@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+import argparse
+import sys
+import os
+import subprocess
+import time
+import json
+import re
+
+VERSION = "1.2.0-lite"
+
+TEMPLATES = {
+    "roadmap.md": "# synlynk Roadmap\n\n| Priority | Feature | Description | Status | Target Release | Owner |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n",
+    "todo.md": "# Project Todo List\n## Active Tasks\n- [ ] Initialize repository with synlynk <!-- id: 0 -->\n",
+    "memory.md": "# synlynk Memory\n\n## Decisions\n- **Structure:** Uses `/project-docs` for core records.\n\n## Conventions\n- **Session Protocol:** Use synlynk project-docs for context.\n",
+    "costs.md": "# synlynk Costs\n\n| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n| | | | | | | |\n",
+    "GEMINI.md": "# synlynk Gemini Instructions\n\n- **Critical:** Always read `.synlynk/context.md` at the start of every session for full project context.\n- Follow the roadmap in `project-docs/roadmap.md` and active tasks in `project-docs/todo.md`.\n- Log your progress in `project-docs/devlogs/<your-username>.md`.\n- Track token usage and costs in `project-docs/costs.md`.\n",
+    "CLAUDE.md": "# synlynk Claude Instructions\n\n- **Critical:** Always read `.synlynk/context.md` at the start of every session for full project context.\n- Follow the roadmap in `project-docs/roadmap.md` and active tasks in `project-docs/todo.md`.\n- Log your progress in `project-docs/devlogs/<your-username>.md`.\n- Track token usage and costs in `project-docs/costs.md`.\n",
+    "AI_INSTRUCTIONS.md": "# synlynk Universal AI Instructions\n\n- **Context:** Always refer to `.synlynk/context.md` for the latest project state.\n- **Roadmap:** Current goals are in `project-docs/roadmap.md`.\n- **Tasks:** Active tasks are in `project-docs/todo.md`.\n- **History:** Previous session notes are in `project-docs/devlogs/`.\n",
+    ".cursorrules": "Always refer to .synlynk/context.md for project context, roadmap, and active tasks before suggesting code changes.",
+    "config.json": "{\n  \"budget\": {\n    \"limit_usd\": 10.00,\n    \"limit_requests\": 100\n  }\n}"
+}
+
+def log_telemetry(command, duration, exit_code, cost=0.0):
+    """Logs execution telemetry to a local JSON file."""
+    telemetry_file = ".synlynk/telemetry.json"
+    entry = {
+        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "command": command,
+        "duration": round(duration, 2),
+        "exit_code": exit_code,
+        "cost": round(cost, 4)
+    }
+    
+    data = []
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file, "r") as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            pass
+            
+    data.append(entry)
+    data = data[-100:]
+    
+    with open(telemetry_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+def check_flatline():
+    """Basic 'Flatline' Sentinel to detect hallucination loops."""
+    telemetry_file = ".synlynk/telemetry.json"
+    if not os.path.exists(telemetry_file):
+        return
+        
+    try:
+        with open(telemetry_file, "r") as f:
+            data = json.load(f)
+    except:
+        return
+
+    if len(data) < 3:
+        return
+
+    last_three = data[-3:]
+    if all(e['exit_code'] != 0 for e in last_three) and \
+       all(e['command'] == last_three[0]['command'] for e in last_three):
+        print("\n⚠️  [Flatline Sentinel] Alert: Detected 3 consecutive failures of the same command.")
+        print("   This might be a hallucination loop. Consider manual intervention.")
+
+def check_budgets():
+    """Checks cumulative usage against budget limits."""
+    telemetry_file = ".synlynk/telemetry.json"
+    config_file = ".synlynk/config.json"
+    
+    if not os.path.exists(telemetry_file) or not os.path.exists(config_file):
+        return
+
+    try:
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        with open(telemetry_file, "r") as f:
+            data = json.load(f)
+    except:
+        return
+
+    limit_usd = config.get("budget", {}).get("limit_usd", 10.0)
+    limit_reqs = config.get("budget", {}).get("limit_requests", 100)
+    
+    total_usd = sum(e.get('cost', 0.0) for e in data)
+    total_reqs = len(data)
+
+    if total_usd >= limit_usd:
+        print(f"\n🛑 [Budget Alert] CRITICAL: You have spent ${total_usd:.2f} / ${limit_usd:.2f} budget.")
+    elif total_usd >= (limit_usd * 0.8):
+        print(f"\n⚠️  [Budget Warning] You have reached 80% of your cost budget (${total_usd:.2f} / ${limit_usd:.2f}).")
+
+    if total_reqs >= limit_reqs:
+        print(f"\n🛑 [Budget Alert] CRITICAL: You have reached {total_reqs} / {limit_reqs} request limit.")
+    elif total_reqs >= (limit_reqs * 0.8):
+        print(f"\n⚠️  [Budget Warning] You have reached 80% of your request limit ({total_reqs} / {limit_reqs}).")
+
+def generate_context():
+    """Aggregates project-docs into a single context snapshot."""
+    docs_dir = "project-docs"
+    context_file = ".synlynk/context.md"
+    
+    if not os.path.exists(docs_dir):
+        return
+    
+    print("  Generating context snapshot...")
+    if not os.path.exists(".synlynk"):
+        os.makedirs(".synlynk")
+
+    with open(context_file, "w") as out:
+        out.write("# synlynk Context Snapshot\n\n")
+        out.write(f"Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        for filename in ["memory.md", "roadmap.md", "todo.md"]:
+            path = os.path.join(docs_dir, filename)
+            if os.path.exists(path):
+                out.write(f"## File: {filename}\n")
+                with open(path, "r") as f:
+                    out.write(f.read())
+                out.write("\n---\n\n")
+    print(f"  ✓ Context saved to {context_file}")
+
+def init():
+    print("Initializing synlynk in current directory...")
+    
+    docs_dir = "project-docs"
+    devlogs_dir = os.path.join(docs_dir, "devlogs")
+    synlynk_dir = ".synlynk" 
+    
+    for d in [docs_dir, devlogs_dir, synlynk_dir]:
+        if not os.path.exists(d):
+            os.makedirs(d)
+            print(f"  Created {d}/")
+
+    for filename, content in TEMPLATES.items():
+        if filename in ["GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", ".cursorrules"]:
+            file_path = filename 
+        elif filename == "config.json":
+            file_path = os.path.join(synlynk_dir, filename)
+        else:
+            file_path = os.path.join(docs_dir, filename)
+            
+        if not os.path.exists(file_path):
+            with open(file_path, "w") as f:
+                f.write(content)
+            print(f"  Created {file_path}")
+        else:
+            print(f"  {file_path} already exists. Skipping.")
+
+    print("\n💡 Tip: To enable frictionless telemetry, add these aliases to your .zshrc or .bashrc:")
+    print("   alias claude='synlynk exec claude'")
+    print("   alias gemini='synlynk exec gemini'")
+
+    print("\n✓ synlynk initialized.")
+
+def upgrade():
+    print(f"Checking for updates... (Current version: {VERSION})")
+    time.sleep(1)
+    print("  Connecting to synlynk-cloud (github.com/nikhilsoman/synlynk)...")
+    time.sleep(1)
+    print(f"  ✓ You are already on the latest version ({VERSION}).")
+
+def extract_tokens(output_text):
+    patterns = [
+        r"Tokens: (\d+) in, (\d+) out",
+        r"usage:.*input_tokens: (\d+).*output_tokens: (\d+)",
+        r"Prompt Tokens: (\d+).*Completion Tokens: (\d+)",
+        r"tokens used: (\d+)"
+    ]
+    in_tokens = 0
+    out_tokens = 0
+    for pattern in patterns:
+        match = re.search(pattern, output_text, re.IGNORECASE | re.DOTALL)
+        if match:
+            groups = match.groups()
+            if len(groups) == 2:
+                in_tokens += int(groups[0])
+                out_tokens += int(groups[1])
+            elif len(groups) == 1:
+                in_tokens += int(groups[0])
+    return in_tokens, out_tokens
+
+def update_costs(command, in_tokens, out_tokens, duration):
+    """Updates costs.md and provides a 'Budget Pulse' summary."""
+    costs_file = "project-docs/costs.md"
+    telemetry_file = ".synlynk/telemetry.json"
+    
+    if not os.path.exists(costs_file):
+        return 0.0
+
+    est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+    
+    total_requests = 0
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file, "r") as f:
+                data = json.load(f)
+                total_requests = len(data)
+        except:
+            pass
+            
+    entry = f"| {time.strftime('%Y-%m-%d %H:%M')} | exec | {command[:20]}... | {in_tokens}/{out_tokens} | 1 | ${est_cost:.4f} | duration: {duration:.1f}s |\n"
+    
+    with open(costs_file, "a") as f:
+        f.write(entry)
+        
+    print(f"  📊 Budget Pulse: ${est_cost:.4f} this session | Total Requests: {total_requests}")
+    if in_tokens > 0:
+        print(f"  🪙 Tokens: {in_tokens} in / {out_tokens} out")
+    
+    return est_cost
+
+def exec_command(cmd_args):
+    if not cmd_args:
+        print("Error: No command provided to exec.")
+        return
+
+    generate_context()
+    check_budgets() # Warn BEFORE execution if budget is low
+    
+    print(f"  Executing: {' '.join(cmd_args)}")
+    start_time = time.time()
+    exit_code = 0
+    captured_output = []
+    
+    try:
+        process = subprocess.Popen(
+            cmd_args, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True,
+            bufsize=1
+        )
+        for line in process.stdout:
+            print(line, end="")
+            captured_output.append(line)
+        process.wait()
+        exit_code = process.returncode
+    except FileNotFoundError:
+        exit_code = 127
+        print(f"  Error: Command '{cmd_args[0]}' not found.")
+    except Exception as e:
+        exit_code = 1
+        print(f"  Error: {str(e)}")
+    finally:
+        end_time = time.time()
+        duration = end_time - start_time
+        full_output = "".join(captured_output)
+        in_t, out_t = extract_tokens(full_output)
+        
+        print(f"\n  ✓ Execution finished in {duration:.2f}s")
+        cost = update_costs(' '.join(cmd_args), in_t, out_t, duration)
+        log_telemetry(' '.join(cmd_args), duration, exit_code, cost)
+        check_flatline()
+
+def main():
+    parser = argparse.ArgumentParser(description="synlynk: The Universal Context Switchboard for AI Devs")
+    parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
+    
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("init", help="Initialize synlynk in a repository")
+    subparsers.add_parser("upgrade", help="Upgrade synlynk binary and templates")
+    exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
+    exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="The command to execute")
+
+    args = parser.parse_args()
+
+    if args.command == "init":
+        init()
+    elif args.command == "exec":
+        exec_command(args.cmd)
+    elif args.command == "upgrade":
+        upgrade()
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

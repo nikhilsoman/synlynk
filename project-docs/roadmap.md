@@ -2,8 +2,9 @@
 
 | Priority | Feature | Description | Status | Target Release | Owner |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| P0 | Core Bootstrap | Initial script and AI instructions for repo setup. | Done | v1.1.0 | @nikhilsoman |
-| P1 | Remote Template Support | Update `install.sh` to pull latest templates via `curl` from GitHub. | Planned | v1.2.0 | [Unassigned] |
-| P1 | Multi-Agent Support | Expand `SYNLYNK_GUIDE.md` for specific AntiGravity and Codex nuances. | Planned | v1.2.0 | [Unassigned] |
-| P2 | Installation Wrapper | Create a more robust installer with dependency checks (git, etc.). | Planned | v1.3.0 | [Unassigned] |
-| P2 | Pulse-Check CLI | A standalone script to validate if docs are being maintained correctly. | Planned | v2.0.0 | [Unassigned] |
+| P0 | Lite Free Tier: File-Based MVP | Markdown templates + basic shell wrappers for context injection. | In Progress | v1.2.0 | [Unassigned] |
+| P0 | Auto-Update Mechanism | Integrated `synlynk upgrade` command for seamless binary/template updates. | Planned | v1.2.0 | [Unassigned] |
+| P1 | Full Free Tier: LCP Daemon | Local Cadence Protocol daemon (JSON-RPC) + MCP Server for IDEs. | Planned | v1.3.0 | [Unassigned] |
+| P1 | The "Flatline" Sentinel | Basic hallucination detection (looping command failures). | Planned | v1.4.0 | [Unassigned] |
+| P2 | S:H Matrix Telemetry | Tracking synthetic vs human velocity via git/diff analysis. | Planned | v1.5.0 | [Unassigned] |
+| P2 | Team Tier: Pulse Sync | Aggregated rollups for team-level observability. | Planned | v2.0.0 | [Unassigned] |

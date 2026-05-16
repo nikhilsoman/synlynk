@@ -1,101 +1,82 @@
 #!/bin/bash
 
-# synlynk: Standardized Documentation Bootstrap
-# Usage: curl -sSL <link-to-raw-script> | bash
+# synlynk Global Installer
+# Usage: curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
 
 set -e
 
-PROJECT_DOCS_DIR="project-docs"
+VERSION="1.2.0-lite"
+INSTALL_DIR="$HOME/.synlynk/bin"
+BINARY_PATH="$INSTALL_DIR/synlynk"
 
-echo "🚀 Pulsing your project..."
+echo "🔗 Installing synlynk $VERSION..."
 
-# 1. Interactive Mode Choice
-echo "------------------------------------------------"
-echo "Select Pulse Mode:"
-echo "1) Single User (Personal repo, simple docs)"
-echo "2) Team Mode (Collaborative, attributed decisions, multi-user devlogs)"
-echo "------------------------------------------------"
-read -p "Enter choice (1 or 2): " SYNLYNK_CHOICE
+# 1. Dependency Check
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Error: python3 is required to run synlynk."
+    exit 1
+fi
 
-if [ "$SYNLYNK_CHOICE" == "2" ]; then
-    SYNLYNK_MODE="team"
-    echo "👥 Team Mode enabled."
+# 2. Create Directory Structure
+mkdir -p "$INSTALL_DIR"
+
+# 3. Copy Binary (or download if running via curl)
+if [ -f "bin/synlynk.py" ]; then
+    cp "bin/synlynk.py" "$BINARY_PATH"
 else
-    SYNLYNK_MODE="single"
-    echo "👤 Single User mode enabled."
+    echo "  Downloading synlynk..."
+    curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/bin/synlynk.py" -o "$BINARY_PATH"
 fi
 
-# 2. Create directory structure
-mkdir -p "$PROJECT_DOCS_DIR"
+chmod +x "$BINARY_PATH"
 
-if [ "$SYNLYNK_MODE" == "team" ]; then
-    mkdir -p "$PROJECT_DOCS_DIR/devlogs"
-fi
+# 4. PATH Configuration
+echo "🚀 Configuring PATH automatically..."
 
-# 3. Initialize files based on mode
-cat <<EOF > "$PROJECT_DOCS_DIR/roadmap.md"
-# Project Roadmap
-| Priority | Feature | Description | Status | Target Release | $([ "$SYNLYNK_MODE" == "team" ] && echo "Owner |")
-| :--- | :--- | :--- | :--- | :--- | $([ "$SYNLYNK_MODE" == "team" ] && echo ":--- |")
-| P0 | Pulse Setup | Initialize project documentation. | Done | v0.1.0 | $([ "$SYNLYNK_MODE" == "team" ] && echo "Pulse-Bot |")
-EOF
-
-cat <<EOF > "$PROJECT_DOCS_DIR/todo.md"
-# Project Todo List
-## Active Tasks
-- [ ] Implement core logic <!-- id: 0 --> $([ "$SYNLYNK_MODE" == "team" ] && echo "[Unassigned]")
-EOF
-
-cat <<EOF > "$PROJECT_DOCS_DIR/memory.md"
-# Project Memory
-## Decisions
-- **Framework:** (e.g., React/Django) $([ "$SYNLYNK_MODE" == "team" ] && echo "[@InitialSetup]")
-
-## Conventions
-- **Docs:** Standardized in /project-docs
-EOF
-
-cat <<EOF > "$PROJECT_DOCS_DIR/costs.md"
-# Project Costs Tracking
-## Session Summary
-| Date | User | Requests | Tokens (In/Out) | Estimated Cost (USD) | Summary |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-EOF
-
-# Initialize Devlogs
-if [ "$SYNLYNK_MODE" == "single" ]; then
-    cat <<EOF > "$PROJECT_DOCS_DIR/devlog.md"
-# Developer Log
-| Date | Task | Outcome |
-| :--- | :--- | :--- |
-| $(date +%Y-%m-%d) | Pulse Initialization | project-docs structure created. |
-EOF
-else
-    # Create a placeholder/sample for teams
-    cat <<EOF > "$PROJECT_DOCS_DIR/devlogs/README.md"
-# Team Devlogs
-This directory contains individual developer logs (e.g., \`nikhil.md\`). 
-The AI will automatically create and maintain your specific log based on your git username.
-EOF
-fi
-
-# 4. Save Pulse Config
-cat <<EOF > "$PROJECT_DOCS_DIR/.synlynk_config.json"
-{
-  "mode": "$SYNLYNK_MODE",
-  "version": "1.1.0",
-  "initialized_at": "$(date)"
+add_to_path_file() {
+    local file=$1
+    local line=$2
+    if [ -f "$file" ]; then
+        if ! grep -q "$INSTALL_DIR" "$file"; then
+            echo "" >> "$file"
+            echo "# synlynk path" >> "$file"
+            echo "$line" >> "$file"
+            echo "  ✓ Added to $file"
+        else
+            echo "  ✓ Already present in $file"
+        fi
+    else
+        # If the file doesn't exist but is a primary config, we might want to create it
+        # but for safety we only update existing ones here except for fish
+        :
+    fi
 }
-EOF
 
-# 5. Handle GEMINI.md
-if [ ! -f "GEMINI.md" ]; then
-    cat <<EOF > "GEMINI.md"
-# Project Guidelines
-- Documentation lives in /project-docs.
-- Follow synlynk standards.
-EOF
+# Zsh (Default on macOS)
+add_to_path_file "$HOME/.zshrc" "export PATH=\"\$PATH:$INSTALL_DIR\""
+
+# Bash
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    add_to_path_file "$HOME/.bash_profile" "export PATH=\"\$PATH:$INSTALL_DIR\""
+else
+    add_to_path_file "$HOME/.bashrc" "export PATH=\"\$PATH:$INSTALL_DIR\""
+fi
+add_to_path_file "$HOME/.profile" "export PATH=\"\$PATH:$INSTALL_DIR\""
+
+# Fish
+if command -v fish &> /dev/null; then
+    mkdir -p "$HOME/.config/fish"
+    if [ ! -f "$HOME/.config/fish/config.fish" ]; then touch "$HOME/.config/fish/config.fish"; fi
+    add_to_path_file "$HOME/.config/fish/config.fish" "set -gx PATH \$PATH $INSTALL_DIR"
 fi
 
-echo "✅ synlynk initialized in $SYNLYNK_MODE mode!"
-echo "👉 Next step: Add the contents of SYNLYNK_GUIDE.md to your AI's global or project instructions."
+echo "------------------------------------------------"
+echo "✅ synlynk installed successfully to $BINARY_PATH"
+echo ""
+echo "🚀 PATH has been updated for your shell."
+echo "👉 Please run 'source ~/.zshrc' (or your shell's config) or open a new terminal."
+echo ""
+echo "👉 Next steps:"
+echo "   1. Run 'synlynk init' in your repository."
+echo "   2. Run 'synlynk exec <command>' to wrap your AI CLIs."
+echo "------------------------------------------------"
