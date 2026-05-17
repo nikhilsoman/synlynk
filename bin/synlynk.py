@@ -7,7 +7,82 @@ import time
 import json
 import re
 
-VERSION = "1.2.0-lite"
+VERSION = "1.2.1-lite"
+
+
+def get_username() -> str:
+    """Resolves current user from git config."""
+    try:
+        result = subprocess.run(
+            ["git", "config", "user.name"],
+            capture_output=True, text=True
+        )
+        name = result.stdout.strip()
+        return name.lower().replace(" ", "") if name else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def get_mode() -> str:
+    """Returns 'single' or 'team' from project-docs/.synlynk_config.json."""
+    config_path = "project-docs/.synlynk_config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                return json.load(f).get("mode", "single")
+        except (json.JSONDecodeError, IOError):
+            pass
+    return "single"
+
+
+def load_config() -> dict:
+    """Loads .synlynk/config.json with schema-v1 defaults."""
+    defaults = {
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30,
+        "org": None,
+        "team": None,
+        "sync_endpoint": None,
+    }
+    config_file = ".synlynk/config.json"
+    if not os.path.exists(config_file):
+        return defaults
+    try:
+        with open(config_file) as f:
+            config = json.load(f)
+        for key, val in defaults.items():
+            if key not in config:
+                config[key] = val
+        for key, val in defaults["budget"].items():
+            if key not in config.get("budget", {}):
+                config.setdefault("budget", {})[key] = val
+        return config
+    except (json.JSONDecodeError, IOError):
+        return defaults
+
+
+def parse_costs_md() -> tuple:
+    """Returns (total_usd, total_requests) by parsing costs.md column 6."""
+    costs_file = "project-docs/costs.md"
+    total_usd = 0.0
+    total_requests = 0
+    if not os.path.exists(costs_file):
+        return total_usd, total_requests
+    with open(costs_file) as f:
+        for line in f:
+            if not line.startswith("|"):
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) < 8:
+                continue
+            cost_str = parts[6].lstrip("$")
+            try:
+                total_usd += float(cost_str)
+                total_requests += 1
+            except ValueError:
+                continue
+    return total_usd, total_requests
 
 TEMPLATES = {
     "roadmap.md": "# synlynk Roadmap\n\n| Priority | Feature | Description | Status | Target Release | Owner |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n",
