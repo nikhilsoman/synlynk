@@ -418,6 +418,114 @@ def generate_context(scope: str = "full") -> None:
 
     print(f"  ✓ Context saved to {context_file}")
 
+def _archive_old_devlog_entries(devlog_path: str) -> None:
+    """Moves devlog entries older than 30 days to devlogs/archive/YYYY-MM.md."""
+    import calendar
+    if not os.path.exists(devlog_path):
+        return
+    cutoff = time.time() - (30 * 24 * 3600)
+    pattern = re.compile(r'^## (\d{4}-\d{2}-\d{2})')
+    sections = []
+    current_lines, current_date = [], None
+    with open(devlog_path) as f:
+        for line in f:
+            m = pattern.match(line)
+            if m:
+                if current_lines:
+                    sections.append((current_date, current_lines))
+                current_date = m.group(1)
+                current_lines = [line]
+            else:
+                current_lines.append(line)
+    if current_lines:
+        sections.append((current_date, current_lines))
+
+    keep, archive_by_month = [], {}
+    for date_str, lines in sections:
+        if date_str is None:
+            keep.append((date_str, lines))
+            continue
+        try:
+            ts = calendar.timegm(time.strptime(date_str, "%Y-%m-%d"))
+            if ts < cutoff:
+                month_key = date_str[:7]
+                archive_by_month.setdefault(month_key, []).extend(lines)
+            else:
+                keep.append((date_str, lines))
+        except ValueError:
+            keep.append((date_str, lines))
+
+    if not archive_by_month:
+        return
+
+    archive_dir = os.path.join(os.path.dirname(devlog_path), "archive")
+    os.makedirs(archive_dir, exist_ok=True)
+    for month_key, lines in archive_by_month.items():
+        with open(os.path.join(archive_dir, f"{month_key}.md"), "a") as f:
+            f.writelines(lines)
+
+    with open(devlog_path, "w") as f:
+        for _, lines in keep:
+            f.writelines(lines)
+
+def checkpoint() -> None:
+    """Archives done tasks, refreshes context, and emits a telemetry event."""
+    set_state("active")
+    username = get_username()
+    todo_path = "project-docs/todo.md"
+    devlog_path = f"project-docs/devlogs/{username}.md"
+
+    # Collect completed tasks and remaining active lines
+    completed, active_lines = [], []
+    if os.path.exists(todo_path):
+        with open(todo_path) as f:
+            for line in f:
+                if re.match(r'\s*-\s*\[x\]', line, re.IGNORECASE):
+                    id_m = re.search(r'<!--\s*id:\s*(\d+)\s*-->', line)
+                    text = re.sub(r'-\s*\[x\]\s*', '', line).strip()
+                    text = re.sub(r'<!--.*?-->', '', text).strip()
+                    completed.append({"id": id_m.group(1) if id_m else None, "text": text})
+                else:
+                    active_lines.append(line)
+
+    # Append completed tasks to devlog
+    if completed:
+        os.makedirs(os.path.dirname(devlog_path), exist_ok=True)
+        with open(devlog_path, "a") as f:
+            f.write(f"\n## {time.strftime('%Y-%m-%d')}\n### Completed (checkpoint)\n")
+            for task in completed:
+                f.write(f"- {task['text']}\n")
+        with open(todo_path, "w") as f:
+            f.writelines(active_lines)
+
+    _archive_old_devlog_entries(devlog_path)
+    generate_context()
+
+    completed_ids = [t["id"] for t in completed if t["id"]]
+    log_telemetry_event({
+        "type": "checkpoint",
+        "schema_version": 1,
+        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "user": username,
+        "completed_task_count": len(completed),
+        "completed_task_ids": completed_ids,
+        "devlog_entry_appended": bool(completed),
+    })
+
+    total_usd, total_requests = parse_costs_md()
+    config = load_config()
+    limit_usd = config["budget"]["limit_usd"]
+    pct = (total_usd / limit_usd * 100) if limit_usd else 0
+
+    daemon = WatchDaemon()
+    set_state("watching" if daemon._is_running() else "stopped")
+
+    print(f"\n✓ checkpoint [@{username}] — {len(completed)} tasks archived, context refreshed")
+    if completed:
+        names = "  ·  ".join(f'"{t["text"][:40]}"' for t in completed[:3])
+        print(f"  Archived: {names}")
+    print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
+
 class WatchDaemon:
     """Polls project-docs/ and regenerates context.md on change.
 

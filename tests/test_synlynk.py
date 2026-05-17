@@ -280,3 +280,45 @@ def test_watch_daemon_cleans_stale_pidfile_on_stop(project_dir):
     daemon = synlynk.WatchDaemon()
     daemon.stop()
     assert not (project_dir / ".synlynk" / "watch.pid").exists()
+
+
+def test_checkpoint_archives_done_tasks(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "## Active Tasks\n"
+        "- [ ] Still active <!-- id: 1 -->\n"
+        "- [x] Done task <!-- id: 2 -->\n"
+    )
+    synlynk.checkpoint()
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Done task" not in todo
+    assert "Still active" in todo
+
+def test_checkpoint_appends_to_devlog(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Finished feature <!-- id: 5 -->\n"
+    )
+    synlynk.checkpoint()
+    devlog = (project_dir / "project-docs" / "devlogs" / "nikhil.md").read_text()
+    assert "Finished feature" in devlog
+
+def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Task A <!-- id: 3 -->\n"
+    )
+    synlynk.checkpoint()
+    import json
+    events = json.loads((project_dir / ".synlynk" / "telemetry.json").read_text())
+    cp_events = [e for e in events if e.get("type") == "checkpoint"]
+    assert len(cp_events) == 1
+    assert cp_events[0]["completed_task_count"] == 1
+    assert cp_events[0]["user"] == "nikhil"
+    assert "3" in cp_events[0]["completed_task_ids"]
+
+def test_checkpoint_idempotent_when_no_done_tasks(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    original_todo = (project_dir / "project-docs" / "todo.md").read_text()
+    synlynk.checkpoint()
+    assert (project_dir / "project-docs" / "todo.md").read_text() == original_todo
