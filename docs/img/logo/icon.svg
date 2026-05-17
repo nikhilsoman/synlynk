@@ -1,7 +1,7 @@
 <svg width="200" height="200" viewBox="0 0 200 200" role="img" xmlns="http://www.w3.org/2000/svg">
   <title>synlynk icon</title>
   <g transform="translate(100,100)">
-    <rect x="-90" y="-90" width="180" height="180" rx="36" fill="#0E0E0F"/>
+    <rect x="-90" y="-90" width="180" height="180" rx="36" fill="#0E0E0F" stroke="#888" stroke-width="2"/>
     <rect x="-90" y="-90" width="180" height="32" rx="36" fill="#1A1A1C"/>
     <rect x="-90" y="-72" width="180" height="14" fill="#1A1A1C"/>
     <circle cx="-62" cy="-74" r="5" fill="#FF5F57"/>
