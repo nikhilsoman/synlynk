@@ -84,6 +84,20 @@ def parse_costs_md() -> tuple:
                 continue
     return total_usd, total_requests
 
+def set_state(state: str) -> None:
+    """Writes synlynk state to .synlynk/state and updates terminal title."""
+    icons = {"watching": "●", "active": "⚡", "stopped": "○"}
+    state_file = ".synlynk/state"
+    if not os.path.exists(".synlynk"):
+        return
+    with open(state_file, "w") as f:
+        f.write(state)
+    if sys.stdout.isatty():
+        project = os.path.basename(os.getcwd())
+        title = f"{icons.get(state, '○')} synlynk: {state}  ·  {project}"
+        sys.stdout.write(f"\033]0;{title}\007")
+        sys.stdout.flush()
+
 TEMPLATES = {
     "roadmap.md": "# synlynk Roadmap\n\n| Priority | Feature | Description | Status | Target Release | Owner |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n",
     "todo.md": "# Project Todo List\n## Active Tasks\n- [ ] Initialize repository with synlynk <!-- id: 0 -->\n",

@@ -55,3 +55,27 @@ def test_parse_costs_md_missing(tmp_path, monkeypatch):
     total_usd, total_requests = synlynk.parse_costs_md()
     assert total_usd == 0.0
     assert total_requests == 0
+
+
+def test_set_state_writes_file(project_dir):
+    synlynk.set_state("watching")
+    assert (project_dir / ".synlynk" / "state").read_text() == "watching"
+
+
+def test_set_state_all_values(project_dir):
+    for state in ("watching", "active", "stopped"):
+        synlynk.set_state(state)
+        assert (project_dir / ".synlynk" / "state").read_text() == state
+
+
+def test_set_state_no_tty_skips_ansi(project_dir, capsys):
+    # capsys captures stdout which is not a TTY in pytest
+    synlynk.set_state("active")
+    captured = capsys.readouterr()
+    assert "\033]0;" not in captured.out
+
+
+def test_set_state_missing_synlynk_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # Should not raise even if .synlynk/ doesn't exist
+    synlynk.set_state("stopped")
