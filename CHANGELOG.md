@@ -11,7 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.2.0] - unreleased
+## [0.2.0] - 2026-05-17
 
 ### Added
 - `synlynk watch start/stop/status` — background daemon that polls `project-docs/` and regenerates `context.md` on any file change, with configurable interval and debounce
@@ -32,9 +32,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `CLAUDE.md` / `GEMINI.md` templates — include full session protocol: startup checklist, during-session rules, session-end steps
 - `VERSION` bumped to `0.2.0`
 
+### Fixed
+- Type hint `str | None` replaced with `Optional[str]` for Python 3.8 compatibility (union syntax requires 3.10+)
+
 ### Infrastructure
 - Added pytest test suite (`tests/conftest.py` + `tests/test_synlynk.py`) with 46 tests and `project_dir` fixture
-- Added GitHub Actions CI workflow (runs pytest on push and PRs)
+- Added GitHub Actions CI workflow (runs pytest on Python 3.8, 3.10, 3.12 on push and PRs)
 - Added `LICENSE` (MIT), `CONTRIBUTING.md`, PR template, issue templates
 
 ---
