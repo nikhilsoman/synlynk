@@ -21,6 +21,11 @@
 - **Context Compaction:** Implement an "Active vs. Archive" model. `.synlynk/context.md` will only compile *active* tasks and the *current* sprint's devlogs. Older logs (e.g., `devlogs/archive/2026-Q1.md`) are excluded from the main context block to save tokens but remain available on disk for specific RAG/grep queries if the AI needs historical context.
 - **Sub-Agent Routing:** Main agents receive the full `.synlynk/context.md` "Switchboard Snapshot". When a main agent delegates to a sub-agent (e.g., `codebase_investigator`), it must pass a *task-scoped* slice of context rather than the global state. synlynk will support this by generating specialized sub-views (e.g., `.synlynk/context_tests.md`) or relying on the main agent to filter the context during delegation.
 
+## Schema Decisions
+- **costs.md canonical schema:** 6 columns — `| Date | User | Requests | Tokens (In/Out) | Estimated Cost (USD) | Summary |`. Cost is at `parts[5]` (1-indexed col 5). This is the parser's expected format as of v0.2.1. Do not add columns without updating `parse_costs_md()`. [@nikhilsoman]
+- **exec exit code contract:** `exec_command()` returns the child's exit code as int; callers must `sys.exit()` with it. The function must never swallow non-zero exits. [@nikhilsoman]
+- **Dead code hygiene:** Token extraction and cost auto-writing (`extract_tokens`, `update_costs`, old `log_telemetry`) were removed in v0.2.1. Cost tracking is manual. Do not re-introduce auto-write to costs.md without defining a single schema first. [@nikhilsoman]
+
 ## Conventions
 - **Attribution:** All `memory.md` entries in Team Mode MUST have `[@username]`.
 - **Session Protocol:** 3-row start (Last Task, Next Task, Collaborator Status).

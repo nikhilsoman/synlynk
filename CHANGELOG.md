@@ -11,6 +11,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.1] - 2026-05-17
+
+### Fixed
+- `exec_command()` now returns the child process exit code and `main()` calls `sys.exit()` with it — previously a wrapped command exiting non-zero would cause `synlynk exec` to exit 0, silently swallowing failures
+- `parse_costs_md()` was reading the wrong column (`parts[6]` = Summary instead of `parts[5]` = Estimated Cost USD), causing `status` and budget checks to always report $0.00
+- `install.sh` version corrected from `1.2.0-lite` to `0.2.0`
+- `conftest.py` fixture schema aligned with real `costs.md` format (6-column) so budget tests exercise the correct parser behavior
+
+### Removed
+- Dead functions `log_telemetry()`, `extract_tokens()`, and `update_costs()` — superseded by `log_telemetry_event()` and manual cost tracking; removed to prevent confusion
+
+### Infrastructure
+- `.gitignore` expanded to cover `.synlynk/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `test_archive/`, `test_context_output/`, `.venv/`
+- `project-docs/roadmap.md` updated to reflect v0.2.x reality (was stale with v1.2/v1.3/v1.4 references)
+- Test added for exit code propagation (47 tests total)
+
+---
+
 ## [0.2.0] - 2026-05-17
 
 ### Added
@@ -56,6 +74,7 @@ Initial public release.
 - `log_telemetry()` — rolling JSON log of last 100 exec events
 - `install.sh` — global installer, adds synlynk to `~/.synlynk/bin/` and PATH
 
-[Unreleased]: https://github.com/nikhilsoman/synlynk/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/nikhilsoman/synlynk/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/nikhilsoman/synlynk/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nikhilsoman/synlynk/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nikhilsoman/synlynk/releases/tag/v0.1.0
