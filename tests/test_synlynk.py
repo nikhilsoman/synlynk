@@ -79,3 +79,54 @@ def test_set_state_missing_synlynk_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     # Should not raise even if .synlynk/ doesn't exist
     synlynk.set_state("stopped")
+
+
+def _write_telemetry(project_dir, events):
+    import json
+    (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(events))
+
+
+def test_flatline_no_trigger_when_fewer_than_3(project_dir):
+    _write_telemetry(project_dir, [
+        {"command": "npm test", "exit_code": 1},
+        {"command": "npm test", "exit_code": 1},
+    ])
+    synlynk.check_flatline()
+    assert not (project_dir / ".synlynk" / "sentinel.md").exists()
+
+
+def test_flatline_triggers_on_3_consecutive(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    _write_telemetry(project_dir, [
+        {"command": "npm test", "exit_code": 1},
+        {"command": "npm test", "exit_code": 1},
+        {"command": "npm test", "exit_code": 1},
+    ])
+    synlynk.check_flatline()
+    sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
+    assert "FLATLINE" in sentinel
+    assert "npm test" in sentinel
+
+
+def test_flatline_no_trigger_when_different_commands(project_dir):
+    _write_telemetry(project_dir, [
+        {"command": "npm test", "exit_code": 1},
+        {"command": "npm build", "exit_code": 1},
+        {"command": "npm test", "exit_code": 1},
+    ])
+    synlynk.check_flatline()
+    assert not (project_dir / ".synlynk" / "sentinel.md").exists()
+
+
+def test_flatline_appends_to_existing_sentinel(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / ".synlynk" / "sentinel.md").write_text("# Sentinel Alerts\n- [old alert]\n")
+    _write_telemetry(project_dir, [
+        {"command": "make build", "exit_code": 1},
+        {"command": "make build", "exit_code": 1},
+        {"command": "make build", "exit_code": 1},
+    ])
+    synlynk.check_flatline()
+    sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
+    assert "old alert" in sentinel
+    assert "make build" in sentinel

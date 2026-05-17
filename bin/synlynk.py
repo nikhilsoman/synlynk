@@ -135,26 +135,38 @@ def log_telemetry(command, duration, exit_code, cost=0.0):
     with open(telemetry_file, "w") as f:
         json.dump(data, f, indent=2)
 
-def check_flatline():
-    """Basic 'Flatline' Sentinel to detect hallucination loops."""
+def check_flatline() -> None:
+    """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
     telemetry_file = ".synlynk/telemetry.json"
+    sentinel_file = ".synlynk/sentinel.md"
     if not os.path.exists(telemetry_file):
         return
-        
     try:
-        with open(telemetry_file, "r") as f:
+        with open(telemetry_file) as f:
             data = json.load(f)
-    except:
+    except (json.JSONDecodeError, IOError):
         return
-
     if len(data) < 3:
         return
-
     last_three = data[-3:]
-    if all(e['exit_code'] != 0 for e in last_three) and \
-       all(e['command'] == last_three[0]['command'] for e in last_three):
-        print("\n⚠️  [Flatline Sentinel] Alert: Detected 3 consecutive failures of the same command.")
-        print("   This might be a hallucination loop. Consider manual intervention.")
+    if not (all(e.get('exit_code', 0) != 0 for e in last_three) and
+            all(e.get('command') == last_three[0].get('command') for e in last_three)):
+        return
+    cmd = last_three[0].get('command', 'unknown')
+    user = get_username()
+    alert = f"- [{time.strftime('%Y-%m-%d %H:%M')}] FLATLINE: `{cmd}` failed 3x in a row [@{user}]\n"
+    print(f"\n⚠️  [Flatline Sentinel] Alert: 3 consecutive failures of '{cmd}'.")
+    print("   Possible hallucination loop — consider manual intervention.")
+    if not os.path.exists(".synlynk"):
+        return
+    existing = ""
+    if os.path.exists(sentinel_file):
+        with open(sentinel_file) as f:
+            existing = f.read()
+    if "# Sentinel Alerts" not in existing:
+        existing = "# Sentinel Alerts\n"
+    with open(sentinel_file, "w") as f:
+        f.write(existing + alert)
 
 def check_budgets():
     """Checks cumulative usage against budget limits."""
