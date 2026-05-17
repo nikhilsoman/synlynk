@@ -24,11 +24,12 @@ def project_dir(tmp_path, monkeypatch):
         "| P1 | Feature B | Desc B | Planned | v1.3.0 | [Unassigned] |\n"
     )
     (tmp_path / "project-docs" / "costs.md").write_text(
-        "# synlynk Costs\n\n"
-        "| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n"
-        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
-        "| 2026-05-17 10:00 | exec | claude... | 1000/500 | 1 | $0.50 | session 1 |\n"
-        "| 2026-05-17 11:00 | exec | claude... | 800/400 | 1 | $0.74 | session 2 |\n"
+        "# Project Costs Tracking\n"
+        "## Session Summary\n"
+        "| Date | User | Requests | Tokens (In/Out) | Estimated Cost (USD) | Summary |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        "| 2026-05-17 10:00 | nikhilsoman | 1 | 1000/500 | $0.50 | session 1 |\n"
+        "| 2026-05-17 11:00 | nikhilsoman | 1 | 800/400 | $0.74 | session 2 |\n"
     )
     config = {
         "schema_version": 1,

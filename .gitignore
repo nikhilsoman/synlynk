@@ -1,1 +1,9 @@
 .superpowers/
+.synlynk/
+__pycache__/
+*.pyc
+.DS_Store
+test_archive/
+test_context_output/
+.venv/
+*.egg-info/

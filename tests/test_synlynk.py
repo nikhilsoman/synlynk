@@ -399,3 +399,21 @@ def test_upgrade_handles_network_error(monkeypatch, capsys):
     synlynk.upgrade()  # should not raise
     captured = capsys.readouterr()
     assert "Could not check" in captured.out
+
+
+def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
+    class FakeProcess:
+        returncode = 7
+        def wait(self): pass
+
+    monkeypatch.setattr(synlynk.subprocess, 'Popen', lambda *a, **kw: FakeProcess())
+    monkeypatch.setattr(synlynk, 'generate_context', lambda: None)
+    monkeypatch.setattr(synlynk, 'check_budgets', lambda: None)
+    monkeypatch.setattr(synlynk, 'set_state', lambda s: None)
+    monkeypatch.setattr(synlynk, '_check_costs_freshness', lambda: None)
+    monkeypatch.setattr(synlynk, 'log_telemetry_event', lambda e: None)
+    monkeypatch.setattr(synlynk, 'check_flatline', lambda: None)
+    monkeypatch.setattr(synlynk.WatchDaemon, '_is_running', lambda self: False)
+
+    result = synlynk.exec_command(['python3', '-c', 'import sys; sys.exit(7)'])
+    assert result == 7
