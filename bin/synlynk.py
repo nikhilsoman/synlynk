@@ -7,6 +7,7 @@ import time
 import json
 import re
 import urllib.request
+from typing import Optional
 
 VERSION = "0.2.0"
 
@@ -280,7 +281,7 @@ def check_budgets() -> None:
     elif total_reqs >= limit_reqs * 0.8:
         print(f"\n⚠️  [Budget Warning] 80% of request limit ({total_reqs} / {limit_reqs}).")
 
-def _get_last_devlog_date(filepath: str) -> str | None:
+def _get_last_devlog_date(filepath: str) -> Optional[str]:
     """Returns the most recent ## YYYY-MM-DD heading from a devlog file."""
     if not os.path.exists(filepath):
         return None
