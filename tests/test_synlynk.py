@@ -367,3 +367,35 @@ def test_status_shows_active_tasks(project_dir, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Task one" in captured.out
     assert "Task two" in captured.out
+
+def test_upgrade_reports_up_to_date(monkeypatch, capsys):
+    import json as _json
+    fake_response = type('R', (), {
+        'read': lambda self: _json.dumps({"tag_name": f"v{synlynk.VERSION}"}).encode(),
+        '__enter__': lambda self: self,
+        '__exit__': lambda self, *a: None,
+    })()
+    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
+    synlynk.upgrade()
+    captured = capsys.readouterr()
+    assert "latest version" in captured.out
+
+def test_upgrade_reports_new_version(monkeypatch, capsys):
+    import json as _json
+    fake_response = type('R', (), {
+        'read': lambda self: _json.dumps({"tag_name": "v99.0.0"}).encode(),
+        '__enter__': lambda self: self,
+        '__exit__': lambda self, *a: None,
+    })()
+    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
+    synlynk.upgrade()
+    captured = capsys.readouterr()
+    assert "99.0.0" in captured.out
+    assert "available" in captured.out
+
+def test_upgrade_handles_network_error(monkeypatch, capsys):
+    monkeypatch.setattr(synlynk.urllib.request, 'urlopen',
+                        lambda *a, **kw: (_ for _ in ()).throw(Exception("no network")))
+    synlynk.upgrade()  # should not raise
+    captured = capsys.readouterr()
+    assert "Could not check" in captured.out

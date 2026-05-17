@@ -6,6 +6,7 @@ import subprocess
 import time
 import json
 import re
+import urllib.request
 
 VERSION = "1.2.1-lite"
 
@@ -821,12 +822,24 @@ def init(force: bool = False) -> None:
     print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
     print("✓ synlynk initialized.")
 
-def upgrade():
-    print(f"Checking for updates... (Current version: {VERSION})")
-    time.sleep(1)
-    print("  Connecting to synlynk-cloud (github.com/nikhilsoman/synlynk)...")
-    time.sleep(1)
-    print(f"  ✓ You are already on the latest version ({VERSION}).")
+def upgrade() -> None:
+    """Checks GitHub releases for a newer version and prints upgrade instructions."""
+    print(f"Checking for updates... (current: v{VERSION})")
+    url = "https://api.github.com/repos/nikhilsoman/synlynk/releases/latest"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": f"synlynk/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        latest = data.get("tag_name", "").lstrip("v")
+        if latest and latest != VERSION:
+            print(f"  ✦ New version available: v{latest}")
+            print("  Upgrade: curl -sSL https://raw.githubusercontent.com/"
+                  "nikhilsoman/synlynk/main/install.sh | bash")
+        else:
+            print(f"  ✓ You are on the latest version (v{VERSION}).")
+    except Exception as e:
+        print(f"  ⚠ Could not check for updates: {e}")
+        print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
 
 def extract_tokens(output_text):
     patterns = [
