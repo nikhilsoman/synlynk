@@ -246,3 +246,37 @@ def test_check_costs_freshness_silent_when_fresh(project_dir, capsys):
     synlynk._check_costs_freshness()
     captured = capsys.readouterr()
     assert "costs.md not updated" not in captured.out
+
+
+def test_watch_daemon_is_running_false_when_no_pidfile(project_dir):
+    daemon = synlynk.WatchDaemon()
+    assert daemon._is_running() is False
+
+
+def test_watch_daemon_is_running_false_stale_pidfile(project_dir):
+    # Write a PID that doesn't exist
+    (project_dir / ".synlynk" / "watch.pid").write_text("99999999")
+    daemon = synlynk.WatchDaemon()
+    assert daemon._is_running() is False
+
+
+def test_watch_daemon_stop_idempotent(project_dir, capsys):
+    daemon = synlynk.WatchDaemon()
+    daemon.stop()  # should not raise
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+def test_watch_daemon_get_mtimes(project_dir):
+    daemon = synlynk.WatchDaemon()
+    mtimes = daemon._get_mtimes("project-docs")
+    assert len(mtimes) > 0
+    for path, mtime in mtimes.items():
+        assert isinstance(mtime, float)
+
+
+def test_watch_daemon_cleans_stale_pidfile_on_stop(project_dir):
+    (project_dir / ".synlynk" / "watch.pid").write_text("99999999")
+    daemon = synlynk.WatchDaemon()
+    daemon.stop()
+    assert not (project_dir / ".synlynk" / "watch.pid").exists()

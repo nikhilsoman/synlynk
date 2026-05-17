@@ -418,6 +418,132 @@ def generate_context(scope: str = "full") -> None:
 
     print(f"  ✓ Context saved to {context_file}")
 
+class WatchDaemon:
+    """Polls project-docs/ and regenerates context.md on change.
+
+    Subclass and override on_change() for the v1.3.0 LCP JSON-RPC daemon.
+    """
+
+    def __init__(self):
+        self.pidfile = ".synlynk/watch.pid"
+        self.logfile = ".synlynk/watch.log"
+        self.settle_seconds = 3
+
+    def start(self) -> None:
+        if self._is_running():
+            print("  synlynk watch is already running.")
+            return
+        if os.path.exists(self.pidfile):
+            os.remove(self.pidfile)
+        if not hasattr(os, "fork"):
+            print("  ⚠ watch daemon requires Unix (macOS/Linux). Not supported on Windows.")
+            return
+        pid = os.fork()
+        if pid > 0:
+            print("  ● synlynk watch started.")
+            return
+        os.setsid()
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+        # Daemon process: redirect stdio to log
+        sys.stdout.flush()
+        sys.stderr.flush()
+        with open(self.logfile, "a") as log:
+            os.dup2(log.fileno(), sys.stdout.fileno())
+            os.dup2(log.fileno(), sys.stderr.fileno())
+        with open(self.pidfile, "w") as f:
+            f.write(str(os.getpid()))
+        set_state("watching")
+        self._run_loop()
+
+    def stop(self) -> None:
+        if not os.path.exists(self.pidfile):
+            print("  synlynk watch is not running.")
+            set_state("stopped")
+            return
+        try:
+            with open(self.pidfile) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 15)  # SIGTERM
+            os.remove(self.pidfile)
+            set_state("stopped")
+            print("  ✓ synlynk watch stopped.")
+        except (ProcessLookupError, ValueError):
+            if os.path.exists(self.pidfile):
+                os.remove(self.pidfile)
+            set_state("stopped")
+            print("  synlynk watch was not running (cleaned stale pidfile).")
+        except OSError as e:
+            print(f"  Error stopping watch daemon: {e}")
+
+    def status(self) -> None:
+        if self._is_running():
+            with open(self.pidfile) as f:
+                pid = f.read().strip()
+            print(f"  ● synlynk watch running (PID {pid})")
+            if os.path.exists(self.logfile):
+                with open(self.logfile) as f:
+                    lines = f.readlines()
+                if lines:
+                    print(f"    Last log: {lines[-1].strip()}")
+        else:
+            if os.path.exists(self.pidfile):
+                os.remove(self.pidfile)
+            print("  ○ synlynk watch stopped")
+
+    def _is_running(self) -> bool:
+        if not os.path.exists(self.pidfile):
+            return False
+        try:
+            with open(self.pidfile) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)
+            return True
+        except (ProcessLookupError, ValueError, IOError, OSError):
+            return False
+
+    def _get_mtimes(self, directory: str) -> dict:
+        mtimes = {}
+        if not os.path.exists(directory):
+            return mtimes
+        for root, _, files in os.walk(directory):
+            for fname in files:
+                if fname.endswith((".md", ".json")):
+                    path = os.path.join(root, fname)
+                    try:
+                        mtimes[path] = os.path.getmtime(path)
+                    except OSError:
+                        pass
+        return mtimes
+
+    def on_change(self, filepath: str) -> None:
+        """Called when a project-docs file changes. Override in v1.3.0 LCP daemon."""
+        generate_context()
+        log_telemetry_event({
+            "type": "watch_trigger",
+            "schema_version": 1,
+            "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+            "user": get_username(),
+            "changed_file": filepath,
+        })
+
+    def _run_loop(self) -> None:
+        config = load_config()
+        interval = config.get("watch_interval_seconds", 30)
+        last_mtimes = self._get_mtimes("project-docs")
+        while True:
+            time.sleep(interval)
+            current_mtimes = self._get_mtimes("project-docs")
+            changed = [f for f in current_mtimes
+                       if current_mtimes[f] != last_mtimes.get(f)]
+            if changed:
+                time.sleep(self.settle_seconds)
+                set_state("active")
+                self.on_change(changed[0])
+                set_state("watching")
+                last_mtimes = self._get_mtimes("project-docs")
+
 def init(force: bool = False) -> None:
     print("Initializing synlynk in current directory...")
 
