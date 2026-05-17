@@ -932,24 +932,53 @@ def exec_command(cmd_args: list) -> None:
         daemon = WatchDaemon()
         set_state("watching" if daemon._is_running() else "stopped")
 
-def main():
-    parser = argparse.ArgumentParser(description="synlynk: The Universal Context Switchboard for AI Devs")
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="synlynk: The Universal Context Switchboard for AI Devs"
+    )
     parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
-    
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("init", help="Initialize synlynk in a repository")
-    subparsers.add_parser("upgrade", help="Upgrade synlynk binary and templates")
+
+    init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
+    init_parser.add_argument("--force", action="store_true",
+                             help="Overwrite existing template files")
+
+    subparsers.add_parser("upgrade", help="Check for and apply updates")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
-    exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="The command to execute")
+    exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
+
+    watch_parser = subparsers.add_parser("watch", help="Manage the file watcher daemon")
+    watch_parser.add_argument("action", choices=["start", "stop", "status"],
+                              help="Daemon action")
+
+    subparsers.add_parser("checkpoint",
+                          help="Archive done tasks, refresh context, emit telemetry")
+
+    status_parser = subparsers.add_parser("status", help="Show project state dashboard")
+    status_parser.add_argument("--json", action="store_true", dest="json_output",
+                               help="Output machine-readable JSON")
 
     args = parser.parse_args()
 
     if args.command == "init":
-        init()
+        init(force=args.force)
     elif args.command == "exec":
         exec_command(args.cmd)
     elif args.command == "upgrade":
         upgrade()
+    elif args.command == "watch":
+        daemon = WatchDaemon()
+        if args.action == "start":
+            daemon.start()
+        elif args.action == "stop":
+            daemon.stop()
+        elif args.action == "status":
+            daemon.status()
+    elif args.command == "checkpoint":
+        checkpoint()
+    elif args.command == "status":
+        cmd_status(json_output=args.json_output)
     else:
         parser.print_help()
 
