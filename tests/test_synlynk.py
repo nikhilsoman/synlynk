@@ -322,3 +322,48 @@ def test_checkpoint_idempotent_when_no_done_tasks(project_dir, monkeypatch):
     original_todo = (project_dir / "project-docs" / "todo.md").read_text()
     synlynk.checkpoint()
     assert (project_dir / "project-docs" / "todo.md").read_text() == original_todo
+
+def test_status_json_structure(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    monkeypatch.setattr(synlynk, 'get_mode', lambda: "single")
+    with pytest.raises(SystemExit) as exc:
+        synlynk.cmd_status(json_output=True)
+    captured = capsys.readouterr()
+    import json
+    data = json.loads(captured.out)
+    assert data["schema_version"] == 1
+    assert data["user"] == "nikhil"
+    assert "active_tasks" in data
+    assert "budget" in data
+    assert "watcher" in data
+    assert exc.value.code == 0
+
+def test_status_json_exit_1_on_sentinel(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    monkeypatch.setattr(synlynk, 'get_mode', lambda: "single")
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "# Sentinel Alerts\n- [2026-05-17] FLATLINE: `x` failed\n"
+    )
+    with pytest.raises(SystemExit) as exc:
+        synlynk.cmd_status(json_output=True)
+    assert exc.value.code == 1
+
+def test_status_human_output_contains_sections(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    monkeypatch.setattr(synlynk, 'get_mode', lambda: "single")
+    with pytest.raises(SystemExit):
+        synlynk.cmd_status(json_output=False)
+    captured = capsys.readouterr()
+    assert "ACTIVE TASKS" in captured.out
+    assert "BUDGET" in captured.out
+    assert "SENTINEL" in captured.out
+    assert "WATCHER" in captured.out
+
+def test_status_shows_active_tasks(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    monkeypatch.setattr(synlynk, 'get_mode', lambda: "single")
+    with pytest.raises(SystemExit):
+        synlynk.cmd_status(json_output=False)
+    captured = capsys.readouterr()
+    assert "Task one" in captured.out
+    assert "Task two" in captured.out

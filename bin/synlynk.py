@@ -526,6 +526,143 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
+def cmd_status(json_output: bool = False) -> None:
+    """Displays project state dashboard. Exits 1 if sentinel active or budget exceeded."""
+    username = get_username()
+    mode = get_mode()
+
+    # Active tasks
+    active_tasks = []
+    todo_path = "project-docs/todo.md"
+    if os.path.exists(todo_path):
+        with open(todo_path) as f:
+            for line in f:
+                if "- [ ]" in line:
+                    id_m = re.search(r'<!--\s*id:\s*(\d+)\s*-->', line)
+                    text = re.sub(r'-\s*\[ \]\s*', '', line).strip()
+                    text = re.sub(r'<!--.*?-->', '', text).strip()
+                    active_tasks.append({"id": id_m.group(1) if id_m else None, "text": text})
+
+    # Last checkpoint from telemetry
+    last_checkpoint = None
+    telemetry_file = ".synlynk/telemetry.json"
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                events = json.load(f)
+            for e in reversed(events):
+                if e.get("type") == "checkpoint":
+                    last_checkpoint = e
+                    break
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Sentinel alerts
+    sentinel_alerts = []
+    sentinel_file = ".synlynk/sentinel.md"
+    if os.path.exists(sentinel_file):
+        with open(sentinel_file) as f:
+            for line in f:
+                if line.startswith("- ["):
+                    sentinel_alerts.append(line.strip())
+
+    # Budget
+    total_usd, total_requests = parse_costs_md()
+    config = load_config()
+    limit_usd = config["budget"]["limit_usd"]
+    limit_reqs = config["budget"]["limit_requests"]
+
+    # Watcher
+    daemon = WatchDaemon()
+    watcher_running = daemon._is_running()
+    last_trigger_file = None
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                events = json.load(f)
+            for e in reversed(events):
+                if e.get("type") == "watch_trigger":
+                    last_trigger_file = e.get("changed_file")
+                    break
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Teammates (team mode)
+    teammates = []
+    if mode == "team":
+        devlogs_dir = "project-docs/devlogs"
+        if os.path.exists(devlogs_dir):
+            for fname in sorted(os.listdir(devlogs_dir)):
+                if fname.endswith(".md") and fname not in (f"{username}.md", "README.md"):
+                    fpath = os.path.join(devlogs_dir, fname)
+                    teammates.append({
+                        "user": fname[:-3],
+                        "last_active": _get_last_devlog_date(fpath),
+                    })
+
+    has_alert = bool(sentinel_alerts) or total_usd >= limit_usd or total_requests >= limit_reqs
+
+    if json_output:
+        data = {
+            "schema_version": 1,
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "user": username,
+            "mode": mode,
+            "active_tasks": active_tasks,
+            "last_checkpoint": last_checkpoint,
+            "sentinel": {"alerts": sentinel_alerts},
+            "budget": {
+                "used_usd": round(total_usd, 4),
+                "limit_usd": limit_usd,
+                "requests": total_requests,
+                "limit_requests": limit_reqs,
+            },
+            "watcher": {"running": watcher_running, "last_trigger_file": last_trigger_file},
+            "teammates": teammates,
+        }
+        print(json.dumps(data, indent=2))
+        sys.exit(1 if has_alert else 0)
+
+    # Human output
+    sep = "─" * 45
+    print(sep)
+    print(f" synlynk status · @{username} · {mode} mode")
+    print(sep)
+    print(f" ACTIVE TASKS ({len(active_tasks)})")
+    for t in active_tasks:
+        tid = f"#{t['id']}" if t['id'] else ""
+        print(f"   [ ] {t['text']:<40} {tid}")
+    print()
+    print(" LAST CHECKPOINT")
+    if last_checkpoint:
+        print(f"   @{last_checkpoint.get('user')} · {last_checkpoint.get('timestamp')} · "
+              f"{last_checkpoint.get('completed_task_count', 0)} tasks archived")
+    else:
+        print("   No checkpoints yet")
+    print()
+    print(" SENTINEL")
+    if sentinel_alerts:
+        for alert in sentinel_alerts:
+            print(f"   ⚠ {alert}")
+    else:
+        print("   ✓ No alerts")
+    print()
+    pct = (total_usd / limit_usd * 100) if limit_usd else 0
+    print(" BUDGET")
+    print(f"   ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} / {limit_reqs} requests")
+    print()
+    icon = "●" if watcher_running else "○"
+    state = "Running" if watcher_running else "Stopped"
+    trigger = f"  ·  last trigger {last_trigger_file}" if last_trigger_file else ""
+    print(f" WATCHER\n   {icon} {state}{trigger}")
+    if mode == "team" and teammates:
+        print()
+        print(" TEAMMATES")
+        for tm in teammates:
+            print(f"   @{tm['user']:<12} · last active {tm['last_active']}")
+    print(sep)
+    sys.exit(1 if has_alert else 0)
+
 class WatchDaemon:
     """Polls project-docs/ and regenerates context.md on change.
 
