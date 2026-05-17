@@ -78,7 +78,7 @@ def parse_costs_md() -> tuple:
             parts = [p.strip() for p in line.split("|")]
             if len(parts) < 8:
                 continue
-            cost_str = parts[6].lstrip("$")
+            cost_str = parts[5].lstrip("$")
             try:
                 total_usd += float(cost_str)
                 total_requests += 1
@@ -168,31 +168,6 @@ TEMPLATES = {
         "sync_endpoint": None,
     }, indent=2),
 }
-
-def log_telemetry(command, duration, exit_code, cost=0.0):
-    """Logs execution telemetry to a local JSON file."""
-    telemetry_file = ".synlynk/telemetry.json"
-    entry = {
-        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
-        "command": command,
-        "duration": round(duration, 2),
-        "exit_code": exit_code,
-        "cost": round(cost, 4)
-    }
-
-    data = []
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file, "r") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            pass
-
-    data.append(entry)
-    data = data[-100:]
-
-    with open(telemetry_file, "w") as f:
-        json.dump(data, f, indent=2)
 
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
@@ -842,57 +817,7 @@ def upgrade() -> None:
         print(f"  ⚠ Could not check for updates: {e}")
         print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
 
-def extract_tokens(output_text):
-    patterns = [
-        r"Tokens: (\d+) in, (\d+) out",
-        r"usage:.*input_tokens: (\d+).*output_tokens: (\d+)",
-        r"Prompt Tokens: (\d+).*Completion Tokens: (\d+)",
-        r"tokens used: (\d+)"
-    ]
-    in_tokens = 0
-    out_tokens = 0
-    for pattern in patterns:
-        match = re.search(pattern, output_text, re.IGNORECASE | re.DOTALL)
-        if match:
-            groups = match.groups()
-            if len(groups) == 2:
-                in_tokens += int(groups[0])
-                out_tokens += int(groups[1])
-            elif len(groups) == 1:
-                in_tokens += int(groups[0])
-    return in_tokens, out_tokens
-
-def update_costs(command, in_tokens, out_tokens, duration):
-    """Updates costs.md and provides a 'Budget Pulse' summary."""
-    costs_file = "project-docs/costs.md"
-    telemetry_file = ".synlynk/telemetry.json"
-    
-    if not os.path.exists(costs_file):
-        return 0.0
-
-    est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
-    
-    total_requests = 0
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file, "r") as f:
-                data = json.load(f)
-                total_requests = len(data)
-        except:
-            pass
-            
-    entry = f"| {time.strftime('%Y-%m-%d %H:%M')} | exec | {command[:20]}... | {in_tokens}/{out_tokens} | 1 | ${est_cost:.4f} | duration: {duration:.1f}s |\n"
-    
-    with open(costs_file, "a") as f:
-        f.write(entry)
-        
-    print(f"  📊 Budget Pulse: ${est_cost:.4f} this session | Total Requests: {total_requests}")
-    if in_tokens > 0:
-        print(f"  🪙 Tokens: {in_tokens} in / {out_tokens} out")
-    
-    return est_cost
-
-def exec_command(cmd_args: list) -> None:
+def exec_command(cmd_args: list) -> int:
     if not cmd_args:
         print("Error: No command provided to exec.")
         return
@@ -932,6 +857,7 @@ def exec_command(cmd_args: list) -> None:
         check_flatline()
         daemon = WatchDaemon()
         set_state("watching" if daemon._is_running() else "stopped")
+    return exit_code
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -965,7 +891,7 @@ def main() -> None:
     if args.command == "init":
         init(force=args.force)
     elif args.command == "exec":
-        exec_command(args.cmd)
+        sys.exit(exec_command(args.cmd))
     elif args.command == "upgrade":
         upgrade()
     elif args.command == "watch":

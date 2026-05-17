@@ -3,7 +3,7 @@
 
   <!-- Icon mark (64×64, scaled from 180×180 natural size) -->
   <g transform="translate(40,40) scale(0.356)">
-    <rect x="-90" y="-90" width="180" height="180" rx="36" fill="#0E0E0F"/>
+    <rect x="-90" y="-90" width="180" height="180" rx="36" fill="#0E0E0F" stroke="#888" stroke-width="6"/>
     <rect x="-90" y="-90" width="180" height="32" rx="36" fill="#1A1A1C"/>
     <rect x="-90" y="-72" width="180" height="14" fill="#1A1A1C"/>
     <circle cx="-62" cy="-74" r="5" fill="#FF5F57"/>

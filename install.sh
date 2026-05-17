@@ -5,7 +5,7 @@
 
 set -e
 
-VERSION="1.2.0-lite"
+VERSION="0.2.0"
 INSTALL_DIR="$HOME/.synlynk/bin"
 BINARY_PATH="$INSTALL_DIR/synlynk"
 
