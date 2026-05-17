@@ -130,3 +130,41 @@ def test_flatline_appends_to_existing_sentinel(project_dir, monkeypatch):
     sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
     assert "old alert" in sentinel
     assert "make build" in sentinel
+
+
+def test_generate_context_excludes_done_tasks(project_dir):
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "## Active Tasks\n"
+        "- [ ] Active task <!-- id: 1 -->\n"
+        "- [x] Done task <!-- id: 2 -->\n"
+    )
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Active task" in ctx
+    assert "Done task" not in ctx
+
+def test_generate_context_includes_only_active_roadmap(project_dir):
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "In Progress" in ctx
+    assert "Feature A" in ctx
+
+def test_generate_context_includes_sentinel_alerts(project_dir):
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "# Sentinel Alerts\n- [2026-05-17 10:00] FLATLINE: `npm test` failed\n"
+    )
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "FLATLINE" in ctx
+
+def test_generate_context_omits_sentinel_section_when_empty(project_dir):
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Sentinel Alerts" not in ctx
+
+def test_generate_context_scope_stub_falls_back(project_dir, capsys):
+    synlynk.generate_context(scope="task:99")
+    captured = capsys.readouterr()
+    assert "not yet implemented" in captured.out
+    # Still generates full context
+    assert (project_dir / ".synlynk" / "context.md").exists()

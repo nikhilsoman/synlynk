@@ -200,29 +200,143 @@ def check_budgets():
     elif total_reqs >= (limit_reqs * 0.8):
         print(f"\n⚠️  [Budget Warning] You have reached 80% of your request limit ({total_reqs} / {limit_reqs}).")
 
-def generate_context():
-    """Aggregates project-docs into a single context snapshot."""
+def _get_last_devlog_date(filepath: str) -> str | None:
+    """Returns the most recent ## YYYY-MM-DD heading from a devlog file."""
+    if not os.path.exists(filepath):
+        return None
+    pattern = re.compile(r'^## (\d{4}-\d{2}-\d{2})')
+    last_date = None
+    with open(filepath) as f:
+        for line in f:
+            m = pattern.match(line)
+            if m:
+                last_date = m.group(1)
+    return last_date
+
+
+def _write_recent_devlog_entries(out, filepath: str, cutoff: float) -> None:
+    """Writes devlog ## sections newer than cutoff timestamp to out."""
+    import calendar
+    pattern = re.compile(r'^## (\d{4}-\d{2}-\d{2})')
+    current_lines = []
+    in_section = False
+    with open(filepath) as f:
+        for line in f:
+            m = pattern.match(line)
+            if m:
+                if in_section and current_lines:
+                    out.writelines(current_lines)
+                try:
+                    ts = calendar.timegm(time.strptime(m.group(1), "%Y-%m-%d"))
+                    in_section = ts >= cutoff
+                except ValueError:
+                    in_section = False
+                current_lines = [line]
+            elif in_section:
+                current_lines.append(line)
+    if in_section and current_lines:
+        out.writelines(current_lines)
+
+
+def _write_last_devlog_section(out, filepath: str) -> None:
+    """Writes only the last ## section from a devlog file."""
+    if not os.path.exists(filepath):
+        return
+    pattern = re.compile(r'^## \d{4}-\d{2}-\d{2}')
+    sections = []
+    current = []
+    with open(filepath) as f:
+        for line in f:
+            if pattern.match(line) and current:
+                sections.append(current)
+                current = [line]
+            else:
+                current.append(line)
+    if current:
+        sections.append(current)
+    if sections:
+        out.writelines(sections[-1])
+
+
+def generate_context(scope: str = "full") -> None:
+    """Aggregates project-docs into .synlynk/context.md (active items only)."""
     docs_dir = "project-docs"
     context_file = ".synlynk/context.md"
-    
+    sentinel_file = ".synlynk/sentinel.md"
+
     if not os.path.exists(docs_dir):
         return
-    
-    print("  Generating context snapshot...")
+
+    if scope != "full":
+        # TODO(v1.3.0): implement task-scoped context slices for sub-agent routing
+        print(f"  ⚠ scope='{scope}' not yet implemented, falling back to full context")
+        scope = "full"
+
     if not os.path.exists(".synlynk"):
         os.makedirs(".synlynk")
 
+    username = get_username()
+    mode = get_mode()
+
     with open(context_file, "w") as out:
         out.write("# synlynk Context Snapshot\n\n")
-        out.write(f"Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        
-        for filename in ["memory.md", "roadmap.md", "todo.md"]:
-            path = os.path.join(docs_dir, filename)
-            if os.path.exists(path):
-                out.write(f"## File: {filename}\n")
-                with open(path, "r") as f:
-                    out.write(f.read())
-                out.write("\n---\n\n")
+        out.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} | User: @{username} | Mode: {mode}\n\n")
+
+        # Sentinel alerts at top (omit section if empty)
+        if os.path.exists(sentinel_file):
+            content = open(sentinel_file).read().strip()
+            lines = [l for l in content.splitlines() if l.startswith("- [")]
+            if lines:
+                out.write("# Sentinel Alerts\n")
+                out.write("\n".join(lines) + "\n\n---\n\n")
+
+        # Active tasks only ([ ] lines)
+        todo_path = os.path.join(docs_dir, "todo.md")
+        if os.path.exists(todo_path):
+            out.write("## Active Tasks\n")
+            with open(todo_path) as f:
+                for line in f:
+                    if "- [ ]" in line:
+                        out.write(line)
+            out.write("\n---\n\n")
+
+        # Roadmap: header rows + In Progress rows only
+        roadmap_path = os.path.join(docs_dir, "roadmap.md")
+        if os.path.exists(roadmap_path):
+            out.write("## Roadmap (active)\n")
+            with open(roadmap_path) as f:
+                for line in f:
+                    if (line.startswith("| Priority") or "| :---" in line or
+                            "In Progress" in line):
+                        out.write(line)
+            out.write("\n---\n\n")
+
+        # Memory (decisions) — full, it's already curated
+        memory_path = os.path.join(docs_dir, "memory.md")
+        if os.path.exists(memory_path):
+            out.write("## Decisions\n")
+            out.write(open(memory_path).read())
+            out.write("\n---\n\n")
+
+        # Recent devlog (last 7 days)
+        cutoff = time.time() - (7 * 24 * 3600)
+        devlog_path = os.path.join(docs_dir, "devlogs", f"{username}.md")
+        if os.path.exists(devlog_path):
+            out.write(f"## Recent Devlog (@{username})\n")
+            _write_recent_devlog_entries(out, devlog_path, cutoff)
+            out.write("\n---\n\n")
+
+        # Teammates (team mode): last 1 entry per teammate devlog
+        if mode == "team":
+            devlogs_dir = os.path.join(docs_dir, "devlogs")
+            if os.path.exists(devlogs_dir):
+                for fname in sorted(os.listdir(devlogs_dir)):
+                    if (fname.endswith(".md") and
+                            fname not in (f"{username}.md", "README.md")):
+                        out.write(f"## Teammate Activity (@{fname[:-3]})\n")
+                        _write_last_devlog_section(out, os.path.join(devlogs_dir, fname))
+                        out.write("\n---\n\n")
+
     print(f"  ✓ Context saved to {context_file}")
 
 def init():
