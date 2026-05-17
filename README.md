@@ -1,6 +1,8 @@
-# synlynk
+<p align="center">
+  <img src="docs/img/logo/lockup.svg" alt="synlynk — keep your AI tools in sync" height="80">
+</p>
 
-**Keep your AI tools in sync with your project.**
+<p align="center"><strong>Keep your AI tools in sync with your project.</strong></p>
 
 synlynk is a single-file Python CLI that injects project context into AI tool sessions, tracks costs, and detects hallucination loops. It maintains a shared `project-docs/` directory that every AI tool reads at session start — so switching between Claude Code, Gemini CLI, or Cursor doesn't lose your task state, decisions, or progress.
 
