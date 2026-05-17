@@ -98,16 +98,73 @@ def set_state(state: str) -> None:
         sys.stdout.write(f"\033]0;{title}\007")
         sys.stdout.flush()
 
+_SESSION_PROTOCOL = """\
+## Session Start (every session, no exceptions)
+1. Run: `git config user.name` — this is your @username for all attribution
+2. Run: `synlynk watch status` — if stopped, run `synlynk watch start`
+3. Read: `.synlynk/context.md` — your full project state snapshot
+4. Check `.synlynk/sentinel.md` for any active alerts
+5. Greet with 3 rows:
+   - Row 1: Last task YOU completed [by @username] — from your devlog entry
+   - Row 2: Your next active task — from project-docs/todo.md
+   - Row 3 (team mode only): Last 1 entry per teammate from project-docs/devlogs/
+
+## During the session
+- Mark tasks `[x]` in project-docs/todo.md when complete — do NOT delete them
+- Append decisions to project-docs/memory.md with [@username] attribution
+- Run `synlynk checkpoint` at every task boundary
+- In team mode: always `git pull` before editing any project-docs file
+- Log costs in project-docs/costs.md after each significant AI operation
+
+## At session end
+- Append a summary entry to project-docs/devlogs/<username>.md
+- Run `synlynk checkpoint` one final time
+- Run `synlynk status` and include the output in your closing message
+"""
+
 TEMPLATES = {
-    "roadmap.md": "# synlynk Roadmap\n\n| Priority | Feature | Description | Status | Target Release | Owner |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n",
-    "todo.md": "# Project Todo List\n## Active Tasks\n- [ ] Initialize repository with synlynk <!-- id: 0 -->\n",
-    "memory.md": "# synlynk Memory\n\n## Decisions\n- **Structure:** Uses `/project-docs` for core records.\n\n## Conventions\n- **Session Protocol:** Use synlynk project-docs for context.\n",
-    "costs.md": "# synlynk Costs\n\n| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n| | | | | | | |\n",
-    "GEMINI.md": "# synlynk Gemini Instructions\n\n- **Critical:** Always read `.synlynk/context.md` at the start of every session for full project context.\n- Follow the roadmap in `project-docs/roadmap.md` and active tasks in `project-docs/todo.md`.\n- Log your progress in `project-docs/devlogs/<your-username>.md`.\n- Track token usage and costs in `project-docs/costs.md`.\n",
-    "CLAUDE.md": "# synlynk Claude Instructions\n\n- **Critical:** Always read `.synlynk/context.md` at the start of every session for full project context.\n- Follow the roadmap in `project-docs/roadmap.md` and active tasks in `project-docs/todo.md`.\n- Log your progress in `project-docs/devlogs/<your-username>.md`.\n- Track token usage and costs in `project-docs/costs.md`.\n",
-    "AI_INSTRUCTIONS.md": "# synlynk Universal AI Instructions\n\n- **Context:** Always refer to `.synlynk/context.md` for the latest project state.\n- **Roadmap:** Current goals are in `project-docs/roadmap.md`.\n- **Tasks:** Active tasks are in `project-docs/todo.md`.\n- **History:** Previous session notes are in `project-docs/devlogs/`.\n",
-    ".cursorrules": "Always refer to .synlynk/context.md for project context, roadmap, and active tasks before suggesting code changes.",
-    "config.json": "{\n  \"budget\": {\n    \"limit_usd\": 10.00,\n    \"limit_requests\": 100\n  }\n}"
+    "roadmap.md": (
+        "# synlynk Roadmap\n\n"
+        "| Priority | Feature | Description | Status | Target Release | Owner |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        "| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n"
+    ),
+    "todo.md": (
+        "# Project Todo List\n## Active Tasks\n"
+        "- [ ] Initialize repository with synlynk <!-- id: 0 -->\n"
+    ),
+    "memory.md": (
+        "# synlynk Memory\n\n## Decisions\n"
+        "- **Structure:** Uses `/project-docs` for core records.\n\n"
+        "## Conventions\n- **Session Protocol:** Use synlynk project-docs for context.\n"
+    ),
+    "costs.md": (
+        "# synlynk Costs\n\n"
+        "| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    ),
+    "GEMINI.md": f"# synlynk Gemini Instructions\n\n{_SESSION_PROTOCOL}",
+    "CLAUDE.md": f"# synlynk Claude Instructions\n\n{_SESSION_PROTOCOL}",
+    "AI_INSTRUCTIONS.md": (
+        "# synlynk Universal AI Instructions\n\n"
+        "Apply the following as your system prompt or custom instructions "
+        "before starting any session in this repository.\n\n"
+        f"{_SESSION_PROTOCOL}"
+    ),
+    ".cursorrules": (
+        "Read .synlynk/context.md at session start. "
+        "Mark tasks [x] in project-docs/todo.md when done. "
+        "Run `synlynk checkpoint` at task boundaries. "
+        "Attribute all project-docs edits with [@username]."
+    ),
+    "config.json": json.dumps({
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30,
+        "org": None,
+        "team": None,
+        "sync_endpoint": None,
+    }, indent=2),
 }
 
 def log_telemetry(command, duration, exit_code, cost=0.0):
@@ -339,38 +396,37 @@ def generate_context(scope: str = "full") -> None:
 
     print(f"  ✓ Context saved to {context_file}")
 
-def init():
+def init(force: bool = False) -> None:
     print("Initializing synlynk in current directory...")
-    
+
     docs_dir = "project-docs"
     devlogs_dir = os.path.join(docs_dir, "devlogs")
-    synlynk_dir = ".synlynk" 
-    
+    synlynk_dir = ".synlynk"
+
     for d in [docs_dir, devlogs_dir, synlynk_dir]:
         if not os.path.exists(d):
             os.makedirs(d)
             print(f"  Created {d}/")
 
     for filename, content in TEMPLATES.items():
-        if filename in ["GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", ".cursorrules"]:
-            file_path = filename 
+        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", ".cursorrules"):
+            file_path = filename
         elif filename == "config.json":
             file_path = os.path.join(synlynk_dir, filename)
         else:
             file_path = os.path.join(docs_dir, filename)
-            
-        if not os.path.exists(file_path):
+
+        if os.path.exists(file_path) and not force:
+            print(f"  {file_path} already exists. Skipping (use --force to overwrite).")
+        else:
             with open(file_path, "w") as f:
                 f.write(content)
-            print(f"  Created {file_path}")
-        else:
-            print(f"  {file_path} already exists. Skipping.")
+            action = "Updated" if os.path.exists(file_path) else "Created"
+            print(f"  {action} {file_path}")
 
-    print("\n💡 Tip: To enable frictionless telemetry, add these aliases to your .zshrc or .bashrc:")
-    print("   alias claude='synlynk exec claude'")
-    print("   alias gemini='synlynk exec gemini'")
-
-    print("\n✓ synlynk initialized.")
+    set_state("stopped")
+    print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
+    print("✓ synlynk initialized.")
 
 def upgrade():
     print(f"Checking for updates... (Current version: {VERSION})")

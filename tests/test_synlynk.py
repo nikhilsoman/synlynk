@@ -168,3 +168,47 @@ def test_generate_context_scope_stub_falls_back(project_dir, capsys):
     assert "not yet implemented" in captured.out
     # Still generates full context
     assert (project_dir / ".synlynk" / "context.md").exists()
+
+
+def test_init_creates_project_structure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(force=False)
+    assert (tmp_path / "project-docs" / "todo.md").exists()
+    assert (tmp_path / "project-docs" / "memory.md").exists()
+    assert (tmp_path / ".synlynk" / "config.json").exists()
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "GEMINI.md").exists()
+
+
+def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(force=False)
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "synlynk watch status" in content
+    assert "synlynk checkpoint" in content
+    assert "context.md" in content
+
+
+def test_init_skips_existing_without_force(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
+    synlynk.init(force=False)
+    assert (tmp_path / "CLAUDE.md").read_text() == "MY CUSTOM CONTENT"
+
+
+def test_init_force_overwrites_existing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
+    synlynk.init(force=True)
+    assert (tmp_path / "CLAUDE.md").read_text() != "MY CUSTOM CONTENT"
+    assert "synlynk checkpoint" in (tmp_path / "CLAUDE.md").read_text()
+
+
+def test_init_config_schema_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(force=False)
+    import json
+    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    assert config["schema_version"] == 1
+    assert "watch_interval_seconds" in config
+    assert "org" in config
