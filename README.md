@@ -45,8 +45,11 @@ synlynk upgrade
 
 | Command | Description |
 | --- | --- |
-| `synlynk init` | Bootstrap `project-docs/` and AI instruction files in the current repo |
+| `synlynk init [--force]` | Bootstrap `project-docs/` and AI instruction files in the current repo |
 | `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
+| `synlynk watch start\|stop\|status` | Background daemon — regenerates `context.md` when files change |
+| `synlynk checkpoint` | Archive completed tasks, refresh context, emit telemetry |
+| `synlynk status [--json]` | Project state dashboard: tasks, budget, sentinel alerts, watcher |
 | `synlynk upgrade` | Check GitHub releases for a newer version |
 | `synlynk --version` | Print current version |
 
@@ -61,9 +64,13 @@ project-docs/
   devlogs/          # Per-user session notes
 
 .synlynk/
-  context.md        # Auto-generated snapshot (overwritten each exec)
+  context.md        # Auto-generated snapshot (overwritten each exec/watch cycle)
   config.json       # Budget limits and settings
-  telemetry.json    # Rolling log of last 100 exec events
+  telemetry.json    # Rolling log of last 100 exec/checkpoint/watch events
+  state             # Current daemon state: watching | active | stopped
+  sentinel.md       # Flatline alerts (written by check_flatline)
+  watch.pid         # Watcher daemon PID (present only while running)
+  watch.log         # Watcher daemon stdout/stderr
 ```
 
 ## Configuration

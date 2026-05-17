@@ -8,7 +8,7 @@ import json
 import re
 import urllib.request
 
-VERSION = "1.2.1-lite"
+VERSION = "0.2.0"
 
 
 def get_username() -> str:
