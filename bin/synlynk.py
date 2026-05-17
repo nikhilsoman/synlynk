@@ -177,7 +177,7 @@ def log_telemetry(command, duration, exit_code, cost=0.0):
         "exit_code": exit_code,
         "cost": round(cost, 4)
     }
-    
+
     data = []
     if os.path.exists(telemetry_file):
         try:
@@ -185,12 +185,38 @@ def log_telemetry(command, duration, exit_code, cost=0.0):
                 data = json.load(f)
         except json.JSONDecodeError:
             pass
-            
+
     data.append(entry)
     data = data[-100:]
-    
+
     with open(telemetry_file, "w") as f:
         json.dump(data, f, indent=2)
+
+def log_telemetry_event(event: dict) -> None:
+    """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
+    telemetry_file = ".synlynk/telemetry.json"
+    if not os.path.exists(".synlynk"):
+        return
+    data = []
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    data.append(event)
+    data = data[-100:]
+    with open(telemetry_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _check_costs_freshness() -> None:
+    """Warns if costs.md hasn't been updated in the current session (>1 hour)."""
+    costs_file = "project-docs/costs.md"
+    if not os.path.exists(costs_file):
+        return
+    if time.time() - os.path.getmtime(costs_file) > 3600:
+        print("  ⚠ costs.md not updated this session — AI may have missed logging")
 
 def check_flatline() -> None:
     """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
@@ -225,37 +251,33 @@ def check_flatline() -> None:
     with open(sentinel_file, "w") as f:
         f.write(existing + alert)
 
-def check_budgets():
-    """Checks cumulative usage against budget limits."""
+def check_budgets() -> None:
+    """Warns if cumulative spend from costs.md approaches config limits."""
+    config = load_config()
+    limit_usd = config["budget"]["limit_usd"]
+    limit_reqs = config["budget"]["limit_requests"]
+    total_usd, _ = parse_costs_md()
+
+    # Request count from telemetry exec events
+    total_reqs = 0
     telemetry_file = ".synlynk/telemetry.json"
-    config_file = ".synlynk/config.json"
-    
-    if not os.path.exists(telemetry_file) or not os.path.exists(config_file):
-        return
-
-    try:
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        with open(telemetry_file, "r") as f:
-            data = json.load(f)
-    except:
-        return
-
-    limit_usd = config.get("budget", {}).get("limit_usd", 10.0)
-    limit_reqs = config.get("budget", {}).get("limit_requests", 100)
-    
-    total_usd = sum(e.get('cost', 0.0) for e in data)
-    total_reqs = len(data)
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                data = json.load(f)
+            total_reqs = sum(1 for e in data if e.get("type") == "exec")
+        except (json.JSONDecodeError, IOError):
+            pass
 
     if total_usd >= limit_usd:
-        print(f"\n🛑 [Budget Alert] CRITICAL: You have spent ${total_usd:.2f} / ${limit_usd:.2f} budget.")
-    elif total_usd >= (limit_usd * 0.8):
-        print(f"\n⚠️  [Budget Warning] You have reached 80% of your cost budget (${total_usd:.2f} / ${limit_usd:.2f}).")
+        print(f"\n🛑 [Budget Alert] CRITICAL: Spent ${total_usd:.2f} / ${limit_usd:.2f}.")
+    elif total_usd >= limit_usd * 0.8:
+        print(f"\n⚠️  [Budget Warning] 80% of cost budget (${total_usd:.2f} / ${limit_usd:.2f}).")
 
     if total_reqs >= limit_reqs:
-        print(f"\n🛑 [Budget Alert] CRITICAL: You have reached {total_reqs} / {limit_reqs} request limit.")
-    elif total_reqs >= (limit_reqs * 0.8):
-        print(f"\n⚠️  [Budget Warning] You have reached 80% of your request limit ({total_reqs} / {limit_reqs}).")
+        print(f"\n🛑 [Budget Alert] CRITICAL: {total_reqs} / {limit_reqs} request limit.")
+    elif total_reqs >= limit_reqs * 0.8:
+        print(f"\n⚠️  [Budget Warning] 80% of request limit ({total_reqs} / {limit_reqs}).")
 
 def _get_last_devlog_date(filepath: str) -> str | None:
     """Returns the most recent ## YYYY-MM-DD heading from a devlog file."""
@@ -485,30 +507,22 @@ def update_costs(command, in_tokens, out_tokens, duration):
     
     return est_cost
 
-def exec_command(cmd_args):
+def exec_command(cmd_args: list) -> None:
     if not cmd_args:
         print("Error: No command provided to exec.")
         return
 
     generate_context()
-    check_budgets() # Warn BEFORE execution if budget is low
-    
+    check_budgets()
+    set_state("active")
+
     print(f"  Executing: {' '.join(cmd_args)}")
     start_time = time.time()
     exit_code = 0
-    captured_output = []
-    
+
     try:
-        process = subprocess.Popen(
-            cmd_args, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT, 
-            text=True,
-            bufsize=1
-        )
-        for line in process.stdout:
-            print(line, end="")
-            captured_output.append(line)
+        # Inherit stdio directly — interactive tools (Claude Code, Gemini) need a real TTY
+        process = subprocess.Popen(cmd_args)
         process.wait()
         exit_code = process.returncode
     except FileNotFoundError:
@@ -516,17 +530,23 @@ def exec_command(cmd_args):
         print(f"  Error: Command '{cmd_args[0]}' not found.")
     except Exception as e:
         exit_code = 1
-        print(f"  Error: {str(e)}")
+        print(f"  Error: {e}")
     finally:
-        end_time = time.time()
-        duration = end_time - start_time
-        full_output = "".join(captured_output)
-        in_t, out_t = extract_tokens(full_output)
-        
+        duration = time.time() - start_time
         print(f"\n  ✓ Execution finished in {duration:.2f}s")
-        cost = update_costs(' '.join(cmd_args), in_t, out_t, duration)
-        log_telemetry(' '.join(cmd_args), duration, exit_code, cost)
+        _check_costs_freshness()
+        log_telemetry_event({
+            "type": "exec",
+            "schema_version": 1,
+            "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+            "user": get_username(),
+            "command": ' '.join(cmd_args),
+            "duration": round(duration, 2),
+            "exit_code": exit_code,
+        })
         check_flatline()
+        daemon = WatchDaemon()
+        set_state("watching" if daemon._is_running() else "stopped")
 
 def main():
     parser = argparse.ArgumentParser(description="synlynk: The Universal Context Switchboard for AI Devs")

@@ -212,3 +212,37 @@ def test_init_config_schema_version(tmp_path, monkeypatch):
     assert config["schema_version"] == 1
     assert "watch_interval_seconds" in config
     assert "org" in config
+
+
+def test_check_budgets_no_alert_under_threshold(project_dir, capsys):
+    # costs.md has $1.24 out of $10.00
+    synlynk.check_budgets()
+    captured = capsys.readouterr()
+    assert "Budget Alert" not in captured.out
+
+
+def test_check_budgets_warning_at_80_percent(project_dir, capsys):
+    import json
+    config = json.loads((project_dir / ".synlynk" / "config.json").read_text())
+    config["budget"]["limit_usd"] = 1.50  # $1.24 is 82% of $1.50
+    (project_dir / ".synlynk" / "config.json").write_text(json.dumps(config))
+    synlynk.check_budgets()
+    captured = capsys.readouterr()
+    assert "Budget Warning" in captured.out
+
+
+def test_check_costs_freshness_warns_when_stale(project_dir, capsys, monkeypatch):
+    # Make costs.md appear old by setting mtime to 2 hours ago
+    import time
+    costs_path = str(project_dir / "project-docs" / "costs.md")
+    old_time = time.time() - 7200
+    os.utime(costs_path, (old_time, old_time))
+    synlynk._check_costs_freshness()
+    captured = capsys.readouterr()
+    assert "costs.md not updated" in captured.out
+
+
+def test_check_costs_freshness_silent_when_fresh(project_dir, capsys):
+    synlynk._check_costs_freshness()
+    captured = capsys.readouterr()
+    assert "costs.md not updated" not in captured.out
