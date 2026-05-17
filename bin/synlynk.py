@@ -482,7 +482,7 @@ def checkpoint() -> None:
             for line in f:
                 if re.match(r'\s*-\s*\[x\]', line, re.IGNORECASE):
                     id_m = re.search(r'<!--\s*id:\s*(\d+)\s*-->', line)
-                    text = re.sub(r'-\s*\[x\]\s*', '', line).strip()
+                    text = re.sub(r'-\s*\[x\]\s*', '', line, flags=re.IGNORECASE).strip()
                     text = re.sub(r'<!--.*?-->', '', text).strip()
                     completed.append({"id": id_m.group(1) if id_m else None, "text": text})
                 else:
