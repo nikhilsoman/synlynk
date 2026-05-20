@@ -13,7 +13,17 @@ VERSION = "0.2.0"
 
 
 def get_username() -> str:
-    """Resolves current user from git config."""
+    """Resolves current user's GitHub login via gh CLI, falling back to git config."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "user", "--jq", ".login"],
+            capture_output=True, text=True
+        )
+        login = result.stdout.strip()
+        if login and result.returncode == 0:
+            return login
+    except Exception:
+        pass
     try:
         result = subprocess.run(
             ["git", "config", "user.name"],
@@ -801,6 +811,24 @@ def init(force: bool = False) -> None:
 def upgrade() -> None:
     """Checks GitHub releases for a newer version and prints upgrade instructions."""
     print(f"Checking for updates... (current: v{VERSION})")
+    # Try gh CLI first — works for private repos and avoids unauthenticated rate limits.
+    try:
+        result = subprocess.run(
+            ["gh", "api", "repos/nikhilsoman/synlynk/releases/latest", "--jq", ".tag_name"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            latest = result.stdout.strip().lstrip("v")
+            if latest and latest != VERSION:
+                print(f"  ✦ New version available: v{latest}")
+                print("  Upgrade: curl -sSL https://raw.githubusercontent.com/"
+                      "nikhilsoman/synlynk/main/install.sh | bash")
+            else:
+                print(f"  ✓ You are on the latest version (v{VERSION}).")
+            return
+    except Exception:
+        pass
+    # Fall back to unauthenticated GitHub API (works for public repos).
     url = "https://api.github.com/repos/nikhilsoman/synlynk/releases/latest"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": f"synlynk/{VERSION}"})
