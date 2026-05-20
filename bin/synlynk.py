@@ -9,7 +9,7 @@ import re
 import urllib.request
 from typing import Optional
 
-VERSION = "0.2.0"
+VERSION = "0.2.2"
 
 
 def get_username() -> str:
