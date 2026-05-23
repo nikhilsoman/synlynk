@@ -1,0 +1,19 @@
+---
+layout: base.njk
+---
+
+<article class="container blog-post">
+    <header class="post-header">
+        <time class="post-date monospace">{{ date | dateFilter }}</time>
+        <h1>{{ title }}</h1>
+        <p class="excerpt">{{ excerpt }}</p>
+    </header>
+
+    <div class="post-body">
+        {{ content | safe }}
+    </div>
+
+    <footer class="post-footer">
+        <a href="/blog/" class="back-link">← Back to all posts</a>
+    </footer>
+</article>

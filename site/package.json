@@ -1,0 +1,13 @@
+{
+  "name": "synlynk-site",
+  "version": "1.2.0",
+  "description": "Synlynk landing page and blog",
+  "scripts": {
+    "build": "npx @11ty/eleventy",
+    "serve": "npx @11ty/eleventy --serve",
+    "debug": "DEBUG=Eleventy* npx @11ty/eleventy"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.0.0"
+  }
+}

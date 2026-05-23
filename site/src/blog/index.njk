@@ -1,0 +1,24 @@
+---
+layout: base.njk
+title: Build Log
+---
+
+<div class="container blog-index">
+    <header class="blog-header">
+        <div class="section-label">Build Log</div>
+        <h1>From the build log</h1>
+    </header>
+
+    <div class="post-list">
+        {% for post in collections.posts | reverse %}
+        <article class="post-preview">
+            <time class="post-date monospace">{{ post.date | dateFilter }}</time>
+            <div class="post-content">
+                <h2><a href="{{ post.url }}">{{ post.data.title }}</a></h2>
+                <p class="excerpt">{{ post.data.excerpt }}</p>
+                <a href="{{ post.url }}" class="read-more">Read more →</a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</div>
