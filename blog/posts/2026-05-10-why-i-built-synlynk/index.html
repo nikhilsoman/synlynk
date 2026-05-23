@@ -1,0 +1,17 @@
+<p>Every AI session starts from scratch.</p>
+<p>I use <strong>Claude Code</strong> for architectural planning, <strong>Gemini CLI</strong> for high-volume file processing, and <strong>Cursor</strong> for the final implementation. Each tool is world-class, but they are all essentially stateless islands.</p>
+<p>When I switch from Claude to Gemini, I have to re-explain the task. I have to copy-paste the latest decisions. I have to manually update the todo list. This &quot;context tax&quot; was slowing me down and wasting tokens.</p>
+<h3>The Pain Points</h3>
+<ol>
+<li><strong>Context Loss:</strong> Switching tools meant re-uploading the world.</li>
+<li><strong>Invisible Costs:</strong> No easy way to see how much I'd spent across tools in a single session.</li>
+<li><strong>Task Drift:</strong> Keeping <code>todo.md</code> updated was a manual chore that I often skipped.</li>
+<li><strong>Hallucination Loops:</strong> AI agents would occasionally get stuck in a &quot;flatline&quot; loop, repeatedly failing the same command while I wasn't looking.</li>
+</ol>
+<h3>The Solution: synlynk</h3>
+<p>I built <strong>synlynk</strong> as a &quot;Context Switchboard.&quot; It's not another AI tool; it's the connective tissue between them.</p>
+<p>By wrapping my existing tools (e.g., <code>synlynk exec claude</code>), I ensure that a single, unified project snapshot is always available. The AI tool is instructed to read <code>.synlynk/context.md</code> at the start of every session.</p>
+<p>It keeps the memory alive, the costs visible, and the tasks in sync.</p>
+<h3>stdlib-only</h3>
+<p>I made a deliberate choice to keep synlynk a single-file Python CLI with <strong>zero dependencies</strong>. No <code>pip install</code>, no environment hell. Just a simple <code>curl | bash</code> and you're ready to build.</p>
+<p>Stay tuned for more updates as we move toward the v0.2.0 release.</p>
