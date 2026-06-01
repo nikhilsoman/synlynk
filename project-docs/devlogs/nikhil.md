@@ -1,5 +1,28 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-01
+### Session: Trio Protocol Rearchitecture Brainstorm
+- **Activity:** Deep review of current roadmap vs. three hybrid workgroup study papers (Claude, Codex,
+  Gemini participant-observer analyses of the RxCC team). Brainstormed full rearchitecture of synlynk
+  for solo human + emergent trio of AI agents.
+- **Key Outcome:** Designed the **Trio Protocol** — two execution modes sharing a common core:
+  - **Candidate 1 (Async):** `synlynk dispatch` → lightweight daemon → Architect→Build→Verify pipeline → interactive TUI review
+  - **Candidate 2 (Sync):** `synlynk run` → foreground streaming, Ctrl+C interrupt → immediate TUI review. Plus `synlynk schedule` (OS-native + agent-native via Claude routines) and `synlynk queue`.
+- **Core design decisions locked:**
+  - Role assignment: emergent from usage (empirical scoring, no vendor defaults)
+  - Domain tagging: keyword inference, `--domain` overrides
+  - Cold-start routing: round-robin across all slots until 3 samples
+  - Score decay: recency-weighted, default half-life = 10 tasks
+  - Phase failure: auto-retry once with next-best agent, then halt
+  - Verify: fully agent-driven (agent decides what to run; `test_cmd` injected as suggestion)
+  - Review: interactive curses-based TUI
+- **Revised roadmap:** v0.3.0 (Trio Bootstrap + Sync MVP) → v0.4.0 (Capability Engine) → v0.5.0
+  (Async Mode + Full Pipeline) → v0.5.1 (Context Architecture) → v0.6.0 (Scheduled Autonomy) →
+  v0.7.0 (TUI + Cost Observability) → v1.0.0 (Stable Trio)
+- **Spec committed:** `docs/superpowers/specs/2026-06-01-synlynk-trio-protocol-design.md`
+- **Status:** Parked. Spec approved, ready for implementation planning when resumed.
+- **Next:** Invoke `superpowers:writing-plans` on the spec to produce the phased implementation plan.
+
 ## 2026-05-17
 ### Session: v0.2.1 Correctness Patch
 - **Activity:** Received and evaluated external code review feedback on v0.2.0.
