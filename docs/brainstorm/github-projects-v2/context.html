@@ -1,0 +1,50 @@
+<h2>GitHub Projects V2 — as observed in rxcc</h2>
+<p class="subtitle">The coordination pattern we're proposing to bring into Synlynk</p>
+
+<div class="section">
+  <span class="label">What rxcc does today (manually, via CLAUDE.md scripts)</span>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 8px">Board Schema</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;color:#ccc;font-size:13px">
+        <li><strong>Columns:</strong> Todo → In Progress → In Review → Approved → Done</li>
+        <li><strong>Agent field:</strong> Claude / Gemini / Codex</li>
+        <li><strong>Domain label:</strong> backend / frontend / infra / testing</li>
+        <li><strong>Status auto-advances</strong> on PR open &amp; merge</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 8px">How Agents Use It</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;color:#ccc;font-size:13px">
+        <li>GraphQL mutation to set <strong>Agent = Claude</strong> + <strong>Status = In Progress</strong> before writing code</li>
+        <li>Label <code>agent:claude</code> added on issue</li>
+        <li><strong>Routing</strong> by domain label → right agent picks up the ticket</li>
+        <li>Live issue board as a separate view for production incidents</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 8px">Pain Points (manual today)</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;color:#ccc;font-size:13px">
+        <li>Agent must copy-paste a 15-line GraphQL snippet from CLAUDE.md every session</li>
+        <li>No cross-repo visibility — Claude in rxcc can't see Gemini is mid-commit in another repo</li>
+        <li>Board drift when agents forget to update status</li>
+        <li>No automatic agent-routing — relies on domain label existing before session starts</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 8px">What Synlynk Could Own</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;color:#ccc;font-size:13px">
+        <li><code>synlynk start --issue 42</code> → board sync + worktree + context injection</li>
+        <li>Live WIP signal from board → injected into every agent's context</li>
+        <li>Circular peer-review routing enforced at <code>synlynk pr</code></li>
+        <li>Cross-repo board aggregation via <code>synlynk board status</code></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;background:#0d1b0d;border:1px solid #1a3a1a;border-radius:8px;padding:16px">
+  <span class="label" style="color:#4caf50">First question coming up in terminal</span>
+  <p style="color:#aaa;margin:4px 0 0;font-size:13px">Reviewing the scope and entry point for this feature — respond in the terminal</p>
+</div>

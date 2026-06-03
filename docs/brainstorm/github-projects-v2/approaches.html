@@ -1,0 +1,57 @@
+<h2>Three Approaches to GitHub Projects V2 Integration</h2>
+<p class="subtitle">All decisions so far: foundational in v0.4 · dynamic field resolution · soft review enforcement</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Thin Sync Wrapper</h3>
+      <p>Automates the manual GraphQL calls from CLAUDE.md. Synlynk writes TO the board (Agent, Status fields) when agents start work, open PRs, and finish. Board is still GitHub's board; Synlynk just keeps it honest.</p>
+      <div style="margin-top:10px;font-size:12px;color:#aaa">
+        <strong>New commands:</strong> <code>synlynk board connect</code>, <code>synlynk start --issue &lt;n&gt;</code> (sets In Progress + worktree), <code>synlynk pr</code> (sets In Review + suggests reviewer)<br>
+        <strong>Scope:</strong> ~3 commands, ~300 lines<br>
+        <strong>What it doesn't solve:</strong> Agents in repo A still can't see what's in-flight in repo B
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Ships fast</li><li>Zero new infrastructure</li><li>Immediately eliminates the copy-paste GraphQL pain</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Board is write-only — context is still blind to cross-repo state</li><li>Doesn't solve the S-037 branch collision problem</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Board as Bidirectional Context Layer <span style="font-size:11px;background:#7c6af7;color:#fff;padding:2px 6px;border-radius:4px;margin-left:6px">Recommended</span></h3>
+      <p>Writes to the board AND reads from it. Every <code>synlynk exec</code> / <code>synlynk start</code> queries the board for all In Progress items across registered repos and injects a "Do Not Touch" WIP signal into the agent's context. This is the missing piece that would have prevented S-037.</p>
+      <div style="margin-top:10px;font-size:12px;color:#aaa">
+        <strong>New commands:</strong> all of A, plus board state is injected into <code>.synlynk/context.md</code> on every session start<br>
+        <strong>New context section:</strong> <code>## Live WIP — other agents</code> listing active issues, branches, and agent owners across repos<br>
+        <strong>Scope:</strong> ~5 commands + context injection hook, ~600 lines
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Solves the actual cross-repo collision problem</li><li>Board becomes the single live state signal for all agents</li><li>Complements v0.4 cross-repo standards (standards tell agents what to do; WIP tells them what not to touch)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>One extra GitHub API call at every session start</li><li>Requires all repos to have <code>synlynk board connect</code> run first</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full Board Gateway + Dashboard</h3>
+      <p>Synlynk becomes the authoritative task management layer. Adds a local polling daemon that watches the board for changes, a <code>synlynk board status</code> terminal dashboard, and webhook support so the board can trigger Synlynk commands (e.g. assigning an issue auto-starts a worktree).</p>
+      <div style="margin-top:10px;font-size:12px;color:#aaa">
+        <strong>Adds:</strong> polling daemon, <code>synlynk board status</code> rich terminal UI, webhook receiver, board→worktree automation<br>
+        <strong>Scope:</strong> ~1200 lines + daemon process<br>
+        <strong>Risk:</strong> Daemon adds operational complexity; polling hits GitHub rate limits on large teams
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Real-time visibility without manual queries</li><li>Board drives workflow, not just records it</li><li>Strong v1.0 Enterprise story</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Too heavy for v0.4 — more appropriate as a v0.6+ feature</li><li>Daemon complexity belongs after the bidirectional layer is proven</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="color:#888;font-size:12px;margin-top:16px">Click your choice, then respond in terminal</p>
