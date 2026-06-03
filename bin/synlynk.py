@@ -1081,6 +1081,12 @@ def main() -> None:
                              help="Comma-separated agent set to generate files for (claude,agy,codex)")
     init_parser.add_argument("--mode", choices=["solo", "team"], default="solo",
                              help="Project mode written to project-docs/.synlynk_config.json")
+    init_parser.add_argument("--org", default=None,
+                             help="GitHub organization name (stored in .synlynk/config.json)")
+    init_parser.add_argument("--repo", default=None,
+                             help="GitHub repository name (stored in .synlynk/config.json)")
+    init_parser.add_argument("--project-id", default=None, dest="project_id",
+                             help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in agent files)")
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
@@ -1102,7 +1108,8 @@ def main() -> None:
 
     if args.command == "init":
         agents = [a.strip() for a in args.agents.split(",") if a.strip()]
-        init(force=args.force, agents=agents, mode=args.mode)
+        init(force=args.force, agents=agents, mode=args.mode,
+             org=args.org, repo=args.repo, project_id=args.project_id)
     elif args.command == "exec":
         sys.exit(exec_command(args.cmd))
     elif args.command == "upgrade":

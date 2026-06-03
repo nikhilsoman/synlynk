@@ -527,3 +527,33 @@ def test_init_overwrites_synlynk_config_with_force(project_dir):
     config_path = project_dir / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
     assert data["mode"] == "team"
+
+
+def test_build_templates_with_project_id_fills_placeholder(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    t = synlynk._build_templates(project_id="PJ_abc123")
+    assert "PJ_abc123" in t["CLAUDE.md"]
+    assert "TODO: PROJECT_ID" not in t["CLAUDE.md"]
+    assert "PJ_abc123" in t["GEMINI.md"]
+    assert "PJ_abc123" in t["AGENTS.md"]
+
+
+def test_build_templates_without_project_id_keeps_todo_placeholder(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    t = synlynk._build_templates()
+    assert "TODO: PROJECT_ID" in t["CLAUDE.md"]
+
+
+def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(project_id="PJ_xyz789")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "PJ_xyz789" in content
+    assert "TODO: PROJECT_ID" not in content
+
+
+def test_init_with_org_stored_in_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(org="myorg", repo="myrepo")
+    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    assert config["org"] == "myorg"
