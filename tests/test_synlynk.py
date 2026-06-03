@@ -401,6 +401,53 @@ def test_upgrade_handles_network_error(monkeypatch, capsys):
     assert "Could not check" in captured.out
 
 
+def test_build_templates_returns_required_keys(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    templates = synlynk._build_templates()
+    for key in ["CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md", "AGENTS.md",
+                 "roadmap.md", "todo.md", "memory.md", "costs.md",
+                 ".cursorrules", "config.json"]:
+        assert key in templates, f"missing key: {key}"
+
+
+def test_claude_template_enriched_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    content = synlynk._build_templates()["CLAUDE.md"]
+    assert "Co-Authored-By: Claude Sonnet" in content
+    assert "feat/claude/" in content
+    assert "Git Worktree-First Policy" in content
+    assert "Live Issues SOP" in content
+    assert "Mid-Session Anti-Amnesia" in content
+    assert "Mandatory 4-Doc Discipline" in content
+    assert "GitHub Projects v2 Integration" in content
+    assert "TODO: PROJECT_ID" in content
+    assert "synlynk start" in content
+    assert "synlynk watch status" in content
+    assert "synlynk checkpoint" in content
+
+
+def test_gemini_template_enriched_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    content = synlynk._build_templates()["GEMINI.md"]
+    assert "Co-Authored-By: Gemini" in content
+    assert "feat/agy/" in content
+    assert "Git Worktree-First Policy" in content
+    assert "Live Issues SOP" in content
+    assert "AGY CLI" in content
+    assert "2026-06-18" in content
+
+
+def test_agents_template_enriched_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    content = synlynk._build_templates()["AGENTS.md"]
+    assert "feat/codex/" in content
+    assert "Co-Authored-By: Codex" in content
+    assert "Git Worktree-First Policy" in content
+    assert "Live Issues SOP" in content
+    assert "GitHub Projects v2 Integration" in content
+    assert "TODO: PROJECT_ID" in content
+
+
 def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
     class FakeProcess:
         returncode = 7
