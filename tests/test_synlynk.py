@@ -557,3 +557,4 @@ def test_init_with_org_stored_in_config(tmp_path, monkeypatch):
     synlynk.init(org="myorg", repo="myrepo")
     config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
     assert config["org"] == "myorg"
+    assert config["repo"] == "myrepo"

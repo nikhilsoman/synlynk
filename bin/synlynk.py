@@ -54,6 +54,7 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
         "org": None,
+        "repo": None,
         "team": None,
         "sync_endpoint": None,
     }
@@ -330,6 +331,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "budget": {"limit_usd": 10.0, "limit_requests": 100},
             "watch_interval_seconds": 30,
             "org": org,
+            "repo": repo,
             "team": None,
             "sync_endpoint": None,
         }, indent=2),
