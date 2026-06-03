@@ -8,7 +8,13 @@ import synlynk
 
 
 def test_get_username_from_git(project_dir, monkeypatch):
-    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: type('R', (), {'stdout': 'Nikhil Soman\n', 'returncode': 0})())
+    def mock_run(args, **kwargs):
+        if args[0] == "gh":
+            return type('R', (), {'stdout': '', 'returncode': 1})()
+        elif args[0] == "git" and args[1] == "config":
+            return type('R', (), {'stdout': 'Nikhil Soman\n', 'returncode': 0})()
+        return type('R', (), {'stdout': '', 'returncode': 1})()
+    monkeypatch.setattr(synlynk.subprocess, 'run', mock_run)
     assert synlynk.get_username() == "nikhilsoman"
 
 
@@ -385,6 +391,7 @@ def test_upgrade_reports_new_version(monkeypatch, capsys):
         '__enter__': lambda self: self,
         '__exit__': lambda self, *a: None,
     })()
+    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
     monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
     synlynk.upgrade()
     captured = capsys.readouterr()
@@ -392,6 +399,7 @@ def test_upgrade_reports_new_version(monkeypatch, capsys):
     assert "available" in captured.out
 
 def test_upgrade_handles_network_error(monkeypatch, capsys):
+    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
     monkeypatch.setattr(synlynk.urllib.request, 'urlopen',
                         lambda *a, **kw: (_ for _ in ()).throw(Exception("no network")))
     synlynk.upgrade()  # should not raise
