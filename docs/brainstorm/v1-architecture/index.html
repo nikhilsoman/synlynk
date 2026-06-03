@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>synlynk v1.0 Architecture Brainstorm — 2026-06-03</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #1d1d1f; color: #f5f5f7; padding: 2rem; line-height: 1.6; }
+    h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .meta { color: #86868b; font-size: 0.85rem; margin-bottom: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    a.card {
+      display: block; text-decoration: none;
+      background: #2d2d2f; border: 1px solid #424245; border-radius: 10px;
+      padding: 1.25rem; transition: border-color 0.15s, transform 0.15s;
+    }
+    a.card:hover { border-color: #0a84ff; transform: translateY(-2px); }
+    .card-num { font-size: 0.7rem; color: #636366; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.4rem; }
+    .card-title { font-size: 1rem; font-weight: 600; color: #f5f5f7; margin-bottom: 0.4rem; }
+    .card-desc { font-size: 0.82rem; color: #86868b; }
+    .spec-link { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(10,132,255,0.1); border: 1px solid rgba(10,132,255,0.3); border-radius: 8px; font-size: 0.85rem; color: #86868b; }
+    .spec-link a { color: #0a84ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>synlynk v1.0 Architecture Brainstorm</h1>
+  <p class="meta">2026-06-03 · Session: rxcc practices → synlynk v1.0 release plan · 6 screens</p>
+
+  <div class="grid">
+    <a class="card" href="agent-comms.html">
+      <div class="card-num">Screen 1</div>
+      <div class="card-title">Inter-Agent Communication</div>
+      <div class="card-desc">GitHub Issues + Projects v2 (B+A) vs Unix sockets vs local handoff file. Decision: B+A combined for v1.0.</div>
+    </a>
+    <a class="card" href="future-comms.html">
+      <div class="card-num">Screen 2</div>
+      <div class="card-title">Future GitHub-Independent Comms</div>
+      <div class="card-desc">Unix Domain Sockets + MessagePack, synlynk Context Server with rooms, SQLite as message store. Decision: SQLite → Context Server → NATS leaf nodes.</div>
+    </a>
+    <a class="card" href="enterprise-scale.html">
+      <div class="card-num">Screen 3</div>
+      <div class="card-title">Enterprise Scale — NATS Architecture</div>
+      <div class="card-desc">How SQLite → NATS leaf node architecture scales to 1000s of engineers across 3 tiers. The room abstraction is the stable interface.</div>
+    </a>
+    <a class="card" href="identity-evolution.html">
+      <div class="card-num">Screen 4</div>
+      <div class="card-title">Identity Model Evolution</div>
+      <div class="card-desc">From agent-tied-to-human → role+competency+scope credential. No biological/synthetic gate. The far-future: capability nodes, trust scores, no distinction.</div>
+    </a>
+    <a class="card" href="competency-model.html">
+      <div class="card-num">Screen 5</div>
+      <div class="card-title">Competency as Vector</div>
+      <div class="card-desc">Competency is a {dimension: score} map. Synthetic agents achieve full-stack by default when well-funded with context. synlynk = context funding mechanism.</div>
+    </a>
+    <a class="card" href="tui-evolution.html">
+      <div class="card-num">Screen 6</div>
+      <div class="card-title">Management Interface Evolution</div>
+      <div class="card-desc">TUI (Textual) → Web portal → Enterprise admin console. Interactive mockup: click tier tabs and nav panels. All operational state visible from `synlynk` (no-arg).</div>
+    </a>
+  </div>
+
+  <div class="spec-link">
+    Design spec: <a href="../../superpowers/specs/2026-06-03-synlynk-v1-architecture-design.md">docs/superpowers/specs/2026-06-03-synlynk-v1-architecture-design.md</a>
+  </div>
+</body>
+</html>
