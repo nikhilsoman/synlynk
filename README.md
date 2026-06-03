@@ -53,7 +53,7 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 
 | Command | Description |
 | --- | --- |
-| `synlynk init [--force]` | Bootstrap `project-docs/` and AI instruction files |
+| `synlynk init [--force] [--agents ...] [--mode ...] [--org ...] [--repo ...] [--project-id ...]` | Bootstrap `project-docs/` and AI instruction files |
 | `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
 | `synlynk watch start\|stop\|status` | Background daemon that regenerates `context.md` when files change (Unix only) |
 | `synlynk checkpoint` | Archive completed `[x]` tasks to devlog, refresh context, emit telemetry |
@@ -62,6 +62,26 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 | `synlynk --version` | Print current version |
 
 > **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux.
+
+## synlynk init flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--force` | off | Overwrite existing template files |
+| `--agents claude,agy,codex` | all three | Comma-separated list of agents to generate instruction files for. `claude` → CLAUDE.md, `agy` → GEMINI.md, `codex` → AGENTS.md |
+| `--mode solo\|team` | `solo` | Written to `project-docs/.synlynk_config.json`. Controls whether teammate devlogs appear in context |
+| `--org <org>` | none | GitHub org name, stored in `.synlynk/config.json` |
+| `--repo <repo>` | none | GitHub repo name, stored in `.synlynk/config.json` |
+| `--project-id <id>` | none | GitHub Projects v2 node ID. When provided, fills the `TODO: PROJECT_ID` placeholder in all generated agent instruction files |
+
+Example with all flags:
+
+```bash
+synlynk init --org acmecorp --repo api-server \
+             --project-id PJ_kwDOA1234 \
+             --agents claude,agy,codex \
+             --mode team
+```
 
 ## Project layout
 

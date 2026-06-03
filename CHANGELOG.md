@@ -11,6 +11,34 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.0] - 2026-06-03
+
+### Added
+- Enriched agent instruction templates: CLAUDE.md, GEMINI.md, AI_INSTRUCTIONS.md now include
+  Live Issues SOP (Sev1/Sev2/Sev3 with RCA doc path pattern), Git Worktree-First Policy,
+  per-agent branch naming and commit trailers, Mid-Session Anti-Amnesia Protocol (Phase 1/2
+  cadence), Mandatory 4-Doc Discipline, and GitHub Projects v2 GraphQL integration block with
+  parameterizable `PROJECT_ID`
+- `AGENTS.md` — new Codex agent instruction file, generated at repo root on `synlynk init`
+- `synlynk init --agents <claude,agy,codex>` — controls which agent files are generated
+  (default: all three). Omit an agent to skip its file
+- `synlynk init --mode <solo|team>` — writes `project-docs/.synlynk_config.json` with the
+  chosen mode at init time (previously this file had to be created manually)
+- `synlynk init --org <org>` — stores GitHub org name in `.synlynk/config.json`
+- `synlynk init --repo <repo>` — stores GitHub repo name in `.synlynk/config.json`
+- `synlynk init --project-id <id>` — fills GitHub Projects v2 node ID into all generated agent
+  files, replacing the `TODO: PROJECT_ID` placeholder
+- GEMINI.md includes AGY/Gemini CLI transition note: file is shared by Gemini CLI (until
+  2026-06-18) and AGY CLI (AntiGravity) thereafter; no migration of the file is needed
+- `_build_templates(org, repo, project_id)` internal function replaces the static `TEMPLATES`
+  dict and `_SESSION_PROTOCOL` string, enabling parameterized template generation
+
+### Changed
+- `synlynk init` now writes `project-docs/.synlynk_config.json` directly (previously missing
+  from init, requiring manual creation)
+
+---
+
 ## [0.2.1] - 2026-05-17
 
 ### Fixed
@@ -74,7 +102,8 @@ Initial public release.
 - `log_telemetry()` — rolling JSON log of last 100 exec events
 - `install.sh` — global installer, adds synlynk to `~/.synlynk/bin/` and PATH
 
-[Unreleased]: https://github.com/nikhilsoman/synlynk/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/nikhilsoman/synlynk/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/nikhilsoman/synlynk/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nikhilsoman/synlynk/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nikhilsoman/synlynk/releases/tag/v0.1.0

@@ -369,13 +369,11 @@ def test_status_shows_active_tasks(project_dir, monkeypatch, capsys):
     assert "Task two" in captured.out
 
 def test_upgrade_reports_up_to_date(monkeypatch, capsys):
-    import json as _json
-    fake_response = type('R', (), {
-        'read': lambda self: _json.dumps({"tag_name": f"v{synlynk.VERSION}"}).encode(),
-        '__enter__': lambda self: self,
-        '__exit__': lambda self, *a: None,
+    fake_gh = type('R', (), {
+        'stdout': f"v{synlynk.VERSION}\n",
+        'returncode': 0,
     })()
-    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
+    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: fake_gh)
     synlynk.upgrade()
     captured = capsys.readouterr()
     assert "latest version" in captured.out
