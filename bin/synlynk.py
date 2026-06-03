@@ -9,7 +9,7 @@ import re
 import urllib.request
 from typing import Optional
 
-VERSION = "0.2.2"
+VERSION = "0.3.0"
 
 
 def get_username() -> str:
@@ -54,6 +54,7 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
         "org": None,
+        "repo": None,
         "team": None,
         "sync_endpoint": None,
     }
@@ -110,7 +111,11 @@ def set_state(state: str) -> None:
         sys.stdout.write(f"\033]0;{title}\007")
         sys.stdout.flush()
 
-_SESSION_PROTOCOL = """\
+def _build_templates(org: str = None, repo: str = None, project_id: str = None) -> dict:
+    """Returns TEMPLATES dict with parameterized values filled in."""
+    _pid = project_id or "TODO: PROJECT_ID"
+
+    _session_protocol = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
 2. Run: `synlynk watch status` — if stopped, run `synlynk watch start`
@@ -134,50 +139,203 @@ _SESSION_PROTOCOL = """\
 - Run `synlynk status` and include the output in your closing message
 """
 
-TEMPLATES = {
-    "roadmap.md": (
-        "# synlynk Roadmap\n\n"
-        "| Priority | Feature | Description | Status | Target Release | Owner |\n"
-        "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
-        "| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n"
-    ),
-    "todo.md": (
-        "# Project Todo List\n## Active Tasks\n"
-        "- [ ] Initialize repository with synlynk <!-- id: 0 -->\n"
-    ),
-    "memory.md": (
-        "# synlynk Memory\n\n## Decisions\n"
-        "- **Structure:** Uses `/project-docs` for core records.\n\n"
-        "## Conventions\n- **Session Protocol:** Use synlynk project-docs for context.\n"
-    ),
-    "costs.md": (
-        "# synlynk Costs\n\n"
-        "| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n"
-        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
-    ),
-    "GEMINI.md": f"# synlynk Gemini Instructions\n\n{_SESSION_PROTOCOL}",
-    "CLAUDE.md": f"# synlynk Claude Instructions\n\n{_SESSION_PROTOCOL}",
-    "AI_INSTRUCTIONS.md": (
+    _worktree_policy = """\
+## Git Worktree-First Policy
+Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:
+```
+git worktree add ../feat+<name> feat/<agent-prefix>/<name>
+git branch --show-current   # confirm before every commit
+```
+Delete the worktree only after its branch is merged.
+"""
+
+    _live_issues_sop = """\
+## Live Issues SOP
+Production defects use `[LIVE-N]` issues. N increments per project per incident.
+
+| Severity | Trigger | RCA |
+|:---|:---|:---|
+| Sev1 | Core broken / data loss / correctness bug | `docs/rca/YYYY-MM-DD-LIVE-N-<slug>.md` |
+| Sev2 | Major feature degraded, workaround exists | Comment-level RCA on ticket |
+| Sev3 | Minor UX / edge case | None required |
+
+Process: Declare → Investigate (no fixes before root cause confirmed) → Post findings as issue comment → Sev1: write RCA doc → Action tickets (`live-issue sev<N> priority:p0`) → Resolution comment → Close.
+"""
+
+    _anti_amnesia = """\
+## Mid-Session Anti-Amnesia Protocol
+**Phase 1 (context ≤ 75%):** Every ~25,000 tokens — write devlog entry + memory update.
+Commit: `docs: mid-session checkpoint [N] — <topic>`
+
+**Phase 2 (context > 75%):** Every ~5,000 tokens — same + add `⚠️ Compaction imminent:` rescue bullet listing open threads and "about to do X" states.
+
+Any numbered list of fixes, options, or recommendations: write to devlog in the same response — never wait.
+"""
+
+    _four_doc = """\
+## Mandatory 4-Doc Discipline
+Update all four during the session, not only at session end:
+- `project-docs/roadmap.md` — status on in-progress items
+- `project-docs/devlogs/<username>.md` — append at each task boundary
+- `project-docs/costs.md` — log each significant AI operation
+- `project-docs/memory.md` — decisions with `[@username]` attribution
+"""
+
+    _ghp_block = (
+        "## GitHub Projects v2 Integration\n"
+        "Move board items via GraphQL. Replace TODO values with your project's IDs.\n\n"
+        "```graphql\n"
+        "mutation MoveItem {\n"
+        "  updateProjectV2ItemFieldValue(input: {\n"
+        f'    projectId: "{_pid}"\n'
+        '    itemId: "<item-node-id>"\n'
+        '    fieldId: "TODO: STATUS_FIELD_ID"\n'
+        '    value: { singleSelectOptionId: "TODO: IN_PROGRESS_OPTION_ID" }\n'
+        "  }) { projectV2Item { id } }\n"
+        "}\n"
+        "```\n\n"
+        "Look up field/option IDs:\n"
+        "```bash\n"
+        f"gh api graphql -f query='{{ node(id: \"{_pid}\") {{ ... on ProjectV2 {{"
+        " fields(first: 20) { nodes { ... on ProjectV2SingleSelectField"
+        " { id name options { id name } } } } } } } }'\n"
+        "```\n"
+    )
+
+    _synlynk_start = """\
+## synlynk Start
+```bash
+synlynk start <issue-id>    # claims board item, injects context, launches agent session
+```
+"""
+
+    _claude_md = (
+        "# synlynk Claude Instructions\n\n"
+        "## Identity & Attribution\n"
+        "- **Engine:** claude-sonnet-4-6\n"
+        "- **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`\n"
+        "- **Branch prefix:** `feat/claude/` or `fix/claude/`\n\n"
+        "## Domain Ownership\n"
+        "| Domain | Owned by this agent | Notes |\n"
+        "|:---|:---|:---|\n"
+        "| TODO: fill domains for this agent | | |\n\n"
+        + _worktree_policy + "\n"
+        "## Branch Naming\n"
+        "- `feat/claude/<description>` — new functionality\n"
+        "- `fix/claude/<description>` — bug fixes\n"
+        "- `chore/<description>` — deps, docs, config\n\n"
+        + _live_issues_sop + "\n"
+        + _anti_amnesia + "\n"
+        + _four_doc + "\n"
+        + _ghp_block + "\n"
+        + _synlynk_start + "\n"
+        + _session_protocol
+    )
+
+    _gemini_md = (
+        "# synlynk Gemini / AntiGravity (AGY) Instructions\n\n"
+        "> **Engine note:** This file is consumed by Gemini CLI (until 2026-06-18) and by AGY CLI\n"
+        "> (AntiGravity) thereafter. AGY CLI natively parses GEMINI.md as its repository-level\n"
+        "> system prompt. Do not write AGY-specific syntax that would break Gemini CLI parity\n"
+        "> during the transition window. After 2026-06-18, AGY CLI is the sole consumer —\n"
+        "> no migration of this file is needed.\n\n"
+        "## Identity & Attribution\n"
+        "- **Engines:** gemini-2.x / agy-2.x\n"
+        "- **Commit trailer:** `Co-Authored-By: Gemini <noreply@google.com>`\n"
+        "- **Branch prefix:** `feat/agy/` or `fix/agy/`\n\n"
+        "## Domain Ownership\n"
+        "| Domain | Owned by this agent | Notes |\n"
+        "|:---|:---|:---|\n"
+        "| TODO: fill domains for this agent | | |\n\n"
+        + _worktree_policy + "\n"
+        "## Branch Naming\n"
+        "- `feat/agy/<description>` — new functionality\n"
+        "- `fix/agy/<description>` — bug fixes\n"
+        "- `chore/<description>` — deps, docs, config\n\n"
+        + _live_issues_sop + "\n"
+        + _anti_amnesia + "\n"
+        + _four_doc + "\n"
+        + _ghp_block + "\n"
+        + _synlynk_start + "\n"
+        + _session_protocol
+    )
+
+    _agents_md = (
+        "# synlynk Codex Instructions\n\n"
+        "## Identity & Attribution\n"
+        "- **Engine:** openai-codex\n"
+        "- **Commit trailer:** `Co-Authored-By: Codex <noreply@openai.com>`\n"
+        "- **Branch prefix:** `feat/codex/` or `fix/codex/`\n\n"
+        "## Domain Ownership\n"
+        "| Domain | Owned by this agent | Notes |\n"
+        "|:---|:---|:---|\n"
+        "| TODO: fill domains for this agent | | |\n\n"
+        + _worktree_policy + "\n"
+        "## Branch Naming\n"
+        "- `feat/codex/<description>` — new functionality\n"
+        "- `fix/codex/<description>` — bug fixes\n"
+        "- `chore/<description>` — deps, docs, config\n\n"
+        + _live_issues_sop + "\n"
+        + _anti_amnesia + "\n"
+        + _four_doc + "\n"
+        + _ghp_block + "\n"
+        + _synlynk_start + "\n"
+        + _session_protocol
+    )
+
+    _ai_instructions_md = (
         "# synlynk Universal AI Instructions\n\n"
         "Apply the following as your system prompt or custom instructions "
         "before starting any session in this repository.\n\n"
-        f"{_SESSION_PROTOCOL}"
-    ),
-    ".cursorrules": (
-        "Read .synlynk/context.md at session start. "
-        "Mark tasks [x] in project-docs/todo.md when done. "
-        "Run `synlynk checkpoint` at task boundaries. "
-        "Attribute all project-docs edits with [@username]."
-    ),
-    "config.json": json.dumps({
-        "schema_version": 1,
-        "budget": {"limit_usd": 10.0, "limit_requests": 100},
-        "watch_interval_seconds": 30,
-        "org": None,
-        "team": None,
-        "sync_endpoint": None,
-    }, indent=2),
-}
+        + _live_issues_sop + "\n"
+        + _anti_amnesia + "\n"
+        + _four_doc + "\n"
+        + _ghp_block + "\n"
+        + _synlynk_start + "\n"
+        + _session_protocol
+    )
+
+    return {
+        "roadmap.md": (
+            "# synlynk Roadmap\n\n"
+            "| Priority | Feature | Description | Status | Target Release | Owner |\n"
+            "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+            "| P0 | Project Setup | Initialize synlynk and project-docs. | In Progress | v0.1.0 | [Unassigned] |\n"
+        ),
+        "todo.md": (
+            "# Project Todo List\n## Active Tasks\n"
+            "- [ ] Initialize repository with synlynk <!-- id: 0 -->\n"
+        ),
+        "memory.md": (
+            "# synlynk Memory\n\n## Decisions\n"
+            "- **Structure:** Uses `/project-docs` for core records.\n\n"
+            "## Conventions\n- **Session Protocol:** Use synlynk project-docs for context.\n"
+        ),
+        "costs.md": (
+            "# synlynk Costs\n\n"
+            "| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n"
+            "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        ),
+        "CLAUDE.md": _claude_md,
+        "GEMINI.md": _gemini_md,
+        "AGENTS.md": _agents_md,
+        "AI_INSTRUCTIONS.md": _ai_instructions_md,
+        ".cursorrules": (
+            "Read .synlynk/context.md at session start. "
+            "Mark tasks [x] in project-docs/todo.md when done. "
+            "Run `synlynk checkpoint` at task boundaries. "
+            "Attribute all project-docs edits with [@username]."
+        ),
+        "config.json": json.dumps({
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "watch_interval_seconds": 30,
+            "org": org,
+            "repo": repo,
+            "team": None,
+            "sync_endpoint": None,
+        }, indent=2),
+    }
 
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
@@ -776,8 +934,12 @@ class WatchDaemon:
                 set_state("watching")
                 last_mtimes = self._get_mtimes("project-docs")
 
-def init(force: bool = False) -> None:
+def init(force: bool = False, agents: list = None,
+         org: str = None, repo: str = None, project_id: str = None,
+         mode: str = "solo") -> None:
     print("Initializing synlynk in current directory...")
+    agent_set = set(agents) if agents is not None else {"claude", "agy", "codex"}
+    templates = _build_templates(org=org, repo=repo, project_id=project_id)
 
     docs_dir = "project-docs"
     devlogs_dir = os.path.join(docs_dir, "devlogs")
@@ -788,8 +950,15 @@ def init(force: bool = False) -> None:
             os.makedirs(d)
             print(f"  Created {d}/")
 
-    for filename, content in TEMPLATES.items():
-        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", ".cursorrules"):
+    _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
+
+    for filename, content in templates.items():
+        required = _agent_guards.get(filename)
+        if required and required not in agent_set:
+            continue
+
+        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md",
+                        "AGENTS.md", ".cursorrules"):
             file_path = filename
         elif filename == "config.json":
             file_path = os.path.join(synlynk_dir, filename)
@@ -803,6 +972,19 @@ def init(force: bool = False) -> None:
                 f.write(content)
             action = "Updated" if os.path.exists(file_path) else "Created"
             print(f"  {action} {file_path}")
+
+    synlynk_config_path = os.path.join(docs_dir, ".synlynk_config.json")
+    if os.path.exists(synlynk_config_path) and not force:
+        print(f"  {synlynk_config_path} already exists. Skipping (use --force to overwrite).")
+    else:
+        synlynk_config_data = {
+            "mode": mode,
+            "version": VERSION,
+            "init_timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+        }
+        with open(synlynk_config_path, "w") as f:
+            json.dump(synlynk_config_data, f, indent=2)
+        print(f"  Created {synlynk_config_path}")
 
     set_state("stopped")
     print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
@@ -897,6 +1079,16 @@ def main() -> None:
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
+    init_parser.add_argument("--agents", default="claude,agy,codex",
+                             help="Comma-separated agent set to generate files for (claude,agy,codex)")
+    init_parser.add_argument("--mode", choices=["solo", "team"], default="solo",
+                             help="Project mode written to project-docs/.synlynk_config.json")
+    init_parser.add_argument("--org", default=None,
+                             help="GitHub organization name (stored in .synlynk/config.json)")
+    init_parser.add_argument("--repo", default=None,
+                             help="GitHub repository name (stored in .synlynk/config.json)")
+    init_parser.add_argument("--project-id", default=None, dest="project_id",
+                             help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in agent files)")
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
@@ -917,7 +1109,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "init":
-        init(force=args.force)
+        agents = [a.strip() for a in args.agents.split(",") if a.strip()]
+        init(force=args.force, agents=agents, mode=args.mode,
+             org=args.org, repo=args.repo, project_id=args.project_id)
     elif args.command == "exec":
         sys.exit(exec_command(args.cmd))
     elif args.command == "upgrade":
