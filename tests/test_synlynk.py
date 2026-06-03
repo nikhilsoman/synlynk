@@ -494,3 +494,36 @@ def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
 
     result = synlynk.exec_command(['python3', '-c', 'import sys; sys.exit(7)'])
     assert result == 7
+
+
+def test_init_writes_synlynk_config_solo_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init()
+    config_path = tmp_path / "project-docs" / ".synlynk_config.json"
+    assert config_path.exists()
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "solo"
+    assert data["version"] == synlynk.VERSION
+
+
+def test_init_writes_synlynk_config_team_mode(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(mode="team")
+    config_path = tmp_path / "project-docs" / ".synlynk_config.json"
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "team"
+
+
+def test_init_skips_synlynk_config_if_exists_without_force(project_dir):
+    # conftest already wrote mode=single; init(mode="team") without force must not overwrite
+    synlynk.init(mode="team")
+    config_path = project_dir / "project-docs" / ".synlynk_config.json"
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "single"
+
+
+def test_init_overwrites_synlynk_config_with_force(project_dir):
+    synlynk.init(mode="team", force=True)
+    config_path = project_dir / "project-docs" / ".synlynk_config.json"
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "team"

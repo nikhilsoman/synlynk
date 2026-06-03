@@ -971,6 +971,19 @@ def init(force: bool = False, agents: list = None,
             action = "Updated" if os.path.exists(file_path) else "Created"
             print(f"  {action} {file_path}")
 
+    synlynk_config_path = os.path.join(docs_dir, ".synlynk_config.json")
+    if os.path.exists(synlynk_config_path) and not force:
+        print(f"  {synlynk_config_path} already exists. Skipping (use --force to overwrite).")
+    else:
+        synlynk_config_data = {
+            "mode": mode,
+            "version": VERSION,
+            "init_timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+        }
+        with open(synlynk_config_path, "w") as f:
+            json.dump(synlynk_config_data, f, indent=2)
+        print(f"  Created {synlynk_config_path}")
+
     set_state("stopped")
     print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
     print("✓ synlynk initialized.")
@@ -1066,6 +1079,8 @@ def main() -> None:
                              help="Overwrite existing template files")
     init_parser.add_argument("--agents", default="claude,agy,codex",
                              help="Comma-separated agent set to generate files for (claude,agy,codex)")
+    init_parser.add_argument("--mode", choices=["solo", "team"], default="solo",
+                             help="Project mode written to project-docs/.synlynk_config.json")
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
@@ -1087,7 +1102,7 @@ def main() -> None:
 
     if args.command == "init":
         agents = [a.strip() for a in args.agents.split(",") if a.strip()]
-        init(force=args.force, agents=agents)
+        init(force=args.force, agents=agents, mode=args.mode)
     elif args.command == "exec":
         sys.exit(exec_command(args.cmd))
     elif args.command == "upgrade":
