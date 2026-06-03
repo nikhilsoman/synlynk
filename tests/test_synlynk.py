@@ -8,7 +8,13 @@ import synlynk
 
 
 def test_get_username_from_git(project_dir, monkeypatch):
-    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: type('R', (), {'stdout': 'Nikhil Soman\n', 'returncode': 0})())
+    def mock_run(args, **kwargs):
+        if args[0] == "gh":
+            return type('R', (), {'stdout': '', 'returncode': 1})()
+        elif args[0] == "git" and args[1] == "config":
+            return type('R', (), {'stdout': 'Nikhil Soman\n', 'returncode': 0})()
+        return type('R', (), {'stdout': '', 'returncode': 1})()
+    monkeypatch.setattr(synlynk.subprocess, 'run', mock_run)
     assert synlynk.get_username() == "nikhilsoman"
 
 
@@ -369,13 +375,11 @@ def test_status_shows_active_tasks(project_dir, monkeypatch, capsys):
     assert "Task two" in captured.out
 
 def test_upgrade_reports_up_to_date(monkeypatch, capsys):
-    import json as _json
-    fake_response = type('R', (), {
-        'read': lambda self: _json.dumps({"tag_name": f"v{synlynk.VERSION}"}).encode(),
-        '__enter__': lambda self: self,
-        '__exit__': lambda self, *a: None,
+    fake_gh = type('R', (), {
+        'stdout': f"v{synlynk.VERSION}\n",
+        'returncode': 0,
     })()
-    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
+    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: fake_gh)
     synlynk.upgrade()
     captured = capsys.readouterr()
     assert "latest version" in captured.out
@@ -387,6 +391,7 @@ def test_upgrade_reports_new_version(monkeypatch, capsys):
         '__enter__': lambda self: self,
         '__exit__': lambda self, *a: None,
     })()
+    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
     monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
     synlynk.upgrade()
     captured = capsys.readouterr()
@@ -394,11 +399,89 @@ def test_upgrade_reports_new_version(monkeypatch, capsys):
     assert "available" in captured.out
 
 def test_upgrade_handles_network_error(monkeypatch, capsys):
+    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
     monkeypatch.setattr(synlynk.urllib.request, 'urlopen',
                         lambda *a, **kw: (_ for _ in ()).throw(Exception("no network")))
     synlynk.upgrade()  # should not raise
     captured = capsys.readouterr()
     assert "Could not check" in captured.out
+
+
+def test_build_templates_returns_required_keys(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    templates = synlynk._build_templates()
+    for key in ["CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md", "AGENTS.md",
+                 "roadmap.md", "todo.md", "memory.md", "costs.md",
+                 ".cursorrules", "config.json"]:
+        assert key in templates, f"missing key: {key}"
+
+
+def test_claude_template_enriched_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    content = synlynk._build_templates()["CLAUDE.md"]
+    assert "Co-Authored-By: Claude Sonnet" in content
+    assert "feat/claude/" in content
+    assert "Git Worktree-First Policy" in content
+    assert "Live Issues SOP" in content
+    assert "Mid-Session Anti-Amnesia" in content
+    assert "Mandatory 4-Doc Discipline" in content
+    assert "GitHub Projects v2 Integration" in content
+    assert "TODO: PROJECT_ID" in content
+    assert "synlynk start" in content
+    assert "synlynk watch status" in content
+    assert "synlynk checkpoint" in content
+
+
+def test_gemini_template_enriched_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    content = synlynk._build_templates()["GEMINI.md"]
+    assert "Co-Authored-By: Gemini" in content
+    assert "feat/agy/" in content
+    assert "Git Worktree-First Policy" in content
+    assert "Live Issues SOP" in content
+    assert "AGY CLI" in content
+    assert "2026-06-18" in content
+
+
+def test_agents_template_enriched_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    content = synlynk._build_templates()["AGENTS.md"]
+    assert "feat/codex/" in content
+    assert "Co-Authored-By: Codex" in content
+    assert "Git Worktree-First Policy" in content
+    assert "Live Issues SOP" in content
+    assert "GitHub Projects v2 Integration" in content
+    assert "TODO: PROJECT_ID" in content
+
+
+def test_init_creates_agents_md_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init()
+    assert (tmp_path / "AGENTS.md").exists()
+
+
+def test_init_skips_agents_md_when_codex_excluded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(agents=["claude", "agy"])
+    assert not (tmp_path / "AGENTS.md").exists()
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "GEMINI.md").exists()
+
+
+def test_init_skips_claude_md_when_claude_excluded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(agents=["agy", "codex"])
+    assert not (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "GEMINI.md").exists()
+    assert (tmp_path / "AGENTS.md").exists()
+
+
+def test_init_skips_gemini_md_when_agy_excluded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(agents=["claude", "codex"])
+    assert not (tmp_path / "GEMINI.md").exists()
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "AGENTS.md").exists()
 
 
 def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
@@ -417,3 +500,67 @@ def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
 
     result = synlynk.exec_command(['python3', '-c', 'import sys; sys.exit(7)'])
     assert result == 7
+
+
+def test_init_writes_synlynk_config_solo_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init()
+    config_path = tmp_path / "project-docs" / ".synlynk_config.json"
+    assert config_path.exists()
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "solo"
+    assert data["version"] == synlynk.VERSION
+
+
+def test_init_writes_synlynk_config_team_mode(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(mode="team")
+    config_path = tmp_path / "project-docs" / ".synlynk_config.json"
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "team"
+
+
+def test_init_skips_synlynk_config_if_exists_without_force(project_dir):
+    # conftest already wrote mode=single; init(mode="team") without force must not overwrite
+    synlynk.init(mode="team")
+    config_path = project_dir / "project-docs" / ".synlynk_config.json"
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "single"
+
+
+def test_init_overwrites_synlynk_config_with_force(project_dir):
+    synlynk.init(mode="team", force=True)
+    config_path = project_dir / "project-docs" / ".synlynk_config.json"
+    data = json.loads(config_path.read_text())
+    assert data["mode"] == "team"
+
+
+def test_build_templates_with_project_id_fills_placeholder(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    t = synlynk._build_templates(project_id="PJ_abc123")
+    assert "PJ_abc123" in t["CLAUDE.md"]
+    assert "TODO: PROJECT_ID" not in t["CLAUDE.md"]
+    assert "PJ_abc123" in t["GEMINI.md"]
+    assert "PJ_abc123" in t["AGENTS.md"]
+
+
+def test_build_templates_without_project_id_keeps_todo_placeholder(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    t = synlynk._build_templates()
+    assert "TODO: PROJECT_ID" in t["CLAUDE.md"]
+
+
+def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(project_id="PJ_xyz789")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "PJ_xyz789" in content
+    assert "TODO: PROJECT_ID" not in content
+
+
+def test_init_with_org_stored_in_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(org="myorg", repo="myrepo")
+    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    assert config["org"] == "myorg"
+    assert config["repo"] == "myrepo"
