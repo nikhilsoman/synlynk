@@ -62,7 +62,7 @@ The local Solo daemon we build in v1.x becomes a NATS leaf node by configuration
     "data": 0.70, "testing": 0.75, "security": 0.65
   },
   "scope": ["rxcc.feat.>", "rxcc.live.>"],
-  "engine": "claude-sonnet-4-6",
+  "engine": "claude-sonnet-4-6",  // or "agy-2.x" for the AGY agent
   "owner": "nikhil"
 }
 ```
@@ -149,7 +149,7 @@ On session end:
 |---|---|---|
 | **Dashboard** | Budget gauge, active rooms, sentinel alerts, recent activity log | — |
 | **Board** | Live GH Projects v2 kanban, routing rules display | `n` new issue, `enter` open, `r` refresh |
-| **Agents** | Edit CLAUDE/GEMINI/AGENTS/AntiGravity.md, diff vs template, competency bars | `e` edit, `d` diff, `r` reload |
+| **Agents** | Edit CLAUDE/GEMINI/AGENTS.md, diff vs template, competency bars | `e` edit, `d` diff, `r` reload |
 | **Memory** | Searchable decision log (project-docs/memory.md + room history) | `/` search, `e` edit, `a` append |
 | **Messages** | Room browser, decoded MessagePack viewer, export | `/` filter room, `d` decode, `x` export JSON |
 
@@ -179,11 +179,12 @@ On session end:
 | File | For | New in v0.3.0? |
 |---|---|---|
 | `CLAUDE.md` | Claude Code | Enriched (was bare) |
-| `GEMINI.md` | Gemini CLI | Enriched (was bare) |
+| `GEMINI.md` | Gemini CLI (until 2026-06-18) + AGY CLI (ongoing) | Enriched (was bare) |
 | `AGENTS.md` | Codex | **New** |
-| `AntiGravity.md` | Google AGY CLI | **New** |
 | `AI_INSTRUCTIONS.md` | Universal fallback | Enriched |
 | `.cursorrules` | Cursor | Minimal (unchanged) |
+
+**AntiGravity.md is not generated.** AGY CLI natively parses `GEMINI.md` as its repository-level system prompt — no separate file required or supported. The two CLIs coexist today on the same `GEMINI.md`. After the Gemini CLI retirement on **2026-06-18**, AGY takes over as the sole consumer of `GEMINI.md` with full backward compatibility. `~/.gemini/` → `~/.agents/` is a local system-level migration only; `GEMINI.md` remains the canonical repo-level file at every tier.
 
 ### 4.2 What enriched templates contain (generic, non-project-specific)
 
@@ -198,6 +199,7 @@ All four main agent files gain:
 - **Mandatory 4-doc discipline** — roadmap + devlog + costs + memory, mid-session update rules
 - **GitHub Projects v2 integration block** — GraphQL mutation templates with `TODO: PROJECT_ID` / `TODO: FIELD_ID` placeholders
 - **`synlynk start` as session driver** — reference to autonomous workflow
+- **Engine-specific note in `GEMINI.md`** — documents that this file is shared by Gemini CLI (pre-2026-06-18) and AGY CLI (post-retirement); agents must not write AGY-specific syntax that would break Gemini CLI parity during the transition window
 
 ### 4.3 `synlynk init` flags
 
@@ -214,7 +216,7 @@ synlynk init [--force] [--org ORG] [--repo REPO] [--project-id ID]
 
 | Release | Theme | Key deliverables |
 |---|---|---|
-| **v0.3.0** | Multi-agent foundation | Enriched templates (CLAUDE/GEMINI/AGENTS/AntiGravity.md), live issues SOP, worktree policy, mid-session protocol, `synlynk init` flags, CHANGELOG + README + site update |
+| **v0.3.0** | Multi-agent foundation | Enriched templates (CLAUDE/GEMINI/AGENTS.md), live issues SOP, worktree policy, mid-session protocol, `synlynk init` flags, CHANGELOG + README + site update. Note: Gemini CLI retires 2026-06-18 → AGY takes over `GEMINI.md` transparently. |
 | **v0.4.0** | Autonomy driver | `synlynk start <issue>`, GH Projects v2 native board sync, WIP signal in rooms (SQLite), `synlynk` TUI (5 core panels, Textual) |
 | **v0.5.0** | Context funding | SQLite Context Server, room subscriptions, scoped context slices replace monolithic context.md, competency tracking |
 | **v0.6.0** | Solo+ management | Competency panel, Rules panel, Rooms panel, Files panel, Config panel (all GH Projects v2 config from TUI), extensible panel registry |
@@ -245,7 +247,7 @@ synlynk init [--force] [--org ORG] [--repo REPO] [--project-id ID]
 
 ## 8. Open Questions (not blocking v0.3.0)
 
-1. Does AntiGravity.md replace GEMINI.md, or do both exist? (AGY CLI vs Gemini CLI are different products)
+1. ~~Does AntiGravity.md replace GEMINI.md, or do both exist?~~ **Resolved:** AGY natively consumes `GEMINI.md`. No separate AntiGravity.md. Gemini CLI retires 2026-06-18, AGY takes over transparently. `GEMINI.md` is the canonical file at all tiers.
 2. `synlynk` no-arg: if Textual is not installed, should it fall back to `synlynk status` output or error with install instructions?
 3. Trust score computation: purely from synlynk-observable history (PRs, rooms) or does it accept external signal (CI pass rate via GitHub Actions API)?
 4. Panel plugin discovery: `~/.synlynk/panels/` (user-global) + `.synlynk/panels/` (project-local) — or just one location?
