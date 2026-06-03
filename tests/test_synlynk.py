@@ -448,6 +448,36 @@ def test_agents_template_enriched_content(tmp_path, monkeypatch):
     assert "TODO: PROJECT_ID" in content
 
 
+def test_init_creates_agents_md_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init()
+    assert (tmp_path / "AGENTS.md").exists()
+
+
+def test_init_skips_agents_md_when_codex_excluded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(agents=["claude", "agy"])
+    assert not (tmp_path / "AGENTS.md").exists()
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "GEMINI.md").exists()
+
+
+def test_init_skips_claude_md_when_claude_excluded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(agents=["agy", "codex"])
+    assert not (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "GEMINI.md").exists()
+    assert (tmp_path / "AGENTS.md").exists()
+
+
+def test_init_skips_gemini_md_when_agy_excluded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.init(agents=["claude", "codex"])
+    assert not (tmp_path / "GEMINI.md").exists()
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "AGENTS.md").exists()
+
+
 def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
     class FakeProcess:
         returncode = 7

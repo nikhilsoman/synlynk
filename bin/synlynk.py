@@ -932,8 +932,12 @@ class WatchDaemon:
                 set_state("watching")
                 last_mtimes = self._get_mtimes("project-docs")
 
-def init(force: bool = False) -> None:
+def init(force: bool = False, agents: list = None,
+         org: str = None, repo: str = None, project_id: str = None,
+         mode: str = "solo") -> None:
     print("Initializing synlynk in current directory...")
+    agent_set = set(agents) if agents is not None else {"claude", "agy", "codex"}
+    templates = _build_templates(org=org, repo=repo, project_id=project_id)
 
     docs_dir = "project-docs"
     devlogs_dir = os.path.join(docs_dir, "devlogs")
@@ -944,8 +948,13 @@ def init(force: bool = False) -> None:
             os.makedirs(d)
             print(f"  Created {d}/")
 
-    templates = _build_templates()
+    _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
+
     for filename, content in templates.items():
+        required = _agent_guards.get(filename)
+        if required and required not in agent_set:
+            continue
+
         if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md",
                         "AGENTS.md", ".cursorrules"):
             file_path = filename
@@ -1055,6 +1064,8 @@ def main() -> None:
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
+    init_parser.add_argument("--agents", default="claude,agy,codex",
+                             help="Comma-separated agent set to generate files for (claude,agy,codex)")
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
@@ -1075,7 +1086,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "init":
-        init(force=args.force)
+        agents = [a.strip() for a in args.agents.split(",") if a.strip()]
+        init(force=args.force, agents=agents)
     elif args.command == "exec":
         sys.exit(exec_command(args.cmd))
     elif args.command == "upgrade":
