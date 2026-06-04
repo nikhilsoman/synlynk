@@ -610,3 +610,39 @@ def test_build_templates_config_includes_owner_and_project_id(tmp_path, monkeypa
     assert config["owner"] == "Dialify"
     assert config["project_id"] == "PVT_abc"
     assert "agent_slots" in config
+
+
+def test_init_auto_detects_remote_into_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: ("Dialify", "rxcc"))
+    synlynk.init()
+    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    assert config["owner"] == "Dialify"
+    assert config["repo"] == "rxcc"
+
+
+def test_init_writes_agent_slots_to_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: (None, None))
+    synlynk.init(agents=["claude", "agy"])
+    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    assert "claude" in config["agent_slots"]
+    assert "agy" in config["agent_slots"]
+    assert "codex" not in config["agent_slots"]
+
+
+def test_init_shows_nudge_when_stray_docs_found(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: (None, None))
+    (tmp_path / "roadmap.md").write_text("# Roadmap")
+    synlynk.init()
+    captured = capsys.readouterr()
+    assert "synlynk migrate" in captured.out
+
+
+def test_init_no_nudge_when_no_stray_docs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: (None, None))
+    synlynk.init()
+    captured = capsys.readouterr()
+    assert "synlynk migrate" not in captured.out

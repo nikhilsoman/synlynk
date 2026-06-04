@@ -982,11 +982,23 @@ def init(force: bool = False, agents: list = None,
          mode: str = "solo") -> None:
     print("Initializing synlynk in current directory...")
     agent_set = set(agents) if agents is not None else {"claude", "agy", "codex"}
-    templates = _build_templates(org=org, repo=repo, project_id=project_id)
+
+    # Auto-detect remote owner/repo
+    remote_owner, remote_repo = detect_remote_owner_repo()
+
+    _default_execs = {"claude": "claude", "agy": "gemini", "codex": "codex"}
+    agent_slots = {name: _default_execs.get(name, name) for name in agent_set}
+
+    templates = _build_templates(org=org, repo=repo or remote_repo, project_id=project_id,
+                                 owner=remote_owner, agent_slots=agent_slots)
 
     docs_dir = "project-docs"
     devlogs_dir = os.path.join(docs_dir, "devlogs")
     synlynk_dir = ".synlynk"
+
+    # Check for stray docs BEFORE writing templates
+    _doc_names = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
+    stray = [f for f in _doc_names if os.path.exists(f)]
 
     for d in [docs_dir, devlogs_dir, synlynk_dir]:
         if not os.path.exists(d):
@@ -1028,6 +1040,11 @@ def init(force: bool = False, agents: list = None,
         with open(synlynk_config_path, "w") as f:
             json.dump(synlynk_config_data, f, indent=2)
         print(f"  Created {synlynk_config_path}")
+
+    # Nudge if stray project docs found outside project-docs/
+    if stray:
+        print(f"\n  ⚠  Existing docs detected outside project-docs/ ({', '.join(stray)})")
+        print("     Run `synlynk migrate` to move them.")
 
     set_state("stopped")
     print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
