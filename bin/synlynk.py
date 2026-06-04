@@ -54,10 +54,7 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
         "org": None,
-        "owner": None,
         "repo": None,
-        "project_id": None,
-        "agent_slots": {"claude": "claude", "agy": "gemini", "codex": "codex"},
         "team": None,
         "sync_endpoint": None,
     }
@@ -114,46 +111,9 @@ def set_state(state: str) -> None:
         sys.stdout.write(f"\033]0;{title}\007")
         sys.stdout.flush()
 
-def detect_remote_owner_repo() -> tuple:
-    """Returns (owner, repo) from git remote origin URL, or (None, None)."""
-    try:
-        result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            return None, None
-        url = result.stdout.strip().rstrip("/")
-        if url.endswith(".git"):
-            url = url[:-4]
-        if "github.com/" in url:
-            path = url.split("github.com/")[-1]
-        elif "github.com:" in url:
-            path = url.split("github.com:")[-1]
-        else:
-            return None, None
-        parts = path.split("/")
-        return (parts[0], parts[1]) if len(parts) >= 2 else (None, None)
-    except Exception:
-        return None, None
-
-
-def _update_config(updates: dict) -> None:
-    """Merges updates into .synlynk/config.json in-place."""
-    config_file = ".synlynk/config.json"
-    if not os.path.exists(".synlynk"):
-        return
-    config = load_config()
-    config.update(updates)
-    with open(config_file, "w") as f:
-        json.dump(config, f, indent=2)
-
-
-def _build_templates(org: str = None, repo: str = None, project_id: str = None,
-                     owner: str = None, agent_slots: dict = None) -> dict:
+def _build_templates(org: str = None, repo: str = None, project_id: str = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
-    _agent_slots = agent_slots or {"claude": "claude", "agy": "gemini", "codex": "codex"}
 
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
@@ -371,10 +331,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "budget": {"limit_usd": 10.0, "limit_requests": 100},
             "watch_interval_seconds": 30,
             "org": org,
-            "owner": owner,
             "repo": repo,
-            "project_id": project_id,
-            "agent_slots": _agent_slots,
             "team": None,
             "sync_endpoint": None,
         }, indent=2),
