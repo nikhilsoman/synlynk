@@ -1540,20 +1540,23 @@ def cmd_start(issue_id: str, dry_run: bool = False) -> None:
         print("  ⚠  No project_id in config — skipping board move")
 
     # Step 5: Build context
-    generate_context()
-    context_file = ".synlynk/context.md"
-    if os.path.exists(context_file):
-        with open(context_file) as f:
-            existing = f.read()
-        issue_block = (
-            f"# Active Issue: #{issue_id} — {title}\n\n"
-            f"**Labels:** {', '.join(labels)}\n"
-            f"**URL:** https://github.com/{owner}/{repo}/issues/{issue_id}\n\n"
-            f"{body}\n\n---\n\n"
-        )
-        with open(context_file, "w") as f:
-            f.write(issue_block + existing)
-        print(f"  {prefix}Context: issue #{issue_id} prepended to context.md")
+    if dry_run:
+        print(f"  {prefix}Context: would prepend issue #{issue_id} to context.md")
+    else:
+        generate_context()
+        context_file = ".synlynk/context.md"
+        if os.path.exists(context_file):
+            with open(context_file) as f:
+                existing = f.read()
+            issue_block = (
+                f"# Active Issue: #{issue_id} — {title}\n\n"
+                f"**Labels:** {', '.join(labels)}\n"
+                f"**URL:** https://github.com/{owner}/{repo}/issues/{issue_id}\n\n"
+                f"{body}\n\n---\n\n"
+            )
+            with open(context_file, "w") as f:
+                f.write(issue_block + existing)
+            print(f"  Context: issue #{issue_id} prepended to context.md")
 
     # Step 6: Launch agent
     if dry_run:

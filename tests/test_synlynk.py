@@ -995,8 +995,10 @@ def test_cmd_start_prepends_issue_block_to_context(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk.subprocess, 'run',
         lambda *a, **kw: type('R', (), {'stdout': issue_payload, 'returncode': 0})())
     monkeypatch.setattr(synlynk, 'generate_context', lambda: None)
+    monkeypatch.setattr(synlynk, 'exec_command', lambda cmd: 0)
+    monkeypatch.setattr(synlynk.sys, 'exit', lambda code: None)
     (project_dir / ".synlynk" / "context.md").write_text("# Context\nExisting content.")
-    synlynk.cmd_start("42", dry_run=True)
+    synlynk.cmd_start("42", dry_run=False)
     ctx = (project_dir / ".synlynk" / "context.md").read_text()
     assert "# Active Issue: #42" in ctx
     assert "Auth is broken on login page." in ctx
@@ -1019,3 +1021,24 @@ def test_cmd_start_dry_run_does_not_launch(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'exec_command', lambda cmd: launched.append(cmd) or 0)
     synlynk.cmd_start("42", dry_run=True)
     assert len(launched) == 0
+
+
+def test_cmd_start_dry_run_does_not_write_context(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'load_config', lambda: {
+        "owner": "Dialify", "repo": "rxcc", "project_id": None,
+        "agent_slots": {"claude": "claude"},
+    })
+    issue_payload = json.dumps({
+        "title": "Test", "body": "body",
+        "labels": [{"name": "agent:claude"}],
+    })
+    original_ctx = "# Context\nOriginal content."
+    (project_dir / ".synlynk" / "context.md").write_text(original_ctx)
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': issue_payload, 'returncode': 0})())
+    generate_called = []
+    monkeypatch.setattr(synlynk, 'generate_context',
+                        lambda: generate_called.append(True))
+    synlynk.cmd_start("42", dry_run=True)
+    assert (project_dir / ".synlynk" / "context.md").read_text() == original_ctx
+    assert len(generate_called) == 0
