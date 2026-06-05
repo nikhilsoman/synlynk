@@ -749,3 +749,130 @@ def test_extract_gh_ids_multiple_pv_ids_returns_first():
     content = 'id1="PVT_aaa"\nid2="PVT_bbb"\n'
     result = synlynk._extract_gh_ids(content)
     assert result["project_id"] == "PVT_aaa"
+
+
+# ---------------------------------------------------------------------------
+# Task 6: _migrate_adopt_combine()
+# ---------------------------------------------------------------------------
+
+def test_migrate_adopt_combine_skips_covered_sections(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    content = (
+        "# CLAUDE.md\n\n## Git Workflow\n\n### Live Issues\n"
+        "Sev1 means core broken. RCA doc required. Use [live-N] numbering.\n\n"
+        "### Mid-Session Persistence\n"
+        "Every ~25,000 tokens write a checkpoint. Watch for compaction imminent.\n\n"
+        "## Mandatory Document Maintenance\n"
+        "Keep roadmap.md, devlog, costs.md, and memory.md updated.\n"
+    )
+    fpath = str(tmp_path / "CLAUDE.md")
+    (tmp_path / "CLAUDE.md").write_text(content)
+    result = synlynk._migrate_adopt_combine(fpath, dry_run=True)
+    assert "## Live Issues SOP" in result["covered"]
+    assert "## Mid-Session Anti-Amnesia Protocol" in result["covered"]
+    assert "## Mandatory 4-Doc Discipline" in result["covered"]
+
+
+def test_migrate_adopt_combine_appends_missing_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    content = "# CLAUDE.md\n\n## Project\nA project.\n"
+    fpath = str(tmp_path / "CLAUDE.md")
+    (tmp_path / "CLAUDE.md").write_text(content)
+    result = synlynk._migrate_adopt_combine(fpath, dry_run=False)
+    updated = (tmp_path / "CLAUDE.md").read_text()
+    assert len(result["missing"]) > 0 or "synlynk Start" in updated
+
+
+def test_migrate_adopt_combine_dry_run_does_not_write(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    content = "# CLAUDE.md\n\n## Project\nA project.\n"
+    fpath = str(tmp_path / "CLAUDE.md")
+    (tmp_path / "CLAUDE.md").write_text(content)
+    synlynk._migrate_adopt_combine(fpath, dry_run=True)
+    assert (tmp_path / "CLAUDE.md").read_text() == content
+
+
+def test_migrate_adopt_combine_extracts_project_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    content = 'PROJECT="PVT_kwDOAAUx684BYYIM"\ngh api graphql ...\n'
+    fpath = str(tmp_path / "CLAUDE.md")
+    (tmp_path / "CLAUDE.md").write_text(content)
+    synlynk._migrate_adopt_combine(fpath, dry_run=False)
+    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    assert config["project_id"] == "PVT_kwDOAAUx684BYYIM"
+
+
+# ---------------------------------------------------------------------------
+# Task 7: migrate() command
+# ---------------------------------------------------------------------------
+
+def test_migrate_option_b_exits_without_changes(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    evolved = "# CLAUDE.md\n" + "\n".join(f"## Section {i}" for i in range(5)) + "\n" * 110
+    (tmp_path / "CLAUDE.md").write_text(evolved)
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: (None, None))
+    synlynk.migrate(dry_run=False, _auto_choice="b")
+    captured = capsys.readouterr()
+    assert any(w in captured.out for w in ["unchanged", "skipped", "Migration skipped"])
+
+
+def test_migrate_option_c_requires_replace_confirmation(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    evolved = "# CLAUDE.md\n" + "\n" * 110
+    (tmp_path / "CLAUDE.md").write_text(evolved)
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: (None, None))
+    synlynk.migrate(dry_run=False, _auto_choice="c", _auto_confirm="wrong")
+    captured = capsys.readouterr()
+    assert any(w in captured.out for w in ["No changes", "Confirmation not received"])
+    assert (tmp_path / "CLAUDE.md").read_text() == evolved
+
+
+def test_migrate_dry_run_moves_nothing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1, "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "watch_interval_seconds": 30, "org": None, "owner": None, "repo": None,
+        "project_id": None, "agent_slots": {}, "team": None, "sync_endpoint": None
+    }))
+    (tmp_path / "roadmap.md").write_text("# Roadmap")
+    monkeypatch.setattr(synlynk, 'detect_remote_owner_repo', lambda: (None, None))
+    synlynk.migrate(dry_run=True, _auto_choice="a")
+    assert (tmp_path / "roadmap.md").exists()
+    assert not (tmp_path / "project-docs" / "roadmap.md").exists()

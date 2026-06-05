@@ -228,6 +228,49 @@ def _extract_gh_ids(content: str) -> dict:
     return result
 
 
+def _migrate_adopt_combine(filepath: str, dry_run: bool = False) -> dict:
+    """Option A: analyse existing agent file, append only missing synlynk sections."""
+    with open(filepath) as f:
+        content = f.read()
+
+    covered, missing = [], []
+    for header in SECTION_SIGNALS:
+        if _is_section_covered(content, header):
+            covered.append(header)
+        elif header not in content:
+            missing.append(header)
+
+    extracted = _extract_gh_ids(content)
+
+    for h in covered:
+        print(f"  ✓ covered   {h} (keeping yours)")
+    if extracted["project_id"]:
+        print(f"  ✓ extracted  GH project_id={extracted['project_id']} → .synlynk/config.json")
+    for h in missing:
+        print(f"  + appending {h}")
+
+    if not dry_run:
+        templates = _build_templates()
+        template_content = templates.get("CLAUDE.md", "")
+        additions = []
+        for header in missing:
+            start = template_content.find(f"\n{header}\n")
+            if start == -1:
+                start = template_content.find(f"\n{header}")
+            if start != -1:
+                next_sec = template_content.find("\n## ", start + 4)
+                section_text = (template_content[start:next_sec].strip()
+                                if next_sec != -1 else template_content[start:].strip())
+                additions.append(section_text)
+        if additions:
+            with open(filepath, "a") as f:
+                f.write("\n\n" + "\n\n".join(additions) + "\n")
+        if extracted["project_id"]:
+            _update_config({"project_id": extracted["project_id"]})
+
+    return {"covered": covered, "missing": missing, "extracted": extracted, "dry_run": dry_run}
+
+
 def _build_templates(org: str = None, repo: str = None, project_id: str = None,
                      owner: str = None, agent_slots: dict = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
@@ -1208,6 +1251,87 @@ def exec_command(cmd_args: list) -> int:
         set_state("watching" if daemon._is_running() else "stopped")
     return exit_code
 
+def migrate(dry_run: bool = False, _auto_choice: str = None,
+            _auto_confirm: str = None) -> None:
+    """Scans repo, detects maturity, and guides safe migration to synlynk layout."""
+    prefix = "[DRY RUN] " if dry_run else ""
+
+    remote_owner, remote_repo = detect_remote_owner_repo()
+    if remote_owner:
+        print(f"  {prefix}Detected: {remote_owner}/{remote_repo}")
+        if not dry_run:
+            _update_config({"owner": remote_owner, "repo": remote_repo})
+
+    scan = _scan_repo_for_docs(".")
+
+    for fname, fpath in scan["agent_files"].items():
+        with open(fpath) as f:
+            content = f.read()
+        if not _is_evolved_repo(content):
+            continue
+        lines = len(content.splitlines())
+        sections = sum(1 for l in content.splitlines() if l.startswith("## "))
+        print(f"\nFound evolved agent instructions ({fname}: {lines} lines, {sections} sections).")
+        print("Your existing content is richer than synlynk's generic template.\n")
+        print("[A] Adopt + combine — preserve your content, add only what's missing")
+        print("[B] Exit           — no changes (re-run migrate when ready)")
+        print("[C] Full replace   — overwrite with synlynk templates (destructive)\n")
+        choice = (_auto_choice or input("Choice [A/b/c]: ")).strip().lower() or "a"
+
+        if choice == "b":
+            print("  Migration skipped. Your existing files are unchanged.")
+            config = load_config()
+            if not config.get("project_id"):
+                print("  ⚠  synlynk start will not work until config.json contains project_id.")
+            return
+
+        if choice == "c":
+            confirm = (_auto_confirm or
+                       input(f"  ⚠  This will overwrite {lines} lines.\n"
+                             "  Type 'replace' to confirm: ")).strip()
+            if confirm != "replace":
+                print("  Confirmation not received. No changes made.")
+                return
+            if not dry_run:
+                templates = _build_templates()
+                with open(fpath, "w") as f:
+                    f.write(templates.get(fname, ""))
+            print(f"  {prefix}Replaced {fname} with synlynk template.")
+            continue
+
+        print(f"\nAnalysing {fname} sections...")
+        result = _migrate_adopt_combine(fpath, dry_run=dry_run)
+        n = len(result["missing"])
+        print(f"\n  {prefix}{fname}: {n} section(s) appended, "
+              f"{len(result['covered'])} already covered")
+
+    if not os.path.exists("AGENTS.md"):
+        if not dry_run:
+            templates = _build_templates()
+            with open("AGENTS.md", "w") as f:
+                f.write(templates["AGENTS.md"])
+        print(f"  {prefix}Created AGENTS.md")
+
+    docs_dir = "project-docs"
+    if scan["docs"] and not os.path.exists(docs_dir) and not dry_run:
+        os.makedirs(docs_dir)
+        os.makedirs(os.path.join(docs_dir, "devlogs"), exist_ok=True)
+
+    for src_path in scan["docs"]:
+        fname = os.path.basename(src_path)
+        dest_path = os.path.join(docs_dir, fname)
+        if os.path.exists(dest_path):
+            print(f"  ⚠  {dest_path} already exists — skipping {src_path} (manual merge needed)")
+        else:
+            if not dry_run:
+                os.rename(src_path, dest_path)
+            print(f"  {prefix}Moved {os.path.relpath(src_path)} → {dest_path}")
+
+    print("\n✓ Migration complete.")
+    if not dry_run:
+        print("  Run `synlynk start <issue-id>` to begin using the autonomy driver.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
@@ -1245,6 +1369,11 @@ def main() -> None:
     status_parser.add_argument("--json", action="store_true", dest="json_output",
                                help="Output machine-readable JSON")
 
+    migrate_parser = subparsers.add_parser("migrate",
+                                           help="Migrate existing repo docs to synlynk layout")
+    migrate_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                                help="Show what would happen without making changes")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -1267,6 +1396,8 @@ def main() -> None:
         checkpoint()
     elif args.command == "status":
         cmd_status(json_output=args.json_output)
+    elif args.command == "migrate":
+        migrate(dry_run=args.dry_run)
     else:
         parser.print_help()
 
