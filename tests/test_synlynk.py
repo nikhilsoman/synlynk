@@ -951,3 +951,71 @@ def test_get_project_item_id_returns_none_when_no_items(monkeypatch):
         lambda *a, **kw: type('R', (), {'stdout': fake_response, 'returncode': 0})())
     result = synlynk._get_project_item_id("Dialify", "rxcc", "42")
     assert result is None
+
+
+def test_cmd_start_fails_fast_without_owner(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'load_config', lambda: {
+        "owner": None, "repo": None, "project_id": None,
+        "agent_slots": {"claude": "claude"},
+    })
+    synlynk.cmd_start("42", dry_run=True)
+    captured = capsys.readouterr()
+    assert "owner/repo" in captured.out or "migrate" in captured.out
+
+
+def test_cmd_start_infers_agent_from_label(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'load_config', lambda: {
+        "owner": "Dialify", "repo": "rxcc", "project_id": "PVT_123",
+        "agent_slots": {"claude": "claude", "agy": "gemini"},
+    })
+    issue_payload = json.dumps({
+        "title": "Fix auth",
+        "body": "Auth is broken",
+        "labels": [{"name": "agent:claude"}, {"name": "domain:backend"}],
+    })
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': issue_payload, 'returncode': 0})())
+    monkeypatch.setattr(synlynk, '_get_board_fields', lambda pid: None)
+    monkeypatch.setattr(synlynk, 'generate_context', lambda: None)
+    synlynk.cmd_start("42", dry_run=True)
+    captured = capsys.readouterr()
+    assert "claude" in captured.out
+
+
+def test_cmd_start_prepends_issue_block_to_context(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'load_config', lambda: {
+        "owner": "Dialify", "repo": "rxcc", "project_id": None,
+        "agent_slots": {"claude": "claude"},
+    })
+    issue_payload = json.dumps({
+        "title": "Fix auth",
+        "body": "Auth is broken on login page.",
+        "labels": [{"name": "agent:claude"}],
+    })
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': issue_payload, 'returncode': 0})())
+    monkeypatch.setattr(synlynk, 'generate_context', lambda: None)
+    (project_dir / ".synlynk" / "context.md").write_text("# Context\nExisting content.")
+    synlynk.cmd_start("42", dry_run=True)
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "# Active Issue: #42" in ctx
+    assert "Auth is broken on login page." in ctx
+    assert "Existing content." in ctx
+
+
+def test_cmd_start_dry_run_does_not_launch(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'load_config', lambda: {
+        "owner": "Dialify", "repo": "rxcc", "project_id": None,
+        "agent_slots": {"claude": "claude"},
+    })
+    issue_payload = json.dumps({
+        "title": "Test", "body": "body",
+        "labels": [{"name": "agent:claude"}],
+    })
+    launched = []
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': issue_payload, 'returncode': 0})())
+    monkeypatch.setattr(synlynk, 'generate_context', lambda: None)
+    monkeypatch.setattr(synlynk, 'exec_command', lambda cmd: launched.append(cmd) or 0)
+    synlynk.cmd_start("42", dry_run=True)
+    assert len(launched) == 0

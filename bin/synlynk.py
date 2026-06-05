@@ -1471,6 +1471,98 @@ def _move_board_item(project_id: str, item_id: str, agent_name: str, cache: dict
     return success
 
 
+def cmd_start(issue_id: str, dry_run: bool = False) -> None:
+    """Full synlynk start flow: read issue → move board → inject context → launch agent."""
+    prefix = "[DRY RUN] " if dry_run else ""
+    config = load_config()
+    owner = config.get("owner")
+    repo = config.get("repo")
+    project_id = config.get("project_id")
+    agent_slots = config.get("agent_slots") or {"claude": "claude", "agy": "gemini", "codex": "codex"}
+
+    if not owner or not repo:
+        print("Error: owner/repo not set in .synlynk/config.json.")
+        print("  Run `synlynk migrate` or `synlynk init --org <org> --repo <repo>` first.")
+        return
+
+    # Step 1: Read issue
+    print(f"  {prefix}Reading issue #{issue_id}...")
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{repo}/issues/{issue_id}"],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            print(f"Error: could not read issue #{issue_id}: {result.stderr.strip()}")
+            return
+        issue = json.loads(result.stdout)
+    except Exception as e:
+        print(f"Error reading issue: {e}")
+        return
+
+    title = issue.get("title", "")
+    body = issue.get("body") or ""
+    labels = [lbl["name"] for lbl in issue.get("labels", [])]
+
+    # Step 2: Infer agent from label
+    agent_name = None
+    for label in labels:
+        if label.startswith("agent:"):
+            agent_name = label.split(":", 1)[1].strip()
+            break
+    if not agent_name:
+        options = list(agent_slots.keys())
+        choice = input(f"  No agent label on #{issue_id}. Which agent? "
+                       f"[{'/'.join(options)}]: ").strip().lower()
+        agent_name = choice if choice in agent_slots else options[0]
+
+    agent_exec = agent_slots.get(agent_name)
+    if not agent_exec:
+        print(f"Error: agent '{agent_name}' not in agent_slots config.")
+        return
+    print(f"  {prefix}Agent: {agent_name} (exec: {agent_exec})")
+
+    # Steps 3 + 4: Board discovery and move
+    if project_id:
+        cache = _get_board_fields(project_id)
+        if cache:
+            if dry_run:
+                print(f"  {prefix}Board: Status → In Progress, Agent → {agent_name}")
+            else:
+                item_id = _get_project_item_id(owner, repo, issue_id)
+                if item_id:
+                    _move_board_item(project_id, item_id, agent_name, cache)
+                else:
+                    print("  ⚠  Could not get board item ID — skipping board move")
+        else:
+            print("  ⚠  Board field discovery failed — skipping board move")
+    else:
+        print("  ⚠  No project_id in config — skipping board move")
+
+    # Step 5: Build context
+    generate_context()
+    context_file = ".synlynk/context.md"
+    if os.path.exists(context_file):
+        with open(context_file) as f:
+            existing = f.read()
+        issue_block = (
+            f"# Active Issue: #{issue_id} — {title}\n\n"
+            f"**Labels:** {', '.join(labels)}\n"
+            f"**URL:** https://github.com/{owner}/{repo}/issues/{issue_id}\n\n"
+            f"{body}\n\n---\n\n"
+        )
+        with open(context_file, "w") as f:
+            f.write(issue_block + existing)
+        print(f"  {prefix}Context: issue #{issue_id} prepended to context.md")
+
+    # Step 6: Launch agent
+    if dry_run:
+        print(f"  {prefix}Would launch: {agent_exec}")
+        return
+    print(f"\n  Launching {agent_name}...")
+    sys.exit(exec_command([agent_exec]))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
@@ -1513,6 +1605,12 @@ def main() -> None:
     migrate_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                                 help="Show what would happen without making changes")
 
+    start_parser = subparsers.add_parser("start",
+                                         help="Read GitHub issue, move board, inject context, launch agent")
+    start_parser.add_argument("issue_id", help="GitHub issue number")
+    start_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                              help="Show plan without moving board or launching agent")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -1537,6 +1635,8 @@ def main() -> None:
         cmd_status(json_output=args.json_output)
     elif args.command == "migrate":
         migrate(dry_run=args.dry_run)
+    elif args.command == "start":
+        cmd_start(args.issue_id, dry_run=args.dry_run)
     else:
         parser.print_help()
 
