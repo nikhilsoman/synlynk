@@ -11,6 +11,42 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.0] - 2026-06-05
+
+### Added
+- `synlynk migrate` — safe repo bootstrapping for evolved repos. Scans the repo tree for
+  project docs and agent instruction files, detects "evolved" repos (>100 lines or 3+
+  non-template sections), and presents three options: (A) adopt + combine — preserve existing
+  content, append only missing synlynk sections using semantic matching; (B) exit — no changes;
+  (C) full replace — overwrite with generic templates (requires typing 'replace' to confirm)
+- `synlynk migrate --dry-run` — shows what would happen without writing any files
+- Semantic section matching (`SECTION_SIGNALS`) — detects whether Live Issues SOP,
+  Anti-Amnesia, 4-Doc Discipline, GH Projects v2 blocks, and Worktree Policy are already
+  covered by existing content under any header, preventing duplicate sections
+- GH Projects v2 ID extraction — `synlynk migrate` reads `PVT_` project node IDs from
+  existing agent files and writes them to `.synlynk/config.json` automatically
+- `synlynk start <issue-id>` — reads a GitHub issue, infers the agent from the `agent:` label,
+  auto-discovers and caches GH Projects v2 field IDs, moves the board item to In Progress,
+  sets the Agent field, prepends the issue body to `.synlynk/context.md`, and launches the
+  agent session
+- `synlynk start --dry-run` — prints the full plan without moving the board or launching
+- Remote auto-detection — `init` and `migrate` both parse `owner`/`repo` from
+  `git remote get-url origin` (supports `https://` and `git@` formats), storing in config.json
+  with no flags required
+- Board field cache (`.synlynk/board-cache.json`) — discovered Status and Agent field IDs
+  cached for 7 days; re-fetched automatically when stale
+- `agent_slots` in `.synlynk/config.json` — maps agent names (`claude`, `agy`, `codex`) to
+  their CLI exec commands; written by `synlynk init` from `--agents` flag
+
+### Changed
+- `synlynk init` now auto-detects `owner`/`repo` from git remote and shows a nudge when
+  project docs are detected outside `project-docs/`
+- `_build_templates()` gains `owner` and `agent_slots` parameters; `config.json` template now
+  includes `owner`, `project_id`, and `agent_slots` fields
+- `load_config()` defaults extended with `owner`, `project_id`, `agent_slots`
+
+---
+
 ## [0.3.0] - 2026-06-03
 
 ### Added
@@ -102,7 +138,8 @@ Initial public release.
 - `log_telemetry()` — rolling JSON log of last 100 exec events
 - `install.sh` — global installer, adds synlynk to `~/.synlynk/bin/` and PATH
 
-[Unreleased]: https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nikhilsoman/synlynk/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nikhilsoman/synlynk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nikhilsoman/synlynk/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/nikhilsoman/synlynk/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nikhilsoman/synlynk/compare/v0.1.0...v0.2.0

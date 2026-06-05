@@ -54,6 +54,8 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 | Command | Description |
 | --- | --- |
 | `synlynk init [--force] [--agents ...] [--mode ...] [--org ...] [--repo ...] [--project-id ...]` | Bootstrap `project-docs/` and AI instruction files |
+| `synlynk migrate [--dry-run]` | Scan repo for existing docs, detect maturity, safely bootstrap into synlynk layout |
+| `synlynk start <issue-id> [--dry-run]` | Read GitHub issue → move Projects v2 board → inject context → launch agent |
 | `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
 | `synlynk watch start\|stop\|status` | Background daemon that regenerates `context.md` when files change (Unix only) |
 | `synlynk checkpoint` | Archive completed `[x]` tasks to devlog, refresh context, emit telemetry |
