@@ -1332,6 +1332,145 @@ def migrate(dry_run: bool = False, _auto_choice: str = None,
         print("  Run `synlynk start <issue-id>` to begin using the autonomy driver.")
 
 
+_BOARD_CACHE_FILE = ".synlynk/board-cache.json"
+_BOARD_CACHE_TTL_DAYS = 7
+
+
+def _load_board_cache() -> dict:
+    """Returns board-cache.json content if fresh (within TTL), else None."""
+    if not os.path.exists(_BOARD_CACHE_FILE):
+        return None
+    try:
+        with open(_BOARD_CACHE_FILE) as f:
+            cache = json.load(f)
+        cached_ts = time.mktime(time.strptime(cache["cached_at"], '%Y-%m-%dT%H:%M:%S'))
+        age_days = (time.time() - cached_ts) / 86400
+        return cache if age_days <= _BOARD_CACHE_TTL_DAYS else None
+    except (KeyError, ValueError, IOError):
+        return None
+
+
+def _save_board_cache(cache: dict) -> None:
+    """Writes board cache to .synlynk/board-cache.json with current timestamp."""
+    if not os.path.exists(".synlynk"):
+        return
+    cache["cached_at"] = time.strftime('%Y-%m-%dT%H:%M:%S')
+    with open(_BOARD_CACHE_FILE, "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+def _discover_board_fields(project_id: str) -> dict:
+    """Queries GH Projects v2 to discover Status and Agent field IDs and options."""
+    query = (
+        'query($projectId: ID!) { node(id: $projectId) { ... on ProjectV2 {'
+        ' fields(first: 20) { nodes { ... on ProjectV2SingleSelectField {'
+        ' id name options { id name } } } } } } }'
+    )
+    try:
+        result = subprocess.run(
+            ["gh", "api", "graphql",
+             "-f", f"query={query}",
+             "-f", f"projectId={project_id}"],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        fields = data["data"]["node"]["fields"]["nodes"]
+        cache = {
+            "project_id": project_id,
+            "status_field_id": None, "agent_field_id": None,
+            "status_options": {}, "agent_options": {},
+        }
+        for field in fields:
+            if not field:
+                continue
+            fname = field.get("name", "").lower()
+            opts = {opt["name"]: opt["id"] for opt in field.get("options", [])}
+            if fname == "status":
+                cache["status_field_id"] = field["id"]
+                cache["status_options"] = opts
+            elif fname == "agent":
+                cache["agent_field_id"] = field["id"]
+                cache["agent_options"] = {k.lower(): v for k, v in opts.items()}
+        return cache
+    except Exception:
+        return None
+
+
+def _get_board_fields(project_id: str) -> dict:
+    """Returns board fields from cache if fresh, else discovers and caches."""
+    cache = _load_board_cache()
+    if cache and cache.get("project_id") == project_id:
+        return cache
+    cache = _discover_board_fields(project_id)
+    if cache:
+        _save_board_cache(cache)
+    return cache
+
+
+def _get_project_item_id(owner: str, repo: str, issue_id: str) -> str:
+    """Returns the GH Projects v2 item node ID for an issue, or None."""
+    query = (
+        'query($url: URI!) { resource(url: $url) {'
+        ' ... on Issue { projectItems(first: 1) { nodes { id } } } } }'
+    )
+    issue_url = f"https://github.com/{owner}/{repo}/issues/{issue_id}"
+    try:
+        result = subprocess.run(
+            ["gh", "api", "graphql",
+             "-f", f"query={query}",
+             "-f", f"url={issue_url}"],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        nodes = data["data"]["resource"]["projectItems"]["nodes"]
+        return nodes[0]["id"] if nodes else None
+    except Exception:
+        return None
+
+
+def _move_board_item(project_id: str, item_id: str, agent_name: str, cache: dict) -> bool:
+    """Sets Status=In Progress and Agent field on a board item. Returns True on full success."""
+    mutation = (
+        'mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {'
+        ' updateProjectV2ItemFieldValue(input: { projectId: $projectId itemId: $itemId'
+        ' fieldId: $fieldId value: { singleSelectOptionId: $optionId } })'
+        ' { projectV2Item { id } } }'
+    )
+    status_opt = cache.get("status_options", {}).get("In Progress")
+    agent_opt = cache.get("agent_options", {}).get(agent_name.lower())
+    success = True
+    for field_id, option_id, label in [
+        (cache.get("status_field_id"), status_opt, "Status → In Progress"),
+        (cache.get("agent_field_id"), agent_opt, f"Agent → {agent_name}"),
+    ]:
+        if not field_id or not option_id:
+            print(f"  ⚠  Board: could not set {label} (field/option not found)")
+            continue
+        try:
+            result = subprocess.run(
+                ["gh", "api", "graphql",
+                 "-f", f"query={mutation}",
+                 "-f", f"projectId={project_id}",
+                 "-f", f"itemId={item_id}",
+                 "-f", f"fieldId={field_id}",
+                 "-f", f"optionId={option_id}"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                print(f"  ✓ Board: {label}")
+            else:
+                print(f"  ⚠  Board move failed for {label}")
+                success = False
+        except Exception as e:
+            print(f"  ⚠  Board move error: {e}")
+            success = False
+    return success
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"

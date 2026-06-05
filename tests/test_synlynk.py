@@ -876,3 +876,78 @@ def test_migrate_dry_run_moves_nothing(tmp_path, monkeypatch):
     synlynk.migrate(dry_run=True, _auto_choice="a")
     assert (tmp_path / "roadmap.md").exists()
     assert not (tmp_path / "project-docs" / "roadmap.md").exists()
+
+
+def test_load_board_cache_returns_none_when_missing(project_dir):
+    result = synlynk._load_board_cache()
+    assert result is None
+
+
+def test_load_board_cache_returns_cache_when_fresh(project_dir):
+    import datetime
+    recent = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+    cache = {
+        "cached_at": recent,
+        "project_id": "PVT_123",
+        "status_field_id": "SF_status",
+        "agent_field_id": "SF_agent",
+        "status_options": {"In Progress": "opt1"},
+        "agent_options": {"claude": "opt2"},
+    }
+    (project_dir / ".synlynk" / "board-cache.json").write_text(json.dumps(cache))
+    result = synlynk._load_board_cache()
+    assert result is not None
+    assert result["project_id"] == "PVT_123"
+
+
+def test_load_board_cache_returns_none_when_stale(project_dir):
+    import datetime
+    old = (datetime.datetime.now() - datetime.timedelta(days=10)).strftime('%Y-%m-%dT%H:%M:%S')
+    cache = {"cached_at": old, "project_id": "PVT_123"}
+    (project_dir / ".synlynk" / "board-cache.json").write_text(json.dumps(cache))
+    result = synlynk._load_board_cache()
+    assert result is None
+
+
+def test_save_board_cache_writes_file(project_dir):
+    cache = {"project_id": "PVT_test", "status_options": {}, "agent_options": {}}
+    synlynk._save_board_cache(cache)
+    data = json.loads((project_dir / ".synlynk" / "board-cache.json").read_text())
+    assert data["project_id"] == "PVT_test"
+    assert "cached_at" in data
+
+
+def test_discover_board_fields_parses_response(monkeypatch):
+    fake_response = json.dumps({"data": {"node": {"fields": {"nodes": [
+        {"id": "SF_status", "name": "Status",
+         "options": [{"id": "opt_ip", "name": "In Progress"}, {"id": "opt_done", "name": "Done"}]},
+        {"id": "SF_agent", "name": "Agent",
+         "options": [{"id": "opt_claude", "name": "Claude"}, {"id": "opt_agy", "name": "Agy"}]},
+    ]}}}})
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': fake_response, 'returncode': 0})())
+    result = synlynk._discover_board_fields("PVT_test")
+    assert result["status_field_id"] == "SF_status"
+    assert result["agent_field_id"] == "SF_agent"
+    assert result["status_options"]["In Progress"] == "opt_ip"
+    assert result["agent_options"]["claude"] == "opt_claude"
+
+
+def test_get_project_item_id_returns_id(monkeypatch):
+    fake_response = json.dumps({
+        "data": {"resource": {"projectItems": {"nodes": [{"id": "PVTI_abc"}]}}}
+    })
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': fake_response, 'returncode': 0})())
+    result = synlynk._get_project_item_id("Dialify", "rxcc", "42")
+    assert result == "PVTI_abc"
+
+
+def test_get_project_item_id_returns_none_when_no_items(monkeypatch):
+    fake_response = json.dumps({
+        "data": {"resource": {"projectItems": {"nodes": []}}}
+    })
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': fake_response, 'returncode': 0})())
+    result = synlynk._get_project_item_id("Dialify", "rxcc", "42")
+    assert result is None
