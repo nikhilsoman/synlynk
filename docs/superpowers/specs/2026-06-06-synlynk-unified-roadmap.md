@@ -107,13 +107,51 @@ They meet in the middle:
 |---|---|---|
 | Storage | project-docs/ ledger, SQLite WAL | Distributed encrypted memory store |
 | Transport | File I/O → HTTP server → NATS leaf | NATS hub, MessagePack streams |
-| Identity | git user attribution, capability scores | Ed25519 agent keys, on-chain reputation |
-| Economics | costs.md manual tracking | Gas tank (BTC/ETH/SOL/USDC/fiat), auto-deduct |
-| Standards | conventions.md per project | Marketplace: publish/subscribe conventions packs |
-| Distribution | Tokq needs a client install base | synlynk init = Tokq onboarding event |
+| Identity | UUID + Ed25519 keypair (v0.9) | Agent registration, signature auth, on-chain reputation |
+| Memory schema | Defined mapping: project-docs/ → memory units (v1.0) | CRUD, versioning, session scoping, access control |
+| Encryption | Local ZK encrypt before send (Tokq Alpha) | Stores ciphertext only — never holds decryption keys |
+| Economics | costs.md = local ops ledger (unchanged) | Gas tank = Tokq cloud ops ledger (separate, additive) |
+| Standards | conventions.md per project | `synlynk publish` → Tokq marketplace collection (Tokq Alpha) |
+| Distribution | synlynk init = Tokq onboarding event | — |
 
-v1.0 defines the bridge API. Tokq Alpha connects to it. Both products survive independently; the
-cloud layer is additive, never required to use synlynk locally.
+v1.0 defines the bridge schema and local identity. Tokq Alpha activates the connection. Both
+products survive independently; the cloud layer is additive, never required to use synlynk locally.
+
+### 3.1 Memory Unit Schema (Gap 2 — resolved)
+
+This defines how synlynk's local state maps to Tokq's FR-2/FR-3 memory unit structure. Required
+before Tokq Alpha can be built.
+
+| Tokq field | synlynk source | Notes |
+|---|---|---|
+| `agent_id` | `.synlynk/identity.json` → `agent_uuid` | Set at `synlynk identity init` |
+| `session_id` | Git remote URL (or SHA of `git rev-parse --show-toplevel` if no remote) | Stable per repo |
+| `client_id` | `.synlynk/config.json` → `project_id` (set at `synlynk init`) | User-facing project name |
+| `memory_id` | `sha256(session_id + filename + version_counter)` | Deterministic; enables idempotent sync |
+| `encrypted_data` | Full file content of each `project-docs/*.md` file, AES-256-GCM encrypted | One memory unit per file |
+| `metadata.title` | Filename without extension (e.g., `memory`, `conventions`, `roadmap`) | |
+| `metadata.tags` | `[@username]` attributions extracted from file content | |
+| `metadata.version` | Monotonic counter incremented on each `synlynk sync` write | |
+| `metadata.expires` | None by default; configurable via `synlynk tokq set-ttl <file> <days>` | |
+
+**Granularity decision:** One memory unit per project-docs/ file (not per paragraph, not per
+decision entry). This keeps sync simple: a `synlynk sync` push serializes 5–8 files into 5–8
+memory units. Retrieval is a single list-by-session_id call followed by 5–8 reads.
+
+### 3.2 Ledger Boundary — costs.md vs. Gas Tank (Gap 5 — resolved)
+
+These are two separate ledgers that coexist permanently. Neither replaces the other.
+
+- **costs.md** (local) — tracks all synlynk CLI operations: exec invocations, Trio pipeline job
+  costs, token extraction from AI CLI output. Exists whether or not Tokq is connected. Human-
+  readable Markdown. Updated by `update_costs()` after every exec.
+- **Gas tank** (Tokq cloud) — tracks all Tokq cloud operations: memory unit storage, retrieval,
+  marketplace subscriptions, earnings from published collections. Managed by Tokq. Queryable via
+  `synlynk tokq balance`. Denominated in USD equivalent (crypto converted at transaction time).
+
+When Tokq Alpha connects, `synlynk sync` operations deduct from the gas tank. Local exec
+operations continue tracking to costs.md. A `synlynk tokq balance` command shows the gas tank
+without requiring any migration of historical costs.md data.
 
 ---
 
@@ -291,11 +329,11 @@ made. GStack personas remember the last session.
 
 ---
 
-### v0.9.0 — Review TUI + Team Safety
+### v0.9.0 — Review TUI + Team Safety + Agent Identity
 
-**OS Layer:** Shell — polished review UX; team safety guarantees  
-**Infrastructure:** JSONL append-only event log backs project-docs/ views  
-**Theme:** Review 3 phases of agent work in 60 seconds; team mode is production-safe
+**OS Layer:** Shell — polished review UX; team safety guarantees; Tokq bridge prep begins  
+**Infrastructure:** JSONL append-only event log backs project-docs/ views; local identity generated  
+**Theme:** Review 3 phases of agent work in 60 seconds; team mode is production-safe; identity ready for Tokq
 
 **Ships:**
 - **Full curses TUI** — launched by `synlynk review`. Navigate phase artifacts (←/→), rate quality
@@ -316,9 +354,29 @@ made. GStack personas remember the last session.
   activity timestamp, and attribution compliance rate.
 - Textual TUI option (Python Textual framework) — richer panel layout for Rooms (named workspaces
   for multi-project or multi-branch setups). Behind `--ui textual` flag; default remains curses.
+- **`synlynk identity init`** (Gap 1 — Agent Identity, FR-1) — generates a local agent identity
+  and writes `.synlynk/identity.json`:
+  ```json
+  {
+    "agent_uuid": "<uuid4>",
+    "public_key": "<ed25519-pubkey-hex>",
+    "public_key_fingerprint": "<sha256-hex>",
+    "created_at": "<iso8601>",
+    "git_user": "<git config user.name>",
+    "git_email": "<git config user.email>"
+  }
+  ```
+  Key generation uses `ssh-keygen -t ed25519` via subprocess (stdlib-safe; available on macOS and
+  Linux). Private key stored at `.synlynk/identity.key` with `chmod 600`. Public key registered
+  with Tokq at first `synlynk tokq connect`.
+- `synlynk identity show` — display current identity (UUID + fingerprint; never the private key).
+- `synlynk identity rotate` — generate new keypair, archive old. Old public key stays registered
+  with Tokq for read access to existing memory units; new key takes over for writes.
+- `synlynk init` updated to call `synlynk identity init` automatically if no identity exists.
 
-**Unlock:** Review a 3-phase agent work bundle in under 60 seconds without touching the mouse. Team
-mode is production-safe: no merge conflicts, full attribution, conflict detection before write.
+**Unlock:** Review TUI + team safety as before. Identity generation means every developer now has a
+local cryptographic identity that Tokq Alpha can immediately use — no identity setup step at bridge
+connection time.
 
 ---
 
@@ -340,12 +398,73 @@ mode is production-safe: no merge conflicts, full attribution, conflict detectio
 - Complete docs: CLI reference, project-docs/ schema reference, Open Context Protocol spec,
   Trio Protocol design, Infrastructure Arc reference.
 - **NATS leaf node schema defined** — `.synlynk/tokq.json` holds: leaf server address, subject
-  prefix, Ed25519 public key (optional). Schema is frozen at v1.0. Tokq Alpha will read it.
-  No NATS dependency required to use synlynk locally — the schema is inert until Tokq connects.
+  prefix, Ed25519 public key (from `.synlynk/identity.json`). Schema frozen at v1.0. Tokq Alpha
+  reads it. No NATS dependency required locally — schema is inert until Tokq connects.
+- **Memory unit schema published** (Gap 2 — Memory Unit Schema, FR-2/FR-3) — the mapping defined
+  in Section 3.1 is frozen and published as a standalone spec (`docs/tokq-memory-unit-schema.md`).
+  Tokq Alpha implements against it. `synlynk sync --dry-run` shows exactly what would be sent
+  without connecting, so developers can inspect the serialization before Tokq Alpha ships.
+- **Ledger boundary formalized** (Gap 5 — costs.md / Gas Tank, FR-6) — `synlynk tokq balance`
+  command stub implemented (returns "Tokq not connected" until Alpha). Clarifies the boundary:
+  costs.md tracks local ops permanently; gas tank tracks Tokq cloud ops. No migration.
 - Public launch (Hacker News, Product Hunt) — stable enough to recommend to a colleague.
 
-**Unlock:** Install from a package manager. `synlynk` is a dependency teams can take on. The
-Tokq Alpha client knows exactly how to connect because the schema is waiting for it.
+**Unlock:** Install from a package manager. `synlynk` is a dependency teams can take on. Every
+developer has a local identity. The memory unit schema is frozen and public. Tokq Alpha knows
+exactly what to connect to because everything is waiting for it.
+
+---
+
+### Tokq Alpha — Cloud Bridge + ZK Encryption + Marketplace
+
+**OS Layer:** Cloud bridge active — synlynk becomes a node in the Tokq network  
+**Infrastructure:** NATS leaf→hub connection live; `cryptography` package introduced as optional dep  
+**Theme:** Local memory goes cloud. conventions.md becomes a publishable product.
+
+This is the first release where synlynk requires an optional external dependency (`cryptography`
+package) — but only for users who connect to Tokq. Local-only use remains zero-dependency.
+
+**Ships:**
+- **`synlynk tokq connect`** — authenticates agent identity with Tokq using Ed25519 signature
+  challenge-response. Registers public key from `.synlynk/identity.json`. Writes connection token
+  to `.synlynk/tokq.json`. One-time per identity.
+- **Zero-Knowledge Encryption layer** (Gap 3 — FR-4, P0) — client-side encryption before any data
+  leaves the machine. Implementation:
+  - Uses `cryptography` package (explicit `pip install synlynk[tokq]` or `pipx inject synlynk cryptography`)
+  - Each project-docs/ file encrypted with AES-256-GCM
+  - Encryption key derived from Ed25519 private key using HKDF-SHA256
+  - Tokq cloud stores only ciphertext — cannot decrypt. Verified: if Tokq is compromised, memory
+    units are useless without the local private key.
+  - Key rotation (`synlynk identity rotate`) re-encrypts all memory units with new key.
+- **`synlynk sync`** — serializes project-docs/ into Tokq memory units per the Section 3.1 schema,
+  encrypts each, pushes via NATS leaf node. Incremental: only pushes files changed since last sync
+  (detected via SHA256 comparison against stored version hash in state.db).
+- **`synlynk sync --pull`** — retrieves memory units from Tokq, decrypts, and merges into local
+  project-docs/. Conflict resolution: event log timestamp wins (latest write wins per file).
+- **`synlynk tokq balance`** — displays gas tank balance, recent transactions, and earning summary.
+- **Auto-sync** — daemon (from v0.7) gains a `--tokq-sync-interval` option. Runs `synlynk sync`
+  in background on a configurable schedule (default: every 30 minutes when daemon is running).
+- **`synlynk publish`** (Gap 4 — conventions.md → Marketplace, FR-5/FR-7) — packages
+  `project-docs/conventions.md` (or any specified file) as a Tokq marketplace collection:
+  ```bash
+  synlynk publish conventions \
+    --title "React + FastAPI team conventions" \
+    --tags react,fastapi,ci,typescript \
+    --price 9.99/month \
+    --license cc-by-4.0
+  ```
+  Validates metadata completeness (title, tags ≥ 3, license), encrypts with a publish key
+  (separate from private memory key — public subscribers can decrypt), pushes to Tokq marketplace.
+  Returns a listing URL and collection ID.
+- **`synlynk subscribe <collection-id>`** — subscribes to a published conventions collection.
+  Downloads and merges into local `project-docs/conventions.md` under a `## Subscriptions` section.
+  Gas tank auto-deducts subscription fee.
+- **`synlynk tokq earnings`** — shows revenue from published collections: subscriber count,
+  monthly earnings, 70/30 split breakdown.
+
+**Unlock:** Your project memory survives machine loss, is accessible from any machine with the
+same private key, and is shareable with teammates (who have their own identities and read access).
+Your conventions.md can earn passive income. The Jan 2026 Tokq vision is now operational.
 
 ---
 
@@ -360,8 +479,8 @@ Tokq Alpha client knows exactly how to connect because the schema is waiting for
 | v0.8.0 | Open Context Protocol | November 2026 |
 | v0.9.0 | Review TUI + Team Safety | December 2026 |
 | v1.0.0 | Stable OS + Tokq Bridge Ready | Q1 2027 |
-| Tokq Alpha | Cloud Bridge (NATS) | Q3 2027 |
-| Tokq GA | Knowledge Marketplace | Q4 2027 |
+| Tokq Alpha | Cloud Bridge + ZK Encryption + Marketplace | Q3 2027 |
+| Tokq GA | Full marketplace GA, multi-cloud replication, enterprise | Q4 2027 |
 
 Dates are targets, not commitments. Each release ships when it's genuinely usable — never
 artificially gated to a calendar date, never shipped in a state that requires the next release to

@@ -60,7 +60,7 @@
 - [ ] GStack context bridge <!-- id: 65 --> [@nikhilsoman]
 - [ ] GitHub Actions sync gateway step <!-- id: 66 --> [@nikhilsoman]
 
-## v0.9.0 — Review TUI + Team Safety
+## v0.9.0 — Review TUI + Team Safety + Agent Identity
 - [ ] Full curses TUI with keyboard navigation (←/→, a=accept, r=reject, 1-5=rate) <!-- id: 70 --> [@nikhilsoman]
 - [ ] Per-job cost roll-up in review header + costs.md <!-- id: 71 --> [@nikhilsoman]
 - [ ] Append-only JSONL event log (`.synlynk/events.jsonl`) <!-- id: 72 --> [@nikhilsoman]
@@ -68,6 +68,9 @@
 - [ ] Attribution validation in team mode <!-- id: 74 --> [@nikhilsoman]
 - [ ] `synlynk team status` rollup view <!-- id: 75 --> [@nikhilsoman]
 - [ ] Textual TUI option behind `--ui textual` flag <!-- id: 76 --> [@nikhilsoman]
+- [ ] `synlynk identity init` — generate UUID + Ed25519 keypair via ssh-keygen, write `.synlynk/identity.json` + `.synlynk/identity.key` <!-- id: 77 --> [@nikhilsoman]
+- [ ] `synlynk identity show / rotate` commands <!-- id: 78 --> [@nikhilsoman]
+- [ ] Auto-call `identity init` from `synlynk init` if no identity exists <!-- id: 79 --> [@nikhilsoman]
 
 ## v1.0.0 — Stable OS + Tokq Bridge Ready
 - [ ] Freeze CLI/schema contract, add MIGRATION.md process <!-- id: 80 --> [@nikhilsoman]
@@ -77,4 +80,18 @@
 - [ ] Cross-platform CI matrix (macOS Intel + Apple Silicon + Ubuntu LTS) <!-- id: 84 --> [@nikhilsoman]
 - [ ] NATS leaf node schema defined in `.synlynk/tokq.json` <!-- id: 85 --> [@nikhilsoman]
 - [ ] Complete docs: CLI reference, project-docs schema, OCP spec, Trio spec, infra arc <!-- id: 86 --> [@nikhilsoman]
+- [ ] Publish memory unit schema spec (`docs/tokq-memory-unit-schema.md`) and freeze it <!-- id: 85b --> [@nikhilsoman]
+- [ ] `synlynk sync --dry-run` — show what would be sent without connecting <!-- id: 86b --> [@nikhilsoman]
+- [ ] `synlynk tokq balance` stub (returns "not connected" until Tokq Alpha) <!-- id: 86c --> [@nikhilsoman]
 - [ ] Public launch (HN + Product Hunt) <!-- id: 87 --> [@nikhilsoman]
+
+## Tokq Alpha — Cloud Bridge + ZK Encryption + Marketplace
+- [ ] `synlynk tokq connect` — Ed25519 challenge-response auth with Tokq, write connection token <!-- id: 90 --> [@nikhilsoman]
+- [ ] ZK encryption layer: AES-256-GCM, key derived from Ed25519 via HKDF-SHA256, `pip install synlynk[tokq]` <!-- id: 91 --> [@nikhilsoman]
+- [ ] `synlynk sync` — serialize project-docs/ → Tokq memory units, encrypt, push via NATS leaf <!-- id: 92 --> [@nikhilsoman]
+- [ ] `synlynk sync --pull` — retrieve + decrypt + merge from Tokq <!-- id: 93 --> [@nikhilsoman]
+- [ ] Auto-sync in daemon with `--tokq-sync-interval` option <!-- id: 94 --> [@nikhilsoman]
+- [ ] `synlynk publish conventions` — package conventions.md as marketplace collection with metadata + pricing <!-- id: 95 --> [@nikhilsoman]
+- [ ] `synlynk subscribe <collection-id>` — subscribe to published conventions, gas tank deduction <!-- id: 96 --> [@nikhilsoman]
+- [ ] `synlynk tokq earnings` — show revenue from published collections (70/30 split) <!-- id: 97 --> [@nikhilsoman]
+- [ ] Key rotation: `identity rotate` re-encrypts all memory units with new key <!-- id: 98 --> [@nikhilsoman]
