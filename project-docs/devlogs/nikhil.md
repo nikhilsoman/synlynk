@@ -1,5 +1,69 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-06
+### Session: Unified Roadmap — OS Framing, Tokq Convergence, Tokq Gap Analysis
+
+**Activity:** Full-day brainstorm + doc consolidation session. Scanned all proposals across the
+repo, assessed competitive positioning vs. GStack/SuperPowers, converged the Tokq + synlynk vision,
+designed the v0.4→v1.0 release staircase, absorbed the SQLite→NATS infrastructure arc, and closed
+5 Tokq PRD requirement gaps.
+
+**Key Outcomes:**
+
+1. **Positioning locked:** "The OS for multi-agent development." Tier model (Solo/Team/Enterprise)
+   retired. OS layer model replaces it — one product, increasing depth through 8 releases.
+
+2. **Competitive positioning resolved:** GStack, SuperPowers, HermesAgent, OpenClaw, NmoClaw are
+   Applications layer tools. synlynk is the OS they run on. Not competition. Coexistence via Open
+   Context Protocol (two commands: `context --for` / `checkpoint --from`).
+
+3. **Tokq convergence:** Recognized synlynk (May 2026) was the missing local OS client that Tokq
+   (Jan 2026) always needed. Same author, same vision, different ends of the stack. Unified:
+   synlynk = local OS, Tokq = cloud layer. Bridge at v1.0 via NATS leaf node.
+
+4. **Release staircase designed (v0.4→v1.0):** 7 releases, each usable on its own, each unlocking
+   one new capability. SQLite→NATS infrastructure arc absorbed into each release as the backbone:
+   - v0.4: Conventions + Trio Bootstrap (IPC layer, flat files)
+   - v0.5: Capability Engine (Scheduler, SQLite WAL)
+   - v0.6: Job Control + Constraints (SQLite extended)
+   - v0.7: Async Pipeline + Daemon (HTTP Context Server)
+   - v0.8: Open Context Protocol (ecosystem interface)
+   - v0.9: Review TUI + Team Safety + Agent Identity
+   - v1.0: Stable OS + Tokq Bridge Ready (NATS leaf schema, frozen CLI)
+
+5. **5 Tokq PRD gaps identified and closed:**
+   - Gap 1 (FR-1, Agent Identity): `synlynk identity init` → Ed25519 keypair in v0.9.0
+   - Gap 2 (FR-2/3, Memory Unit Schema): Section 3.1 mapping project-docs/ → Tokq units, frozen v1.0
+   - Gap 3 (FR-4, ZK Encryption): AES-256-GCM via HKDF-SHA256, Tokq Alpha, `synlynk[tokq]` extra
+   - Gap 4 (FR-5/7, Marketplace): `synlynk publish` / `subscribe` in Tokq Alpha
+   - Gap 5 (FR-6, Ledger Boundary): costs.md = local (permanent), gas tank = cloud (additive). Coexist.
+
+**Documents created/updated:**
+- `docs/superpowers/specs/2026-06-06-synlynk-unified-roadmap.md` — canonical single source of truth
+- `project-docs/roadmap.md` — replaced stale pre-Trio table with 9-release view
+- `project-docs/todo.md` — 80+ discrete todos across v0.4→Tokq Alpha
+- `project-docs/memory.md` — full rewrite with all 2026-06-06 decisions
+- `docs/archive/` — 8 superseded proposals archived (consolidated-roadmap, multi-agent-impl-plan,
+  agy-arch-review, public-launch-plan, agent-workers-assessment, agent-workers-git-managed,
+  agent-perf, polyglot-bootstrap)
+- `docs/brainstorm/synlynk-unified-roadmap/` — 6 visual companion HTML files committed
+
+**Visual companion created:** 6 HTML pages at `docs/brainstorm/synlynk-unified-roadmap/`:
+- `positioning-map.html` — 2x2 competitive map + capability matrix
+- `os-framing.html` — OS layer stack diagram + release overview
+- `tokq-convergence.html` — convergence map + product combination options
+- `unified-vision.html` — origin story arc (Tokq→synlynk→unified)
+- `unified-roadmap.html` — ecosystem coexistence map + five milestone roadmap
+- `release-staircase.html` — full v0.3→v1.0 release staircase with infra arc
+
+**Commits:** `a7fe8fc` (unified roadmap + archive + visuals), `f5ce10f` (5 Tokq gaps absorbed)
+
+**Status:** Unified roadmap complete and committed. Ready to start v0.4.0 implementation planning.
+
+**Next:** Invoke `superpowers:writing-plans` on the Trio Protocol spec
+(`docs/superpowers/specs/2026-06-01-synlynk-trio-protocol-design.md`) to produce the v0.4.0
+implementation plan.
+
 ## 2026-06-01
 ### Session: Trio Protocol Rearchitecture Brainstorm
 - **Activity:** Deep review of current roadmap vs. three hybrid workgroup study papers (Claude, Codex,
