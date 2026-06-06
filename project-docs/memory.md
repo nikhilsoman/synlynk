@@ -9,6 +9,7 @@
     - **Free/Solo:** Optimized dev workflow for CLIs (Claude/Gemini/Codex). Focus on Context, Project, Cost, Model, Skill, and Environment management.
     - **Paid/Team:** Hierarchical team scope with roll-up observability for leadership. [@nikhilsoman]
 - **Architectural Vision:** synlynk as a "Context Switchboard" (CLI/Daemon) using MCP and wrappers to provide state to stateless AI engines across CLIs and IDEs. [@nikhilsoman]
+- **Solo Dev Augmentation:** Future evolution focuses on allowing a solo developer to interchangeably use various AI agents (Claude Code, Gemini, Antigravity/Codex) on any GitHub-hosted project while maintaining a real-time, shared context state across all tools. [@nikhilsoman]
 - **Shipping Strategy:** Incremental "Lite" (File-based) -> "Full" (Daemon-based) Free tier progression. [@nikhilsoman]
 - **Auto-Update:** Binary and template updates must be seamless and baked into the CLI (`synlynk upgrade`). [@nikhilsoman]
 

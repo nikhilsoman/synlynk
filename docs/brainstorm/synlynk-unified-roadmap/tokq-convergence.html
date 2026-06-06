@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synlynk + Tokq</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; padding: 24px; }
+h1 { font-size: 1.4rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+.subtitle { color: #64748b; font-size: 0.88rem; margin-bottom: 24px; }
+
+/* ── Main layout ── */
+.grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; margin-bottom: 24px; }
+
+/* ── Stack diagram ── */
+.stack-wrap { display: flex; flex-direction: column; gap: 0; }
+.stack-label { font-size: 0.68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
+
+.layer {
+  padding: 11px 16px;
+  border-left: 3px solid transparent;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.layer-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.layer h3 { font-size: 0.8rem; font-weight: 700; margin-bottom: 2px; }
+.layer p  { font-size: 0.68rem; color: #64748b; line-height: 1.4; }
+.layer .mono { font-size: 0.62rem; font-family: monospace; color: #334155; margin-top: 3px; }
+
+/* Tokq layers – cloud purple */
+.l-mkt   { border-color: #7c3aed; background: #130e2033; }
+.l-mkt   h3 { color: #c4b5fd; }
+.l-id    { border-color: #6d28d9; background: #110d1e33; }
+.l-id    h3 { color: #a78bfa; }
+.l-net   { border-color: #5b21b6; background: #0f0b1a33; }
+.l-net   h3 { color: #8b5cf6; }
+
+/* bridge */
+.l-bridge { border-color: #0e7490; background: #071a2233; border-style: dashed; }
+.l-bridge h3 { color: #67e8f9; }
+
+/* Synlynk layers – cyan */
+.l-apps  { border-color: #7c3aed50; background: #12102033; }
+.l-apps  h3 { color: #a78bfa90; }
+.l-shell { border-color: #0369a1; background: #0a172233; }
+.l-shell h3 { color: #38bdf8; }
+.l-sched { border-color: #0891b2; background: #0a1c2233; }
+.l-sched h3 { color: #22d3ee; }
+.l-ipc   { border-color: #0d9488; background: #0a1e1a33; }
+.l-ipc   h3 { color: #2dd4bf; }
+.l-fs    { border-color: #15803d; background: #091a1033; }
+.l-fs    h3 { color: #4ade80; }
+.l-ker   { border-color: #b45309; background: #1a100833; }
+.l-ker   h3 { color: #fbbf24; }
+
+.layer-divider { height: 1px; background: #1a2233; }
+
+/* section header bars */
+.section-bar {
+  font-size: 0.62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  padding: 5px 16px; display: flex; align-items: center; gap: 8px;
+}
+.bar-tokq   { background: #1a0d2e; color: #7c3aed; border-left: 3px solid #7c3aed; }
+.bar-bridge { background: #071620; color: #0e7490; border-left: 3px solid #0e7490; border-style: solid; }
+.bar-syn    { background: #07101a; color: #0891b2; border-left: 3px solid #0891b2; }
+
+/* ── Right panel ── */
+.right-col { display: flex; flex-direction: column; gap: 16px; }
+
+/* Convergence map */
+.conv-box {
+  background: #080e1a;
+  border: 1px solid #1e2e4a;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.conv-box h3 { font-size: 0.75rem; font-weight: 700; color: #38bdf8; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 12px; }
+
+.conv-row {
+  display: grid;
+  grid-template-columns: 1fr 24px 1fr;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.7rem;
+}
+.conv-row:last-child { margin-bottom: 0; }
+.conv-left  { color: #4ade80; background: #091a10; border-radius: 4px; padding: 5px 8px; }
+.conv-right { color: #c4b5fd; background: #130e20; border-radius: 4px; padding: 5px 8px; }
+.conv-arr   { color: #334155; font-size: 0.9rem; text-align: center; }
+.conv-label { font-size: 0.62rem; color: #475569; }
+
+/* What Tokq adds */
+.adds-box {
+  background: #0c0917;
+  border: 1px solid #2d1b5e;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.adds-box h3 { font-size: 0.75rem; font-weight: 700; color: #a78bfa; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 12px; }
+.add-item { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
+.add-item:last-child { margin-bottom: 0; }
+.add-icon { font-size: 0.9rem; flex-shrink: 0; margin-top: 1px; }
+.add-item h4 { font-size: 0.75rem; font-weight: 700; color: #c4b5fd; margin-bottom: 2px; }
+.add-item p  { font-size: 0.67rem; color: #64748b; line-height: 1.4; }
+
+/* What Synlynk gives Tokq */
+.gives-box {
+  background: #07100a;
+  border: 1px solid #14401e;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.gives-box h3 { font-size: 0.75rem; font-weight: 700; color: #4ade80; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 12px; }
+.gives-box p { font-size: 0.7rem; color: #64748b; line-height: 1.55; }
+.gives-box p + p { margin-top: 8px; }
+
+/* ── Bottom row ── */
+.bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+.option-card {
+  border-radius: 10px;
+  padding: 16px 18px;
+  border: 1px solid #1e293b;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.option-card:hover { border-color: #334155; background: #0d1520; }
+.option-card.selected { border-color: #22d3ee !important; background: #0a1e28 !important; }
+
+.option-card .opt-letter {
+  font-size: 0.65rem; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.option-card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 6px; }
+.option-card p  { font-size: 0.68rem; color: #64748b; line-height: 1.5; }
+.option-card ul { font-size: 0.67rem; color: #64748b; line-height: 1.6; padding-left: 14px; margin-top: 6px; }
+
+.opt-a .opt-letter { color: #22d3ee; }
+.opt-a h3 { color: #7dd3fc; }
+.opt-a { border-color: #0e3a50; }
+
+.opt-b .opt-letter { color: #a78bfa; }
+.opt-b h3 { color: #c4b5fd; }
+.opt-b { border-color: #2d1b5e; }
+
+.opt-c .opt-letter { color: #4ade80; }
+.opt-c h3 { color: #86efac; }
+.opt-c { border-color: #14401e; }
+
+.bottom-label { grid-column: 1/-1; font-size: 0.68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #475569; }
+</style>
+</head>
+<body>
+<h1>Synlynk + Tokq — The Convergence Map</h1>
+<p class="subtitle">Tokq (Jan 2026) is the cloud/network layer. Synlynk is the local OS. They were always meant to be the same stack.</p>
+
+<div class="grid">
+
+  <!-- Combined stack -->
+  <div class="stack-wrap">
+    <div class="stack-label">The Combined Stack</div>
+
+    <div class="section-bar bar-tokq">☁️ &nbsp;TOKQ — Cloud / Network Layer</div>
+    <div class="layer l-mkt">
+      <div class="layer-icon">🛒</div>
+      <div>
+        <h3>Knowledge Marketplace</h3>
+        <p>Agents publish, discover, and subscribe to shared memory collections. Creator economy — 70% revenue to knowledge publishers. Legal, medical, engineering domains.</p>
+        <div class="mono">tokq.io marketplace · semantic search · subscription billing</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-id">
+      <div class="layer-icon">🪪</div>
+      <div>
+        <h3>Agent Identity + Reputation</h3>
+        <p>Cryptographic agent IDs. Cross-session reputation scores. Zero-knowledge auth. Gas tank for operations — crypto + fiat.</p>
+        <div class="mono">Ed25519 keys · reputation score · gas tank · multi-cloud storage</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-net">
+      <div class="layer-icon">🌐</div>
+      <div>
+        <h3>Distributed Memory Store</h3>
+        <p>Multi-cloud, 11-nine durability, <100ms retrieval. The cloud equivalent of project-docs/ — but versioned, encrypted, and accessible to any agent on any machine.</p>
+        <div class="mono">3-way replication · zero-knowledge encryption · session-scoped org</div>
+      </div>
+    </div>
+
+    <div class="section-bar bar-bridge" style="margin-top:2px;">⟷ &nbsp;SYNLYNK BRIDGE — Cloud Sync API</div>
+    <div class="layer l-bridge">
+      <div class="layer-icon">🔄</div>
+      <div>
+        <h3>synlynk sync / tokq connect</h3>
+        <p>Pushes local project-docs/ snapshots to Tokq distributed store. Pulls shared conventions and constraints from team subscriptions. Maps local agent slots to Tokq identity registry.</p>
+        <div class="mono">synlynk sync --remote tokq · tokq publish conventions.md</div>
+      </div>
+    </div>
+
+    <div class="section-bar bar-syn" style="margin-top:2px;">💻 &nbsp;SYNLYNK — Local OS Layer</div>
+    <div class="layer l-apps">
+      <div class="layer-icon">📦</div>
+      <div><h3>Applications (SuperPowers, GStack, custom skills)</h3><p>Runs on the OS.</p></div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-shell">
+      <div class="layer-icon">⌨️</div>
+      <div><h3>Shell / Interface</h3><p>synlynk run · dispatch · review · status · team TUI</p></div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-sched">
+      <div class="layer-icon">🧭</div>
+      <div><h3>Process Scheduler</h3><p>Trio routing · capability engine · A→B→V pipeline · job state</p></div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-ipc">
+      <div class="layer-icon">🔗</div>
+      <div><h3>IPC — Inter-Agent Communication</h3><p>conventions.md · handoff context · constraint propagation</p></div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-fs">
+      <div class="layer-icon">🗄️</div>
+      <div><h3>Filesystem</h3><p>project-docs/ · context.md · devlogs/ · capability.json</p></div>
+    </div>
+    <div class="layer-divider"></div>
+    <div class="layer l-ker">
+      <div class="layer-icon">⚙️</div>
+      <div><h3>Kernel</h3><p>exec · telemetry · flatline sentinel · budget pulse</p></div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div class="right-col">
+
+    <!-- Convergence map -->
+    <div class="conv-box">
+      <h3>Where They Converge — Same Concept, Different Scope</h3>
+      <div class="conv-row">
+        <div class="conv-left">project-docs/ ledger</div>
+        <div class="conv-arr">↔</div>
+        <div class="conv-right">Distributed Memory Store</div>
+      </div>
+      <div class="conv-row">
+        <div class="conv-left">capability.json scores</div>
+        <div class="conv-arr">↔</div>
+        <div class="conv-right">Agent Reputation Score</div>
+      </div>
+      <div class="conv-row">
+        <div class="conv-left">conventions.md sharing</div>
+        <div class="conv-arr">↔</div>
+        <div class="conv-right">Knowledge Marketplace</div>
+      </div>
+      <div class="conv-row">
+        <div class="conv-left">Budget Pulse + costs.md</div>
+        <div class="conv-arr">↔</div>
+        <div class="conv-right">Gas Tank + Ledger</div>
+      </div>
+      <div class="conv-row">
+        <div class="conv-left">trio.json agent slots</div>
+        <div class="conv-arr">↔</div>
+        <div class="conv-right">Agent Identity Registry</div>
+      </div>
+      <div class="conv-row">
+        <div class="conv-left">synlynk watch daemon</div>
+        <div class="conv-arr">↔</div>
+        <div class="conv-right">Session Management</div>
+      </div>
+    </div>
+
+    <!-- What Tokq adds -->
+    <div class="adds-box">
+      <h3>What Tokq Adds to Synlynk</h3>
+      <div class="add-item">
+        <div class="add-icon">☁️</div>
+        <div>
+          <h4>Cross-machine persistence</h4>
+          <p>project-docs/ today lives on one laptop. Tokq makes it available on any machine, to any agent, with zero manual sync.</p>
+        </div>
+      </div>
+      <div class="add-item">
+        <div class="add-icon">🛒</div>
+        <div>
+          <h4>The standards marketplace</h4>
+          <p>The "standards distribution engine" from the consolidated roadmap becomes real: developers publish conventions.md collections (CI rules, TypeScript patterns, domain knowledge) and others subscribe.</p>
+        </div>
+      </div>
+      <div class="add-item">
+        <div class="add-icon">💰</div>
+        <div>
+          <h4>Economic model</h4>
+          <p>The gas tank gives Synlynk a native payment rail. Cost tracking becomes automatic — operations deduct from the gas tank. No more manual costs.md rows.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- What Synlynk gives Tokq -->
+    <div class="gives-box">
+      <h3>What Synlynk Gives Tokq</h3>
+      <p>Tokq's biggest problem (Jan 2026) was the cold-start: it had no distribution channel, no user base, no way to onboard developers without a full cloud deployment.</p>
+      <p>Synlynk solves this: <strong style="color:#4ade80">every developer who runs synlynk init is a Tokq prospect</strong>. The local OS is the distribution mechanism for the cloud layer. Install synlynk → use it locally → hit the sync ceiling → upgrade to Tokq.</p>
+      <p>Synlynk is the local client. Tokq is the cloud backend. Together they're one product.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Three combination approaches -->
+<div class="bottom">
+  <div class="bottom-label">How do you want to combine them?</div>
+
+  <div class="option-card opt-a" data-choice="a" onclick="toggleSelect(this)">
+    <div class="opt-letter">A — Absorb</div>
+    <h3>Synlynk grows into Tokq</h3>
+    <p>Keep the Synlynk name and brand. Tokq becomes the cloud-sync feature at the top of the OS stack. "synlynk sync" is the bridge.</p>
+    <ul>
+      <li>One product, clear local→cloud journey</li>
+      <li>Synlynk brand already has code/momentum</li>
+      <li>Tokq's marketplace becomes a Synlynk feature</li>
+      <li>Drops the crypto/gas-tank complexity for now</li>
+    </ul>
+  </div>
+
+  <div class="option-card opt-b" data-choice="b" onclick="toggleSelect(this)">
+    <div class="opt-letter">B — Two Products, One Stack</div>
+    <h3>Synlynk (local) + Tokq (cloud)</h3>
+    <p>Keep both brands. Synlynk is the local OS. Tokq is the cloud platform. They connect via a published protocol.</p>
+    <ul>
+      <li>Tokq can serve non-Synlynk agents too</li>
+      <li>Larger TAM for Tokq as standalone infra</li>
+      <li>Synlynk stays laser-focused on local dev</li>
+      <li>Requires building and maintaining two brands</li>
+    </ul>
+  </div>
+
+  <div class="option-card opt-c" data-choice="c" onclick="toggleSelect(this)">
+    <div class="opt-letter">C — Rebrand Together</div>
+    <h3>New unified brand, new name</h3>
+    <p>Synlynk + Tokq together merit a new product identity that captures the full OS-to-marketplace vision. Neither name carries it alone.</p>
+    <ul>
+      <li>Clean break, no legacy naming baggage</li>
+      <li>"Synlynk" too narrow, "Tokq" too abstract</li>
+      <li>The combined product is genuinely new</li>
+      <li>Requires naming/branding work before launch</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function toggleSelect(el) {
+  document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  if (window.recordChoice) recordChoice(el.dataset.choice, el.querySelector('h3').textContent);
+}
+</script>
+</body>
+</html>
