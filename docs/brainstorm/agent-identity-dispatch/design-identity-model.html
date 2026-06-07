@@ -1,0 +1,69 @@
+<h2>Design — Section 1: Identity Model</h2>
+<p class="subtitle">Two layers compose to answer: who can do this work, and who does it best?</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Identity stack — from trust primitive to routing decision</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:2.2">
+      <span style="color:#e879f9">Local Identity</span> &nbsp; Ed25519 keypair · agent_uuid · git_user<br>
+      <span style="color:#888;margin-left:1rem">↳ cryptographic anchor. generated once at synlynk init. machine-scoped.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ already designed (Tokq Gap 1) — pulling forward from v0.9.0 to now.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ signs dispatch events. proves "this synlynk instance did this work."</span><br><br>
+
+      <span style="color:#60a5fa">Role</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Architect · Builder · Verifier (+ custom roles)<br>
+      <span style="color:#888;margin-left:1rem">↳ primary entitlement unit. defines what work can be claimed and what it can touch.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ a story's role requirement is set at epic creation (writing-plans output).</span><br>
+      <span style="color:#888;margin-left:1rem">↳ entitlements attach here: what paths, what actions, what approval threshold.</span><br><br>
+
+      <span style="color:#34d399">Agent Profile</span> &nbsp; cli × model × environment × competency_scores<br>
+      <span style="color:#888;margin-left:1rem">↳ fitness function. who fills a role best right now?</span><br>
+      <span style="color:#888;margin-left:1rem">↳ cli: claude-code | claude-desktop | gemini-cli | codex</span><br>
+      <span style="color:#888;margin-left:1rem">↳ environment: what native actions this cli can perform (see Section 2)</span><br>
+      <span style="color:#888;margin-left:1rem">↳ competency_scores: earned from past executions per (agent, domain) — v0.5.0</span><br><br>
+
+      <span style="color:#fbbf24">Dispatch Decision</span> &nbsp; role match + entitlement check + profile fitness + quota<br>
+      <span style="color:#888;margin-left:1rem">↳ role defines the gate. profile picks the winner within the gate.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ "Builder needed, domain=api → claude-code (score:0.91, quota:80K, cost:$0.18)"</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">How the layers answer different questions</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div style="padding:0.875rem;border:1px solid var(--border);border-radius:8px">
+      <p class="label">Role answers</p>
+      <ul style="font-size:0.85em;line-height:2;margin:0.5rem 0 0 1.2rem">
+        <li>Can this story auto-dispatch?</li>
+        <li>What files/paths can be written?</li>
+        <li>Can it create branches? Merge PRs?</li>
+        <li>Does it need human approval first?</li>
+        <li>What quota ceiling applies?</li>
+      </ul>
+    </div>
+    <div style="padding:0.875rem;border:1px solid var(--border);border-radius:8px">
+      <p class="label">Agent Profile answers</p>
+      <ul style="font-size:0.85em;line-height:2;margin:0.5rem 0 0 1.2rem">
+        <li>Which CLI fills this role best today?</li>
+        <li>Is bash execution available?</li>
+        <li>Can it open a browser / use GUI?</li>
+        <li>What's the cost per token for this model?</li>
+        <li>Has it done this domain before?</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Key invariant — roles are stable, profiles are dynamic</p>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:0.86em;line-height:1.9">
+      <strong>Roles</strong> are defined once per project and change rarely. The Builder role's entitlements
+      (can write src/, can create branches, cannot merge to main) are stable architectural decisions.<br><br>
+      <strong>Agent Profiles</strong> change constantly — competency scores update after every execution,
+      quota headroom changes hourly, new CLI versions add environment capabilities.<br><br>
+      <strong>Consequence:</strong> entitlement enforcement uses the stable role definition. Routing uses
+      the live agent profile. These two concerns never mix.
+    </div>
+  </div>
+</div>

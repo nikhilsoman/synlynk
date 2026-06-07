@@ -1,6 +1,34 @@
 # Devlog - Nikhil Soman
 
 ## 2026-06-07
+### Session: Agent Identity, Dispatch & Entitlements + Arc Gap Analysis
+
+**Activity:** Second major brainstorm session. Designed agent identity (two-layer: local Ed25519 + Role + Agent Profile), addressability (inbox table → NATS), dispatch architecture (4 modes), and entitlements (authorization + sandboxing). Followed with a milestone-wise gap analysis covering v0.4.0 through Tokq GA.
+
+**Key Outcomes:**
+
+1. **Identity is two-layered:** Local Identity (Ed25519 keypair, machine-scoped) answers "who made this decision." Role (Architect/Builder/Verifier) answers "what can this work touch." Agent Profile (CLI × model × environment × competency) answers "who fills this role best right now." These never mix.
+
+2. **Ed25519 identity pulled forward from v0.9.0 to v0.5.0.** Every dispatch event and completion event is signed. Audit trail is non-repudiable at v0.5.0, verified by Tokq cloud at Tokq Alpha.
+
+3. **Dispatch: 4 modes.** A=daemon (persistent, primary). B=self-chain (completion triggers re-evaluate). C=`synlynk dispatch` one-shot (universal fallback, CI/cron-compatible). D=agent-native scheduling (`use_native_scheduling` flag in agent_profiles). Fallback priority: A fails → C always works.
+
+4. **Dispatch address → inbox table.** Logical address `synlynk://<project_id>/roles/<role>/inbox` resolves to state.db row today, NATS subject at v1.0. Forward-compatible scheme.
+
+5. **Human-agent bridge is email, not dispatch.** Send-only SMTP at v0.7.0. Approval via `synlynk story approve <id>` CLI (not email reply). Gmail reply parsing deferred to v0.8.0.
+
+6. **Entitlements: two layers.** Authorization (gate before dispatch — auto/approval/hold/reject). Sandboxing (constraints while running — token ceiling, time ceiling, network, path ACLs). Merge to main: always approval-required, no override.
+
+7. **Gap analysis completed.** 12 gaps across v0.5.0–v1.0.0 identified. Priority: Gap 1 (v0.5.0 scope split) is the only blocker for next implementation plan. Gaps 2–4 (v0.6.0 design questions) can be resolved in one session.
+
+**Specs committed:**
+- `docs/superpowers/specs/2026-06-07-agent-identity-dispatch-design.md`
+- `docs/superpowers/2026-06-07-arc-gap-analysis.md`
+
+**Next:** Implement v0.4.0 (Trio Protocol — spec is ready). Then gaps 1–4 reconciliation session before v0.5.0 plan.
+
+---
+
 ### Session: State DB & Agentic PM Design
 
 **Activity:** Full brainstorm session. Diagnosed the merge conflict root cause (state branching with code), designed the state.db migration from project-docs/, and designed the full Agentic PM hierarchy as a consequence.

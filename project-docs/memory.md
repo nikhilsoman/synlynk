@@ -7,6 +7,17 @@
 - **Tier model retired:** Solo/Team/Enterprise tiers replaced by the OS layer model — one product,
   increasing capability as you move up the stack.
 
+## Agent Identity, Dispatch & Entitlements (decided 2026-06-07)
+- **Identity is two-layered:** Local Identity (Ed25519 keypair, agent_uuid — cryptographic anchor, machine-scoped) + Role (primary entitlement unit) + Agent Profile (fitness function: CLI × model × environment × competency_scores). [@nikhilsoman]
+- **Roles:** Architect (docs only, no src writes), Builder (implements, can branch/PR), Verifier (tests/audits). Custom roles via `synlynk role add`.
+- **Dispatch modes:** A=daemon (persistent, primary), B=self-chain (agent completion re-evaluates), C=one-shot `synlynk dispatch` (universal fallback — no daemon needed), D=agent-native scheduling (`use_native_scheduling` flag).
+- **Dispatch address:** `inbox` table in state.db (v0.5–v0.7), NATS subject (v1.0+). Logical address: `synlynk://<project_id>/roles/<role>/inbox`.
+- **Human-agent bridge:** Email (send-only SMTP, v0.7.0). Approval via `synlynk story approve <id>` CLI. Gmail reply parsing deferred to v0.8.0.
+- **Entitlements are two layers:** Authorization (gate before dispatch) + Sandboxing (constraints while running). Merge to main is always approval-required — no threshold can override.
+- **Ed25519 identity pulled forward:** From v0.9.0 to v0.5.0. Every dispatch_log row and completed event is signed. Audit trail is non-repudiable.
+- **Cron design:** One `synlynk dispatch` cron, not per-agent. Per-role frequency via multiple `schedules` entries with different `filter` values.
+- **Spec:** `docs/superpowers/specs/2026-06-07-agent-identity-dispatch-design.md`
+
 ## State DB & Agentic PM (decided 2026-06-07)
 - **Core invariant:** State never branches. All worktrees share one `~/.synlynk/projects/<project_id>/state.db`. [@nikhilsoman]
 - **project-docs/ retired:** Markdown files become gitignored. state.db is primary. Context bridge unchanged — agents still see `.synlynk/context.md`.
