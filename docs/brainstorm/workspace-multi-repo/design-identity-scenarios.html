@@ -1,0 +1,123 @@
+<h2>Design — Section 3: Identity by Scenario</h2>
+<p class="subtitle">What identity means in practice across four real situations</p>
+
+<div class="section">
+  <p class="label">Scenario 1 — Solo dev, single machine (the common case)</p>
+  <div class="mockup">
+    <div class="mockup-header">Nikhil · MacBook · one workspace · one identity</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2">
+      ~/.synlynk/identity.key &nbsp;&nbsp;&nbsp;← <span style="color:#e879f9">nikhil-macbook · Ed25519</span><br>
+      ~/.synlynk/identity.json &nbsp;&nbsp;← { machine_uuid: "m1", git_user: "nikhilsoman" }<br><br>
+      ~/.synlynk/workspaces/synlynk/state.db<br>
+      &nbsp;&nbsp;dispatch_log: all signed with <span style="color:#e879f9">m1 key</span><br>
+      &nbsp;&nbsp;events: all signed with <span style="color:#e879f9">m1 key</span><br><br>
+      <span style="color:#34d399">✓ Trivial. No multi-identity complexity. Gap 10 closed.</span><br>
+      <span style="color:#888">&nbsp;&nbsp;Tokq Alpha: registers m1 public key against nikhilsoman account.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Scenario 2 — Solo dev, two machines (laptop + desktop)</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">MacBook (m1)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.79em;line-height:2">
+        ~/.synlynk/identity.key &nbsp;← <span style="color:#e879f9">m1 key</span><br>
+        identity.json: machine_uuid="m1"<br><br>
+        workspaces/synlynk/state.db<br>
+        &nbsp;dispatch_log rows: sig=<span style="color:#e879f9">m1</span><br>
+        &nbsp;events: sig=<span style="color:#e879f9">m1</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Desktop (m2)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.79em;line-height:2">
+        ~/.synlynk/identity.key &nbsp;← <span style="color:#60a5fa">m2 key</span><br>
+        identity.json: machine_uuid="m2"<br><br>
+        workspaces/synlynk/state.db<br>
+        &nbsp;dispatch_log rows: sig=<span style="color:#60a5fa">m2</span><br>
+        &nbsp;events: sig=<span style="color:#60a5fa">m2</span>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:0.6rem;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-size:0.82em;line-height:1.8">
+    <strong>Pre-Tokq:</strong> Two separate state.dbs. Work done on m1 doesn't automatically appear on m2. Sync via <code>synlynk workspace export</code> → copy file → <code>synlynk workspace import</code>. Imported events carry m1 sig — provably from MacBook, not forged on Desktop.<br><br>
+    <strong>Tokq Alpha:</strong> Both m1 + m2 public keys registered under <code>nikhilsoman</code> Tokq account. NATS sync keeps both state.dbs converged. Attribution: "nikhilsoman via m1" vs "nikhilsoman via m2" — both verified.
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Scenario 3 — Simulated team (Nikhil + two alt identities, one machine)</p>
+  <div class="mockup">
+    <div class="mockup-header">One machine · three git identities · one workspace state.db</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.79em;line-height:2">
+      <span style="color:#888">Identity is machine-level → only ONE keypair on this machine.</span><br>
+      <span style="color:#888">How do three "people" sign events differently?</span><br><br>
+
+      <span style="color:#fbbf24">Answer: identity = machine_uuid + git_user.</span><br>
+      The git_user at dispatch time is recorded in events.user and dispatch_log.approver.<br><br>
+
+      git config user.name = "nikhilsoman" &nbsp;&nbsp;&nbsp;→ events.user = <span style="color:#e879f9">"nikhilsoman"</span>, sig = m1<br>
+      git config user.name = "gaurav-sim" &nbsp;&nbsp;&nbsp;→ events.user = <span style="color:#34d399">"gaurav-sim"</span>, sig = m1<br>
+      git config user.name = "kunal-sim" &nbsp;&nbsp;&nbsp;&nbsp;→ events.user = <span style="color:#60a5fa">"kunal-sim"</span>, sig = m1<br><br>
+
+      <span style="color:#888">All three signed by m1 key — same machine, different role simulation.</span><br>
+      <span style="color:#888">state.db shows: nikhilsoman built frontend, gaurav-sim reviewed backend.</span><br><br>
+      <span style="color:#34d399">✓ Team dynamics visible. Cost roll-up per simulated member. No extra infra needed.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Scenario 4 — Real team (Nikhil + Gaurav + Kunal, separate machines)</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem">
+
+    <div style="padding:0.75rem;border:1px solid #7c3aed44;border-radius:8px">
+      <p class="label" style="color:#e879f9">Nikhil · MacBook (m1)</p>
+      <div style="font-family:monospace;font-size:0.75em;line-height:1.9">
+        identity.key → <span style="color:#e879f9">m1 key</span><br>
+        git_user: nikhilsoman<br>
+        workspace: my-product<br>
+        state.db: primary<br><br>
+        Dispatches stories<br>
+        Approves merges<br>
+        Exports snapshots
+      </div>
+    </div>
+
+    <div style="padding:0.75rem;border:1px solid #06523444;border-radius:8px">
+      <p class="label" style="color:#34d399">Gaurav · his machine (m2)</p>
+      <div style="font-family:monospace;font-size:0.75em;line-height:1.9">
+        identity.key → <span style="color:#34d399">m2 key</span><br>
+        git_user: gaurav<br>
+        workspace: my-product<br>
+        state.db: local copy<br><br>
+        Imports Nikhil snapshot<br>
+        Works on stories<br>
+        Exports back
+      </div>
+    </div>
+
+    <div style="padding:0.75rem;border:1px solid #1d4ed844;border-radius:8px">
+      <p class="label" style="color:#60a5fa">Kunal · his machine (m3)</p>
+      <div style="font-family:monospace;font-size:0.75em;line-height:1.9">
+        identity.key → <span style="color:#60a5fa">m3 key</span><br>
+        git_user: kunal<br>
+        workspace: my-product<br>
+        state.db: local copy<br><br>
+        Imports Nikhil snapshot<br>
+        Works on stories<br>
+        Exports back
+      </div>
+    </div>
+
+  </div>
+  <div style="margin-top:0.6rem;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-size:0.82em;line-height:1.85">
+    <strong>Pre-Tokq sync loop:</strong><br>
+    Nikhil exports → shares file → Gaurav imports → works → exports → Nikhil imports.<br>
+    Each import merges events. Gaurav's events carry m2 sig → Nikhil's state.db knows m2 public key (from Gaurav's identity.json, included in export) → verifies signature → trusts attribution.<br><br>
+    <strong>Trust bootstrap:</strong> First import from Gaurav requires Nikhil to confirm his public key fingerprint (one-time, out-of-band — a Slack message: "my fingerprint is ab:cd:ef"). Subsequent imports auto-verify.<br><br>
+    <strong>Tokq Alpha:</strong> All three register. NATS sync replaces export/import entirely. Workspace state converges in real-time. Attribution is cryptographically verified by Tokq cloud, not just locally.
+  </div>
+</div>
