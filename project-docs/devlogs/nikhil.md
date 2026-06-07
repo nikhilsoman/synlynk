@@ -1,6 +1,30 @@
 # Devlog - Nikhil Soman
 
 ## 2026-06-07
+### Session: Workspace & Multi-Repo Design
+
+**Activity:** Third brainstorm session. Designed workspace concept (multi-repo support), machine-level identity, event-log team sync. Resolved the async drift concern that makes export/import unworkable at agentic velocity.
+
+**Key Outcomes:**
+
+1. **Workspace concept:** Unit of organization above a repo. One product = one workspace, N repos. Solo dev gets workspace with one member — invisible. `~/.synlynk/workspaces/<name>/state.db` is the single state store per product.
+
+2. **Machine-level identity:** `~/.synlynk/identity.key` — one Ed25519 keypair per person per machine. Closes Gap 10 (network identity). Per-project keypair retired.
+
+3. **Cross-repo Epics first-class:** One Epic spans repos. Stories have `repo_id` FK. Architect sees full cross-repo epic. Builder/Verifier sees workspace shared + repo slice.
+
+4. **Event-log sync replaces export/import:** Daemon pushes new events to per-member branch in shared git repo every 5 min. Max drift ≈ 5 min — workable at agentic velocity. Becomes NATS at Tokq Alpha.
+
+5. **Simulated team on one machine:** `git config user.name` switch — events record different git_user, all signed by machine key. Full cost attribution per simulated member. Enables Gaurav/Kunal simulation.
+
+6. **Schedule impact:** workspace-aware init at v0.4.0, workspace join at v0.5.0, team attribution at v0.6.0, event sync at v0.7.0 (with daemon). Gap 10 closed.
+
+**Spec committed:** `docs/superpowers/specs/2026-06-07-synlynk-workspace-multi-repo-design.md`
+
+**PR opened:** https://github.com/nikhilsoman/synlynk/pull/28
+
+---
+
 ### Session: Agent Identity, Dispatch & Entitlements + Arc Gap Analysis
 
 **Activity:** Second major brainstorm session. Designed agent identity (two-layer: local Ed25519 + Role + Agent Profile), addressability (inbox table → NATS), dispatch architecture (4 modes), and entitlements (authorization + sandboxing). Followed with a milestone-wise gap analysis covering v0.4.0 through Tokq GA.

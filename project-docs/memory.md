@@ -7,6 +7,16 @@
 - **Tier model retired:** Solo/Team/Enterprise tiers replaced by the OS layer model — one product,
   increasing capability as you move up the stack.
 
+## Workspace & Multi-Repo (decided 2026-06-07)
+- **Workspace = unit of organization above a repo.** One product = one workspace, N repos. Solo dev = one workspace, one repo — structurally identical, invisible to user. [@nikhilsoman]
+- **Storage:** `~/.synlynk/workspaces/<name>/state.db` — one DB per workspace. Repos are a dimension (`repos` table + `repo_id` FK on stories/events/costs), not separate DBs.
+- **Identity: machine-level.** `~/.synlynk/identity.key` — one Ed25519 keypair per person per machine. Shared across all workspaces. Replaces per-project keypair. Closes Gap 10 entirely.
+- **Init: repo-first, auto-promoted.** `synlynk init` creates workspace transparently. `synlynk workspace join <name>` adds a second repo. Auto-detects via GitHub org match.
+- **Cross-repo Epics: first-class.** One Epic spans N repos. Stories have `repo_id` FK. Architect context = full epic cross-repo view. Builder/Verifier = workspace shared + repo slice.
+- **Team sync: event-log via shared git repo (not export/import).** Daemon pushes new events to per-member branch every 5 min. Others pull and apply. Max drift ≈ 5 min. Conflict-free (events are append-only). Becomes NATS at Tokq Alpha — same event format, different transport.
+- **Simulated team:** switch `git config user.name` — events record different git_user, all signed by same machine key. Full cost/activity attribution per simulated member. No extra infra.
+- **Spec:** `docs/superpowers/specs/2026-06-07-synlynk-workspace-multi-repo-design.md`
+
 ## Agent Identity, Dispatch & Entitlements (decided 2026-06-07)
 - **Identity is two-layered:** Local Identity (Ed25519 keypair, agent_uuid — cryptographic anchor, machine-scoped) + Role (primary entitlement unit) + Agent Profile (fitness function: CLI × model × environment × competency_scores). [@nikhilsoman]
 - **Roles:** Architect (docs only, no src writes), Builder (implements, can branch/PR), Verifier (tests/audits). Custom roles via `synlynk role add`.
