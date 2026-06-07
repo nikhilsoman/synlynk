@@ -1,5 +1,30 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-07
+### Session: State DB & Agentic PM Design
+
+**Activity:** Full brainstorm session. Diagnosed the merge conflict root cause (state branching with code), designed the state.db migration from project-docs/, and designed the full Agentic PM hierarchy as a consequence.
+
+**Key Outcomes:**
+
+1. **Root cause confirmed:** `project-docs/` tracked in git causes worktree snapshots to drift. The fix: state.db at `~/.synlynk/projects/<project_id>/` shared by all worktrees. Core invariant: state never branches.
+
+2. **Agentic PM hierarchy locked:** Project → Arc → Phase → Epic → Story → Event. Arc is the strategic direction layer missing from all existing PM tools — handles pivots, convergences, and external triggers. Phase is structural backbone. Epic = one implementation plan. Story = one agent task with `done_criteria` and dependency graph. Event = append-only universal log replacing devlogs.
+
+3. **Token budget as execution constraint:** `estimated_tokens` on stories replaces story points. Agent routing: capability score → quota headroom → cost. `agent_quotas` table tracks per-agent limits. Throughput = tokens/quota-period.
+
+4. **Costs fully attributed:** `costs` table gains project FKs (`story_id`, `epic_id`, `phase_id`). Phase-level cost rollup now queryable.
+
+5. **Platform sync:** `external_refs` table maps to GitHub/Jira/Linear. state.db is canonical; platforms are views.
+
+6. **Schema verified against generate_context():** Three schema corrections found — memory uses `heading/body` (not key/value); tasks use `milestone` not `priority`; roadmap needs `os_layer` and `infrastructure` columns.
+
+7. **Spec committed:** `docs/superpowers/specs/2026-06-07-synlynk-state-db-agentic-pm-design.md`
+
+**Next:** Agent identity, addressability, scheduling, entitlements brainstorm.
+
+---
+
 ## 2026-06-06
 ### Session: Unified Roadmap — OS Framing, Tokq Convergence, Tokq Gap Analysis
 

@@ -7,11 +7,27 @@
 - **Tier model retired:** Solo/Team/Enterprise tiers replaced by the OS layer model — one product,
   increasing capability as you move up the stack.
 
+## State DB & Agentic PM (decided 2026-06-07)
+- **Core invariant:** State never branches. All worktrees share one `~/.synlynk/projects/<project_id>/state.db`. [@nikhilsoman]
+- **project-docs/ retired:** Markdown files become gitignored. state.db is primary. Context bridge unchanged — agents still see `.synlynk/context.md`.
+- **Agentic PM hierarchy:** Project → Arc → Phase → Epic → Story → Event. Replaces time/capacity anchoring with dependency/verification anchoring.
+  - **Arc** — strategic direction (pivot/archive/merge). The layer missing from every PM tool.
+  - **Phase** — structural backbone (capability gate, rarely changes; was: roadmap row).
+  - **Epic** — one implementation plan (`writing-plans` output = one Epic + N Stories).
+  - **Story** — one agent task unit with `done_criteria` and `depends_on` graph.
+  - **Event** — append-only universal log (replaces devlogs; devlog is a filtered view).
+- **Token budget replaces story points:** `estimated_tokens` on stories. Routing: capability → quota headroom → cost. `agent_quotas` table tracks per-agent limits.
+- **Costs fully attributed:** `costs` table gains `story_id / epic_id / phase_id` FKs — can now answer "what did Phase v0.5.0 cost?"
+- **Platform sync:** `external_refs` table maps Arc/Phase/Epic/Story → GitHub/Jira/Linear. state.db is canonical; platforms are views.
+- **Migration:** `synlynk migrate` (ships v0.5.0) — parses project-docs/, populates state.db, untracks with `git rm --cached`.
+- **Next:** Agent identity, addressability, scheduling, entitlements — separate brainstorm.
+- **Spec:** `docs/superpowers/specs/2026-06-07-synlynk-state-db-agentic-pm-design.md`
+
 ## Architecture — OS Layer Model (decided 2026-06-06)
 Bottom to top: Kernel → Filesystem → IPC → Scheduler → Shell → Ecosystem Interface → Applications.
 - **Kernel + Filesystem:** SHIPPED (v0.3.0) — exec, telemetry, flatline, budget, project-docs/
 - **IPC:** v0.4.0 — conventions.md, Trio pipeline, constraint propagation
-- **Scheduler:** v0.5.0 — capability engine, SQLite-backed routing
+- **Scheduler:** v0.5.0 — capability engine, SQLite-backed routing, state.db for all project state
 - **Shell:** v0.7.0 — daemon, dispatch, async pipeline
 - **Ecosystem Interface:** v0.8.0 — Open Context Protocol, MCP server
 - **Applications:** GStack, SuperPowers, HermesAgent, OpenClaw, NmoClaw run ON synlynk, not beside it
