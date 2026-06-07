@@ -1,0 +1,69 @@
+<h2>Design — Section 2: Context Bridge</h2>
+<p class="subtitle">What agents see, how state.db surfaces to them, and what "nightly consolidation" becomes</p>
+
+<div class="section">
+  <p class="label">generate_context() — rewritten to read SQLite</p>
+  <div class="mockup">
+    <div class="mockup-header">synlynk exec → generate_context() → .synlynk/context.md</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      <span style="color:#60a5fa"># reads from state.db, assembles context.md</span><br><br>
+      SELECT content FROM memory ORDER BY updated_at DESC LIMIT 20<br>
+      SELECT * FROM roadmap WHERE status != 'shipped'<br>
+      SELECT * FROM tasks WHERE status != 'done' ORDER BY priority<br>
+      SELECT content FROM devlog ORDER BY ts DESC LIMIT 5<br>
+      SELECT SUM(cost_usd) FROM costs WHERE session_date >= date('now','-7 days')<br><br>
+      <span style="color:#4ade80">→ writes .synlynk/context.md (ephemeral, same as today)</span><br>
+      <span style="color:#4ade80">→ agent receives identical injection experience</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">New CLI surface</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <p class="label">Read commands</p>
+      <div style="font-family:monospace;font-size:0.82em;line-height:2">
+        synlynk context dump<br>
+        <span style="color:#888;font-size:0.9em"># human-readable markdown to stdout</span><br><br>
+        synlynk context show tasks<br>
+        <span style="color:#888;font-size:0.9em"># filtered by table</span><br><br>
+        synlynk context --for claude<br>
+        <span style="color:#888;font-size:0.9em"># agent-filtered view (v0.8 alignment)</span>
+      </div>
+    </div>
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <p class="label">Write commands</p>
+      <div style="font-family:monospace;font-size:0.82em;line-height:2">
+        synlynk log "message" --agent claude<br>
+        <span style="color:#888;font-size:0.9em"># append devlog entry</span><br><br>
+        synlynk task done "task text"<br>
+        <span style="color:#888;font-size:0.9em"># mark task complete</span><br><br>
+        synlynk memory set key value<br>
+        <span style="color:#888;font-size:0.9em"># upsert memory entry</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">What "nightly consolidation" becomes</p>
+  <div class="mockup">
+    <div class="mockup-header">The DB is always live — no batch consolidation needed</div>
+    <div class="mockup-body" style="font-size:0.88em;line-height:1.8">
+      <p>The original "nightly consolidation" idea assumed markdown files as primary store and SQLite as a derived index. With state.db as primary, every <code>synlynk exec</code> writes directly — the DB is always current.</p>
+      <p style="margin-top:0.75rem">What remains useful on a schedule:</p>
+      <ul style="margin:0.5rem 0 0 1.2rem;line-height:2">
+        <li><strong>Vacuum</strong> — SQLite WAL compaction, once nightly</li>
+        <li><strong>Devlog archive</strong> — entries older than 30 days → <code>devlog_archive</code> table</li>
+        <li><strong>Costs rollup</strong> — weekly aggregate rows to keep costs table lean</li>
+      </ul>
+      <p style="margin-top:0.75rem;color:#888">These are maintenance ops on state.db, not a batch import from files.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">Agent experience — unchanged on the surface</p>
+  <p style="margin-top:0.5rem">Agents still see <code>.synlynk/context.md</code> injected before each run. The change is invisible to them — but the state is now always consistent, never a stale worktree snapshot.</p>
+</div>

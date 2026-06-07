@@ -1,0 +1,77 @@
+<h2>Table Boundaries — Verified Against generate_context()</h2>
+<p class="subtitle">What each table stores, how it feeds context, and corrections to the draft schema</p>
+
+<div class="section">
+
+  <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <h3 style="margin:0">memory → <code>memory</code> table</h3>
+      <span style="color:#f59e0b;font-size:0.8em">⚠ schema correction</span>
+    </div>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Scope:</strong> Durable architectural and positioning decisions. Injected in full into every context snapshot.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Structure in practice:</strong> Thematic sections (<code>## Positioning</code>, <code>## Architecture</code>) with multiple narrative bullets per section. Not key/value pairs.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em;color:#f59e0b"><strong>Correction:</strong> Replace <code>key TEXT UNIQUE / value TEXT</code> with <code>heading TEXT UNIQUE / body TEXT</code> — store at section granularity, not bullet granularity. Preserves the narrative structure agents expect.</p>
+    <div style="font-family:monospace;font-size:0.8em;margin-top:0.5rem;color:var(--text);line-height:1.8">
+      id INTEGER PK | heading TEXT UNIQUE | body TEXT | agent TEXT | updated_at TIMESTAMP
+    </div>
+  </div>
+
+  <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <h3 style="margin:0">todo.md → <code>tasks</code> table</h3>
+      <span style="color:#f59e0b;font-size:0.8em">⚠ schema correction</span>
+    </div>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Scope:</strong> Atomic work items. Context injection: unchecked <code>- [ ]</code> lines only — completed tasks are filtered out.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Structure in practice:</strong> Grouped by milestone version (## v0.4.0), with embedded <code>&lt;!-- id: N --&gt;</code> and <code>[@username]</code> attribution.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em;color:#f59e0b"><strong>Correction:</strong> Replace <code>priority INTEGER</code> (doesn't exist) with <code>milestone TEXT</code> (e.g. "v0.4.0"). Promote <code><!-- id: N --></code> to <code>task_id INTEGER</code> primary key.</p>
+    <div style="font-family:monospace;font-size:0.8em;margin-top:0.5rem;color:var(--text);line-height:1.8">
+      task_id INTEGER PK | text TEXT | status TEXT | owner TEXT | milestone TEXT | created_at TIMESTAMP
+    </div>
+  </div>
+
+  <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <h3 style="margin:0">roadmap.md → <code>roadmap</code> table</h3>
+      <span style="color:#f59e0b;font-size:0.8em">⚠ schema correction</span>
+    </div>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Scope:</strong> Version-level milestones. Context injection: only rows with status "In Progress" or "Next".</p>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Structure in practice:</strong> 6-column table — version | theme | <strong>os_layer</strong> | <strong>infrastructure</strong> | status | target.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em;color:#f59e0b"><strong>Correction:</strong> Add <code>os_layer TEXT</code> and <code>infrastructure TEXT</code> — both are currently in the table and matter for context generation. Replace <code>notes TEXT</code> (not in current doc).</p>
+    <div style="font-family:monospace;font-size:0.8em;margin-top:0.5rem;color:var(--text);line-height:1.8">
+      id INTEGER PK | version TEXT UNIQUE | theme TEXT | os_layer TEXT | infrastructure TEXT | status TEXT | target TEXT
+    </div>
+  </div>
+
+  <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <h3 style="margin:0">devlogs/* → <code>devlog</code> table</h3>
+      <span style="color:#4ade80;font-size:0.8em">✓ clear, minor addition</span>
+    </div>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Scope:</strong> Session narrative log. Context injection: own last 7 days, teammates' last entry.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Structure in practice:</strong> Date-grouped sections per user file (<code>nikhil.md</code>, etc). Session title + narrative content.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em;color:#4ade80"><strong>Addition:</strong> <code>user TEXT</code> (git username, maps to devlogs/&lt;username&gt;.md) is already implied but should be explicit. Rename <code>agent</code> → <code>user</code> for clarity — in synlynk, the devlog author is always a human user, not a model.</p>
+    <div style="font-family:monospace;font-size:0.8em;margin-top:0.5rem;color:var(--text);line-height:1.8">
+      id INTEGER PK AUTOINCREMENT | date TEXT | session_title TEXT | user TEXT | content TEXT | ts TIMESTAMP
+    </div>
+  </div>
+
+  <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <h3 style="margin:0">costs.md → <code>costs</code> table</h3>
+      <span style="color:#4ade80;font-size:0.8em">✓ clear, no change</span>
+    </div>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Scope:</strong> Session cost ledger. <strong>Not injected into context</strong> — purely for human review and budget checks.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Structure in practice:</strong> Date | User | Requests | Tokens In/Out | Estimated Cost | Summary.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em;color:#4ade80"><strong>No change needed.</strong> Schema is correct. Budget checks (<code>check_budgets()</code>) query costs by summing cost_usd.</p>
+  </div>
+
+  <div style="padding:1rem;border:1px solid #374151;border-radius:8px;background:var(--surface)">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <h3 style="margin:0">sentinel.md — stays as a file</h3>
+      <span style="color:#888;font-size:0.8em">out of scope for state.db</span>
+    </div>
+    <p style="margin:0.5rem 0;font-size:0.88em"><strong>Scope:</strong> Active flatline/budget alerts. Injected at the top of context when alerts exist.</p>
+    <p style="margin:0.5rem 0;font-size:0.88em;color:#888">Ephemeral — written and cleared by <code>check_flatline()</code> and <code>check_budgets()</code>. No historical value. Stays in <code>.synlynk/sentinel.md</code> as today.</p>
+  </div>
+
+</div>
