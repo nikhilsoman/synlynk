@@ -812,3 +812,23 @@ def test_update_costs_missing_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     # Should not raise even if costs.md doesn't exist
     synlynk.update_costs("claude", 100, 50, 5.0)
+
+
+def test_is_interactive_default(project_dir):
+    assert synlynk._is_interactive(["claude"]) is True
+
+
+def test_is_interactive_print_flag(project_dir):
+    assert synlynk._is_interactive(["claude", "--print", "hello"]) is False
+
+
+def test_is_interactive_no_tty_flag(project_dir):
+    assert synlynk._is_interactive(["claude", "--no-tty"]) is False
+
+
+def test_is_interactive_json_flag(project_dir):
+    assert synlynk._is_interactive(["gemini", "--output-format", "json"]) is False
+
+
+def test_is_interactive_noninteractive_flag(project_dir):
+    assert synlynk._is_interactive(["claude", "--non-interactive"]) is False

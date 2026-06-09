@@ -6,6 +6,7 @@ import subprocess
 import time
 import json
 import re
+import threading
 import urllib.request
 from typing import Optional
 
@@ -555,6 +556,34 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float)
              f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
     with open(costs_file, "a") as f:
         f.write(entry)
+
+
+def _is_interactive(cmd_args: list) -> bool:
+    """Returns True if the command needs a real TTY (no stdout capture)."""
+    NON_INTERACTIVE = ["--no-tty", "--output-format json", "--print",
+                       "--non-interactive", "-p "]
+    cmd_str = " ".join(cmd_args)
+    return not any(flag in cmd_str for flag in NON_INTERACTIVE)
+
+
+def _tee_process(process, buffer: list) -> None:
+    """Reads process stdout line-by-line, writes to terminal and appends to buffer."""
+    for line in iter(process.stdout.readline, b''):
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
+        buffer.append(line.decode('utf-8', errors='replace'))
+    process.stdout.close()
+
+
+def _check_pre_exec_gate(force: bool = False) -> bool:
+    """Stub — implemented in Task 7. Always allows exec."""
+    return True
+
+
+def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
+                             cmd: str = "") -> None:
+    """Stub — implemented in Task 6."""
+    pass
 
 
 def check_flatline() -> None:
@@ -1221,24 +1250,42 @@ def upgrade() -> None:
         print(f"  ⚠ Could not check for updates: {e}")
         print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
 
-def exec_command(cmd_args: list) -> int:
+def exec_command(cmd_args: list, force: bool = False) -> int:
     if not cmd_args:
         print("Error: No command provided to exec.")
-        return
+        return 1
 
     generate_context()
     check_budgets()
-    set_state("active")
 
+    if not _check_pre_exec_gate(force=force):
+        return 1
+
+    set_state("active")
     print(f"  Executing: {' '.join(cmd_args)}")
     start_time = time.time()
     exit_code = 0
+    output_text = ""
 
     try:
-        # Inherit stdio directly — interactive tools (Claude Code, Gemini) need a real TTY
-        process = subprocess.Popen(cmd_args)
-        process.wait()
-        exit_code = process.returncode
+        interactive = _is_interactive(cmd_args)
+        if interactive:
+            process = subprocess.Popen(cmd_args)
+            process.wait()
+            exit_code = process.returncode
+        else:
+            process = subprocess.Popen(
+                cmd_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            buffer: list = []
+            tee_thread = threading.Thread(target=_tee_process, args=(process, buffer))
+            tee_thread.start()
+            process.wait()
+            tee_thread.join()
+            exit_code = process.returncode
+            output_text = "".join(buffer)
     except FileNotFoundError:
         exit_code = 127
         print(f"  Error: Command '{cmd_args[0]}' not found.")
@@ -1248,19 +1295,33 @@ def exec_command(cmd_args: list) -> int:
     finally:
         duration = time.time() - start_time
         print(f"\n  ✓ Execution finished in {duration:.2f}s")
+
+        in_tokens, out_tokens = extract_tokens(output_text)
+        if in_tokens > 0:
+            est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
+            update_costs(' '.join(cmd_args), in_tokens, out_tokens, duration)
+        elif not _is_interactive(cmd_args):
+            pass  # non-interactive but no tokens found — silent
+        else:
+            print("  ⚡ Token count unavailable (interactive mode)")
+
         _check_costs_freshness()
         log_telemetry_event({
             "type": "exec",
             "schema_version": 1,
             "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+            "_ts": time.time(),
             "user": get_username(),
             "command": ' '.join(cmd_args),
             "duration": round(duration, 2),
             "exit_code": exit_code,
         })
-        check_flatline()
+        check_sentinel_patterns(output_text=output_text, exit_code=exit_code,
+                                cmd=' '.join(cmd_args))
         daemon = WatchDaemon()
         set_state("watching" if daemon._is_running() else "stopped")
+
     return exit_code
 
 def main() -> None:
@@ -1288,6 +1349,8 @@ def main() -> None:
 
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
+    exec_parser.add_argument("--force", action="store_true",
+                             help="Bypass CRITICAL sentinel gate")
 
     watch_parser = subparsers.add_parser("watch", help="Manage the file watcher daemon")
     watch_parser.add_argument("action", choices=["start", "stop", "status"],
@@ -1307,7 +1370,8 @@ def main() -> None:
         init(force=args.force, agents=agents, mode=args.mode,
              org=args.org, repo=args.repo, project_id=args.project_id)
     elif args.command == "exec":
-        sys.exit(exec_command(args.cmd))
+        force = getattr(args, 'force', False)
+        sys.exit(exec_command(args.cmd, force=force))
     elif args.command == "upgrade":
         upgrade()
     elif args.command == "watch":
