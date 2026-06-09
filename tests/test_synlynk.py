@@ -955,3 +955,43 @@ def test_pre_exec_gate_critical_blocks(project_dir, capsys):
 def test_pre_exec_gate_force_bypasses_critical(project_dir):
     synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "zombie")
     assert synlynk._check_pre_exec_gate(force=True) is True
+
+
+def test_compute_burn_rate_no_data(project_dir):
+    rate, remaining = synlynk._compute_burn_rate()
+    assert rate == 0.0
+    assert remaining is None
+
+
+def test_compute_burn_rate_with_costed_events(project_dir):
+    import json as _json
+    import time as _t
+    now = _t.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 0,
+         "_ts": now - i * 60, "in_tokens": 1000, "out_tokens": 200}
+        for i in range(5)
+    ]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(_json.dumps(events))
+    rate, remaining = synlynk._compute_burn_rate()
+    # est_cost per exec = (1000/1000*0.003) + (200/1000*0.015) = 0.003 + 0.003 = 0.006
+    assert abs(rate - 0.006) < 0.001
+    assert remaining is not None
+    assert remaining > 0
+
+
+def test_compute_burn_rate_sparse_data(project_dir):
+    # Fewer than 3 costed events — should return (0.0, None)
+    import json as _json
+    import time as _t
+    now = _t.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 0,
+         "_ts": now - 60, "in_tokens": 0, "out_tokens": 0},
+        {"type": "exec", "command": "claude", "exit_code": 0,
+         "_ts": now - 30, "in_tokens": 0, "out_tokens": 0},
+    ]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(_json.dumps(events))
+    rate, remaining = synlynk._compute_burn_rate()
+    assert rate == 0.0
+    assert remaining is None

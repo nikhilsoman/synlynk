@@ -694,6 +694,41 @@ def check_stall() -> None:
 
 
 
+def _compute_burn_rate() -> tuple:
+    """Returns (avg_usd_per_exec, estimated_execs_remaining) from telemetry.
+    Returns (0.0, None) if fewer than 3 costed events."""
+    telemetry_file = ".synlynk/telemetry.json"
+    if not os.path.exists(telemetry_file):
+        return 0.0, None
+    try:
+        with open(telemetry_file) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return 0.0, None
+
+    costed = [
+        e for e in data
+        if e.get("type") == "exec" and e.get("in_tokens", 0) > 0
+    ][-10:]
+
+    if len(costed) < 3:
+        return 0.0, None
+
+    costs = [
+        (e["in_tokens"] / 1000 * 0.003) + (e["out_tokens"] / 1000 * 0.015)
+        for e in costed
+    ]
+    avg = sum(costs) / len(costs)
+
+    total_usd, _ = parse_costs_md()
+    config = load_config()
+    limit_usd = config["budget"]["limit_usd"]
+    remaining_usd = limit_usd - total_usd
+    remaining_execs = int(remaining_usd / avg) if avg > 0 else None
+
+    return avg, remaining_execs
+
+
 def check_budgets() -> None:
     """Warns if cumulative spend from costs.md approaches config limits."""
     config = load_config()
@@ -1103,6 +1138,10 @@ def cmd_status(json_output: bool = False) -> None:
     pct = (total_usd / limit_usd * 100) if limit_usd else 0
     print(" BUDGET")
     print(f"   ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} / {limit_reqs} requests")
+    avg_cost, remaining_execs = _compute_burn_rate()
+    if avg_cost > 0:
+        runway = f"~{remaining_execs:,} execs remaining" if remaining_execs is not None else "N/A"
+        print(f"   Burn:   ${avg_cost:.4f}/exec avg  |  {runway} at current pace")
     print()
     icon = "●" if watcher_running else "○"
     state = "Running" if watcher_running else "Stopped"
@@ -1407,6 +1446,8 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             "command": ' '.join(cmd_args),
             "duration": round(duration, 2),
             "exit_code": exit_code,
+            "in_tokens": in_tokens,
+            "out_tokens": out_tokens,
         })
         check_sentinel_patterns(output_text=output_text, exit_code=exit_code,
                                 cmd=' '.join(cmd_args))
