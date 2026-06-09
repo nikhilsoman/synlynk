@@ -523,6 +523,40 @@ def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
     return alerts
 
 
+def extract_tokens(output_text: str) -> tuple:
+    """Regex-scrapes token counts from AI CLI stdout. Returns (in_tokens, out_tokens)."""
+    patterns = [
+        (r'Input tokens:\s*(\d+).*?Output tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
+        (r'"input_tokens":\s*(\d+).*?"output_tokens":\s*(\d+)', re.DOTALL | re.IGNORECASE),
+        (r'Tokens used:\s*(\d+)\s+input,\s*(\d+)\s+output', re.IGNORECASE),
+        (r'prompt_tokens:\s*(\d+).*?completion_tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
+    ]
+    for pat, flags in patterns:
+        m = re.search(pat, output_text, flags)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    m = re.search(r'Total tokens:\s*(\d+)', output_text, re.IGNORECASE)
+    if m:
+        total = int(m.group(1))
+        return int(total * 0.8), int(total * 0.2)
+    return 0, 0
+
+
+def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
+    """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
+    costs_file = "project-docs/costs.md"
+    if not os.path.exists(costs_file):
+        return
+    est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+    short_cmd = (command[:20] + '...') if len(command) > 20 else command
+    ts = time.strftime('%Y-%m-%d %H:%M')
+    user = get_username()
+    entry = (f"| {ts} | {user} | 1 | {in_tokens}/{out_tokens} "
+             f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
+    with open(costs_file, "a") as f:
+        f.write(entry)
+
+
 def check_flatline() -> None:
     """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
     telemetry_file = ".synlynk/telemetry.json"

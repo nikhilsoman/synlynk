@@ -764,3 +764,51 @@ def test_read_sentinel_alerts_preserves_old_format(project_dir):
     )
     alerts = synlynk._read_sentinel_alerts()
     assert len(alerts) == 1  # old-format line returned as-is
+
+
+def test_extract_tokens_claude_format(project_dir):
+    text = "Input tokens: 4821\nOutput tokens: 312\nTotal cost: $0.02"
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 4821
+    assert out_t == 312
+
+
+def test_extract_tokens_claude_json_format(project_dir):
+    text = '{"input_tokens": 1000, "output_tokens": 250}'
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 1000
+    assert out_t == 250
+
+
+def test_extract_tokens_gemini_format(project_dir):
+    text = "Tokens used: 800 input, 150 output"
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 800
+    assert out_t == 150
+
+
+def test_extract_tokens_total_fallback(project_dir):
+    text = "Total tokens: 1000"
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 800   # 80%
+    assert out_t == 200  # 20%
+
+
+def test_extract_tokens_no_match(project_dir):
+    in_t, out_t = synlynk.extract_tokens("no token info here")
+    assert in_t == 0
+    assert out_t == 0
+
+
+def test_update_costs_appends_row(project_dir):
+    synlynk.update_costs("claude --print hello", 1000, 200, 30.0)
+    content = (project_dir / "project-docs" / "costs.md").read_text()
+    assert "1000/200" in content
+    # cost: (1000/1000*0.003) + (200/1000*0.015) = 0.003 + 0.003 = $0.0060
+    assert "$0.0060" in content
+
+
+def test_update_costs_missing_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # Should not raise even if costs.md doesn't exist
+    synlynk.update_costs("claude", 100, 50, 5.0)
