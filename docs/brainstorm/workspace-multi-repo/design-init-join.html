@@ -1,0 +1,104 @@
+<h2>Design — Section 2: Init + Join Flow</h2>
+<p class="subtitle">Repo-first, auto-promoted · Solo is zero-friction · Multi-repo is one command</p>
+
+<div class="section">
+  <p class="label">Path A — solo dev, single repo (the common case)</p>
+  <div class="mockup">
+    <div class="mockup-header">synlynk init in frontend/</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2.1">
+      <span style="color:#888">$ cd ~/dev/my-product/frontend && synlynk init</span><br><br>
+      <span style="color:#34d399">1.</span> No ~/.synlynk/identity.key found → generate Ed25519 keypair<br>
+      &nbsp;&nbsp;&nbsp;Writes ~/.synlynk/identity.key (chmod 600)<br>
+      &nbsp;&nbsp;&nbsp;Writes ~/.synlynk/identity.json { machine_uuid, public_key, git_user }<br><br>
+      <span style="color:#34d399">2.</span> No workspace found → create new workspace<br>
+      &nbsp;&nbsp;&nbsp;workspace_id = uuid4()<br>
+      &nbsp;&nbsp;&nbsp;workspace_name = git remote slug OR parent dir name → <span style="color:#fbbf24">"my-product"</span><br>
+      &nbsp;&nbsp;&nbsp;Creates ~/.synlynk/workspaces/my-product/state.db<br>
+      &nbsp;&nbsp;&nbsp;Seeds: repos, arcs, phases, epics, roles, entitlements tables<br><br>
+      <span style="color:#34d399">3.</span> Register this repo<br>
+      &nbsp;&nbsp;&nbsp;INSERT INTO repos { id="frontend", name="frontend", path=cwd, git_remote }<br>
+      &nbsp;&nbsp;&nbsp;Writes .synlynk/config.json { workspace_id, repo_id: "frontend" }<br><br>
+      <span style="color:#34d399">4.</span> Writes project-docs/ templates (conventions.md, roadmap.md, ...)<br><br>
+      <span style="color:#60a5fa">✓ Workspace "my-product" created · 1 repo · identity ready</span><br>
+      <span style="color:#888">&nbsp;&nbsp;To add another repo: cd ../backend && synlynk workspace join my-product</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Path B — adding a second repo to an existing workspace</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Option B1 — explicit join</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2.1">
+        <span style="color:#888">$ cd ~/dev/my-product/backend</span><br>
+        <span style="color:#888">$ synlynk workspace join my-product</span><br><br>
+        Workspace "my-product" found locally<br>
+        Repo name for this directory? [backend] <span style="color:#fbbf24">↵</span><br><br>
+        INSERT INTO repos { id="backend", ... }<br>
+        Writes .synlynk/config.json { workspace_id, repo_id: "backend" }<br><br>
+        <span style="color:#60a5fa">✓ backend joined workspace "my-product"</span><br>
+        <span style="color:#888">&nbsp;&nbsp;Workspace now has 2 repos: frontend · backend</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Option B2 — auto-detect on init</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2.1">
+        <span style="color:#888">$ cd ~/dev/my-product/backend</span><br>
+        <span style="color:#888">$ synlynk init</span><br><br>
+        GitHub remote: github.com/nikhil/backend<br>
+        → same org as "frontend" in workspace "my-product"<br><br>
+        <span style="color:#fbbf24">Found related workspace "my-product" (frontend)</span><br>
+        Join it? [Y/n] <span style="color:#fbbf24">Y</span><br><br>
+        INSERT INTO repos { id="backend", ... }<br>
+        Writes config.json { workspace_id, repo_id: "backend" }<br><br>
+        <span style="color:#60a5fa">✓ backend joined workspace "my-product"</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Path C — inherited multi-repo (team already has 3 repos, no synlynk)</p>
+  <div class="mockup">
+    <div class="mockup-header">Adoption flow — bring synlynk to an existing multi-repo product</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2.1">
+      <span style="color:#888"># Step 1: init in any repo first</span><br>
+      <span style="color:#888">$ cd ~/dev/existing-product/api && synlynk init</span><br>
+      → creates workspace "existing-product" · repo "api" registered<br><br>
+      <span style="color:#888"># Step 2: join remaining repos (any order)</span><br>
+      <span style="color:#888">$ cd ../web && synlynk workspace join existing-product</span><br>
+      <span style="color:#888">$ cd ../infra && synlynk workspace join existing-product</span><br><br>
+      <span style="color:#888"># Done. No workspace repo, no config file at parent dir.</span><br>
+      <span style="color:#888"># Existing git history, branch structure, CI — all untouched.</span><br><br>
+      <span style="color:#60a5fa">✓ Workspace "existing-product" · 3 repos: api · web · infra</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Workspace management commands</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;font-family:monospace;font-size:0.8em">
+    <div style="padding:0.75rem;border:1px solid var(--border);border-radius:8px;line-height:2">
+      <span style="color:#fbbf24">synlynk workspace list</span><br>
+      <span style="color:#888">→ all workspaces on this machine</span><br><br>
+      <span style="color:#fbbf24">synlynk workspace join &lt;name-or-id&gt;</span><br>
+      <span style="color:#888">→ add current repo to existing workspace</span><br><br>
+      <span style="color:#fbbf24">synlynk workspace status</span><br>
+      <span style="color:#888">→ all repos, last activity, open epics</span>
+    </div>
+    <div style="padding:0.75rem;border:1px solid var(--border);border-radius:8px;line-height:2">
+      <span style="color:#fbbf24">synlynk workspace export</span><br>
+      <span style="color:#888">→ portable JSON snapshot of state</span><br>
+      <span style="color:#888">&nbsp;&nbsp;(pre-Tokq team sync mechanism)</span><br><br>
+      <span style="color:#fbbf24">synlynk workspace import &lt;file&gt;</span><br>
+      <span style="color:#888">→ merge snapshot into local state</span><br><br>
+      <span style="color:#fbbf24">synlynk workspace rename &lt;new-name&gt;</span>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:0.75rem;padding:0.875rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:0.84em;line-height:1.75">
+  <p class="label">Pre-Tokq team sync — export/import</p>
+  Gaurav runs <code>synlynk workspace export</code> → sends JSON to Nikhil → <code>synlynk workspace import gaurav-state.json</code>. Last-write-wins per entity (story, event, memory). Conflicts are surfaced, not silently merged. Full sync activates at Tokq Alpha via NATS — the export/import mechanism is the lightweight bridge until then.
+</div>

@@ -147,36 +147,16 @@ MIT — see [LICENSE](LICENSE).
 
 ## Roadmap
 
-synlynk is early-stage and community feedback will shape its direction. Below is the broad vision across three horizons.
+synlynk's goal is to become the OS for multi-agent development — the substrate that keeps every AI tool, every agent, and every developer in sync across the full project lifecycle.
 
-### Solo edition (current focus)
-
-The goal is to make a single developer with multiple AI tools feel like they have one consistent co-pilot across all of them — no repeated context-setting, no lost state between sessions or quota resets.
-
-Near-term priorities:
-- Automatic token/cost capture from AI CLI output (removing the manual step)
-- Scoped context slices — inject only the tasks and decisions relevant to the current file or feature, not the whole project
-- Shell integration improvements — seamless alias setup, tab completion
-
-### Team edition (next)
-
-Extend synlynk to shared projects where multiple developers are using AI tools concurrently. The core challenge is keeping `project-docs/` consistent without merge conflicts while each developer's AI tool writes decisions, devlog entries, and task completions.
-
-Areas of interest:
-- Lightweight sync mechanism for `project-docs/` across team members (pull-before-write, conflict detection)
-- Shared telemetry aggregation — team-wide cost and usage visibility
-- Attribution enforcement — decisions and task completions tagged to the right developer
-
-### Enterprise edition (future)
-
-For organisations running AI tools across many teams, repositories, and accounts.
-
-Areas of interest:
-- Org-level budget and policy enforcement
-- Centralised audit log of AI operations across repos
-- SSO and role-based access to shared project state
-- Self-hosted sync endpoint
-
----
+| Version | Theme | Status | Target |
+|---|---|---|---|
+| v0.3.0 | Conventions + enriched agent templates | ✅ Shipped | Jun 2026 |
+| v0.4.0 | Trio Bootstrap — `synlynk run`, Architect→Build→Verify pipeline | 🔜 Next | Jul 2026 |
+| v0.5.0 | Capability Engine — data-driven agent routing, SQLite state | Planned | Aug 2026 |
+| v0.6.0 | Job Control — constraint propagation, job state machine | Planned | Sep 2026 |
+| v0.7.0 | Async Pipeline + Daemon — `synlynk dispatch`, HTTP context server | Planned | Oct 2026 |
+| v0.8.0 | Open Context Protocol — MCP server, cross-tool context API | Planned | Nov 2026 |
+| v1.0.0 | Stable OS — frozen CLI, pipx/Homebrew, Tokq bridge ready | Planned | Q1 2027 |
 
 **We're looking for community input on what to build next.** See the [Discussions](../../discussions) tab to vote on feature direction and share use cases.

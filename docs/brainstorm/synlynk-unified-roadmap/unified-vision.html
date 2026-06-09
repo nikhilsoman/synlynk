@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unified Vision</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; padding: 24px; }
+h1 { font-size: 1.4rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+.subtitle { color: #64748b; font-size: 0.88rem; margin-bottom: 24px; }
+
+/* ── Origin story ── */
+.origin {
+  display: grid;
+  grid-template-columns: 1fr 48px 1fr 48px 1fr;
+  gap: 0;
+  align-items: center;
+  margin-bottom: 24px;
+  background: #080c14;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+.origin-node {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.origin-node .era {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+}
+.origin-node h3 { font-size: 0.95rem; font-weight: 800; }
+.origin-node p  { font-size: 0.7rem; color: #64748b; line-height: 1.5; }
+.origin-arrow { text-align: center; color: #334155; font-size: 1.4rem; }
+
+.node-tokq-orig .era { color: #7c3aed; }
+.node-tokq-orig h3   { color: #c4b5fd; }
+.node-synlynk   .era { color: #0891b2; }
+.node-synlynk   h3   { color: #22d3ee; }
+.node-unified   .era { color: #d97706; }
+.node-unified   h3   { color: #fbbf24; background: linear-gradient(90deg,#fbbf24,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+
+/* ── Main layout ── */
+.main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+/* ── Journey arc ── */
+.arc-wrap { }
+.arc-label { font-size: 0.68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #475569; margin-bottom: 12px; }
+
+.journey {
+  display: flex; flex-direction: column; gap: 0;
+  position: relative;
+}
+.journey::before {
+  content: '';
+  position: absolute;
+  left: 20px; top: 12px; bottom: 12px;
+  width: 2px;
+  background: linear-gradient(180deg, #fbbf24 0%, #22d3ee 30%, #a78bfa 70%, #7c3aed 100%);
+  opacity: 0.4;
+}
+
+.j-item {
+  display: flex; gap: 16px; align-items: flex-start;
+  padding: 10px 0 10px 0;
+  position: relative;
+}
+.j-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  margin-left: 16px;
+  border: 2px solid transparent;
+}
+.j-body { flex: 1; }
+.j-body .ver  { font-size: 0.6rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #475569; margin-bottom: 2px; }
+.j-body h4    { font-size: 0.8rem; font-weight: 700; margin-bottom: 3px; }
+.j-body p     { font-size: 0.68rem; color: #64748b; line-height: 1.45; }
+.j-body .tag  {
+  display: inline-block;
+  font-size: 0.58rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 3px; margin-top: 4px;
+}
+
+/* phase colors */
+.ph-done   .j-dot { background: #4ade80; border-color: #15803d; box-shadow: 0 0 6px #4ade8044; }
+.ph-done   h4     { color: #4ade80; }
+.ph-done   .tag   { background: #14401e; color: #4ade80; }
+
+.ph-next   .j-dot { background: #22d3ee; border-color: #0891b2; box-shadow: 0 0 8px #22d3ee55; }
+.ph-next   h4     { color: #22d3ee; }
+.ph-next   .tag   { background: #0a1e28; color: #22d3ee; }
+
+.ph-cap    .j-dot { background: #38bdf8; border-color: #0369a1; }
+.ph-cap    h4     { color: #38bdf8; }
+.ph-cap    .tag   { background: #07101e; color: #38bdf8; }
+
+.ph-async  .j-dot { background: #818cf8; border-color: #4338ca; }
+.ph-async  h4     { color: #818cf8; }
+.ph-async  .tag   { background: #0d0e20; color: #818cf8; }
+
+.ph-bridge .j-dot { background: #a78bfa; border-color: #6d28d9; box-shadow: 0 0 8px #a78bfa44; }
+.ph-bridge h4     { color: #a78bfa; }
+.ph-bridge .tag   { background: #130e20; color: #a78bfa; }
+
+.ph-mkt    .j-dot { background: #fbbf24; border-color: #b45309; box-shadow: 0 0 10px #fbbf2455; }
+.ph-mkt    h4     { color: #fbbf24; }
+.ph-mkt    .tag   { background: #1a120a; color: #fbbf24; }
+
+.j-divider { height: 1px; background: #111827; margin-left: 44px; }
+
+/* ── Right: What changes ── */
+.changes-wrap { display: flex; flex-direction: column; gap: 16px; }
+
+.change-box {
+  background: #080c14;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.change-box h3 {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.change-row {
+  display: grid; grid-template-columns: 1fr 20px 1fr;
+  align-items: flex-start; gap: 8px; margin-bottom: 8px; font-size: 0.7rem;
+}
+.change-row:last-child { margin-bottom: 0; }
+.change-old { color: #475569; text-decoration: line-through; padding: 4px 8px; border-radius: 4px; background: #0d1117; }
+.change-new { color: #e2e8f0; padding: 4px 8px; border-radius: 4px; background: #0d1a24; }
+.change-arr { color: #334155; text-align: center; font-size: 0.8rem; margin-top: 4px; }
+
+.insight-box {
+  background: #0c0917;
+  border: 1px solid #2d1b5e80;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.insight-box h3 { font-size: 0.72rem; font-weight: 700; color: #a78bfa; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+.insight-item { display: flex; gap: 10px; margin-bottom: 9px; font-size: 0.7rem; }
+.insight-item:last-child { margin-bottom: 0; }
+.ii-icon { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
+.ii-text { color: #94a3b8; line-height: 1.5; }
+.ii-text strong { color: #c4b5fd; }
+
+.pitch-box {
+  background: linear-gradient(135deg, #07101a 0%, #0c0917 100%);
+  border: 1px solid #22d3ee40;
+  border-radius: 10px;
+  padding: 16px 18px;
+  text-align: center;
+}
+.pitch-box .tagline {
+  font-size: 1.05rem; font-weight: 800;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa, #fbbf24);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  line-height: 1.3; margin-bottom: 8px;
+}
+.pitch-box .sub {
+  font-size: 0.72rem; color: #475569; line-height: 1.5;
+}
+.pitch-box .sub em { color: #64748b; font-style: normal; }
+</style>
+</head>
+<body>
+<h1>One Author. One Vision. Two Products — Now One.</h1>
+<p class="subtitle">Tokq was the destination. Synlynk was the path. The path is now the foundation.</p>
+
+<!-- Origin story -->
+<div class="origin">
+  <div class="origin-node node-tokq-orig">
+    <div class="era">Jan 2026 — The Original Vision</div>
+    <h3>Tokq</h3>
+    <p>"Agentic Memory Marketplace" — the cloud-scale infrastructure dream. Distributed memory, zero-knowledge, crypto gas tank, knowledge economy. Imagined at the very dawn of AI coding. Ambitious, correct, but too far ahead to build directly.</p>
+  </div>
+  <div class="origin-arrow">→</div>
+  <div class="origin-node node-synlynk">
+    <div class="era">May 2026 — The Stepping Stone</div>
+    <h3>Synlynk</h3>
+    <p>"The Context Switchboard" — local-first, zero-dependency, built for the real problem of today: keeping AI coding agents in sync across sessions. The practical bridge while the world caught up to the Tokq vision.</p>
+  </div>
+  <div class="origin-arrow">→</div>
+  <div class="origin-node node-unified">
+    <div class="era">Now — The Convergence</div>
+    <h3>The Full Stack</h3>
+    <p>Synlynk has built the local OS foundation that Tokq always needed as its client layer. Tokq's cloud vision is exactly the ceiling Synlynk hits at v1.0. They were always one product — now we can see it.</p>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Journey arc -->
+  <div class="arc-wrap">
+    <div class="arc-label">The Unified Roadmap Arc — Local OS → Cloud Platform</div>
+    <div class="journey">
+
+      <div class="j-item ph-done">
+        <div class="j-dot"></div>
+        <div class="j-body">
+          <div class="ver">v0.1 – v0.3 · Shipped</div>
+          <h4>Kernel + Filesystem · Local OS Foundation</h4>
+          <p>exec, telemetry, flatline sentinel, project-docs ledger, enriched agent templates, init flags. The OS is bootable.</p>
+          <span class="tag">DONE</span>
+        </div>
+      </div>
+      <div class="j-divider"></div>
+
+      <div class="j-item ph-next">
+        <div class="j-dot"></div>
+        <div class="j-body">
+          <div class="ver">v0.4 · Next</div>
+          <h4>IPC Layer · Trio Bootstrap</h4>
+          <p>conventions.md, constraint propagation, synlynk trio init, synlynk run (foreground pipeline), cold-start routing. Agents start talking to each other through the OS.</p>
+          <span class="tag">TRIO BOOTSTRAP</span>
+        </div>
+      </div>
+      <div class="j-divider"></div>
+
+      <div class="j-item ph-cap">
+        <div class="j-dot"></div>
+        <div class="j-body">
+          <div class="ver">v0.5</div>
+          <h4>Scheduler · Capability Engine</h4>
+          <p>capability.json, recency-weighted routing, score engine, domain inference, doctor, cost add. The OS learns which processes are best at what.</p>
+          <span class="tag">CAPABILITY ENGINE</span>
+        </div>
+      </div>
+      <div class="j-divider"></div>
+
+      <div class="j-item ph-async">
+        <div class="j-dot"></div>
+        <div class="j-body">
+          <div class="ver">v0.6 – v1.0</div>
+          <h4>Shell + Async · Complete Local OS</h4>
+          <p>Daemon, synlynk dispatch, full A→B→V pipeline, TUI review, scheduled autonomy. Stable CLI/schema contract, pipx/brew. The local OS is complete.</p>
+          <span class="tag">FULL PIPELINE + STABLE</span>
+        </div>
+      </div>
+      <div class="j-divider"></div>
+
+      <div class="j-item ph-bridge">
+        <div class="j-dot"></div>
+        <div class="j-body">
+          <div class="ver">Tokq Alpha · Q3 2026</div>
+          <h4>Cloud Bridge · synlynk sync</h4>
+          <p>project-docs/ syncs to Tokq distributed store. Local capability scores map to Tokq agent identity. Cross-machine context. Team state without merge conflicts.</p>
+          <span class="tag">CLOUD SYNC</span>
+        </div>
+      </div>
+      <div class="j-divider"></div>
+
+      <div class="j-item ph-mkt">
+        <div class="j-dot"></div>
+        <div class="j-body">
+          <div class="ver">Tokq GA · Q4 2026</div>
+          <h4>Marketplace · The Original Vision</h4>
+          <p>Knowledge marketplace live. Developers publish conventions.md collections, CI rule sets, domain expertise. Others subscribe. Creator economy. The Tokq Jan 2026 PRD — finally buildable because Synlynk created the install base.</p>
+          <span class="tag">KNOWLEDGE ECONOMY</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right: What changes and the pitch -->
+  <div class="changes-wrap">
+
+    <div class="change-box">
+      <h3 style="color:#475569;">What the Unified Vision Changes</h3>
+
+      <div class="change-row">
+        <div class="change-old">Solo / Team / Enterprise tiers</div>
+        <div class="change-arr">→</div>
+        <div class="change-new">Local OS → Cloud Platform journey</div>
+      </div>
+      <div class="change-row">
+        <div class="change-old">Synlynk competes with GStack</div>
+        <div class="change-arr">→</div>
+        <div class="change-new">GStack runs on Synlynk</div>
+      </div>
+      <div class="change-row">
+        <div class="change-old">Tokq = separate product</div>
+        <div class="change-arr">→</div>
+        <div class="change-new">Tokq = Synlynk's cloud layer</div>
+      </div>
+      <div class="change-row">
+        <div class="change-old">v1.0 = "stable Lite"</div>
+        <div class="change-arr">→</div>
+        <div class="change-new">v1.0 = stable local OS, Tokq begins</div>
+      </div>
+      <div class="change-row">
+        <div class="change-old">Manual costs.md rows</div>
+        <div class="change-arr">→</div>
+        <div class="change-new">Gas tank auto-deducts at Tokq layer</div>
+      </div>
+      <div class="change-row">
+        <div class="change-old">Standards distribution = future feature</div>
+        <div class="change-arr">→</div>
+        <div class="change-new">Tokq marketplace = the standards economy</div>
+      </div>
+    </div>
+
+    <div class="insight-box">
+      <h3>Why This Arc Is Right</h3>
+      <div class="insight-item">
+        <div class="ii-icon">🎯</div>
+        <div class="ii-text">Tokq's biggest unsolved problem in Jan 2026 was <strong>distribution</strong> — no one would install a cloud memory platform with no local client. Synlynk is that client. Every <code>synlynk init</code> is a Tokq onboarding event.</div>
+      </div>
+      <div class="insight-item">
+        <div class="ii-icon">🧱</div>
+        <div class="ii-text">Synlynk's ceiling is clear: local state can't span machines, can't enable knowledge markets, can't provide crypto-grade economic rails. That ceiling is exactly where Tokq begins.</div>
+      </div>
+      <div class="insight-item">
+        <div class="ii-icon">📐</div>
+        <div class="ii-text"><strong>The Tokq PRD was the product spec.</strong> Synlynk was the go-to-market strategy written in code. You've been building Tokq the whole time — just from the bottom up, not the top down.</div>
+      </div>
+    </div>
+
+    <div class="pitch-box">
+      <div class="tagline">The OS for multi-agent development —<br>local to cloud, solo to marketplace.</div>
+      <div class="sub">
+        Start with <em>synlynk init</em> on your laptop.<br>
+        End with a global marketplace of agent knowledge.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

@@ -54,7 +54,10 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
         "org": None,
+        "owner": None,
         "repo": None,
+        "project_id": None,
+        "agent_slots": {"claude": "claude", "agy": "gemini", "codex": "codex"},
         "team": None,
         "sync_endpoint": None,
     }
@@ -111,9 +114,126 @@ def set_state(state: str) -> None:
         sys.stdout.write(f"\033]0;{title}\007")
         sys.stdout.flush()
 
-def _build_templates(org: str = None, repo: str = None, project_id: str = None) -> dict:
+def detect_remote_owner_repo() -> tuple:
+    """Returns (owner, repo) from git remote origin URL, or (None, None)."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return None, None
+        url = result.stdout.strip().rstrip("/")
+        if url.endswith(".git"):
+            url = url[:-4]
+        if "github.com/" in url:
+            path = url.split("github.com/")[-1]
+        elif "github.com:" in url:
+            path = url.split("github.com:")[-1]
+        else:
+            return None, None
+        parts = path.split("/")
+        return (parts[0], parts[1]) if len(parts) >= 2 else (None, None)
+    except Exception:
+        return None, None
+
+
+def _update_config(updates: dict) -> None:
+    """Merges updates into .synlynk/config.json in-place."""
+    config_file = ".synlynk/config.json"
+    if not os.path.exists(".synlynk"):
+        return
+    config = load_config()
+    config.update(updates)
+    with open(config_file, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+# Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
+_PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md"}
+_SCAN_SKIP_DIRS = {".git", "node_modules", ".synlynk", "project-docs",
+                   "__pycache__", ".venv", ".next", "dist", "build"}
+
+SECTION_SIGNALS: dict = {
+    "## Live Issues SOP": [
+        "live issue", "live-issue", "sev1", "sev2", "sev3", "rca", "[live-",
+    ],
+    "## Mid-Session Anti-Amnesia Protocol": [
+        "25,000 tokens", "25k tokens", "compaction", "compaction imminent",
+        "mid-session", "checkpoint every",
+    ],
+    "## Mandatory 4-Doc Discipline": [
+        "roadmap.md", "devlog", "costs.md", "memory.md",
+        "mandatory document", "four doc", "4-doc",
+    ],
+    "## GitHub Projects v2 Integration": [
+        "updateProjectV2", "projectId", "PVT_", "PVTSSF_",
+        "github projects", "programme board",
+    ],
+    "## Git Worktree-First Policy": [
+        "git worktree", "worktree add", "never commit to main",
+        "never commit to master",
+    ],
+}
+
+
+def _scan_repo_for_docs(root: str = ".") -> dict:
+    """Scans repo tree for project docs and agent files outside expected locations.
+
+    Returns {"docs": [absolute_paths], "agent_files": {name: absolute_path}}.
+    """
+    docs = []
+    agent_files = {}
+    abs_root = os.path.abspath(root)
+    for dirpath, dirnames, filenames in os.walk(abs_root):
+        dirnames[:] = [d for d in dirnames if d not in _SCAN_SKIP_DIRS]
+        rel_dir = os.path.relpath(dirpath, abs_root)
+        for fname in filenames:
+            fpath = os.path.join(dirpath, fname)
+            if fname.lower() in _PROJECT_DOC_NAMES:
+                docs.append(fpath)
+            if rel_dir == "." and fname in _AGENT_FILE_NAMES:
+                agent_files[fname] = fpath
+    return {"docs": docs, "agent_files": agent_files}
+
+
+def _is_evolved_repo(content: str) -> bool:
+    """Returns True if file content indicates evolved (non-template) agent instructions."""
+    if len(content.splitlines()) > 100:
+        return True
+    unknown = sum(
+        1 for line in content.splitlines()
+        if line.startswith("## ") and line.rstrip() not in SECTION_SIGNALS
+    )
+    return unknown >= 3
+
+
+def _is_section_covered(content: str, section_header: str) -> bool:
+    """Returns True if file content semantically covers a synlynk section (2+ signals)."""
+    signals = SECTION_SIGNALS.get(section_header, [])
+    content_lower = content.lower()
+    matches = sum(1 for sig in signals if sig.lower() in content_lower)
+    return matches >= 2
+
+
+def _extract_gh_ids(content: str) -> dict:
+    """Extracts GH Projects v2 node IDs from file content.
+
+    Returns {"project_id": str | None}.
+    """
+    result = {"project_id": None}
+    match = re.search(r'(PVT_[A-Za-z0-9_]+)', content)
+    if match:
+        result["project_id"] = match.group(1)
+    return result
+
+
+def _build_templates(org: str = None, repo: str = None, project_id: str = None,
+                     owner: str = None, agent_slots: dict = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
+    _agent_slots = agent_slots or {"claude": "claude", "agy": "gemini", "codex": "codex"}
 
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
@@ -331,7 +451,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "budget": {"limit_usd": 10.0, "limit_requests": 100},
             "watch_interval_seconds": 30,
             "org": org,
+            "owner": owner,
             "repo": repo,
+            "project_id": project_id,
+            "agent_slots": _agent_slots,
             "team": None,
             "sync_endpoint": None,
         }, indent=2),
