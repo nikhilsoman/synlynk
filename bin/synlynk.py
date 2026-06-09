@@ -586,6 +586,19 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
     pass
 
 
+def check_daemon_health() -> None:
+    """Writes CRITICAL alert if watch daemon pidfile exists but process is dead."""
+    daemon = WatchDaemon()
+    if daemon._health() == "zombie":
+        _write_sentinel_alert(
+            "CRITICAL", "ZOMBIE_DAEMON",
+            "Watch daemon pidfile exists but process is dead. "
+            "Run: synlynk watch stop && synlynk watch start"
+        )
+        print("  🚨 [ZOMBIE_DAEMON] Watch daemon is dead — "
+              "run: synlynk watch stop && synlynk watch start")
+
+
 def check_flatline() -> None:
     """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
     telemetry_file = ".synlynk/telemetry.json"
@@ -1023,6 +1036,7 @@ def cmd_status(json_output: bool = False) -> None:
     state = "Running" if watcher_running else "Stopped"
     trigger = f"  ·  last trigger {last_trigger_file}" if last_trigger_file else ""
     print(f" WATCHER\n   {icon} {state}{trigger}")
+    check_daemon_health()
     if mode == "team" and teammates:
         print()
         print(" TEAMMATES")
@@ -1105,16 +1119,20 @@ class WatchDaemon:
                 os.remove(self.pidfile)
             print("  ○ synlynk watch stopped")
 
-    def _is_running(self) -> bool:
+    def _health(self) -> str:
+        """Returns 'running', 'stopped', or 'zombie' (pidfile exists but process dead)."""
         if not os.path.exists(self.pidfile):
-            return False
+            return "stopped"
         try:
             with open(self.pidfile) as f:
                 pid = int(f.read().strip())
             os.kill(pid, 0)
-            return True
-        except (ProcessLookupError, ValueError, IOError, OSError):
-            return False
+            return "running"
+        except (ProcessLookupError, ValueError, OSError):
+            return "zombie"
+
+    def _is_running(self) -> bool:
+        return self._health() == "running"
 
     def _get_mtimes(self, directory: str) -> dict:
         mtimes = {}

@@ -832,3 +832,22 @@ def test_is_interactive_json_flag(project_dir):
 
 def test_is_interactive_noninteractive_flag(project_dir):
     assert synlynk._is_interactive(["claude", "--non-interactive"]) is False
+
+
+def test_daemon_health_stopped(project_dir):
+    daemon = synlynk.WatchDaemon()
+    assert daemon._health() == "stopped"
+
+
+def test_daemon_health_zombie(project_dir):
+    # Write a pidfile with a PID that doesn't exist
+    (project_dir / ".synlynk" / "watch.pid").write_text("99999999")
+    daemon = synlynk.WatchDaemon()
+    assert daemon._health() == "zombie"
+
+
+def test_check_daemon_health_writes_sentinel(project_dir):
+    (project_dir / ".synlynk" / "watch.pid").write_text("99999999")
+    synlynk.check_daemon_health()
+    alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert any("ZOMBIE_DAEMON" in a for a in alerts)
