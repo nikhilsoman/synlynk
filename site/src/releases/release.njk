@@ -1,0 +1,66 @@
+---
+layout: base.njk
+pagination:
+  data: releases
+  size: 1
+  alias: release
+permalink: "/releases/v{{ release.minor }}/"
+eleventyComputed:
+  title: "v{{ release.minor }}.x — {{ release.theme }}"
+---
+
+{% set relFeatures = features | filterBy("introduced", release.minor) %}
+
+<div class="container release-detail">
+
+  <header class="release-detail-header">
+    <a href="/releases/" class="back-link">← All releases</a>
+    <span class="release-version">{{ release.label }}</span>
+    <h1>{{ release.theme }}</h1>
+
+    {% if release.current and release.install_cmd %}
+    <div class="release-install-block">
+      {{ release.install_cmd }}
+    </div>
+    {% endif %}
+  </header>
+
+  {% if relFeatures.length > 0 %}
+  <div class="release-section">
+    <h2>What's new</h2>
+    <ul class="whats-new-list">
+      {% for feature in relFeatures %}
+      <li>
+        <a href="/features/{{ feature.slug }}/">{{ feature.name }}</a>
+        <span class="feature-note">— {{ feature.subtitle }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="release-section">
+    <h2>Changelog</h2>
+    <ul class="patch-list">
+      {% for patch in release.patches %}
+      <li class="patch-item">
+        <span class="patch-version">v{{ patch.version }}</span>
+        <span class="patch-date">{{ patch.date | dateFilter }}</span>
+        <span class="patch-summary">{{ patch.summary }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {% if release.blog_post %}
+  <div class="release-section">
+    <h2>From the build log</h2>
+    <a href="{{ release.blog_post }}" class="release-blog-link">Read the blog post →</a>
+  </div>
+  {% endif %}
+
+  <div class="release-section">
+    <a href="/features/" style="font-size:14px;color:var(--accent-teal);text-decoration:none">← Back to feature matrix</a>
+  </div>
+
+</div>

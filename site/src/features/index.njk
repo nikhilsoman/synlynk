@@ -1,0 +1,154 @@
+---
+layout: base.njk
+title: Features
+---
+
+{% set windowRels = releases | windowReleases %}
+
+{% set osSections = [
+  { key: "kernel",     label: "Kernel — Context Engine" },
+  { key: "filesystem", label: "Filesystem — State & Telemetry" },
+  { key: "ipc",        label: "IPC — Agent Files & Coordination" },
+  { key: "scheduler",  label: "Scheduler — Dispatch" }
+] %}
+
+{% set userSections = [
+  { key: "context-management",  label: "Context Management" },
+  { key: "cost-visibility",     label: "Cost & Visibility" },
+  { key: "agent-coordination",  label: "Agent Coordination" },
+  { key: "autonomy-dispatch",   label: "Autonomy & Dispatch" }
+] %}
+
+<div class="container features-page">
+
+  <header class="features-header">
+    <div class="section-label" style="color: var(--accent-teal)">Capabilities</div>
+    <h1>Features</h1>
+    <p>Everything synlynk provides across releases — from context injection to autonomous dispatch.</p>
+
+    <div class="view-toggle">
+      <button id="btn-os" class="active" onclick="setView('os')">OS Layer view</button>
+      <button id="btn-user" onclick="setView('user')">User-facing view</button>
+    </div>
+  </header>
+
+  <div class="feature-matrix-wrapper">
+
+    {# OS LAYER VIEW #}
+    <table class="feature-matrix" id="view-os">
+      <thead>
+        <tr>
+          <th class="feature-col">Feature</th>
+          {% for rel in windowRels %}
+            <th class="{% if rel.current %}current-col{% endif %}">
+              <span class="release-label {% if not rel.current %}muted{% endif %}">{{ rel.label }}</span>
+              {% if rel.current %}
+                <div class="release-actions">
+                  <a href="/releases/v{{ rel.minor }}/" class="install-pill">↓ install</a>
+                  <a href="/releases/v{{ rel.minor }}/" class="changelog-link">changelog →</a>
+                </div>
+              {% else %}
+                <a href="/releases/v{{ rel.minor }}/" class="changelog-link" style="font-size:10px">changelog →</a>
+              {% endif %}
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for section in osSections %}
+          <tr class="matrix-section-header">
+            <td colspan="{{ windowRels.length + 1 }}">{{ section.label }}</td>
+          </tr>
+          {% for feature in features %}
+            {% if feature.os_layer == section.key %}
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/{{ feature.slug }}/">
+                    {{ feature.name }}
+                    {% if feature.introduced == windowRels[0].minor %}<span class="badge-new">new</span>{% endif %}
+                  </a>
+                  <span class="feature-subtitle">{{ feature.subtitle }}</span>
+                </td>
+                {% for rel in windowRels %}
+                  <td class="{% if rel.current %}current-col{% endif %}">
+                    {% if feature.introduced | featureAvailable(rel.minor) %}
+                      <span class="check-yes">✓</span>
+                    {% else %}
+                      <span class="check-no">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {# USER-FACING VIEW #}
+    <table class="feature-matrix" id="view-user" style="display:none">
+      <thead>
+        <tr>
+          <th class="feature-col">Feature</th>
+          {% for rel in windowRels %}
+            <th class="{% if rel.current %}current-col{% endif %}">
+              <span class="release-label {% if not rel.current %}muted{% endif %}">{{ rel.label }}</span>
+              {% if rel.current %}
+                <div class="release-actions">
+                  <a href="/releases/v{{ rel.minor }}/" class="install-pill">↓ install</a>
+                  <a href="/releases/v{{ rel.minor }}/" class="changelog-link">changelog →</a>
+                </div>
+              {% else %}
+                <a href="/releases/v{{ rel.minor }}/" class="changelog-link" style="font-size:10px">changelog →</a>
+              {% endif %}
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for section in userSections %}
+          <tr class="matrix-section-header">
+            <td colspan="{{ windowRels.length + 1 }}">{{ section.label }}</td>
+          </tr>
+          {% for feature in features %}
+            {% if feature.user_theme == section.key %}
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/{{ feature.slug }}/">
+                    {{ feature.name }}
+                    {% if feature.introduced == windowRels[0].minor %}<span class="badge-new">new</span>{% endif %}
+                  </a>
+                  <span class="feature-subtitle">{{ feature.subtitle }}</span>
+                </td>
+                {% for rel in windowRels %}
+                  <td class="{% if rel.current %}current-col{% endif %}">
+                    {% if feature.introduced | featureAvailable(rel.minor) %}
+                      <span class="check-yes">✓</span>
+                    {% else %}
+                      <span class="check-no">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+
+  </div>
+
+  <div class="matrix-footer">
+    Older releases: <a href="/releases/">View full release history →</a>
+  </div>
+
+</div>
+
+<script>
+function setView(v) {
+  document.getElementById('view-os').style.display = v === 'os' ? '' : 'none';
+  document.getElementById('view-user').style.display = v === 'user' ? '' : 'none';
+  document.getElementById('btn-os').className = v === 'os' ? 'active' : '';
+  document.getElementById('btn-user').className = v === 'user' ? 'active' : '';
+}
+</script>

@@ -1,0 +1,172 @@
+[
+  {
+    "slug": "context-injection",
+    "name": "Context injection",
+    "subtitle": "Reads project-docs/ into .synlynk/context.md before each exec",
+    "description": "Before every `synlynk exec` call, the harness reads `project-docs/memory.md`, `roadmap.md`, and `todo.md` into a single `.synlynk/context.md` file that is prepended to the agent's prompt. This ensures every AI session starts with current project state — no repeated setup, no lost context.",
+    "os_layer": "kernel",
+    "user_theme": "context-management",
+    "introduced": "0.1",
+    "usage": [
+      {
+        "cmd": "synlynk exec claude",
+        "note": "Generates .synlynk/context.md then spawns claude with context prepended"
+      }
+    ],
+    "related": ["flatline-detection", "parametric-init"],
+    "changelog": []
+  },
+  {
+    "slug": "flatline-detection",
+    "name": "Flatline detection",
+    "subtitle": "Alerts and halts when the last 3 runs share identical command + non-zero exit",
+    "description": "synlynk tracks the last 100 exec invocations in `.synlynk/telemetry.json`. If the most recent 3 entries share the same command and all exited non-zero, the harness prints a flatline warning and blocks the next run. This prevents silent looping where an agent repeatedly fails at the same step without human review.",
+    "os_layer": "kernel",
+    "user_theme": "context-management",
+    "introduced": "0.1",
+    "usage": [
+      {
+        "cmd": "synlynk exec gemini",
+        "note": "After 3 consecutive failures: FLATLINE ALERT — same command, 3 non-zero exits"
+      }
+    ],
+    "related": ["context-injection", "telemetry-log"],
+    "changelog": []
+  },
+  {
+    "slug": "cost-tracking",
+    "name": "Cost tracking",
+    "subtitle": "Appends per-session token counts and $ cost to project-docs/costs.md",
+    "description": "After each `synlynk exec` run, the harness scrapes token counts from captured AI CLI stdout using format-specific regex patterns, computes cost at hardcoded rates ($0.003/1K input + $0.015/1K output), appends a row to `project-docs/costs.md`, and prints a Budget Pulse summary to the terminal.",
+    "os_layer": "filesystem",
+    "user_theme": "cost-visibility",
+    "introduced": "0.1",
+    "usage": [
+      {
+        "cmd": "synlynk exec claude",
+        "note": "Prints: Budget Pulse | session: $0.24 | total: $3.12 | 14 runs"
+      }
+    ],
+    "related": ["budget-enforcement", "telemetry-log"],
+    "changelog": []
+  },
+  {
+    "slug": "budget-enforcement",
+    "name": "Budget enforcement",
+    "subtitle": "Blocks exec when cumulative cost or request count exceeds configured limits",
+    "description": "Before spawning any AI subprocess, `check_budgets()` reads `.synlynk/config.json` for `limit_usd` and `limit_requests`, then compares against totals in `.synlynk/telemetry.json`. If either limit is exceeded, the exec is blocked with a clear message. Limits are project-specific and set at `synlynk init` time.",
+    "os_layer": "filesystem",
+    "user_theme": "cost-visibility",
+    "introduced": "0.1",
+    "usage": [
+      {
+        "cmd": "synlynk exec claude",
+        "note": "If over budget: Budget limit exceeded ($50.00). Run synlynk reset to continue."
+      }
+    ],
+    "related": ["cost-tracking"],
+    "changelog": []
+  },
+  {
+    "slug": "telemetry-log",
+    "name": "Telemetry log",
+    "subtitle": "Rolling 100-entry log of every exec — duration, exit code, cost, command",
+    "description": "Every `synlynk exec` invocation appends a structured JSON record to `.synlynk/telemetry.json`, keeping only the last 100 entries. Each record includes: timestamp, command, duration_seconds, exit_code, input_tokens, output_tokens, and estimated_cost_usd. This log powers both flatline detection and budget enforcement.",
+    "os_layer": "filesystem",
+    "user_theme": "cost-visibility",
+    "introduced": "0.1",
+    "usage": [
+      {
+        "cmd": "cat .synlynk/telemetry.json | python3 -m json.tool | tail -30",
+        "note": "Inspect last 100 exec records"
+      }
+    ],
+    "related": ["cost-tracking", "flatline-detection", "budget-enforcement"],
+    "changelog": []
+  },
+  {
+    "slug": "gh-cli-identity",
+    "name": "gh CLI identity",
+    "subtitle": "Resolves verified GitHub login as the canonical session actor for devlog attribution",
+    "description": "When attributing devlog entries, `get_username()` calls `gh api user --jq .login` first, falling back to `git config user.name` only if gh is unavailable or unauthenticated. The GitHub login is a verified identity tied to a real account, unlike git config which can be set to any value. This is the v0.2.x approximation of the full Ed25519 identity stack planned for v0.5.0.",
+    "os_layer": "ipc",
+    "user_theme": "agent-coordination",
+    "introduced": "0.2",
+    "usage": [
+      {
+        "cmd": "synlynk exec claude",
+        "note": "Devlog entry attributed to authenticated GitHub user (e.g. nikhilsoman)"
+      }
+    ],
+    "related": ["polyglot-agent-files"],
+    "changelog": []
+  },
+  {
+    "slug": "polyglot-agent-files",
+    "name": "Polyglot agent files",
+    "subtitle": "Generates CLAUDE.md, GEMINI.md, and AGENTS.md from a single parameterised template",
+    "description": "`synlynk init` generates three agent instruction files — `CLAUDE.md` (Claude Code), `GEMINI.md` (Gemini CLI), and `AGENTS.md` (Codex/OpenAI CLI) — from `_build_templates(org, repo, project_id)`. All three files contain the same session protocol, live issues SOP, git worktree policy, and GitHub Projects v2 GraphQL block. This ensures every agent in the workgroup receives identical constraints from a single source of truth.",
+    "os_layer": "ipc",
+    "user_theme": "agent-coordination",
+    "introduced": "0.3",
+    "usage": [
+      {
+        "cmd": "synlynk init --agents claude,gemini,codex --project-id PJ_kwDO...",
+        "note": "Generates CLAUDE.md, GEMINI.md, AGENTS.md with live GraphQL blocks"
+      }
+    ],
+    "related": ["gh-cli-identity", "parametric-init"],
+    "changelog": []
+  },
+  {
+    "slug": "parametric-init",
+    "name": "Parametric init",
+    "subtitle": "Four --flags fill project-specific values into all generated files at init time",
+    "description": "`synlynk init` accepts `--agents`, `--mode`, `--org`, `--repo`, and `--project-id` flags. The `--project-id` flag is the most consequential: it fills the GitHub Projects v2 node ID (`PJ_kwDO…`) into live GraphQL mutation blocks in all agent instruction files, making them immediately executable rather than containing placeholder text.",
+    "os_layer": "kernel",
+    "user_theme": "context-management",
+    "introduced": "0.3",
+    "usage": [
+      {
+        "cmd": "synlynk init --mode team --org acme --repo api --project-id PJ_kwDOA1234",
+        "note": "All agent files generated with org, repo, and project ID filled in"
+      }
+    ],
+    "related": ["polyglot-agent-files"],
+    "changelog": []
+  },
+  {
+    "slug": "trio-protocol",
+    "name": "Trio Protocol",
+    "subtitle": "Routes tasks through an Architect → Builder → Verifier pipeline by capability score",
+    "description": "The Trio Protocol assigns each task to one of three roles — Architect (design and planning), Builder (implementation), Verifier (testing and review) — based on per-agent capability scores accumulated from past performance. Cold-start uses round-robin assignment to generate initial score data. Scores are recency-weighted: recent performance has more influence than older runs, so improvements surface in routing within 3–4 jobs.",
+    "os_layer": "scheduler",
+    "user_theme": "autonomy-dispatch",
+    "introduced": "0.4",
+    "usage": [
+      {
+        "cmd": "synlynk dispatch --story 42",
+        "note": "Routes story 42 to the highest-scoring available agent for its required role"
+      }
+    ],
+    "related": ["board-management"],
+    "changelog": []
+  },
+  {
+    "slug": "board-management",
+    "name": "Board management",
+    "subtitle": "synlynk start moves GitHub Projects v2 board items autonomously via GraphQL",
+    "description": "`synlynk start <issue-number>` reads cached field IDs from `.synlynk/config.json`, calls the GitHub Projects v2 GraphQL API to move the item to In Progress, sets the Agent field to the current executor, and begins the Trio Protocol dispatch sequence. This is the first autonomous action the harness takes on behalf of the user — no manual board updates required.",
+    "os_layer": "scheduler",
+    "user_theme": "autonomy-dispatch",
+    "introduced": "0.4",
+    "usage": [
+      {
+        "cmd": "synlynk start 42",
+        "note": "Moves issue #42 to In Progress on GitHub Projects v2 board, sets Agent field"
+      }
+    ],
+    "related": ["trio-protocol", "gh-cli-identity"],
+    "changelog": []
+  }
+]

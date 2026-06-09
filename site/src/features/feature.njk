@@ -1,0 +1,85 @@
+---
+layout: base.njk
+pagination:
+  data: features
+  size: 1
+  alias: feature
+permalink: "/features/{{ feature.slug }}/"
+eleventyComputed:
+  title: "{{ feature.name }} — Feature"
+---
+
+{% set featureRelease = releases | findBy("minor", feature.introduced) %}
+
+{% set osSectionLabels = {
+  "kernel":     "Kernel — Context Engine",
+  "filesystem": "Filesystem — State & Telemetry",
+  "ipc":        "IPC — Agent Files & Coordination",
+  "scheduler":  "Scheduler — Dispatch"
+} %}
+
+<div class="container feature-detail">
+
+  <header class="feature-detail-header">
+    <a href="/features/" class="back-link">← All features</a>
+    <h1>{{ feature.name }}</h1>
+    <p class="feature-lead">{{ feature.subtitle }}</p>
+  </header>
+
+  <div class="feature-section">
+    <h2>What it does</h2>
+    <p>{{ feature.description }}</p>
+  </div>
+
+  <div class="feature-section">
+    <h2>OS Layer</h2>
+    <div class="os-layer-badge">
+      <span class="layer-label">{{ osSectionLabels[feature.os_layer] }}</span>
+    </div>
+  </div>
+
+  <div class="feature-section">
+    <h2>Introduced in</h2>
+    <div class="introduced-badge">
+      <a href="/releases/v{{ feature.introduced }}/">v{{ feature.introduced }}.x</a>
+      {% if featureRelease %}— {{ featureRelease.theme }}{% endif %}
+    </div>
+  </div>
+
+  {% if feature.usage.length > 0 %}
+  <div class="feature-section">
+    <h2>Usage</h2>
+    {% for item in feature.usage %}
+    <div class="usage-block">
+      <code>$ {{ item.cmd }}</code>
+      <span class="usage-note">{{ item.note }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if feature.related.length > 0 %}
+  <div class="feature-section">
+    <h2>Related features</h2>
+    <div class="related-features">
+      {% for slug in feature.related %}
+        {% for f in features %}
+          {% if f.slug == slug %}
+            <a href="/features/{{ f.slug }}/">{{ f.name }}</a>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if feature.changelog.length > 0 %}
+  <div class="feature-section">
+    <h2>Upgrade notes</h2>
+    {% for note in feature.changelog %}
+    <p><strong>v{{ note.version }}:</strong> {{ note.note }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>

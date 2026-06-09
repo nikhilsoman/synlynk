@@ -1,0 +1,41 @@
+---
+layout: base.njk
+title: Releases
+---
+
+<div class="container releases-page">
+
+  <header class="releases-header">
+    <div class="section-label" style="color: var(--accent-purple)">History</div>
+    <h1>All releases</h1>
+    <p>Every synlynk release — including older versions outside the active download window.</p>
+  </header>
+
+  <div class="release-list">
+    {% for rel in releases %}
+    <article class="release-row">
+      <div class="release-row-meta">
+        <span class="release-version-badge {% if rel.current %}current{% endif %}">{{ rel.label }}</span>
+        <span class="release-row-date">{{ rel.date | dateFilter }}</span>
+        {% if not rel.in_window %}
+          <span class="archived-tag" style="display:block;margin-top:6px">archived</span>
+        {% endif %}
+      </div>
+      <div class="release-row-body">
+        <h2><a href="/releases/v{{ rel.minor }}/">{{ rel.theme }}</a></h2>
+        <p>{{ rel.patches[0].summary }}</p>
+        <div class="release-row-links">
+          {% if rel.current %}
+            <a href="/releases/v{{ rel.minor }}/" class="install-pill">↓ install</a>
+          {% endif %}
+          <a href="/releases/v{{ rel.minor }}/">Release notes →</a>
+          {% if rel.blog_post %}
+            <a href="{{ rel.blog_post }}">Blog post →</a>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+</div>

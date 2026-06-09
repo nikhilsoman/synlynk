@@ -1,0 +1,43 @@
+[
+  {
+    "minor": "0.3",
+    "label": "v0.3.x",
+    "theme": "The Multi-Agent Foundation",
+    "date": "2026-06-03",
+    "current": true,
+    "in_window": true,
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
+    "blog_post": "/blog/05-pr26-v0-3-0-multi-agent-foundation/",
+    "patches": [
+      { "version": "0.3.0", "date": "2026-06-03", "summary": "Polyglot agent files (AGENTS.md), parametric init flags, _build_templates() refactor" }
+    ]
+  },
+  {
+    "minor": "0.2",
+    "label": "v0.2.x",
+    "theme": "The Kernel",
+    "date": "2026-05-20",
+    "current": false,
+    "in_window": true,
+    "install_cmd": null,
+    "blog_post": "/blog/02-pr1-v0-2-0-the-kernel/",
+    "patches": [
+      { "version": "0.2.2", "date": "2026-05-20", "summary": "gh CLI identity resolution, upgrade check via gh API" },
+      { "version": "0.2.1", "date": "2026-05-17", "summary": "Token extraction correctness, test suite reliability" },
+      { "version": "0.2.0", "date": "2026-05-17", "summary": "Initial kernel: context injection, cost tracking, telemetry, flatline detection, budget enforcement" }
+    ]
+  },
+  {
+    "minor": "0.1",
+    "label": "v0.1.x",
+    "theme": "Proof of Concept",
+    "date": "2026-05-01",
+    "current": false,
+    "in_window": false,
+    "install_cmd": null,
+    "blog_post": null,
+    "patches": [
+      { "version": "0.1.0", "date": "2026-05-01", "summary": "Single-file CLI skeleton, exec wrapper, basic context injection" }
+    ]
+  }
+]
