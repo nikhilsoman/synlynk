@@ -577,7 +577,18 @@ def _tee_process(process, buffer: list) -> None:
 
 
 def _check_pre_exec_gate(force: bool = False) -> bool:
-    """Stub — implemented in Task 7. Always allows exec."""
+    """Checks for active sentinel alerts. Returns False to abort if CRITICAL and not forced."""
+    warns = _read_sentinel_alerts(severity="WARN")
+    criticals = _read_sentinel_alerts(severity="CRITICAL")
+    for w in warns:
+        print(f"  ⚠ {w}")
+    if criticals:
+        for c in criticals:
+            print(f"  🚨 {c}")
+        if not force:
+            print("  Exec blocked by CRITICAL sentinel alert. "
+                  "Fix the issue or re-run with --force to bypass.")
+            return False
     return True
 
 
@@ -849,6 +860,16 @@ def generate_context(scope: str = "full") -> None:
                         out.write("\n---\n\n")
 
     print(f"  ✓ Context saved to {context_file}")
+    try:
+        size_kb = os.path.getsize(".synlynk/context.md") / 1024
+        if size_kb > 64:
+            print(f"  ⚠ Context is very large ({size_kb:.0f} KB) — strongly consider "
+                  "archiving completed todos and old devlog entries to reduce token cost.")
+        elif size_kb > 32:
+            print(f"  ⚠ Context is large ({size_kb:.0f} KB) — consider archiving "
+                  "completed todos and old devlog entries.")
+    except OSError:
+        pass
 
 def _archive_old_devlog_entries(devlog_path: str) -> None:
     """Moves devlog entries older than 30 days to devlogs/archive/YYYY-MM.md."""

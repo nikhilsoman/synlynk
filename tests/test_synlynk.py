@@ -933,3 +933,25 @@ def test_check_sentinel_no_false_positive(project_dir):
     _write_telemetry_typed(project_dir, events)
     synlynk.check_sentinel_patterns(output_text="", exit_code=0, cmd="claude")
     assert synlynk._read_sentinel_alerts() == []
+
+
+def test_pre_exec_gate_no_alerts(project_dir):
+    assert synlynk._check_pre_exec_gate(force=False) is True
+
+
+def test_pre_exec_gate_warn_allows(project_dir):
+    synlynk._write_sentinel_alert("WARN", "SUCCESS_LOOP", "loop detected")
+    assert synlynk._check_pre_exec_gate(force=False) is True
+
+
+def test_pre_exec_gate_critical_blocks(project_dir, capsys):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "zombie")
+    result = synlynk._check_pre_exec_gate(force=False)
+    assert result is False
+    out = capsys.readouterr().out
+    assert "CRITICAL" in out or "blocked" in out.lower()
+
+
+def test_pre_exec_gate_force_bypasses_critical(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "zombie")
+    assert synlynk._check_pre_exec_gate(force=True) is True
