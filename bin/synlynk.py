@@ -486,6 +486,41 @@ def _check_costs_freshness() -> None:
     if time.time() - os.path.getmtime(costs_file) > 3600:
         print("  ⚠ costs.md not updated this session — AI may have missed logging")
 
+def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
+    """Appends a structured alert line to .synlynk/sentinel.md."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(".synlynk"):
+        return
+    existing = ""
+    if os.path.exists(sentinel_file):
+        with open(sentinel_file) as f:
+            existing = f.read()
+    if "# Sentinel Alerts" not in existing:
+        existing = "# Sentinel Alerts\n"
+    ts = time.strftime('%Y-%m-%d %H:%M')
+    line = f"- [{severity}] [{ts}] {code}: {message}\n"
+    with open(sentinel_file, "w") as f:
+        f.write(existing + line)
+
+
+def _read_sentinel_alerts(severity=None):
+    """Returns alert lines from sentinel.md, optionally filtered by severity."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        return []
+    alerts = []
+    with open(sentinel_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("- ["):
+                continue
+            if severity is None:
+                alerts.append(line)
+            elif f"[{severity}]" in line:
+                alerts.append(line)
+    return alerts
+
+
 def check_flatline() -> None:
     """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
     telemetry_file = ".synlynk/telemetry.json"

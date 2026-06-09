@@ -716,3 +716,51 @@ def test_extract_gh_ids_multiple_pv_ids_returns_first():
     content = 'id1="PVT_aaa"\nid2="PVT_bbb"\n'
     result = synlynk._extract_gh_ids(content)
     assert result["project_id"] == "PVT_aaa"
+
+
+def test_write_sentinel_alert_creates_file(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "TEST_CODE", "something went wrong")
+    sentinel = (project_dir / ".synlynk" / "sentinel.md")
+    assert sentinel.exists()
+    content = sentinel.read_text()
+    assert "[CRITICAL]" in content
+    assert "TEST_CODE" in content
+    assert "something went wrong" in content
+
+
+def test_write_sentinel_alert_appends(project_dir):
+    synlynk._write_sentinel_alert("WARN", "CODE_A", "first alert")
+    synlynk._write_sentinel_alert("CRITICAL", "CODE_B", "second alert")
+    content = (project_dir / ".synlynk" / "sentinel.md").read_text()
+    assert "CODE_A" in content
+    assert "CODE_B" in content
+
+
+def test_read_sentinel_alerts_all(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "CODE_A", "first")
+    synlynk._write_sentinel_alert("WARN", "CODE_B", "second")
+    alerts = synlynk._read_sentinel_alerts()
+    assert len(alerts) == 2
+
+
+def test_read_sentinel_alerts_by_severity(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "CODE_A", "first")
+    synlynk._write_sentinel_alert("WARN", "CODE_B", "second")
+    criticals = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert len(criticals) == 1
+    assert "CODE_A" in criticals[0]
+
+
+def test_read_sentinel_alerts_empty(project_dir):
+    assert synlynk._read_sentinel_alerts() == []
+
+
+def test_read_sentinel_alerts_preserves_old_format(project_dir):
+    # Old free-form lines must not crash the reader
+    sentinel = project_dir / ".synlynk" / "sentinel.md"
+    sentinel.write_text(
+        "# Sentinel Alerts\n"
+        "- [2026-06-09 14:23] FLATLINE: `claude` failed 3x in a row [@nikhilsoman]\n"
+    )
+    alerts = synlynk._read_sentinel_alerts()
+    assert len(alerts) == 1  # old-format line returned as-is
