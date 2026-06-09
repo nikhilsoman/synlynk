@@ -61,6 +61,7 @@ def load_config() -> dict:
         "agent_slots": {"claude": "claude", "agy": "gemini", "codex": "codex"},
         "team": None,
         "sync_endpoint": None,
+        "exec_timeout_minutes": 30,
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -599,6 +600,30 @@ def check_daemon_health() -> None:
               "run: synlynk watch stop && synlynk watch start")
 
 
+def check_stall() -> None:
+    """Writes WARN alert if .synlynk/state has been 'active' longer than exec_timeout_minutes."""
+    state_file = ".synlynk/state"
+    if not os.path.exists(state_file):
+        return
+    try:
+        with open(state_file) as f:
+            state = f.read().strip()
+        if state != "active":
+            return
+        age_minutes = (time.time() - os.path.getmtime(state_file)) / 60
+        timeout = load_config().get("exec_timeout_minutes", 30)
+        if age_minutes > timeout:
+            _write_sentinel_alert(
+                "WARN", "STALL",
+                f"Exec has been running for {age_minutes:.0f} min "
+                f"(threshold: {timeout} min). May be stalled."
+            )
+            print(f"  ⚠ [STALL] Exec has been active for {age_minutes:.0f} min — "
+                  f"consider checking or restarting.")
+    except (IOError, OSError):
+        pass
+
+
 def check_flatline() -> None:
     """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
     telemetry_file = ".synlynk/telemetry.json"
@@ -1037,6 +1062,7 @@ def cmd_status(json_output: bool = False) -> None:
     trigger = f"  ·  last trigger {last_trigger_file}" if last_trigger_file else ""
     print(f" WATCHER\n   {icon} {state}{trigger}")
     check_daemon_health()
+    check_stall()
     if mode == "team" and teammates:
         print()
         print(" TEAMMATES")

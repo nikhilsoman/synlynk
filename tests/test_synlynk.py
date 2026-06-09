@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 import json
 import pytest
 
@@ -851,3 +852,29 @@ def test_check_daemon_health_writes_sentinel(project_dir):
     synlynk.check_daemon_health()
     alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
     assert any("ZOMBIE_DAEMON" in a for a in alerts)
+
+
+def test_check_stall_no_stall(project_dir):
+    # State is "stopped", no stall
+    (project_dir / ".synlynk" / "state").write_text("stopped")
+    synlynk.check_stall()
+    assert synlynk._read_sentinel_alerts(severity="WARN") == []
+
+
+def test_check_stall_active_recent(project_dir):
+    # State is "active" but only 1 minute old — no stall
+    (project_dir / ".synlynk" / "state").write_text("active")
+    synlynk.check_stall()
+    assert synlynk._read_sentinel_alerts(severity="WARN") == []
+
+
+def test_check_stall_detects_old_active(project_dir):
+    # State is "active" and 35 minutes old — stall
+    state_file = project_dir / ".synlynk" / "state"
+    state_file.write_text("active")
+    # Backdate mtime by 35 minutes
+    old_time = time.time() - (35 * 60)
+    os.utime(str(state_file), (old_time, old_time))
+    synlynk.check_stall()
+    alerts = synlynk._read_sentinel_alerts(severity="WARN")
+    assert any("STALL" in a for a in alerts)
