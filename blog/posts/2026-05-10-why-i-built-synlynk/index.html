@@ -1,4 +1,38 @@
-<p>Every AI session starts from scratch.</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why I built synlynk | synlynk</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body class="">
+    <nav class="sticky-nav">
+        <div class="container nav-container">
+            <a href="/" class="wordmark">
+                <img src="/assets/img/logo/icon.svg" alt="Synlynk Icon" class="nav-icon">
+                <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+            </a>
+            <div class="nav-links">
+                <a href="#how-it-works">How it works</a>
+                <a href="#install">Install</a>
+                <a href="/blog/" class="teal-link">Blog</a>
+                <a href="https://github.com/nikhilsoman/synlynk" class="github-btn">GitHub ↗</a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        
+<article class="container blog-post">
+    <header class="post-header">
+        <time class="post-date monospace">May 10, 2026</time>
+        <h1>Why I built synlynk</h1>
+        <p class="excerpt">Three AI tools. Three separate contexts. Zero shared memory. There had to be a better way.</p>
+    </header>
+
+    <div class="post-body">
+        <p>Every AI session starts from scratch.</p>
 <p>I use <strong>Claude Code</strong> for architectural planning, <strong>Gemini CLI</strong> for high-volume file processing, and <strong>Cursor</strong> for the final implementation. Each tool is world-class, but they are all essentially stateless islands.</p>
 <p>When I switch from Claude to Gemini, I have to re-explain the task. I have to copy-paste the latest decisions. I have to manually update the todo list. This &quot;context tax&quot; was slowing me down and wasting tokens.</p>
 <h3>The Pain Points</h3>
@@ -15,3 +49,33 @@
 <h3>stdlib-only</h3>
 <p>I made a deliberate choice to keep synlynk a single-file Python CLI with <strong>zero dependencies</strong>. No <code>pip install</code>, no environment hell. Just a simple <code>curl | bash</code> and you're ready to build.</p>
 <p>Stay tuned for more updates as we move toward the v0.2.0 release.</p>
+
+    </div>
+
+    <footer class="post-footer">
+        <a href="/blog/" class="back-link">← Back to all posts</a>
+    </footer>
+</article>
+
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-container">
+            <div class="footer-left">
+                <div class="wordmark">
+                    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+                </div>
+                <div class="version">v1.2.0-lite</div>
+            </div>
+            <div class="footer-right">
+                <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
+                <a href="https://github.com/nikhilsoman/synlynk/discussions">Discussions</a>
+                <a href="https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md">Changelog</a>
+                <span class="license">MIT</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/assets/js/copy.js"></script>
+</body>
+</html>
