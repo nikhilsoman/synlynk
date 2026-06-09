@@ -7,8 +7,6 @@ tags: posts
 excerpt: "AI tools are not converging on one winner. They are diverging by design. The harness that runs them must speak all their dialects — or it isn't a harness at all."
 ---
 
-# Why We Need a Polyglot Harness
-
 The premise of synlynk is simple to state and surprisingly hard to argue against: you will not use one AI tool. You are not using one AI tool. You are already managing a small fleet.
 
 And that fleet has no shared memory, no shared state, and no shared cost ledger. Every tool is an island.

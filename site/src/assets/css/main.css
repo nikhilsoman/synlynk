@@ -395,6 +395,105 @@ code, .monospace {
     margin-bottom: 8px;
 }
 
+.post-body > p:first-child strong:first-child {
+    color: var(--text-secondary, #888);
+    font-size: 13px;
+}
+
+.post-body code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+    background: var(--bg-secondary, #111);
+    color: var(--accent-teal, #00e5bf);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.post-body pre {
+    background: #0a0a0a;
+    border: 1px solid #222;
+    border-radius: 6px;
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 0 0 28px;
+}
+
+.post-body pre code {
+    background: none;
+    color: #cdd9e5;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.post-body blockquote {
+    border-left: 3px solid var(--accent-teal, #00e5bf);
+    margin: 0 0 28px;
+    padding: 12px 24px;
+    color: var(--text-secondary, #888);
+    font-style: italic;
+}
+
+.post-body blockquote p {
+    margin-bottom: 0;
+}
+
+.post-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 28px;
+    font-size: 14px;
+}
+
+.post-body th {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #333;
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.post-body td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1a1a1a;
+    line-height: 1.5;
+    vertical-align: top;
+}
+
+.post-body tr:last-child td {
+    border-bottom: none;
+}
+
+.post-body hr {
+    border: none;
+    border-top: 1px solid #222;
+    margin: 48px 0;
+}
+
+.post-body h4 {
+    margin: 32px 0 16px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary, #888);
+}
+
+.post-body ol {
+    margin: 0 0 24px 24px;
+}
+
+.post-body ol li {
+    margin-bottom: 8px;
+}
+
+.post-body strong {
+    color: #fff;
+}
+
 .post-footer {
     margin-top: 80px;
     padding-top: 40px;

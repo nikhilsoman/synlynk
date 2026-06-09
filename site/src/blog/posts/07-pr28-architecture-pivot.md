@@ -9,8 +9,6 @@ tags: posts
 excerpt: "Four design specs, thirteen brainstorm screens, and twelve identified arc gaps. The 2026-06-07 session designed the state DB, agent identity, workspace model, and a complete gap analysis for v0.5–v1.0. The flat-file era ends here."
 ---
 
-# PR #28 — The Architecture Pivot: Designing the Rest of the OS
-
 **PR:** [chore: 2026-06-07 design session docs — state-db, identity, workspace, arc gap analysis](https://github.com/nikhilsoman/synlynk/pull/28)  
 **Merged:** 2026-06-09  
 **Contents:** 4 design specs, 13 brainstorm HTML screens, memory + devlog updates, unified roadmap
