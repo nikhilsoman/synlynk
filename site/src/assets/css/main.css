@@ -11,7 +11,7 @@
     --accent-teal: #2EC4A0;
     --text-primary: #1a1a1a;
     --text-secondary: #666;
-    --text-muted: #aaa;
+    --text-muted: #767676;
     --text-hero: #d4d4d4;
     --text-hero-sub: #ccc;
     --text-hero-body: #666;
@@ -436,7 +436,7 @@ code, .monospace {
     border-left: 3px solid var(--accent-teal, #00e5bf);
     margin: 0 0 28px;
     padding: 12px 24px;
-    color: var(--text-secondary, #888);
+    color: var(--text-secondary);
     font-style: italic;
 }
 
@@ -454,9 +454,9 @@ code, .monospace {
 .post-body th {
     text-align: left;
     padding: 10px 14px;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid #ddd;
     font-weight: 600;
-    color: var(--text-secondary, #888);
+    color: var(--text-secondary);
     font-size: 12px;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -464,7 +464,7 @@ code, .monospace {
 
 .post-body td {
     padding: 12px 14px;
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid #e5e5e5;
     line-height: 1.6;
     vertical-align: top;
 }
@@ -475,7 +475,7 @@ code, .monospace {
 
 .post-body hr {
     border: none;
-    border-top: 1px solid #222;
+    border-top: 1px solid #e5e5e5;
     margin: 48px 0;
 }
 
@@ -485,7 +485,7 @@ code, .monospace {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: var(--text-secondary, #888);
+    color: var(--text-secondary);
 }
 
 .post-body ol {
@@ -497,7 +497,8 @@ code, .monospace {
 }
 
 .post-body strong {
-    color: #fff;
+    color: var(--text-primary);
+    font-weight: 700;
 }
 
 .post-footer {
@@ -576,7 +577,7 @@ section {
 }
 
 .step p {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-secondary);
 }
 
@@ -986,14 +987,14 @@ section {
 .introduced-badge a:hover { text-decoration: underline; }
 
 .usage-block {
-    background: #f5f5f5;
+    background: #111;
     border-radius: 6px;
     padding: 16px 20px;
     margin-bottom: 12px;
 }
 
 .usage-block code {
-    font-family: 'Courier New', monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
     font-size: 14px;
     color: var(--accent-teal);
     display: block;
@@ -1002,7 +1003,7 @@ section {
 
 .usage-block .usage-note {
     font-size: 13px;
-    color: var(--text-muted);
+    color: #aaa;
 }
 
 .related-features {
@@ -1071,7 +1072,7 @@ section {
 .release-version-badge.current { color: var(--accent-teal); }
 
 .release-row-date {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
 }
 
