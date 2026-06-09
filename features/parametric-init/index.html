@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parametric init — Feature | synlynk</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body class="">
+    <nav class="sticky-nav">
+        <div class="container nav-container">
+            <a href="/" class="wordmark">
+                <img src="/assets/img/logo/icon.svg" alt="Synlynk Icon" class="nav-icon">
+                <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+            </a>
+            <div class="nav-links">
+                <a href="#how-it-works">How it works</a>
+                <a href="/features/">Features</a>
+                <a href="#install">Install</a>
+                <a href="/blog/" class="teal-link">Blog</a>
+                <a href="https://github.com/nikhilsoman/synlynk" class="github-btn">GitHub ↗</a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        
+
+
+
+
+<div class="container feature-detail">
+
+  <header class="feature-detail-header">
+    <a href="/features/" class="back-link">← All features</a>
+    <h1>Parametric init</h1>
+    <p class="feature-lead">Four --flags fill project-specific values into all generated files at init time</p>
+  </header>
+
+  <div class="feature-section">
+    <h2>What it does</h2>
+    <p>`synlynk init` accepts `--agents`, `--mode`, `--org`, `--repo`, and `--project-id` flags. The `--project-id` flag is the most consequential: it fills the GitHub Projects v2 node ID (`PJ_kwDO…`) into live GraphQL mutation blocks in all agent instruction files, making them immediately executable rather than containing placeholder text.</p>
+  </div>
+
+  <div class="feature-section">
+    <h2>OS Layer</h2>
+    <div class="os-layer-badge">
+      <span class="layer-label">Kernel — Context Engine</span>
+    </div>
+  </div>
+
+  <div class="feature-section">
+    <h2>Introduced in</h2>
+    <div class="introduced-badge">
+      <a href="/releases/v0.3/">v0.3.x</a>
+      — The Multi-Agent Foundation
+    </div>
+  </div>
+
+  
+  <div class="feature-section">
+    <h2>Usage</h2>
+    
+    <div class="usage-block">
+      <code>$ synlynk init --mode team --org acme --repo api --project-id PJ_kwDOA1234</code>
+      <span class="usage-note">All agent files generated with org, repo, and project ID filled in</span>
+    </div>
+    
+  </div>
+  
+
+  
+  <div class="feature-section">
+    <h2>Related features</h2>
+    <div class="related-features">
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <a href="/features/polyglot-agent-files/">Polyglot agent files</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      
+    </div>
+  </div>
+  
+
+  
+
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-container">
+            <div class="footer-left">
+                <div class="wordmark">
+                    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+                </div>
+                <div class="version">v1.2.0-lite</div>
+            </div>
+            <div class="footer-right">
+                <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
+                <a href="https://github.com/nikhilsoman/synlynk/discussions">Discussions</a>
+                <a href="https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md">Changelog</a>
+                <a href="/releases/">Releases</a>
+                <span class="license">MIT</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/assets/js/copy.js"></script>
+</body>
+</html>
