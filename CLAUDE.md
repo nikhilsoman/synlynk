@@ -62,4 +62,21 @@ At session start:
 
 Keep `project-docs/` docs updated during the session: roadmap status, todo checkboxes, memory decisions with `[@username]` attribution, and devlog entry in `project-docs/devlogs/<username>.md`.
 
+## Blog Post Protocol
+
+**For every PR raised in this project, draft a blog post in `docs/blog/` before or immediately after opening the PR.**
+
+Use the template in `docs/blog/README.md`. Each post must:
+
+1. State the broader goal as it was understood at the end of the *previous* PR
+2. Explain any strategic shifts that moved the goalpost in *this* PR, and why
+3. Describe what the PR shipped, technically — commands, key implementation decisions, data structures, test approach
+4. Reference any brainstorm visuals in `docs/brainstorm/` that informed decisions
+5. Summarise what was achieved on track to the goal of full autonomous multi-agent dispatch
+6. State the new goalpost as understood at the end of this PR
+
+File naming: `docs/blog/NN-prN-<version-or-theme>.md` (e.g. `08-pr29-v0.4.0-trio-bootstrap.md`).
+
+Commit the blog post in the same branch as the PR. Do not wait until after merge.
+
 Always `git pull` before modifying project-docs files to avoid conflicts in team mode.
