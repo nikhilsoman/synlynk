@@ -564,3 +564,155 @@ def test_init_with_org_stored_in_config(tmp_path, monkeypatch):
     config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
     assert config["org"] == "myorg"
     assert config["repo"] == "myrepo"
+
+
+def test_detect_remote_https(monkeypatch):
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': 'https://github.com/Dialify/rxcc.git\n', 'returncode': 0})())
+    owner, repo = synlynk.detect_remote_owner_repo()
+    assert owner == "Dialify"
+    assert repo == "rxcc"
+
+
+def test_detect_remote_ssh(monkeypatch):
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': 'git@github.com:Dialify/rxcc.git\n', 'returncode': 0})())
+    owner, repo = synlynk.detect_remote_owner_repo()
+    assert owner == "Dialify"
+    assert repo == "rxcc"
+
+
+def test_detect_remote_no_remote(monkeypatch):
+    monkeypatch.setattr(synlynk.subprocess, 'run',
+        lambda *a, **kw: type('R', (), {'stdout': '', 'returncode': 128})())
+    owner, repo = synlynk.detect_remote_owner_repo()
+    assert owner is None
+    assert repo is None
+
+
+def test_load_config_has_new_defaults(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config = synlynk.load_config()
+    assert "owner" in config
+    assert "project_id" in config
+    assert "agent_slots" in config
+    assert config["owner"] is None
+    assert config["project_id"] is None
+    assert config["agent_slots"]["claude"] == "claude"
+    assert config["agent_slots"]["agy"] == "gemini"
+    assert config["agent_slots"]["codex"] == "codex"
+
+
+def test_build_templates_config_includes_owner_and_project_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    t = synlynk._build_templates(owner="Dialify", project_id="PVT_abc")
+    config = json.loads(t["config.json"])
+    assert config["owner"] == "Dialify"
+    assert config["project_id"] == "PVT_abc"
+    assert "agent_slots" in config
+
+
+# Task 3: Repo scanning + maturity detection tests
+def test_scan_finds_docs_at_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "roadmap.md").write_text("# Roadmap")
+    (tmp_path / "todo.md").write_text("# Todo")
+    (tmp_path / "project-docs").mkdir()
+    result = synlynk._scan_repo_for_docs(".")
+    paths = result["docs"]
+    assert any("roadmap.md" in p for p in paths)
+    assert any("todo.md" in p for p in paths)
+
+
+def test_scan_ignores_docs_inside_project_docs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs" / "roadmap.md").write_text("# Roadmap")
+    result = synlynk._scan_repo_for_docs(".")
+    assert len(result["docs"]) == 0
+
+
+def test_scan_finds_agent_files_at_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("# Claude")
+    result = synlynk._scan_repo_for_docs(".")
+    assert "CLAUDE.md" in result["agent_files"]
+
+
+def test_is_evolved_repo_large_file():
+    content = "# CLAUDE.md\n" + "\n".join(f"line {i}" for i in range(150))
+    assert synlynk._is_evolved_repo(content) is True
+
+
+def test_is_evolved_repo_many_unknown_sections():
+    content = "# CLAUDE.md\n## Tech Stack\n## Key Context\n## Code Standards\n## Encryption\n"
+    assert synlynk._is_evolved_repo(content) is True
+
+
+def test_is_evolved_repo_fresh_file():
+    content = "# CLAUDE.md\nSmall file with minimal content."
+    assert synlynk._is_evolved_repo(content) is False
+
+
+# Task 4: SECTION_SIGNALS + semantic section matching tests
+def test_section_covered_live_issues():
+    content = (
+        "## Git Workflow\n"
+        "### Live Issues\n"
+        "A live issue is a production defect. Sev1 means core broken.\n"
+        "RCA doc required for sev1 incidents.\n"
+    )
+    assert synlynk._is_section_covered(content, "## Live Issues SOP") is True
+
+
+def test_section_covered_anti_amnesia():
+    content = (
+        "## Mandatory Document Maintenance\n"
+        "### Mid-Session Persistence\n"
+        "Every ~25,000 tokens write a checkpoint. Watch for compaction imminent signals.\n"
+    )
+    assert synlynk._is_section_covered(content, "## Mid-Session Anti-Amnesia Protocol") is True
+
+
+def test_section_covered_gh_projects():
+    content = (
+        'PROJECT="PVT_kwDOAAUx684BYYIM"\n'
+        'gh api graphql -f query="mutation { updateProjectV2ItemFieldValue ..."\n'
+    )
+    assert synlynk._is_section_covered(content, "## GitHub Projects v2 Integration") is True
+
+
+def test_section_covered_four_doc():
+    content = (
+        "## Mandatory Document Maintenance\n"
+        "Keep roadmap.md, devlog, costs.md, and memory.md updated.\n"
+    )
+    assert synlynk._is_section_covered(content, "## Mandatory 4-Doc Discipline") is True
+
+
+def test_section_not_covered_when_below_threshold():
+    content = "## Project\nThis is a healthcare app.\n"
+    assert synlynk._is_section_covered(content, "## Live Issues SOP") is False
+
+
+def test_section_not_covered_single_signal():
+    content = "## Workflow\nuse sev1 label for critical bugs.\n"
+    assert synlynk._is_section_covered(content, "## Live Issues SOP") is False
+
+
+# Task 5: GH Projects v2 ID extraction tests
+def test_extract_gh_ids_finds_project_id():
+    content = 'PROJECT="PVT_kwDOAAUx684BYYIM"\nsome other content\n'
+    result = synlynk._extract_gh_ids(content)
+    assert result["project_id"] == "PVT_kwDOAAUx684BYYIM"
+
+
+def test_extract_gh_ids_no_ids():
+    result = synlynk._extract_gh_ids("# No IDs here — just regular markdown")
+    assert result["project_id"] is None
+
+
+def test_extract_gh_ids_multiple_pv_ids_returns_first():
+    content = 'id1="PVT_aaa"\nid2="PVT_bbb"\n'
+    result = synlynk._extract_gh_ids(content)
+    assert result["project_id"] == "PVT_aaa"

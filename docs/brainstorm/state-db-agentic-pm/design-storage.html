@@ -1,0 +1,74 @@
+<h2>Design — Section 1: Storage Layout</h2>
+<p class="subtitle">What lives where, and how agents reach it from any worktree</p>
+
+<div class="section">
+  <p class="label">Before (current — broken)</p>
+  <div class="mockup">
+    <div class="mockup-header">repo/</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.85em;line-height:1.8">
+      <span style="color:var(--accent)">project-docs/</span> &nbsp;← tracked in git, branches per worktree, drifts<br>
+      &nbsp;&nbsp;memory.md<br>
+      &nbsp;&nbsp;roadmap.md<br>
+      &nbsp;&nbsp;todo.md<br>
+      &nbsp;&nbsp;costs.md<br>
+      &nbsp;&nbsp;devlogs/<br>
+      .synlynk/config.json &nbsp;← has project_id already<br>
+      CLAUDE.md &nbsp;← tracked in git ✓<br>
+      GEMINI.md &nbsp;← tracked in git ✓
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">After (proposed)</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">repo/ (any worktree)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.85em;line-height:1.8">
+        <span style="color:#888">project-docs/ &nbsp;← gitignored + removed</span><br><br>
+        .synlynk/<br>
+        &nbsp;&nbsp;config.json &nbsp;← project_id: "rxcc"<br>
+        &nbsp;&nbsp;context.md &nbsp;← generated, ephemeral<br><br>
+        <span style="color:#4ade80">CLAUDE.md &nbsp;← git-tracked (config)</span><br>
+        <span style="color:#4ade80">GEMINI.md &nbsp;← git-tracked (config)</span><br>
+        <span style="color:#4ade80">AGENTS.md &nbsp;← git-tracked (config)</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">~/.synlynk/projects/rxcc/ (shared, machine-local)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.85em;line-height:1.8">
+        <span style="color:#60a5fa">state.db &nbsp;← SQLite WAL</span><br><br>
+        Tables:<br>
+        &nbsp;&nbsp;memory &nbsp; — key/value + agent + ts<br>
+        &nbsp;&nbsp;roadmap &nbsp;— version, theme, status<br>
+        &nbsp;&nbsp;tasks &nbsp;&nbsp; — todo items, owner, status<br>
+        &nbsp;&nbsp;devlog &nbsp; — append-only entries<br>
+        &nbsp;&nbsp;costs &nbsp;&nbsp; — session rows<br><br>
+        <span style="color:#888">One DB, all worktrees read/write here</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">How any worktree resolves the store</p>
+  <div class="mockup">
+    <div class="mockup-header">Resolution chain (happens inside synlynk exec)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.85em;line-height:1.9">
+      CWD (any worktree path)<br>
+      &nbsp;&nbsp;↓ walk up to find .synlynk/config.json<br>
+      read project_id → "rxcc"<br>
+      &nbsp;&nbsp;↓<br>
+      open ~/.synlynk/projects/rxcc/state.db<br>
+      &nbsp;&nbsp;↓<br>
+      generate context → .synlynk/context.md<br>
+      &nbsp;&nbsp;↓<br>
+      spawn agent with context injected
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">Key invariant</p>
+  <p style="margin-top:0.5rem">No matter which worktree an agent runs in, it always reads and writes the same <code>state.db</code>. Branching is for code. State never branches.</p>
+</div>

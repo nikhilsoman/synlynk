@@ -1,0 +1,76 @@
+<h2>Human PM vs. Agentic PM — The Core Shift</h2>
+<p class="subtitle">What anchors project structure when there is no human cadence?</p>
+
+<div class="section">
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color:#f87171">Human PM anchors on time + capacity</div>
+      <div class="mockup-body" style="font-size:0.85em;line-height:1.9">
+        <strong>Sprint 3 · Week of June 9</strong><br>
+        <span style="color:#888">← time is the primary container</span><br><br>
+        <strong>Story points: 8</strong><br>
+        <span style="color:#888">← effort estimate as unit of work</span><br><br>
+        <strong>"Done" = sprint ended + accepted</strong><br>
+        <span style="color:#888">← temporal ritual defines completion</span><br><br>
+        <strong>Velocity / burndown</strong><br>
+        <span style="color:#888">← progress measured in time consumed</span><br><br>
+        <strong>Blocking = waiting on a human</strong><br>
+        <span style="color:#888">← idle time is the bottleneck</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color:#4ade80">Agentic PM anchors on dependencies + verification</div>
+      <div class="mockup-body" style="font-size:0.85em;line-height:1.9">
+        <strong>Phase: SQLite kernel</strong><br>
+        <span style="color:#888">← capability gate is the container</span><br><br>
+        <strong>Parallelism surface: 4 stories</strong><br>
+        <span style="color:#888">← concurrent work is the unit of throughput</span><br><br>
+        <strong>"Done" = verification criteria pass</strong><br>
+        <span style="color:#888">← deterministic signal defines completion</span><br><br>
+        <strong>Dependency graph / critical path</strong><br>
+        <span style="color:#888">← progress measured in gates cleared</span><br><br>
+        <strong>Blocking = unmet dependency</strong><br>
+        <span style="color:#888">← logic is the bottleneck, not time</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Proposed agentic hierarchy</p>
+  <div class="mockup">
+    <div class="mockup-header">Project → Phase → Epic → Story → Event</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:2.1">
+      <span style="color:#a78bfa">Project</span> &nbsp; synlynk<br>
+      <span style="color:#888;margin-left:1rem">↳ the stable root. never changes.</span><br><br>
+
+      <span style="color:#60a5fa">Phase</span> &nbsp;&nbsp; "SQLite Kernel" &nbsp;<span style="color:#888">← was: v0.5.0</span><br>
+      <span style="color:#888;margin-left:1rem">↳ a capability gate. after this, X becomes possible.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ has: capability_assertion, depends_on_phase</span><br>
+      <span style="color:#888;margin-left:1rem">↳ human alias: "v0.5.0", "Aug 2026" — optional labels only</span><br><br>
+
+      <span style="color:#34d399">Epic</span> &nbsp;&nbsp;&nbsp; "Context Bridge" &nbsp;<span style="color:#888">← agent domain cluster</span><br>
+      <span style="color:#888;margin-left:1rem">↳ a coherent cluster routable to one agent or domain.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ defines the parallelism surface within a phase.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ optional for small projects; essential for team builds.</span><br><br>
+
+      <span style="color:#fbbf24">Story</span> &nbsp;&nbsp; "migrate project-docs to state.db" &nbsp;<span style="color:#888">← was: task</span><br>
+      <span style="color:#888;margin-left:1rem">↳ atomic deliverable. one verifiable done state.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ has: done_criteria, depends_on (other story IDs)</span><br>
+      <span style="color:#888;margin-left:1rem">↳ no time estimate. no story points. just: done or not.</span><br><br>
+
+      <span style="color:#f87171">Event</span> &nbsp;&nbsp; "state.db created · schema v1 applied" &nbsp;<span style="color:#888">← was: devlog</span><br>
+      <span style="color:#888;margin-left:1rem">↳ append-only state change. never edited, never deleted.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ types: started · completed · blocked · decision · note</span><br>
+      <span style="color:#888;margin-left:1rem">↳ devlog becomes a filtered view of events. not a separate store.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">What collapses</p>
+  <p style="margin-top:0.5rem;font-size:0.88em">
+    <strong>roadmap + tasks → phases + epics + stories.</strong> The roadmap table was a version-level alias for what is actually a dependency graph of capability gates. Tasks were time-anchored work items. Stories replace them with dependency-anchored, verifiable deliverables.<br><br>
+    <strong>devlog → events.</strong> Session narrative (human temporal) becomes state transition log (agentic logical). A devlog view is just <code>SELECT * FROM events WHERE user='nikhil' AND date >= 'today-7d'</code>.
+  </p>
+</div>

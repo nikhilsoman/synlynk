@@ -1,0 +1,96 @@
+<h2>Design — Section 1: Workspace Structure</h2>
+<p class="subtitle">One workspace per product · One state.db · Repos are a dimension, not a boundary</p>
+
+<div class="section">
+  <p class="label">File layout — multi-repo product</p>
+  <div class="split">
+
+    <div class="mockup">
+      <div class="mockup-header">Machine-level (~/.synlynk/)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2">
+        ~/.synlynk/<br>
+        &nbsp;&nbsp;<span style="color:#e879f9">identity.key</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← Ed25519 private key<br>
+        &nbsp;&nbsp;<span style="color:#e879f9">identity.json</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← machine_uuid · public_key<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;git_user · git_email<br>
+        &nbsp;&nbsp;workspaces/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#34d399">my-product/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#60a5fa">state.db</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← ALL workspace state<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;another-product/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state.db
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">Per-repo (.synlynk/) — lightweight</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2">
+        ~/dev/my-product/<br>
+        &nbsp;&nbsp;frontend/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← git repo<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;.synlynk/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;config.json &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← { workspace_id,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repo_id: "frontend" }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context.md &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← generated snapshot<br>
+        &nbsp;&nbsp;backend/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← git repo<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;.synlynk/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;config.json &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← { workspace_id,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repo_id: "backend" }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context.md<br>
+        &nbsp;&nbsp;infra/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;.synlynk/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← same pattern
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">What lives in workspace state.db</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem">
+
+    <div style="padding:0.75rem;border:1px solid #7c3aed44;border-radius:8px">
+      <p class="label" style="color:#e879f9">Workspace-level (shared)</p>
+      <div style="font-size:0.8em;line-height:1.9">
+        arcs<br>phases<br>epics<br>memory<br>constraints<br>config<br>inbox &amp; schedules<br>roles &amp; entitlements<br>dispatch_log<br>external_refs
+      </div>
+    </div>
+
+    <div style="padding:0.75rem;border:1px solid #06523444;border-radius:8px">
+      <p class="label" style="color:#34d399">Repo-tagged (in same DB)</p>
+      <div style="font-size:0.8em;line-height:1.9">
+        stories (+ repo_id FK)<br>events (+ repo_id FK)<br>costs (+ repo_id FK)<br>agent_quotas (+ repo_id FK)<br>jobs (+ repo_id FK)
+      </div>
+    </div>
+
+    <div style="padding:0.75rem;border:1px solid #1d4ed844;border-radius:8px">
+      <p class="label" style="color:#60a5fa">New: repos table</p>
+      <div style="font-family:monospace;font-size:0.75em;line-height:1.9">
+        id TEXT PK<br>name TEXT<br>path TEXT<br>git_remote TEXT<br>joined_at TIMESTAMP
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Key invariant change from previous design</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div style="padding:0.75rem;border:1px solid #7f1d1d44;border-radius:8px;font-size:0.82em;line-height:1.8">
+      <strong style="color:#f87171">Before (project-scoped)</strong><br><br>
+      identity.key → <code>.synlynk/identity.key</code><br>
+      state.db → <code>~/.synlynk/projects/&lt;project_id&gt;/</code><br>
+      One project = one repo<br>
+      Cross-repo: not supported
+    </div>
+    <div style="padding:0.75rem;border:1px solid #06523444;border-radius:8px;font-size:0.82em;line-height:1.8">
+      <strong style="color:#34d399">After (machine + workspace scoped)</strong><br><br>
+      identity.key → <code>~/.synlynk/identity.key</code><br>
+      state.db → <code>~/.synlynk/workspaces/&lt;id&gt;/</code><br>
+      One workspace = N repos (or 1 — transparent)<br>
+      Cross-repo Epics: first-class
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:0.75rem;padding:0.875rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:0.84em;line-height:1.75">
+  <p class="label">Solo dev experience — zero friction</p>
+  <code>synlynk init</code> in a single repo creates a workspace with one member. The user sees nothing different — no workspace commands, no new config to understand. The workspace directory exists at <code>~/.synlynk/workspaces/&lt;id&gt;/</code> but is invisible until you add a second repo.
+</div>
