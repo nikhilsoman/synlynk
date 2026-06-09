@@ -98,18 +98,18 @@ def test_flatline_no_trigger_when_fewer_than_3(project_dir):
         {"command": "npm test", "exit_code": 1},
         {"command": "npm test", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="npm test")
     assert not (project_dir / ".synlynk" / "sentinel.md").exists()
 
 
 def test_flatline_triggers_on_3_consecutive(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     _write_telemetry(project_dir, [
-        {"command": "npm test", "exit_code": 1},
-        {"command": "npm test", "exit_code": 1},
-        {"command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="npm test")
     sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
     assert "FLATLINE" in sentinel
     assert "npm test" in sentinel
@@ -117,11 +117,11 @@ def test_flatline_triggers_on_3_consecutive(project_dir, monkeypatch):
 
 def test_flatline_no_trigger_when_different_commands(project_dir):
     _write_telemetry(project_dir, [
-        {"command": "npm test", "exit_code": 1},
-        {"command": "npm build", "exit_code": 1},
-        {"command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm build", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="npm test")
     assert not (project_dir / ".synlynk" / "sentinel.md").exists()
 
 
@@ -129,11 +129,11 @@ def test_flatline_appends_to_existing_sentinel(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     (project_dir / ".synlynk" / "sentinel.md").write_text("# Sentinel Alerts\n- [old alert]\n")
     _write_telemetry(project_dir, [
-        {"command": "make build", "exit_code": 1},
-        {"command": "make build", "exit_code": 1},
-        {"command": "make build", "exit_code": 1},
+        {"type": "exec", "command": "make build", "exit_code": 1},
+        {"type": "exec", "command": "make build", "exit_code": 1},
+        {"type": "exec", "command": "make build", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="make build")
     sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
     assert "old alert" in sentinel
     assert "make build" in sentinel
@@ -496,7 +496,7 @@ def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'set_state', lambda s: None)
     monkeypatch.setattr(synlynk, '_check_costs_freshness', lambda: None)
     monkeypatch.setattr(synlynk, 'log_telemetry_event', lambda e: None)
-    monkeypatch.setattr(synlynk, 'check_flatline', lambda: None)
+    monkeypatch.setattr(synlynk, 'check_sentinel_patterns', lambda **kw: None)
     monkeypatch.setattr(synlynk.WatchDaemon, '_is_running', lambda self: False)
 
     result = synlynk.exec_command(['python3', '-c', 'import sys; sys.exit(7)'])
