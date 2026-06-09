@@ -581,10 +581,68 @@ def _check_pre_exec_gate(force: bool = False) -> bool:
     return True
 
 
+QUOTA_PATTERNS = [
+    "rate limit", "quota exceeded", "resource exhausted",
+    "billing", "insufficient_quota", "too many requests",
+    "RESOURCE_EXHAUSTED",
+]
+
+
 def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                              cmd: str = "") -> None:
-    """Stub — implemented in Task 6."""
-    pass
+    """Detects flatline, success loop, and quota-exhausted; writes sentinel alerts."""
+    telemetry_file = ".synlynk/telemetry.json"
+    data = []
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    execs = [e for e in data if e.get("type") == "exec"]
+
+    # Pattern 1: Flatline — last 3 execs same command, all non-zero exit
+    if len(execs) >= 3:
+        last3 = execs[-3:]
+        if (all(e.get("exit_code", 0) != 0 for e in last3) and
+                all(e.get("command") == last3[0].get("command") for e in last3)):
+            fail_cmd = last3[0].get("command", "unknown")
+            _write_sentinel_alert(
+                "CRITICAL", "FLATLINE",
+                f"`{fail_cmd}` failed 3 times in a row — possible hallucination loop."
+            )
+            print(f"\n  \U0001f6a8 [FLATLINE] `{fail_cmd}` failed 3x — consider manual intervention.")
+
+    # Pattern 2: Success loop — last 5 execs same command, all exit 0, within 10 min
+    if len(execs) >= 5:
+        last5 = execs[-5:]
+        if (all(e.get("exit_code", 1) == 0 for e in last5) and
+                all(e.get("command") == last5[0].get("command") for e in last5)):
+            ts_first = last5[0].get("_ts", 0)
+            ts_last = last5[-1].get("_ts", 0)
+            window_min = (ts_last - ts_first) / 60 if ts_first else 999
+            if window_min < 10:
+                _write_sentinel_alert(
+                    "WARN", "SUCCESS_LOOP",
+                    f"Same command succeeded 5x in {window_min:.1f} min — "
+                    "possible automated loop burning tokens."
+                )
+                print(f"\n  ⚠ [SUCCESS_LOOP] Same command 5x in {window_min:.1f} min.")
+
+    # Pattern 3: Quota-exhausted — keyword in captured output
+    if output_text:
+        lower = output_text.lower()
+        for phrase in QUOTA_PATTERNS:
+            if phrase.lower() in lower:
+                cli = cmd.split()[0] if cmd else "agent"
+                _write_sentinel_alert(
+                    "CRITICAL", "QUOTA_EXHAUSTED",
+                    f"`{cli}` — matched \"{phrase}\". "
+                    "Check plan limits or switch agent CLI."
+                )
+                print(f"\n  \U0001f6a8 [QUOTA_EXHAUSTED] Matched \"{phrase}\" in output.")
+                break
 
 
 def check_daemon_health() -> None:

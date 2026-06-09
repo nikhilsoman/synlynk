@@ -878,3 +878,58 @@ def test_check_stall_detects_old_active(project_dir):
     synlynk.check_stall()
     alerts = synlynk._read_sentinel_alerts(severity="WARN")
     assert any("STALL" in a for a in alerts)
+
+
+def _write_telemetry_typed(project_dir, events):
+    import json as _json
+    (project_dir / ".synlynk" / "telemetry.json").write_text(_json.dumps(events))
+
+
+def test_check_sentinel_flatline(project_dir):
+    now = time.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 1, "_ts": now - 60},
+        {"type": "exec", "command": "claude", "exit_code": 1, "_ts": now - 40},
+        {"type": "exec", "command": "claude", "exit_code": 1, "_ts": now - 20},
+    ]
+    _write_telemetry_typed(project_dir, events)
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="claude")
+    alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert any("FLATLINE" in a for a in alerts)
+
+
+def test_check_sentinel_success_loop(project_dir):
+    now = time.time()
+    events = [
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 480},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 360},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 240},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 120},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 10},
+    ]
+    _write_telemetry_typed(project_dir, events)
+    synlynk.check_sentinel_patterns(output_text="", exit_code=0, cmd="claude --print hi")
+    alerts = synlynk._read_sentinel_alerts(severity="WARN")
+    assert any("SUCCESS_LOOP" in a for a in alerts)
+
+
+def test_check_sentinel_quota_exhausted(project_dir):
+    synlynk.check_sentinel_patterns(
+        output_text="Error: rate limit exceeded. Please wait.",
+        exit_code=1,
+        cmd="claude"
+    )
+    alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert any("QUOTA_EXHAUSTED" in a for a in alerts)
+
+
+def test_check_sentinel_no_false_positive(project_dir):
+    now = time.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 0, "_ts": now - 60},
+        {"type": "exec", "command": "gemini", "exit_code": 0, "_ts": now - 40},
+        {"type": "exec", "command": "claude", "exit_code": 0, "_ts": now - 20},
+    ]
+    _write_telemetry_typed(project_dir, events)
+    synlynk.check_sentinel_patterns(output_text="", exit_code=0, cmd="claude")
+    assert synlynk._read_sentinel_alerts() == []
