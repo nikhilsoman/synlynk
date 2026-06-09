@@ -503,7 +503,7 @@ def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
         f.write(existing + line)
 
 
-def _read_sentinel_alerts(severity=None):
+def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
     """Returns alert lines from sentinel.md, optionally filtered by severity."""
     sentinel_file = ".synlynk/sentinel.md"
     if not os.path.exists(sentinel_file):
@@ -516,8 +516,10 @@ def _read_sentinel_alerts(severity=None):
                 continue
             if severity is None:
                 alerts.append(line)
-            elif f"[{severity}]" in line:
-                alerts.append(line)
+            else:
+                m = re.match(r'^- \[([A-Z]+)\]', line)
+                if m and m.group(1) == severity:
+                    alerts.append(line)
     return alerts
 
 
