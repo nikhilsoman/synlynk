@@ -187,6 +187,45 @@ No dead releases.
 
 ---
 
+### v0.3.1 — Sentinel + Observability Hardening
+
+**OS Layer:** Kernel — deeper health signals, closing regression gaps  
+**Infrastructure:** Flat files (unchanged)  
+**Theme:** synlynk knows when something is wrong before you do
+
+**Ships:**
+- **Token scraping restored** — `extract_tokens()` + `update_costs()` re-wired into `exec_command`.
+  Non-interactive: tee stdout to a temp buffer while preserving TTY pass-through. Interactive mode
+  unchanged. Feeds `costs.md` automatically after every exec (regression from v1.2.x).
+- **Session cost pulse** — print `tokens: N in / N out  est. $0.0NNN` after each exec finishes
+  (regression from v1.2.x). Zero cost = silent, non-zero always prints.
+- **Zombie daemon detection** — `check_flatline()` extended: if pidfile exists but PID is dead,
+  write CRITICAL sentinel alert and print recovery instructions. `synlynk status` surfaces it.
+- **Stall detection** — if an exec has been running longer than a configurable threshold
+  (`exec_timeout_minutes` in `.synlynk/config.json`, default 30), emit a WARN alert to sentinel.
+  Detection runs on the next `synlynk status` or `synlynk exec` call, not as a background thread.
+- **Quota-exhausted exit** — after exec, scan captured output for known rate-limit/quota strings
+  per AI CLI (claude, gemini, codex). On match, write CRITICAL sentinel alert with the CLI name
+  and the matched phrase.
+- **Success loop detection** — if the last 5 execs share the same command and all exit 0, emit WARN:
+  rapid repeated success of the same command with no intervening different command is suspicious.
+- **Burn rate + runway** — `synlynk status` computes avg $/exec from telemetry, shows estimated
+  sessions remaining before budget exhausted.
+- **Context bloat warning** — after `generate_context()`, if `context.md` exceeds 32 KB warn:
+  "Context is large (N KB) — consider archiving completed todos and old devlog entries."
+- **Sentinel severity + ack** — alerts gain severity: `INFO`, `WARN`, `CRITICAL`. `synlynk sentinel
+  list` shows all active alerts with age. `synlynk sentinel clear` clears resolved alerts.
+- **Pre-exec gate** — if any CRITICAL sentinel alert is active, print it before exec and require
+  `--force` to proceed. WARN alerts print but do not block.
+
+**Unlock:** `synlynk status` is now a reliable health dashboard. CRITICAL conditions surface and
+block automatically. Token cost tracking works without manual log entries.
+
+**Required before v0.5.0:** `extract_tokens()` feeds `agent_quotas.used_tokens` in the v0.5.0
+state.db schema. This patch must ship before the capability engine can be built correctly.
+
+---
+
 ### v0.4.0 — Conventions + Trio Bootstrap
 
 **OS Layer:** IPC — Inter-agent communication established  

@@ -6,7 +6,8 @@
 | Version | Theme | OS Layer | Infrastructure | Status | Target |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | v0.1–v0.3.0 | Kernel + Filesystem | exec · telemetry · flatline · budget · project-docs ledger · enriched templates | Flat files | ✅ Shipped | June 2026 |
-| v0.4.0 | Conventions + Trio Bootstrap | IPC — shared rules, Architect→Build→Verify pipeline, `synlynk run` | Flat files | 🔜 Next | July 2026 |
+| v0.3.1 | Sentinel + Observability Hardening | Token scraping restored · zombie/stall/quota/loop detection · burn rate · context bloat · sentinel severity + ack | Flat files | 🔜 Next | June 2026 |
+| v0.4.0 | Conventions + Trio Bootstrap | IPC — shared rules, Architect→Build→Verify pipeline, `synlynk run` | Flat files | Planned | July 2026 |
 | v0.5.0 | Capability Engine | Scheduler — data-driven routing, `capability.json` → SQLite | **SQLite WAL** | Planned | Aug 2026 |
 | v0.6.0 | Job Control + Constraints | IPC complete — constraint propagation, job state machine | SQLite extended | Planned | Sep 2026 |
 | v0.7.0 | Async Pipeline + Daemon | Shell — `synlynk dispatch`, daemon, `synlynk review` TUI | **HTTP Context Server** | Planned | Oct 2026 |
