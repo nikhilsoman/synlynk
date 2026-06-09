@@ -315,7 +315,7 @@ code, .monospace {
 }
 
 .post-date {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     min-width: 100px;
     padding-top: 8px;
@@ -379,8 +379,14 @@ code, .monospace {
     line-height: 1.8;
 }
 
-.post-body h2, .post-body h3 {
-    margin: 40px 0 20px;
+.post-body h2 {
+    font-size: 26px;
+    margin: 48px 0 20px;
+}
+
+.post-body h3 {
+    font-size: 20px;
+    margin: 40px 0 16px;
 }
 
 .post-body p {
@@ -397,15 +403,15 @@ code, .monospace {
 
 .post-body > p:first-child strong:first-child {
     color: var(--text-secondary, #888);
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .post-body code {
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 13px;
+    font-size: 14px;
     background: var(--bg-secondary, #111);
     color: var(--accent-teal, #00e5bf);
-    padding: 2px 6px;
+    padding: 2px 7px;
     border-radius: 3px;
 }
 
@@ -422,7 +428,7 @@ code, .monospace {
     background: none;
     color: #cdd9e5;
     padding: 0;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.7;
 }
 
@@ -442,7 +448,7 @@ code, .monospace {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 28px;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .post-body th {
@@ -451,15 +457,15 @@ code, .monospace {
     border-bottom: 1px solid #333;
     font-weight: 600;
     color: var(--text-secondary, #888);
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 1px;
     text-transform: uppercase;
 }
 
 .post-body td {
-    padding: 10px 14px;
+    padding: 12px 14px;
     border-bottom: 1px solid #1a1a1a;
-    line-height: 1.5;
+    line-height: 1.6;
     vertical-align: top;
 }
 
