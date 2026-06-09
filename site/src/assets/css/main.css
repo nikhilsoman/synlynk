@@ -337,13 +337,13 @@ code, .monospace {
 }
 
 .post-preview .excerpt {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-secondary);
     margin-bottom: 16px;
 }
 
 .read-more {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--accent-teal);
     text-decoration: none;
 }
