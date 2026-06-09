@@ -995,3 +995,36 @@ def test_compute_burn_rate_sparse_data(project_dir):
     rate, remaining = synlynk._compute_burn_rate()
     assert rate == 0.0
     assert remaining is None
+
+
+def test_sentinel_list_empty(project_dir, capsys):
+    synlynk.sentinel_list()
+    out = capsys.readouterr().out
+    assert "No active" in out
+
+
+def test_sentinel_list_shows_alerts(project_dir, capsys):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "daemon dead")
+    synlynk.sentinel_list()
+    out = capsys.readouterr().out
+    assert "ZOMBIE_DAEMON" in out
+
+
+def test_sentinel_clear_all(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "daemon dead")
+    synlynk._write_sentinel_alert("WARN", "STALL", "stalled")
+    synlynk.sentinel_clear()
+    assert synlynk._read_sentinel_alerts() == []
+
+
+def test_sentinel_clear_by_severity(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "daemon dead")
+    synlynk._write_sentinel_alert("WARN", "STALL", "stalled")
+    synlynk.sentinel_clear(severity="WARN")
+    alerts = synlynk._read_sentinel_alerts()
+    assert len(alerts) == 1
+    assert "ZOMBIE_DAEMON" in alerts[0]
+
+
+def test_version_is_031(project_dir):
+    assert synlynk.VERSION == "0.3.1"

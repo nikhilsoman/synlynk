@@ -10,7 +10,7 @@ import threading
 import urllib.request
 from typing import Optional
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 
 def get_username() -> str:
@@ -692,6 +692,51 @@ def check_stall() -> None:
     except (IOError, OSError):
         pass
 
+
+def sentinel_list() -> None:
+    """Prints all active sentinel alerts."""
+    alerts = _read_sentinel_alerts()
+    if not alerts:
+        print("  No active sentinel alerts.")
+        return
+    print(f"  {len(alerts)} active alert(s):")
+    for a in alerts:
+        print(f"    {a}")
+
+
+def sentinel_clear(severity: Optional[str] = None, code: Optional[str] = None) -> None:
+    """Removes matching alerts from sentinel.md. No args = clear all structured alerts."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        print("  No sentinel file found.")
+        return
+    with open(sentinel_file) as f:
+        lines = f.readlines()
+
+    kept = []
+    removed = 0
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("- ["):
+            kept.append(line)
+            continue
+        # Only handle structured format: - [SEVERITY] [TIMESTAMP] CODE: message
+        m = re.match(r'^- \[([A-Z]+)\]', stripped)
+        if not m:
+            kept.append(line)  # old format — keep as-is
+            continue
+        line_sev = m.group(1)
+        if severity and line_sev != severity:
+            kept.append(line)
+            continue
+        if code and code not in stripped:
+            kept.append(line)
+            continue
+        removed += 1
+
+    with open(sentinel_file, "w") as f:
+        f.writelines(kept)
+    print(f"  Cleared {removed} alert(s).")
 
 
 def _compute_burn_rate() -> tuple:
@@ -1495,6 +1540,17 @@ def main() -> None:
     status_parser.add_argument("--json", action="store_true", dest="json_output",
                                help="Output machine-readable JSON")
 
+    sentinel_parser = subparsers.add_parser("sentinel",
+                                             help="View and manage sentinel alerts")
+    sentinel_sub = sentinel_parser.add_subparsers(dest="sentinel_action")
+    sentinel_sub.add_parser("list", help="List all active sentinel alerts")
+    sentinel_clear_parser = sentinel_sub.add_parser("clear", help="Clear sentinel alerts")
+    sentinel_clear_parser.add_argument("--severity",
+                                       choices=["CRITICAL", "WARN", "INFO"],
+                                       help="Clear only alerts of this severity")
+    sentinel_clear_parser.add_argument("--code",
+                                       help="Clear only alerts with this code")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -1518,6 +1574,15 @@ def main() -> None:
         checkpoint()
     elif args.command == "status":
         cmd_status(json_output=args.json_output)
+    elif args.command == "sentinel":
+        action = getattr(args, 'sentinel_action', None)
+        if action == "clear":
+            sentinel_clear(
+                severity=getattr(args, 'severity', None),
+                code=getattr(args, 'code', None),
+            )
+        else:
+            sentinel_list()  # default: list
     else:
         parser.print_help()
 
