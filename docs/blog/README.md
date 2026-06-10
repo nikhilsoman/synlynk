@@ -15,6 +15,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [06](./06-pr27-v0.4.0-autonomy-driver.md) | PR #27 — v0.4.0: The Autonomy Driver | [#27](https://github.com/nikhilsoman/synlynk/pull/27) | open |
 | [07](./07-pr28-architecture-pivot.md) | PR #28 — The Architecture Pivot | [#28](https://github.com/nikhilsoman/synlynk/pull/28) | 2026-06-09 |
 | [08](./08-pr29-v0.3.1-sentinel-observability.md) | PR #29 — v0.3.1: When the OS Learns to Self-Diagnose | [#29](https://github.com/nikhilsoman/synlynk/pull/29) | open |
+| [09](./09-pr30-e2e-test-suite.md) | PR #30 — The E2E Safety Net | [#30](https://github.com/nikhilsoman/synlynk/pull/30) | open |
 
 ## Per-PR Post Template
 
