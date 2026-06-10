@@ -31,9 +31,9 @@ The entire CLI is `bin/synlynk.py`. Key functions and their responsibilities:
 | Function | What it does |
 |---|---|
 | `init()` | Creates `project-docs/` (roadmap.md, todo.md, memory.md, costs.md, devlogs/) and `.synlynk/config.json`. Also writes CLAUDE.md, GEMINI.md, AI_INSTRUCTIONS.md, .cursorrules at the repo root. Skips existing files. |
-| `exec_command(cmd_args)` | Main wrapper: calls `generate_context()` → `check_budgets()` → spawns subprocess → `update_costs()` → `log_telemetry()` → `check_flatline()` |
+| `exec_command(cmd_args)` | Main wrapper: calls `generate_context()` → `check_budgets()` → spawns subprocess → `update_costs()` → `log_telemetry()` → `check_sentinel_patterns()` |
 | `generate_context()` | Reads `project-docs/memory.md`, `roadmap.md`, `todo.md` and concatenates them into `.synlynk/context.md` |
-| `check_flatline()` | Reads `.synlynk/telemetry.json`; alerts if the last 3 entries share the same command and all have non-zero exit codes |
+| `check_sentinel_patterns(output_text, exit_code, cmd)` | Reads `.synlynk/telemetry.json`; detects FLATLINE (3 consecutive failures), SUCCESS_LOOP, QUOTA_EXHAUSTED, and other patterns; writes alerts to `sentinel.md` |
 | `check_budgets()` | Compares cumulative cost/request totals from telemetry against limits in `.synlynk/config.json` |
 | `update_costs()` | Appends a row to `project-docs/costs.md` and prints the Budget Pulse summary |
 | `log_telemetry()` | Appends to `.synlynk/telemetry.json`, keeping only the last 100 entries |

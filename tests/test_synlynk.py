@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 import json
 import pytest
 
@@ -97,18 +98,18 @@ def test_flatline_no_trigger_when_fewer_than_3(project_dir):
         {"command": "npm test", "exit_code": 1},
         {"command": "npm test", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="npm test")
     assert not (project_dir / ".synlynk" / "sentinel.md").exists()
 
 
 def test_flatline_triggers_on_3_consecutive(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     _write_telemetry(project_dir, [
-        {"command": "npm test", "exit_code": 1},
-        {"command": "npm test", "exit_code": 1},
-        {"command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="npm test")
     sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
     assert "FLATLINE" in sentinel
     assert "npm test" in sentinel
@@ -116,11 +117,11 @@ def test_flatline_triggers_on_3_consecutive(project_dir, monkeypatch):
 
 def test_flatline_no_trigger_when_different_commands(project_dir):
     _write_telemetry(project_dir, [
-        {"command": "npm test", "exit_code": 1},
-        {"command": "npm build", "exit_code": 1},
-        {"command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
+        {"type": "exec", "command": "npm build", "exit_code": 1},
+        {"type": "exec", "command": "npm test", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="npm test")
     assert not (project_dir / ".synlynk" / "sentinel.md").exists()
 
 
@@ -128,11 +129,11 @@ def test_flatline_appends_to_existing_sentinel(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     (project_dir / ".synlynk" / "sentinel.md").write_text("# Sentinel Alerts\n- [old alert]\n")
     _write_telemetry(project_dir, [
-        {"command": "make build", "exit_code": 1},
-        {"command": "make build", "exit_code": 1},
-        {"command": "make build", "exit_code": 1},
+        {"type": "exec", "command": "make build", "exit_code": 1},
+        {"type": "exec", "command": "make build", "exit_code": 1},
+        {"type": "exec", "command": "make build", "exit_code": 1},
     ])
-    synlynk.check_flatline()
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="make build")
     sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
     assert "old alert" in sentinel
     assert "make build" in sentinel
@@ -495,7 +496,7 @@ def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'set_state', lambda s: None)
     monkeypatch.setattr(synlynk, '_check_costs_freshness', lambda: None)
     monkeypatch.setattr(synlynk, 'log_telemetry_event', lambda e: None)
-    monkeypatch.setattr(synlynk, 'check_flatline', lambda: None)
+    monkeypatch.setattr(synlynk, 'check_sentinel_patterns', lambda **kw: None)
     monkeypatch.setattr(synlynk.WatchDaemon, '_is_running', lambda self: False)
 
     result = synlynk.exec_command(['python3', '-c', 'import sys; sys.exit(7)'])
@@ -716,3 +717,314 @@ def test_extract_gh_ids_multiple_pv_ids_returns_first():
     content = 'id1="PVT_aaa"\nid2="PVT_bbb"\n'
     result = synlynk._extract_gh_ids(content)
     assert result["project_id"] == "PVT_aaa"
+
+
+def test_write_sentinel_alert_creates_file(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "TEST_CODE", "something went wrong")
+    sentinel = (project_dir / ".synlynk" / "sentinel.md")
+    assert sentinel.exists()
+    content = sentinel.read_text()
+    assert "[CRITICAL]" in content
+    assert "TEST_CODE" in content
+    assert "something went wrong" in content
+
+
+def test_write_sentinel_alert_appends(project_dir):
+    synlynk._write_sentinel_alert("WARN", "CODE_A", "first alert")
+    synlynk._write_sentinel_alert("CRITICAL", "CODE_B", "second alert")
+    content = (project_dir / ".synlynk" / "sentinel.md").read_text()
+    assert "CODE_A" in content
+    assert "CODE_B" in content
+
+
+def test_read_sentinel_alerts_all(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "CODE_A", "first")
+    synlynk._write_sentinel_alert("WARN", "CODE_B", "second")
+    alerts = synlynk._read_sentinel_alerts()
+    assert len(alerts) == 2
+
+
+def test_read_sentinel_alerts_by_severity(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "CODE_A", "first")
+    synlynk._write_sentinel_alert("WARN", "CODE_B", "second")
+    criticals = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert len(criticals) == 1
+    assert "CODE_A" in criticals[0]
+
+
+def test_read_sentinel_alerts_empty(project_dir):
+    assert synlynk._read_sentinel_alerts() == []
+
+
+def test_read_sentinel_alerts_preserves_old_format(project_dir):
+    # Old free-form lines must not crash the reader
+    sentinel = project_dir / ".synlynk" / "sentinel.md"
+    sentinel.write_text(
+        "# Sentinel Alerts\n"
+        "- [2026-06-09 14:23] FLATLINE: `claude` failed 3x in a row [@nikhilsoman]\n"
+    )
+    alerts = synlynk._read_sentinel_alerts()
+    assert len(alerts) == 1  # old-format line returned as-is
+
+
+def test_extract_tokens_claude_format(project_dir):
+    text = "Input tokens: 4821\nOutput tokens: 312\nTotal cost: $0.02"
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 4821
+    assert out_t == 312
+
+
+def test_extract_tokens_claude_json_format(project_dir):
+    text = '{"input_tokens": 1000, "output_tokens": 250}'
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 1000
+    assert out_t == 250
+
+
+def test_extract_tokens_gemini_format(project_dir):
+    text = "Tokens used: 800 input, 150 output"
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 800
+    assert out_t == 150
+
+
+def test_extract_tokens_total_fallback(project_dir):
+    text = "Total tokens: 1000"
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 800   # 80%
+    assert out_t == 200  # 20%
+
+
+def test_extract_tokens_no_match(project_dir):
+    in_t, out_t = synlynk.extract_tokens("no token info here")
+    assert in_t == 0
+    assert out_t == 0
+
+
+def test_update_costs_appends_row(project_dir):
+    synlynk.update_costs("claude --print hello", 1000, 200, 30.0)
+    content = (project_dir / "project-docs" / "costs.md").read_text()
+    assert "1000/200" in content
+    # cost: (1000/1000*0.003) + (200/1000*0.015) = 0.003 + 0.003 = $0.0060
+    assert "$0.0060" in content
+
+
+def test_update_costs_missing_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # Should not raise even if costs.md doesn't exist
+    synlynk.update_costs("claude", 100, 50, 5.0)
+
+
+def test_is_interactive_default(project_dir):
+    assert synlynk._is_interactive(["claude"]) is True
+
+
+def test_is_interactive_print_flag(project_dir):
+    assert synlynk._is_interactive(["claude", "--print", "hello"]) is False
+
+
+def test_is_interactive_no_tty_flag(project_dir):
+    assert synlynk._is_interactive(["claude", "--no-tty"]) is False
+
+
+def test_is_interactive_json_flag(project_dir):
+    assert synlynk._is_interactive(["gemini", "--output-format", "json"]) is False
+
+
+def test_is_interactive_noninteractive_flag(project_dir):
+    assert synlynk._is_interactive(["claude", "--non-interactive"]) is False
+
+
+def test_daemon_health_stopped(project_dir):
+    daemon = synlynk.WatchDaemon()
+    assert daemon._health() == "stopped"
+
+
+def test_daemon_health_zombie(project_dir):
+    # Write a pidfile with a PID that doesn't exist
+    (project_dir / ".synlynk" / "watch.pid").write_text("99999999")
+    daemon = synlynk.WatchDaemon()
+    assert daemon._health() == "zombie"
+
+
+def test_check_daemon_health_writes_sentinel(project_dir):
+    (project_dir / ".synlynk" / "watch.pid").write_text("99999999")
+    synlynk.check_daemon_health()
+    alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert any("ZOMBIE_DAEMON" in a for a in alerts)
+
+
+def test_check_stall_no_stall(project_dir):
+    # State is "stopped", no stall
+    (project_dir / ".synlynk" / "state").write_text("stopped")
+    synlynk.check_stall()
+    assert synlynk._read_sentinel_alerts(severity="WARN") == []
+
+
+def test_check_stall_active_recent(project_dir):
+    # State is "active" but only 1 minute old — no stall
+    (project_dir / ".synlynk" / "state").write_text("active")
+    synlynk.check_stall()
+    assert synlynk._read_sentinel_alerts(severity="WARN") == []
+
+
+def test_check_stall_detects_old_active(project_dir):
+    # State is "active" and 35 minutes old — stall
+    state_file = project_dir / ".synlynk" / "state"
+    state_file.write_text("active")
+    # Backdate mtime by 35 minutes
+    old_time = time.time() - (35 * 60)
+    os.utime(str(state_file), (old_time, old_time))
+    synlynk.check_stall()
+    alerts = synlynk._read_sentinel_alerts(severity="WARN")
+    assert any("STALL" in a for a in alerts)
+
+
+def _write_telemetry_typed(project_dir, events):
+    import json as _json
+    (project_dir / ".synlynk" / "telemetry.json").write_text(_json.dumps(events))
+
+
+def test_check_sentinel_flatline(project_dir):
+    now = time.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 1, "_ts": now - 60},
+        {"type": "exec", "command": "claude", "exit_code": 1, "_ts": now - 40},
+        {"type": "exec", "command": "claude", "exit_code": 1, "_ts": now - 20},
+    ]
+    _write_telemetry_typed(project_dir, events)
+    synlynk.check_sentinel_patterns(output_text="", exit_code=1, cmd="claude")
+    alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert any("FLATLINE" in a for a in alerts)
+
+
+def test_check_sentinel_success_loop(project_dir):
+    now = time.time()
+    events = [
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 480},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 360},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 240},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 120},
+        {"type": "exec", "command": "claude --print hi", "exit_code": 0, "_ts": now - 10},
+    ]
+    _write_telemetry_typed(project_dir, events)
+    synlynk.check_sentinel_patterns(output_text="", exit_code=0, cmd="claude --print hi")
+    alerts = synlynk._read_sentinel_alerts(severity="WARN")
+    assert any("SUCCESS_LOOP" in a for a in alerts)
+
+
+def test_check_sentinel_quota_exhausted(project_dir):
+    synlynk.check_sentinel_patterns(
+        output_text="Error: rate limit exceeded. Please wait.",
+        exit_code=1,
+        cmd="claude"
+    )
+    alerts = synlynk._read_sentinel_alerts(severity="CRITICAL")
+    assert any("QUOTA_EXHAUSTED" in a for a in alerts)
+
+
+def test_check_sentinel_no_false_positive(project_dir):
+    now = time.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 0, "_ts": now - 60},
+        {"type": "exec", "command": "gemini", "exit_code": 0, "_ts": now - 40},
+        {"type": "exec", "command": "claude", "exit_code": 0, "_ts": now - 20},
+    ]
+    _write_telemetry_typed(project_dir, events)
+    synlynk.check_sentinel_patterns(output_text="", exit_code=0, cmd="claude")
+    assert synlynk._read_sentinel_alerts() == []
+
+
+def test_pre_exec_gate_no_alerts(project_dir):
+    assert synlynk._check_pre_exec_gate(force=False) is True
+
+
+def test_pre_exec_gate_warn_allows(project_dir):
+    synlynk._write_sentinel_alert("WARN", "SUCCESS_LOOP", "loop detected")
+    assert synlynk._check_pre_exec_gate(force=False) is True
+
+
+def test_pre_exec_gate_critical_blocks(project_dir, capsys):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "zombie")
+    result = synlynk._check_pre_exec_gate(force=False)
+    assert result is False
+    out = capsys.readouterr().out
+    assert "CRITICAL" in out or "blocked" in out.lower()
+
+
+def test_pre_exec_gate_force_bypasses_critical(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "zombie")
+    assert synlynk._check_pre_exec_gate(force=True) is True
+
+
+def test_compute_burn_rate_no_data(project_dir):
+    rate, remaining = synlynk._compute_burn_rate()
+    assert rate == 0.0
+    assert remaining is None
+
+
+def test_compute_burn_rate_with_costed_events(project_dir):
+    import json as _json
+    import time as _t
+    now = _t.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 0,
+         "_ts": now - i * 60, "in_tokens": 1000, "out_tokens": 200}
+        for i in range(5)
+    ]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(_json.dumps(events))
+    rate, remaining = synlynk._compute_burn_rate()
+    # est_cost per exec = (1000/1000*0.003) + (200/1000*0.015) = 0.003 + 0.003 = 0.006
+    assert abs(rate - 0.006) < 0.001
+    assert remaining is not None
+    assert remaining > 0
+
+
+def test_compute_burn_rate_sparse_data(project_dir):
+    # Fewer than 3 costed events — should return (0.0, None)
+    import json as _json
+    import time as _t
+    now = _t.time()
+    events = [
+        {"type": "exec", "command": "claude", "exit_code": 0,
+         "_ts": now - 60, "in_tokens": 0, "out_tokens": 0},
+        {"type": "exec", "command": "claude", "exit_code": 0,
+         "_ts": now - 30, "in_tokens": 0, "out_tokens": 0},
+    ]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(_json.dumps(events))
+    rate, remaining = synlynk._compute_burn_rate()
+    assert rate == 0.0
+    assert remaining is None
+
+
+def test_sentinel_list_empty(project_dir, capsys):
+    synlynk.sentinel_list()
+    out = capsys.readouterr().out
+    assert "No active" in out
+
+
+def test_sentinel_list_shows_alerts(project_dir, capsys):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "daemon dead")
+    synlynk.sentinel_list()
+    out = capsys.readouterr().out
+    assert "ZOMBIE_DAEMON" in out
+
+
+def test_sentinel_clear_all(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "daemon dead")
+    synlynk._write_sentinel_alert("WARN", "STALL", "stalled")
+    synlynk.sentinel_clear()
+    assert synlynk._read_sentinel_alerts() == []
+
+
+def test_sentinel_clear_by_severity(project_dir):
+    synlynk._write_sentinel_alert("CRITICAL", "ZOMBIE_DAEMON", "daemon dead")
+    synlynk._write_sentinel_alert("WARN", "STALL", "stalled")
+    synlynk.sentinel_clear(severity="WARN")
+    alerts = synlynk._read_sentinel_alerts()
+    assert len(alerts) == 1
+    assert "ZOMBIE_DAEMON" in alerts[0]
+
+
+def test_version_is_031(project_dir):
+    assert synlynk.VERSION == "0.3.1"
