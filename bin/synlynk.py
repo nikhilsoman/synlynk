@@ -6,10 +6,11 @@ import subprocess
 import time
 import json
 import re
+import threading
 import urllib.request
 from typing import Optional
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 
 def get_username() -> str:
@@ -60,6 +61,7 @@ def load_config() -> dict:
         "agent_slots": {"claude": "claude", "agy": "gemini", "codex": "codex"},
         "team": None,
         "sync_endpoint": None,
+        "exec_timeout_minutes": 30,
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -486,28 +488,9 @@ def _check_costs_freshness() -> None:
     if time.time() - os.path.getmtime(costs_file) > 3600:
         print("  ⚠ costs.md not updated this session — AI may have missed logging")
 
-def check_flatline() -> None:
-    """Detects 3 consecutive failures of the same command; injects alert into sentinel.md."""
-    telemetry_file = ".synlynk/telemetry.json"
+def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
+    """Appends a structured alert line to .synlynk/sentinel.md."""
     sentinel_file = ".synlynk/sentinel.md"
-    if not os.path.exists(telemetry_file):
-        return
-    try:
-        with open(telemetry_file) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return
-    if len(data) < 3:
-        return
-    last_three = data[-3:]
-    if not (all(e.get('exit_code', 0) != 0 for e in last_three) and
-            all(e.get('command') == last_three[0].get('command') for e in last_three)):
-        return
-    cmd = last_three[0].get('command', 'unknown')
-    user = get_username()
-    alert = f"- [{time.strftime('%Y-%m-%d %H:%M')}] FLATLINE: `{cmd}` failed 3x in a row [@{user}]\n"
-    print(f"\n⚠️  [Flatline Sentinel] Alert: 3 consecutive failures of '{cmd}'.")
-    print("   Possible hallucination loop — consider manual intervention.")
     if not os.path.exists(".synlynk"):
         return
     existing = ""
@@ -516,8 +499,280 @@ def check_flatline() -> None:
             existing = f.read()
     if "# Sentinel Alerts" not in existing:
         existing = "# Sentinel Alerts\n"
+    ts = time.strftime('%Y-%m-%d %H:%M')
+    line = f"- [{severity}] [{ts}] {code}: {message}\n"
     with open(sentinel_file, "w") as f:
-        f.write(existing + alert)
+        f.write(existing + line)
+
+
+def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
+    """Returns alert lines from sentinel.md, optionally filtered by severity."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        return []
+    alerts = []
+    with open(sentinel_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("- ["):
+                continue
+            if severity is None:
+                alerts.append(line)
+            else:
+                m = re.match(r'^- \[([A-Z]+)\]', line)
+                if m and m.group(1) == severity:
+                    alerts.append(line)
+    return alerts
+
+
+def extract_tokens(output_text: str) -> tuple:
+    """Regex-scrapes token counts from AI CLI stdout. Returns (in_tokens, out_tokens)."""
+    patterns = [
+        (r'Input tokens:\s*(\d+).*?Output tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
+        (r'"input_tokens":\s*(\d+).*?"output_tokens":\s*(\d+)', re.DOTALL | re.IGNORECASE),
+        (r'Tokens used:\s*(\d+)\s+input,\s*(\d+)\s+output', re.IGNORECASE),
+        (r'prompt_tokens:\s*(\d+).*?completion_tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
+    ]
+    for pat, flags in patterns:
+        m = re.search(pat, output_text, flags)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    m = re.search(r'Total tokens:\s*(\d+)', output_text, re.IGNORECASE)
+    if m:
+        total = int(m.group(1))
+        return int(total * 0.8), int(total * 0.2)
+    return 0, 0
+
+
+def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
+    """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
+    costs_file = "project-docs/costs.md"
+    if not os.path.exists(costs_file):
+        return
+    est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+    short_cmd = (command[:20] + '...') if len(command) > 20 else command
+    ts = time.strftime('%Y-%m-%d %H:%M')
+    user = get_username()
+    entry = (f"| {ts} | {user} | 1 | {in_tokens}/{out_tokens} "
+             f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
+    with open(costs_file, "a") as f:
+        f.write(entry)
+
+
+def _is_interactive(cmd_args: list) -> bool:
+    """Returns True if the command needs a real TTY (no stdout capture)."""
+    NON_INTERACTIVE = ["--no-tty", "--output-format json", "--print",
+                       "--non-interactive", "-p "]
+    cmd_str = " ".join(cmd_args)
+    return not any(flag in cmd_str for flag in NON_INTERACTIVE)
+
+
+def _tee_process(process, buffer: list) -> None:
+    """Reads process stdout line-by-line, writes to terminal and appends to buffer."""
+    for line in iter(process.stdout.readline, b''):
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
+        buffer.append(line.decode('utf-8', errors='replace'))
+    process.stdout.close()
+
+
+def _check_pre_exec_gate(force: bool = False) -> bool:
+    """Checks for active sentinel alerts. Returns False to abort if CRITICAL and not forced."""
+    warns = _read_sentinel_alerts(severity="WARN")
+    criticals = _read_sentinel_alerts(severity="CRITICAL")
+    for w in warns:
+        print(f"  ⚠ {w}")
+    if criticals:
+        for c in criticals:
+            print(f"  🚨 {c}")
+        if not force:
+            print("  Exec blocked by CRITICAL sentinel alert. "
+                  "Fix the issue or re-run with --force to bypass.")
+            return False
+    return True
+
+
+QUOTA_PATTERNS = [
+    "rate limit", "quota exceeded", "resource exhausted",
+    "billing", "insufficient_quota", "too many requests",
+    "RESOURCE_EXHAUSTED",
+]
+
+
+def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
+                             cmd: str = "") -> None:
+    """Detects flatline, success loop, and quota-exhausted; writes sentinel alerts."""
+    telemetry_file = ".synlynk/telemetry.json"
+    data = []
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    execs = [e for e in data if e.get("type") == "exec"]
+
+    # Pattern 1: Flatline — last 3 execs same command, all non-zero exit
+    if len(execs) >= 3:
+        last3 = execs[-3:]
+        if (all(e.get("exit_code", 0) != 0 for e in last3) and
+                all(e.get("command") == last3[0].get("command") for e in last3)):
+            fail_cmd = last3[0].get("command", "unknown")
+            _write_sentinel_alert(
+                "CRITICAL", "FLATLINE",
+                f"`{fail_cmd}` failed 3 times in a row — possible hallucination loop."
+            )
+            print(f"\n  \U0001f6a8 [FLATLINE] `{fail_cmd}` failed 3x — consider manual intervention.")
+
+    # Pattern 2: Success loop — last 5 execs same command, all exit 0, within 10 min
+    if len(execs) >= 5:
+        last5 = execs[-5:]
+        if (all(e.get("exit_code", 1) == 0 for e in last5) and
+                all(e.get("command") == last5[0].get("command") for e in last5)):
+            ts_first = last5[0].get("_ts", 0)
+            ts_last = last5[-1].get("_ts", 0)
+            window_min = (ts_last - ts_first) / 60 if ts_first else 999
+            if window_min < 10:
+                _write_sentinel_alert(
+                    "WARN", "SUCCESS_LOOP",
+                    f"Same command succeeded 5x in {window_min:.1f} min — "
+                    "possible automated loop burning tokens."
+                )
+                print(f"\n  ⚠ [SUCCESS_LOOP] Same command 5x in {window_min:.1f} min.")
+
+    # Pattern 3: Quota-exhausted — keyword in captured output
+    if output_text:
+        lower = output_text.lower()
+        for phrase in QUOTA_PATTERNS:
+            if phrase.lower() in lower:
+                cli = cmd.split()[0] if cmd else "agent"
+                _write_sentinel_alert(
+                    "CRITICAL", "QUOTA_EXHAUSTED",
+                    f"`{cli}` — matched \"{phrase}\". "
+                    "Check plan limits or switch agent CLI."
+                )
+                print(f"\n  \U0001f6a8 [QUOTA_EXHAUSTED] Matched \"{phrase}\" in output.")
+                break
+
+
+def check_daemon_health() -> None:
+    """Writes CRITICAL alert if watch daemon pidfile exists but process is dead."""
+    daemon = WatchDaemon()
+    if daemon._health() == "zombie":
+        _write_sentinel_alert(
+            "CRITICAL", "ZOMBIE_DAEMON",
+            "Watch daemon pidfile exists but process is dead. "
+            "Run: synlynk watch stop && synlynk watch start"
+        )
+        print("  🚨 [ZOMBIE_DAEMON] Watch daemon is dead — "
+              "run: synlynk watch stop && synlynk watch start")
+
+
+def check_stall() -> None:
+    """Writes WARN alert if .synlynk/state has been 'active' longer than exec_timeout_minutes."""
+    state_file = ".synlynk/state"
+    if not os.path.exists(state_file):
+        return
+    try:
+        with open(state_file) as f:
+            state = f.read().strip()
+        if state != "active":
+            return
+        age_minutes = (time.time() - os.path.getmtime(state_file)) / 60
+        timeout = load_config().get("exec_timeout_minutes", 30)
+        if age_minutes > timeout:
+            _write_sentinel_alert(
+                "WARN", "STALL",
+                f"Exec has been running for {age_minutes:.0f} min "
+                f"(threshold: {timeout} min). May be stalled."
+            )
+            print(f"  ⚠ [STALL] Exec has been active for {age_minutes:.0f} min — "
+                  f"consider checking or restarting.")
+    except (IOError, OSError):
+        pass
+
+
+def sentinel_list() -> None:
+    """Prints all active sentinel alerts."""
+    alerts = _read_sentinel_alerts()
+    if not alerts:
+        print("  No active sentinel alerts.")
+        return
+    print(f"  {len(alerts)} active alert(s):")
+    for a in alerts:
+        print(f"    {a}")
+
+
+def sentinel_clear(severity: Optional[str] = None, code: Optional[str] = None) -> None:
+    """Removes matching alerts from sentinel.md. No args = clear all structured alerts."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        print("  No sentinel file found.")
+        return
+    with open(sentinel_file) as f:
+        lines = f.readlines()
+
+    kept = []
+    removed = 0
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("- ["):
+            kept.append(line)
+            continue
+        # Only handle structured format: - [SEVERITY] [TIMESTAMP] CODE: message
+        m = re.match(r'^- \[([A-Z]+)\]', stripped)
+        if not m:
+            kept.append(line)  # old format — keep as-is
+            continue
+        line_sev = m.group(1)
+        if severity and line_sev != severity:
+            kept.append(line)
+            continue
+        if code and code not in stripped:
+            kept.append(line)
+            continue
+        removed += 1
+
+    with open(sentinel_file, "w") as f:
+        f.writelines(kept)
+    print(f"  Cleared {removed} alert(s).")
+
+
+def _compute_burn_rate() -> tuple:
+    """Returns (avg_usd_per_exec, estimated_execs_remaining) from telemetry.
+    Returns (0.0, None) if fewer than 3 costed events."""
+    telemetry_file = ".synlynk/telemetry.json"
+    if not os.path.exists(telemetry_file):
+        return 0.0, None
+    try:
+        with open(telemetry_file) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return 0.0, None
+
+    costed = [
+        e for e in data
+        if e.get("type") == "exec" and e.get("in_tokens", 0) > 0
+    ][-10:]
+
+    if len(costed) < 3:
+        return 0.0, None
+
+    costs = [
+        (e["in_tokens"] / 1000 * 0.003) + (e["out_tokens"] / 1000 * 0.015)
+        for e in costed
+    ]
+    avg = sum(costs) / len(costs)
+
+    total_usd, _ = parse_costs_md()
+    config = load_config()
+    limit_usd = config["budget"]["limit_usd"]
+    remaining_usd = limit_usd - total_usd
+    remaining_execs = int(remaining_usd / avg) if avg > 0 else None
+
+    return avg, remaining_execs
+
 
 def check_budgets() -> None:
     """Warns if cumulative spend from costs.md approaches config limits."""
@@ -685,6 +940,16 @@ def generate_context(scope: str = "full") -> None:
                         out.write("\n---\n\n")
 
     print(f"  ✓ Context saved to {context_file}")
+    try:
+        size_kb = os.path.getsize(".synlynk/context.md") / 1024
+        if size_kb > 64:
+            print(f"  ⚠ Context is very large ({size_kb:.0f} KB) — strongly consider "
+                  "archiving completed todos and old devlog entries to reduce token cost.")
+        elif size_kb > 32:
+            print(f"  ⚠ Context is large ({size_kb:.0f} KB) — consider archiving "
+                  "completed todos and old devlog entries.")
+    except OSError:
+        pass
 
 def _archive_old_devlog_entries(devlog_path: str) -> None:
     """Moves devlog entries older than 30 days to devlogs/archive/YYYY-MM.md."""
@@ -918,11 +1183,17 @@ def cmd_status(json_output: bool = False) -> None:
     pct = (total_usd / limit_usd * 100) if limit_usd else 0
     print(" BUDGET")
     print(f"   ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} / {limit_reqs} requests")
+    avg_cost, remaining_execs = _compute_burn_rate()
+    if avg_cost > 0:
+        runway = f"~{remaining_execs:,} execs remaining" if remaining_execs is not None else "N/A"
+        print(f"   Burn:   ${avg_cost:.4f}/exec avg  |  {runway} at current pace")
     print()
     icon = "●" if watcher_running else "○"
     state = "Running" if watcher_running else "Stopped"
     trigger = f"  ·  last trigger {last_trigger_file}" if last_trigger_file else ""
     print(f" WATCHER\n   {icon} {state}{trigger}")
+    check_daemon_health()
+    check_stall()
     if mode == "team" and teammates:
         print()
         print(" TEAMMATES")
@@ -1005,16 +1276,20 @@ class WatchDaemon:
                 os.remove(self.pidfile)
             print("  ○ synlynk watch stopped")
 
-    def _is_running(self) -> bool:
+    def _health(self) -> str:
+        """Returns 'running', 'stopped', or 'zombie' (pidfile exists but process dead)."""
         if not os.path.exists(self.pidfile):
-            return False
+            return "stopped"
         try:
             with open(self.pidfile) as f:
                 pid = int(f.read().strip())
             os.kill(pid, 0)
-            return True
-        except (ProcessLookupError, ValueError, IOError, OSError):
-            return False
+            return "running"
+        except (ProcessLookupError, ValueError, OSError):
+            return "zombie"
+
+    def _is_running(self) -> bool:
+        return self._health() == "running"
 
     def _get_mtimes(self, directory: str) -> dict:
         mtimes = {}
@@ -1150,24 +1425,42 @@ def upgrade() -> None:
         print(f"  ⚠ Could not check for updates: {e}")
         print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
 
-def exec_command(cmd_args: list) -> int:
+def exec_command(cmd_args: list, force: bool = False) -> int:
     if not cmd_args:
         print("Error: No command provided to exec.")
-        return
+        return 1
 
     generate_context()
     check_budgets()
-    set_state("active")
 
+    if not _check_pre_exec_gate(force=force):
+        return 1
+
+    set_state("active")
     print(f"  Executing: {' '.join(cmd_args)}")
     start_time = time.time()
     exit_code = 0
+    output_text = ""
 
     try:
-        # Inherit stdio directly — interactive tools (Claude Code, Gemini) need a real TTY
-        process = subprocess.Popen(cmd_args)
-        process.wait()
-        exit_code = process.returncode
+        interactive = _is_interactive(cmd_args)
+        if interactive:
+            process = subprocess.Popen(cmd_args)
+            process.wait()
+            exit_code = process.returncode
+        else:
+            process = subprocess.Popen(
+                cmd_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            buffer: list = []
+            tee_thread = threading.Thread(target=_tee_process, args=(process, buffer))
+            tee_thread.start()
+            process.wait()
+            tee_thread.join()
+            exit_code = process.returncode
+            output_text = "".join(buffer)
     except FileNotFoundError:
         exit_code = 127
         print(f"  Error: Command '{cmd_args[0]}' not found.")
@@ -1177,19 +1470,35 @@ def exec_command(cmd_args: list) -> int:
     finally:
         duration = time.time() - start_time
         print(f"\n  ✓ Execution finished in {duration:.2f}s")
+
+        in_tokens, out_tokens = extract_tokens(output_text)
+        if in_tokens > 0:
+            est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
+            update_costs(' '.join(cmd_args), in_tokens, out_tokens, duration)
+        elif not _is_interactive(cmd_args):
+            pass  # non-interactive but no tokens found — silent
+        else:
+            print("  ⚡ Token count unavailable (interactive mode)")
+
         _check_costs_freshness()
         log_telemetry_event({
             "type": "exec",
             "schema_version": 1,
             "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+            "_ts": time.time(),
             "user": get_username(),
             "command": ' '.join(cmd_args),
             "duration": round(duration, 2),
             "exit_code": exit_code,
+            "in_tokens": in_tokens,
+            "out_tokens": out_tokens,
         })
-        check_flatline()
+        check_sentinel_patterns(output_text=output_text, exit_code=exit_code,
+                                cmd=' '.join(cmd_args))
         daemon = WatchDaemon()
         set_state("watching" if daemon._is_running() else "stopped")
+
     return exit_code
 
 def main() -> None:
@@ -1217,6 +1526,8 @@ def main() -> None:
 
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
+    exec_parser.add_argument("--force", action="store_true",
+                             help="Bypass CRITICAL sentinel gate")
 
     watch_parser = subparsers.add_parser("watch", help="Manage the file watcher daemon")
     watch_parser.add_argument("action", choices=["start", "stop", "status"],
@@ -1229,6 +1540,17 @@ def main() -> None:
     status_parser.add_argument("--json", action="store_true", dest="json_output",
                                help="Output machine-readable JSON")
 
+    sentinel_parser = subparsers.add_parser("sentinel",
+                                             help="View and manage sentinel alerts")
+    sentinel_sub = sentinel_parser.add_subparsers(dest="sentinel_action")
+    sentinel_sub.add_parser("list", help="List all active sentinel alerts")
+    sentinel_clear_parser = sentinel_sub.add_parser("clear", help="Clear sentinel alerts")
+    sentinel_clear_parser.add_argument("--severity",
+                                       choices=["CRITICAL", "WARN", "INFO"],
+                                       help="Clear only alerts of this severity")
+    sentinel_clear_parser.add_argument("--code",
+                                       help="Clear only alerts with this code")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -1236,7 +1558,8 @@ def main() -> None:
         init(force=args.force, agents=agents, mode=args.mode,
              org=args.org, repo=args.repo, project_id=args.project_id)
     elif args.command == "exec":
-        sys.exit(exec_command(args.cmd))
+        force = getattr(args, 'force', False)
+        sys.exit(exec_command(args.cmd, force=force))
     elif args.command == "upgrade":
         upgrade()
     elif args.command == "watch":
@@ -1251,6 +1574,15 @@ def main() -> None:
         checkpoint()
     elif args.command == "status":
         cmd_status(json_output=args.json_output)
+    elif args.command == "sentinel":
+        action = getattr(args, 'sentinel_action', None)
+        if action == "clear":
+            sentinel_clear(
+                severity=getattr(args, 'severity', None),
+                code=getattr(args, 'code', None),
+            )
+        else:
+            sentinel_list()  # default: list
     else:
         parser.print_help()
 

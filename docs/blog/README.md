@@ -14,6 +14,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [05](./05-pr26-v0.3.0-multi-agent-foundation.md) | PR #26 — v0.3.0: The Multi-Agent Foundation | [#26](https://github.com/nikhilsoman/synlynk/pull/26) | 2026-06-03 |
 | [06](./06-pr27-v0.4.0-autonomy-driver.md) | PR #27 — v0.4.0: The Autonomy Driver | [#27](https://github.com/nikhilsoman/synlynk/pull/27) | open |
 | [07](./07-pr28-architecture-pivot.md) | PR #28 — The Architecture Pivot | [#28](https://github.com/nikhilsoman/synlynk/pull/28) | 2026-06-09 |
+| [08](./08-pr29-v0.3.1-sentinel-observability.md) | PR #29 — v0.3.1: When the OS Learns to Self-Diagnose | [#29](https://github.com/nikhilsoman/synlynk/pull/29) | open |
 
 ## Per-PR Post Template
 

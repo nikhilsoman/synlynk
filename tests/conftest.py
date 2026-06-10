@@ -35,7 +35,8 @@ def project_dir(tmp_path, monkeypatch):
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
-        "org": None, "team": None, "sync_endpoint": None
+        "org": None, "team": None, "sync_endpoint": None,
+        "exec_timeout_minutes": 30
     }
     (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
     (tmp_path / "project-docs" / ".synlynk_config.json").write_text(
