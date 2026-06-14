@@ -8,8 +8,8 @@
 | v0.1–v0.3.0 | Kernel + Filesystem | exec · telemetry · flatline · budget · project-docs ledger · enriched templates | Flat files | ✅ Shipped | June 2026 |
 | v0.3.1 | Sentinel + Observability Hardening | Token scraping restored · zombie/stall/quota/loop detection · burn rate · context bloat · sentinel severity + ack | Flat files | ✅ Shipped | June 2026 |
 | v0.4.0 | Hybrid Workgroup Bootstrap | IPC — agent discovery, `synlynk dispatch`, job store (PID tracking), `synlynk jobs/logs/shell/run`, init wizard with Magic Moments | Flat files | ✅ Shipped | June 2026 |
-| v0.5.0 | Capability Engine | Scheduler — model-aware routing, 3D domain taxonomy (engg·org·industry), quality signal hierarchy (human→verifier→auto), `dispatch_rework` signal, `synlynk story/score` CLI, `state.db` SQLite ledger | **SQLite WAL** | 🔜 Next | Aug 2026 |
-| v0.6.0 | Job Control + Constraints | IPC complete — constraint propagation, job state machine · **+** model version tier-2 probe, `synlynk pr check`, `synlynk score attest`, verifier pipeline capture, Tokq `org_domain_tags` | SQLite extended | Planned | Sep 2026 |
+| v0.5.0 | Capability Engine | Scheduler — model-aware routing, 3D domain taxonomy (engg·org·industry), quality signal hierarchy (human→verifier→auto), `dispatch_rework` signal, `synlynk story/score` CLI, `state.db` SQLite ledger | **SQLite WAL** | ✅ Shipped | June 2026 |
+| v0.6.0 | Job Control + Constraints | IPC complete — constraint propagation, job state machine · **+** model version tier-2 probe, `synlynk pr check`, `synlynk score attest`, verifier pipeline capture, Tokq `org_domain_tags` | SQLite extended | ✅ Shipped | June 2026 |
 | v0.7.0 | Async Pipeline + Daemon | Shell — `synlynk dispatch`, daemon, `synlynk review` TUI | **HTTP Context Server** | Planned | Oct 2026 |
 | v0.8.0 | Open Context Protocol | Ecosystem interface — `context --for`, `checkpoint --from`, MCP server | HTTP server (public) | Planned | Nov 2026 |
 | v0.9.0 | Review TUI + Team Safety | Shell polish — full curses TUI, append-only event log, team guardrails | JSONL event log | Planned | Dec 2026 |

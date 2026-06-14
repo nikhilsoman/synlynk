@@ -1,6 +1,26 @@
 # Devlog - Nikhil Soman
 
 ## 2026-06-14
+### Session: v0.6.0 Job Control — R2 fix, merge PR #42
+
+- **Merged:** PR #42 (`feat/v060-job-control`) — v0.6.0 Job Control + model-aware capability engine fully shipped
+- **R2 critical bug fixed:** Tier resolution bypass in `_write_capability_rating()` — calling `extract_model_version(log_text, agent=agent)` fell through to Tier 3 (config default) when no synlynk-meta header present, then compared config default against live-probed `model_at_dispatch`, incorrectly setting `split_model=1` on normal single-model runs and silently excluding them from `capability_scores` aggregation.
+  - Fix: extract Tier 1 only via `agent=None`, resolve hierarchy explicitly (Tier 1 > Tier 2 > Tier 3), flag `split_model=1` only when both Tier 1 and Tier 2 are concretely known and differ.
+- **Also applied:** `quality_auto` normalization (`weighted_sum/total_weight`) from PR #44 — this branch predated that hotfix merge.
+- **Tests:** 43 passing (2 new R2 regression tests)
+- **Blog post:** `docs/blog/12-pr42-v0.6.0-job-control.md`
+- **Roadmap:** v0.5.0 + v0.6.0 marked ✅ Shipped. Next: v0.7.0 async pipeline + daemon.
+
+### Session: Quick Start Guide PDF Generation (v0.6.0)
+- **Activity:** Designed and compiled a modern, minimalist Apple-style quick start guide covering all features of synlynk (up to v0.6.0).
+- **Updates:**
+  - Modified `docs/synlynk-quickstart-apple.html` to bump versioning to v0.6.0.
+  - Refined Command Reference on Page 6: converted to a 2-column grid layout to fit `Story & Capability Scoring (v0.5.0/v0.6.0)` commands (`story create/list`, `score add/list`, `score attest`, `pr check`).
+  - Replaced outdated "Hold off on dispatch..." warning callout on Page 6 to indicate that the Capability Engine and Smart Routing are fully live.
+  - Marked v0.5 and v0.6 milestones as Live on Page 7 roadmap.
+  - Generated PDF using headless Google Chrome at `docs/synlynk-quickstart-apple.pdf`.
+  - Copied compiled PDF to root `synlynk_quick_start.pdf` and `docs/synlynk-quickstart-guide.pdf`.
+
 ### Session: v0.4.0 Hybrid Workgroup Bootstrap
 
 - **Shipped:** v0.4.0 — 14 TDD tasks, 11 commits, 183 tests (PR #39, open)
