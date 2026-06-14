@@ -10,7 +10,57 @@ import threading
 import urllib.request
 from typing import Optional
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
+
+JOBS_FILE = ".synlynk/jobs.json"
+LOGS_DIR = ".synlynk/logs"
+PROMPTS_DIR = ".synlynk/prompts"
+
+# Known baseline capabilities per agent CLI.
+# Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
+AGENT_CAPABILITY_BASELINES = {
+    "claude": {
+        "cli": "claude",
+        "non_interactive_flags": ["--print"],
+        "roles": ["architect", "builder"],
+        "strengths": ["long context", "reasoning", "code review", "planning"],
+    },
+    "gemini": {
+        "cli": "gemini",
+        "non_interactive_flags": ["--quiet"],
+        "roles": ["builder", "verifier"],
+        "strengths": ["multimodal", "large context", "search-augmented", "fast"],
+    },
+    "codex": {
+        "cli": "codex",
+        "non_interactive_flags": [],
+        "roles": ["builder"],
+        "strengths": ["code completion", "inline edits", "fast iteration"],
+    },
+    "agy": {
+        "cli": "agy",
+        "non_interactive_flags": ["--quiet"],
+        "roles": ["builder", "verifier"],
+        "strengths": ["multimodal", "large context", "search-augmented"],
+    },
+}
+
+# Default paths scanned for agent CLI config directories.
+# Overridable in .synlynk/config.json under "agent_discovery_paths".
+AGENT_DISCOVERY_DEFAULTS = {
+    "claude": os.path.expanduser("~/.claude"),
+    "gemini": os.path.expanduser("~/.gemini"),
+    "codex": os.path.expanduser("~/.codex"),
+    "agy": os.path.expanduser("~/.agy"),
+}
+
+# ANSI helpers used by the wizard.
+_BOLD = "\033[1m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
 
 
 def get_username() -> str:

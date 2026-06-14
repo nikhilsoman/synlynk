@@ -8,6 +8,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bin'))
 import synlynk
 
 
+def test_agent_capability_baselines_exist():
+    assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "gemini" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
+    for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
+        assert "roles" in caps
+        assert "cli" in caps
+        assert "non_interactive_flags" in caps
+
+
+def test_jobs_file_constant():
+    assert synlynk.JOBS_FILE == ".synlynk/jobs.json"
+
+
 def test_get_username_from_git(project_dir, monkeypatch):
     def mock_run(args, **kwargs):
         if args[0] == "gh":
@@ -1026,5 +1040,5 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_031(project_dir):
-    assert synlynk.VERSION == "0.3.1"
+def test_version_is_040(project_dir):
+    assert synlynk.VERSION == "0.4.0"
