@@ -1,0 +1,135 @@
+<h2>synlynk Dispatch — Evolution Path</h2>
+<p class="subtitle">Shell-native dispatch in v0.4.0 · gradually gains a TUI skin · shell mode stays forever</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+
+  <!-- v0.4.0 -->
+  <div style="background:#0f172a;border:2px solid #10b981;border-radius:10px;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="label" style="color:#6ee7b7">v0.4.0 — Shell-Native Dispatch</div>
+      <div style="font-size:11px;color:#10b981;background:#064e3b;padding:3px 8px;border-radius:20px">✨ Second Magic Moment</div>
+    </div>
+    <div style="font-family:monospace;font-size:11px;background:#020617;padding:10px;border-radius:6px;color:#ccc;line-height:2">
+      <span style="color:#6ee7b7">$</span> synlynk dispatch claude --story 14<br>
+      <span style="color:#94a3b8">▶ [job:1] claude → story#14 (feat/auth-fix)</span><br>
+      <span style="color:#94a3b8">  worktree: .synlynk/worktrees/feat/auth-fix</span><br>
+      <span style="color:#94a3b8">  context: .synlynk/context-claude.md injected</span><br>
+      <span style="color:#94a3b8">  running in background — PID 48291</span><br>
+      <br>
+      <span style="color:#6ee7b7">$</span> synlynk dispatch gemini --story 15<br>
+      <span style="color:#94a3b8">▶ [job:2] gemini → story#15 (feat/tests)</span><br>
+      <br>
+      <span style="color:#6ee7b7">$</span> synlynk jobs<br>
+      <span style="color:#fbbf24">job:1  claude  story#14  running   4m12s</span><br>
+      <span style="color:#fbbf24">job:2  gemini  story#15  running   1m03s</span><br>
+      <br>
+      <span style="color:#6ee7b7">$</span> synlynk logs --job 1<br>
+      <span style="color:#94a3b8">← tails captured stdout in real time</span><br>
+      <br>
+      <span style="color:#6ee7b7">$</span> synlynk shell --story 14<br>
+      <span style="color:#94a3b8">← jump into worktree to unblock agent</span>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:#6ee7b7">
+      <b>How it works:</b> nohup + PTY-less exec (claude --print / gemini --quiet).
+      PID tracked in .synlynk/jobs.json. stdout captured via tee → telemetry.
+      No daemon required. Works with existing exec infrastructure.
+    </div>
+  </div>
+
+  <!-- v0.4.0 Magic Moment -->
+  <div style="background:#0f172a;border:2px solid #7c3aed;border-radius:10px;padding:16px">
+    <div class="label" style="color:#a78bfa;margin-bottom:10px">v0.4.0 — The Two Magic Moments</div>
+
+    <div style="background:#1e1b4b;border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-size:12px;color:#c4b5fd;font-weight:bold;margin-bottom:6px">✨ Magic 1 — Hybrid Workgroup Discovered</div>
+      <div style="font-family:monospace;font-size:11px;color:#94a3b8;line-height:1.8">
+        synlynk init detects:<br>
+        <span style="color:#10b981">✓ Claude Code</span> — capability: Architect, Builder<br>
+        <span style="color:#3b82f6">✓ Gemini CLI  </span> — capability: Builder, Verifier<br>
+        <span style="color:#f59e0b">✓ Codex       </span> — capability: Builder<br>
+        <br>
+        → "You have a 3-agent Hybrid Workgroup.<br>
+           Quota problems solved. Let's assign roles."
+      </div>
+    </div>
+
+    <div style="background:#1e1b4b;border-radius:8px;padding:12px">
+      <div style="font-size:12px;color:#c4b5fd;font-weight:bold;margin-bottom:6px">✨ Magic 2 — Parallel Dispatch from Shell</div>
+      <div style="font-family:monospace;font-size:11px;color:#94a3b8;line-height:1.8">
+        synlynk run --trio<br>
+        <span style="color:#a78bfa">▶ Architect (claude) → generating task-packet.md</span><br>
+        <span style="color:#3b82f6">▶ Builder   (gemini) → implementing feat/auth-fix</span><br>
+        <span style="color:#10b981">▶ Verifier  (codex)  → running tests on story#13</span><br>
+        <br>
+        <span style="color:#94a3b8">← three agents running in parallel, right now,</span><br>
+        <span style="color:#94a3b8">  from your shell, no extra tooling needed</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Evolution -->
+<div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:16px">
+  <div class="label" style="color:#94a3b8;margin-bottom:12px">EVOLUTION — same UX primitives, gaining depth</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+
+    <div style="background:#0c1a2e;border:1px solid #10b981;border-radius:8px;padding:10px">
+      <div style="font-size:11px;color:#10b981;font-weight:bold;margin-bottom:6px">v0.4.0</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        Shell-native dispatch<br>
+        PID tracking (jobs.json)<br>
+        synlynk jobs / logs<br>
+        synlynk shell / launch<br>
+        <b style="color:#6ee7b7">No daemon needed</b>
+      </div>
+    </div>
+
+    <div style="background:#0c1a2e;border:1px solid #3b82f6;border-radius:8px;padding:10px">
+      <div style="font-size:11px;color:#3b82f6;font-weight:bold;margin-bottom:6px">v0.5.0–v0.6.0</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        state.db replaces jobs.json<br>
+        Capability routing<br>
+        Agent identity (Ed25519)<br>
+        Async outbox (ext PM)<br>
+        <b style="color:#60a5fa">Same shell UX</b>
+      </div>
+    </div>
+
+    <div style="background:#0c1a2e;border:1px solid #7c3aed;border-radius:8px;padding:10px">
+      <div style="font-size:11px;color:#7c3aed;font-weight:bold;margin-bottom:6px">v0.7.0</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        Persistent daemon<br>
+        HTTP context server<br>
+        synlynk attach (proto-TUI)<br>
+        Detach / re-attach<br>
+        <b style="color:#a78bfa">Shell mode still works</b>
+      </div>
+    </div>
+
+    <div style="background:#0c1a2e;border:1px solid #ec4899;border-radius:8px;padding:10px">
+      <div style="font-size:11px;color:#ec4899;font-weight:bold;margin-bottom:6px">v0.9.0</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+        Full curses TUI<br>
+        tmux-style pane switchboard<br>
+        Live agent panes<br>
+        Board / cost / sentinel<br>
+        <b style="color:#f9a8d4">Shell mode still works</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shell mode permanent -->
+<div style="background:#0f172a;border:1px solid #f59e0b;border-radius:10px;padding:14px">
+  <div class="label" style="color:#fcd34d;margin-bottom:8px">SHELL MODE — permanent parallel track (never removed)</div>
+  <div style="font-size:12px;color:#fde68a;line-height:1.8">
+    For developers who live in their shell and don't want to switch UX layers:
+    <code style="background:#451a03;padding:2px 6px;border-radius:4px">synlynk dispatch</code>,
+    <code style="background:#451a03;padding:2px 6px;border-radius:4px">synlynk jobs</code>,
+    <code style="background:#451a03;padding:2px 6px;border-radius:4px">synlynk logs</code>,
+    <code style="background:#451a03;padding:2px 6px;border-radius:4px">synlynk shell</code>
+    all remain first-class CLI commands forever.
+    The TUI is an opt-in surface, not a replacement.
+    Power users get the full workgroup in their existing terminal. No layers, no context switching.
+  </div>
+</div>
