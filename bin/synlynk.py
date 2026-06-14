@@ -9,8 +9,96 @@ import re
 import threading
 import urllib.request
 from typing import Optional
+import sqlite3 as _sqlite3
 
 VERSION = "0.4.0"
+
+DB_PATH = ".synlynk/state/state.db"
+
+_DB_SCHEMA = """
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS stories (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    story_id      TEXT NOT NULL UNIQUE,
+    title         TEXT,
+    engg_domain   TEXT DEFAULT 'unknown',
+    org_domain    TEXT DEFAULT 'unknown',
+    org_domain_tags TEXT DEFAULT '[]',
+    industry      TEXT DEFAULT 'unknown',
+    phase         TEXT DEFAULT 'build',
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS capability_ratings (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    story_id              TEXT NOT NULL REFERENCES stories(story_id),
+    agent                 TEXT NOT NULL,
+    model_version         TEXT NOT NULL DEFAULT 'unknown',
+    model_at_dispatch     TEXT,
+    model_at_completion   TEXT,
+    split_model           INTEGER DEFAULT 0,
+    engg_domain           TEXT NOT NULL DEFAULT 'unknown',
+    org_domain            TEXT NOT NULL DEFAULT 'unknown',
+    org_domain_tags       TEXT DEFAULT '[]',
+    industry              TEXT NOT NULL DEFAULT 'unknown',
+    phase                 TEXT NOT NULL DEFAULT 'build',
+    signal_source         TEXT NOT NULL DEFAULT 'auto',
+    quality               REAL NOT NULL DEFAULT 0.0,
+    quality_auto          REAL,
+    verifier_agent        TEXT,
+    verifier_model        TEXT,
+    test_pass_rate        REAL,
+    build_success         INTEGER,
+    dispatch_rework       INTEGER DEFAULT 0,
+    micro_rework          INTEGER DEFAULT 0,
+    pr_review_cycles      INTEGER DEFAULT 0,
+    duration_vs_estimate  REAL,
+    verified_by_ci        INTEGER,
+    correct               INTEGER DEFAULT 1,
+    note                  TEXT,
+    ed25519_sig           TEXT,
+    ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DB_SCORES_VIEW = """
+CREATE VIEW IF NOT EXISTS capability_scores AS
+SELECT
+    agent,
+    model_version,
+    engg_domain,
+    org_domain,
+    industry,
+    phase,
+    SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
+      SUM(pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER)))
+      AS weighted_score,
+    COUNT(*) AS sample_count,
+    MAX(ts) AS last_seen
+FROM capability_ratings
+WHERE split_model = 0
+GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
+"""
+
+def _get_db() -> _sqlite3.Connection:
+    """Returns a WAL-mode SQLite connection to state.db, running migrations."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = _sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    _migrate_db(conn)
+    return conn
+
+def _migrate_db(conn: _sqlite3.Connection) -> None:
+    """Idempotent schema migrations. Adds tables/views if absent."""
+    conn.executescript(_DB_SCHEMA)
+    try:
+        conn.executescript(_DB_SCORES_VIEW)
+    except _sqlite3.OperationalError:
+        pass  # view already exists with same definition
+    conn.commit()
+
 
 JOBS_FILE = ".synlynk/jobs.json"
 LOGS_DIR = ".synlynk/logs"
