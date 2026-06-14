@@ -94,7 +94,7 @@ $ synlynk          ← re-attach; see what happened
 synlynk scans for installed agent CLIs (`.claude/`, `.gemini/`, Cursor settings, Codex profiles). Infers capability baselines from known CLI × model mappings. Presents: "You have Claude + Gemini + Codex — your Hybrid Workgroup is ready."
 
 **Layer 2 — Cloud directory (always nudged, never required):**
-A lightweight cloud registry (Tokq-backed at v1.0; standalone at v0.5.0) lets users invite agents to a workspace by synlynk ID. Even solo developers see the nudge: "Add a second human collaborator" or "Share this workspace with your team." The sharing flow is the **viral trigger**.
+The v0.4.0 init wizard always shows a nudge step: "Add a second human collaborator" or "Share this workspace with your team." At v0.4.0 this is a placeholder that surfaces the concept and captures intent (email/synlynk ID). A functional cloud registry (Tokq-backed at v1.0, or standalone earlier) backs this step once built — timing deferred to implementation planning. The sharing nudge itself is the **viral trigger**; the registry is the infrastructure that fulfils it.
 
 Cold-start routing: round-robin across all detected agents until 3 samples per (agent × phase × domain). Score decay: recency-weighted, half-life = 10 tasks. Seeded baselines from a capability registry (known Claude/Gemini/Codex strengths) augment empirical scoring from day 0.
 
