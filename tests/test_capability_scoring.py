@@ -116,6 +116,38 @@ def test_infer_engg_domain_prefers_specific_over_generic():
     # ML beats backend when both patterns present
     assert _infer_engg_domain("src/ml/train.py and src/api/serve.py") in ("ml", "backend")
 
+def test_extract_model_version_from_meta_header():
+    from synlynk import extract_model_version
+    output = """
+Some agent output here.
+
+# synlynk-meta
+model_version=claude-opus-4-8
+quality=8
+correct=true
+"""
+    assert extract_model_version(output) == "claude-opus-4-8"
+
+def test_extract_model_version_missing_returns_unknown():
+    from synlynk import extract_model_version
+    assert extract_model_version("No meta block here") == "unknown"
+
+def test_extract_model_version_falls_back_to_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json
+    json.dump({"agents": {"claude": {"default_model": "claude-sonnet-4-6"}}},
+              open(".synlynk/config.json", "w"))
+    from synlynk import extract_model_version
+    result = extract_model_version("No meta block", agent="claude")
+    assert result == "claude-sonnet-4-6"
+
+def test_extract_model_version_parses_various_formats():
+    from synlynk import extract_model_version
+    # Whitespace tolerance
+    assert extract_model_version("# synlynk-meta\n model_version = gemini-2.5-pro\n") == "gemini-2.5-pro"
+
+
 
 
 

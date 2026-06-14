@@ -1316,6 +1316,30 @@ def extract_tokens(output_text: str) -> tuple:
     return 0, 0
 
 
+def extract_model_version(output_text: str, agent: str = None) -> str:
+    """
+    Tier 1: Parse model_version from # synlynk-meta block in agent output.
+    Tier 3 fallback: read default_model from .synlynk/config.json for the agent.
+    Returns 'unknown' if neither source provides a value.
+    """
+    # Tier 1: structured header
+    m = re.search(r"#\s*synlynk-meta.*?model_version\s*=\s*(\S+)", output_text,
+                  re.DOTALL | re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    # Tier 3: config default
+    if agent:
+        config = load_config()
+        agents_cfg = config.get("agents", {})
+        default = agents_cfg.get(agent, {}).get("default_model")
+        if default:
+            return default
+
+    return "unknown"
+
+
+
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
     """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
     costs_file = "project-docs/costs.md"
