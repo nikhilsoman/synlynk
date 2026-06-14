@@ -180,6 +180,75 @@ def test_extract_auto_signals_all_zeros_on_empty_log():
     assert signals["build_success"] is None
 
 
+# --- Hotfix #43: quality_auto normalization ---
+
+def test_quality_auto_normalizes_when_tests_absent(tmp_path, monkeypatch):
+    """Perfect build + zero rework must score 10.0 even when test_pass_rate is None."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+
+    # Log with no test output but a clean build and synlynk-meta model line
+    log_content = "# synlynk-meta\nmodel_version=claude-opus-4-8\nBuild succeeded."
+    log_path = str(tmp_path / ".synlynk/logs/job-norm.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")  # exit 0 → build_success=True
+
+    jobs = [{
+        "id": "job-norm", "agent": "claude", "story_id": "story-norm",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    json.dump({"industry": "ott"}, open(".synlynk/config.json", "w"))
+
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-norm", "Docs update"))
+    conn.commit(); conn.close()
+
+    _reconcile_jobs()
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT quality_auto FROM capability_ratings WHERE story_id=?", ("story-norm",)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == pytest.approx(10.0, abs=0.01), \
+        f"Expected 10.0 (normalized), got {row[0]:.2f} (capped at 6.5 without normalization)"
+
+def test_quality_auto_full_signals_still_scores_correctly(tmp_path, monkeypatch):
+    """When all signals present, normalization must not change the correct result."""
+    from synlynk import _write_capability_rating, _get_db
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-full", "Full"))
+    conn.commit(); conn.close()
+
+    job = {
+        "agent": "claude", "story_id": "story-full",
+        "started_at": "2026-06-14T10:00:00", "ended_at": "2026-06-14T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "claude-opus-4-8",
+    }
+    # 100% test pass rate + build success + zero rework = 10.0
+    log = "# synlynk-meta\nmodel_version=claude-opus-4-8\n19 passed"
+    _write_capability_rating(job, log)
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT quality_auto FROM capability_ratings WHERE story_id=?", ("story-full",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == pytest.approx(10.0, abs=0.01)
+
+
 # --- Task 7: dispatch_rework + micro_rework ---
 
 def test_dispatch_rework_increments_on_same_story(tmp_path, monkeypatch):
