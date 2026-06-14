@@ -1,5 +1,25 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-14
+### Session: v0.4.0 Hybrid Workgroup Bootstrap
+
+- **Shipped:** v0.4.0 — 14 TDD tasks, 11 commits, 183 tests (PR #39, open)
+- **Method:** Full subagent-driven development via `superpowers:subagent-driven-development`. Fresh subagent per task, spec + quality review after each. Session hit Claude rate limit mid-flight (Tasks 9-11 partial); resumed directly in main session.
+- **Pre-implementation fix:** Tokq memory unit schema gap — redesigned from file-grain to 5 purpose-typed DB view units (`strategic`, `context`, `execution`, `activity`, `capability`). Visual in `docs/brainstorm/tokq-data-metamorphosis/`. Schema fix committed separately (PR #37, merged).
+- **Bug caught in review:** `_reconcile_jobs()` was catching `PermissionError` alongside `ProcessLookupError` and marking jobs failed. `PermissionError` from `os.kill(pid,0)` means the process exists but is unsiglable — not dead. Fixed to `except ProcessLookupError:` only.
+- **What shipped:**
+  - `AGENT_CAPABILITY_BASELINES` (claude/gemini/codex/agy), job store constants, ANSI helpers
+  - `_load_jobs()`, `_save_jobs()`, `_reconcile_jobs()` (PID probe on startup)
+  - `_check_agent_functional()`, `discover_agents()` with configurable paths
+  - `_static_scan()` (git log + README + file tree)
+  - `_write_informed_skeleton()`, `_llm_enrich()` (opt-in, non-interactive)
+  - `init()` refactored to 6-step wizard: scan → **Magic Moment 1** (workgroup table) → doc bootstrap → LLM enrichment offer → cloud nudge → finalise
+  - `dispatch_agent()` with `start_new_session=True` background dispatch
+  - `cmd_jobs`, `cmd_logs`, `cmd_shell`, `cmd_launch`, `cmd_run_trio`
+  - Subcommand wiring in `main()` + 4 new E2E tests
+- **Milestone:** First release where `synlynk dispatch claude --task "..."` actually works end-to-end. **Magic Moment 2** — parallel dispatch from shell — is now real.
+- **Next:** v0.5.0 Capability Engine — SQLite WAL, data-driven capability routing, `synlynk migrate`.
+
 ## 2026-06-10
 ### Session: v0.3.1 Sentinel + Observability + E2E Test Suite
 
