@@ -194,6 +194,9 @@ def test_generate_context_scope_stub_falls_back(project_dir, capsys):
 
 def test_init_creates_project_structure(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     assert (tmp_path / "project-docs" / "todo.md").exists()
     assert (tmp_path / "project-docs" / "memory.md").exists()
@@ -204,6 +207,9 @@ def test_init_creates_project_structure(tmp_path, monkeypatch):
 
 def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "synlynk watch status" in content
@@ -213,6 +219,9 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
 
 def test_init_skips_existing_without_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=False)
     assert (tmp_path / "CLAUDE.md").read_text() == "MY CUSTOM CONTENT"
@@ -220,6 +229,9 @@ def test_init_skips_existing_without_force(tmp_path, monkeypatch):
 
 def test_init_force_overwrites_existing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=True)
     assert (tmp_path / "CLAUDE.md").read_text() != "MY CUSTOM CONTENT"
@@ -228,6 +240,9 @@ def test_init_force_overwrites_existing(tmp_path, monkeypatch):
 
 def test_init_config_schema_version(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     import json
     config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
@@ -472,12 +487,18 @@ def test_agents_template_enriched_content(tmp_path, monkeypatch):
 
 def test_init_creates_agents_md_by_default(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init()
     assert (tmp_path / "AGENTS.md").exists()
 
 
 def test_init_skips_agents_md_when_codex_excluded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(agents=["claude", "agy"])
     assert not (tmp_path / "AGENTS.md").exists()
     assert (tmp_path / "CLAUDE.md").exists()
@@ -486,6 +507,9 @@ def test_init_skips_agents_md_when_codex_excluded(tmp_path, monkeypatch):
 
 def test_init_skips_claude_md_when_claude_excluded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(agents=["agy", "codex"])
     assert not (tmp_path / "CLAUDE.md").exists()
     assert (tmp_path / "GEMINI.md").exists()
@@ -494,6 +518,9 @@ def test_init_skips_claude_md_when_claude_excluded(tmp_path, monkeypatch):
 
 def test_init_skips_gemini_md_when_agy_excluded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(agents=["claude", "codex"])
     assert not (tmp_path / "GEMINI.md").exists()
     assert (tmp_path / "CLAUDE.md").exists()
@@ -520,6 +547,9 @@ def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
 
 def test_init_writes_synlynk_config_solo_by_default(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init()
     config_path = tmp_path / "project-docs" / ".synlynk_config.json"
     assert config_path.exists()
@@ -530,21 +560,28 @@ def test_init_writes_synlynk_config_solo_by_default(tmp_path, monkeypatch):
 
 def test_init_writes_synlynk_config_team_mode(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(mode="team")
     config_path = tmp_path / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
     assert data["mode"] == "team"
 
 
-def test_init_skips_synlynk_config_if_exists_without_force(project_dir):
+def test_init_skips_synlynk_config_if_exists_without_force(project_dir, monkeypatch):
     # conftest already wrote mode=single; init(mode="team") without force must not overwrite
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     synlynk.init(mode="team")
     config_path = project_dir / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
     assert data["mode"] == "single"
 
 
-def test_init_overwrites_synlynk_config_with_force(project_dir):
+def test_init_overwrites_synlynk_config_with_force(project_dir, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     synlynk.init(mode="team", force=True)
     config_path = project_dir / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
@@ -568,6 +605,9 @@ def test_build_templates_without_project_id_keeps_todo_placeholder(tmp_path, mon
 
 def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(project_id="PJ_xyz789")
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "PJ_xyz789" in content
@@ -576,6 +616,9 @@ def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
 
 def test_init_with_org_stored_in_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(org="myorg", repo="myrepo")
     config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
     assert config["org"] == "myorg"
@@ -1086,6 +1129,76 @@ def test_reconcile_skips_finished_jobs(project_dir):
     assert result[0]["status"] == "completed"  # unchanged
 
 
+def test_reconcile_marks_completed_from_exit_file(project_dir):
+    log_file = ".synlynk/logs/job-success.log"
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    with open(log_file + ".exit", "w") as f:
+        f.write("0\n")
+    
+    jobs = [
+        {"id": "job-success", "pid": 9999999, "status": "running", 
+         "ended_at": None, "exit_code": None, "log_file": log_file},
+    ]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    
+    result = synlynk._load_jobs()
+    job = result[0]
+    assert job["status"] == "completed"
+    assert job["exit_code"] == 0
+    assert job["ended_at"] is not None
+    assert not os.path.exists(log_file + ".exit")
+
+
+def test_reconcile_marks_failed_from_exit_file(project_dir):
+    log_file = ".synlynk/logs/job-error.log"
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    with open(log_file + ".exit", "w") as f:
+        f.write("1\n")
+    
+    jobs = [
+        {"id": "job-error", "pid": 9999999, "status": "running", 
+         "ended_at": None, "exit_code": None, "log_file": log_file},
+    ]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    
+    result = synlynk._load_jobs()
+    job = result[0]
+    assert job["status"] == "failed"
+    assert job["exit_code"] == 1
+    assert job["ended_at"] is not None
+    assert not os.path.exists(log_file + ".exit")
+
+
+def test_reconcile_survives_permission_error(project_dir, monkeypatch):
+    # PermissionError from os.kill means PID exists (owned by another user) — keep as running.
+    def fake_kill(pid, sig):
+        raise PermissionError("Operation not permitted")
+    monkeypatch.setattr(synlynk.os, "kill", fake_kill)
+    jobs = [{"id": "job-owned", "pid": 1, "status": "running",
+             "ended_at": None, "exit_code": None, "log_file": ""}]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()  # must not raise
+    result = synlynk._load_jobs()
+    assert result[0]["status"] == "running"
+
+
+def test_reconcile_empty_log_file_does_not_crash(project_dir):
+    # A job with empty log_file must not read/delete ".exit" in CWD.
+    sentinel = ".exit"
+    with open(sentinel, "w") as f:
+        f.write("0\n")
+    jobs = [{"id": "job-nolog", "pid": 9999999, "status": "running",
+             "ended_at": None, "exit_code": None, "log_file": ""}]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    assert os.path.exists(sentinel), ".exit in CWD must not be consumed"
+    os.remove(sentinel)
+    result = synlynk._load_jobs()
+    assert result[0]["status"] == "failed"  # dead PID → failed regardless
+
+
 def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):
     def fake_run(cmd, **kw):
         class R:
@@ -1188,7 +1301,151 @@ def test_static_scan_no_git_repo(tmp_path, monkeypatch):
     assert result["project_name"] == tmp_path.name
 
 
+def test_write_informed_skeleton_creates_docs(project_dir):
+    import shutil
+    # Remove existing project-docs to test creation path
+    shutil.rmtree("project-docs")
+    os.makedirs("project-docs/devlogs")
+    scan = {
+        "project_name": "testproject", "description": "A test tool.",
+        "commit_count": 12, "has_structured_commits": True,
+        "recent_topics": ["feat: add login", "fix: auth bug"],
+        "top_dirs": ["src", "tests"], "languages": ["Python"],
+        "readme_summary": "# testproject\nA test tool.",
+    }
+    written = synlynk._write_informed_skeleton(scan, skip_existing=False)
+    assert "project-docs/roadmap.md" in written
+    assert "project-docs/memory.md" in written
+    assert "project-docs/todo.md" in written
+
+
+def test_write_informed_skeleton_injects_project_name(project_dir):
+    import shutil
+    shutil.rmtree("project-docs")
+    os.makedirs("project-docs/devlogs")
+    scan = {
+        "project_name": "myapp", "description": "My application.",
+        "commit_count": 5, "has_structured_commits": False,
+        "recent_topics": ["initial commit"],
+        "top_dirs": ["src"], "languages": ["Go"], "readme_summary": "",
+    }
+    synlynk._write_informed_skeleton(scan, skip_existing=False)
+    roadmap = open("project-docs/roadmap.md").read()
+    assert "myapp" in roadmap
+
+
+def test_write_informed_skeleton_skips_existing_by_default(project_dir):
+    original = open("project-docs/roadmap.md").read()
+    scan = {"project_name": "x", "description": "", "commit_count": 0,
+            "has_structured_commits": False, "recent_topics": [],
+            "top_dirs": [], "languages": [], "readme_summary": ""}
+    synlynk._write_informed_skeleton(scan, skip_existing=True)
+    assert open("project-docs/roadmap.md").read() == original
+
+
+def test_llm_enrich_calls_agent_noninteractively(project_dir, monkeypatch):
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        class R:
+            returncode = 0
+            stdout = "# Updated Roadmap\n\nThis is enriched content.\n"
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+    scan = {"project_name": "testproject", "description": "A test.",
+            "commit_count": 5, "recent_topics": ["feat: add x"], "languages": ["Python"],
+            "readme_summary": "# testproject\nA test.", "top_dirs": ["src"],
+            "has_structured_commits": True}
+    result = synlynk._llm_enrich("claude", "claude", scan)
+    assert result is True
+    assert any("claude" in str(c) for c in calls)
+
+
+def test_llm_enrich_returns_false_on_agent_failure(project_dir, monkeypatch):
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 1
+            stdout = ""
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+    scan = {"project_name": "x", "description": "", "commit_count": 0,
+            "recent_topics": [], "languages": [], "readme_summary": "",
+            "top_dirs": [], "has_structured_commits": False}
+    result = synlynk._llm_enrich("claude", "claude", scan)
+    assert result is False
+
+
+def test_llm_enrich_uses_agent_name_not_cli_for_baselines(project_dir, monkeypatch):
+    # When agent_cli is a custom path, agent_name must still resolve the right baselines.
+    captured_cmd = []
+    def fake_run(cmd, **kw):
+        captured_cmd.extend(cmd)
+        class R:
+            returncode = 0
+            stdout = "# Roadmap\n"
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+    scan = {"project_name": "p", "description": "", "commit_count": 0,
+            "recent_topics": [], "languages": [], "readme_summary": "",
+            "top_dirs": [], "has_structured_commits": False}
+    # agent_name="claude" (key in BASELINES), agent_cli="/usr/local/bin/my-claude" (custom path)
+    synlynk._llm_enrich("claude", "/usr/local/bin/my-claude", scan)
+    # The command must use the custom cli path, not the key name
+    assert captured_cmd[0] == "/usr/local/bin/my-claude"
+    # And claude's non_interactive_flags ("--print") must be applied (from BASELINES["claude"])
+    assert "--print" in captured_cmd
+
+
+# ── Task 7: Init wizard tests ─────────────────────────────────────────────────
+
+def test_init_wizard_creates_synlynk_dir(tmp_path, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    monkeypatch.setattr("builtins.input", lambda _: "")  # accept all defaults
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
+    sl.init()
+    assert os.path.exists(".synlynk")
+    assert os.path.exists(".synlynk/config.json")
+
+def test_init_wizard_writes_project_docs(tmp_path, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
+    sl.init()
+    assert os.path.exists("project-docs/roadmap.md")
+    assert os.path.exists("project-docs/memory.md")
+    assert os.path.exists("project-docs/todo.md")
+
+def test_init_wizard_skips_existing_synlynk_without_force(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    original_roadmap = open("project-docs/roadmap.md").read()
+    sl.init(force=False)
+    assert open("project-docs/roadmap.md").read() == original_roadmap
+
+def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
+    import bin.synlynk as sl
+    import json as _json
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    # Simulate user providing email at the cloud nudge step
+    inputs = iter(["nikhil@example.com"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs, ""))
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
+    sl.init()
+    config = _json.loads(open(".synlynk/config.json").read())
+    assert config.get("workgroup_invite_email") == "nikhil@example.com"
+
+
 def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
+    import bin.synlynk as sl
     launched = []
     class FakeProc:
         pid = 12345
@@ -1196,35 +1453,177 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
         launched.append(cmd)
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
-    job = synlynk.dispatch_agent("claude", "implement auth fix", story_id="14")
+    job = sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     assert job["agent"] == "claude"
     assert job["pid"] == 12345
     assert job["status"] == "running"
     assert job["task"] == "implement auth fix"
     assert job["story_id"] == "14"
-    jobs = synlynk._load_jobs()
+    jobs = sl._load_jobs()
     assert any(j["id"] == job["id"] for j in jobs)
 
 
 def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
+    import bin.synlynk as sl
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    job = synlynk.dispatch_agent("gemini", "write tests")
+    job = sl.dispatch_agent("gemini", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
     assert "write tests" in content
 
 
 def test_dispatch_agent_unknown_agent_raises(project_dir):
-    with pytest.raises(ValueError, match="Unknown agent"):
-        synlynk.dispatch_agent("unknownbot", "do thing")
+    import bin.synlynk as sl, pytest as _pytest
+    with _pytest.raises(ValueError, match="Unknown agent"):
+        sl.dispatch_agent("unknownbot", "do thing")
 
 
 def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
+    import bin.synlynk as sl
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    synlynk.dispatch_agent("claude", "task one")
-    synlynk.dispatch_agent("claude", "task two")
-    assert len(synlynk._load_jobs()) == 2
+    sl.dispatch_agent("claude", "task one")
+    sl.dispatch_agent("claude", "task two")
+    assert len(sl._load_jobs()) == 2
+
+
+def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
+    import bin.synlynk as sl
+    monkeypatch.setattr(sl, "_reconcile_jobs", lambda: None)  # bypass PID probing
+    jobs = [
+        {"id": "job-aaa", "agent": "claude", "story_id": "14", "task": "do thing",
+         "pid": 99999, "status": "running", "started_at": "2026-06-14T10:00:00",
+         "ended_at": None, "exit_code": None, "log_file": ".synlynk/logs/job-aaa.log"},
+    ]
+    sl._save_jobs(jobs)
+    sl.cmd_jobs()
+    out = capsys.readouterr().out
+    assert "job-aaa" in out
+    assert "claude" in out
+    assert "running" in out
+
+
+def test_cmd_jobs_empty_output_when_no_jobs(project_dir, capsys):
+    import bin.synlynk as sl
+    sl.cmd_jobs()
+    out = capsys.readouterr().out
+    assert "No jobs" in out or out.strip() == "" or "no jobs" in out.lower()
+
+
+def test_cmd_logs_prints_log_content(project_dir, capsys):
+    import bin.synlynk as sl
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    job = {"id": "job-bbb", "agent": "claude", "status": "running",
+            "log_file": ".synlynk/logs/job-bbb.log", "pid": 1,
+            "story_id": "", "task": "t", "started_at": "2026-06-14T10:00:00",
+            "ended_at": None, "exit_code": None, "prompt_file": ""}
+    sl._save_jobs([job])
+    open(".synlynk/logs/job-bbb.log", "w").write("Agent output line 1\nAgent output line 2\n")
+    sl.cmd_logs("job-bbb")
+    out = capsys.readouterr().out
+    assert "Agent output line 1" in out
+
+
+def test_cmd_logs_error_for_missing_job(project_dir, capsys):
+    import bin.synlynk as sl
+    sl.cmd_logs("job-missing")
+    out = capsys.readouterr().out
+    assert "not found" in out.lower() or "no job" in out.lower()
+
+
+def test_cmd_shell_spawns_subshell(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    spawned = []
+    def fake_run(cmd, **kw):
+        spawned.append((cmd, kw))
+        class R:
+            returncode = 0
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl.cmd_shell(story_id="14")
+    assert any(isinstance(c, list) and any("sh" in str(x) for x in c)
+               for c, _ in spawned)
+
+
+def test_cmd_shell_injects_synlynk_env(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    captured_env = {}
+    def fake_run(cmd, **kw):
+        captured_env.update(kw.get("env", {}))
+        class R:
+            returncode = 0
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl.cmd_shell(story_id="42")
+    assert captured_env.get("SYNLYNK_STORY_ID") == "42"
+    assert "SYNLYNK_PROJECT_DIR" in captured_env
+
+
+def test_cmd_launch_starts_agent_interactively(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    launched = []
+    def fake_run(cmd, **kw):
+        launched.append(cmd)
+        class R:
+            returncode = 0
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl.cmd_launch("claude", story_id="14")
+    assert any("claude" in str(c) for c in launched)
+
+
+def test_cmd_launch_unknown_agent_prints_error(project_dir, capsys):
+    import bin.synlynk as sl
+    sl.cmd_launch("unknownbot", story_id="1")
+    out = capsys.readouterr().out
+    assert "unknown" in out.lower() or "not found" in out.lower()
+
+
+def test_cmd_launch_generates_agent_context(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    sl.cmd_launch("claude", story_id="5")
+    assert os.path.exists(".synlynk/context-claude.md")
+
+
+def test_cmd_run_trio_dispatches_three_agents(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    dispatched = []
+    def fake_dispatch(agent, task, story_id=None):
+        dispatched.append(agent)
+        return {"id": f"job-{agent}", "agent": agent, "pid": 1, "status": "running",
+                "task": task, "story_id": story_id, "log_file": "", "prompt_file": "",
+                "started_at": "2026-06-14T10:00:00", "ended_at": None, "exit_code": None}
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch)
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [
+        {"name": "claude", "functional": True, "roles": ["architect", "builder"],
+         "cli": "claude", "version": "2", "capabilities": [], "non_interactive_flags": ["--print"],
+         "discovery_path": ""},
+        {"name": "gemini", "functional": True, "roles": ["builder", "verifier"],
+         "cli": "gemini", "version": "1", "capabilities": [], "non_interactive_flags": [],
+         "discovery_path": ""},
+        {"name": "codex", "functional": True, "roles": ["builder"],
+         "cli": "codex", "version": "1", "capabilities": [], "non_interactive_flags": [],
+         "discovery_path": ""},
+    ])
+    sl.cmd_run_trio("implement the auth feature")
+    assert len(dispatched) == 3
+    assert "claude" in dispatched
+
+
+def test_cmd_run_trio_warns_with_fewer_than_three_agents(project_dir, monkeypatch, capsys):
+    import bin.synlynk as sl
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [
+        {"name": "claude", "functional": True, "roles": ["architect"],
+         "cli": "claude", "version": "2", "capabilities": [], "non_interactive_flags": [],
+         "discovery_path": ""},
+    ])
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: {"id": "j", "pid": 1,
+        "status": "running", "agent": "claude", "task": "", "story_id": "",
+        "log_file": "", "prompt_file": "", "started_at": "", "ended_at": None, "exit_code": None})
+    sl.cmd_run_trio("do thing")
+    out = capsys.readouterr().out
+    assert "1" in out or "agent" in out.lower()

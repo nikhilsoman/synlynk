@@ -149,7 +149,7 @@ def _save_jobs(jobs: list) -> None:
 
 
 def _reconcile_jobs() -> None:
-    """Probes PIDs of running jobs; marks unreachable ones as failed.
+    """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
     Called on every synlynk invocation before any command runs.
     Prevents stale jobs surviving reboots or external kills.
@@ -166,9 +166,30 @@ def _reconcile_jobs() -> None:
         try:
             os.kill(pid, 0)  # signal 0: check existence only, no actual signal
         except ProcessLookupError:
-            job["status"] = "failed"
+            # PID is dead. Check if wrapper wrote an exit code.
+            log_file = job.get("log_file")
+            exit_code = None
+            if log_file:
+                exit_file = log_file + ".exit"
+                if os.path.exists(exit_file):
+                    try:
+                        with open(exit_file) as f:
+                            exit_code = int(f.read().strip())
+                        os.remove(exit_file)
+                    except Exception:
+                        pass
+
+            if exit_code == 0:
+                job["status"] = "completed"
+                job["exit_code"] = 0
+            else:
+                job["status"] = "failed"
+                job["exit_code"] = exit_code if exit_code is not None else -1
             job["ended_at"] = now
             changed = True
+        except PermissionError:
+            # Process exists but is owned by another user — keep status as running.
+            pass
     if changed:
         _save_jobs(jobs)
 
@@ -313,6 +334,349 @@ def _static_scan(root: str = ".") -> dict:
         pass
 
     return result
+
+
+def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
+    """Writes project-docs skeleton informed by static scan results.
+
+    Returns list of file paths written. Skips files that already exist
+    when skip_existing=True. The wizard surfaces a caveat for repos
+    without structured commits.
+    """
+    name = scan.get("project_name", "this project")
+    desc = scan.get("description") or f"A project named {name}."
+    topics = scan.get("recent_topics", [])
+    langs = ", ".join(scan.get("languages", [])) or "unknown"
+    commit_count = scan.get("commit_count", 0)
+    caveat = (
+        "\n> ⚠ Skeleton generated from git history — results vary by commit style. "
+        "Review before proceeding.\n"
+        if not scan.get("has_structured_commits") else ""
+    )
+
+    recent_work = "\n".join(f"- {t}" for t in topics[:5]) or "- (no commits found)"
+
+    roadmap_content = f"""\
+# {name} Roadmap
+{caveat}
+**Positioning:** [Describe what {name} is building toward]
+
+| Version | Theme | Status | Target |
+| :--- | :--- | :--- | :--- |
+| v0.1.0 | Initial release | ✅ Shipped | — |
+| v0.2.0 | [Next milestone] | 🔜 Next | — |
+
+## Recent work (from git history — {commit_count} commits, {langs})
+{recent_work}
+"""
+
+    memory_content = f"""\
+# {name} Memory
+
+## Project Overview
+- **Name:** {name}
+- **Description:** {desc}
+- **Languages:** {langs}
+- **Directories:** {", ".join(scan.get("top_dirs", [])) or "—"}
+
+## Decisions
+[Document key decisions here with [@username] attribution in team mode]
+
+## Architecture
+[Document key architectural decisions here]
+"""
+
+    todo_content = f"""\
+# {name} — Todo
+
+## Active Tasks
+- [ ] Review and refine the generated roadmap.md <!-- id: 1 -->
+- [ ] Review and update memory.md with actual decisions <!-- id: 2 -->
+- [ ] Define first milestone in roadmap <!-- id: 3 -->
+
+## Completed
+"""
+
+    files = {
+        "project-docs/roadmap.md": roadmap_content,
+        "project-docs/memory.md": memory_content,
+        "project-docs/todo.md": todo_content,
+    }
+
+    written = []
+    for path, content in files.items():
+        if skip_existing and os.path.exists(path):
+            continue
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        written.append(path)
+    return written
+
+
+def _llm_enrich(agent_name: str, agent_cli: str, scan: dict) -> bool:
+    """Calls the configured agent non-interactively to enrich project-docs.
+
+    Passes the static scan result + current doc drafts as context.
+    Writes enriched roadmap.md if the agent responds successfully.
+    Returns True on success, False on failure.
+    """
+    name = scan.get("project_name", "this project")
+    topics = "\n".join(f"- {t}" for t in scan.get("recent_topics", []))
+    langs = ", ".join(scan.get("languages", [])) or "unknown"
+    readme = scan.get("readme_summary", "")[:400]
+
+    prompt = f"""\
+You are helping initialise a synlynk project context for a software project.
+
+Project: {name}
+Description: {scan.get('description', '')}
+Languages: {langs}
+Commit count: {scan.get('commit_count', 0)}
+Recent commit messages:
+{topics}
+
+README excerpt:
+{readme}
+
+Based on this, write a concise `roadmap.md` for this project in this exact format:
+
+# {name} Roadmap
+
+**Positioning:** [one sentence describing the product goal]
+
+| Version | Theme | Status | Target |
+| :--- | :--- | :--- | :--- |
+[3-5 plausible milestone rows based on the commit history]
+
+Keep it short. Infer from the evidence. Do not invent features not supported by the commits.
+"""
+
+    # Write prompt to a temp file to avoid shell escaping issues.
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+    prompt_file = os.path.join(PROMPTS_DIR, "llm-enrich.md")
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+
+    baselines = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    flags = baselines.get("non_interactive_flags", ["--print"])
+    cmd = [agent_cli] + flags
+
+    try:
+        with open(prompt_file) as pf:
+            result = subprocess.run(cmd, stdin=pf, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+        enriched = result.stdout.strip()
+        with open("project-docs/roadmap.md", "w") as f:
+            f.write(enriched + "\n")
+        return True
+    except Exception:
+        return False
+
+
+def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
+    """Dispatches an agent to run a task in the background.
+
+    Uses non-interactive agent mode (no PTY). Stdout captured to
+    .synlynk/logs/<job_id>.log. Returns the job dict.
+    Raises ValueError for unknown agent names.
+    """
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+
+    baselines = AGENT_CAPABILITY_BASELINES[agent]
+    cli = baselines["cli"]
+    flags = baselines["non_interactive_flags"]
+
+    import hashlib as _hashlib
+    job_id = "job-" + _hashlib.md5(
+        f"{agent}{task}{time.time()}".encode()
+    ).hexdigest()[:8]
+
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+
+    log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
+    prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+
+    try:
+        generate_context(scope="full")
+    except Exception:
+        pass
+    context_path = ".synlynk/context.md"
+    context_text = ""
+    if os.path.exists(context_path):
+        context_text = open(context_path).read()
+
+    story_line = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
+    prompt = f"{context_text}{story_line}\n\n## Your Task\n{task}\n"
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+
+    cmd = [cli] + flags
+    import shlex as _shlex
+    cmd_str = " ".join(_shlex.quote(c) for c in cmd)
+    shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
+
+    proc = subprocess.Popen(
+        ["sh", "-c", shell_cmd],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+    job = {
+        "id": job_id,
+        "agent": agent,
+        "story_id": story_id or "",
+        "task": task,
+        "pid": proc.pid,
+        "log_file": log_file,
+        "prompt_file": prompt_file,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+    }
+
+    jobs = _load_jobs()
+    jobs.append(job)
+    _save_jobs(jobs)
+
+    log_telemetry_event({"type": "dispatch", "agent": agent,
+                         "story_id": story_id, "job_id": job_id})
+    return job
+
+
+def cmd_jobs(all_jobs: bool = False) -> None:
+    """Prints active (and optionally completed) jobs."""
+    _reconcile_jobs()
+    jobs = _load_jobs()
+    if not jobs:
+        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+        return
+    visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
+    if not visible:
+        completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
+        print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
+        return
+    header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
+    print(f"{_BOLD}{header}{_RESET}")
+    print("─" * 70)
+    for j in visible:
+        sid = (j.get("story_id") or "—")[:6]
+        task = (j.get("task") or "")[:40]
+        status = j["status"]
+        color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
+        print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+
+def cmd_logs(job_id: str, tail: int = 50) -> None:
+    """Prints the captured stdout of a dispatched job."""
+    jobs = _load_jobs()
+    job = next((j for j in jobs if j["id"] == job_id), None)
+    if job is None:
+        print(f"No job found with id '{job_id}'. Run `synlynk jobs` to list jobs.")
+        return
+    log_file = job.get("log_file", "")
+    if not log_file or not os.path.exists(log_file):
+        print(f"Log file not found for job {job_id}.")
+        return
+    print(f"{_BOLD}── logs: {job_id} ({job['agent']}) ─────────────────────────{_RESET}")
+    with open(log_file) as f:
+        lines = f.readlines()
+    for line in lines[-tail:]:
+        print(line, end="")
+    if len(lines) > tail:
+        print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
+
+
+def cmd_shell(story_id: str = None) -> None:
+    """Spawns an interactive subshell with synlynk context env vars injected.
+
+    The shell runs in the current directory (worktree-per-story lands in v0.5.0).
+    On exit the calling process resumes normally.
+    """
+    shell = os.environ.get("SHELL", "/bin/bash")
+    env = {**os.environ,
+           "SYNLYNK_PROJECT_DIR": os.path.abspath("."),
+           "SYNLYNK_STORY_ID": story_id or "",
+           "SYNLYNK_CONTEXT": os.path.abspath(".synlynk/context.md")}
+    label = f"story #{story_id}" if story_id else "synlynk"
+    print(f"{_BOLD}Entering synlynk shell ({label}).{_RESET} "
+          f"Type {_CYAN}exit{_RESET} to return.")
+    subprocess.run([shell], env=env)
+    print(f"{_DIM}Returned from synlynk shell.{_RESET}")
+
+
+def cmd_launch(agent: str, story_id: str = None) -> None:
+    """Launches an agent CLI interactively in the current directory.
+
+    Pre-generates .synlynk/context-<agent>.md and starts the CLI so the
+    agent reads it as initial context. Stdout/stderr are not captured —
+    this is an interactive session. Telemetry is logged on exit.
+    """
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        print(f"Unknown agent '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+        return
+
+    cli = AGENT_CAPABILITY_BASELINES[agent]["cli"]
+
+    try:
+        generate_context(scope="full")
+    except Exception:
+        pass
+    src = ".synlynk/context.md"
+    dest = f".synlynk/context-{agent}.md"
+    if os.path.exists(src):
+        import shutil as _shutil
+        _shutil.copy(src, dest)
+
+    label = f"story #{story_id}" if story_id else "interactive session"
+    print(f"{_BOLD}Launching {agent} — {label}.{_RESET}")
+    print(f"  Context: {_CYAN}{dest}{_RESET}")
+    print(f"  Exit the agent to return to synlynk.\n")
+
+    start = time.time()
+    result = subprocess.run([cli])
+    duration = time.time() - start
+
+    log_telemetry_event({"type": "launch", "agent": agent,
+                         "story_id": story_id, "exit_code": result.returncode,
+                         "duration_s": round(duration, 1)})
+    update_costs(cli, 0, 0, duration)
+    print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
+
+
+def cmd_run_trio(task: str, story_id: str = None) -> None:
+    """Dispatches all functional agents in parallel — one job per agent.
+
+    This is a parallel convenience wrapper, NOT the sequential Trio pipeline.
+    Each agent gets the same task description and full context. For the
+    sequential Architect→Build→Verify pipeline, see the Trio Protocol spec.
+    """
+    agents = [a for a in discover_agents() if a["functional"]]
+    if not agents:
+        print("No functional agents found. Run `synlynk init` to set up your Hybrid Workgroup.")
+        return
+    if len(agents) < 3:
+        print(f"  {_YELLOW}Only {len(agents)} agent(s) available "
+              f"(trio needs 3). Dispatching what's configured.{_RESET}")
+
+    print(f"{_BOLD}✨ Dispatching {len(agents)} agents in parallel{_RESET}")
+    print(f"  Task: {task}\n")
+
+    jobs = []
+    for ag in agents:
+        job = dispatch_agent(ag["name"], task, story_id=story_id)
+        jobs.append(job)
+        role = ag["roles"][0] if ag["roles"] else "worker"
+        print(f"  {_GREEN}▶{_RESET} [{job['id']}] {ag['name']:10} → {role}  PID {job['pid']}")
+
+    print(f"\n  {_DIM}All agents running in background.{_RESET}")
+    print(f"  Monitor with: {_CYAN}synlynk jobs{_RESET}")
+    print(f"  View output:  {_CYAN}synlynk logs <job-id>{_RESET}")
 
 
 def parse_costs_md() -> tuple:
@@ -1567,137 +1931,138 @@ class WatchDaemon:
                 set_state("watching")
                 last_mtimes = self._get_mtimes("project-docs")
 
-
-def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
-    """Dispatches an agent to run a task in the background.
-
-    Uses non-interactive agent mode (no PTY). Stdout captured to
-    .synlynk/logs/<job_id>.log. Returns the job dict.
-    Raises ValueError for unknown agent names.
-    """
-    if agent not in AGENT_CAPABILITY_BASELINES:
-        raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
-
-    baselines = AGENT_CAPABILITY_BASELINES[agent]
-    cli = baselines["cli"]
-    flags = baselines["non_interactive_flags"]
-
-    # Unique job ID based on timestamp + agent.
-    import hashlib as _hashlib
-    job_id = "job-" + _hashlib.md5(
-        f"{agent}{task}{time.time()}".encode()
-    ).hexdigest()[:8]
-
-    os.makedirs(LOGS_DIR, exist_ok=True)
-    os.makedirs(PROMPTS_DIR, exist_ok=True)
-
-    log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
-    prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
-
-    # Build prompt: context snapshot + task description.
-    try:
-        generate_context(scope="full")
-    except Exception:
-        pass
-    context_path = ".synlynk/context.md"
-    context_text = ""
-    if os.path.exists(context_path):
-        context_text = open(context_path).read()
-
-    story_line = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
-    prompt = f"{context_text}{story_line}\n\n## Your Task\n{task}\n"
-    with open(prompt_file, "w") as f:
-        f.write(prompt)
-
-    # Launch agent non-interactively, detached from terminal.
-    cmd = [cli] + flags
-    with open(log_file, "w") as log_out, open(prompt_file) as prompt_in:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=prompt_in,
-            stdout=log_out,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,  # detach — survives terminal close
-        )
-
-    job = {
-        "id": job_id,
-        "agent": agent,
-        "story_id": story_id or "",
-        "task": task,
-        "pid": proc.pid,
-        "log_file": log_file,
-        "prompt_file": prompt_file,
-        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "ended_at": None,
-        "status": "running",
-        "exit_code": None,
-    }
-
-    jobs = _load_jobs()
-    jobs.append(job)
-    _save_jobs(jobs)
-
-    log_telemetry_event({"type": "dispatch", "agent": agent,
-                         "story_id": story_id, "job_id": job_id})
-    return job
-
-
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo") -> None:
-    print("Initializing synlynk in current directory...")
-    agent_set = set(agents) if agents is not None else {"claude", "agy", "codex"}
-    templates = _build_templates(org=org, repo=repo, project_id=project_id)
+    """Progressive wizard: semantic scan → agent discovery → doc bootstrap → nudge."""
 
-    docs_dir = "project-docs"
-    devlogs_dir = os.path.join(docs_dir, "devlogs")
-    synlynk_dir = ".synlynk"
+    def _print_step(n: int, label: str) -> None:
+        print(f"\n{_BOLD}{_CYAN}Step {n}/{_TOTAL_STEPS} — {label}{_RESET}")
 
-    for d in [docs_dir, devlogs_dir, synlynk_dir]:
+    _TOTAL_STEPS = 6
+
+    # ── Step 1: Detect existing state ──────────────────────────────────────
+    _print_step(1, "Scanning repository")
+    synlynk_exists = os.path.exists(".synlynk")
+    if synlynk_exists and not force:
+        print(f"  {_YELLOW}⚠ .synlynk/ already exists.{_RESET} "
+              "Use --force to reinitialise.\n  Updating agent files only.")
+
+    scan = _static_scan(".")
+    print(f"  Project : {_BOLD}{scan['project_name']}{_RESET}")
+    print(f"  Commits : {scan['commit_count']}")
+    print(f"  Languages: {', '.join(scan['languages']) or 'unknown'}")
+    if scan["recent_topics"]:
+        print(f"  Recent  : {scan['recent_topics'][0]}")
+    if not scan["has_structured_commits"] and scan["commit_count"] > 0:
+        print(f"  {_DIM}⚠ Commit messages don't follow a structured convention — "
+              "skeleton quality may be lower. Review generated docs before proceeding.{_RESET}")
+
+    # ── Step 2: Agent discovery ─────────────────────────────────────────────
+    _print_step(2, "Discovering agents")
+    discovered = discover_agents()
+    functional = [a for a in discovered if a["functional"]]
+    non_functional = [a for a in discovered if not a["functional"]]
+
+    if functional:
+        print(f"\n  {_BOLD}{_GREEN}✨ Your Hybrid Workgroup is ready:{_RESET}")
+        for ag in functional:
+            roles = ", ".join(ag["roles"])
+            print(f"    {_GREEN}✓ {ag['name']:10}{_RESET} {ag['version']}  "
+                  f"roles: {roles}")
+    else:
+        print(f"  {_YELLOW}No agents detected. Install Claude, Gemini, or Codex to form your Hybrid Workgroup.{_RESET}")
+
+    if non_functional:
+        print(f"\n  {_DIM}Found but not configured (run --version failed):{_RESET}")
+        for ag in non_functional:
+            print(f"    {_DIM}✗ {ag['name']} — check API key / install{_RESET}")
+
+    # ── Step 3: Create directories + write skeleton ─────────────────────────
+    _print_step(3, "Bootstrapping project-docs")
+    for d in ["project-docs", "project-docs/devlogs", ".synlynk",
+              LOGS_DIR, PROMPTS_DIR]:
         if not os.path.exists(d):
             os.makedirs(d)
-            print(f"  Created {d}/")
 
+    written = _write_informed_skeleton(scan, skip_existing=not force)
+    if written:
+        for p in written:
+            print(f"  {_GREEN}✓{_RESET} Created {p}")
+    else:
+        print(f"  {_DIM}All project-docs already exist — skipped (use --force to overwrite){_RESET}")
+
+    # Write agent instruction files.
+    agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex"}
+    templates = _build_templates(org=org, repo=repo, project_id=project_id)
     _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
-
     for filename, content in templates.items():
         required = _agent_guards.get(filename)
         if required and required not in agent_set:
             continue
-
-        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md",
-                        "AGENTS.md", ".cursorrules"):
+        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", "AGENTS.md", ".cursorrules"):
             file_path = filename
         elif filename == "config.json":
-            file_path = os.path.join(synlynk_dir, filename)
+            file_path = os.path.join(".synlynk", filename)
         else:
-            file_path = os.path.join(docs_dir, filename)
-
+            file_path = os.path.join("project-docs", filename)
         if os.path.exists(file_path) and not force:
-            print(f"  {file_path} already exists. Skipping (use --force to overwrite).")
-        else:
-            with open(file_path, "w") as f:
-                f.write(content)
-            action = "Updated" if os.path.exists(file_path) else "Created"
-            print(f"  {action} {file_path}")
+            continue
+        with open(file_path, "w") as f:
+            f.write(content)
 
-    synlynk_config_path = os.path.join(docs_dir, ".synlynk_config.json")
-    if os.path.exists(synlynk_config_path) and not force:
-        print(f"  {synlynk_config_path} already exists. Skipping (use --force to overwrite).")
+    # ── Step 4: LLM enrichment offer ────────────────────────────────────────
+    _print_step(4, "LLM enrichment (optional)")
+    if functional:
+        enricher = functional[0]
+        print(f"  I found {scan['commit_count']} commits and {len(scan['recent_topics'])} "
+              f"recent topics.\n  Want me to ask {enricher['name']} to synthesise a roadmap "
+              f"from this? (costs tokens)")
+        try:
+            answer = input("  [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer == "y":
+            print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
+            ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
+            print(f"{_GREEN}done{_RESET}" if ok else f"{_YELLOW}failed — keeping skeleton{_RESET}")
     else:
-        synlynk_config_data = {
-            "mode": mode,
-            "version": VERSION,
-            "init_timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-        }
+        print(f"  {_DIM}No functional agent available — skipping enrichment{_RESET}")
+
+    # ── Step 5: Cloud directory nudge ────────────────────────────────────────
+    _print_step(5, "Team & cloud setup (optional)")
+    print("  Add a collaborator or share this workspace with your team.")
+    print("  Leave blank to skip.")
+    try:
+        email = input("  Email or synlynk ID: ").strip()
+    except EOFError:
+        email = ""
+
+    # ── Step 6: Finalise config ──────────────────────────────────────────────
+    _print_step(6, "Finalising")
+    synlynk_config_path = os.path.join("project-docs", ".synlynk_config.json")
+    if not os.path.exists(synlynk_config_path) or force:
+        config_data = {"mode": mode, "version": VERSION,
+                       "init_timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}
         with open(synlynk_config_path, "w") as f:
-            json.dump(synlynk_config_data, f, indent=2)
-        print(f"  Created {synlynk_config_path}")
+            json.dump(config_data, f, indent=2)
+
+    _update_config({
+        "workgroup_agents": [a["name"] for a in functional],
+        "workgroup_invite_email": email or None,
+    })
 
     set_state("stopped")
-    print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
-    print("✓ synlynk initialized.")
+
+    print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
+    if functional:
+        agent_names = " + ".join(a["name"] for a in functional)
+        print(f"\n  {_BOLD}✨ Magic Moment 2 — dispatch agents now:{_RESET}")
+        print(f"    {_CYAN}synlynk dispatch {functional[0]['name']} --task \"your task\"{_RESET}")
+        if len(functional) >= 3:
+            print(f"    {_CYAN}synlynk run --trio --task \"your task\"{_RESET}  "
+                  f"← runs {agent_names} in parallel")
+    print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 def upgrade() -> None:
     """Checks GitHub releases for a newer version and prints upgrade instructions."""
@@ -1813,6 +2178,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
     return exit_code
 
 def main() -> None:
+    _reconcile_jobs()
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
     )
@@ -1862,6 +2228,46 @@ def main() -> None:
     sentinel_clear_parser.add_argument("--code",
                                        help="Clear only alerts with this code")
 
+    dispatch_parser = subparsers.add_parser(
+        "dispatch", help="Dispatch an agent to run a task in the background")
+    dispatch_parser.add_argument("agent",
+        help="Agent name: claude, gemini, codex, agy")
+    dispatch_parser.add_argument("--task", required=True,
+        help="Task description for the agent")
+    dispatch_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story/task ID for context labelling")
+
+    jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
+    jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
+        help="Include completed and failed jobs")
+
+    logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
+    logs_parser.add_argument("--job", required=True, dest="job_id",
+        help="Job ID (from `synlynk jobs`)")
+    logs_parser.add_argument("--tail", type=int, default=50,
+        help="Number of lines to show (default: 50)")
+
+    shell_parser = subparsers.add_parser(
+        "shell", help="Spawn a subshell with synlynk context injected")
+    shell_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story ID to label the shell session")
+
+    launch_parser = subparsers.add_parser(
+        "launch", help="Launch an agent CLI interactively with pre-loaded context")
+    launch_parser.add_argument("agent", help="Agent name: claude, gemini, codex, agy")
+    launch_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story ID for context labelling")
+
+    run_parser = subparsers.add_parser(
+        "run", help="Convenience wrappers for common dispatch patterns")
+    run_sub = run_parser.add_subparsers(dest="run_action")
+    trio_parser = run_sub.add_parser("--trio",
+        help="Dispatch all functional agents in parallel (not the sequential Trio pipeline)")
+    trio_parser.add_argument("--task", required=True,
+        help="Task description sent to all agents")
+    trio_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story ID for context labelling")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -1894,6 +2300,28 @@ def main() -> None:
             )
         else:
             sentinel_list()  # default: list
+    elif args.command == "dispatch":
+        try:
+            job = dispatch_agent(args.agent, args.task, story_id=args.story_id)
+            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
+            print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    elif args.command == "jobs":
+        cmd_jobs(all_jobs=getattr(args, "all_jobs", False))
+    elif args.command == "logs":
+        cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
+    elif args.command == "shell":
+        cmd_shell(story_id=getattr(args, "story_id", None))
+    elif args.command == "launch":
+        cmd_launch(args.agent, story_id=getattr(args, "story_id", None))
+    elif args.command == "run":
+        action = getattr(args, "run_action", None)
+        if action == "--trio":
+            cmd_run_trio(args.task, story_id=getattr(args, "story_id", None))
+        else:
+            run_parser.print_help()
     else:
         parser.print_help()
 

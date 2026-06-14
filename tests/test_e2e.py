@@ -254,3 +254,50 @@ def test_status_output_contains_expected_sections(cli):
 # handling, timing). Add these as a dedicated test module that is opt-in
 # and marked @pytest.mark.slow when the daemon API stabilises.
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0 — dispatch / jobs / logs / reconcile E2E
+# ---------------------------------------------------------------------------
+
+import os as _os
+
+
+def test_dispatch_creates_job(cli):
+    fake_bin = cli.dir / ".fake_bin"
+    fake_bin.mkdir()
+    fake_claude = fake_bin / "claude"
+    fake_claude.write_text("#!/bin/sh\ncat > /dev/null\n")
+    fake_claude.chmod(0o755)
+    env = {**_os.environ, "PATH": str(fake_bin) + ":" + _os.environ["PATH"]}
+    r = cli.run("dispatch", "claude", "--task", "test task", env=env)
+    assert r.returncode == 0, r.stderr
+    jobs_file = cli.dir / ".synlynk" / "jobs.json"
+    assert jobs_file.exists()
+    jobs = json.loads(jobs_file.read_text())
+    assert len(jobs) == 1
+    assert jobs[0]["agent"] == "claude"
+
+
+def test_jobs_shows_no_jobs_when_empty(cli):
+    r = cli.run("jobs")
+    assert r.returncode == 0
+    assert "no jobs" in r.stdout.lower() or r.stdout.strip() == ""
+
+
+def test_logs_error_for_missing_job(cli):
+    r = cli.run("logs", "--job", "job-missing")
+    assert r.returncode == 0
+    assert "not found" in r.stdout.lower() or "no job" in r.stdout.lower()
+
+
+def test_reconcile_runs_on_startup(cli):
+    jobs = [{"id": "job-stale", "agent": "claude", "pid": 9999999, "status": "running",
+              "task": "stale", "story_id": "", "log_file": "", "prompt_file": "",
+              "started_at": "2026-06-14T09:00:00", "ended_at": None, "exit_code": None}]
+    jobs_path = cli.dir / ".synlynk" / "jobs.json"
+    jobs_path.write_text(json.dumps(jobs))
+    r = cli.run("jobs")
+    assert r.returncode == 0
+    result = json.loads(jobs_path.read_text())
+    assert result[0]["status"] == "failed"
