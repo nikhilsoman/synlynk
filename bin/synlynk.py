@@ -100,6 +100,44 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
     conn.commit()
 
 
+def cmd_story_create(title: str, engg_domain: str = "unknown",
+                     org_domain: str = "unknown", phase: str = "build") -> str:
+    """Creates a story record in state.db. Returns the generated story_id."""
+    import hashlib as _hashlib
+    story_id = "story-" + _hashlib.md5(
+        f"{title}{time.time()}".encode()
+    ).hexdigest()[:8]
+    config = load_config()
+    industry = config.get("industry", "unknown")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (story_id, title, engg_domain, org_domain, industry, phase)
+    )
+    conn.commit()
+    conn.close()
+    print(f"  {_GREEN}✓{_RESET} Story created: {story_id}  [{engg_domain} · {org_domain} · {industry}]")
+    return story_id
+
+def cmd_story_list() -> None:
+    """Prints all stories in state.db."""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT story_id, title, engg_domain, org_domain, industry, phase, created_at "
+        "FROM stories ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    if not rows:
+        print("  No stories yet. Use: synlynk story create --title '...'")
+        return
+    print(f"\n  {'ID':<14} {'Title':<30} {'Engg':<12} {'Org':<14} {'Industry':<12} Phase")
+    print("  " + "-" * 90)
+    for r in rows:
+        print(f"  {r[0]:<14} {(r[1] or '')[:29]:<30} {r[2]:<12} {r[3]:<14} {r[4]:<12} {r[5]}")
+
+
+
 JOBS_FILE = ".synlynk/jobs.json"
 LOGS_DIR = ".synlynk/logs"
 PROMPTS_DIR = ".synlynk/prompts"
@@ -2393,6 +2431,15 @@ def main() -> None:
     trio_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 
+    story_parser = subparsers.add_parser("story", help="Manage stories")
+    story_sub = story_parser.add_subparsers(dest="story_action")
+    story_create_parser = story_sub.add_parser("create", help="Create a story")
+    story_create_parser.add_argument("--title", required=True)
+    story_create_parser.add_argument("--engg", default="unknown", dest="engg_domain")
+    story_create_parser.add_argument("--org", default="unknown", dest="org_domain")
+    story_create_parser.add_argument("--phase", default="build")
+    story_sub.add_parser("list", help="List all stories")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -2447,6 +2494,11 @@ def main() -> None:
             cmd_run_trio(args.task, story_id=getattr(args, "story_id", None))
         else:
             run_parser.print_help()
+    elif args.command == "story":
+        if args.story_action == "create":
+            cmd_story_create(args.title, args.engg_domain, args.org_domain, args.phase)
+        elif args.story_action == "list":
+            cmd_story_list()
     else:
         parser.print_help()
 

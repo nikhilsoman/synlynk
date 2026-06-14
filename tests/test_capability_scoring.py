@@ -71,4 +71,38 @@ def test_init_infers_industry_from_readme(tmp_path, monkeypatch):
     config = json.load(open(".synlynk/config.json"))
     assert config.get("industry") == "fintech"
 
+def test_story_create_writes_to_db(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import cmd_story_create, _get_db
+    cmd_story_create(title="Add billing endpoint", engg_domain="backend",
+                     org_domain="monetization", phase="build")
+    conn = _get_db()
+    rows = conn.execute("SELECT * FROM stories WHERE title=?",
+                        ("Add billing endpoint",)).fetchall()
+    conn.close()
+    assert len(rows) == 1
+
+def test_story_create_generates_unique_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import cmd_story_create, _get_db
+    cmd_story_create(title="Story A", engg_domain="backend", org_domain="platform", phase="build")
+    cmd_story_create(title="Story B", engg_domain="frontend", org_domain="growth", phase="build")
+    conn = _get_db()
+    rows = conn.execute("SELECT story_id FROM stories").fetchall()
+    conn.close()
+    ids = [r[0] for r in rows]
+    assert len(set(ids)) == 2
+
+def test_story_list_returns_rows(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import cmd_story_create, cmd_story_list
+    cmd_story_create(title="My story", engg_domain="data", org_domain="analytics", phase="build")
+    cmd_story_list()
+    out = capsys.readouterr().out
+    assert "My story" in out
+
+
 
