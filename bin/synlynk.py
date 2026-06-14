@@ -393,6 +393,67 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     return written
 
 
+def _llm_enrich(agent_cli: str, scan: dict) -> bool:
+    """Calls the configured agent non-interactively to enrich project-docs.
+
+    Passes the static scan result + current doc drafts as context.
+    Writes enriched roadmap.md if the agent responds successfully.
+    Returns True on success, False on failure.
+    """
+    name = scan.get("project_name", "this project")
+    topics = "\n".join(f"- {t}" for t in scan.get("recent_topics", []))
+    langs = ", ".join(scan.get("languages", [])) or "unknown"
+    readme = scan.get("readme_summary", "")[:400]
+
+    prompt = f"""\
+You are helping initialise a synlynk project context for a software project.
+
+Project: {name}
+Description: {scan.get('description', '')}
+Languages: {langs}
+Commit count: {scan.get('commit_count', 0)}
+Recent commit messages:
+{topics}
+
+README excerpt:
+{readme}
+
+Based on this, write a concise `roadmap.md` for this project in this exact format:
+
+# {name} Roadmap
+
+**Positioning:** [one sentence describing the product goal]
+
+| Version | Theme | Status | Target |
+| :--- | :--- | :--- | :--- |
+[3-5 plausible milestone rows based on the commit history]
+
+Keep it short. Infer from the evidence. Do not invent features not supported by the commits.
+"""
+
+    # Write prompt to a temp file to avoid shell escaping issues.
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+    prompt_file = os.path.join(PROMPTS_DIR, "llm-enrich.md")
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+
+    baselines = AGENT_CAPABILITY_BASELINES.get(agent_cli, {})
+    flags = baselines.get("non_interactive_flags", ["--print"])
+    cmd = [agent_cli] + flags
+
+    try:
+        with open(prompt_file) as pf:
+            result = subprocess.run(cmd, stdin=pf, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+        enriched = result.stdout.strip()
+        with open("project-docs/roadmap.md", "w") as f:
+            f.write(enriched + "\n")
+        return True
+    except Exception:
+        return False
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"

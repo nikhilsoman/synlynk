@@ -1228,3 +1228,35 @@ def test_write_informed_skeleton_skips_existing_by_default(project_dir):
             "top_dirs": [], "languages": [], "readme_summary": ""}
     synlynk._write_informed_skeleton(scan, skip_existing=True)
     assert open("project-docs/roadmap.md").read() == original
+
+
+def test_llm_enrich_calls_agent_noninteractively(project_dir, monkeypatch):
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        class R:
+            returncode = 0
+            stdout = "# Updated Roadmap\n\nThis is enriched content.\n"
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+    scan = {"project_name": "testproject", "description": "A test.",
+            "commit_count": 5, "recent_topics": ["feat: add x"], "languages": ["Python"],
+            "readme_summary": "# testproject\nA test.", "top_dirs": ["src"],
+            "has_structured_commits": True}
+    result = synlynk._llm_enrich("claude", scan)
+    assert result is True
+    assert any("claude" in str(c) for c in calls)
+
+
+def test_llm_enrich_returns_false_on_agent_failure(project_dir, monkeypatch):
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 1
+            stdout = ""
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+    scan = {"project_name": "x", "description": "", "commit_count": 0,
+            "recent_topics": [], "languages": [], "readme_summary": "",
+            "top_dirs": [], "has_structured_commits": False}
+    result = synlynk._llm_enrich("claude", scan)
+    assert result is False
