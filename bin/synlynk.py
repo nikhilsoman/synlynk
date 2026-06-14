@@ -424,6 +424,33 @@ def _static_scan(root: str = ".") -> dict:
     return result
 
 
+_INDUSTRY_KEYWORDS = {
+    "ott": ["ott", "over-the-top", "streaming service", "video platform"],
+    "streaming": ["streaming", "live stream", "media delivery"],
+    "fintech": ["fintech", "financial", "payment", "trading", "investment"],
+    "banking": ["banking", "bank", "loan", "mortgage", "deposit"],
+    "securities": ["securities", "stock", "equity", "portfolio", "brokerage"],
+    "healthcare": ["healthcare", "medical", "patient", "clinical", "health"],
+    "ecommerce": ["ecommerce", "e-commerce", "shop", "cart", "marketplace"],
+    "edtech": ["edtech", "education", "learning", "course", "student"],
+    "gaming": ["gaming", "game", "player", "leaderboard", "matchmaking"],
+}
+
+def _infer_industry(root: str = ".") -> str:
+    """Infers industry vertical from README content. Returns 'unknown' if no match."""
+    for fname in ("README.md", "README.rst", "README.txt"):
+        path = os.path.join(root, fname)
+        if os.path.exists(path):
+            try:
+                text = open(path).read().lower()
+                for industry, keywords in _INDUSTRY_KEYWORDS.items():
+                    if any(kw in text for kw in keywords):
+                        return industry
+            except Exception:
+                pass
+    return "unknown"
+
+
 def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     """Writes project-docs skeleton informed by static scan results.
 
@@ -2126,6 +2153,15 @@ def init(force: bool = False, agents: list = None,
     except EOFError:
         email = ""
 
+    # Industry vertical
+    inferred = _infer_industry()
+    try:
+        industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
+    except EOFError:
+        industry = inferred
+    if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
+        industry = "unknown"
+
     # ── Step 6: Finalise config ──────────────────────────────────────────────
     _print_step(6, "Finalising")
     synlynk_config_path = os.path.join("project-docs", ".synlynk_config.json")
@@ -2138,6 +2174,7 @@ def init(force: bool = False, agents: list = None,
     _update_config({
         "workgroup_agents": [a["name"] for a in functional],
         "workgroup_invite_email": email or None,
+        "industry": industry,
     })
 
     set_state("stopped")

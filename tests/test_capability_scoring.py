@@ -32,3 +32,43 @@ def test_migrate_db_is_idempotent(tmp_path, monkeypatch):
     from synlynk import _get_db
     _get_db().close()
     _get_db().close()  # second call must not crash
+
+def test_init_writes_industry_to_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    def mock_input(prompt):
+        if "[y/N]" in prompt:
+            return "n"
+        elif "Email or synlynk ID" in prompt:
+            return "user@example.com"
+        elif "Industry vertical" in prompt:
+            return "ott"
+        return ""
+    monkeypatch.setattr("builtins.input", mock_input)
+    from synlynk import init
+    init(force=True)
+    import json
+    config = json.load(open(".synlynk/config.json"))
+    assert config.get("industry") == "ott"
+    assert config.get("workgroup_invite_email") == "user@example.com"
+
+def test_init_infers_industry_from_readme(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "README.md").write_text("# MyApp\nA fintech platform for trading.")
+    def mock_input(prompt):
+        if "[y/N]" in prompt:
+            return "n"
+        elif "Email or synlynk ID" in prompt:
+            return ""
+        elif "Industry vertical" in prompt:
+            return "" # Accept default
+        return ""
+    monkeypatch.setattr("builtins.input", mock_input)
+    from synlynk import init, _infer_industry
+    inferred = _infer_industry(str(tmp_path))
+    assert inferred == "fintech"
+    init(force=True)
+    import json
+    config = json.load(open(".synlynk/config.json"))
+    assert config.get("industry") == "fintech"
+
+
