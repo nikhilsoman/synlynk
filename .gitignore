@@ -7,3 +7,4 @@ test_archive/
 test_context_output/
 .venv/
 *.egg-info/
+.worktrees/
