@@ -117,26 +117,58 @@ They meet in the middle:
 v1.0 defines the bridge schema and local identity. Tokq Alpha activates the connection. Both
 products survive independently; the cloud layer is additive, never required to use synlynk locally.
 
-### 3.1 Memory Unit Schema (Gap 2 — resolved)
+### 3.1 Memory Unit Schema (Gap 2 — resolved; updated 2026-06-14)
 
 This defines how synlynk's local state maps to Tokq's FR-2/FR-3 memory unit structure. Required
 before Tokq Alpha can be built.
 
+**Correction (2026-06-14):** The original spec defined "one memory unit per `project-docs/*.md`
+file." That mapping breaks after `synlynk migrate` (v0.5.0) retires `project-docs/`. The schema
+below supersedes it. The Tokq envelope fields are unchanged; only the source mapping shifts from
+file-grain to semantic view-grain.
+
+**Envelope fields (unchanged):**
+
 | Tokq field | synlynk source | Notes |
 |---|---|---|
 | `agent_id` | `.synlynk/identity.json` → `agent_uuid` | Set at `synlynk identity init` |
-| `session_id` | Git remote URL (or SHA of `git rev-parse --show-toplevel` if no remote) | Stable per repo |
-| `client_id` | `.synlynk/config.json` → `project_id` (set at `synlynk init`) | User-facing project name |
-| `memory_id` | `sha256(session_id + filename + version_counter)` | Deterministic; enables idempotent sync |
-| `encrypted_data` | Full file content of each `project-docs/*.md` file, AES-256-GCM encrypted | One memory unit per file |
-| `metadata.title` | Filename without extension (e.g., `memory`, `conventions`, `roadmap`) | |
-| `metadata.tags` | `[@username]` attributions extracted from file content | |
-| `metadata.version` | Monotonic counter incremented on each `synlynk sync` write | |
-| `metadata.expires` | None by default; configurable via `synlynk tokq set-ttl <file> <days>` | |
+| `workspace_id` | `.synlynk/config.json` → `workspace_id` | Replaces `session_id`; stable across multi-repo workspaces |
+| `client_id` | `.synlynk/config.json` → `project_id` | User-facing project name |
+| `memory_id` | `sha256(workspace_id + unit_type + entity_id + version_counter)` | Deterministic; idempotent sync |
+| `metadata.version` | Monotonic counter incremented on each `synlynk sync` write for this entity | |
+| `metadata.expires` | None by default; configurable via `synlynk tokq set-ttl <unit_type> <days>` | |
 
-**Granularity decision:** One memory unit per project-docs/ file (not per paragraph, not per
-decision entry). This keeps sync simple: a `synlynk sync` push serializes 5–8 files into 5–8
-memory units. Retrieval is a single list-by-session_id call followed by 5–8 reads.
+**Five memory unit types (new — replaces file-grain):**
+
+| Unit type | state.db source | Replaces | entity_id | Privacy |
+|---|---|---|---|---|
+| `strategic` | `arc` + `phase` tables | `roadmap.md` | `phase.id` | **Publishable** — marketplace conventions |
+| `context` | `memory` table rows | `memory.md` | `workspace.id` (one per workspace) | Private; opt-in publish |
+| `execution` | `epic` + `story WHERE status='open'` | `todo.md` | `epic.id` (N units per project) | Always private |
+| `activity` | `event` table, filtered by `git_user` + time window | `devlogs/<user>.md` | `git_user + ISO_date_bucket` | Always private |
+| `capability` | `agent_profiles` + scoring history | (new — no file equivalent) | `agent_uuid + scoring_period` | Machine-local; opt-in sync |
+
+**Never synced:** `costs` table (local ops ledger — see §3.2), `external_refs` (workspace-specific
+platform links), `sentinel.md` (ephemeral alerts).
+
+**encrypted_data payload:** Structured JSON view of the relevant state.db tables — not raw file
+content. This makes units more searchable, less brittle to file formatting changes, and separates
+Tokq-visible structure from internal implementation details.
+
+**metadata.tags:** Sourced from DB fields — `arc.tags`, `epic.labels`, `event.type` distinct
+values — instead of scraping `[@username]` patterns from file text.
+
+**Backward compatibility:** `synlynk sync` checks `state_db` in `.synlynk/config.json`.
+- `state_db: false` (default before `synlynk migrate`) → legacy file-grain serializer, reads
+  `project-docs/*.md`
+- `state_db: true` (set by `synlynk migrate`) → view-grain serializer, queries state.db
+  Version counters reset to 0 on first post-migration sync.
+
+**Marketplace publishing:** `synlynk publish conventions` packages `strategic` units as a Tokq
+collection. Each Arc becomes a collection; each Phase row is a versioned entry. Subscribers
+receive the Arc/Phase structure as a project template. `strategic` units published to the
+marketplace are re-encrypted with a separate publish key (subscribers can decrypt; personal memory
+units remain inaccessible to subscribers).
 
 ### 3.2 Ledger Boundary — costs.md vs. Gas Tank (Gap 5 — resolved)
 
