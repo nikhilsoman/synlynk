@@ -149,7 +149,7 @@ def _save_jobs(jobs: list) -> None:
 
 
 def _reconcile_jobs() -> None:
-    """Probes PIDs of running jobs; marks unreachable ones as failed.
+    """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
     Called on every synlynk invocation before any command runs.
     Prevents stale jobs surviving reboots or external kills.
@@ -166,7 +166,23 @@ def _reconcile_jobs() -> None:
         try:
             os.kill(pid, 0)  # signal 0: check existence only, no actual signal
         except ProcessLookupError:
-            job["status"] = "failed"
+            # PID is dead. Check if wrapper wrote an exit code.
+            exit_file = job.get("log_file", "") + ".exit"
+            exit_code = None
+            if os.path.exists(exit_file):
+                try:
+                    with open(exit_file) as f:
+                        exit_code = int(f.read().strip())
+                    os.remove(exit_file)  # Clean up
+                except Exception:
+                    pass
+            
+            if exit_code == 0:
+                job["status"] = "completed"
+                job["exit_code"] = 0
+            else:
+                job["status"] = "failed"
+                job["exit_code"] = exit_code if exit_code is not None else -1
             job["ended_at"] = now
             changed = True
     if changed:
@@ -494,14 +510,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
         f.write(prompt)
 
     cmd = [cli] + flags
-    with open(log_file, "w") as log_out, open(prompt_file) as prompt_in:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=prompt_in,
-            stdout=log_out,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+    import shlex as _shlex
+    cmd_str = " ".join(_shlex.quote(c) for c in cmd)
+    shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
+
+    proc = subprocess.Popen(
+        ["sh", "-c", shell_cmd],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
     job = {
         "id": job_id,

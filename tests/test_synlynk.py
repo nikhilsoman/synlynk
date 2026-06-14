@@ -1129,6 +1129,48 @@ def test_reconcile_skips_finished_jobs(project_dir):
     assert result[0]["status"] == "completed"  # unchanged
 
 
+def test_reconcile_marks_completed_from_exit_file(project_dir):
+    log_file = ".synlynk/logs/job-success.log"
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    with open(log_file + ".exit", "w") as f:
+        f.write("0\n")
+    
+    jobs = [
+        {"id": "job-success", "pid": 9999999, "status": "running", 
+         "ended_at": None, "exit_code": None, "log_file": log_file},
+    ]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    
+    result = synlynk._load_jobs()
+    job = result[0]
+    assert job["status"] == "completed"
+    assert job["exit_code"] == 0
+    assert job["ended_at"] is not None
+    assert not os.path.exists(log_file + ".exit")
+
+
+def test_reconcile_marks_failed_from_exit_file(project_dir):
+    log_file = ".synlynk/logs/job-error.log"
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    with open(log_file + ".exit", "w") as f:
+        f.write("1\n")
+    
+    jobs = [
+        {"id": "job-error", "pid": 9999999, "status": "running", 
+         "ended_at": None, "exit_code": None, "log_file": log_file},
+    ]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    
+    result = synlynk._load_jobs()
+    job = result[0]
+    assert job["status"] == "failed"
+    assert job["exit_code"] == 1
+    assert job["ended_at"] is not None
+    assert not os.path.exists(log_file + ".exit")
+
+
 def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):
     def fake_run(cmd, **kw):
         class R:
