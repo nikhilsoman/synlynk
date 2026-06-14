@@ -180,6 +180,154 @@ def test_extract_auto_signals_all_zeros_on_empty_log():
     assert signals["build_success"] is None
 
 
+# --- Task 7: dispatch_rework + micro_rework ---
+
+def test_dispatch_rework_increments_on_same_story(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    os.makedirs(".synlynk/prompts", exist_ok=True)
+    import json
+    jobs = [{
+        "id": "job-prev", "agent": "claude", "story_id": "story-abc",
+        "status": "completed", "exit_code": 0,
+        "dispatch_rework": 0, "micro_rework": 0,
+        "started_at": "2026-06-14T10:00:00", "ended_at": "2026-06-14T10:05:00"
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    from synlynk import _count_dispatch_rework
+    assert _count_dispatch_rework("story-abc") == 1
+
+def test_micro_rework_extracted_from_log():
+    from synlynk import _extract_micro_rework
+    log = "Retrying step 1...\nRetrying step 1...\nRetrying step 2..."
+    assert _extract_micro_rework(log) == 3
+
+def test_micro_rework_zero_when_no_retries():
+    from synlynk import _extract_micro_rework
+    assert _extract_micro_rework("All steps passed cleanly.") == 0
+
+
+# --- Task 8: _write_capability_rating ---
+
+def test_reconcile_writes_capability_rating_on_completion(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+
+    log_content = "# synlynk-meta\nmodel_version=claude-opus-4-8\n\n47 passed"
+    log_path = str(tmp_path / ".synlynk/logs/job-test.log")
+    open(log_path, "w").write(log_content)
+    exit_path = log_path + ".exit"
+    open(exit_path, "w").write("0")
+
+    jobs = [{
+        "id": "job-test", "agent": "claude", "story_id": "story-xyz",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    json.dump({"industry": "ott"}, open(".synlynk/config.json", "w"))
+
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-xyz", "Test"))
+    conn.commit()
+    conn.close()
+
+    _reconcile_jobs()
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, test_pass_rate, build_success FROM capability_ratings "
+        "WHERE story_id=?", ("story-xyz",)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "claude-opus-4-8"
+    assert row[2] == 1
+
+
+# --- Task 9: capability-based routing ---
+
+def test_dispatch_uses_capability_score_when_available(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _best_agent_for_story
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase) "
+                 "VALUES (?, ?, ?, ?, ?, ?)", ("story-1", "Test", "backend", "monetization", "ott", "build"))
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-1", "gemini", "gemini-2.5-pro", "backend", "monetization", "ott",
+         "build", "auto", 8.5, 8.5)
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-1", "claude", "claude-opus-4-8", "backend", "monetization", "ott",
+         "build", "auto", 6.0, 6.0)
+    )
+    conn.commit()
+    conn.close()
+    result = _best_agent_for_story("story-1")
+    assert result == "gemini"
+
+def test_dispatch_returns_none_when_no_capability_data(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _best_agent_for_story
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase) "
+                 "VALUES (?, ?, ?, ?, ?, ?)", ("story-2", "Test", "backend", "monetization", "ott", "build"))
+    conn.commit()
+    conn.close()
+    assert _best_agent_for_story("story-2") is None
+
+
+# --- Task 10: score add/list ---
+
+def test_score_add_writes_human_rating(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_score_add
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-1", "Test"))
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-1", "claude", "claude-opus-4-8", "backend", "monetization", "ott",
+         "build", "auto", 6.0, 6.0)
+    )
+    conn.commit()
+    conn.close()
+    cmd_score_add("story-1", 9.0, note="Clean first-pass implementation")
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT signal_source, quality, note FROM capability_ratings "
+        "WHERE story_id=? AND signal_source='human'", ("story-1",)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[1] == 9.0
+    assert "Clean" in row[2]
+
+def test_score_add_rejects_out_of_range(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_score_add
+    _get_db().close()
+    with pytest.raises(ValueError):
+        cmd_score_add("story-1", 11.0)
+
+
 
 
 
