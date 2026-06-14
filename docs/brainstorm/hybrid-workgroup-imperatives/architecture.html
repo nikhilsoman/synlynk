@@ -1,0 +1,106 @@
+<h2>synlynk — Full System Architecture</h2>
+<p class="subtitle">Locked design decisions as of 2026-06-14 · Two-spec plan</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+
+  <!-- Control Plane -->
+  <div style="background:#0f172a;border:1px solid #7c3aed;border-radius:10px;padding:16px">
+    <div class="label" style="color:#a78bfa">CONTROL PLANE</div>
+    <h3 style="color:#e2e8f0;margin:6px 0 12px">synlynk TUI</h3>
+    <div style="font-size:12px;color:#94a3b8;line-height:2">
+      <div>🏠 <b style="color:#c4b5fd">Home</b> — Hybrid Workgroup status</div>
+      <div>📋 <b style="color:#c4b5fd">Board</b> — Arc / Phase / Epic / Story kanban</div>
+      <div>🤖 <b style="color:#c4b5fd">Agents</b> — capability scores, quota, active stories</div>
+      <div>💰 <b style="color:#c4b5fd">Costs</b> — burn rate, budget runway</div>
+      <div>🔔 <b style="color:#c4b5fd">Sentinel</b> — alerts, flatline, stall, blocker</div>
+    </div>
+    <div style="margin-top:12px;font-family:monospace;font-size:11px;background:#1e1b4b;padding:8px;border-radius:6px;color:#818cf8">
+      $ synlynk       ← attach<br>
+      Ctrl+D / d      ← detach (daemon runs)<br>
+      $ synlynk status ← one-shot check
+    </div>
+  </div>
+
+  <!-- Data Plane -->
+  <div style="background:#0f172a;border:1px solid #0891b2;border-radius:10px;padding:16px">
+    <div class="label" style="color:#67e8f9">DATA PLANE</div>
+    <h3 style="color:#e2e8f0;margin:6px 0 12px">Native Tool UX</h3>
+    <div style="font-size:12px;color:#94a3b8;line-height:2">
+      <div>⌨️ Claude CLI / Claude Desktop</div>
+      <div>⌨️ Gemini CLI / Agy IDE / Agy 2.0</div>
+      <div>⌨️ Codex CLI / Codex Desktop</div>
+      <div>⌨️ Cursor / Windsurf / Opencode / Emergent</div>
+    </div>
+    <div style="margin-top:12px;font-family:monospace;font-size:11px;background:#0c4a6e;padding:8px;border-radius:6px;color:#38bdf8">
+      synlynk launch claude --story 42<br>
+      synlynk shell --story 42<br>
+      synlynk open ide --story 42<br>
+      synlynk open web --story 42
+    </div>
+  </div>
+</div>
+
+<!-- Daemon -->
+<div style="background:#0f172a;border:2px solid #10b981;border-radius:10px;padding:16px;margin-bottom:16px">
+  <div class="label" style="color:#6ee7b7">DAEMON (v0.7.0 — persistent multiplexer)</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:12px">
+    <div style="font-size:11px;color:#a7f3d0;background:#064e3b;padding:8px;border-radius:6px">
+      <b>Dispatch Loop</b><br>
+      Routes stories to agents via capability score → quota headroom → cost
+    </div>
+    <div style="font-size:11px;color:#a7f3d0;background:#064e3b;padding:8px;border-radius:6px">
+      <b>Async Outbox</b><br>
+      Queues state.db writes → GitHub Projects V2 / Jira / Linear (non-blocking)
+    </div>
+    <div style="font-size:11px;color:#a7f3d0;background:#064e3b;padding:8px;border-radius:6px">
+      <b>Sentinel Watch</b><br>
+      Zombie, stall, quota-exhausted, flatline, loop detection
+    </div>
+    <div style="font-size:11px;color:#a7f3d0;background:#064e3b;padding:8px;border-radius:6px">
+      <b>HTTP Context Server</b><br>
+      localhost:27471 — TUI attaches here; serves context-&lt;tool&gt;.md
+    </div>
+  </div>
+</div>
+
+<!-- State DB -->
+<div style="background:#0f172a;border:1px solid #f59e0b;border-radius:10px;padding:16px;margin-bottom:16px">
+  <div class="label" style="color:#fcd34d">STATE DB — ~/.synlynk/workspaces/&lt;name&gt;/state.db (canonical, never branches)</div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px;font-size:11px;text-align:center">
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">Arc</div>
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">Phase</div>
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">Epic</div>
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">Story</div>
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">Event log</div>
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">agent_profiles</div>
+    <div style="background:#451a03;padding:6px;border-radius:4px;color:#fed7aa">external_refs</div>
+  </div>
+</div>
+
+<!-- Two Spec Plan -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+  <div style="background:#0f172a;border:1px solid #6366f1;border-radius:10px;padding:16px">
+    <div class="label" style="color:#a5b4fc">SPEC 1 — Hybrid Workgroup Bootstrap</div>
+    <div style="font-size:12px;color:#c7d2fe;margin-top:10px;line-height:1.9">
+      <div>🧙 <b>TUI Init Wizard</b> — curses, progressive</div>
+      <div>🔍 <b>Semantic Discovery</b> — static skeleton → LLM enrichment (opt-in)</div>
+      <div>🤖 <b>Agent Discovery</b> — CLI scan → capability profiles</div>
+      <div>✨ <b>Magic Moment</b> — "You have Claude + Gemini + Codex" screen</div>
+      <div>🔗 <b>Cloud Directory</b> — always nudge to multi-AI / team connect</div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:#818cf8">Target: v0.4.0 / v0.5.0</div>
+  </div>
+
+  <div style="background:#0f172a;border:1px solid #ec4899;border-radius:10px;padding:16px">
+    <div class="label" style="color:#f9a8d4">SPEC 2 — PM Engine + Command Centre</div>
+    <div style="font-size:12px;color:#fce7f3;margin-top:10px;line-height:1.9">
+      <div>📋 <b>TUI Kanban</b> — Arc/Phase/Epic/Story board</div>
+      <div>⚡ <b>Detach/Attach</b> — Ctrl+D detach, daemon keeps running</div>
+      <div>🚀 <b>4 Launch Primitives</b> — open ide / open web / shell / launch</div>
+      <div>📤 <b>Async Outbox</b> — GH Projects V2 / Jira / Linear sync</div>
+      <div>☁️ <b>Cross-team</b> — event-log sync → NATS at v1.0</div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:#f472b6">Target: v0.5.0 → v0.9.0</div>
+  </div>
+</div>
