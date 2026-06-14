@@ -1083,3 +1083,65 @@ def test_reconcile_skips_finished_jobs(project_dir):
     synlynk._reconcile_jobs()
     result = synlynk._load_jobs()
     assert result[0]["status"] == "completed"  # unchanged
+
+
+def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 0
+            stdout = "claude 2.1.175\n"
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run)
+    result = synlynk._check_agent_functional("claude")
+    assert result == "claude 2.1.175"
+
+
+def test_check_agent_functional_returns_none_for_missing_tool(monkeypatch):
+    def fake_run(cmd, **kw):
+        raise FileNotFoundError
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run)
+    result = synlynk._check_agent_functional("notacli")
+    assert result is None
+
+
+def test_check_agent_functional_returns_none_for_nonzero_exit(monkeypatch):
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 1
+            stdout = ""
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run)
+    result = synlynk._check_agent_functional("claude")
+    assert result is None
+
+
+def test_discover_agents_returns_functional_agents(monkeypatch, tmp_path):
+    # Simulate claude config dir exists, others don't
+    (tmp_path / ".claude").mkdir()
+    versions = {"claude": "claude 2.1.0"}
+    def fake_check(cli):
+        return versions.get(cli)
+    monkeypatch.setattr(synlynk, "_check_agent_functional", fake_check)
+    monkeypatch.setattr(synlynk, "AGENT_DISCOVERY_DEFAULTS", {
+        "claude": str(tmp_path / ".claude"),
+        "gemini": str(tmp_path / ".gemini"),
+    })
+    agents = synlynk.discover_agents()
+    names = [a["name"] for a in agents]
+    assert "claude" in names
+    functional = [a for a in agents if a["functional"]]
+    assert all(a["name"] == "claude" for a in functional)
+
+
+def test_discover_agents_uses_config_override(monkeypatch, tmp_path, project_dir):
+    import json as _json
+    custom_path = str(tmp_path / "custom_claude")
+    os.makedirs(custom_path)
+    config = {"agent_discovery_paths": {"claude": custom_path}}
+    with open(".synlynk/config.json", "w") as f:
+        _json.dump(config, f)
+    monkeypatch.setattr(synlynk, "_check_agent_functional", lambda cli: "claude 2.0")
+    agents = synlynk.discover_agents()
+    claude_agent = next((a for a in agents if a["name"] == "claude"), None)
+    assert claude_agent is not None
+    assert claude_agent["discovery_path"] == custom_path

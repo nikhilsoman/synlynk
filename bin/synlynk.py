@@ -173,6 +173,58 @@ def _reconcile_jobs() -> None:
         _save_jobs(jobs)
 
 
+def _check_agent_functional(cli: str) -> Optional[str]:
+    """Runs `<cli> --version` to confirm CLI is installed and executable.
+
+    Returns version string (stdout stripped) on success, None otherwise.
+    """
+    try:
+        result = subprocess.run(
+            [cli, "--version"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip().splitlines()[0]
+        return None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def discover_agents(config: dict = None) -> list:
+    """Scans for installed agent CLIs and checks each is functional.
+
+    Returns list of dicts: {name, cli, version, functional, capabilities,
+    roles, discovery_path}.
+    Agents not found on disk are omitted. Agents found but failing --version
+    are included with functional=False.
+    """
+    if config is None:
+        config = load_config()
+
+    # Allow per-project overrides of discovery paths.
+    discovery_paths = {**AGENT_DISCOVERY_DEFAULTS}
+    discovery_paths.update(config.get("agent_discovery_paths", {}))
+
+    found = []
+    for name, defaults in AGENT_CAPABILITY_BASELINES.items():
+        path = discovery_paths.get(name)
+        if path and not os.path.exists(path):
+            continue  # config dir not present — skip entirely
+        cli = defaults["cli"]
+        version = _check_agent_functional(cli)
+        found.append({
+            "name": name,
+            "cli": cli,
+            "version": version,
+            "functional": version is not None,
+            "roles": defaults["roles"],
+            "capabilities": defaults["strengths"],
+            "non_interactive_flags": defaults["non_interactive_flags"],
+            "discovery_path": path or "",
+        })
+    return found
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"
