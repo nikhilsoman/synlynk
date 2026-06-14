@@ -137,6 +137,26 @@ def cmd_story_list() -> None:
         print(f"  {r[0]:<14} {(r[1] or '')[:29]:<30} {r[2]:<12} {r[3]:<14} {r[4]:<12} {r[5]}")
 
 
+_ENGG_DOMAIN_PATTERNS = [
+    ("data",         [r"etl", r"pipeline/", r"schema\.sql", r"migrations/", r"dbt/"]),
+    ("ml",           [r"ml/", r"models/", r"train\.", r"inference/", r"embeddings/"]),
+    ("security",     [r"auth/", r"oauth", r"jwt", r"crypto", r"certs/"]),
+    ("devops",       [r"\.github/", r"dockerfile", r"terraform", r"pulumi", r"k8s/", r"helm/"]),
+    ("frontend",     [r"components/", r"pages/", r"\.tsx?", r"\.vue", r"\.svelte", r"styles/"]),
+    ("backend",      [r"api/", r"routes/", r"handlers/", r"controllers/", r"services/"]),
+    ("testing",      [r"tests/", r"test_", r"spec/", r"\.spec\.", r"fixtures/"]),
+    ("docs",         [r"docs/", r"readme", r"\.md$", r"changelogs?"]),
+    ("architecture", [r"design/", r"specs/", r"adr/", r"diagrams/"]),
+]
+
+def _infer_engg_domain(log_text: str) -> str:
+    """Infers engineering domain from file path patterns in job log output."""
+    lower = log_text.lower()
+    for domain, patterns in _ENGG_DOMAIN_PATTERNS:
+        if any(re.search(p, lower) for p in patterns):
+            return domain
+    return "unknown"
+
 
 JOBS_FILE = ".synlynk/jobs.json"
 LOGS_DIR = ".synlynk/logs"

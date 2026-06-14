@@ -104,5 +104,18 @@ def test_story_list_returns_rows(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "My story" in out
 
+def test_infer_engg_domain_from_paths():
+    from synlynk import _infer_engg_domain
+    assert _infer_engg_domain("Modified src/api/billing.py and tests/test_billing.py") == "backend"
+    assert _infer_engg_domain("Updated src/components/Button.tsx") == "frontend"
+    assert _infer_engg_domain("Added pipeline/etl_job.py and models/schema.sql") == "data"
+    assert _infer_engg_domain("No matching paths here") == "unknown"
+
+def test_infer_engg_domain_prefers_specific_over_generic():
+    from synlynk import _infer_engg_domain
+    # ML beats backend when both patterns present
+    assert _infer_engg_domain("src/ml/train.py and src/api/serve.py") in ("ml", "backend")
+
+
 
 
