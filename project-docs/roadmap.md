@@ -6,8 +6,8 @@
 | Version | Theme | OS Layer | Infrastructure | Status | Target |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | v0.1–v0.3.0 | Kernel + Filesystem | exec · telemetry · flatline · budget · project-docs ledger · enriched templates | Flat files | ✅ Shipped | June 2026 |
-| v0.3.1 | Sentinel + Observability Hardening | Token scraping restored · zombie/stall/quota/loop detection · burn rate · context bloat · sentinel severity + ack | Flat files | 🔜 Next | June 2026 |
-| v0.4.0 | Conventions + Trio Bootstrap | IPC — shared rules, Architect→Build→Verify pipeline, `synlynk run` | Flat files | Planned | July 2026 |
+| v0.3.1 | Sentinel + Observability Hardening | Token scraping restored · zombie/stall/quota/loop detection · burn rate · context bloat · sentinel severity + ack | Flat files | ✅ Shipped | June 2026 |
+| v0.4.0 | Conventions + Trio Bootstrap | IPC — shared rules, Architect→Build→Verify pipeline, `synlynk run` | Flat files | 🔜 Next | July 2026 |
 | v0.5.0 | Capability Engine | Scheduler — data-driven routing, `capability.json` → SQLite | **SQLite WAL** | Planned | Aug 2026 |
 | v0.6.0 | Job Control + Constraints | IPC complete — constraint propagation, job state machine | SQLite extended | Planned | Sep 2026 |
 | v0.7.0 | Async Pipeline + Daemon | Shell — `synlynk dispatch`, daemon, `synlynk review` TUI | **HTTP Context Server** | Planned | Oct 2026 |
@@ -16,3 +16,9 @@
 | v1.0.0 | Stable OS + Tokq Bridge Ready | Platform — frozen CLI, pipx/Homebrew, NATS leaf schema defined | **NATS leaf node schema** | Planned | Q1 2027 |
 | Tokq Alpha | Cloud Bridge | Synlynk→Tokq sync over NATS leaf→hub | NATS + MessagePack | Planned | Q3 2027 |
 | Tokq GA | Knowledge Marketplace | Agent identity, gas tank, publish/subscribe conventions | Full Tokq cloud | Planned | Q4 2027 |
+
+## Strategic Initiatives (parallel tracks)
+
+| Initiative | Theme | Agents | Status | Brainstorm |
+| :--- | :--- | :--- | :--- | :--- |
+| Synlynk Autopilot | Put synlynk's own growth, content, and QA on autonomous agents | PM (growth) · Marketing Intern (blogs + publishing) · Support Engineer (regression scanning) | 🧠 Brainstorm | `docs/proposals/synlynk-autopilot-initiative.md` |

@@ -1,5 +1,27 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-10
+### Session: v0.3.1 Sentinel + Observability + E2E Test Suite
+
+- **Discovery:** Upgraded installed synlynk from v1.2.0-lite → v0.3.0; found `extract_tokens()` and `update_costs()` were silently dropped in v0.3.0 TTY pass-through refactor. Confirmed v0.5.0 state.db spec explicitly depends on `extract_tokens()`.
+- **Decision:** Insert v0.3.1 patch before v0.4.0 to restore regressions and harden the sentinel layer while the surface area was open.
+- **Shipped:** v0.3.1 — 9 features, 40 new tests, 12 commits (PR #29, merged 2026-06-10):
+  - `extract_tokens()` + `update_costs()` restored; tee-based stdout capture for non-interactive execs; cost pulse after each non-interactive exec
+  - `WatchDaemon._health()` tri-state + `check_daemon_health()` ZOMBIE_DAEMON CRITICAL alert
+  - `check_stall()` using `.synlynk/state` mtime + `exec_timeout_minutes` config key
+  - `check_sentinel_patterns()` — flatline (existing) + success loop (new) + quota-exhausted (new)
+  - `_check_pre_exec_gate()` — CRITICAL alerts block exec; `synlynk exec --force` bypasses
+  - `_compute_burn_rate()` + burn rate / runway in `synlynk status`
+  - Context bloat warning in `generate_context()` at 32 KB / 64 KB thresholds
+  - `synlynk sentinel list/clear` CLI with structured `[SEVERITY] [TIMESTAMP] CODE:` format
+  - VERSION bumped to 0.3.1 in `bin/synlynk.py` and `install.sh`
+- **Shipped:** E2E test suite — 17 black-box CLI tests in `tests/test_e2e.py` (PR #30, merged 2026-06-10)
+  - `Cli` helper class wraps subprocess calls; `cli` fixture provides initialized project
+  - Covers: CLI basics, exec (exit codes, telemetry), sentinel CRUD, pre-exec gate, status
+  - `pytest.ini` registers `e2e` mark; `pytest tests/` now runs 140 tests total
+- **Method:** First full subagent-driven development session — 10 tasks, fresh subagent per task, spec + quality review after each. Caught 2 real bugs before PR: severity filter false-positive (substring → regex), dead `check_flatline()` left after rename.
+- **Milestone:** `main` is now v0.3.1. Release checklist = `pytest tests/` (140 tests). v0.4.0 is next.
+
 ## 2026-06-07
 ### Session: Workspace & Multi-Repo Design
 
