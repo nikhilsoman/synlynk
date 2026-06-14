@@ -470,14 +470,28 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
-    model_at_completion = extract_model_version(log_text, agent=agent)
+    # Tier 1 only — synlynk-meta header, no config fallback (agent=None prevents Tier 3 contamination)
+    tier1_completion = extract_model_version(log_text, agent=None)
     model_at_dispatch = job.get("model_at_dispatch", "unknown")
-    # Tier 1 wins if available; otherwise fall back to dispatch probe
-    model_version = model_at_completion if model_at_completion != "unknown" else model_at_dispatch
+    # Tier 3: config default — used only as last resort label, never for split_model detection
+    tier3_config = extract_model_version("", agent=agent)
+
+    # Resolve hierarchy: Tier 1 > Tier 2 (live dispatch probe) > Tier 3 (config default)
+    if tier1_completion != "unknown":
+        model_at_completion = tier1_completion
+        model_version = tier1_completion
+    elif model_at_dispatch != "unknown":
+        model_at_completion = model_at_dispatch
+        model_version = model_at_dispatch
+    else:
+        model_at_completion = tier3_config
+        model_version = tier3_config
+
+    # Only flag split_model when BOTH Tier 1 and Tier 2 are concretely known and differ
     split_model = 1 if (
-        model_at_dispatch != model_at_completion
+        tier1_completion != "unknown"
         and model_at_dispatch != "unknown"
-        and model_at_completion != "unknown"
+        and tier1_completion != model_at_dispatch
     ) else 0
 
     signals = _extract_auto_signals(
@@ -497,14 +511,17 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     industry = story_row[1] if story_row else load_config().get("industry", "unknown")
     phase = story_row[2] if story_row else "build"
 
-    scores = []
+    weighted_sum, total_weight = 0.0, 0.0
     if signals["test_pass_rate"] is not None:
-        scores.append(signals["test_pass_rate"] * 10 * 0.35)
+        weighted_sum += signals["test_pass_rate"] * 10 * 0.35
+        total_weight += 0.35
     if signals["build_success"] is not None:
-        scores.append((10.0 if signals["build_success"] else 0.0) * 0.30)
+        weighted_sum += (10.0 if signals["build_success"] else 0.0) * 0.30
+        total_weight += 0.30
     rework_penalty = min(dispatch_rework * 2.0, 10.0)
-    scores.append(max(0.0, 10.0 - rework_penalty) * 0.35)
-    quality_auto = sum(scores) if scores else 5.0
+    weighted_sum += max(0.0, 10.0 - rework_penalty) * 0.35
+    total_weight += 0.35
+    quality_auto = (weighted_sum / total_weight) if total_weight else 5.0
 
     # Check for verifier meta block — upgrades signal_source from 'auto' to 'verifier'
     verifier_meta = extract_verifier_meta(log_text)

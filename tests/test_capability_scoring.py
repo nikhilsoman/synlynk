@@ -505,6 +505,89 @@ def test_write_capability_rating_sets_correct_from_verifier(tmp_path, monkeypatc
     assert row[2] == 0  # correct=false from verifier meta
 
 
+# --- R2 fix: tier resolution and split_model correctness in _write_capability_rating ---
+
+def test_write_capability_rating_no_false_split_model_when_no_tier1(tmp_path, monkeypatch):
+    """When no synlynk-meta header is present, split_model must stay 0 even if config default
+    differs from model_at_dispatch — Tier 3 config default must never trigger split_model."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+    # Log has no synlynk-meta header; dispatch probed as gemini; config default is claude
+    log_content = "Build complete.\nAll tests passed 5/5.\n"
+    log_path = str(tmp_path / ".synlynk/logs/job-r2.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")
+    jobs = [{
+        "id": "job-r2", "agent": "claude", "story_id": "story-r2",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "gemini-2.5-pro",  # Tier 2: live probe
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    # Config default is different agent — must not trigger split_model
+    json.dump({"agents": {"claude": {"default_model": "claude-opus-4-8"}}, "industry": "ott"},
+              open(".synlynk/config.json", "w"))
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-r2", "R2"))
+    conn.commit(); conn.close()
+    _reconcile_jobs()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, split_model FROM capability_ratings WHERE story_id=?",
+        ("story-r2",)
+    ).fetchone()
+    conn.close()
+    # model_version should be Tier 2 (model_at_dispatch) since no Tier 1 header
+    assert row[0] == "gemini-2.5-pro"
+    # split_model must be 0 — no Tier 1 header means no evidence of a split-model run
+    assert row[1] == 0
+
+
+def test_write_capability_rating_flags_split_model_when_tier1_differs_from_dispatch(tmp_path, monkeypatch):
+    """When Tier 1 synlynk-meta header is present and differs from model_at_dispatch,
+    split_model must be 1."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+    log_content = (
+        "# synlynk-meta\n"
+        "model_version=claude-opus-4-8\n"
+        "quality=8\n"
+    )
+    log_path = str(tmp_path / ".synlynk/logs/job-r2b.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")
+    jobs = [{
+        "id": "job-r2b", "agent": "claude", "story_id": "story-r2b",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "gemini-2.5-pro",  # Tier 2: different from Tier 1
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    json.dump({"industry": "ott"}, open(".synlynk/config.json", "w"))
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-r2b", "R2b"))
+    conn.commit(); conn.close()
+    _reconcile_jobs()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, split_model FROM capability_ratings WHERE story_id=?",
+        ("story-r2b",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "claude-opus-4-8"  # Tier 1 wins
+    assert row[1] == 1  # True split-model: Tier 1 ≠ Tier 2
+
+
 # --- Task 14: org_domain_tags ---
 
 def test_story_create_stores_org_domain_tags(tmp_path, monkeypatch):
