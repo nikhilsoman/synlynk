@@ -2155,6 +2155,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
     return exit_code
 
 def main() -> None:
+    _reconcile_jobs()
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
     )
@@ -2204,6 +2205,46 @@ def main() -> None:
     sentinel_clear_parser.add_argument("--code",
                                        help="Clear only alerts with this code")
 
+    dispatch_parser = subparsers.add_parser(
+        "dispatch", help="Dispatch an agent to run a task in the background")
+    dispatch_parser.add_argument("agent",
+        help="Agent name: claude, gemini, codex, agy")
+    dispatch_parser.add_argument("--task", required=True,
+        help="Task description for the agent")
+    dispatch_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story/task ID for context labelling")
+
+    jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
+    jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
+        help="Include completed and failed jobs")
+
+    logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
+    logs_parser.add_argument("--job", required=True, dest="job_id",
+        help="Job ID (from `synlynk jobs`)")
+    logs_parser.add_argument("--tail", type=int, default=50,
+        help="Number of lines to show (default: 50)")
+
+    shell_parser = subparsers.add_parser(
+        "shell", help="Spawn a subshell with synlynk context injected")
+    shell_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story ID to label the shell session")
+
+    launch_parser = subparsers.add_parser(
+        "launch", help="Launch an agent CLI interactively with pre-loaded context")
+    launch_parser.add_argument("agent", help="Agent name: claude, gemini, codex, agy")
+    launch_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story ID for context labelling")
+
+    run_parser = subparsers.add_parser(
+        "run", help="Convenience wrappers for common dispatch patterns")
+    run_sub = run_parser.add_subparsers(dest="run_action")
+    trio_parser = run_sub.add_parser("--trio",
+        help="Dispatch all functional agents in parallel (not the sequential Trio pipeline)")
+    trio_parser.add_argument("--task", required=True,
+        help="Task description sent to all agents")
+    trio_parser.add_argument("--story", default=None, dest="story_id",
+        help="Story ID for context labelling")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -2236,6 +2277,28 @@ def main() -> None:
             )
         else:
             sentinel_list()  # default: list
+    elif args.command == "dispatch":
+        try:
+            job = dispatch_agent(args.agent, args.task, story_id=args.story_id)
+            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
+            print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    elif args.command == "jobs":
+        cmd_jobs(all_jobs=getattr(args, "all_jobs", False))
+    elif args.command == "logs":
+        cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
+    elif args.command == "shell":
+        cmd_shell(story_id=getattr(args, "story_id", None))
+    elif args.command == "launch":
+        cmd_launch(args.agent, story_id=getattr(args, "story_id", None))
+    elif args.command == "run":
+        action = getattr(args, "run_action", None)
+        if action == "--trio":
+            cmd_run_trio(args.task, story_id=getattr(args, "story_id", None))
+        else:
+            run_parser.print_help()
     else:
         parser.print_help()
 
