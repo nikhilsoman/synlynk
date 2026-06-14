@@ -10,7 +10,57 @@ import threading
 import urllib.request
 from typing import Optional
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
+
+JOBS_FILE = ".synlynk/jobs.json"
+LOGS_DIR = ".synlynk/logs"
+PROMPTS_DIR = ".synlynk/prompts"
+
+# Known baseline capabilities per agent CLI.
+# Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
+AGENT_CAPABILITY_BASELINES = {
+    "claude": {
+        "cli": "claude",
+        "non_interactive_flags": ["--print"],
+        "roles": ["architect", "builder"],
+        "strengths": ["long context", "reasoning", "code review", "planning"],
+    },
+    "gemini": {
+        "cli": "gemini",
+        "non_interactive_flags": ["--quiet"],
+        "roles": ["builder", "verifier"],
+        "strengths": ["multimodal", "large context", "search-augmented", "fast"],
+    },
+    "codex": {
+        "cli": "codex",
+        "non_interactive_flags": [],
+        "roles": ["builder"],
+        "strengths": ["code completion", "inline edits", "fast iteration"],
+    },
+    "agy": {
+        "cli": "agy",
+        "non_interactive_flags": ["--quiet"],
+        "roles": ["builder", "verifier"],
+        "strengths": ["multimodal", "large context", "search-augmented"],
+    },
+}
+
+# Default paths scanned for agent CLI config directories.
+# Overridable in .synlynk/config.json under "agent_discovery_paths".
+AGENT_DISCOVERY_DEFAULTS = {
+    "claude": os.path.expanduser("~/.claude"),
+    "gemini": os.path.expanduser("~/.gemini"),
+    "codex": os.path.expanduser("~/.codex"),
+    "agy": os.path.expanduser("~/.agy"),
+}
+
+# ANSI helpers used by the wizard.
+_BOLD = "\033[1m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
 
 
 def get_username() -> str:
@@ -78,6 +128,191 @@ def load_config() -> dict:
         return config
     except (json.JSONDecodeError, IOError):
         return defaults
+
+
+def _load_jobs() -> list:
+    """Reads .synlynk/jobs.json; returns [] if missing or corrupt."""
+    if not os.path.exists(JOBS_FILE):
+        return []
+    try:
+        with open(JOBS_FILE) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def _save_jobs(jobs: list) -> None:
+    """Writes jobs list to .synlynk/jobs.json."""
+    os.makedirs(os.path.dirname(JOBS_FILE), exist_ok=True)
+    with open(JOBS_FILE, "w") as f:
+        json.dump(jobs, f, indent=2)
+
+
+def _reconcile_jobs() -> None:
+    """Probes PIDs of running jobs; marks unreachable ones as failed.
+
+    Called on every synlynk invocation before any command runs.
+    Prevents stale jobs surviving reboots or external kills.
+    """
+    jobs = _load_jobs()
+    changed = False
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    for job in jobs:
+        if job.get("status") not in ("running",):
+            continue
+        pid = job.get("pid")
+        if pid is None:
+            continue
+        try:
+            os.kill(pid, 0)  # signal 0: check existence only, no actual signal
+        except ProcessLookupError:
+            job["status"] = "failed"
+            job["ended_at"] = now
+            changed = True
+    if changed:
+        _save_jobs(jobs)
+
+
+def _check_agent_functional(cli: str) -> Optional[str]:
+    """Runs `<cli> --version` to confirm CLI is installed and executable.
+
+    Returns version string (stdout stripped) on success, None otherwise.
+    """
+    try:
+        result = subprocess.run(
+            [cli, "--version"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip().splitlines()[0]
+        return None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def discover_agents(config: dict = None) -> list:
+    """Scans for installed agent CLIs and checks each is functional.
+
+    Returns list of dicts: {name, cli, version, functional, capabilities,
+    roles, discovery_path}.
+    Agents not found on disk are omitted. Agents found but failing --version
+    are included with functional=False.
+    """
+    if config is None:
+        config = load_config()
+
+    # Allow per-project overrides of discovery paths.
+    discovery_paths = {**AGENT_DISCOVERY_DEFAULTS}
+    discovery_paths.update(config.get("agent_discovery_paths", {}))
+
+    found = []
+    for name, defaults in AGENT_CAPABILITY_BASELINES.items():
+        path = discovery_paths.get(name)
+        if path and not os.path.exists(path):
+            continue  # config dir not present — skip entirely
+        cli = defaults["cli"]
+        version = _check_agent_functional(cli)
+        found.append({
+            "name": name,
+            "cli": cli,
+            "version": version,
+            "functional": version is not None,
+            "roles": defaults["roles"],
+            "capabilities": defaults["strengths"],
+            "non_interactive_flags": defaults["non_interactive_flags"],
+            "discovery_path": path or "",
+        })
+    return found
+
+
+def _static_scan(root: str = ".") -> dict:
+    """Scans repo for project context: git log, README, file tree.
+
+    Best-effort: repos without structured commits produce a lower-quality result.
+    Returns dict with keys: project_name, description, commit_count,
+    has_structured_commits, recent_topics, top_dirs, languages, readme_summary.
+    """
+    result = {
+        "project_name": os.path.basename(os.path.abspath(root)),
+        "description": "",
+        "commit_count": 0,
+        "has_structured_commits": False,
+        "recent_topics": [],
+        "top_dirs": [],
+        "languages": [],
+        "readme_summary": "",
+    }
+
+    # README extraction — project name from H1, summary from first paragraph.
+    for readme in ("README.md", "README.rst", "README.txt", "README"):
+        readme_path = os.path.join(root, readme)
+        if os.path.exists(readme_path):
+            try:
+                text = open(readme_path).read(2000)
+                lines = text.splitlines()
+                for line in lines:
+                    if line.startswith("# "):
+                        result["project_name"] = line[2:].strip()
+                        break
+                # First non-heading, non-empty paragraph as description.
+                para_lines = []
+                in_para = False
+                for line in lines[1:]:
+                    if line.startswith("#"):
+                        if in_para:
+                            break
+                        continue
+                    if line.strip():
+                        para_lines.append(line.strip())
+                        in_para = True
+                    elif in_para:
+                        break
+                result["description"] = " ".join(para_lines)[:300]
+                result["readme_summary"] = text[:500]
+            except IOError:
+                pass
+            break
+
+    # Git log — commit count, structured commit detection, recent topics.
+    try:
+        log_result = subprocess.run(
+            ["git", "log", "--oneline", "-50", "--no-merges"],
+            capture_output=True, text=True, cwd=root
+        )
+        if log_result.returncode == 0:
+            messages = [l.split(" ", 1)[1] for l in log_result.stdout.strip().splitlines()
+                        if " " in l]
+            result["commit_count"] = int(subprocess.run(
+                ["git", "rev-list", "--count", "HEAD"],
+                capture_output=True, text=True, cwd=root
+            ).stdout.strip() or "0")
+            cc_prefixes = ("feat:", "fix:", "chore:", "docs:", "test:", "refactor:", "perf:")
+            structured = sum(1 for m in messages if any(m.startswith(p) for p in cc_prefixes))
+            result["has_structured_commits"] = structured >= max(1, len(messages) // 2)
+            result["recent_topics"] = messages[:10]
+    except (FileNotFoundError, ValueError):
+        pass
+
+    # File tree — top-level directories and language hints.
+    try:
+        entries = os.listdir(root)
+        result["top_dirs"] = sorted([
+            e for e in entries
+            if os.path.isdir(os.path.join(root, e))
+            and not e.startswith(".") and e not in ("node_modules", "__pycache__", "venv")
+        ])
+        lang_map = {".py": "Python", ".ts": "TypeScript", ".tsx": "TypeScript",
+                    ".js": "JavaScript", ".go": "Go", ".rs": "Rust", ".rb": "Ruby"}
+        langs = set()
+        for e in entries:
+            ext = os.path.splitext(e)[1]
+            if ext in lang_map:
+                langs.add(lang_map[ext])
+        result["languages"] = sorted(langs)
+    except OSError:
+        pass
+
+    return result
 
 
 def parse_costs_md() -> tuple:
@@ -1331,6 +1566,82 @@ class WatchDaemon:
                 self.on_change(changed[0])
                 set_state("watching")
                 last_mtimes = self._get_mtimes("project-docs")
+
+
+def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
+    """Dispatches an agent to run a task in the background.
+
+    Uses non-interactive agent mode (no PTY). Stdout captured to
+    .synlynk/logs/<job_id>.log. Returns the job dict.
+    Raises ValueError for unknown agent names.
+    """
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+
+    baselines = AGENT_CAPABILITY_BASELINES[agent]
+    cli = baselines["cli"]
+    flags = baselines["non_interactive_flags"]
+
+    # Unique job ID based on timestamp + agent.
+    import hashlib as _hashlib
+    job_id = "job-" + _hashlib.md5(
+        f"{agent}{task}{time.time()}".encode()
+    ).hexdigest()[:8]
+
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+
+    log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
+    prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+
+    # Build prompt: context snapshot + task description.
+    try:
+        generate_context(scope="full")
+    except Exception:
+        pass
+    context_path = ".synlynk/context.md"
+    context_text = ""
+    if os.path.exists(context_path):
+        context_text = open(context_path).read()
+
+    story_line = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
+    prompt = f"{context_text}{story_line}\n\n## Your Task\n{task}\n"
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+
+    # Launch agent non-interactively, detached from terminal.
+    cmd = [cli] + flags
+    with open(log_file, "w") as log_out, open(prompt_file) as prompt_in:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=prompt_in,
+            stdout=log_out,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,  # detach — survives terminal close
+        )
+
+    job = {
+        "id": job_id,
+        "agent": agent,
+        "story_id": story_id or "",
+        "task": task,
+        "pid": proc.pid,
+        "log_file": log_file,
+        "prompt_file": prompt_file,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+    }
+
+    jobs = _load_jobs()
+    jobs.append(job)
+    _save_jobs(jobs)
+
+    log_telemetry_event({"type": "dispatch", "agent": agent,
+                         "story_id": story_id, "job_id": job_id})
+    return job
+
 
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,

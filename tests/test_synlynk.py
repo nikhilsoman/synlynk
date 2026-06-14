@@ -3,9 +3,24 @@ import os
 import time
 import json
 import pytest
+import subprocess
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bin'))
 import synlynk
+
+
+def test_agent_capability_baselines_exist():
+    assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "gemini" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
+    for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
+        assert "roles" in caps
+        assert "cli" in caps
+        assert "non_interactive_flags" in caps
+
+
+def test_jobs_file_constant():
+    assert synlynk.JOBS_FILE == ".synlynk/jobs.json"
 
 
 def test_get_username_from_git(project_dir, monkeypatch):
@@ -1026,5 +1041,190 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_031(project_dir):
-    assert synlynk.VERSION == "0.3.1"
+def test_version_is_040(project_dir):
+    assert synlynk.VERSION == "0.4.0"
+
+
+def test_load_jobs_returns_empty_list_when_no_file(project_dir):
+    jobs = synlynk._load_jobs()
+    assert jobs == []
+
+
+def test_save_and_load_jobs_roundtrip(project_dir):
+    job = {"id": "job-001", "agent": "claude", "pid": 99999, "status": "running",
+            "started_at": "2026-06-14T10:00:00", "ended_at": None, "exit_code": None,
+            "story_id": "14", "task": "do thing", "log_file": ".synlynk/logs/job-001.log",
+            "prompt_file": ".synlynk/prompts/job-001.md"}
+    synlynk._save_jobs([job])
+    loaded = synlynk._load_jobs()
+    assert loaded == [job]
+
+
+def test_reconcile_marks_dead_pid_as_failed(project_dir):
+    # Current process PID always exists; PID 9999999 never exists
+    current_pid = os.getpid()
+    jobs = [
+        {"id": "job-alive", "pid": current_pid, "status": "running", "ended_at": None, "exit_code": None},
+        {"id": "job-dead", "pid": 9999999, "status": "running", "ended_at": None, "exit_code": None},
+    ]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    result = synlynk._load_jobs()
+    alive = next(j for j in result if j["id"] == "job-alive")
+    dead = next(j for j in result if j["id"] == "job-dead")
+    assert alive["status"] == "running"
+    assert dead["status"] == "failed"
+    assert dead["ended_at"] is not None
+
+
+def test_reconcile_skips_finished_jobs(project_dir):
+    jobs = [{"id": "job-done", "pid": 9999999, "status": "completed",
+              "ended_at": "2026-06-14T09:00:00", "exit_code": 0}]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    result = synlynk._load_jobs()
+    assert result[0]["status"] == "completed"  # unchanged
+
+
+def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 0
+            stdout = "claude 2.1.175\n"
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run)
+    result = synlynk._check_agent_functional("claude")
+    assert result == "claude 2.1.175"
+
+
+def test_check_agent_functional_returns_none_for_missing_tool(monkeypatch):
+    def fake_run(cmd, **kw):
+        raise FileNotFoundError
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run)
+    result = synlynk._check_agent_functional("notacli")
+    assert result is None
+
+
+def test_check_agent_functional_returns_none_for_nonzero_exit(monkeypatch):
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 1
+            stdout = ""
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run)
+    result = synlynk._check_agent_functional("claude")
+    assert result is None
+
+
+def test_discover_agents_returns_functional_agents(monkeypatch, tmp_path):
+    # Simulate claude config dir exists, others don't
+    (tmp_path / ".claude").mkdir()
+    versions = {"claude": "claude 2.1.0"}
+    def fake_check(cli):
+        return versions.get(cli)
+    monkeypatch.setattr(synlynk, "_check_agent_functional", fake_check)
+    monkeypatch.setattr(synlynk, "AGENT_DISCOVERY_DEFAULTS", {
+        "claude": str(tmp_path / ".claude"),
+        "gemini": str(tmp_path / ".gemini"),
+    })
+    agents = synlynk.discover_agents()
+    names = [a["name"] for a in agents]
+    assert "claude" in names
+    functional = [a for a in agents if a["functional"]]
+    assert all(a["name"] == "claude" for a in functional)
+
+
+def test_discover_agents_uses_config_override(monkeypatch, tmp_path, project_dir):
+    import json as _json
+    custom_path = str(tmp_path / "custom_claude")
+    os.makedirs(custom_path)
+    config = {"agent_discovery_paths": {"claude": custom_path}}
+    with open(".synlynk/config.json", "w") as f:
+        _json.dump(config, f)
+    monkeypatch.setattr(synlynk, "_check_agent_functional", lambda cli: "claude 2.0")
+    agents = synlynk.discover_agents()
+    claude_agent = next((a for a in agents if a["name"] == "claude"), None)
+    assert claude_agent is not None
+    assert claude_agent["discovery_path"] == custom_path
+
+
+def test_static_scan_extracts_project_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "README.md").write_text("# my-cool-project\nA great tool.\n")
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["project_name"] == "my-cool-project"
+
+
+def test_static_scan_counts_commits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "f.txt").write_text("a")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "feat: first"], cwd=tmp_path, capture_output=True)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["commit_count"] == 1
+
+
+def test_static_scan_detects_structured_commits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=tmp_path, capture_output=True)
+    for msg in ["feat: add thing", "fix: broken thing", "chore: cleanup"]:
+        (tmp_path / f"{msg[:4]}.txt").write_text(msg)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "commit", "-m", msg], cwd=tmp_path, capture_output=True)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["has_structured_commits"] is True
+
+
+def test_static_scan_no_git_repo(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["commit_count"] == 0
+    assert result["project_name"] == tmp_path.name
+
+
+def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
+    launched = []
+    class FakeProc:
+        pid = 12345
+    def fake_popen(cmd, **kw):
+        launched.append(cmd)
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    job = synlynk.dispatch_agent("claude", "implement auth fix", story_id="14")
+    assert job["agent"] == "claude"
+    assert job["pid"] == 12345
+    assert job["status"] == "running"
+    assert job["task"] == "implement auth fix"
+    assert job["story_id"] == "14"
+    jobs = synlynk._load_jobs()
+    assert any(j["id"] == job["id"] for j in jobs)
+
+
+def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
+    class FakeProc:
+        pid = 99
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    job = synlynk.dispatch_agent("gemini", "write tests")
+    assert os.path.exists(job["prompt_file"])
+    content = open(job["prompt_file"]).read()
+    assert "write tests" in content
+
+
+def test_dispatch_agent_unknown_agent_raises(project_dir):
+    with pytest.raises(ValueError, match="Unknown agent"):
+        synlynk.dispatch_agent("unknownbot", "do thing")
+
+
+def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    synlynk.dispatch_agent("claude", "task one")
+    synlynk.dispatch_agent("claude", "task two")
+    assert len(synlynk._load_jobs()) == 2
