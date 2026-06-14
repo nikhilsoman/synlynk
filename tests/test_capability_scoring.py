@@ -397,6 +397,310 @@ def test_score_add_rejects_out_of_range(tmp_path, monkeypatch):
         cmd_score_add("story-1", 11.0)
 
 
+# --- Task 11: statusline probe ---
+
+def test_probe_model_version_parses_claude_statusline(monkeypatch):
+    from synlynk import _probe_model_version
+    import subprocess
+    fake = type("R", (), {"stdout": "claude-opus-4-8 | ctx: 45%", "returncode": 0})()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: fake)
+    result = _probe_model_version("claude", "claude")
+    assert result == "claude-opus-4-8"
+
+def test_probe_model_version_returns_unknown_on_failure(monkeypatch):
+    from synlynk import _probe_model_version
+    import subprocess
+    def raise_exc(*a, **k): raise Exception("timeout")
+    monkeypatch.setattr(subprocess, "run", raise_exc)
+    result = _probe_model_version("claude", "claude")
+    assert result == "unknown"
+
+def test_probe_model_version_flexible_pattern(monkeypatch):
+    from synlynk import _probe_model_version
+    import subprocess
+    # Covers "claude-3-5-sonnet" format (version before family name)
+    fake = type("R", (), {"stdout": "claude-3-5-sonnet | ctx: 20%", "returncode": 0, "stderr": ""})()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: fake)
+    result = _probe_model_version("claude", "claude")
+    assert "sonnet" in result
+
+
+# --- Task 12: verifier meta parsing ---
+
+def test_extract_verifier_meta_block():
+    from synlynk import extract_verifier_meta
+    output = """
+Code review complete.
+
+# synlynk-meta
+quality=8
+correct=true
+rework_needed=false
+verifier_model=gemini-2.5-pro
+"""
+    meta = extract_verifier_meta(output)
+    assert meta["quality"] == 8.0
+    assert meta["correct"] is True
+    assert meta["rework_needed"] is False
+    assert meta["verifier_model"] == "gemini-2.5-pro"
+
+def test_extract_verifier_meta_returns_none_when_absent():
+    from synlynk import extract_verifier_meta
+    assert extract_verifier_meta("No meta block here") is None
+
+
+# --- Task 13: pr check + score attest ---
+
+def test_pr_check_blocks_on_unknown_model(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_pr_check
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-1", "T"))
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-1", "claude", "unknown", "backend", "monetization", "ott",
+         "build", "auto", 5.0, 5.0)
+    )
+    conn.commit(); conn.close()
+    with pytest.raises(SystemExit) as exc:
+        cmd_pr_check()
+    assert exc.value.code != 0
+
+def test_pr_check_passes_when_all_models_known(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_pr_check
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-2", "T"))
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-2", "claude", "claude-opus-4-8", "backend", "monetization", "ott",
+         "build", "auto", 8.0, 8.0)
+    )
+    conn.commit(); conn.close()
+    cmd_pr_check()  # must not raise
+
+def test_score_attest_updates_model_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_score_attest
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-3", "T"))
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-3", "claude", "unknown", "backend", "monetization", "ott",
+         "build", "auto", 5.0, 5.0)
+    )
+    conn.commit(); conn.close()
+    cmd_score_attest("story-3", "claude-opus-4-8")
+    conn = _get_db()
+    row = conn.execute("SELECT model_version FROM capability_ratings WHERE story_id=?",
+                       ("story-3",)).fetchone()
+    conn.close()
+    assert row[0] == "claude-opus-4-8"
+
+def test_score_attest_sets_split_model_when_dispatch_differs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_score_attest
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-4", "T"))
+    # Row was dispatched with gemini but completion unknown (model changed mid-task)
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, model_at_dispatch, engg_domain, org_domain, "
+        "industry, phase, signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("story-4", "claude", "unknown", "gemini-2.5-pro", "backend", "monetization",
+         "ott", "build", "auto", 5.0, 5.0)
+    )
+    conn.commit(); conn.close()
+    cmd_score_attest("story-4", "claude-opus-4-8")
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, split_model FROM capability_ratings WHERE story_id=?",
+        ("story-4",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "claude-opus-4-8"
+    assert row[1] == 1  # split_model flagged: dispatch=gemini, completion=claude
+
+
+def test_write_capability_rating_sets_correct_from_verifier(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+    log_content = (
+        "# synlynk-meta\n"
+        "model_version=claude-opus-4-8\n"
+        "quality=7\n"
+        "correct=false\n"
+        "rework_needed=true\n"
+        "verifier_model=gemini-2.5-pro\n"
+    )
+    log_path = str(tmp_path / ".synlynk/logs/job-v.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")
+    jobs = [{
+        "id": "job-v", "agent": "claude", "story_id": "story-v",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    json.dump({"industry": "ott"}, open(".synlynk/config.json", "w"))
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-v", "T"))
+    conn.commit(); conn.close()
+    _reconcile_jobs()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT signal_source, quality, correct FROM capability_ratings WHERE story_id=?",
+        ("story-v",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "verifier"
+    assert row[1] == 7.0
+    assert row[2] == 0  # correct=false from verifier meta
+
+
+# --- R2 fix: tier resolution and split_model correctness in _write_capability_rating ---
+
+def test_write_capability_rating_no_false_split_model_when_no_tier1(tmp_path, monkeypatch):
+    """When no synlynk-meta header is present, split_model must stay 0 even if config default
+    differs from model_at_dispatch — Tier 3 config default must never trigger split_model."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+    # Log has no synlynk-meta header; dispatch probed as gemini; config default is claude
+    log_content = "Build complete.\nAll tests passed 5/5.\n"
+    log_path = str(tmp_path / ".synlynk/logs/job-r2.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")
+    jobs = [{
+        "id": "job-r2", "agent": "claude", "story_id": "story-r2",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "gemini-2.5-pro",  # Tier 2: live probe
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    # Config default is different agent — must not trigger split_model
+    json.dump({"agents": {"claude": {"default_model": "claude-opus-4-8"}}, "industry": "ott"},
+              open(".synlynk/config.json", "w"))
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-r2", "R2"))
+    conn.commit(); conn.close()
+    _reconcile_jobs()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, split_model FROM capability_ratings WHERE story_id=?",
+        ("story-r2",)
+    ).fetchone()
+    conn.close()
+    # model_version should be Tier 2 (model_at_dispatch) since no Tier 1 header
+    assert row[0] == "gemini-2.5-pro"
+    # split_model must be 0 — no Tier 1 header means no evidence of a split-model run
+    assert row[1] == 0
+
+
+def test_write_capability_rating_flags_split_model_when_tier1_differs_from_dispatch(tmp_path, monkeypatch):
+    """When Tier 1 synlynk-meta header is present and differs from model_at_dispatch,
+    split_model must be 1."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+    log_content = (
+        "# synlynk-meta\n"
+        "model_version=claude-opus-4-8\n"
+        "quality=8\n"
+    )
+    log_path = str(tmp_path / ".synlynk/logs/job-r2b.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")
+    jobs = [{
+        "id": "job-r2b", "agent": "claude", "story_id": "story-r2b",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "gemini-2.5-pro",  # Tier 2: different from Tier 1
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    json.dump({"industry": "ott"}, open(".synlynk/config.json", "w"))
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-r2b", "R2b"))
+    conn.commit(); conn.close()
+    _reconcile_jobs()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, split_model FROM capability_ratings WHERE story_id=?",
+        ("story-r2b",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "claude-opus-4-8"  # Tier 1 wins
+    assert row[1] == 1  # True split-model: Tier 1 ≠ Tier 2
+
+
+# --- Task 14: org_domain_tags ---
+
+def test_story_create_stores_org_domain_tags(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_story_create
+    cmd_story_create(title="Ad insertion", engg_domain="backend",
+                     org_domain="adtech", phase="build",
+                     org_domain_tags=["monetization", "workflow"])
+    conn = _get_db()
+    row = conn.execute("SELECT org_domain_tags FROM stories WHERE title=?",
+                       ("Ad insertion",)).fetchone()
+    conn.close()
+    import json as _json
+    tags = _json.loads(row[0])
+    assert "monetization" in tags
+    assert "workflow" in tags
+
+def test_org_domain_tags_not_used_in_routing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _best_agent_for_story
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, "
+        "org_domain_tags, industry, phase) VALUES (?,?,?,?,?,?,?)",
+        ("s-1", "T", "backend", "adtech", '["monetization"]', "ott", "build")
+    )
+    # Seed a rating for a completely different coordinate — different engg AND org
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, model_version, engg_domain, "
+        "org_domain, industry, phase, signal_source, quality, quality_auto) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("s-1", "claude", "claude-opus-4-8", "frontend", "monetization", "ott",
+         "build", "auto", 9.0, 9.0)
+    )
+    conn.commit(); conn.close()
+    # story.org_domain="adtech", story.engg_domain="backend"
+    # rating has org_domain="monetization", engg_domain="frontend" — no fallback level matches
+    # verifies org_domain_tags don't substitute for org_domain in routing
+    result = _best_agent_for_story("s-1")
+    assert result is None
+
+
 
 
 

@@ -132,3 +132,4 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.
 - AI maintains these docs without user prompting at natural pause points.
+- PR Reviews: When reviewing a pull request, only comment with observations and suggestions. Do not make code fixes on the branch or commit changes directly; the original author must implement corrections to learn and retain ownership.

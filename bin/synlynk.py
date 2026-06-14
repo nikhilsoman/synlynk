@@ -101,19 +101,22 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
 
 
 def cmd_story_create(title: str, engg_domain: str = "unknown",
-                     org_domain: str = "unknown", phase: str = "build") -> str:
+                     org_domain: str = "unknown", phase: str = "build",
+                     org_domain_tags: list = None) -> str:
     """Creates a story record in state.db. Returns the generated story_id."""
     import hashlib as _hashlib
+    import json as _json
     story_id = "story-" + _hashlib.md5(
         f"{title}{time.time()}".encode()
     ).hexdigest()[:8]
     config = load_config()
     industry = config.get("industry", "unknown")
+    tags_json = _json.dumps(org_domain_tags or [])
     conn = _get_db()
     conn.execute(
-        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (story_id, title, engg_domain, org_domain, industry, phase)
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, "
+        "org_domain_tags, industry, phase) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (story_id, title, engg_domain, org_domain, tags_json, industry, phase)
     )
     conn.commit()
     conn.close()
@@ -203,6 +206,51 @@ def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> N
         score_str = f"{r[6]:.2f}" if r[6] is not None else "  n/a"
         print(f"  {r[0]:<10} {r[1]:<22} {r[2]:<12} {r[3]:<14} "
               f"{r[4]:<12} {r[5]:<10} {score_str:>6} {r[7]:>4}")
+
+
+def cmd_pr_check() -> None:
+    """Hard-blocks merge if any capability_ratings row has model_version='unknown'.
+
+    Exit code 1 if blocked. Exit code 0 if clean.
+    """
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"
+    ).fetchall()
+    conn.close()
+    if rows:
+        print("\n  🚫 [PR CHECK BLOCKED] Unattested model versions found:")
+        for story_id, agent in rows:
+            print(f"    story: {story_id}  agent: {agent}")
+        print("\n  Fix with: synlynk score attest <story-id> --model <version>")
+        raise SystemExit(1)
+    print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
+
+
+def cmd_score_attest(story_id: str, model_version: str) -> None:
+    """Retroactively sets model_version on all 'unknown' rows for a story.
+
+    Also recalculates split_model — if model_at_dispatch differs from the attested
+    completion model, the row is a split-model run and must be excluded from scoring.
+    """
+    conn = _get_db()
+    updated = conn.execute(
+        """UPDATE capability_ratings
+           SET model_version = ?,
+               model_at_completion = ?,
+               split_model = CASE
+                   WHEN model_at_dispatch != ? AND model_at_dispatch != 'unknown' THEN 1
+                   ELSE 0
+               END
+           WHERE story_id = ? AND model_version = 'unknown'""",
+        (model_version, model_version, model_version, story_id)
+    ).rowcount
+    conn.commit()
+    conn.close()
+    if updated:
+        print(f"  {_GREEN}✓{_RESET} Attested {updated} row(s) for {story_id} → {model_version}")
+    else:
+        print(f"  No 'unknown' rows found for {story_id}")
 
 
 _ENGG_DOMAIN_PATTERNS = [
@@ -362,6 +410,35 @@ def _save_jobs(jobs: list) -> None:
         json.dump(jobs, f, indent=2)
 
 
+def _probe_model_version(agent_name: str, cli: str) -> str:
+    """Tier 2: probe the agent's active model from its statusline before dispatch.
+
+    Times out after 3s to avoid blocking dispatch.
+    """
+    probe_cmds = {
+        "claude": [cli, "/status"],
+        "gemini": [cli, "--version"],
+        "codex":  [cli, "--version"],
+    }
+    cmd = probe_cmds.get(agent_name, [cli, "--version"])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+        text = (result.stdout or "") + (getattr(result, "stderr", "") or "")
+        patterns = [
+            r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
+            r"(gemini-[\w.-]+)",
+            r"(gpt-[\d.]+-[\w.-]+)",
+            r"(codex-[\w-]+)",
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                return m.group(1).lower()
+    except Exception:
+        pass
+    return "unknown"
+
+
 def _count_dispatch_rework(story_id: str) -> int:
     """Counts completed jobs for this story_id — each represents one dispatch cycle."""
     if not story_id:
@@ -393,7 +470,30 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
-    model_version = extract_model_version(log_text, agent=agent)
+    # Tier 1 only — synlynk-meta header, no config fallback (agent=None prevents Tier 3 contamination)
+    tier1_completion = extract_model_version(log_text, agent=None)
+    model_at_dispatch = job.get("model_at_dispatch", "unknown")
+    # Tier 3: config default — used only as last resort label, never for split_model detection
+    tier3_config = extract_model_version("", agent=agent)
+
+    # Resolve hierarchy: Tier 1 > Tier 2 (live dispatch probe) > Tier 3 (config default)
+    if tier1_completion != "unknown":
+        model_at_completion = tier1_completion
+        model_version = tier1_completion
+    elif model_at_dispatch != "unknown":
+        model_at_completion = model_at_dispatch
+        model_version = model_at_dispatch
+    else:
+        model_at_completion = tier3_config
+        model_version = tier3_config
+
+    # Only flag split_model when BOTH Tier 1 and Tier 2 are concretely known and differ
+    split_model = 1 if (
+        tier1_completion != "unknown"
+        and model_at_dispatch != "unknown"
+        and tier1_completion != model_at_dispatch
+    ) else 0
+
     signals = _extract_auto_signals(
         log_text,
         started_at=job.get("started_at"),
@@ -411,8 +511,7 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     industry = story_row[1] if story_row else load_config().get("industry", "unknown")
     phase = story_row[2] if story_row else "build"
 
-    weighted_sum = 0.0
-    total_weight = 0.0
+    weighted_sum, total_weight = 0.0, 0.0
     if signals["test_pass_rate"] is not None:
         weighted_sum += signals["test_pass_rate"] * 10 * 0.35
         total_weight += 0.35
@@ -424,21 +523,39 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     total_weight += 0.35
     quality_auto = (weighted_sum / total_weight) if total_weight else 5.0
 
+    # Check for verifier meta block — upgrades signal_source from 'auto' to 'verifier'
+    verifier_meta = extract_verifier_meta(log_text)
+    if verifier_meta:
+        signal_source = "verifier"
+        quality = verifier_meta["quality"]
+        verifier_model = verifier_meta.get("verifier_model")
+        verifier_agent_val = agent
+        correct = 0 if verifier_meta.get("correct") is False else 1
+    else:
+        signal_source = "auto"
+        quality = quality_auto
+        verifier_model = None
+        verifier_agent_val = None
+        # Auto: infer correctness from build success (default 1 if unknown)
+        correct = 1 if signals.get("build_success") is not False else 0
+
     conn.execute(
         """INSERT INTO capability_ratings
-           (story_id, agent, model_version, model_at_completion,
+           (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
             engg_domain, org_domain, industry, phase,
             signal_source, quality, quality_auto,
+            verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework,
-            duration_vs_estimate, verified_by_ci)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (story_id, agent, model_version, model_version,
+            duration_vs_estimate, verified_by_ci, correct)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
          engg_domain, org_domain, industry, phase,
-         "auto", quality_auto, quality_auto,
+         signal_source, quality, quality_auto,
+         verifier_agent_val, verifier_model,
          signals["test_pass_rate"], 1 if signals["build_success"] else 0,
          dispatch_rework, micro_rework,
-         None, None)
+         None, None, correct)
     )
     conn.commit()
     conn.close()
@@ -862,6 +979,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
+    model_at_dispatch = _probe_model_version(agent, cli)
 
     import hashlib as _hashlib
     job_id = "job-" + _hashlib.md5(
@@ -914,6 +1032,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
         "exit_code": None,
         "dispatch_rework": _count_dispatch_rework(story_id or ""),
         "micro_rework": 0,
+        "model_at_dispatch": model_at_dispatch,
     }
 
     jobs = _load_jobs()
@@ -1540,6 +1659,34 @@ def extract_model_version(output_text: str, agent: str = None) -> str:
             return default
 
     return "unknown"
+
+
+def extract_verifier_meta(output_text: str) -> Optional[dict]:
+    """Parses the # synlynk-meta block from a verifier agent's output.
+
+    Returns dict with quality, correct, rework_needed, verifier_model — or None if absent.
+    """
+    m = re.search(r"#\s*synlynk-meta\s*\n((?:[^\n]+\n?)+)", output_text, re.IGNORECASE)
+    if not m:
+        return None
+    block = m.group(1)
+    meta = {}
+    for line in block.splitlines():
+        if "=" in line:
+            k, _, v = line.partition("=")
+            k, v = k.strip(), v.strip()
+            if k == "quality":
+                try:
+                    meta["quality"] = float(v)
+                except ValueError:
+                    pass
+            elif k == "correct":
+                meta["correct"] = v.lower() in ("true", "yes", "1")
+            elif k == "rework_needed":
+                meta["rework_needed"] = v.lower() in ("true", "yes", "1")
+            elif k == "verifier_model":
+                meta["verifier_model"] = v
+    return meta if "quality" in meta else None
 
 
 def _extract_auto_signals(log_text: str, started_at: str = None,
@@ -2736,6 +2883,9 @@ def main() -> None:
     story_create_parser.add_argument("--engg", default="unknown", dest="engg_domain")
     story_create_parser.add_argument("--org", default="unknown", dest="org_domain")
     story_create_parser.add_argument("--phase", default="build")
+    story_create_parser.add_argument("--org-tags", nargs="*", default=[],
+                                      dest="org_domain_tags",
+                                      help="Secondary org domain tags (Tokq discoverability only)")
     story_sub.add_parser("list", help="List all stories")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
@@ -2749,6 +2899,13 @@ def main() -> None:
     score_list_parser.add_argument("--engg", default=None)
     score_list_parser.add_argument("--org", default=None)
     score_list_parser.add_argument("--industry", default=None)
+    attest_parser = score_sub.add_parser("attest", help="Retroactively attest model version")
+    attest_parser.add_argument("story_id")
+    attest_parser.add_argument("--model", required=True)
+
+    pr_parser = subparsers.add_parser("pr", help="PR workflow commands")
+    pr_sub = pr_parser.add_subparsers(dest="pr_action")
+    pr_sub.add_parser("check", help="Block PR if model versions are unattested")
 
     args = parser.parse_args()
 
@@ -2806,7 +2963,8 @@ def main() -> None:
             run_parser.print_help()
     elif args.command == "story":
         if args.story_action == "create":
-            cmd_story_create(args.title, args.engg_domain, args.org_domain, args.phase)
+            cmd_story_create(args.title, args.engg_domain, args.org_domain, args.phase,
+                             org_domain_tags=getattr(args, "org_domain_tags", []))
         elif args.story_action == "list":
             cmd_story_list()
     elif args.command == "score":
@@ -2814,6 +2972,11 @@ def main() -> None:
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
         elif args.score_action == "list":
             cmd_score_list(engg=args.engg, org=args.org, industry=args.industry)
+        elif args.score_action == "attest":
+            cmd_score_attest(args.story_id, args.model)
+    elif args.command == "pr":
+        if args.pr_action == "check":
+            cmd_pr_check()
     else:
         parser.print_help()
 
