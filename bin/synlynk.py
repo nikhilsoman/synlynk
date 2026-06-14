@@ -130,6 +130,49 @@ def load_config() -> dict:
         return defaults
 
 
+def _load_jobs() -> list:
+    """Reads .synlynk/jobs.json; returns [] if missing or corrupt."""
+    if not os.path.exists(JOBS_FILE):
+        return []
+    try:
+        with open(JOBS_FILE) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def _save_jobs(jobs: list) -> None:
+    """Writes jobs list to .synlynk/jobs.json."""
+    os.makedirs(os.path.dirname(JOBS_FILE), exist_ok=True)
+    with open(JOBS_FILE, "w") as f:
+        json.dump(jobs, f, indent=2)
+
+
+def _reconcile_jobs() -> None:
+    """Probes PIDs of running jobs; marks unreachable ones as failed.
+
+    Called on every synlynk invocation before any command runs.
+    Prevents stale jobs surviving reboots or external kills.
+    """
+    jobs = _load_jobs()
+    changed = False
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    for job in jobs:
+        if job.get("status") not in ("running",):
+            continue
+        pid = job.get("pid")
+        if pid is None:
+            continue
+        try:
+            os.kill(pid, 0)  # signal 0: check existence only, no actual signal
+        except ProcessLookupError:
+            job["status"] = "failed"
+            job["ended_at"] = now
+            changed = True
+    if changed:
+        _save_jobs(jobs)
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"

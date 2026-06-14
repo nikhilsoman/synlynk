@@ -1042,3 +1042,44 @@ def test_sentinel_clear_by_severity(project_dir):
 
 def test_version_is_040(project_dir):
     assert synlynk.VERSION == "0.4.0"
+
+
+def test_load_jobs_returns_empty_list_when_no_file(project_dir):
+    jobs = synlynk._load_jobs()
+    assert jobs == []
+
+
+def test_save_and_load_jobs_roundtrip(project_dir):
+    job = {"id": "job-001", "agent": "claude", "pid": 99999, "status": "running",
+            "started_at": "2026-06-14T10:00:00", "ended_at": None, "exit_code": None,
+            "story_id": "14", "task": "do thing", "log_file": ".synlynk/logs/job-001.log",
+            "prompt_file": ".synlynk/prompts/job-001.md"}
+    synlynk._save_jobs([job])
+    loaded = synlynk._load_jobs()
+    assert loaded == [job]
+
+
+def test_reconcile_marks_dead_pid_as_failed(project_dir):
+    # Current process PID always exists; PID 9999999 never exists
+    current_pid = os.getpid()
+    jobs = [
+        {"id": "job-alive", "pid": current_pid, "status": "running", "ended_at": None, "exit_code": None},
+        {"id": "job-dead", "pid": 9999999, "status": "running", "ended_at": None, "exit_code": None},
+    ]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    result = synlynk._load_jobs()
+    alive = next(j for j in result if j["id"] == "job-alive")
+    dead = next(j for j in result if j["id"] == "job-dead")
+    assert alive["status"] == "running"
+    assert dead["status"] == "failed"
+    assert dead["ended_at"] is not None
+
+
+def test_reconcile_skips_finished_jobs(project_dir):
+    jobs = [{"id": "job-done", "pid": 9999999, "status": "completed",
+              "ended_at": "2026-06-14T09:00:00", "exit_code": 0}]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    result = synlynk._load_jobs()
+    assert result[0]["status"] == "completed"  # unchanged
