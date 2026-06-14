@@ -147,6 +147,39 @@ def test_extract_model_version_parses_various_formats():
     # Whitespace tolerance
     assert extract_model_version("# synlynk-meta\n model_version = gemini-2.5-pro\n") == "gemini-2.5-pro"
 
+def test_extract_auto_signals_test_pass_rate():
+    from synlynk import _extract_auto_signals
+    log = "Tests: 47 passed, 3 failed, 50 total"
+    signals = _extract_auto_signals(log, started_at="2026-06-14T10:00:00",
+                                    ended_at="2026-06-14T10:05:00")
+    assert abs(signals["test_pass_rate"] - 0.94) < 0.01
+
+def test_extract_auto_signals_build_success_on_zero_exit():
+    from synlynk import _extract_auto_signals
+    signals = _extract_auto_signals("Build OK", started_at="2026-06-14T10:00:00",
+                                    ended_at="2026-06-14T10:01:00", exit_code=0)
+    assert signals["build_success"] is True
+
+def test_extract_auto_signals_build_fail_on_nonzero_exit():
+    from synlynk import _extract_auto_signals
+    signals = _extract_auto_signals("Error: compilation failed",
+                                    started_at="2026-06-14T10:00:00",
+                                    ended_at="2026-06-14T10:01:00", exit_code=1)
+    assert signals["build_success"] is False
+
+def test_extract_auto_signals_duration_computed():
+    from synlynk import _extract_auto_signals
+    signals = _extract_auto_signals("", started_at="2026-06-14T10:00:00",
+                                    ended_at="2026-06-14T10:10:00")
+    assert signals["duration_seconds"] == pytest.approx(600.0, abs=1)
+
+def test_extract_auto_signals_all_zeros_on_empty_log():
+    from synlynk import _extract_auto_signals
+    signals = _extract_auto_signals("", started_at=None, ended_at=None)
+    assert signals["test_pass_rate"] is None
+    assert signals["build_success"] is None
+
+
 
 
 

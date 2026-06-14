@@ -1339,6 +1339,57 @@ def extract_model_version(output_text: str, agent: str = None) -> str:
     return "unknown"
 
 
+def _extract_auto_signals(log_text: str, started_at: str = None,
+                           ended_at: str = None, exit_code: int = None) -> dict:
+    """Extracts objective quality signals from a completed job's log text."""
+    signals = {
+        "test_pass_rate": None,
+        "build_success": None,
+        "duration_seconds": None,
+    }
+
+    # Test pass rate — multiple runner formats
+    patterns = [
+        r"(\d+)\s+passed.*?(\d+)\s+(?:failed|error)",   # pytest: "47 passed, 3 failed"
+        r"Tests:\s+(\d+)\s+passed.*?(\d+)\s+failed",     # jest variant
+        r"(\d+)/(\d+)\s+tests?\s+passed",                # generic "47/50 tests passed"
+    ]
+    for pat in patterns:
+        m = re.search(pat, log_text, re.IGNORECASE)
+        if m:
+            passed = int(m.group(1))
+            second = int(m.group(2))
+            if "passed" in pat and "failed" in pat:
+                total = passed + second
+            else:
+                total = second
+            signals["test_pass_rate"] = passed / total if total else None
+            break
+
+    # All-passed shortcut: "X passed" with no failures mentioned
+    if signals["test_pass_rate"] is None:
+        m = re.search(r"(\d+)\s+passed", log_text, re.IGNORECASE)
+        if m and "failed" not in log_text.lower() and "error" not in log_text.lower():
+            signals["test_pass_rate"] = 1.0
+
+    # Build success from exit code
+    if exit_code is not None:
+        signals["build_success"] = (exit_code == 0)
+
+    # Duration
+    if started_at and ended_at:
+        try:
+            fmt = "%Y-%m-%dT%H:%M:%S"
+            import datetime as _dt
+            delta = _dt.datetime.strptime(ended_at, fmt) - _dt.datetime.strptime(started_at, fmt)
+            signals["duration_seconds"] = delta.total_seconds()
+        except Exception:
+            pass
+
+    return signals
+
+
+
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
     """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
