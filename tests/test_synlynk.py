@@ -3,6 +3,7 @@ import os
 import time
 import json
 import pytest
+import subprocess
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bin'))
 import synlynk
@@ -1145,3 +1146,43 @@ def test_discover_agents_uses_config_override(monkeypatch, tmp_path, project_dir
     claude_agent = next((a for a in agents if a["name"] == "claude"), None)
     assert claude_agent is not None
     assert claude_agent["discovery_path"] == custom_path
+
+
+def test_static_scan_extracts_project_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "README.md").write_text("# my-cool-project\nA great tool.\n")
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["project_name"] == "my-cool-project"
+
+
+def test_static_scan_counts_commits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=tmp_path, capture_output=True)
+    (tmp_path / "f.txt").write_text("a")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "feat: first"], cwd=tmp_path, capture_output=True)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["commit_count"] == 1
+
+
+def test_static_scan_detects_structured_commits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=tmp_path, capture_output=True)
+    for msg in ["feat: add thing", "fix: broken thing", "chore: cleanup"]:
+        (tmp_path / f"{msg[:4]}.txt").write_text(msg)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "commit", "-m", msg], cwd=tmp_path, capture_output=True)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["has_structured_commits"] is True
+
+
+def test_static_scan_no_git_repo(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = synlynk._static_scan(str(tmp_path))
+    assert result["commit_count"] == 0
+    assert result["project_name"] == tmp_path.name

@@ -225,6 +225,96 @@ def discover_agents(config: dict = None) -> list:
     return found
 
 
+def _static_scan(root: str = ".") -> dict:
+    """Scans repo for project context: git log, README, file tree.
+
+    Best-effort: repos without structured commits produce a lower-quality result.
+    Returns dict with keys: project_name, description, commit_count,
+    has_structured_commits, recent_topics, top_dirs, languages, readme_summary.
+    """
+    result = {
+        "project_name": os.path.basename(os.path.abspath(root)),
+        "description": "",
+        "commit_count": 0,
+        "has_structured_commits": False,
+        "recent_topics": [],
+        "top_dirs": [],
+        "languages": [],
+        "readme_summary": "",
+    }
+
+    # README extraction — project name from H1, summary from first paragraph.
+    for readme in ("README.md", "README.rst", "README.txt", "README"):
+        readme_path = os.path.join(root, readme)
+        if os.path.exists(readme_path):
+            try:
+                text = open(readme_path).read(2000)
+                lines = text.splitlines()
+                for line in lines:
+                    if line.startswith("# "):
+                        result["project_name"] = line[2:].strip()
+                        break
+                # First non-heading, non-empty paragraph as description.
+                para_lines = []
+                in_para = False
+                for line in lines[1:]:
+                    if line.startswith("#"):
+                        if in_para:
+                            break
+                        continue
+                    if line.strip():
+                        para_lines.append(line.strip())
+                        in_para = True
+                    elif in_para:
+                        break
+                result["description"] = " ".join(para_lines)[:300]
+                result["readme_summary"] = text[:500]
+            except IOError:
+                pass
+            break
+
+    # Git log — commit count, structured commit detection, recent topics.
+    try:
+        log_result = subprocess.run(
+            ["git", "log", "--oneline", "-50", "--no-merges"],
+            capture_output=True, text=True, cwd=root
+        )
+        if log_result.returncode == 0:
+            messages = [l.split(" ", 1)[1] for l in log_result.stdout.strip().splitlines()
+                        if " " in l]
+            result["commit_count"] = int(subprocess.run(
+                ["git", "rev-list", "--count", "HEAD"],
+                capture_output=True, text=True, cwd=root
+            ).stdout.strip() or "0")
+            cc_prefixes = ("feat:", "fix:", "chore:", "docs:", "test:", "refactor:", "perf:")
+            structured = sum(1 for m in messages if any(m.startswith(p) for p in cc_prefixes))
+            result["has_structured_commits"] = structured >= max(1, len(messages) // 2)
+            result["recent_topics"] = messages[:10]
+    except (FileNotFoundError, ValueError):
+        pass
+
+    # File tree — top-level directories and language hints.
+    try:
+        entries = os.listdir(root)
+        result["top_dirs"] = sorted([
+            e for e in entries
+            if os.path.isdir(os.path.join(root, e))
+            and not e.startswith(".") and e not in ("node_modules", "__pycache__", "venv")
+        ])
+        lang_map = {".py": "Python", ".ts": "TypeScript", ".tsx": "TypeScript",
+                    ".js": "JavaScript", ".go": "Go", ".rs": "Rust", ".rb": "Ruby"}
+        langs = set()
+        for e in entries:
+            ext = os.path.splitext(e)[1]
+            if ext in lang_map:
+                langs.add(lang_map[ext])
+        result["languages"] = sorted(langs)
+    except OSError:
+        pass
+
+    return result
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"
