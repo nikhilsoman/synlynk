@@ -1171,6 +1171,34 @@ def test_reconcile_marks_failed_from_exit_file(project_dir):
     assert not os.path.exists(log_file + ".exit")
 
 
+def test_reconcile_survives_permission_error(project_dir, monkeypatch):
+    # PermissionError from os.kill means PID exists (owned by another user) — keep as running.
+    def fake_kill(pid, sig):
+        raise PermissionError("Operation not permitted")
+    monkeypatch.setattr(synlynk.os, "kill", fake_kill)
+    jobs = [{"id": "job-owned", "pid": 1, "status": "running",
+             "ended_at": None, "exit_code": None, "log_file": ""}]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()  # must not raise
+    result = synlynk._load_jobs()
+    assert result[0]["status"] == "running"
+
+
+def test_reconcile_empty_log_file_does_not_crash(project_dir):
+    # A job with empty log_file must not read/delete ".exit" in CWD.
+    sentinel = ".exit"
+    with open(sentinel, "w") as f:
+        f.write("0\n")
+    jobs = [{"id": "job-nolog", "pid": 9999999, "status": "running",
+             "ended_at": None, "exit_code": None, "log_file": ""}]
+    synlynk._save_jobs(jobs)
+    synlynk._reconcile_jobs()
+    assert os.path.exists(sentinel), ".exit in CWD must not be consumed"
+    os.remove(sentinel)
+    result = synlynk._load_jobs()
+    assert result[0]["status"] == "failed"  # dead PID → failed regardless
+
+
 def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):
     def fake_run(cmd, **kw):
         class R:
@@ -1328,7 +1356,7 @@ def test_llm_enrich_calls_agent_noninteractively(project_dir, monkeypatch):
             "commit_count": 5, "recent_topics": ["feat: add x"], "languages": ["Python"],
             "readme_summary": "# testproject\nA test.", "top_dirs": ["src"],
             "has_structured_commits": True}
-    result = synlynk._llm_enrich("claude", scan)
+    result = synlynk._llm_enrich("claude", "claude", scan)
     assert result is True
     assert any("claude" in str(c) for c in calls)
 
@@ -1343,8 +1371,29 @@ def test_llm_enrich_returns_false_on_agent_failure(project_dir, monkeypatch):
     scan = {"project_name": "x", "description": "", "commit_count": 0,
             "recent_topics": [], "languages": [], "readme_summary": "",
             "top_dirs": [], "has_structured_commits": False}
-    result = synlynk._llm_enrich("claude", scan)
+    result = synlynk._llm_enrich("claude", "claude", scan)
     assert result is False
+
+
+def test_llm_enrich_uses_agent_name_not_cli_for_baselines(project_dir, monkeypatch):
+    # When agent_cli is a custom path, agent_name must still resolve the right baselines.
+    captured_cmd = []
+    def fake_run(cmd, **kw):
+        captured_cmd.extend(cmd)
+        class R:
+            returncode = 0
+            stdout = "# Roadmap\n"
+        return R()
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+    scan = {"project_name": "p", "description": "", "commit_count": 0,
+            "recent_topics": [], "languages": [], "readme_summary": "",
+            "top_dirs": [], "has_structured_commits": False}
+    # agent_name="claude" (key in BASELINES), agent_cli="/usr/local/bin/my-claude" (custom path)
+    synlynk._llm_enrich("claude", "/usr/local/bin/my-claude", scan)
+    # The command must use the custom cli path, not the key name
+    assert captured_cmd[0] == "/usr/local/bin/my-claude"
+    # And claude's non_interactive_flags ("--print") must be applied (from BASELINES["claude"])
+    assert "--print" in captured_cmd
 
 
 # ── Task 7: Init wizard tests ─────────────────────────────────────────────────

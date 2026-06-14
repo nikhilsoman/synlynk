@@ -167,16 +167,18 @@ def _reconcile_jobs() -> None:
             os.kill(pid, 0)  # signal 0: check existence only, no actual signal
         except ProcessLookupError:
             # PID is dead. Check if wrapper wrote an exit code.
-            exit_file = job.get("log_file", "") + ".exit"
+            log_file = job.get("log_file")
             exit_code = None
-            if os.path.exists(exit_file):
-                try:
-                    with open(exit_file) as f:
-                        exit_code = int(f.read().strip())
-                    os.remove(exit_file)  # Clean up
-                except Exception:
-                    pass
-            
+            if log_file:
+                exit_file = log_file + ".exit"
+                if os.path.exists(exit_file):
+                    try:
+                        with open(exit_file) as f:
+                            exit_code = int(f.read().strip())
+                        os.remove(exit_file)
+                    except Exception:
+                        pass
+
             if exit_code == 0:
                 job["status"] = "completed"
                 job["exit_code"] = 0
@@ -185,6 +187,9 @@ def _reconcile_jobs() -> None:
                 job["exit_code"] = exit_code if exit_code is not None else -1
             job["ended_at"] = now
             changed = True
+        except PermissionError:
+            # Process exists but is owned by another user — keep status as running.
+            pass
     if changed:
         _save_jobs(jobs)
 
@@ -409,7 +414,7 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     return written
 
 
-def _llm_enrich(agent_cli: str, scan: dict) -> bool:
+def _llm_enrich(agent_name: str, agent_cli: str, scan: dict) -> bool:
     """Calls the configured agent non-interactively to enrich project-docs.
 
     Passes the static scan result + current doc drafts as context.
@@ -453,7 +458,7 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
-    baselines = AGENT_CAPABILITY_BASELINES.get(agent_cli, {})
+    baselines = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
     flags = baselines.get("non_interactive_flags", ["--print"])
     cmd = [agent_cli] + flags
 
@@ -2019,7 +2024,7 @@ def init(force: bool = False, agents: list = None,
             answer = ""
         if answer == "y":
             print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
-            ok = _llm_enrich(enricher["cli"], scan)
+            ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
             print(f"{_GREEN}done{_RESET}" if ok else f"{_YELLOW}failed — keeping skeleton{_RESET}")
     else:
         print(f"  {_DIM}No functional agent available — skipping enrichment{_RESET}")
