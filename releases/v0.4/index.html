@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v0.2.x — The Kernel | synlynk</title>
+    <title>v0.4.x — Hybrid Workgroup Bootstrap | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -31,9 +31,13 @@
 
   <header class="release-detail-header">
     <a href="/releases/" class="back-link">← All releases</a>
-    <span class="release-version">v0.2.x</span>
-    <h1>The Kernel</h1>
+    <span class="release-version">v0.4.x</span>
+    <h1>Hybrid Workgroup Bootstrap</h1>
 
+    
+    <div class="release-install-block">
+      curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
+    </div>
     
   </header>
 
@@ -43,8 +47,18 @@
     <ul class="whats-new-list">
       
       <li>
-        <a href="/features/gh-cli-identity/">gh CLI identity</a>
-        <span class="feature-note">— Resolves verified GitHub login as the canonical session actor for devlog attribution</span>
+        <a href="/features/agent-discovery/">Agent discovery</a>
+        <span class="feature-note">— init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance</span>
+      </li>
+      
+      <li>
+        <a href="/features/agent-dispatch/">Background dispatch</a>
+        <span class="feature-note">— Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task &quot;...&quot;</span>
+      </li>
+      
+      <li>
+        <a href="/features/parallel-trio/">Parallel trio dispatch</a>
+        <span class="feature-note">— synlynk run --trio dispatches one task to all functional agents simultaneously</span>
       </li>
       
     </ul>
@@ -56,21 +70,9 @@
     <ul class="patch-list">
       
       <li class="patch-item">
-        <span class="patch-version">v0.2.2</span>
-        <span class="patch-date">May 20, 2026</span>
-        <span class="patch-summary">gh CLI identity resolution, upgrade check via gh API</span>
-      </li>
-      
-      <li class="patch-item">
-        <span class="patch-version">v0.2.1</span>
-        <span class="patch-date">May 17, 2026</span>
-        <span class="patch-summary">Token extraction correctness, test suite reliability</span>
-      </li>
-      
-      <li class="patch-item">
-        <span class="patch-version">v0.2.0</span>
-        <span class="patch-date">May 17, 2026</span>
-        <span class="patch-summary">Initial kernel: context injection, cost tracking, telemetry, flatline detection, budget enforcement</span>
+        <span class="patch-version">v0.4.0</span>
+        <span class="patch-date">Jun 14, 2026</span>
+        <span class="patch-summary">Agent discovery, dispatch, job store, init wizard with Magic Moments, run --trio</span>
       </li>
       
     </ul>
@@ -79,7 +81,7 @@
   
   <div class="release-section">
     <h2>From the build log</h2>
-    <a href="/blog/02-pr1-v0-2-0-the-kernel/" class="release-blog-link">Read the blog post →</a>
+    <a href="/blog/11-pr39-v040-hybrid-workgroup-bootstrap/" class="release-blog-link">Read the blog post →</a>
   </div>
   
 

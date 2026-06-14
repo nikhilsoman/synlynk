@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Board management — Feature | synlynk</title>
+    <title>Background dispatch — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,19 +33,19 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Board management</h1>
-    <p class="feature-lead">synlynk start moves GitHub Projects v2 board items autonomously via GraphQL</p>
+    <h1>Background dispatch</h1>
+    <p class="feature-lead">Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task &quot;...&quot;</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>`synlynk start &lt;issue-number&gt;` reads cached field IDs from `.synlynk/config.json`, calls the GitHub Projects v2 GraphQL API to move the item to In Progress, sets the Agent field to the current executor, and begins the Trio Protocol dispatch sequence. This is the first autonomous action the harness takes on behalf of the user — no manual board updates required.</p>
+    <p>`synlynk dispatch &lt;agent&gt; --task &lt;text&gt;` launches the agent CLI in the background using `subprocess.Popen(start_new_session=True)`, capturing stdout to `.synlynk/logs/&lt;job_id&gt;.log` and persisting the PID to `.synlynk/jobs.json`. On every startup, `_reconcile_jobs()` probes live PIDs and marks dead ones as completed or failed. `synlynk jobs` lists running/recent jobs; `synlynk logs --job &lt;id&gt;` tails output in real time.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">Scheduler — Dispatch</span>
+      <span class="layer-label">IPC — Agent Files &amp; Coordination</span>
     </div>
   </div>
 
@@ -53,7 +53,7 @@
     <h2>Introduced in</h2>
     <div class="introduced-badge">
       <a href="/releases/v0.4/">v0.4.x</a>
-      
+      — Hybrid Workgroup Bootstrap
     </div>
   </div>
 
@@ -62,8 +62,18 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk start 42</code>
-      <span class="usage-note">Moves issue #42 to In Progress on GitHub Projects v2 board, sets Agent field</span>
+      <code>$ synlynk dispatch claude --task &quot;refactor auth module&quot;</code>
+      <span class="usage-note">Launches claude in background, returns job ID immediately</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk jobs</code>
+      <span class="usage-note">Lists all running and recent jobs with status, agent, and task</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk logs --job job-abc123 --tail 50</code>
+      <span class="usage-note">Tails the last 50 lines of a job&#39;s stdout log</span>
     </div>
     
   </div>
@@ -92,9 +102,11 @@
           
         
           
-            <a href="/features/trio-protocol/">Trio Protocol</a>
+        
           
         
+          
+            <a href="/features/parallel-trio/">Parallel trio dispatch</a>
           
         
       
@@ -110,11 +122,13 @@
           
         
           
-            <a href="/features/gh-cli-identity/">gh CLI identity</a>
-          
         
           
         
+          
+        
+          
+            <a href="/features/agent-discovery/">Agent discovery</a>
           
         
           
@@ -138,7 +152,7 @@
                 <div class="wordmark">
                     <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
                 </div>
-                <div class="version">v1.2.0-lite</div>
+                <div class="version">v0.4.0</div>
             </div>
             <div class="footer-right">
                 <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>

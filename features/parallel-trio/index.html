@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flatline detection — Feature | synlynk</title>
+    <title>Parallel trio dispatch — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,27 +33,27 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Flatline detection</h1>
-    <p class="feature-lead">Alerts and halts when the last 3 runs share identical command + non-zero exit</p>
+    <h1>Parallel trio dispatch</h1>
+    <p class="feature-lead">synlynk run --trio dispatches one task to all functional agents simultaneously</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>synlynk tracks the last 100 exec invocations in `.synlynk/telemetry.json`. If the most recent 3 entries share the same command and all exited non-zero, the harness prints a flatline warning and blocks the next run. This prevents silent looping where an agent repeatedly fails at the same step without human review.</p>
+    <p>`synlynk run --trio &lt;task&gt;` dispatches the same task description to every functional agent (claude, gemini, codex, agy — whichever are installed) in parallel background jobs. Each agent runs independently; `synlynk jobs` shows all three. This is the first form of horizontal parallelism in synlynk: same task, multiple perspectives, results streamed to separate log files for human review.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">Kernel — Context Engine</span>
+      <span class="layer-label">IPC — Agent Files &amp; Coordination</span>
     </div>
   </div>
 
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.1/">v0.1.x</a>
-      — Proof of Concept
+      <a href="/releases/v0.4/">v0.4.x</a>
+      — Hybrid Workgroup Bootstrap
     </div>
   </div>
 
@@ -62,8 +62,8 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk exec gemini</code>
-      <span class="usage-note">After 3 consecutive failures: FLATLINE ALERT — same command, 3 non-zero exits</span>
+      <code>$ synlynk run --trio &quot;write unit tests for src/auth.py&quot;</code>
+      <span class="usage-note">Dispatches to all functional agents in parallel; each gets its own job ID</span>
     </div>
     
   </div>
@@ -76,8 +76,6 @@
       
         
           
-            <a href="/features/context-injection/">Context injection</a>
-          
         
           
         
@@ -95,6 +93,8 @@
         
           
         
+          
+            <a href="/features/agent-dispatch/">Background dispatch</a>
           
         
           
@@ -110,8 +110,6 @@
           
         
           
-            <a href="/features/telemetry-log/">Telemetry log</a>
-          
         
           
         
@@ -119,6 +117,8 @@
         
           
         
+          
+            <a href="/features/agent-discovery/">Agent discovery</a>
           
         
           

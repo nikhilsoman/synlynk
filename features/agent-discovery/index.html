@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trio Protocol — Feature | synlynk</title>
+    <title>Agent discovery — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,19 +33,19 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Trio Protocol</h1>
-    <p class="feature-lead">Routes tasks through an Architect → Builder → Verifier pipeline by capability score</p>
+    <h1>Agent discovery</h1>
+    <p class="feature-lead">init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>The Trio Protocol assigns each task to one of three roles — Architect (design and planning), Builder (implementation), Verifier (testing and review) — based on per-agent capability scores accumulated from past performance. Cold-start uses round-robin assignment to generate initial score data. Scores are recency-weighted: recent performance has more influence than older runs, so improvements surface in routing within 3–4 jobs.</p>
+    <p>`synlynk init` now runs a 6-step wizard. Step 2 is Magic Moment 1: it probes each known agent CLI with `--version`, then prints a workgroup table showing every installed agent with its roles (Architect / Builder / Verifier) and a functional indicator. `discover_agents()` reads `AGENT_CAPABILITY_BASELINES` for role and flag definitions, checks `~/.claude`, `~/.gemini`, etc. for config directories, and supports per-project path overrides in `.synlynk/config.json`. An opt-in LLM enrichment step calls the best available agent non-interactively to synthesise an informed `roadmap.md` from git history and the README.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">Scheduler — Dispatch</span>
+      <span class="layer-label">Kernel — Context Engine</span>
     </div>
   </div>
 
@@ -53,7 +53,7 @@
     <h2>Introduced in</h2>
     <div class="introduced-badge">
       <a href="/releases/v0.4/">v0.4.x</a>
-      
+      — Hybrid Workgroup Bootstrap
     </div>
   </div>
 
@@ -62,8 +62,8 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk dispatch --story 42</code>
-      <span class="usage-note">Routes story 42 to the highest-scoring available agent for its required role</span>
+      <code>$ synlynk init</code>
+      <span class="usage-note">Wizard discovers agents, shows workgroup table, bootstraps project-docs/, offers LLM enrichment</span>
     </div>
     
   </div>
@@ -94,7 +94,61 @@
           
         
           
-            <a href="/features/board-management/">Board management</a>
+            <a href="/features/agent-dispatch/">Background dispatch</a>
+          
+        
+          
+        
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <a href="/features/parallel-trio/">Parallel trio dispatch</a>
+          
+        
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <a href="/features/parametric-init/">Parametric init</a>
+          
+        
+          
+        
+          
+        
           
         
       
@@ -114,7 +168,7 @@
                 <div class="wordmark">
                     <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
                 </div>
-                <div class="version">v1.2.0-lite</div>
+                <div class="version">v0.4.0</div>
             </div>
             <div class="footer-right">
                 <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
