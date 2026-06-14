@@ -411,14 +411,18 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     industry = story_row[1] if story_row else load_config().get("industry", "unknown")
     phase = story_row[2] if story_row else "build"
 
-    scores = []
+    weighted_sum = 0.0
+    total_weight = 0.0
     if signals["test_pass_rate"] is not None:
-        scores.append(signals["test_pass_rate"] * 10 * 0.35)
+        weighted_sum += signals["test_pass_rate"] * 10 * 0.35
+        total_weight += 0.35
     if signals["build_success"] is not None:
-        scores.append((10.0 if signals["build_success"] else 0.0) * 0.30)
+        weighted_sum += (10.0 if signals["build_success"] else 0.0) * 0.30
+        total_weight += 0.30
     rework_penalty = min(dispatch_rework * 2.0, 10.0)
-    scores.append(max(0.0, 10.0 - rework_penalty) * 0.35)
-    quality_auto = sum(scores) if scores else 5.0
+    weighted_sum += max(0.0, 10.0 - rework_penalty) * 0.35
+    total_weight += 0.35
+    quality_auto = (weighted_sum / total_weight) if total_weight else 5.0
 
     conn.execute(
         """INSERT INTO capability_ratings
