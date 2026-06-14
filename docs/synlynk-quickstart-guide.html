@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synlynk Quick Start Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap');
+
+  :root {
+    --bg:        #0a0d14;
+    --bg2:       #0f1520;
+    --bg3:       #141a26;
+    --card:      #151c2e;
+    --border:    #1e2d4a;
+    --cyan:      #00e5ff;
+    --green:     #00ff9d;
+    --purple:    #a855f7;
+    --yellow:    #ffd60a;
+    --orange:    #ff6b35;
+    --pink:      #ff2d78;
+    --blue:      #3b82f6;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --dim:       #94a3b8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  /* ── PAGE BREAKS ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* ── GLOBAL NOISE TEXTURE ── */
+  .page::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page > * { position: relative; z-index: 1; }
+
+  /* ══════════════════════════════════════
+     PAGE 1 — COVER
+  ══════════════════════════════════════ */
+  .cover {
+    background: linear-gradient(145deg, #060a14 0%, #0a1020 40%, #0d1530 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 297mm;
+    text-align: center;
+    padding: 0 20mm;
+    position: relative;
+  }
+
+  .cover-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .cover-glow-1 {
+    position: absolute;
+    top: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0,229,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .cover-glow-2 {
+    position: absolute;
+    bottom: 20%;
+    right: 10%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(168,85,247,0.1) 0%, transparent 70%);
+  }
+
+  .cover-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 24px;
+  }
+
+  .cover-logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 72px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #00e5ff 0%, #a855f7 50%, #ff2d78 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .cover-tagline {
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .cover-version {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 48px;
+  }
+
+  .cover-hero-command {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(0,229,255,0.2);
+    border-radius: 12px;
+    padding: 20px 32px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--green);
+    margin-bottom: 48px;
+    text-align: left;
+    min-width: 380px;
+  }
+
+  .cover-hero-command .prompt { color: var(--muted); }
+  .cover-hero-command .cmd { color: var(--cyan); }
+  .cover-hero-command .arg { color: var(--yellow); }
+  .cover-hero-command .out { color: var(--dim); font-size: 11px; }
+
+  .cover-pills {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+
+  .cover-pill {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--dim);
+  }
+
+  .cover-footer {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ══════════════════════════════════════
+     CONTENT PAGES — SHARED
+  ══════════════════════════════════════ */
+  .content-page {
+    background: var(--bg);
+    padding: 14mm 14mm;
+    min-height: 297mm;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Page header strip */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10mm;
+    padding-bottom: 3mm;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-header-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .page-header-logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 900;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .page-header-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+  }
+
+  /* Section headings */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 4px;
+  }
+
+  h1.chapter {
+    font-family: 'Orbitron', monospace;
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--dim) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  h2.section {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+    margin-top: 12px;
+  }
+
+  h3.subsection {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cyan);
+    margin-bottom: 4px;
+    margin-top: 8px;
+  }
+
+  p {
+    color: var(--dim);
+    font-size: 11.5px;
+    line-height: 1.65;
+    margin-bottom: 8px;
+  }
+
+  /* ── TERMINAL BLOCK ── */
+  .terminal {
+    background: #050810;
+    border: 1px solid rgba(0,229,255,0.15);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 8px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  .terminal-bar {
+    background: #0d1320;
+    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+
+  .terminal-label {
+    font-size: 9px;
+    color: var(--muted);
+    margin-left: auto;
+    letter-spacing: 0.1em;
+  }
+
+  .terminal-body {
+    padding: 10px 14px;
+    line-height: 1.8;
+  }
+
+  .t-prompt { color: var(--muted); }
+  .t-cmd { color: var(--cyan); font-weight: 500; }
+  .t-arg { color: var(--yellow); }
+  .t-flag { color: var(--purple); }
+  .t-out { color: #4a6080; }
+  .t-success { color: var(--green); }
+  .t-warn { color: var(--orange); }
+  .t-comment { color: #2a3a50; }
+
+  /* ── CALLOUT BOXES ── */
+  .callout {
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .callout-body { flex: 1; }
+  .callout-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
+  .callout-text { font-size: 11px; line-height: 1.5; }
+
+  .callout-tip {
+    background: rgba(0,229,255,0.05);
+    border: 1px solid rgba(0,229,255,0.2);
+  }
+  .callout-tip .callout-title { color: var(--cyan); }
+  .callout-tip .callout-text { color: var(--dim); }
+
+  .callout-power {
+    background: rgba(0,255,157,0.05);
+    border: 1px solid rgba(0,255,157,0.2);
+  }
+  .callout-power .callout-title { color: var(--green); }
+  .callout-power .callout-text { color: var(--dim); }
+
+  .callout-warn {
+    background: rgba(255,107,53,0.05);
+    border: 1px solid rgba(255,107,53,0.2);
+  }
+  .callout-warn .callout-title { color: var(--orange); }
+  .callout-warn .callout-text { color: var(--dim); }
+
+  /* ── ACHIEVEMENT UNLOCKED ── */
+  .achievement {
+    background: linear-gradient(135deg, rgba(255,214,10,0.08) 0%, rgba(255,107,53,0.05) 100%);
+    border: 1px solid rgba(255,214,10,0.25);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 6px 0;
+  }
+
+  .achievement-icon { font-size: 24px; }
+  .achievement-body { flex: 1; }
+  .achievement-eyebrow {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--yellow);
+    margin-bottom: 1px;
+  }
+  .achievement-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 1px;
+  }
+  .achievement-desc { font-size: 10px; color: var(--muted); }
+
+  /* ── BENEFIT CARDS ── */
+  .benefit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+  }
+
+  .benefit-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .benefit-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .bc-cyan::before  { background: linear-gradient(90deg, var(--cyan), transparent); }
+  .bc-green::before { background: linear-gradient(90deg, var(--green), transparent); }
+  .bc-purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+  .bc-yellow::before { background: linear-gradient(90deg, var(--yellow), transparent); }
+  .bc-orange::before { background: linear-gradient(90deg, var(--orange), transparent); }
+  .bc-pink::before  { background: linear-gradient(90deg, var(--pink), transparent); }
+
+  .benefit-icon { font-size: 20px; margin-bottom: 6px; display: block; }
+  .benefit-title { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .benefit-desc { font-size: 10px; color: var(--muted); line-height: 1.5; }
+
+  /* ── STEP FLOW ── */
+  .step-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+  }
+
+  .step-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #000;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .step-body { flex: 1; }
+  .step-title { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .step-desc { font-size: 10.5px; color: var(--muted); line-height: 1.5; }
+
+  .step-connector {
+    width: 24px;
+    display: flex;
+    justify-content: center;
+    margin: 0 0 0 0;
+  }
+
+  .step-line {
+    width: 1px;
+    height: 8px;
+    background: linear-gradient(var(--cyan), var(--purple));
+    margin-left: 11px;
+  }
+
+  /* ── COMMAND REFERENCE TABLE ── */
+  .cmd-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 10.5px;
+  }
+
+  .cmd-table th {
+    background: rgba(0,229,255,0.06);
+    color: var(--cyan);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 7px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0,229,255,0.15);
+  }
+
+  .cmd-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+    color: var(--dim);
+  }
+
+  .cmd-table tr:last-child td { border-bottom: none; }
+
+  .cmd-table td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+
+  .cmd-table tr:hover td { background: rgba(255,255,255,0.015); }
+
+  /* ── STAT PILLS ── */
+  .stat-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+  }
+
+  .stat-pill {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 3px;
+  }
+
+  .stat-label { font-size: 9px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ── CHAPTER INTRO HERO ── */
+  .chapter-hero {
+    background: linear-gradient(135deg, rgba(0,229,255,0.04) 0%, rgba(168,85,247,0.04) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+
+  /* ── COLUMN LAYOUTS ── */
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 10px 0;
+  }
+
+  /* ── INLINE CODE ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    background: rgba(0,229,255,0.06);
+    color: var(--cyan);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,229,255,0.1);
+  }
+
+  /* ── TAG ── */
+  .tag {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tag-new { background: rgba(0,255,157,0.12); color: var(--green); border: 1px solid rgba(0,255,157,0.25); }
+  .tag-v4  { background: rgba(0,229,255,0.1); color: var(--cyan); border: 1px solid rgba(0,229,255,0.2); }
+  .tag-wip { background: rgba(255,214,10,0.1); color: var(--yellow); border: 1px solid rgba(255,214,10,0.25); }
+
+  /* ── FLOWCHART ── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 10px 0;
+    justify-content: center;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .flow-node {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+    min-width: 80px;
+  }
+
+  .flow-node-icon { font-size: 16px; display: block; margin-bottom: 2px; }
+  .flow-node-label { font-size: 9px; font-weight: 600; color: var(--dim); letter-spacing: 0.05em; }
+  .flow-node-sub { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--muted); }
+
+  .flow-arrow {
+    font-size: 14px;
+    color: var(--border);
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+
+  .flow-node.active {
+    border-color: rgba(0,229,255,0.4);
+    background: rgba(0,229,255,0.05);
+  }
+  .flow-node.active .flow-node-label { color: var(--cyan); }
+
+  /* ── PRINT SETTINGS ── */
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  @media print {
+    body { width: 210mm; }
+    .page { page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+  }
+
+  /* ── BACK COVER ── */
+  .back-cover {
+    background: linear-gradient(145deg, #060a14 0%, #0a1020 60%, #0d1530 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 297mm;
+    text-align: center;
+    padding: 20mm;
+    gap: 16px;
+    position: relative;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     PAGE 1 — COVER
+══════════════════════════════════════ -->
+<div class="page">
+<div class="cover">
+  <div class="cover-grid"></div>
+  <div class="cover-glow-1"></div>
+  <div class="cover-glow-2"></div>
+
+  <div class="cover-badge">⬡ &nbsp;Quick Start Guide</div>
+
+  <div class="cover-logo">SYNLYNK</div>
+  <div class="cover-tagline">The OS for Multi-Agent Development</div>
+  <div class="cover-version">v0.4.0 · Hybrid Workgroup Bootstrap</div>
+
+  <div class="cover-hero-command">
+    <div><span class="prompt">$</span> <span class="cmd">synlynk</span> <span class="arg">init</span></div>
+    <div style="color:#2a3a50; margin: 4px 0;">───────────────────────────────</div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">Project context injected</span></div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">3 agents discovered  (claude · gemini · codex)</span></div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">Budget guard active  $10.00 / session</span></div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">Sentinel monitoring enabled</span></div>
+    <div style="color:#2a3a50; margin: 4px 0;">───────────────────────────────</div>
+    <div><span style="color:#ffd60a;">→</span> <span style="color:#94a3b8;">synlynk exec claude</span></div>
+  </div>
+
+  <div class="cover-pills">
+    <div class="cover-pill">🔌 Zero Dependencies</div>
+    <div class="cover-pill">🐍 Python 3 stdlib only</div>
+    <div class="cover-pill">🤖 Claude · Gemini · Codex</div>
+    <div class="cover-pill">💰 Cost Tracking</div>
+    <div class="cover-pill">🛡️ Sentinel Guard</div>
+    <div class="cover-pill">⚡ Background Dispatch</div>
+  </div>
+
+  <div class="cover-footer">synlynk.dev &nbsp;·&nbsp; github.com/nikhilsoman/synlynk &nbsp;·&nbsp; 2026</div>
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 2 — WHAT IS SYNLYNK + WHY
+══════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 01 — Introduction</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">02</div>
+  </div>
+
+  <div class="section-label">What is Synlynk?</div>
+  <h1 class="chapter">Your AI agents,<br>working as a team.</h1>
+
+  <div class="chapter-hero">
+    <p style="margin:0; font-size:12px; color: var(--text); line-height:1.7;">
+      Synlynk is a single-file Python CLI that wraps AI agents — Claude, Gemini, Codex — and makes them <strong style="color:var(--cyan)">project-aware, cost-tracked, and safe to run in parallel</strong>. It injects your project's context before every invocation, guards your budget, detects hallucination loops, and lets you dispatch background tasks across multiple agents simultaneously.
+    </p>
+  </div>
+
+  <!-- Flow diagram -->
+  <h2 class="section">How it works</h2>
+
+  <div class="flow">
+    <div class="flow-node active">
+      <span class="flow-node-icon">📁</span>
+      <div class="flow-node-label">Your Repo</div>
+      <div class="flow-node-sub">project-docs/</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node active">
+      <span class="flow-node-icon">⬡</span>
+      <div class="flow-node-label">Synlynk</div>
+      <div class="flow-node-sub">bin/synlynk.py</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <span class="flow-node-icon">🧠</span>
+      <div class="flow-node-label">Context</div>
+      <div class="flow-node-sub">memory · roadmap · todos</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node active">
+      <span class="flow-node-icon">🤖</span>
+      <div class="flow-node-label">AI Agent</div>
+      <div class="flow-node-sub">claude · gemini · codex</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <span class="flow-node-icon">📊</span>
+      <div class="flow-node-label">Telemetry</div>
+      <div class="flow-node-sub">cost · tokens · signals</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Benefits grid -->
+  <h2 class="section">Why Synlynk?</h2>
+  <div class="benefit-grid">
+    <div class="benefit-card bc-cyan">
+      <span class="benefit-icon">🧠</span>
+      <div class="benefit-title">Context-Aware by Default</div>
+      <div class="benefit-desc">Every agent invocation automatically receives your roadmap, memory notes, and todos — no more copy-pasting context into every session.</div>
+    </div>
+    <div class="benefit-card bc-green">
+      <span class="benefit-icon">💰</span>
+      <div class="benefit-title">Zero Surprise Bills</div>
+      <div class="benefit-desc">Budget guard blocks execution the moment you hit your daily or session limit. Real-time cost tracking in every exec.</div>
+    </div>
+    <div class="benefit-card bc-purple">
+      <span class="benefit-icon">🛡️</span>
+      <div class="benefit-title">Hallucination Sentinel</div>
+      <div class="benefit-desc">Automatically detects flatline loops (3 same-command failures), success loops (5 identical runs), and quota exhaustion. Alerts before damage.</div>
+    </div>
+    <div class="benefit-card bc-yellow">
+      <span class="benefit-icon">⚡</span>
+      <div class="benefit-title">Parallel Dispatch</div>
+      <div class="benefit-desc">Launch Claude, Gemini, and Codex in parallel on different tasks. Monitor all jobs, tail logs, and compare results — all from one CLI.</div>
+    </div>
+    <div class="benefit-card bc-orange">
+      <span class="benefit-icon">👥</span>
+      <div class="benefit-title">Team-Ready from Day One</div>
+      <div class="benefit-desc">Single or team mode. Per-user devlogs with git attribution. Shared roadmap and memory visible to every agent in the repo.</div>
+    </div>
+    <div class="benefit-card bc-pink">
+      <span class="benefit-icon">🔌</span>
+      <div class="benefit-title">Zero Dependencies</div>
+      <div class="benefit-desc">Pure Python 3 stdlib. No pip install, no Docker, no build step. One file. Works in any environment where Python 3 runs.</div>
+    </div>
+  </div>
+
+  <!-- Stat row -->
+  <div class="stat-row" style="margin-top: 10px;">
+    <div class="stat-pill">
+      <div class="stat-num" style="background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">1</div>
+      <div class="stat-label">File · No Build Step</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-num" style="background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">3</div>
+      <div class="stat-label">AI Agents Supported</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-num" style="background: linear-gradient(135deg, var(--yellow), var(--orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">0</div>
+      <div class="stat-label">Pip Dependencies</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-num" style="background: linear-gradient(135deg, var(--purple), var(--pink)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">∞</div>
+      <div class="stat-label">Parallel Agent Jobs</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 3 — INSTALL + INIT
+══════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 02 — Installation</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">03</div>
+  </div>
+
+  <div class="section-label">Getting Started</div>
+  <h1 class="chapter">Install in 60 seconds.</h1>
+
+  <div class="step-flow">
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">Clone &amp; install globally</div>
+        <div class="step-desc">Adds <code>synlynk</code> to your PATH via <code>~/.synlynk/bin/</code>. No sudo, no pip, no build.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">install</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">git clone</span> <span class="t-arg">https://github.com/nikhilsoman/synlynk</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">cd</span> <span class="t-arg">synlynk</span> <span class="t-cmd">&amp;&amp; ./install.sh</span></div>
+      <div><span class="t-comment">#</span></div>
+      <div><span class="t-success">✓</span> <span class="t-out">Installed to ~/.synlynk/bin/synlynk</span></div>
+      <div><span class="t-success">✓</span> <span class="t-out">PATH updated in ~/.zshrc</span></div>
+      <div><span class="t-success">✓</span> <span class="t-out">synlynk 0.4.0 ready</span></div>
+    </div>
+  </div>
+
+  <div class="step-line"></div>
+  <div class="step-flow" style="margin-top:6px;">
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">Bootstrap your project</div>
+        <div class="step-desc">Run inside any repo. Creates <code>project-docs/</code>, writes <code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>AI_INSTRUCTIONS.md</code>, and <code>.synlynk/config.json</code>. Skips files that already exist.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">synlynk init</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">~/my-project $ </span><span class="t-cmd">synlynk init</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-out">  Mode: single | team? </span><span style="color:var(--yellow);">single</span></div>
+      <div><span class="t-out">  Scanning repository...</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/roadmap.md</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/memory.md</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/todo.md</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/costs.md</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">CLAUDE.md  (context injected at every session)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">GEMINI.md  (context injected at every session)</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-out">  Agents discovered:</span></div>
+      <div><span class="t-success">  ✓</span> <span style="color:#a855f7;">claude</span><span class="t-out">  →  /usr/local/bin/claude</span></div>
+      <div><span class="t-success">  ✓</span> <span style="color:#00e5ff;">gemini</span><span class="t-out">  →  /usr/local/bin/gemini</span></div>
+      <div>&nbsp;</div>
+      <div><span style="color:#ffd60a;">  →</span> <span class="t-out">Ready. Try: </span><span class="t-cmd">synlynk exec claude</span></div>
+    </div>
+  </div>
+
+  <div class="callout callout-power" style="margin-top: 8px;">
+    <div class="callout-icon">⚡</div>
+    <div class="callout-body">
+      <div class="callout-title">Magic Moments</div>
+      <div class="callout-text">The init wizard scans your repo's README, git history, and existing docs to pre-fill your roadmap and memory with real context about what you're building — not generic placeholders.</div>
+    </div>
+  </div>
+
+  <div class="step-line"></div>
+  <div class="step-flow" style="margin-top:6px;">
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">Run your first context-injected session</div>
+        <div class="step-desc">Synlynk prepends your project context before spawning the agent — the AI already knows your roadmap, decisions, and open tasks.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">synlynk exec</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk exec</span> <span class="t-arg">claude</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-out">  📋 Context injected  (memory · roadmap · todos)</span></div>
+      <div><span class="t-out">  💰 Budget: $2.34 / $10.00 used this session</span></div>
+      <div><span class="t-out">  🚀 Launching claude...</span></div>
+      <div>&nbsp;</div>
+      <div><span style="color:#a855f7;">  claude ›</span> <span class="t-out">I can see you're building a billing API for the monetization</span></div>
+      <div><span class="t-out">            module. Based on your roadmap, the next step is...</span></div>
+    </div>
+  </div>
+
+  <div class="achievement">
+    <div class="achievement-icon">🏆</div>
+    <div class="achievement-body">
+      <div class="achievement-eyebrow">Achievement Unlocked</div>
+      <div class="achievement-title">Context Master</div>
+      <div class="achievement-desc">Your AI agent now knows your entire project history — zero onboarding time on every session.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 4 — DISPATCH + PARALLEL AGENTS
+══════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 03 — Multi-Agent Dispatch</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">04</div>
+  </div>
+
+  <div class="section-label">v0.4.0 Feature · Hybrid Workgroup Bootstrap</div>
+  <h1 class="chapter">Run agents in parallel.<br>In the background.</h1>
+
+  <p>Dispatch fires an agent as a background job — non-interactive, captured to a log file, tracked by the job store. Multiple agents can run simultaneously on different tasks. You keep your terminal free.</p>
+
+  <!-- Dispatch example -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">synlynk dispatch</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk dispatch</span> <span class="t-arg">claude</span> <span class="t-flag">--task</span> <span style="color:var(--text);">"Write unit tests for the billing module"</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Dispatched job-a3f2  (claude)  running in background</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk dispatch</span> <span class="t-arg">gemini</span> <span class="t-flag">--task</span> <span style="color:var(--text);">"Review billing API for edge cases"</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Dispatched job-b7e1  (gemini)  running in background</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Both agents working simultaneously — terminal is yours</span></div>
+    </div>
+  </div>
+
+  <!-- Jobs + Logs side by side -->
+  <div class="cols-2" style="margin-top: 8px;">
+    <div>
+      <h3 class="subsection">Monitor all jobs</h3>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">jobs</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px;">
+          <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk jobs</span></div>
+          <div>&nbsp;</div>
+          <div><span style="color:#00ff9d;">● </span><span style="color:var(--text);">job-a3f2</span>  <span style="color:#a855f7;">claude</span>  <span class="t-out">running  2m14s</span></div>
+          <div><span style="color:#00ff9d;">● </span><span style="color:var(--text);">job-b7e1</span>  <span style="color:#00e5ff;">gemini</span>  <span class="t-out">running  1m58s</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 class="subsection">Tail a job's output</h3>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">logs</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px;">
+          <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk logs</span> <span class="t-arg">job-a3f2</span></div>
+          <div>&nbsp;</div>
+          <div><span class="t-out">Writing test_billing.py...</span></div>
+          <div><span class="t-out">  ✓ test_charge_success</span></div>
+          <div><span class="t-out">  ✓ test_refund_partial</span></div>
+          <div><span class="t-out">  → 12/12 tests passing</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trio run -->
+  <h2 class="section" style="margin-top:12px;">The Trio Pipeline <span class="tag tag-new">v0.4.0</span></h2>
+  <p>Run a three-agent pipeline: Architect designs, Builder implements, Verifier reviews — all in sequence with full context hand-off between each.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">synlynk run --trio</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk run</span> <span class="t-flag">--trio</span> <span style="color:var(--text);">"Add Stripe webhook handler"</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-out">  Phase 1  </span><span style="color:#ffd60a;">Architect</span><span class="t-out"> (claude)  …  ✓ done  job-c1a0</span></div>
+      <div><span class="t-out">  Phase 2  </span><span style="color:#a855f7;">Builder </span><span class="t-out"> (gemini)  …  ✓ done  job-d4b2</span></div>
+      <div><span class="t-out">  Phase 3  </span><span style="color:#00e5ff;">Verifier</span><span class="t-out"> (claude)  …  ✓ done  job-e9f3</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-success">  ✓ Trio complete. </span><span class="t-out">See logs: synlynk logs job-e9f3</span></div>
+    </div>
+  </div>
+
+  <div class="achievement">
+    <div class="achievement-icon">🚀</div>
+    <div class="achievement-body">
+      <div class="achievement-eyebrow">Achievement Unlocked</div>
+      <div class="achievement-title">Workgroup Commander</div>
+      <div class="achievement-desc">You now run a multi-agent team. Claude architects, Gemini builds, Claude verifies — while you review the output over coffee.</div>
+    </div>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <div class="callout-title">Pro Tip — Story IDs</div>
+      <div class="callout-text">Pass <code>--story &lt;id&gt;</code> to any dispatch or run command to link jobs to a tracked work item. Coming in v0.5.0: Synlynk will automatically route to the best agent for that story based on historical performance scores.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 5 — SENTINEL + BUDGET
+══════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 04 — Safety Systems</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">05</div>
+  </div>
+
+  <div class="section-label">Sentinel &amp; Budget Guard</div>
+  <h1 class="chapter">Your safety net,<br>always on.</h1>
+
+  <p>Synlynk watches every agent invocation for danger signals — spiralling costs, hallucination loops, and quota exhaustion — and surfaces alerts before they become expensive mistakes.</p>
+
+  <div class="cols-2">
+    <!-- Budget Guard -->
+    <div>
+      <h2 class="section">💰 Budget Guard</h2>
+      <p>Set per-session and per-day limits in <code>.synlynk/config.json</code>. Synlynk blocks execution the moment you'd exceed your limit.</p>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">config.json</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height: 1.9;">
+          <div><span style="color:var(--border);">{</span></div>
+          <div>  <span style="color:var(--purple);">"limit_usd"</span><span class="t-out">:      </span><span style="color:var(--yellow);">10.00</span><span class="t-out">,</span></div>
+          <div>  <span style="color:var(--purple);">"limit_requests"</span><span class="t-out">: </span><span style="color:var(--yellow);">100</span></div>
+          <div><span style="color:var(--border);">}</span></div>
+        </div>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">budget pulse (after each exec)</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height: 1.9;">
+          <div><span class="t-out">  ── Budget Pulse ──────────────</span></div>
+          <div><span class="t-out">  Cost:     </span><span style="color:var(--yellow);">$2.34</span><span class="t-out"> / $10.00</span></div>
+          <div><span class="t-out">  Requests: </span><span style="color:var(--green);">14</span><span class="t-out">   / 100</span></div>
+          <div><span class="t-out">  Tokens:   2,840 in · 480 out</span></div>
+          <div><span class="t-out">  ─────────────────────────────</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sentinel -->
+    <div>
+      <h2 class="section">🛡️ Sentinel Patterns</h2>
+      <p>Sentinel watches your telemetry log and fires alerts for dangerous patterns automatically.</p>
+
+      <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+        <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2); border-radius:8px; padding: 9px 11px;">
+          <div style="color:#f87171; font-size:10px; font-weight:700; margin-bottom:3px;">🚨 FLATLINE</div>
+          <div style="font-size:10px; color:var(--muted);">Same command failed 3× in a row. Possible hallucination loop. Manual intervention recommended.</div>
+        </div>
+        <div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius:8px; padding: 9px 11px;">
+          <div style="color:var(--yellow); font-size:10px; font-weight:700; margin-bottom:3px;">⚠ SUCCESS_LOOP</div>
+          <div style="font-size:10px; color:var(--muted);">Same command succeeded 5× in &lt;10 min. Likely an automated loop burning tokens unproductively.</div>
+        </div>
+        <div style="background: rgba(255,107,53,0.06); border: 1px solid rgba(255,107,53,0.2); border-radius:8px; padding: 9px 11px;">
+          <div style="color:var(--orange); font-size:10px; font-weight:700; margin-bottom:3px;">🚨 QUOTA_EXHAUSTED</div>
+          <div style="font-size:10px; color:var(--muted);">Output matched a known quota-exhaustion phrase. Switch agent or check your plan limits.</div>
+        </div>
+        <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius:8px; padding: 9px 11px;">
+          <div style="color:#f87171; font-size:10px; font-weight:700; margin-bottom:3px;">💀 ZOMBIE / ⏳ STALL</div>
+          <div style="font-size:10px; color:var(--muted);">Job PID is dead but never marked complete (zombie), or job has been running &gt;30 min without output (stall).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2 class="section">Managing sentinel alerts</h2>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">sentinel commands</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk sentinel list</span></div>
+      <div>&nbsp;</div>
+      <div><span style="color:#f87171;">  [CRITICAL]</span>  <span class="t-out">FLATLINE      `synlynk exec claude` failed 3x  —  2026-06-14 09:41</span></div>
+      <div><span style="color:var(--yellow);">  [WARN]    </span>  <span class="t-out">SUCCESS_LOOP  Same command 5x in 4.2 min     —  2026-06-14 10:02</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk sentinel clear</span> <span class="t-flag">--code</span> <span class="t-arg">FLATLINE</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Cleared FLATLINE alerts</span></div>
+    </div>
+  </div>
+
+  <div class="achievement" style="margin-top: 10px;">
+    <div class="achievement-icon">🛡️</div>
+    <div class="achievement-body">
+      <div class="achievement-eyebrow">Achievement Unlocked</div>
+      <div class="achievement-title">Incident Avoided</div>
+      <div class="achievement-desc">Sentinel detected a FLATLINE loop before you burned $40 in repeated failed calls. The budget guard has your back.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 6 — COMMAND REFERENCE
+══════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 05 — Command Reference</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">06</div>
+  </div>
+
+  <div class="section-label">All Commands</div>
+  <h1 class="chapter">Everything at a glance.</h1>
+
+  <!-- Setup commands -->
+  <h2 class="section">Setup &amp; Context</h2>
+  <table class="cmd-table">
+    <thead>
+      <tr><th>Command</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>synlynk init</td>
+        <td>Bootstrap <code>project-docs/</code>, agent instruction files, and <code>.synlynk/config.json</code> in any repo. Safe to re-run — skips existing files.</td>
+      </tr>
+      <tr>
+        <td>synlynk exec &lt;agent&gt;</td>
+        <td>Run an agent interactively with full context injection (memory + roadmap + todos prepended). Captures token counts and cost on exit.</td>
+      </tr>
+      <tr>
+        <td>synlynk checkpoint</td>
+        <td>Force a context snapshot — regenerates <code>.synlynk/context.md</code> from current project-docs state.</td>
+      </tr>
+      <tr>
+        <td>synlynk status</td>
+        <td>Dashboard showing current project state, recent costs, active sentinel alerts, and running jobs.</td>
+      </tr>
+      <tr>
+        <td>synlynk upgrade</td>
+        <td>Check for and apply updates from the remote repository.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Dispatch commands -->
+  <h2 class="section">Dispatch &amp; Jobs <span class="tag tag-v4">v0.4.0</span></h2>
+  <table class="cmd-table">
+    <thead>
+      <tr><th>Command</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>synlynk dispatch &lt;agent&gt;</td>
+        <td>Fire an agent task in the background. Captures stdout to a log file. Returns a job ID immediately. Accepts <code>--task "..."</code> and <code>--story &lt;id&gt;</code>.</td>
+      </tr>
+      <tr>
+        <td>synlynk jobs</td>
+        <td>List all tracked jobs with status (running / completed / failed), agent, duration. Use <code>--all</code> to include completed jobs.</td>
+      </tr>
+      <tr>
+        <td>synlynk logs &lt;job-id&gt;</td>
+        <td>Tail the output log of a specific job. Use <code>--tail N</code> to control how many lines to show.</td>
+      </tr>
+      <tr>
+        <td>synlynk shell &lt;agent&gt;</td>
+        <td>Open an interactive shell pre-loaded with the agent's context. Useful for debugging or ad-hoc queries.</td>
+      </tr>
+      <tr>
+        <td>synlynk run --trio</td>
+        <td>Run a three-phase Architect → Builder → Verifier pipeline. Sequentially dispatches three jobs with context hand-off between each phase.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Sentinel commands -->
+  <h2 class="section">Sentinel &amp; Safety</h2>
+  <table class="cmd-table">
+    <thead>
+      <tr><th>Command</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>synlynk sentinel list</td>
+        <td>Show all active alerts with severity (CRITICAL / WARN), code, message, and timestamp.</td>
+      </tr>
+      <tr>
+        <td>synlynk sentinel clear</td>
+        <td>Clear alerts. Use <code>--severity CRITICAL</code> or <code>--code FLATLINE</code> to target specific alerts.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <!-- Project docs layout -->
+  <h2 class="section">Project Docs Structure</h2>
+  <div class="cols-2" style="margin-top: 6px;">
+    <div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">directory layout</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height:1.9;">
+          <div><span style="color:var(--cyan);">project-docs/</span></div>
+          <div><span class="t-out">  ├── roadmap.md      </span><span style="color:#2a3a50;">← version plan</span></div>
+          <div><span class="t-out">  ├── memory.md       </span><span style="color:#2a3a50;">← decisions</span></div>
+          <div><span class="t-out">  ├── todo.md         </span><span style="color:#2a3a50;">← open tasks</span></div>
+          <div><span class="t-out">  ├── costs.md        </span><span style="color:#2a3a50;">← cost ledger</span></div>
+          <div><span class="t-out">  └── devlogs/</span></div>
+          <div><span class="t-out">      └── nikhil.md   </span><span style="color:#2a3a50;">← per-user log</span></div>
+          <div>&nbsp;</div>
+          <div><span style="color:var(--cyan);">.synlynk/</span></div>
+          <div><span class="t-out">  ├── config.json     </span><span style="color:#2a3a50;">← budget limits</span></div>
+          <div><span class="t-out">  ├── context.md      </span><span style="color:#2a3a50;">← auto-generated</span></div>
+          <div><span class="t-out">  ├── telemetry.json  </span><span style="color:#2a3a50;">← rolling log</span></div>
+          <div><span class="t-out">  └── logs/           </span><span style="color:#2a3a50;">← job outputs</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="callout callout-tip" style="margin-top:0;">
+        <div class="callout-icon">💡</div>
+        <div class="callout-body">
+          <div class="callout-title">What agents read</div>
+          <div class="callout-text">Every <code>synlynk exec</code> prepends <code>memory.md</code> + <code>roadmap.md</code> + <code>todo.md</code> into a single <code>context.md</code> snapshot before handing off to the agent. Your agents always know where the project stands.</div>
+        </div>
+      </div>
+      <div class="callout callout-warn" style="margin-top:8px;">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-body">
+          <div class="callout-title">Keep project-docs current</div>
+          <div class="callout-text">Synlynk's context is only as good as your <code>memory.md</code> and <code>roadmap.md</code>. Update them after significant decisions — agents will pick up the changes on the next exec automatically.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 7 — WHAT'S NEXT + BACK COVER
+══════════════════════════════════════ -->
+<div class="page">
+<div class="back-cover">
+  <div class="cover-grid"></div>
+  <div class="cover-glow-1"></div>
+
+  <div class="cover-badge">⬡ &nbsp;Roadmap Preview</div>
+
+  <div style="font-family:'Orbitron',monospace; font-size:24px; font-weight:900; margin-bottom:6px; background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
+    What's coming next
+  </div>
+  <div style="font-size:12px; color:var(--muted); margin-bottom:32px; max-width: 140mm; text-align:center; line-height:1.6;">
+    Synlynk evolves from an agent wrapper into a full OS for multi-agent development. Here's the arc.
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:10px; width:160mm;">
+    <div style="background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.2); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--cyan); min-width:50px;">v0.5</div>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Capability Engine  <span style="font-size:9px; color:var(--muted); font-weight:400;">Aug 2026</span></div>
+        <div style="font-size:10px; color:var(--muted);">Model-aware routing · 3D domain taxonomy · quality signal hierarchy · SQLite state ledger</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.18); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--purple); min-width:50px;">v0.6</div>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Job Control + Constraints  <span style="font-size:9px; color:var(--muted); font-weight:400;">Sep 2026</span></div>
+        <div style="font-size:10px; color:var(--muted);">Constraint propagation · job state machine · PR attestation · verifier pipeline capture</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,107,53,0.05); border:1px solid rgba(255,107,53,0.18); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--orange); min-width:50px;">v0.7</div>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Async Pipeline + Daemon  <span style="font-size:9px; color:var(--muted); font-weight:400;">Oct 2026</span></div>
+        <div style="font-size:10px; color:var(--muted);">Background daemon · HTTP context server · synlynk review TUI</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(0,255,157,0.04); border:1px solid rgba(0,255,157,0.15); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--green); min-width:50px;">v1.0</div>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Stable OS + Tokq Bridge Ready  <span style="font-size:9px; color:var(--muted); font-weight:400;">Q1 2027</span></div>
+        <div style="font-size:10px; color:var(--muted);">Frozen CLI · pipx/Homebrew · NATS leaf node schema · Tokq marketplace ready</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 32px; display:flex; gap:28px; align-items:center;">
+    <div style="text-align:center;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cyan); margin-bottom:3px;">github.com/nikhilsoman/synlynk</div>
+      <div style="font-size:10px; color:var(--muted);">Source · Issues · PRs</div>
+    </div>
+    <div style="width:1px; height:30px; background:var(--border);"></div>
+    <div style="text-align:center;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--purple); margin-bottom:3px;">synlynk.dev</div>
+      <div style="font-size:10px; color:var(--muted);">Docs · Releases</div>
+    </div>
+  </div>
+
+  <div style="margin-top:40px; font-family:'Orbitron',monospace; font-size:28px; font-weight:900; background: linear-gradient(135deg, #00e5ff 0%, #a855f7 50%, #ff2d78 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
+    SYNLYNK
+  </div>
+  <div style="font-size:10px; color:var(--muted); letter-spacing:0.15em; text-transform:uppercase; margin-top:4px;">
+    The OS for Multi-Agent Development · v0.4.0
+  </div>
+</div>
+</div>
+
+</body>
+</html>
