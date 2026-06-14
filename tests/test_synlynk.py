@@ -1351,3 +1351,49 @@ def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
     sl.init()
     config = _json.loads(open(".synlynk/config.json").read())
     assert config.get("workgroup_invite_email") == "nikhil@example.com"
+
+
+def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    launched = []
+    class FakeProc:
+        pid = 12345
+    def fake_popen(cmd, **kw):
+        launched.append(cmd)
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    job = sl.dispatch_agent("claude", "implement auth fix", story_id="14")
+    assert job["agent"] == "claude"
+    assert job["pid"] == 12345
+    assert job["status"] == "running"
+    assert job["task"] == "implement auth fix"
+    assert job["story_id"] == "14"
+    jobs = sl._load_jobs()
+    assert any(j["id"] == job["id"] for j in jobs)
+
+
+def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    class FakeProc:
+        pid = 99
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    job = sl.dispatch_agent("gemini", "write tests")
+    assert os.path.exists(job["prompt_file"])
+    content = open(job["prompt_file"]).read()
+    assert "write tests" in content
+
+
+def test_dispatch_agent_unknown_agent_raises(project_dir):
+    import bin.synlynk as sl, pytest as _pytest
+    with _pytest.raises(ValueError, match="Unknown agent"):
+        sl.dispatch_agent("unknownbot", "do thing")
+
+
+def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    sl.dispatch_agent("claude", "task one")
+    sl.dispatch_agent("claude", "task two")
+    assert len(sl._load_jobs()) == 2

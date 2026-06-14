@@ -454,6 +454,78 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
         return False
 
 
+def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
+    """Dispatches an agent to run a task in the background.
+
+    Uses non-interactive agent mode (no PTY). Stdout captured to
+    .synlynk/logs/<job_id>.log. Returns the job dict.
+    Raises ValueError for unknown agent names.
+    """
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+
+    baselines = AGENT_CAPABILITY_BASELINES[agent]
+    cli = baselines["cli"]
+    flags = baselines["non_interactive_flags"]
+
+    import hashlib as _hashlib
+    job_id = "job-" + _hashlib.md5(
+        f"{agent}{task}{time.time()}".encode()
+    ).hexdigest()[:8]
+
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+
+    log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
+    prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+
+    try:
+        generate_context(scope="full")
+    except Exception:
+        pass
+    context_path = ".synlynk/context.md"
+    context_text = ""
+    if os.path.exists(context_path):
+        context_text = open(context_path).read()
+
+    story_line = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
+    prompt = f"{context_text}{story_line}\n\n## Your Task\n{task}\n"
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+
+    cmd = [cli] + flags
+    with open(log_file, "w") as log_out, open(prompt_file) as prompt_in:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=prompt_in,
+            stdout=log_out,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    job = {
+        "id": job_id,
+        "agent": agent,
+        "story_id": story_id or "",
+        "task": task,
+        "pid": proc.pid,
+        "log_file": log_file,
+        "prompt_file": prompt_file,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+    }
+
+    jobs = _load_jobs()
+    jobs.append(job)
+    _save_jobs(jobs)
+
+    log_telemetry_event({"type": "dispatch", "agent": agent,
+                         "story_id": story_id, "job_id": job_id})
+    return job
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"
