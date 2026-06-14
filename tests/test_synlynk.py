@@ -194,6 +194,9 @@ def test_generate_context_scope_stub_falls_back(project_dir, capsys):
 
 def test_init_creates_project_structure(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     assert (tmp_path / "project-docs" / "todo.md").exists()
     assert (tmp_path / "project-docs" / "memory.md").exists()
@@ -204,6 +207,9 @@ def test_init_creates_project_structure(tmp_path, monkeypatch):
 
 def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "synlynk watch status" in content
@@ -213,6 +219,9 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
 
 def test_init_skips_existing_without_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=False)
     assert (tmp_path / "CLAUDE.md").read_text() == "MY CUSTOM CONTENT"
@@ -220,6 +229,9 @@ def test_init_skips_existing_without_force(tmp_path, monkeypatch):
 
 def test_init_force_overwrites_existing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=True)
     assert (tmp_path / "CLAUDE.md").read_text() != "MY CUSTOM CONTENT"
@@ -228,6 +240,9 @@ def test_init_force_overwrites_existing(tmp_path, monkeypatch):
 
 def test_init_config_schema_version(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     import json
     config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
@@ -472,12 +487,18 @@ def test_agents_template_enriched_content(tmp_path, monkeypatch):
 
 def test_init_creates_agents_md_by_default(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init()
     assert (tmp_path / "AGENTS.md").exists()
 
 
 def test_init_skips_agents_md_when_codex_excluded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(agents=["claude", "agy"])
     assert not (tmp_path / "AGENTS.md").exists()
     assert (tmp_path / "CLAUDE.md").exists()
@@ -486,6 +507,9 @@ def test_init_skips_agents_md_when_codex_excluded(tmp_path, monkeypatch):
 
 def test_init_skips_claude_md_when_claude_excluded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(agents=["agy", "codex"])
     assert not (tmp_path / "CLAUDE.md").exists()
     assert (tmp_path / "GEMINI.md").exists()
@@ -494,6 +518,9 @@ def test_init_skips_claude_md_when_claude_excluded(tmp_path, monkeypatch):
 
 def test_init_skips_gemini_md_when_agy_excluded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(agents=["claude", "codex"])
     assert not (tmp_path / "GEMINI.md").exists()
     assert (tmp_path / "CLAUDE.md").exists()
@@ -520,6 +547,9 @@ def test_exec_command_propagates_exit_code(project_dir, monkeypatch):
 
 def test_init_writes_synlynk_config_solo_by_default(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init()
     config_path = tmp_path / "project-docs" / ".synlynk_config.json"
     assert config_path.exists()
@@ -530,21 +560,28 @@ def test_init_writes_synlynk_config_solo_by_default(tmp_path, monkeypatch):
 
 def test_init_writes_synlynk_config_team_mode(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(mode="team")
     config_path = tmp_path / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
     assert data["mode"] == "team"
 
 
-def test_init_skips_synlynk_config_if_exists_without_force(project_dir):
+def test_init_skips_synlynk_config_if_exists_without_force(project_dir, monkeypatch):
     # conftest already wrote mode=single; init(mode="team") without force must not overwrite
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     synlynk.init(mode="team")
     config_path = project_dir / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
     assert data["mode"] == "single"
 
 
-def test_init_overwrites_synlynk_config_with_force(project_dir):
+def test_init_overwrites_synlynk_config_with_force(project_dir, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     synlynk.init(mode="team", force=True)
     config_path = project_dir / "project-docs" / ".synlynk_config.json"
     data = json.loads(config_path.read_text())
@@ -568,6 +605,9 @@ def test_build_templates_without_project_id_keeps_todo_placeholder(tmp_path, mon
 
 def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(project_id="PJ_xyz789")
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "PJ_xyz789" in content
@@ -576,6 +616,9 @@ def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
 
 def test_init_with_org_stored_in_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(org="myorg", repo="myrepo")
     config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
     assert config["org"] == "myorg"
@@ -1260,3 +1303,51 @@ def test_llm_enrich_returns_false_on_agent_failure(project_dir, monkeypatch):
             "top_dirs": [], "has_structured_commits": False}
     result = synlynk._llm_enrich("claude", scan)
     assert result is False
+
+
+# ── Task 7: Init wizard tests ─────────────────────────────────────────────────
+
+def test_init_wizard_creates_synlynk_dir(tmp_path, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    monkeypatch.setattr("builtins.input", lambda _: "")  # accept all defaults
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
+    sl.init()
+    assert os.path.exists(".synlynk")
+    assert os.path.exists(".synlynk/config.json")
+
+def test_init_wizard_writes_project_docs(tmp_path, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
+    sl.init()
+    assert os.path.exists("project-docs/roadmap.md")
+    assert os.path.exists("project-docs/memory.md")
+    assert os.path.exists("project-docs/todo.md")
+
+def test_init_wizard_skips_existing_synlynk_without_force(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    original_roadmap = open("project-docs/roadmap.md").read()
+    sl.init(force=False)
+    assert open("project-docs/roadmap.md").read() == original_roadmap
+
+def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
+    import bin.synlynk as sl
+    import json as _json
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    # Simulate user providing email at the cloud nudge step
+    inputs = iter(["nikhil@example.com"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs, ""))
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
+    monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
+    sl.init()
+    config = _json.loads(open(".synlynk/config.json").read())
+    assert config.get("workgroup_invite_email") == "nikhil@example.com"

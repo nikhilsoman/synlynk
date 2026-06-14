@@ -1709,58 +1709,135 @@ class WatchDaemon:
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo") -> None:
-    print("Initializing synlynk in current directory...")
-    agent_set = set(agents) if agents is not None else {"claude", "agy", "codex"}
-    templates = _build_templates(org=org, repo=repo, project_id=project_id)
+    """Progressive wizard: semantic scan → agent discovery → doc bootstrap → nudge."""
 
-    docs_dir = "project-docs"
-    devlogs_dir = os.path.join(docs_dir, "devlogs")
-    synlynk_dir = ".synlynk"
+    def _print_step(n: int, label: str) -> None:
+        print(f"\n{_BOLD}{_CYAN}Step {n}/{_TOTAL_STEPS} — {label}{_RESET}")
 
-    for d in [docs_dir, devlogs_dir, synlynk_dir]:
+    _TOTAL_STEPS = 6
+
+    # ── Step 1: Detect existing state ──────────────────────────────────────
+    _print_step(1, "Scanning repository")
+    synlynk_exists = os.path.exists(".synlynk")
+    if synlynk_exists and not force:
+        print(f"  {_YELLOW}⚠ .synlynk/ already exists.{_RESET} "
+              "Use --force to reinitialise.\n  Updating agent files only.")
+
+    scan = _static_scan(".")
+    print(f"  Project : {_BOLD}{scan['project_name']}{_RESET}")
+    print(f"  Commits : {scan['commit_count']}")
+    print(f"  Languages: {', '.join(scan['languages']) or 'unknown'}")
+    if scan["recent_topics"]:
+        print(f"  Recent  : {scan['recent_topics'][0]}")
+    if not scan["has_structured_commits"] and scan["commit_count"] > 0:
+        print(f"  {_DIM}⚠ Commit messages don't follow a structured convention — "
+              "skeleton quality may be lower. Review generated docs before proceeding.{_RESET}")
+
+    # ── Step 2: Agent discovery ─────────────────────────────────────────────
+    _print_step(2, "Discovering agents")
+    discovered = discover_agents()
+    functional = [a for a in discovered if a["functional"]]
+    non_functional = [a for a in discovered if not a["functional"]]
+
+    if functional:
+        print(f"\n  {_BOLD}{_GREEN}✨ Your Hybrid Workgroup is ready:{_RESET}")
+        for ag in functional:
+            roles = ", ".join(ag["roles"])
+            print(f"    {_GREEN}✓ {ag['name']:10}{_RESET} {ag['version']}  "
+                  f"roles: {roles}")
+    else:
+        print(f"  {_YELLOW}No agents detected. Install Claude, Gemini, or Codex to form your Hybrid Workgroup.{_RESET}")
+
+    if non_functional:
+        print(f"\n  {_DIM}Found but not configured (run --version failed):{_RESET}")
+        for ag in non_functional:
+            print(f"    {_DIM}✗ {ag['name']} — check API key / install{_RESET}")
+
+    # ── Step 3: Create directories + write skeleton ─────────────────────────
+    _print_step(3, "Bootstrapping project-docs")
+    for d in ["project-docs", "project-docs/devlogs", ".synlynk",
+              LOGS_DIR, PROMPTS_DIR]:
         if not os.path.exists(d):
             os.makedirs(d)
-            print(f"  Created {d}/")
 
+    written = _write_informed_skeleton(scan, skip_existing=not force)
+    if written:
+        for p in written:
+            print(f"  {_GREEN}✓{_RESET} Created {p}")
+    else:
+        print(f"  {_DIM}All project-docs already exist — skipped (use --force to overwrite){_RESET}")
+
+    # Write agent instruction files.
+    agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex"}
+    templates = _build_templates(org=org, repo=repo, project_id=project_id)
     _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
-
     for filename, content in templates.items():
         required = _agent_guards.get(filename)
         if required and required not in agent_set:
             continue
-
-        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md",
-                        "AGENTS.md", ".cursorrules"):
+        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", "AGENTS.md", ".cursorrules"):
             file_path = filename
         elif filename == "config.json":
-            file_path = os.path.join(synlynk_dir, filename)
+            file_path = os.path.join(".synlynk", filename)
         else:
-            file_path = os.path.join(docs_dir, filename)
-
+            file_path = os.path.join("project-docs", filename)
         if os.path.exists(file_path) and not force:
-            print(f"  {file_path} already exists. Skipping (use --force to overwrite).")
-        else:
-            with open(file_path, "w") as f:
-                f.write(content)
-            action = "Updated" if os.path.exists(file_path) else "Created"
-            print(f"  {action} {file_path}")
+            continue
+        with open(file_path, "w") as f:
+            f.write(content)
 
-    synlynk_config_path = os.path.join(docs_dir, ".synlynk_config.json")
-    if os.path.exists(synlynk_config_path) and not force:
-        print(f"  {synlynk_config_path} already exists. Skipping (use --force to overwrite).")
+    # ── Step 4: LLM enrichment offer ────────────────────────────────────────
+    _print_step(4, "LLM enrichment (optional)")
+    if functional:
+        enricher = functional[0]
+        print(f"  I found {scan['commit_count']} commits and {len(scan['recent_topics'])} "
+              f"recent topics.\n  Want me to ask {enricher['name']} to synthesise a roadmap "
+              f"from this? (costs tokens)")
+        try:
+            answer = input("  [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer == "y":
+            print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
+            ok = _llm_enrich(enricher["cli"], scan)
+            print(f"{_GREEN}done{_RESET}" if ok else f"{_YELLOW}failed — keeping skeleton{_RESET}")
     else:
-        synlynk_config_data = {
-            "mode": mode,
-            "version": VERSION,
-            "init_timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-        }
+        print(f"  {_DIM}No functional agent available — skipping enrichment{_RESET}")
+
+    # ── Step 5: Cloud directory nudge ────────────────────────────────────────
+    _print_step(5, "Team & cloud setup (optional)")
+    print("  Add a collaborator or share this workspace with your team.")
+    print("  Leave blank to skip.")
+    try:
+        email = input("  Email or synlynk ID: ").strip()
+    except EOFError:
+        email = ""
+
+    # ── Step 6: Finalise config ──────────────────────────────────────────────
+    _print_step(6, "Finalising")
+    synlynk_config_path = os.path.join("project-docs", ".synlynk_config.json")
+    if not os.path.exists(synlynk_config_path) or force:
+        config_data = {"mode": mode, "version": VERSION,
+                       "init_timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}
         with open(synlynk_config_path, "w") as f:
-            json.dump(synlynk_config_data, f, indent=2)
-        print(f"  Created {synlynk_config_path}")
+            json.dump(config_data, f, indent=2)
+
+    _update_config({
+        "workgroup_agents": [a["name"] for a in functional],
+        "workgroup_invite_email": email or None,
+    })
 
     set_state("stopped")
-    print("\n💡 Next: run `synlynk watch start` to keep context fresh during sessions.")
-    print("✓ synlynk initialized.")
+
+    print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
+    if functional:
+        agent_names = " + ".join(a["name"] for a in functional)
+        print(f"\n  {_BOLD}✨ Magic Moment 2 — dispatch agents now:{_RESET}")
+        print(f"    {_CYAN}synlynk dispatch {functional[0]['name']} --task \"your task\"{_RESET}")
+        if len(functional) >= 3:
+            print(f"    {_CYAN}synlynk run --trio --task \"your task\"{_RESET}  "
+                  f"← runs {agent_names} in parallel")
+    print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 def upgrade() -> None:
     """Checks GitHub releases for a newer version and prints upgrade instructions."""
