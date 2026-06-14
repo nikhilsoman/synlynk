@@ -5,7 +5,7 @@
 <p align="center"><strong>Keep your AI tools in sync with your project.</strong></p>
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
-synlynk is a single-file Python CLI that injects project context into AI tool sessions, tracks costs, and detects hallucination loops. It maintains a shared `project-docs/` directory that every AI tool reads at session start — so switching between Claude Code, Gemini CLI, or Cursor doesn't lose your task state, decisions, or progress.
+synlynk is a single-file Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects project context into every AI session, tracks costs, detects hallucination loops, and dispatches background agent jobs with a single command. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Gemini CLI, Codex, and AGY all read the same context, decisions, and progress.
 
 ## Install
 
@@ -24,12 +24,21 @@ python3 bin/synlynk.py <command>
 ## Quick start
 
 ```bash
-# Initialize synlynk in your repo
+# Initialize synlynk — discovers your agents, writes informed project-docs/
 synlynk init
 
 # Run an AI CLI with context automatically injected
 synlynk exec claude
 synlynk exec gemini
+
+# Dispatch an agent job to run in the background
+synlynk dispatch claude --task "refactor auth module"
+
+# Check running jobs
+synlynk jobs
+
+# Tail a job's output
+synlynk logs --job <job-id>
 
 # Archive completed tasks and refresh context
 synlynk checkpoint
@@ -53,15 +62,22 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 
 | Command | Description |
 | --- | --- |
-| `synlynk init [--force] [--agents ...] [--mode ...] [--org ...] [--repo ...] [--project-id ...]` | Bootstrap `project-docs/` and AI instruction files |
+| `synlynk init [--force]` | 6-step wizard: scans repo, discovers agents (Magic Moment 1), bootstraps `project-docs/`, offers LLM enrichment |
 | `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
-| `synlynk watch start\|stop\|status` | Background daemon that regenerates `context.md` when files change (Unix only) |
+| `synlynk dispatch <agent> --task <text> [--story <id>]` | Dispatch an agent job to run in the background (Magic Moment 2) |
+| `synlynk jobs [--all]` | List running/recent background jobs |
+| `synlynk logs --job <id> [--tail N]` | Tail a job's stdout log |
+| `synlynk shell [--story <id>]` | Open an interactive agent shell with story context |
+| `synlynk launch <agent> [--story <id>]` | Prompt for task, then dispatch interactively |
+| `synlynk run --trio <task>` | Dispatch the same task to all functional agents in parallel |
+| `synlynk watch start\|stop\|status` | Background daemon that regenerates `context.md` on file changes (Unix only) |
 | `synlynk checkpoint` | Archive completed `[x]` tasks to devlog, refresh context, emit telemetry |
 | `synlynk status [--json]` | Dashboard: active tasks, budget, sentinel alerts, watcher state |
+| `synlynk sentinel list\|clear [--severity] [--code]` | View or dismiss sentinel alerts |
 | `synlynk upgrade` | Check GitHub releases for a newer version |
 | `synlynk --version` | Print current version |
 
-> **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux.
+> **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux. `synlynk dispatch` works on all platforms.
 
 ## synlynk init flags
 
@@ -151,11 +167,11 @@ synlynk's goal is to become the OS for multi-agent development — the substrate
 
 | Version | Theme | Status | Target |
 |---|---|---|---|
-| v0.3.0 | Conventions + enriched agent templates | ✅ Shipped | Jun 2026 |
-| v0.4.0 | Trio Bootstrap — `synlynk run`, Architect→Build→Verify pipeline | 🔜 Next | Jul 2026 |
-| v0.5.0 | Capability Engine — data-driven agent routing, SQLite state | Planned | Aug 2026 |
+| v0.3.x | Enriched agent templates, AGENTS.md, parametric init | ✅ Shipped | Jun 2026 |
+| v0.4.0 | Hybrid Workgroup Bootstrap — agent discovery, `dispatch`, `jobs`, `run --trio`, init wizard | ✅ Shipped | Jun 2026 |
+| v0.5.0 | Capability Engine — data-driven agent routing, SQLite state | 🔜 Next | Aug 2026 |
 | v0.6.0 | Job Control — constraint propagation, job state machine | Planned | Sep 2026 |
-| v0.7.0 | Async Pipeline + Daemon — `synlynk dispatch`, HTTP context server | Planned | Oct 2026 |
+| v0.7.0 | Async Pipeline + Daemon — HTTP context server, daemon | Planned | Oct 2026 |
 | v0.8.0 | Open Context Protocol — MCP server, cross-tool context API | Planned | Nov 2026 |
 | v1.0.0 | Stable OS — frozen CLI, pipx/Homebrew, Tokq bridge ready | Planned | Q1 2027 |
 

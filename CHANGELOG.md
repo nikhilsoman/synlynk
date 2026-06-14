@@ -11,6 +11,53 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.0] - 2026-06-14
+
+### Added
+- `AGENT_CAPABILITY_BASELINES` — hardcoded capability dict for claude/gemini/codex/agy with
+  `cli`, `non_interactive_flags`, `roles`, and `strengths` per agent
+- `discover_agents(config)` — probes each known agent CLI with `--version`, returns functional
+  agents with their roles and capabilities; supports per-project path overrides via config
+- `_static_scan(root)` — reads git log, README, and file tree to produce a structured project
+  context dict (project name, commit count, languages, recent topics)
+- `_write_informed_skeleton(scan)` — writes project-docs/ first draft using scan results
+  instead of blank placeholders
+- `_llm_enrich(agent_name, agent_cli, scan)` — opt-in step that calls the best available agent
+  non-interactively to synthesise an informed `roadmap.md` from scan results
+- `init()` refactored to a 6-step wizard: scan → **Magic Moment 1** (workgroup discovery table
+  showing all detected agents with roles) → doc bootstrap → LLM enrichment offer → cloud nudge
+  → finalise config
+- `dispatch_agent(agent, task, story_id)` — launches agent CLI in background using
+  `subprocess.Popen(start_new_session=True)`, captures stdout to `.synlynk/logs/<job_id>.log`,
+  writes PID and job metadata to `.synlynk/jobs.json`
+- `_load_jobs()`, `_save_jobs(jobs)` — read/write `.synlynk/jobs.json`
+- `_reconcile_jobs()` — probes PIDs of running jobs via `os.kill(pid, 0)` on every startup;
+  marks unreachable PIDs as failed/completed; called as first action in `main()`
+- `synlynk dispatch <agent> --task <text> [--story <id>]` — **Magic Moment 2**: fire and
+  forget agent dispatch from any shell
+- `synlynk jobs [--all]` — list running/recent jobs with status, agent, and task
+- `synlynk logs --job <id> [--tail N]` — tail the log file for a job
+- `synlynk shell [--story <id>]` — open an interactive agent shell with story context injected
+- `synlynk launch <agent> [--story <id>]` — interactive launcher that prompts for task before
+  dispatching
+- `synlynk run --trio <task>` — dispatches the same task to all functional agents in parallel
+  (Architect, Builder, Verifier roles)
+- ANSI colour helpers (`_BOLD`, `_GREEN`, `_YELLOW`, `_CYAN`, `_DIM`, `_RESET`) for wizard UI
+
+### Fixed
+- `_reconcile_jobs()`: `PermissionError` from `os.kill(pid, 0)` means the process exists (owned
+  by another user) — no longer crashes the CLI; job correctly stays `running`
+- `_reconcile_jobs()`: empty `log_file` no longer accidentally reads/deletes an unrelated
+  `.exit` file in the current working directory
+- `_llm_enrich()`: baselines now indexed by canonical agent name (not CLI binary path), so
+  custom CLI paths still resolve the correct non-interactive flags
+
+### Infrastructure
+- 5 new reconcile/enrich tests; 4 new E2E tests (dispatch, jobs, logs, reconcile startup)
+- 188 tests total (up from 140)
+
+---
+
 ## [0.3.0] - 2026-06-03
 
 ### Added

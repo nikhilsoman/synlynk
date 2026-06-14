@@ -136,37 +136,62 @@
     "changelog": []
   },
   {
-    "slug": "trio-protocol",
-    "name": "Trio Protocol",
-    "subtitle": "Routes tasks through an Architect → Builder → Verifier pipeline by capability score",
-    "description": "The Trio Protocol assigns each task to one of three roles — Architect (design and planning), Builder (implementation), Verifier (testing and review) — based on per-agent capability scores accumulated from past performance. Cold-start uses round-robin assignment to generate initial score data. Scores are recency-weighted: recent performance has more influence than older runs, so improvements surface in routing within 3–4 jobs.",
-    "os_layer": "scheduler",
-    "user_theme": "autonomy-dispatch",
+    "slug": "agent-discovery",
+    "name": "Agent discovery",
+    "subtitle": "init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance",
+    "description": "`synlynk init` now runs a 6-step wizard. Step 2 is Magic Moment 1: it probes each known agent CLI with `--version`, then prints a workgroup table showing every installed agent with its roles (Architect / Builder / Verifier) and a functional indicator. `discover_agents()` reads `AGENT_CAPABILITY_BASELINES` for role and flag definitions, checks `~/.claude`, `~/.gemini`, etc. for config directories, and supports per-project path overrides in `.synlynk/config.json`. An opt-in LLM enrichment step calls the best available agent non-interactively to synthesise an informed `roadmap.md` from git history and the README.",
+    "os_layer": "kernel",
+    "user_theme": "agent-coordination",
     "introduced": "0.4",
     "usage": [
       {
-        "cmd": "synlynk dispatch --story 42",
-        "note": "Routes story 42 to the highest-scoring available agent for its required role"
+        "cmd": "synlynk init",
+        "note": "Wizard discovers agents, shows workgroup table, bootstraps project-docs/, offers LLM enrichment"
       }
     ],
-    "related": ["board-management"],
+    "related": ["agent-dispatch", "parallel-trio", "parametric-init"],
     "changelog": []
   },
   {
-    "slug": "board-management",
-    "name": "Board management",
-    "subtitle": "synlynk start moves GitHub Projects v2 board items autonomously via GraphQL",
-    "description": "`synlynk start <issue-number>` reads cached field IDs from `.synlynk/config.json`, calls the GitHub Projects v2 GraphQL API to move the item to In Progress, sets the Agent field to the current executor, and begins the Trio Protocol dispatch sequence. This is the first autonomous action the harness takes on behalf of the user — no manual board updates required.",
-    "os_layer": "scheduler",
+    "slug": "agent-dispatch",
+    "name": "Background dispatch",
+    "subtitle": "Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task \"...\"",
+    "description": "`synlynk dispatch <agent> --task <text>` launches the agent CLI in the background using `subprocess.Popen(start_new_session=True)`, capturing stdout to `.synlynk/logs/<job_id>.log` and persisting the PID to `.synlynk/jobs.json`. On every startup, `_reconcile_jobs()` probes live PIDs and marks dead ones as completed or failed. `synlynk jobs` lists running/recent jobs; `synlynk logs --job <id>` tails output in real time.",
+    "os_layer": "ipc",
     "user_theme": "autonomy-dispatch",
     "introduced": "0.4",
     "usage": [
       {
-        "cmd": "synlynk start 42",
-        "note": "Moves issue #42 to In Progress on GitHub Projects v2 board, sets Agent field"
+        "cmd": "synlynk dispatch claude --task \"refactor auth module\"",
+        "note": "Launches claude in background, returns job ID immediately"
+      },
+      {
+        "cmd": "synlynk jobs",
+        "note": "Lists all running and recent jobs with status, agent, and task"
+      },
+      {
+        "cmd": "synlynk logs --job job-abc123 --tail 50",
+        "note": "Tails the last 50 lines of a job's stdout log"
       }
     ],
-    "related": ["trio-protocol", "gh-cli-identity"],
+    "related": ["parallel-trio", "agent-discovery"],
+    "changelog": []
+  },
+  {
+    "slug": "parallel-trio",
+    "name": "Parallel trio dispatch",
+    "subtitle": "synlynk run --trio dispatches one task to all functional agents simultaneously",
+    "description": "`synlynk run --trio <task>` dispatches the same task description to every functional agent (claude, gemini, codex, agy — whichever are installed) in parallel background jobs. Each agent runs independently; `synlynk jobs` shows all three. This is the first form of horizontal parallelism in synlynk: same task, multiple perspectives, results streamed to separate log files for human review.",
+    "os_layer": "ipc",
+    "user_theme": "autonomy-dispatch",
+    "introduced": "0.4",
+    "usage": [
+      {
+        "cmd": "synlynk run --trio \"write unit tests for src/auth.py\"",
+        "note": "Dispatches to all functional agents in parallel; each gets its own job ID"
+      }
+    ],
+    "related": ["agent-dispatch", "agent-discovery"],
     "changelog": []
   }
 ]

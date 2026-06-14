@@ -1,14 +1,28 @@
 [
   {
+    "minor": "0.4",
+    "label": "v0.4.x",
+    "theme": "Hybrid Workgroup Bootstrap",
+    "date": "2026-06-14",
+    "current": true,
+    "in_window": true,
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
+    "blog_post": "/blog/11-pr39-v040-hybrid-workgroup-bootstrap/",
+    "patches": [
+      { "version": "0.4.0", "date": "2026-06-14", "summary": "Agent discovery, dispatch, job store, init wizard with Magic Moments, run --trio" }
+    ]
+  },
+  {
     "minor": "0.3",
     "label": "v0.3.x",
     "theme": "The Multi-Agent Foundation",
     "date": "2026-06-03",
-    "current": true,
+    "current": false,
     "in_window": true,
-    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
+    "install_cmd": null,
     "blog_post": "/blog/05-pr26-v0-3-0-multi-agent-foundation/",
     "patches": [
+      { "version": "0.3.1", "date": "2026-06-10", "summary": "Sentinel hardening, token scraping restored, burn rate, E2E test suite" },
       { "version": "0.3.0", "date": "2026-06-03", "summary": "Polyglot agent files (AGENTS.md), parametric init flags, _build_templates() refactor" }
     ]
   },
@@ -18,7 +32,7 @@
     "theme": "The Kernel",
     "date": "2026-05-20",
     "current": false,
-    "in_window": true,
+    "in_window": false,
     "install_cmd": null,
     "blog_post": "/blog/02-pr1-v0-2-0-the-kernel/",
     "patches": [
