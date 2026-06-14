@@ -526,6 +526,67 @@ def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
     return job
 
 
+def cmd_jobs(all_jobs: bool = False) -> None:
+    """Prints active (and optionally completed) jobs."""
+    _reconcile_jobs()
+    jobs = _load_jobs()
+    if not jobs:
+        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+        return
+    visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
+    if not visible:
+        completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
+        print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
+        return
+    header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
+    print(f"{_BOLD}{header}{_RESET}")
+    print("─" * 70)
+    for j in visible:
+        sid = (j.get("story_id") or "—")[:6]
+        task = (j.get("task") or "")[:40]
+        status = j["status"]
+        color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
+        print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+
+def cmd_logs(job_id: str, tail: int = 50) -> None:
+    """Prints the captured stdout of a dispatched job."""
+    jobs = _load_jobs()
+    job = next((j for j in jobs if j["id"] == job_id), None)
+    if job is None:
+        print(f"No job found with id '{job_id}'. Run `synlynk jobs` to list jobs.")
+        return
+    log_file = job.get("log_file", "")
+    if not log_file or not os.path.exists(log_file):
+        print(f"Log file not found for job {job_id}.")
+        return
+    print(f"{_BOLD}── logs: {job_id} ({job['agent']}) ─────────────────────────{_RESET}")
+    with open(log_file) as f:
+        lines = f.readlines()
+    for line in lines[-tail:]:
+        print(line, end="")
+    if len(lines) > tail:
+        print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
+
+
+def cmd_shell(story_id: str = None) -> None:
+    """Spawns an interactive subshell with synlynk context env vars injected.
+
+    The shell runs in the current directory (worktree-per-story lands in v0.5.0).
+    On exit the calling process resumes normally.
+    """
+    shell = os.environ.get("SHELL", "/bin/bash")
+    env = {**os.environ,
+           "SYNLYNK_PROJECT_DIR": os.path.abspath("."),
+           "SYNLYNK_STORY_ID": story_id or "",
+           "SYNLYNK_CONTEXT": os.path.abspath(".synlynk/context.md")}
+    label = f"story #{story_id}" if story_id else "synlynk"
+    print(f"{_BOLD}Entering synlynk shell ({label}).{_RESET} "
+          f"Type {_CYAN}exit{_RESET} to return.")
+    subprocess.run([shell], env=env)
+    print(f"{_DIM}Returned from synlynk shell.{_RESET}")
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"

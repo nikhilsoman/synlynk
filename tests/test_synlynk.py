@@ -1397,3 +1397,75 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     sl.dispatch_agent("claude", "task one")
     sl.dispatch_agent("claude", "task two")
     assert len(sl._load_jobs()) == 2
+
+
+def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
+    import bin.synlynk as sl
+    monkeypatch.setattr(sl, "_reconcile_jobs", lambda: None)  # bypass PID probing
+    jobs = [
+        {"id": "job-aaa", "agent": "claude", "story_id": "14", "task": "do thing",
+         "pid": 99999, "status": "running", "started_at": "2026-06-14T10:00:00",
+         "ended_at": None, "exit_code": None, "log_file": ".synlynk/logs/job-aaa.log"},
+    ]
+    sl._save_jobs(jobs)
+    sl.cmd_jobs()
+    out = capsys.readouterr().out
+    assert "job-aaa" in out
+    assert "claude" in out
+    assert "running" in out
+
+
+def test_cmd_jobs_empty_output_when_no_jobs(project_dir, capsys):
+    import bin.synlynk as sl
+    sl.cmd_jobs()
+    out = capsys.readouterr().out
+    assert "No jobs" in out or out.strip() == "" or "no jobs" in out.lower()
+
+
+def test_cmd_logs_prints_log_content(project_dir, capsys):
+    import bin.synlynk as sl
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    job = {"id": "job-bbb", "agent": "claude", "status": "running",
+            "log_file": ".synlynk/logs/job-bbb.log", "pid": 1,
+            "story_id": "", "task": "t", "started_at": "2026-06-14T10:00:00",
+            "ended_at": None, "exit_code": None, "prompt_file": ""}
+    sl._save_jobs([job])
+    open(".synlynk/logs/job-bbb.log", "w").write("Agent output line 1\nAgent output line 2\n")
+    sl.cmd_logs("job-bbb")
+    out = capsys.readouterr().out
+    assert "Agent output line 1" in out
+
+
+def test_cmd_logs_error_for_missing_job(project_dir, capsys):
+    import bin.synlynk as sl
+    sl.cmd_logs("job-missing")
+    out = capsys.readouterr().out
+    assert "not found" in out.lower() or "no job" in out.lower()
+
+
+def test_cmd_shell_spawns_subshell(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    spawned = []
+    def fake_run(cmd, **kw):
+        spawned.append((cmd, kw))
+        class R:
+            returncode = 0
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl.cmd_shell(story_id="14")
+    assert any(isinstance(c, list) and any("sh" in str(x) for x in c)
+               for c, _ in spawned)
+
+
+def test_cmd_shell_injects_synlynk_env(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    captured_env = {}
+    def fake_run(cmd, **kw):
+        captured_env.update(kw.get("env", {}))
+        class R:
+            returncode = 0
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl.cmd_shell(story_id="42")
+    assert captured_env.get("SYNLYNK_STORY_ID") == "42"
+    assert "SYNLYNK_PROJECT_DIR" in captured_env
