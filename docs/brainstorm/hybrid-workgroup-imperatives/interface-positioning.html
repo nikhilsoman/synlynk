@@ -1,0 +1,76 @@
+<h2>synlynk Interface Positioning</h2>
+<p class="subtitle">Where does synlynk live relative to Claude CLI, Gemini, Codex, Cursor, etc.?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="A" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Invisible OS</h3>
+      <p style="margin-bottom:10px">synlynk runs as a daemon. Users work in their preferred tools. synlynk captures output, updates state.db, fires sentinels — entirely in the background. No persistent TUI during agent work.</p>
+      <div style="font-family:monospace;font-size:11px;background:#111;padding:10px;border-radius:6px;color:#ccc;line-height:1.7">
+        <span style="color:#666"># user launches their preferred tool directly</span><br>
+        $ claude  <span style="color:#666">← user lives here</span><br>
+        $ gemini  <span style="color:#666">← user lives here</span><br>
+        <br>
+        <span style="color:#444"># synlynk watches silently in background</span><br>
+        <span style="color:#444"># state.db updated, costs tracked, sentinel fires</span><br>
+        <span style="color:#444"># user checks: synlynk status / synlynk board</span>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero friction</li><li>No interface competition</li><li>Works with any tool</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>No interface gravity</li><li>Invisible = forgettable</li><li>Magic moment is lost</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="B" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Launcher Hub (Home Base)</h3>
+      <p style="margin-bottom:10px"><code>synlynk</code> is your home base TUI. You launch Claude, Gemini, Codex from within it. Each agent runs in a managed pane. You return to synlynk to review, assign next task, check costs. Like OpenCode but as a meta-layer above any tool.</p>
+      <div style="font-family:monospace;font-size:11px;background:#111;padding:10px;border-radius:6px;color:#ccc;line-height:1.7">
+        <span style="color:#7c3aed">synlynk</span> TUI<br>
+        ┌──────────────────────────────────────────┐<br>
+        │ 🏠 Home  │ 📋 Board  │ 🤖 Agents  │ 💰 Cost │<br>
+        ├──────────────────────────────────────────┤<br>
+        │ <span style="color:#10b981">[▶ Launch Claude]</span>  Story: Fix auth bug   │<br>
+        │ <span style="color:#3b82f6">[▶ Launch Gemini]</span>  Story: Write tests     │<br>
+        │ <span style="color:#f59e0b">[▶ Launch Codex] </span>  Story: Docs update     │<br>
+        │                                          │<br>
+        │ ↵ to launch · Tab to switch · q to quit  │<br>
+        └──────────────────────────────────────────┘
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Strong interface gravity</li><li>Magic moment is visible</li><li>Hybrid Workgroup is tangible</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Users may bypass for native UX</li><li>Complex to implement (pty)</li><li>Competes with tool preferences</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="C" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Detachable Command Centre</h3>
+      <p style="margin-bottom:10px">synlynk TUI is the home base <em>and</em> can be detached. Launch agents from synlynk (they run in the background or a split). User can then switch to native Claude/Cursor UX — synlynk keeps running. Re-attach anytime with <code>synlynk</code>. Like tmux sessions for your Hybrid Workgroup.</p>
+      <div style="font-family:monospace;font-size:11px;background:#111;padding:10px;border-radius:6px;color:#ccc;line-height:1.7">
+        $ synlynk          <span style="color:#666">← attach to workgroup</span><br>
+        <span style="color:#7c3aed">▶ dispatching claude  → story #14</span><br>
+        <span style="color:#3b82f6">▶ dispatching gemini  → story #15</span><br>
+        <span style="color:#10b981">✓ codex completed    → story #13 verified</span><br>
+        <br>
+        <span style="color:#666">Ctrl+D to detach  ·  agents keep running</span><br>
+        <br>
+        $ claude           <span style="color:#666">← user works in native UX</span><br>
+        $ synlynk          <span style="color:#666">← re-attach, see what happened</span>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Home base + native UX coexist</li><li>Agents visible when you want</li><li>Familiar (tmux mental model)</li><li>synlynk never competes</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Slightly more complex mental model</li><li>Needs persistent daemon</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">All three keep state.db canonical. The difference is <strong>how visible synlynk is during agent work</strong>.</p>
