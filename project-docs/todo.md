@@ -28,12 +28,14 @@
 - [ ] `synlynk doctor` — diagnose trio.json, conventions.md, agent CLIs <!-- id: 27 --> [@nikhilsoman]
 
 ## v0.5.0 — Capability Engine
-- [ ] Migrate capability scores + telemetry to SQLite WAL (`.synlynk/state.db`) <!-- id: 30 --> [@nikhilsoman]
-- [ ] Recency-weighted routing after 3 samples per (agent, phase, domain) <!-- id: 31 --> [@nikhilsoman]
-- [ ] `synlynk score show / add / reset` <!-- id: 32 --> [@nikhilsoman]
+- [x] Migrate capability scores + telemetry to SQLite WAL (`.synlynk/state.db`) <!-- id: 30 --> [@nikhilsoman]
+- [x] Recency-weighted routing after 3 samples per (agent, phase, domain) <!-- id: 31 --> [@nikhilsoman]
+- [x] `synlynk score show / add / reset` <!-- id: 32 --> [@nikhilsoman]
 - [ ] `synlynk trio status` — routing matrix with scores and sample counts <!-- id: 33 --> [@nikhilsoman]
 - [ ] `synlynk cost add` — structured cost entry <!-- id: 34 --> [@nikhilsoman]
 - [ ] Shell completions: `synlynk completions <zsh|bash|fish>` <!-- id: 35 --> [@nikhilsoman]
+- [ ] **HOTFIX** (Issue #43): Normalise quality_auto calculation in capability_ratings when tests are absent <!-- id: 36 --> [@claude]
+
 
 ## v0.6.0 — Job Control + Constraints
 - [ ] `synlynk constraint add/remove/list` — propagate to all agent contexts <!-- id: 40 --> [@nikhilsoman]
