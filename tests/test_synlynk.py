@@ -1469,3 +1469,70 @@ def test_cmd_shell_injects_synlynk_env(project_dir, monkeypatch):
     sl.cmd_shell(story_id="42")
     assert captured_env.get("SYNLYNK_STORY_ID") == "42"
     assert "SYNLYNK_PROJECT_DIR" in captured_env
+
+
+def test_cmd_launch_starts_agent_interactively(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    launched = []
+    def fake_run(cmd, **kw):
+        launched.append(cmd)
+        class R:
+            returncode = 0
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl.cmd_launch("claude", story_id="14")
+    assert any("claude" in str(c) for c in launched)
+
+
+def test_cmd_launch_unknown_agent_prints_error(project_dir, capsys):
+    import bin.synlynk as sl
+    sl.cmd_launch("unknownbot", story_id="1")
+    out = capsys.readouterr().out
+    assert "unknown" in out.lower() or "not found" in out.lower()
+
+
+def test_cmd_launch_generates_agent_context(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    sl.cmd_launch("claude", story_id="5")
+    assert os.path.exists(".synlynk/context-claude.md")
+
+
+def test_cmd_run_trio_dispatches_three_agents(project_dir, monkeypatch):
+    import bin.synlynk as sl
+    dispatched = []
+    def fake_dispatch(agent, task, story_id=None):
+        dispatched.append(agent)
+        return {"id": f"job-{agent}", "agent": agent, "pid": 1, "status": "running",
+                "task": task, "story_id": story_id, "log_file": "", "prompt_file": "",
+                "started_at": "2026-06-14T10:00:00", "ended_at": None, "exit_code": None}
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch)
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [
+        {"name": "claude", "functional": True, "roles": ["architect", "builder"],
+         "cli": "claude", "version": "2", "capabilities": [], "non_interactive_flags": ["--print"],
+         "discovery_path": ""},
+        {"name": "gemini", "functional": True, "roles": ["builder", "verifier"],
+         "cli": "gemini", "version": "1", "capabilities": [], "non_interactive_flags": [],
+         "discovery_path": ""},
+        {"name": "codex", "functional": True, "roles": ["builder"],
+         "cli": "codex", "version": "1", "capabilities": [], "non_interactive_flags": [],
+         "discovery_path": ""},
+    ])
+    sl.cmd_run_trio("implement the auth feature")
+    assert len(dispatched) == 3
+    assert "claude" in dispatched
+
+
+def test_cmd_run_trio_warns_with_fewer_than_three_agents(project_dir, monkeypatch, capsys):
+    import bin.synlynk as sl
+    monkeypatch.setattr(sl, "discover_agents", lambda **kw: [
+        {"name": "claude", "functional": True, "roles": ["architect"],
+         "cli": "claude", "version": "2", "capabilities": [], "non_interactive_flags": [],
+         "discovery_path": ""},
+    ])
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: {"id": "j", "pid": 1,
+        "status": "running", "agent": "claude", "task": "", "story_id": "",
+        "log_file": "", "prompt_file": "", "started_at": "", "ended_at": None, "exit_code": None})
+    sl.cmd_run_trio("do thing")
+    out = capsys.readouterr().out
+    assert "1" in out or "agent" in out.lower()

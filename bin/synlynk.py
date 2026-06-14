@@ -587,6 +587,75 @@ def cmd_shell(story_id: str = None) -> None:
     print(f"{_DIM}Returned from synlynk shell.{_RESET}")
 
 
+def cmd_launch(agent: str, story_id: str = None) -> None:
+    """Launches an agent CLI interactively in the current directory.
+
+    Pre-generates .synlynk/context-<agent>.md and starts the CLI so the
+    agent reads it as initial context. Stdout/stderr are not captured —
+    this is an interactive session. Telemetry is logged on exit.
+    """
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        print(f"Unknown agent '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+        return
+
+    cli = AGENT_CAPABILITY_BASELINES[agent]["cli"]
+
+    try:
+        generate_context(scope="full")
+    except Exception:
+        pass
+    src = ".synlynk/context.md"
+    dest = f".synlynk/context-{agent}.md"
+    if os.path.exists(src):
+        import shutil as _shutil
+        _shutil.copy(src, dest)
+
+    label = f"story #{story_id}" if story_id else "interactive session"
+    print(f"{_BOLD}Launching {agent} — {label}.{_RESET}")
+    print(f"  Context: {_CYAN}{dest}{_RESET}")
+    print(f"  Exit the agent to return to synlynk.\n")
+
+    start = time.time()
+    result = subprocess.run([cli])
+    duration = time.time() - start
+
+    log_telemetry_event({"type": "launch", "agent": agent,
+                         "story_id": story_id, "exit_code": result.returncode,
+                         "duration_s": round(duration, 1)})
+    update_costs(cli, 0, 0, duration)
+    print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
+
+
+def cmd_run_trio(task: str, story_id: str = None) -> None:
+    """Dispatches all functional agents in parallel — one job per agent.
+
+    This is a parallel convenience wrapper, NOT the sequential Trio pipeline.
+    Each agent gets the same task description and full context. For the
+    sequential Architect→Build→Verify pipeline, see the Trio Protocol spec.
+    """
+    agents = [a for a in discover_agents() if a["functional"]]
+    if not agents:
+        print("No functional agents found. Run `synlynk init` to set up your Hybrid Workgroup.")
+        return
+    if len(agents) < 3:
+        print(f"  {_YELLOW}Only {len(agents)} agent(s) available "
+              f"(trio needs 3). Dispatching what's configured.{_RESET}")
+
+    print(f"{_BOLD}✨ Dispatching {len(agents)} agents in parallel{_RESET}")
+    print(f"  Task: {task}\n")
+
+    jobs = []
+    for ag in agents:
+        job = dispatch_agent(ag["name"], task, story_id=story_id)
+        jobs.append(job)
+        role = ag["roles"][0] if ag["roles"] else "worker"
+        print(f"  {_GREEN}▶{_RESET} [{job['id']}] {ag['name']:10} → {role}  PID {job['pid']}")
+
+    print(f"\n  {_DIM}All agents running in background.{_RESET}")
+    print(f"  Monitor with: {_CYAN}synlynk jobs{_RESET}")
+    print(f"  View output:  {_CYAN}synlynk logs <job-id>{_RESET}")
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"
