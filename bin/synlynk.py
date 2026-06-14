@@ -315,6 +315,84 @@ def _static_scan(root: str = ".") -> dict:
     return result
 
 
+def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
+    """Writes project-docs skeleton informed by static scan results.
+
+    Returns list of file paths written. Skips files that already exist
+    when skip_existing=True. The wizard surfaces a caveat for repos
+    without structured commits.
+    """
+    name = scan.get("project_name", "this project")
+    desc = scan.get("description") or f"A project named {name}."
+    topics = scan.get("recent_topics", [])
+    langs = ", ".join(scan.get("languages", [])) or "unknown"
+    commit_count = scan.get("commit_count", 0)
+    caveat = (
+        "\n> ⚠ Skeleton generated from git history — results vary by commit style. "
+        "Review before proceeding.\n"
+        if not scan.get("has_structured_commits") else ""
+    )
+
+    recent_work = "\n".join(f"- {t}" for t in topics[:5]) or "- (no commits found)"
+
+    roadmap_content = f"""\
+# {name} Roadmap
+{caveat}
+**Positioning:** [Describe what {name} is building toward]
+
+| Version | Theme | Status | Target |
+| :--- | :--- | :--- | :--- |
+| v0.1.0 | Initial release | ✅ Shipped | — |
+| v0.2.0 | [Next milestone] | 🔜 Next | — |
+
+## Recent work (from git history — {commit_count} commits, {langs})
+{recent_work}
+"""
+
+    memory_content = f"""\
+# {name} Memory
+
+## Project Overview
+- **Name:** {name}
+- **Description:** {desc}
+- **Languages:** {langs}
+- **Directories:** {", ".join(scan.get("top_dirs", [])) or "—"}
+
+## Decisions
+[Document key decisions here with [@username] attribution in team mode]
+
+## Architecture
+[Document key architectural decisions here]
+"""
+
+    todo_content = f"""\
+# {name} — Todo
+
+## Active Tasks
+- [ ] Review and refine the generated roadmap.md <!-- id: 1 -->
+- [ ] Review and update memory.md with actual decisions <!-- id: 2 -->
+- [ ] Define first milestone in roadmap <!-- id: 3 -->
+
+## Completed
+"""
+
+    files = {
+        "project-docs/roadmap.md": roadmap_content,
+        "project-docs/memory.md": memory_content,
+        "project-docs/todo.md": todo_content,
+    }
+
+    written = []
+    for path, content in files.items():
+        if skip_existing and os.path.exists(path):
+            continue
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        written.append(path)
+    return written
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
     costs_file = "project-docs/costs.md"

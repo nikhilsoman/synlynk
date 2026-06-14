@@ -1186,3 +1186,45 @@ def test_static_scan_no_git_repo(tmp_path, monkeypatch):
     result = synlynk._static_scan(str(tmp_path))
     assert result["commit_count"] == 0
     assert result["project_name"] == tmp_path.name
+
+
+def test_write_informed_skeleton_creates_docs(project_dir):
+    import shutil
+    # Remove existing project-docs to test creation path
+    shutil.rmtree("project-docs")
+    os.makedirs("project-docs/devlogs")
+    scan = {
+        "project_name": "testproject", "description": "A test tool.",
+        "commit_count": 12, "has_structured_commits": True,
+        "recent_topics": ["feat: add login", "fix: auth bug"],
+        "top_dirs": ["src", "tests"], "languages": ["Python"],
+        "readme_summary": "# testproject\nA test tool.",
+    }
+    written = synlynk._write_informed_skeleton(scan, skip_existing=False)
+    assert "project-docs/roadmap.md" in written
+    assert "project-docs/memory.md" in written
+    assert "project-docs/todo.md" in written
+
+
+def test_write_informed_skeleton_injects_project_name(project_dir):
+    import shutil
+    shutil.rmtree("project-docs")
+    os.makedirs("project-docs/devlogs")
+    scan = {
+        "project_name": "myapp", "description": "My application.",
+        "commit_count": 5, "has_structured_commits": False,
+        "recent_topics": ["initial commit"],
+        "top_dirs": ["src"], "languages": ["Go"], "readme_summary": "",
+    }
+    synlynk._write_informed_skeleton(scan, skip_existing=False)
+    roadmap = open("project-docs/roadmap.md").read()
+    assert "myapp" in roadmap
+
+
+def test_write_informed_skeleton_skips_existing_by_default(project_dir):
+    original = open("project-docs/roadmap.md").read()
+    scan = {"project_name": "x", "description": "", "commit_count": 0,
+            "has_structured_commits": False, "recent_topics": [],
+            "top_dirs": [], "languages": [], "readme_summary": ""}
+    synlynk._write_informed_skeleton(scan, skip_existing=True)
+    assert open("project-docs/roadmap.md").read() == original
