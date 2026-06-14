@@ -228,12 +228,22 @@ def cmd_pr_check() -> None:
 
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:
-    """Retroactively sets model_version on all 'unknown' rows for a story."""
+    """Retroactively sets model_version on all 'unknown' rows for a story.
+
+    Also recalculates split_model — if model_at_dispatch differs from the attested
+    completion model, the row is a split-model run and must be excluded from scoring.
+    """
     conn = _get_db()
     updated = conn.execute(
-        "UPDATE capability_ratings SET model_version=?, model_at_completion=? "
-        "WHERE story_id=? AND model_version='unknown'",
-        (model_version, model_version, story_id)
+        """UPDATE capability_ratings
+           SET model_version = ?,
+               model_at_completion = ?,
+               split_model = CASE
+                   WHEN model_at_dispatch != ? AND model_at_dispatch != 'unknown' THEN 1
+                   ELSE 0
+               END
+           WHERE story_id = ? AND model_version = 'unknown'""",
+        (model_version, model_version, model_version, story_id)
     ).rowcount
     conn.commit()
     conn.close()
@@ -415,9 +425,9 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
         text = (result.stdout or "") + (getattr(result, "stderr", "") or "")
         patterns = [
-            r"(claude-(?:opus|sonnet|haiku)-[\d.-]+)",
-            r"(gemini-[\d.]+-(?:pro|flash|ultra))",
-            r"(gpt-[\d.]+-(?:turbo|preview)?)",
+            r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
+            r"(gemini-[\w.-]+)",
+            r"(gpt-[\d.]+-[\w.-]+)",
             r"(codex-[\w-]+)",
         ]
         for pat in patterns:
@@ -503,11 +513,14 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         quality = verifier_meta["quality"]
         verifier_model = verifier_meta.get("verifier_model")
         verifier_agent_val = agent
+        correct = 0 if verifier_meta.get("correct") is False else 1
     else:
         signal_source = "auto"
         quality = quality_auto
         verifier_model = None
         verifier_agent_val = None
+        # Auto: infer correctness from build success (default 1 if unknown)
+        correct = 1 if signals.get("build_success") is not False else 0
 
     conn.execute(
         """INSERT INTO capability_ratings
@@ -517,15 +530,15 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework,
-            duration_vs_estimate, verified_by_ci)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            duration_vs_estimate, verified_by_ci, correct)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
          engg_domain, org_domain, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
          signals["test_pass_rate"], 1 if signals["build_success"] else 0,
          dispatch_rework, micro_rework,
-         None, None)
+         None, None, correct)
     )
     conn.commit()
     conn.close()

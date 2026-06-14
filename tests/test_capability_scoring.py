@@ -346,6 +346,15 @@ def test_probe_model_version_returns_unknown_on_failure(monkeypatch):
     result = _probe_model_version("claude", "claude")
     assert result == "unknown"
 
+def test_probe_model_version_flexible_pattern(monkeypatch):
+    from synlynk import _probe_model_version
+    import subprocess
+    # Covers "claude-3-5-sonnet" format (version before family name)
+    fake = type("R", (), {"stdout": "claude-3-5-sonnet | ctx: 20%", "returncode": 0, "stderr": ""})()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: fake)
+    result = _probe_model_version("claude", "claude")
+    assert "sonnet" in result
+
 
 # --- Task 12: verifier meta parsing ---
 
@@ -427,6 +436,73 @@ def test_score_attest_updates_model_version(tmp_path, monkeypatch):
                        ("story-3",)).fetchone()
     conn.close()
     assert row[0] == "claude-opus-4-8"
+
+def test_score_attest_sets_split_model_when_dispatch_differs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, cmd_score_attest
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-4", "T"))
+    # Row was dispatched with gemini but completion unknown (model changed mid-task)
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, model_at_dispatch, engg_domain, org_domain, "
+        "industry, phase, signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("story-4", "claude", "unknown", "gemini-2.5-pro", "backend", "monetization",
+         "ott", "build", "auto", 5.0, 5.0)
+    )
+    conn.commit(); conn.close()
+    cmd_score_attest("story-4", "claude-opus-4-8")
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT model_version, split_model FROM capability_ratings WHERE story_id=?",
+        ("story-4",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "claude-opus-4-8"
+    assert row[1] == 1  # split_model flagged: dispatch=gemini, completion=claude
+
+
+def test_write_capability_rating_sets_correct_from_verifier(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+    import json
+    log_content = (
+        "# synlynk-meta\n"
+        "model_version=claude-opus-4-8\n"
+        "quality=7\n"
+        "correct=false\n"
+        "rework_needed=true\n"
+        "verifier_model=gemini-2.5-pro\n"
+    )
+    log_path = str(tmp_path / ".synlynk/logs/job-v.log")
+    open(log_path, "w").write(log_content)
+    open(log_path + ".exit", "w").write("0")
+    jobs = [{
+        "id": "job-v", "agent": "claude", "story_id": "story-v",
+        "status": "running", "pid": 99999999,
+        "log_file": log_path, "prompt_file": None,
+        "started_at": "2026-06-14T10:00:00", "ended_at": None,
+        "exit_code": None, "dispatch_rework": 0, "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }]
+    json.dump(jobs, open(".synlynk/jobs.json", "w"))
+    json.dump({"industry": "ott"}, open(".synlynk/config.json", "w"))
+    from synlynk import _get_db, _reconcile_jobs
+    conn = _get_db()
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?,?)", ("story-v", "T"))
+    conn.commit(); conn.close()
+    _reconcile_jobs()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT signal_source, quality, correct FROM capability_ratings WHERE story_id=?",
+        ("story-v",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "verifier"
+    assert row[1] == 7.0
+    assert row[2] == 0  # correct=false from verifier meta
 
 
 # --- Task 14: org_domain_tags ---
