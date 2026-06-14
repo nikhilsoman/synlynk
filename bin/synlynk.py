@@ -9,8 +9,222 @@ import re
 import threading
 import urllib.request
 from typing import Optional
+import sqlite3 as _sqlite3
 
 VERSION = "0.4.0"
+
+DB_PATH = ".synlynk/state/state.db"
+
+_DB_SCHEMA = """
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS stories (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    story_id      TEXT NOT NULL UNIQUE,
+    title         TEXT,
+    engg_domain   TEXT DEFAULT 'unknown',
+    org_domain    TEXT DEFAULT 'unknown',
+    org_domain_tags TEXT DEFAULT '[]',
+    industry      TEXT DEFAULT 'unknown',
+    phase         TEXT DEFAULT 'build',
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS capability_ratings (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    story_id              TEXT NOT NULL REFERENCES stories(story_id),
+    agent                 TEXT NOT NULL,
+    model_version         TEXT NOT NULL DEFAULT 'unknown',
+    model_at_dispatch     TEXT,
+    model_at_completion   TEXT,
+    split_model           INTEGER DEFAULT 0,
+    engg_domain           TEXT NOT NULL DEFAULT 'unknown',
+    org_domain            TEXT NOT NULL DEFAULT 'unknown',
+    org_domain_tags       TEXT DEFAULT '[]',
+    industry              TEXT NOT NULL DEFAULT 'unknown',
+    phase                 TEXT NOT NULL DEFAULT 'build',
+    signal_source         TEXT NOT NULL DEFAULT 'auto',
+    quality               REAL NOT NULL DEFAULT 0.0,
+    quality_auto          REAL,
+    verifier_agent        TEXT,
+    verifier_model        TEXT,
+    test_pass_rate        REAL,
+    build_success         INTEGER,
+    dispatch_rework       INTEGER DEFAULT 0,
+    micro_rework          INTEGER DEFAULT 0,
+    pr_review_cycles      INTEGER DEFAULT 0,
+    duration_vs_estimate  REAL,
+    verified_by_ci        INTEGER,
+    correct               INTEGER DEFAULT 1,
+    note                  TEXT,
+    ed25519_sig           TEXT,
+    ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_DB_SCORES_VIEW = """
+CREATE VIEW IF NOT EXISTS capability_scores AS
+SELECT
+    agent,
+    model_version,
+    engg_domain,
+    org_domain,
+    industry,
+    phase,
+    SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
+      SUM(pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER)))
+      AS weighted_score,
+    COUNT(*) AS sample_count,
+    MAX(ts) AS last_seen
+FROM capability_ratings
+WHERE split_model = 0
+GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
+"""
+
+def _get_db() -> _sqlite3.Connection:
+    """Returns a WAL-mode SQLite connection to state.db, running migrations."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = _sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    _migrate_db(conn)
+    return conn
+
+def _migrate_db(conn: _sqlite3.Connection) -> None:
+    """Idempotent schema migrations. Adds tables/views if absent."""
+    conn.executescript(_DB_SCHEMA)
+    try:
+        conn.executescript(_DB_SCORES_VIEW)
+    except _sqlite3.OperationalError:
+        pass  # view already exists with same definition
+    conn.commit()
+
+
+def cmd_story_create(title: str, engg_domain: str = "unknown",
+                     org_domain: str = "unknown", phase: str = "build") -> str:
+    """Creates a story record in state.db. Returns the generated story_id."""
+    import hashlib as _hashlib
+    story_id = "story-" + _hashlib.md5(
+        f"{title}{time.time()}".encode()
+    ).hexdigest()[:8]
+    config = load_config()
+    industry = config.get("industry", "unknown")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (story_id, title, engg_domain, org_domain, industry, phase)
+    )
+    conn.commit()
+    conn.close()
+    print(f"  {_GREEN}✓{_RESET} Story created: {story_id}  [{engg_domain} · {org_domain} · {industry}]")
+    return story_id
+
+def cmd_story_list() -> None:
+    """Prints all stories in state.db."""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT story_id, title, engg_domain, org_domain, industry, phase, created_at "
+        "FROM stories ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    if not rows:
+        print("  No stories yet. Use: synlynk story create --title '...'")
+        return
+    print(f"\n  {'ID':<14} {'Title':<30} {'Engg':<12} {'Org':<14} {'Industry':<12} Phase")
+    print("  " + "-" * 90)
+    for r in rows:
+        print(f"  {r[0]:<14} {(r[1] or '')[:29]:<30} {r[2]:<12} {r[3]:<14} {r[4]:<12} {r[5]}")
+
+
+def cmd_score_add(story_id: str, rating: float, note: str = None,
+                  rework: bool = False) -> None:
+    """Add a human quality rating for a story. Inserts a new 'human' row."""
+    if not 0.0 <= rating <= 10.0:
+        raise ValueError(f"Rating must be 0–10, got {rating}")
+    conn = _get_db()
+    story = conn.execute(
+        "SELECT engg_domain, org_domain, industry, phase FROM stories WHERE story_id=?",
+        (story_id,)
+    ).fetchone()
+    if not story:
+        conn.close()
+        print(f"  Story '{story_id}' not found. Create it first with: synlynk story create")
+        return
+    engg, org, industry, phase = story
+    prev = conn.execute(
+        "SELECT agent, model_version FROM capability_ratings "
+        "WHERE story_id=? ORDER BY ts DESC LIMIT 1", (story_id,)
+    ).fetchone()
+    agent = prev[0] if prev else "unknown"
+    model_version = prev[1] if prev else "unknown"
+    dispatch_rework = 1 if rework else 0
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, dispatch_rework, note) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (story_id, agent, model_version, engg, org, industry, phase,
+         "human", rating, dispatch_rework, note)
+    )
+    conn.commit()
+    conn.close()
+    flag = " [rework]" if rework else ""
+    print(f"  {_GREEN}✓{_RESET} Score recorded: {rating}/10{flag} for {story_id}")
+    if note:
+        print(f"    Note: {note}")
+
+
+def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> None:
+    """Display capability_scores for a domain coordinate."""
+    conn = _get_db()
+    where_parts, params = [], []
+    if engg:
+        where_parts.append("engg_domain=?"); params.append(engg)
+    if org:
+        where_parts.append("org_domain=?"); params.append(org)
+    if industry:
+        where_parts.append("industry=?"); params.append(industry)
+    where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    rows = conn.execute(
+        f"SELECT agent, model_version, engg_domain, org_domain, industry, phase, "
+        f"weighted_score, sample_count FROM capability_scores {where} "
+        f"ORDER BY weighted_score DESC",
+        params
+    ).fetchall()
+    conn.close()
+    if not rows:
+        print("  No capability data yet for this coordinate.")
+        return
+    print(f"\n  {'Agent':<10} {'Model':<22} {'Engg':<12} {'Org':<14} "
+          f"{'Industry':<12} {'Phase':<10} {'Score':>6} {'N':>4}")
+    print("  " + "-" * 96)
+    for r in rows:
+        score_str = f"{r[6]:.2f}" if r[6] is not None else "  n/a"
+        print(f"  {r[0]:<10} {r[1]:<22} {r[2]:<12} {r[3]:<14} "
+              f"{r[4]:<12} {r[5]:<10} {score_str:>6} {r[7]:>4}")
+
+
+_ENGG_DOMAIN_PATTERNS = [
+    ("data",         [r"etl", r"pipeline/", r"schema\.sql", r"migrations/", r"dbt/"]),
+    ("ml",           [r"ml/", r"models/", r"train\.", r"inference/", r"embeddings/"]),
+    ("security",     [r"auth/", r"oauth", r"jwt", r"crypto", r"certs/"]),
+    ("devops",       [r"\.github/", r"dockerfile", r"terraform", r"pulumi", r"k8s/", r"helm/"]),
+    ("frontend",     [r"components/", r"pages/", r"\.tsx?", r"\.vue", r"\.svelte", r"styles/"]),
+    ("backend",      [r"api/", r"routes/", r"handlers/", r"controllers/", r"services/"]),
+    ("testing",      [r"tests/", r"test_", r"spec/", r"\.spec\.", r"fixtures/"]),
+    ("docs",         [r"docs/", r"readme", r"\.md$", r"changelogs?"]),
+    ("architecture", [r"design/", r"specs/", r"adr/", r"diagrams/"]),
+]
+
+def _infer_engg_domain(log_text: str) -> str:
+    """Infers engineering domain from file path patterns in job log output."""
+    lower = log_text.lower()
+    for domain, patterns in _ENGG_DOMAIN_PATTERNS:
+        if any(re.search(p, lower) for p in patterns):
+            return domain
+    return "unknown"
+
 
 JOBS_FILE = ".synlynk/jobs.json"
 LOGS_DIR = ".synlynk/logs"
@@ -148,6 +362,124 @@ def _save_jobs(jobs: list) -> None:
         json.dump(jobs, f, indent=2)
 
 
+def _count_dispatch_rework(story_id: str) -> int:
+    """Counts completed jobs for this story_id — each represents one dispatch cycle."""
+    if not story_id:
+        return 0
+    jobs = _load_jobs()
+    return sum(1 for j in jobs
+               if j.get("story_id") == story_id and j.get("status") == "completed")
+
+
+def _extract_micro_rework(log_text: str) -> int:
+    """Counts sub-task retry signals in agent log output."""
+    patterns = [r"retrying step", r"retry attempt", r"re-trying", r"attempt \d+"]
+    count = 0
+    for pat in patterns:
+        count += len(re.findall(pat, log_text, re.IGNORECASE))
+    return count
+
+
+def _write_capability_rating(job: dict, log_text: str) -> None:
+    """Writes a capability_ratings row for a completed job."""
+    story_id = job.get("story_id", "")
+    if not story_id:
+        return
+
+    conn = _get_db()
+    exists = conn.execute("SELECT 1 FROM stories WHERE story_id=?", (story_id,)).fetchone()
+    if not exists:
+        conn.close()
+        return
+
+    agent = job.get("agent", "unknown")
+    model_version = extract_model_version(log_text, agent=agent)
+    signals = _extract_auto_signals(
+        log_text,
+        started_at=job.get("started_at"),
+        ended_at=job.get("ended_at"),
+        exit_code=job.get("exit_code"),
+    )
+    engg_domain = _infer_engg_domain(log_text)
+    dispatch_rework = job.get("dispatch_rework", 0)
+    micro_rework = job.get("micro_rework", 0)
+
+    story_row = conn.execute(
+        "SELECT org_domain, industry, phase FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    org_domain = story_row[0] if story_row else "unknown"
+    industry = story_row[1] if story_row else load_config().get("industry", "unknown")
+    phase = story_row[2] if story_row else "build"
+
+    scores = []
+    if signals["test_pass_rate"] is not None:
+        scores.append(signals["test_pass_rate"] * 10 * 0.35)
+    if signals["build_success"] is not None:
+        scores.append((10.0 if signals["build_success"] else 0.0) * 0.30)
+    rework_penalty = min(dispatch_rework * 2.0, 10.0)
+    scores.append(max(0.0, 10.0 - rework_penalty) * 0.35)
+    quality_auto = sum(scores) if scores else 5.0
+
+    conn.execute(
+        """INSERT INTO capability_ratings
+           (story_id, agent, model_version, model_at_completion,
+            engg_domain, org_domain, industry, phase,
+            signal_source, quality, quality_auto,
+            test_pass_rate, build_success,
+            dispatch_rework, micro_rework,
+            duration_vs_estimate, verified_by_ci)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (story_id, agent, model_version, model_version,
+         engg_domain, org_domain, industry, phase,
+         "auto", quality_auto, quality_auto,
+         signals["test_pass_rate"], 1 if signals["build_success"] else 0,
+         dispatch_rework, micro_rework,
+         None, None)
+    )
+    conn.commit()
+    conn.close()
+
+
+def _best_agent_for_story(story_id: str) -> Optional[str]:
+    """Returns the agent with the highest capability score for the story's coordinate.
+
+    Falls back through progressively wider coordinates. Returns None on cold start.
+    """
+    if not story_id:
+        return None
+    conn = _get_db()
+    story = conn.execute(
+        "SELECT engg_domain, org_domain, industry, phase FROM stories WHERE story_id=?",
+        (story_id,)
+    ).fetchone()
+    if not story:
+        conn.close()
+        return None
+
+    engg, org, industry, phase = story
+
+    queries = [
+        ("full",       "engg_domain=? AND org_domain=? AND industry=? AND phase=?",
+                       (engg, org, industry, phase)),
+        ("no-industry","engg_domain=? AND org_domain=? AND phase=?",
+                       (engg, org, phase)),
+        ("engg-only",  "engg_domain=? AND phase=?",
+                       (engg, phase)),
+    ]
+    for _, where, params in queries:
+        row = conn.execute(
+            f"SELECT agent FROM capability_scores WHERE {where} "
+            "ORDER BY weighted_score DESC LIMIT 1",
+            params
+        ).fetchone()
+        if row:
+            conn.close()
+            return row[0]
+
+    conn.close()
+    return None
+
+
 def _reconcile_jobs() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
@@ -187,6 +519,12 @@ def _reconcile_jobs() -> None:
                 job["exit_code"] = exit_code if exit_code is not None else -1
             job["ended_at"] = now
             changed = True
+
+            if log_file and os.path.exists(log_file):
+                log_text = open(log_file).read()
+                job["micro_rework"] = _extract_micro_rework(log_text)
+                _write_capability_rating(job, log_text)
+
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.
             pass
@@ -336,6 +674,33 @@ def _static_scan(root: str = ".") -> dict:
     return result
 
 
+_INDUSTRY_KEYWORDS = {
+    "ott": ["ott", "over-the-top", "streaming service", "video platform"],
+    "streaming": ["streaming", "live stream", "media delivery"],
+    "fintech": ["fintech", "financial", "payment", "trading", "investment"],
+    "banking": ["banking", "bank", "loan", "mortgage", "deposit"],
+    "securities": ["securities", "stock", "equity", "portfolio", "brokerage"],
+    "healthcare": ["healthcare", "medical", "patient", "clinical", "health"],
+    "ecommerce": ["ecommerce", "e-commerce", "shop", "cart", "marketplace"],
+    "edtech": ["edtech", "education", "learning", "course", "student"],
+    "gaming": ["gaming", "game", "player", "leaderboard", "matchmaking"],
+}
+
+def _infer_industry(root: str = ".") -> str:
+    """Infers industry vertical from README content. Returns 'unknown' if no match."""
+    for fname in ("README.md", "README.rst", "README.txt"):
+        path = os.path.join(root, fname)
+        if os.path.exists(path):
+            try:
+                text = open(path).read().lower()
+                for industry, keywords in _INDUSTRY_KEYWORDS.items():
+                    if any(kw in text for kw in keywords):
+                        return industry
+            except Exception:
+                pass
+    return "unknown"
+
+
 def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     """Writes project-docs skeleton informed by static scan results.
 
@@ -482,6 +847,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
     .synlynk/logs/<job_id>.log. Returns the job dict.
     Raises ValueError for unknown agent names.
     """
+    if story_id:
+        best = _best_agent_for_story(story_id)
+        if best and best in AGENT_CAPABILITY_BASELINES:
+            agent = best
+
     if agent not in AGENT_CAPABILITY_BASELINES:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
 
@@ -538,6 +908,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
         "ended_at": None,
         "status": "running",
         "exit_code": None,
+        "dispatch_rework": _count_dispatch_rework(story_id or ""),
+        "micro_rework": 0,
     }
 
     jobs = _load_jobs()
@@ -1141,6 +1513,81 @@ def extract_tokens(output_text: str) -> tuple:
         total = int(m.group(1))
         return int(total * 0.8), int(total * 0.2)
     return 0, 0
+
+
+def extract_model_version(output_text: str, agent: str = None) -> str:
+    """
+    Tier 1: Parse model_version from # synlynk-meta block in agent output.
+    Tier 3 fallback: read default_model from .synlynk/config.json for the agent.
+    Returns 'unknown' if neither source provides a value.
+    """
+    # Tier 1: structured header
+    m = re.search(r"#\s*synlynk-meta.*?model_version\s*=\s*(\S+)", output_text,
+                  re.DOTALL | re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    # Tier 3: config default
+    if agent:
+        config = load_config()
+        agents_cfg = config.get("agents", {})
+        default = agents_cfg.get(agent, {}).get("default_model")
+        if default:
+            return default
+
+    return "unknown"
+
+
+def _extract_auto_signals(log_text: str, started_at: str = None,
+                           ended_at: str = None, exit_code: int = None) -> dict:
+    """Extracts objective quality signals from a completed job's log text."""
+    signals = {
+        "test_pass_rate": None,
+        "build_success": None,
+        "duration_seconds": None,
+    }
+
+    # Test pass rate — multiple runner formats
+    patterns = [
+        r"(\d+)\s+passed.*?(\d+)\s+(?:failed|error)",   # pytest: "47 passed, 3 failed"
+        r"Tests:\s+(\d+)\s+passed.*?(\d+)\s+failed",     # jest variant
+        r"(\d+)/(\d+)\s+tests?\s+passed",                # generic "47/50 tests passed"
+    ]
+    for pat in patterns:
+        m = re.search(pat, log_text, re.IGNORECASE)
+        if m:
+            passed = int(m.group(1))
+            second = int(m.group(2))
+            if "passed" in pat and "failed" in pat:
+                total = passed + second
+            else:
+                total = second
+            signals["test_pass_rate"] = passed / total if total else None
+            break
+
+    # All-passed shortcut: "X passed" with no failures mentioned
+    if signals["test_pass_rate"] is None:
+        m = re.search(r"(\d+)\s+passed", log_text, re.IGNORECASE)
+        if m and "failed" not in log_text.lower() and "error" not in log_text.lower():
+            signals["test_pass_rate"] = 1.0
+
+    # Build success from exit code
+    if exit_code is not None:
+        signals["build_success"] = (exit_code == 0)
+
+    # Duration
+    if started_at and ended_at:
+        try:
+            fmt = "%Y-%m-%dT%H:%M:%S"
+            import datetime as _dt
+            delta = _dt.datetime.strptime(ended_at, fmt) - _dt.datetime.strptime(started_at, fmt)
+            signals["duration_seconds"] = delta.total_seconds()
+        except Exception:
+            pass
+
+    return signals
+
+
 
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
@@ -2038,6 +2485,15 @@ def init(force: bool = False, agents: list = None,
     except EOFError:
         email = ""
 
+    # Industry vertical
+    inferred = _infer_industry()
+    try:
+        industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
+    except EOFError:
+        industry = inferred
+    if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
+        industry = "unknown"
+
     # ── Step 6: Finalise config ──────────────────────────────────────────────
     _print_step(6, "Finalising")
     synlynk_config_path = os.path.join("project-docs", ".synlynk_config.json")
@@ -2050,6 +2506,7 @@ def init(force: bool = False, agents: list = None,
     _update_config({
         "workgroup_agents": [a["name"] for a in functional],
         "workgroup_invite_email": email or None,
+        "industry": industry,
     })
 
     set_state("stopped")
@@ -2268,6 +2725,27 @@ def main() -> None:
     trio_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 
+    story_parser = subparsers.add_parser("story", help="Manage stories")
+    story_sub = story_parser.add_subparsers(dest="story_action")
+    story_create_parser = story_sub.add_parser("create", help="Create a story")
+    story_create_parser.add_argument("--title", required=True)
+    story_create_parser.add_argument("--engg", default="unknown", dest="engg_domain")
+    story_create_parser.add_argument("--org", default="unknown", dest="org_domain")
+    story_create_parser.add_argument("--phase", default="build")
+    story_sub.add_parser("list", help="List all stories")
+
+    score_parser = subparsers.add_parser("score", help="Manage capability scores")
+    score_sub = score_parser.add_subparsers(dest="score_action")
+    score_add_parser = score_sub.add_parser("add", help="Add a human quality rating")
+    score_add_parser.add_argument("story_id")
+    score_add_parser.add_argument("rating", type=float)
+    score_add_parser.add_argument("--note", default=None)
+    score_add_parser.add_argument("--rework", action="store_true")
+    score_list_parser = score_sub.add_parser("list", help="Show capability scores")
+    score_list_parser.add_argument("--engg", default=None)
+    score_list_parser.add_argument("--org", default=None)
+    score_list_parser.add_argument("--industry", default=None)
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -2322,6 +2800,16 @@ def main() -> None:
             cmd_run_trio(args.task, story_id=getattr(args, "story_id", None))
         else:
             run_parser.print_help()
+    elif args.command == "story":
+        if args.story_action == "create":
+            cmd_story_create(args.title, args.engg_domain, args.org_domain, args.phase)
+        elif args.story_action == "list":
+            cmd_story_list()
+    elif args.command == "score":
+        if args.score_action == "add":
+            cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
+        elif args.score_action == "list":
+            cmd_score_list(engg=args.engg, org=args.org, industry=args.industry)
     else:
         parser.print_help()
 

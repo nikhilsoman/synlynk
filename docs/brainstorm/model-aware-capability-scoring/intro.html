@@ -1,0 +1,47 @@
+<h2>Model-Aware Capability Scoring + Tokq Memory Units</h2>
+<p class="subtitle">Brainstorm session — synlynk v0.5.0 + Tokq Alpha</p>
+
+<div class="section" style="margin-top: 2rem;">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem;">
+      <div class="label" style="color: #7dd3fc; margin-bottom: 0.75rem;">The Gap (Gemini's Proposal)</div>
+      <p style="font-size: 0.9rem; line-height: 1.6; color: #94a3b8;">Current designs score agents at the CLI level — <code>claude-code</code>, <code>gemini-cli</code>, <code>codex</code>. But capability is a function of the <strong>underlying model</strong>, not the runner. Upgrading claude-3-5-sonnet → claude-3-7-sonnet carries over stale scores silently.</p>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem;">
+      <div class="label" style="color: #a78bfa; margin-bottom: 0.75rem;">The Bigger Picture (Tokq)</div>
+      <p style="font-size: 0.9rem; line-height: 1.6; color: #94a3b8;">A capability rating row — <code>(model_version, domain, phase, quality)</code> — anchored to a verifiable task is a unit of institutional knowledge. In Tokq, that's a tradeable <strong>Memory Unit</strong> with provenance, value, and marketplace discoverability.</p>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top: 1.5rem;">
+  <div class="label" style="margin-bottom: 1rem;">Three questions to resolve in this session</div>
+  <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+    <div style="display: flex; gap: 1rem; align-items: flex-start; padding: 0.9rem 1.2rem; background: rgba(125,211,252,0.06); border-left: 3px solid #7dd3fc; border-radius: 6px;">
+      <span style="font-size: 1.1rem; font-weight: 700; color: #7dd3fc; min-width: 1.5rem;">1</span>
+      <div>
+        <strong style="color: #e2e8f0;">Model version extraction</strong>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0.25rem 0 0 0;">How do we reliably capture which model executed a task? Self-report, scrape, or require explicit configuration?</p>
+      </div>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: flex-start; padding: 0.9rem 1.2rem; background: rgba(167,139,250,0.06); border-left: 3px solid #a78bfa; border-radius: 6px;">
+      <span style="font-size: 1.1rem; font-weight: 700; color: #a78bfa; min-width: 1.5rem;">2</span>
+      <div>
+        <strong style="color: #e2e8f0;">Domain taxonomy + quality signal</strong>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0.25rem 0 0 0;">Controlled vocabulary for domains. Automated signal vs. human rating as primary quality source.</p>
+      </div>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: flex-start; padding: 0.9rem 1.2rem; background: rgba(52,211,153,0.06); border-left: 3px solid #34d399; border-radius: 6px;">
+      <span style="font-size: 1.1rem; font-weight: 700; color: #34d399; min-width: 1.5rem;">3</span>
+      <div>
+        <strong style="color: #e2e8f0;">Capability profile as Tokq Memory Unit</strong>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0.25rem 0 0 0;">Schema, provenance, valuation. What makes a capability score discoverable and valuable in the marketplace?</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="text-align: center; color: #64748b; font-size: 0.85rem; margin-top: 2rem;">Starting with Question 1 →</p>
