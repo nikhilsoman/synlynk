@@ -1399,7 +1399,7 @@ def test_llm_enrich_uses_agent_name_not_cli_for_baselines(project_dir, monkeypat
 # ── Task 7: Init wizard tests ─────────────────────────────────────────────────
 
 def test_init_wizard_creates_synlynk_dir(tmp_path, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     monkeypatch.chdir(tmp_path)
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
     monkeypatch.setattr("builtins.input", lambda _: "")  # accept all defaults
@@ -1410,7 +1410,7 @@ def test_init_wizard_creates_synlynk_dir(tmp_path, monkeypatch):
     assert os.path.exists(".synlynk/config.json")
 
 def test_init_wizard_writes_project_docs(tmp_path, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     monkeypatch.chdir(tmp_path)
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
     monkeypatch.setattr("builtins.input", lambda _: "")
@@ -1422,7 +1422,7 @@ def test_init_wizard_writes_project_docs(tmp_path, monkeypatch):
     assert os.path.exists("project-docs/todo.md")
 
 def test_init_wizard_skips_existing_synlynk_without_force(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     monkeypatch.setattr("builtins.input", lambda _: "")
     monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
     original_roadmap = open("project-docs/roadmap.md").read()
@@ -1430,7 +1430,7 @@ def test_init_wizard_skips_existing_synlynk_without_force(project_dir, monkeypat
     assert open("project-docs/roadmap.md").read() == original_roadmap
 
 def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     import json as _json
     monkeypatch.chdir(tmp_path)
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
@@ -1445,7 +1445,7 @@ def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
 
 
 def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     launched = []
     class FakeProc:
         pid = 12345
@@ -1464,7 +1464,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
 
 
 def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
@@ -1475,13 +1475,13 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
 
 
 def test_dispatch_agent_unknown_agent_raises(project_dir):
-    import bin.synlynk as sl, pytest as _pytest
+    import synlynk as sl; import pytest as _pytest
     with _pytest.raises(ValueError, match="Unknown agent"):
         sl.dispatch_agent("unknownbot", "do thing")
 
 
 def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
@@ -1491,7 +1491,7 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
 
 
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
-    import bin.synlynk as sl
+    import synlynk as sl
     monkeypatch.setattr(sl, "_reconcile_jobs", lambda: None)  # bypass PID probing
     jobs = [
         {"id": "job-aaa", "agent": "claude", "story_id": "14", "task": "do thing",
@@ -1507,14 +1507,14 @@ def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
 
 
 def test_cmd_jobs_empty_output_when_no_jobs(project_dir, capsys):
-    import bin.synlynk as sl
+    import synlynk as sl
     sl.cmd_jobs()
     out = capsys.readouterr().out
     assert "No jobs" in out or out.strip() == "" or "no jobs" in out.lower()
 
 
 def test_cmd_logs_prints_log_content(project_dir, capsys):
-    import bin.synlynk as sl
+    import synlynk as sl
     os.makedirs(".synlynk/logs", exist_ok=True)
     job = {"id": "job-bbb", "agent": "claude", "status": "running",
             "log_file": ".synlynk/logs/job-bbb.log", "pid": 1,
@@ -1528,14 +1528,14 @@ def test_cmd_logs_prints_log_content(project_dir, capsys):
 
 
 def test_cmd_logs_error_for_missing_job(project_dir, capsys):
-    import bin.synlynk as sl
+    import synlynk as sl
     sl.cmd_logs("job-missing")
     out = capsys.readouterr().out
     assert "not found" in out.lower() or "no job" in out.lower()
 
 
 def test_cmd_shell_spawns_subshell(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     spawned = []
     def fake_run(cmd, **kw):
         spawned.append((cmd, kw))
@@ -1549,7 +1549,7 @@ def test_cmd_shell_spawns_subshell(project_dir, monkeypatch):
 
 
 def test_cmd_shell_injects_synlynk_env(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     captured_env = {}
     def fake_run(cmd, **kw):
         captured_env.update(kw.get("env", {}))
@@ -1563,7 +1563,7 @@ def test_cmd_shell_injects_synlynk_env(project_dir, monkeypatch):
 
 
 def test_cmd_launch_starts_agent_interactively(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     launched = []
     def fake_run(cmd, **kw):
         launched.append(cmd)
@@ -1576,21 +1576,21 @@ def test_cmd_launch_starts_agent_interactively(project_dir, monkeypatch):
 
 
 def test_cmd_launch_unknown_agent_prints_error(project_dir, capsys):
-    import bin.synlynk as sl
+    import synlynk as sl
     sl.cmd_launch("unknownbot", story_id="1")
     out = capsys.readouterr().out
     assert "unknown" in out.lower() or "not found" in out.lower()
 
 
 def test_cmd_launch_generates_agent_context(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
     sl.cmd_launch("claude", story_id="5")
     assert os.path.exists(".synlynk/context-claude.md")
 
 
 def test_cmd_run_trio_dispatches_three_agents(project_dir, monkeypatch):
-    import bin.synlynk as sl
+    import synlynk as sl
     dispatched = []
     def fake_dispatch(agent, task, story_id=None):
         dispatched.append(agent)
@@ -1615,7 +1615,7 @@ def test_cmd_run_trio_dispatches_three_agents(project_dir, monkeypatch):
 
 
 def test_cmd_run_trio_warns_with_fewer_than_three_agents(project_dir, monkeypatch, capsys):
-    import bin.synlynk as sl
+    import synlynk as sl
     monkeypatch.setattr(sl, "discover_agents", lambda **kw: [
         {"name": "claude", "functional": True, "roles": ["architect"],
          "cli": "claude", "version": "2", "capabilities": [], "non_interactive_flags": [],
