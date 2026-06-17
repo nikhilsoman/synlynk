@@ -1087,8 +1087,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_040(project_dir):
-    assert synlynk.VERSION == "0.4.0"
+def test_version_is_041(project_dir):
+    assert synlynk.VERSION == "0.4.1"
 
 
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):

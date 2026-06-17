@@ -11,7 +11,7 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 DB_PATH = ".synlynk/state/state.db"
 
