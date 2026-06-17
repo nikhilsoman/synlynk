@@ -816,6 +816,29 @@ def _infer_industry(root: str = ".") -> str:
     return "unknown"
 
 
+def _extract_synlynk_section(content: str, marker_style: str = "html") -> Optional[str]:
+    """Return the text inside synlynk markers, or the whole content for marker_style='none'."""
+    if marker_style == "none":
+        return content
+    if marker_style == "html":
+        m = re.search(
+            r'<!-- synlynk:start[^>]* -->(.*?)<!-- synlynk:end -->',
+            content, re.DOTALL
+        )
+    else:  # hash
+        m = re.search(
+            r'# synlynk:start[^\n]*\n(.*?)\n# synlynk:end',
+            content, re.DOTALL
+        )
+    return m.group(1) if m else None
+
+
+def _compute_section_sha(content: str) -> str:
+    """Return first 16 hex chars of SHA-256 of content string."""
+    import hashlib
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
 def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     """Writes project-docs skeleton informed by static scan results.
 
