@@ -287,12 +287,6 @@ AGENT_CAPABILITY_BASELINES = {
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
-    "gemini": {
-        "cli": "gemini",
-        "non_interactive_flags": ["--quiet"],
-        "roles": ["builder", "verifier"],
-        "strengths": ["multimodal", "large context", "search-augmented", "fast"],
-    },
     "codex": {
         "cli": "codex",
         "non_interactive_flags": [],
@@ -311,7 +305,6 @@ AGENT_CAPABILITY_BASELINES = {
 # Overridable in .synlynk/config.json under "agent_discovery_paths".
 AGENT_DISCOVERY_DEFAULTS = {
     "claude": os.path.expanduser("~/.claude"),
-    "gemini": os.path.expanduser("~/.gemini"),
     "codex": os.path.expanduser("~/.codex"),
     "agy": os.path.expanduser("~/.agy"),
 }
@@ -1449,15 +1442,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
     )
 
     _gemini_md = (
-        "# synlynk Gemini / AntiGravity (AGY) Instructions\n\n"
-        "> **Engine note:** This file is consumed by Gemini CLI (until 2026-06-18) and by AGY CLI\n"
-        "> (AntiGravity) thereafter. AGY CLI natively parses GEMINI.md as its repository-level\n"
-        "> system prompt. Do not write AGY-specific syntax that would break Gemini CLI parity\n"
-        "> during the transition window. After 2026-06-18, AGY CLI is the sole consumer —\n"
-        "> no migration of this file is needed.\n\n"
+        "# synlynk AGY (AntiGravity) Instructions\n\n"
         "## Identity & Attribution\n"
-        "- **Engines:** gemini-2.x / agy-2.x\n"
-        "- **Commit trailer:** `Co-Authored-By: Gemini <noreply@google.com>`\n"
+        "- **Engine:** agy-2.x\n"
+        "- **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`\n"
         "- **Branch prefix:** `feat/agy/` or `fix/agy/`\n\n"
         "## Domain Ownership\n"
         "| Domain | Owned by this agent | Notes |\n"

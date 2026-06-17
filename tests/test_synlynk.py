@@ -11,7 +11,7 @@ import synlynk
 
 def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
-    assert "gemini" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "agy" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
     for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
         assert "roles" in caps
@@ -466,12 +466,12 @@ def test_claude_template_enriched_content(tmp_path, monkeypatch):
 def test_gemini_template_enriched_content(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     content = synlynk._build_templates()["GEMINI.md"]
-    assert "Co-Authored-By: Gemini" in content
+    assert "Co-Authored-By: AGY" in content
+    assert "agy-2.x" in content
     assert "feat/agy/" in content
     assert "Git Worktree-First Policy" in content
     assert "Live Issues SOP" in content
-    assert "AGY CLI" in content
-    assert "2026-06-18" in content
+    assert "2026-06-18" not in content
 
 
 def test_agents_template_enriched_content(tmp_path, monkeypatch):
@@ -1468,7 +1468,7 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    job = sl.dispatch_agent("gemini", "write tests")
+    job = sl.dispatch_agent("agy", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
     assert "write tests" in content
