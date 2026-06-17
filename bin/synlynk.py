@@ -11,9 +11,28 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
-DB_PATH = ".synlynk/state/state.db"
+
+def _resolve_db_path() -> str:
+    """Centralise DB at ~/.synlynk/projects/<key>/state.db so all worktrees share one DB.
+
+    Key is an 8-char MD5 of the git repo root (common dir parent), falling back to CWD.
+    This avoids the .synlynk/state flat-file collision and the per-worktree isolation bug.
+    """
+    import hashlib as _h
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--git-common-dir"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+        root = os.path.abspath(os.path.join(common, ".."))
+    except Exception:
+        root = os.getcwd()
+    key = _h.md5(root.encode()).hexdigest()[:8]
+    return os.path.expanduser(f"~/.synlynk/projects/{key}/state.db")
+
+
+DB_PATH = _resolve_db_path()
 
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -287,12 +306,6 @@ AGENT_CAPABILITY_BASELINES = {
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
-    "gemini": {
-        "cli": "gemini",
-        "non_interactive_flags": ["--quiet"],
-        "roles": ["builder", "verifier"],
-        "strengths": ["multimodal", "large context", "search-augmented", "fast"],
-    },
     "codex": {
         "cli": "codex",
         "non_interactive_flags": [],
@@ -311,7 +324,6 @@ AGENT_CAPABILITY_BASELINES = {
 # Overridable in .synlynk/config.json under "agent_discovery_paths".
 AGENT_DISCOVERY_DEFAULTS = {
     "claude": os.path.expanduser("~/.claude"),
-    "gemini": os.path.expanduser("~/.gemini"),
     "codex": os.path.expanduser("~/.codex"),
     "agy": os.path.expanduser("~/.agy"),
 }
@@ -370,7 +382,7 @@ def load_config() -> dict:
         "owner": None,
         "repo": None,
         "project_id": None,
-        "agent_slots": {"claude": "claude", "agy": "gemini", "codex": "codex"},
+        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
         "team": None,
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
@@ -417,7 +429,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
     """
     probe_cmds = {
         "claude": [cli, "/status"],
-        "gemini": [cli, "--version"],
+        "agy":    [cli, "--version"],
         "codex":  [cli, "--version"],
     }
     cmd = probe_cmds.get(agent_name, [cli, "--version"])
@@ -426,6 +438,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
         text = (result.stdout or "") + (getattr(result, "stderr", "") or "")
         patterns = [
             r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
+            r"(agy-[\w.-]+)",
             r"(gemini-[\w.-]+)",
             r"(gpt-[\d.]+-[\w.-]+)",
             r"(codex-[\w-]+)",
@@ -820,6 +833,84 @@ def _infer_industry(root: str = ".") -> str:
             except Exception:
                 pass
     return "unknown"
+
+
+def _extract_synlynk_section(content: str, marker_style: str = "html") -> Optional[str]:
+    """Return the text inside synlynk markers, or the whole content for marker_style='none'."""
+    if marker_style == "none":
+        return content
+    if marker_style == "html":
+        m = re.search(
+            r'<!-- synlynk:start[^>]* -->(.*?)<!-- synlynk:end -->',
+            content, re.DOTALL
+        )
+    else:  # hash
+        m = re.search(
+            r'# synlynk:start[^\n]*\n(.*?)\n# synlynk:end',
+            content, re.DOTALL
+        )
+    return m.group(1) if m else None
+
+
+def _compute_section_sha(content: str) -> str:
+    """Return first 16 hex chars of SHA-256 of content string."""
+    import hashlib
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
+def _write_instruction_file(path: str, tool: str, content: str,
+                             marker_style: str = "html") -> bool:
+    """Write or update the synlynk block in an instruction file.
+
+    marker_style='none': synlynk owns the whole file (overwrites).
+    marker_style='html': <!-- synlynk:start --> markers.
+    marker_style='hash': # synlynk:start markers.
+
+    Behaviour:
+    1. File absent            → create with markers
+    2. File present, no marks → append block at end
+    3. File present, has marks → replace section between markers
+    Returns True always.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+    if marker_style == "none":
+        with open(path, "w") as f:
+            f.write(content)
+        return True
+
+    start = f'<!-- synlynk:start version="{VERSION}" tool="{tool}" -->'
+    end = "<!-- synlynk:end -->"
+    start_pattern = "<!-- synlynk:start"
+    if marker_style == "hash":
+        start = f'# synlynk:start version="{VERSION}"'
+        end = "# synlynk:end"
+        start_pattern = "# synlynk:start"
+
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(f"{start}\n{content}\n{end}\n")
+        return True
+
+    with open(path) as f:
+        existing = f.read()
+
+    if start_pattern in existing:
+        # Replace section between markers
+        if marker_style == "html":
+            pattern = r'<!-- synlynk:start[^>]* -->.*?<!-- synlynk:end -->'
+        else:
+            pattern = r'# synlynk:start[^\n]*\n.*?\n# synlynk:end'
+        replacement = f"{start}\n{content}\n{end}"
+        new_content = re.sub(pattern, replacement, existing, flags=re.DOTALL)
+        with open(path, "w") as f:
+            f.write(new_content)
+        return True
+
+    # Append block
+    with open(path, "a") as f:
+        f.write(f"\n{start}\n{content}\n{end}\n")
+    return True
 
 
 def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
@@ -1247,7 +1338,7 @@ def _update_config(updates: dict) -> None:
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
-_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
 _SCAN_SKIP_DIRS = {".git", "node_modules", ".synlynk", "project-docs",
                    "__pycache__", ".venv", ".next", "dist", "build"}
 
@@ -1329,7 +1420,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
                      owner: str = None, agent_slots: dict = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
-    _agent_slots = agent_slots or {"claude": "claude", "agy": "gemini", "codex": "codex"}
+    _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex"}  # AGY CLI binary is named 'agy' — update when binary is renamed
 
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
@@ -1449,15 +1540,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
     )
 
     _gemini_md = (
-        "# synlynk Gemini / AntiGravity (AGY) Instructions\n\n"
-        "> **Engine note:** This file is consumed by Gemini CLI (until 2026-06-18) and by AGY CLI\n"
-        "> (AntiGravity) thereafter. AGY CLI natively parses GEMINI.md as its repository-level\n"
-        "> system prompt. Do not write AGY-specific syntax that would break Gemini CLI parity\n"
-        "> during the transition window. After 2026-06-18, AGY CLI is the sole consumer —\n"
-        "> no migration of this file is needed.\n\n"
+        "# synlynk AGY (AntiGravity) Instructions\n\n"
         "## Identity & Attribution\n"
-        "- **Engines:** gemini-2.x / agy-2.x\n"
-        "- **Commit trailer:** `Co-Authored-By: Gemini <noreply@google.com>`\n"
+        "- **Engine:** agy-2.x\n"
+        "- **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`\n"
         "- **Branch prefix:** `feat/agy/` or `fix/agy/`\n\n"
         "## Domain Ownership\n"
         "| Domain | Owned by this agent | Notes |\n"
@@ -1536,12 +1622,6 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "GEMINI.md": _gemini_md,
         "AGENTS.md": _agents_md,
         "AI_INSTRUCTIONS.md": _ai_instructions_md,
-        ".cursorrules": (
-            "Read .synlynk/context.md at session start. "
-            "Mark tasks [x] in project-docs/todo.md when done. "
-            "Run `synlynk checkpoint` at task boundaries. "
-            "Attribute all project-docs edits with [@username]."
-        ),
         "config.json": json.dumps({
             "schema_version": 1,
             "budget": {"limit_usd": 10.0, "limit_requests": 100},
@@ -1555,6 +1635,328 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "sync_endpoint": None,
         }, indent=2),
     }
+
+def _build_cursor_mdc() -> str:
+    """Returns content for .cursor/rules/synlynk.mdc (Cursor MDC format, no markers)."""
+    return """\
+---
+description: synlynk project protocol — session start, task tracking, git discipline
+alwaysApply: true
+---
+
+# synlynk Protocol
+
+## Session Start
+1. Run `git config user.name` — this is your @username
+2. Read `.synlynk/context.md` — full project state snapshot
+3. Check `.synlynk/sentinel.md` for active alerts
+
+## During Session
+- Mark tasks `[x]` in `project-docs/todo.md` when complete — do not delete them
+- Append decisions to `project-docs/memory.md` with `[@username]` attribution
+- Run `synlynk checkpoint` at every task boundary
+
+## Git Worktree-First Policy
+Never commit directly to `main`/`master`. Create a worktree for every feature or fix:
+```
+git worktree add .worktrees/<name> feat/<name>
+git branch --show-current   # confirm before every commit
+```
+
+## At Session End
+- Append a summary entry to `project-docs/devlogs/<username>.md`
+- Run `synlynk checkpoint` one final time
+"""
+
+
+def _build_copilot_instructions() -> str:
+    """Returns content for .github/copilot-instructions.md synlynk block (plain markdown)."""
+    return """\
+## synlynk Session Protocol
+
+### Session Start
+1. Run `git config user.name` — this is your @username
+2. Read `.synlynk/context.md` — full project state snapshot
+3. Check `.synlynk/sentinel.md` for active alerts
+
+### During Session
+- Mark tasks `[x]` in `project-docs/todo.md` when complete — do not delete them
+- Append decisions to `project-docs/memory.md` with `[@username]` attribution
+- Run `synlynk checkpoint` at every task boundary
+- Never commit directly to `main`/`master` — create a worktree or branch first
+
+### At Session End
+- Append a summary entry to `project-docs/devlogs/<username>.md`
+- Run `synlynk checkpoint` one final time
+"""
+
+
+def _build_windsurf_rules() -> str:
+    """Returns content for .windsurfrules synlynk block (terse directive format)."""
+    return """\
+Read .synlynk/context.md at session start.
+Mark tasks [x] in project-docs/todo.md when complete.
+Run `synlynk checkpoint` at task boundaries.
+Never commit directly to main or master — use a worktree.
+Append decisions to project-docs/memory.md with [@username].
+Check .synlynk/sentinel.md for active alerts before starting work.
+"""
+
+_INSTRUCTIONS_MANIFEST = ".synlynk/instructions.json"
+
+_INSTRUCTION_TARGETS = [
+    # (path, tool, marker_style, detection_fn)
+    # detection_fn: called in init() to decide whether to write the file.
+    ("CLAUDE.md",                          "claude",    "html", lambda: True),
+    ("GEMINI.md",                          "agy",       "html", lambda: True),
+    ("AGENTS.md",                          "codex",     "html", lambda: True),
+    (".cursor/rules/synlynk.mdc",          "cursor",    "none", lambda: os.path.isdir(".cursor")),
+    (".github/copilot-instructions.md",    "copilot",   "html", lambda: os.path.isdir(".github")),
+    (".windsurfrules",                     "windsurf",  "hash", lambda: True),
+    ("AI_INSTRUCTIONS.md",                 "universal", "html", lambda: True),
+]
+
+
+def _load_instruction_manifest() -> dict:
+    """Returns files dict from .synlynk/instructions.json, or {} if absent."""
+    if not os.path.exists(_INSTRUCTIONS_MANIFEST):
+        return {}
+    try:
+        return json.load(open(_INSTRUCTIONS_MANIFEST)).get("files", {})
+    except (json.JSONDecodeError, KeyError):
+        return {}
+
+
+def _write_instruction_manifest(entries: dict) -> None:
+    """Write .synlynk/instructions.json with schema_version, synlynk_version, and file SHAs."""
+    os.makedirs(os.path.dirname(_INSTRUCTIONS_MANIFEST), exist_ok=True)
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
+    existing = _load_instruction_manifest()
+    existing.update({
+        path: {
+            "tool": info["tool"],
+            "sha": info["sha"],
+            "last_checked": ts,
+        }
+        for path, info in entries.items()
+    })
+    manifest = {
+        "schema_version": 1,
+        "generated_at": ts,
+        "synlynk_version": VERSION,
+        "files": existing,
+    }
+    with open(_INSTRUCTIONS_MANIFEST, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+_MARKER_STYLE_FOR_TOOL = {
+    "claude":    "html",
+    "agy":       "html",
+    "codex":     "html",
+    "cursor":    "none",
+    "copilot":   "html",
+    "windsurf":  "hash",
+    "universal": "html",
+}
+
+
+def _check_instruction_drift() -> list:
+    """Check tracked instruction files for external modifications to the synlynk section.
+
+    Fires INSTRUCTION_DRIFT sentinel entries for any drifted file.
+    Updates manifest SHA after each check (deduplicates re-firing).
+    Returns list of drifted file paths.
+    """
+    manifest_data = _load_instruction_manifest()
+    if not manifest_data:
+        return []
+
+    drifted = []
+    updated_entries = {}
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
+
+    for fpath, info in manifest_data.items():
+        tool = info.get("tool", "unknown")
+        recorded_sha = info.get("sha", "")
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+
+        if not os.path.exists(fpath):
+            updated_entries[fpath] = {**info, "last_checked": ts}
+            continue
+
+        file_content = open(fpath).read()
+        section = _extract_synlynk_section(file_content, marker_style)
+        if section is None:
+            updated_entries[fpath] = {**info, "last_checked": ts}
+            continue
+
+        current_sha = _compute_section_sha(section)
+        updated_entries[fpath] = {**info, "sha": current_sha, "last_checked": ts}
+
+        if current_sha != recorded_sha:
+            drifted.append(fpath)
+            _write_sentinel_alert(
+                "WARN", "INSTRUCTION_DRIFT",
+                f"{fpath} (tool: {tool}) — synlynk section modified externally. "
+                f"Run `synlynk instructions diff {fpath}` to review. "
+                f"Run `synlynk instructions update {fpath}` to reset. "
+                f"[ack: synlynk instructions ack {fpath}]"
+            )
+
+    _write_instruction_manifest(updated_entries)
+    return drifted
+
+
+def cmd_instructions_status() -> None:
+    """Print status table for all tracked instruction files."""
+    manifest_data = _load_instruction_manifest()
+    if not manifest_data:
+        print("  No instruction manifest found. Run `synlynk init` first.")
+        return
+
+    col = {"file": 38, "tool": 10, "status": 16, "checked": 12}
+    header = (f"{'File':<{col['file']}}{'Tool':<{col['tool']}}"
+              f"{'Status':<{col['status']}}{'Last checked':<{col['checked']}}")
+    print(f"\n{_BOLD}{header}{_RESET}")
+    print("─" * (col["file"] + col["tool"] + col["status"] + col["checked"]))
+
+    for fpath, info in sorted(manifest_data.items()):
+        tool = info.get("tool", "?")
+        recorded_sha = info.get("sha", "")
+        checked = info.get("last_checked", "")[:10]
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+
+        if not os.path.exists(fpath):
+            status = f"{_YELLOW}✗ missing{_RESET}"
+        else:
+            file_content = open(fpath).read()
+            section = _extract_synlynk_section(file_content, marker_style)
+            if section is None:
+                status = f"{_YELLOW}? no markers{_RESET}"
+            elif _compute_section_sha(section) != recorded_sha:
+                status = f"{_YELLOW}⚠ drifted{_RESET}"
+            else:
+                has_user = bool(re.sub(
+                    r'<!-- synlynk:start.*?<!-- synlynk:end -->', '', file_content, flags=re.DOTALL
+                ).strip() if marker_style == "html" else re.sub(
+                    r'# synlynk:start.*?# synlynk:end', '', file_content, flags=re.DOTALL
+                ).strip())
+                status = (f"{_DIM}+ user-content{_RESET}" if has_user
+                          else f"{_GREEN}✓ clean{_RESET}")
+
+        print(f"{fpath:<{col['file']}}{tool:<{col['tool']}}"
+              f"{status:<{col['status'] + 10}}{checked}")
+    print()
+
+
+def cmd_instructions_diff(file_path: Optional[str] = None) -> None:
+    """Show user/tool content outside the synlynk section for deliberate review."""
+    manifest_data = _load_instruction_manifest()
+    if not manifest_data:
+        print("  No instruction manifest found. Run `synlynk init` first.")
+        return
+
+    targets = ([file_path] if file_path else list(manifest_data.keys()))
+    for fpath in targets:
+        if fpath not in manifest_data:
+            print(f"  {fpath}: not tracked in manifest")
+            continue
+        if not os.path.exists(fpath):
+            print(f"  {fpath}: {_YELLOW}missing{_RESET}")
+            continue
+        info = manifest_data[fpath]
+        tool = info.get("tool", "unknown")
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+        file_content = open(fpath).read()
+
+        print(f"\n{_BOLD}── {fpath} (tool: {tool}) ──{_RESET}")
+
+        if marker_style == "html":
+            user_content = re.sub(
+                r'<!-- synlynk:start.*?<!-- synlynk:end -->', '', file_content, flags=re.DOTALL
+            ).strip()
+        elif marker_style == "hash":
+            user_content = re.sub(
+                r'# synlynk:start.*?# synlynk:end', '', file_content, flags=re.DOTALL
+            ).strip()
+        else:
+            user_content = ""
+
+        if user_content:
+            print(f"{_DIM}User/tool content outside synlynk section:{_RESET}")
+            print(user_content)
+        else:
+            print(f"{_DIM}No user content outside synlynk section.{_RESET}")
+
+
+def cmd_instructions_update(file_path: Optional[str] = None,
+                             new_content: Optional[str] = None) -> None:
+    """Re-generate the synlynk section for file(s) and refresh manifest SHAs.
+
+    file_path=None updates all tracked files.
+    new_content is used in tests; production callers pass None and content
+    is rebuilt from the relevant template function.
+    """
+    manifest_data = _load_instruction_manifest()
+    targets = ([file_path] if file_path else list(manifest_data.keys()))
+
+    _tool_content_builders = {
+        "cursor":    (_build_cursor_mdc,            "none"),
+        "copilot":   (_build_copilot_instructions,  "html"),
+        "windsurf":  (_build_windsurf_rules,        "hash"),
+        "universal": (lambda: _build_templates().get("AI_INSTRUCTIONS.md", ""), "html"),
+    }
+
+    updated = {}
+    for fpath in targets:
+        if fpath not in manifest_data:
+            print(f"  {fpath}: not tracked — skipping")
+            continue
+        info = manifest_data[fpath]
+        tool = info.get("tool", "unknown")
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+
+        if new_content is not None:
+            content = new_content
+        elif tool in _tool_content_builders:
+            builder, _ = _tool_content_builders[tool]
+            content = builder()
+        else:
+            templates = _build_templates()
+            fname = os.path.basename(fpath)
+            content = templates.get(fname, "")
+
+        _write_instruction_file(fpath, tool, content, marker_style)
+
+        if os.path.exists(fpath):
+            section = _extract_synlynk_section(open(fpath).read(), marker_style)
+            if section:
+                updated[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
+
+        print(f"  {_GREEN}✓{_RESET} Updated {fpath}")
+
+    if updated:
+        _write_instruction_manifest(updated)
+
+
+def cmd_instructions_ack(file_path: str) -> None:
+    """Acknowledge an INSTRUCTION_DRIFT event for a specific file.
+
+    Removes matching INSTRUCTION_DRIFT lines from sentinel.md.
+    """
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        return
+    with open(sentinel_file) as f:
+        lines = f.readlines()
+    filtered = [
+        l for l in lines
+        if not ("INSTRUCTION_DRIFT" in l and file_path in l)
+    ]
+    with open(sentinel_file, "w") as f:
+        f.writelines(filtered)
+    print(f"  {_GREEN}✓{_RESET} Acknowledged drift for {file_path}")
+
 
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
@@ -2590,24 +2992,56 @@ def init(force: bool = False, agents: list = None,
     else:
         print(f"  {_DIM}All project-docs already exist — skipped (use --force to overwrite){_RESET}")
 
-    # Write agent instruction files.
+    # Write agent instruction files using _write_instruction_file().
     agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex"}
     templates = _build_templates(org=org, repo=repo, project_id=project_id)
+
+    # Core trio: only write if agent was discovered as functional.
+    trio_content = {
+        "CLAUDE.md":   (templates.get("CLAUDE.md", ""), "html"),
+        "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
+        "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
+    }
     _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
-    for filename, content in templates.items():
-        required = _agent_guards.get(filename)
-        if required and required not in agent_set:
+    for fname, (content, mstyle) in trio_content.items():
+        required = _agent_guards[fname]
+        if required not in agent_set:
             continue
-        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", "AGENTS.md", ".cursorrules"):
-            file_path = filename
-        elif filename == "config.json":
-            file_path = os.path.join(".synlynk", filename)
-        else:
-            file_path = os.path.join("project-docs", filename)
-        if os.path.exists(file_path) and not force:
+        _write_instruction_file(fname, required, content, mstyle)
+
+    # Extended targets: written based on environment detection.
+    # Guards are sourced from _INSTRUCTION_TARGETS[i][3] (detection_fn).
+    _target_detection = {fpath: fn for fpath, _, _, fn in _INSTRUCTION_TARGETS}
+    extended = [
+        (".cursor/rules/synlynk.mdc",       "cursor",    "none", _build_cursor_mdc()),
+        (".github/copilot-instructions.md",  "copilot",   "html", _build_copilot_instructions()),
+        (".windsurfrules",                   "windsurf",  "hash", _build_windsurf_rules()),
+        ("AI_INSTRUCTIONS.md",              "universal",  "html", templates.get("AI_INSTRUCTIONS.md", "")),
+    ]
+    for fpath, tool, mstyle, content in extended:
+        if _target_detection[fpath]():
+            # marker_style='none' means synlynk owns the whole file — always overwrites
+            _write_instruction_file(fpath, tool, content, mstyle)
+
+    # Write manifest of all tracked files with their SHAs.
+    manifest_entries = {}
+    for fpath, tool, mstyle, _ in _INSTRUCTION_TARGETS:
+        if not os.path.exists(fpath):
             continue
-        with open(file_path, "w") as f:
-            f.write(content)
+        file_content = open(fpath).read()
+        section = _extract_synlynk_section(file_content, mstyle)
+        if section is not None:
+            manifest_entries[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
+    if manifest_entries:
+        _write_instruction_manifest(manifest_entries)
+
+    # Write config.json if needed.
+    config_json_content = templates.get("config.json", "")
+    if config_json_content:
+        config_path = os.path.join(".synlynk", "config.json")
+        if not os.path.exists(config_path) or force:
+            with open(config_path, "w") as f:
+                f.write(config_json_content)
 
     # ── Step 4: LLM enrichment offer ────────────────────────────────────────
     _print_step(4, "LLM enrichment (optional)")
@@ -2780,6 +3214,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         })
         check_sentinel_patterns(output_text=output_text, exit_code=exit_code,
                                 cmd=' '.join(cmd_args))
+        _check_instruction_drift()
         daemon = WatchDaemon()
         set_state("watching" if daemon._is_running() else "stopped")
 
@@ -2839,7 +3274,7 @@ def main() -> None:
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch an agent to run a task in the background")
     dispatch_parser.add_argument("agent",
-        help="Agent name: claude, gemini, codex, agy")
+        help="Agent name: claude, agy, codex")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -2862,7 +3297,7 @@ def main() -> None:
 
     launch_parser = subparsers.add_parser(
         "launch", help="Launch an agent CLI interactively with pre-loaded context")
-    launch_parser.add_argument("agent", help="Agent name: claude, gemini, codex, agy")
+    launch_parser.add_argument("agent", help="Agent name: claude, agy, codex")
     launch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 
@@ -2906,6 +3341,26 @@ def main() -> None:
     pr_parser = subparsers.add_parser("pr", help="PR workflow commands")
     pr_sub = pr_parser.add_subparsers(dest="pr_action")
     pr_sub.add_parser("check", help="Block PR if model versions are unattested")
+
+    instructions_parser = subparsers.add_parser(
+        "instructions", help="Manage synlynk instruction files across AI tools"
+    )
+    instructions_sub = instructions_parser.add_subparsers(dest="instructions_action")
+    instructions_sub.add_parser("status", help="Show status of all tracked instruction files")
+    instr_diff_parser = instructions_sub.add_parser(
+        "diff", help="Show user/tool content outside synlynk sections"
+    )
+    instr_diff_parser.add_argument("file", nargs="?", default=None,
+                                   help="Specific file to diff (default: all)")
+    instr_update_parser = instructions_sub.add_parser(
+        "update", help="Re-generate synlynk sections and refresh manifest"
+    )
+    instr_update_parser.add_argument("file", nargs="?", default=None,
+                                     help="Specific file to update (default: all)")
+    instr_ack_parser = instructions_sub.add_parser(
+        "ack", help="Acknowledge an INSTRUCTION_DRIFT sentinel event"
+    )
+    instr_ack_parser.add_argument("file", help="File to acknowledge drift for")
 
     args = parser.parse_args()
 
@@ -2977,6 +3432,18 @@ def main() -> None:
     elif args.command == "pr":
         if args.pr_action == "check":
             cmd_pr_check()
+    elif args.command == "instructions":
+        action = getattr(args, "instructions_action", None)
+        if action == "status" or action is None:
+            cmd_instructions_status()
+        elif action == "diff":
+            cmd_instructions_diff(getattr(args, "file", None))
+        elif action == "update":
+            cmd_instructions_update(getattr(args, "file", None))
+        elif action == "ack":
+            cmd_instructions_ack(args.file)
+        else:
+            instructions_parser.print_help()
     else:
         parser.print_help()
 

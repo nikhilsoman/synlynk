@@ -18,6 +18,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [09](./09-pr30-e2e-test-suite.md) | PR #30 — The E2E Safety Net | [#30](https://github.com/nikhilsoman/synlynk/pull/30) | open |
 | [10](./10-brainstorm-hybrid-workgroup-imperatives.md) | The Four Imperatives — Redesigning synlynk's Core Contracts | — | 2026-06-14 |
 | [11](./11-pr39-v0.4.0-hybrid-workgroup-bootstrap.md) | PR #39 — v0.4.0: The Hybrid Workgroup Bootstrap | [#39](https://github.com/nikhilsoman/synlynk/pull/39) | open |
+| [12](./12-pr42-v0.6.0-job-control.md) | PR #42 — v0.6.0: Job Control + Model-Aware Capability Engine | [#42](https://github.com/nikhilsoman/synlynk/pull/42) | open |
+| [13](./13-v0.4.1-instruction-reach.md) | v0.4.1 — Instruction Reach: Context Injection Across Every IDE | TBD | 2026-06-17 |
 
 ## Per-PR Post Template
 

@@ -3,6 +3,13 @@ import json
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolated_db(tmp_path, monkeypatch):
+    """Redirect DB_PATH to a per-test temp file so tests never share state.db."""
+    import synlynk
+    monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
+
+
 @pytest.fixture
 def project_dir(tmp_path, monkeypatch):
     """Creates a minimal synlynk project structure and chdirs into it."""

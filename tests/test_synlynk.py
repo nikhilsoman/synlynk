@@ -11,7 +11,7 @@ import synlynk
 
 def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
-    assert "gemini" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "agy" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
     for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
         assert "roles" in caps
@@ -217,14 +217,17 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     assert "context.md" in content
 
 
-def test_init_skips_existing_without_force(tmp_path, monkeypatch):
+def test_init_appends_to_existing_without_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda _: "")
     monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=False)
-    assert (tmp_path / "CLAUDE.md").read_text() == "MY CUSTOM CONTENT"
+    # _write_instruction_file appends the synlynk block without removing user content
+    text = (tmp_path / "CLAUDE.md").read_text()
+    assert "MY CUSTOM CONTENT" in text
+    assert "<!-- synlynk:start" in text
 
 
 def test_init_force_overwrites_existing(tmp_path, monkeypatch):
@@ -443,7 +446,7 @@ def test_build_templates_returns_required_keys(tmp_path, monkeypatch):
     templates = synlynk._build_templates()
     for key in ["CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md", "AGENTS.md",
                  "roadmap.md", "todo.md", "memory.md", "costs.md",
-                 ".cursorrules", "config.json"]:
+                 "config.json"]:
         assert key in templates, f"missing key: {key}"
 
 
@@ -466,12 +469,12 @@ def test_claude_template_enriched_content(tmp_path, monkeypatch):
 def test_gemini_template_enriched_content(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     content = synlynk._build_templates()["GEMINI.md"]
-    assert "Co-Authored-By: Gemini" in content
+    assert "Co-Authored-By: AGY" in content
+    assert "agy-2.x" in content
     assert "feat/agy/" in content
     assert "Git Worktree-First Policy" in content
     assert "Live Issues SOP" in content
-    assert "AGY CLI" in content
-    assert "2026-06-18" in content
+    assert "2026-06-18" not in content
 
 
 def test_agents_template_enriched_content(tmp_path, monkeypatch):
@@ -658,7 +661,7 @@ def test_load_config_has_new_defaults(tmp_path, monkeypatch):
     assert config["owner"] is None
     assert config["project_id"] is None
     assert config["agent_slots"]["claude"] == "claude"
-    assert config["agent_slots"]["agy"] == "gemini"
+    assert config["agent_slots"]["agy"] == "agy"
     assert config["agent_slots"]["codex"] == "codex"
 
 
@@ -1084,8 +1087,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_040(project_dir):
-    assert synlynk.VERSION == "0.4.0"
+def test_version_is_041(project_dir):
+    assert synlynk.VERSION == "0.4.1"
 
 
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):
@@ -1468,7 +1471,7 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    job = sl.dispatch_agent("gemini", "write tests")
+    job = sl.dispatch_agent("agy", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
     assert "write tests" in content
