@@ -13,7 +13,26 @@ import sqlite3 as _sqlite3
 
 VERSION = "0.4.1"
 
-DB_PATH = ".synlynk/state/state.db"
+
+def _resolve_db_path() -> str:
+    """Centralise DB at ~/.synlynk/projects/<key>/state.db so all worktrees share one DB.
+
+    Key is an 8-char MD5 of the git repo root (common dir parent), falling back to CWD.
+    This avoids the .synlynk/state flat-file collision and the per-worktree isolation bug.
+    """
+    import hashlib as _h
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--git-common-dir"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+        root = os.path.abspath(os.path.join(common, ".."))
+    except Exception:
+        root = os.getcwd()
+    key = _h.md5(root.encode()).hexdigest()[:8]
+    return os.path.expanduser(f"~/.synlynk/projects/{key}/state.db")
+
+
+DB_PATH = _resolve_db_path()
 
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
