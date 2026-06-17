@@ -1603,12 +1603,6 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "GEMINI.md": _gemini_md,
         "AGENTS.md": _agents_md,
         "AI_INSTRUCTIONS.md": _ai_instructions_md,
-        ".cursorrules": (
-            "Read .synlynk/context.md at session start. "
-            "Mark tasks [x] in project-docs/todo.md when done. "
-            "Run `synlynk checkpoint` at task boundaries. "
-            "Attribute all project-docs edits with [@username]."
-        ),
         "config.json": json.dumps({
             "schema_version": 1,
             "budget": {"limit_usd": 10.0, "limit_requests": 100},
@@ -2801,19 +2795,12 @@ def init(force: bool = False, agents: list = None,
     }
     for fpath, tool, mstyle, content in extended:
         if ext_guards[fpath]():
+            # marker_style='none' means synlynk owns the whole file — always overwrites
             _write_instruction_file(fpath, tool, content, mstyle)
 
     # Write manifest of all tracked files with their SHAs.
     manifest_entries = {}
-    for fpath, tool, mstyle, _ in [
-        ("CLAUDE.md",                        "claude",    "html", None),
-        ("GEMINI.md",                        "agy",       "html", None),
-        ("AGENTS.md",                        "codex",     "html", None),
-        (".cursor/rules/synlynk.mdc",        "cursor",    "none", None),
-        (".github/copilot-instructions.md",  "copilot",   "html", None),
-        (".windsurfrules",                   "windsurf",  "hash", None),
-        ("AI_INSTRUCTIONS.md",               "universal", "html", None),
-    ]:
+    for fpath, tool, mstyle, _ in _INSTRUCTION_TARGETS:
         if not os.path.exists(fpath):
             continue
         file_content = open(fpath).read()

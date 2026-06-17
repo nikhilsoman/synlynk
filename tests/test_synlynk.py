@@ -217,7 +217,7 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     assert "context.md" in content
 
 
-def test_init_skips_existing_without_force(tmp_path, monkeypatch):
+def test_init_appends_to_existing_without_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda _: "")
     monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
@@ -227,6 +227,7 @@ def test_init_skips_existing_without_force(tmp_path, monkeypatch):
     # _write_instruction_file appends the synlynk block without removing user content
     text = (tmp_path / "CLAUDE.md").read_text()
     assert "MY CUSTOM CONTENT" in text
+    assert "<!-- synlynk:start" in text
 
 
 def test_init_force_overwrites_existing(tmp_path, monkeypatch):
@@ -445,7 +446,7 @@ def test_build_templates_returns_required_keys(tmp_path, monkeypatch):
     templates = synlynk._build_templates()
     for key in ["CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md", "AGENTS.md",
                  "roadmap.md", "todo.md", "memory.md", "costs.md",
-                 ".cursorrules", "config.json"]:
+                 "config.json"]:
         assert key in templates, f"missing key: {key}"
 
 
