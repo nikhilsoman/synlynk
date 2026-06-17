@@ -363,3 +363,59 @@ def test_cmd_instructions_status_shows_missing(tmp_path, monkeypatch, capsys):
     sl.cmd_instructions_status()
     out = capsys.readouterr().out
     assert "missing" in out
+
+
+def test_cmd_instructions_update_replaces_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    old = '# User\n<!-- synlynk:start version="0.4.0" tool="claude" -->\nold content\n<!-- synlynk:end -->\n'
+    open("CLAUDE.md", "w").write(old)
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.0",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": "old_sha", "last_checked": "2026-06-17"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    sl = importlib.import_module("synlynk")
+    sl.cmd_instructions_update("CLAUDE.md", new_content="updated content")
+    text = open("CLAUDE.md").read()
+    assert "old content" not in text
+    assert "updated content" in text
+    assert "# User" in text  # user content preserved
+    updated_manifest = json.load(open(".synlynk/instructions.json"))
+    assert updated_manifest["files"]["CLAUDE.md"]["sha"] != "old_sha"
+
+
+def test_cmd_instructions_ack_suppresses_sentinel(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import importlib
+    # Seed sentinel.md with a drift event for CLAUDE.md
+    open(".synlynk/sentinel.md", "w").write(
+        "# Sentinel Alerts\n"
+        "- [WARN] [2026-06-17 10:00] INSTRUCTION_DRIFT: CLAUDE.md (tool: claude) — synlynk section modified externally.\n"
+    )
+    sl = importlib.import_module("synlynk")
+    sl.cmd_instructions_ack("CLAUDE.md")
+    alerts = open(".synlynk/sentinel.md").read()
+    assert "CLAUDE.md" not in alerts
+
+
+def test_cmd_instructions_diff_shows_user_content(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    content = '# User rules here\n<!-- synlynk:start version="0.4.1" tool="claude" -->\nsynlynk block\n<!-- synlynk:end -->\n'
+    open("CLAUDE.md", "w").write(content)
+    sl = importlib.import_module("synlynk")
+    sha = sl._compute_section_sha("\nsynlynk block\n")
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": sha, "last_checked": "2026-06-17"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    sl.cmd_instructions_diff("CLAUDE.md")
+    out = capsys.readouterr().out
+    assert "User rules here" in out

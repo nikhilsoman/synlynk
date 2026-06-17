@@ -1829,6 +1829,115 @@ def cmd_instructions_status() -> None:
     print()
 
 
+def cmd_instructions_diff(file_path: Optional[str] = None) -> None:
+    """Show user/tool content outside the synlynk section for deliberate review."""
+    manifest_data = _load_instruction_manifest()
+    if not manifest_data:
+        print("  No instruction manifest found. Run `synlynk init` first.")
+        return
+
+    targets = ([file_path] if file_path else list(manifest_data.keys()))
+    for fpath in targets:
+        if fpath not in manifest_data:
+            print(f"  {fpath}: not tracked in manifest")
+            continue
+        if not os.path.exists(fpath):
+            print(f"  {fpath}: {_YELLOW}missing{_RESET}")
+            continue
+        info = manifest_data[fpath]
+        tool = info.get("tool", "unknown")
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+        file_content = open(fpath).read()
+
+        print(f"\n{_BOLD}── {fpath} (tool: {tool}) ──{_RESET}")
+
+        if marker_style == "html":
+            user_content = re.sub(
+                r'<!-- synlynk:start.*?<!-- synlynk:end -->', '', file_content, flags=re.DOTALL
+            ).strip()
+        elif marker_style == "hash":
+            user_content = re.sub(
+                r'# synlynk:start.*?# synlynk:end', '', file_content, flags=re.DOTALL
+            ).strip()
+        else:
+            user_content = ""
+
+        if user_content:
+            print(f"{_DIM}User/tool content outside synlynk section:{_RESET}")
+            print(user_content)
+        else:
+            print(f"{_DIM}No user content outside synlynk section.{_RESET}")
+
+
+def cmd_instructions_update(file_path: Optional[str] = None,
+                             new_content: Optional[str] = None) -> None:
+    """Re-generate the synlynk section for file(s) and refresh manifest SHAs.
+
+    file_path=None updates all tracked files.
+    new_content is used in tests; production callers pass None and content
+    is rebuilt from the relevant template function.
+    """
+    manifest_data = _load_instruction_manifest()
+    targets = ([file_path] if file_path else list(manifest_data.keys()))
+
+    _tool_content_builders = {
+        "cursor":    (_build_cursor_mdc,            "none"),
+        "copilot":   (_build_copilot_instructions,  "html"),
+        "windsurf":  (_build_windsurf_rules,        "hash"),
+        "universal": (lambda: _build_templates().get("AI_INSTRUCTIONS.md", ""), "html"),
+    }
+
+    updated = {}
+    for fpath in targets:
+        if fpath not in manifest_data:
+            print(f"  {fpath}: not tracked — skipping")
+            continue
+        info = manifest_data[fpath]
+        tool = info.get("tool", "unknown")
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+
+        if new_content is not None:
+            content = new_content
+        elif tool in _tool_content_builders:
+            builder, _ = _tool_content_builders[tool]
+            content = builder()
+        else:
+            templates = _build_templates()
+            fname = os.path.basename(fpath)
+            content = templates.get(fname, "")
+
+        _write_instruction_file(fpath, tool, content, marker_style)
+
+        if os.path.exists(fpath):
+            section = _extract_synlynk_section(open(fpath).read(), marker_style)
+            if section:
+                updated[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
+
+        print(f"  {_GREEN}✓{_RESET} Updated {fpath}")
+
+    if updated:
+        _write_instruction_manifest(updated)
+
+
+def cmd_instructions_ack(file_path: str) -> None:
+    """Acknowledge an INSTRUCTION_DRIFT event for a specific file.
+
+    Removes matching INSTRUCTION_DRIFT lines from sentinel.md.
+    """
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        return
+    with open(sentinel_file) as f:
+        lines = f.readlines()
+    filtered = [
+        l for l in lines
+        if not ("INSTRUCTION_DRIFT" in l and file_path in l)
+    ]
+    with open(sentinel_file, "w") as f:
+        f.writelines(filtered)
+    print(f"  {_GREEN}✓{_RESET} Acknowledged drift for {file_path}")
+
+
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
     telemetry_file = ".synlynk/telemetry.json"
