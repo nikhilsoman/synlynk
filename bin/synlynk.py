@@ -1352,6 +1352,79 @@ _AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"
 _SCAN_SKIP_DIRS = {".git", "node_modules", ".synlynk", "project-docs",
                    "__pycache__", ".venv", ".next", "dist", "build"}
 
+_SOURCE_EXTENSIONS = {
+    ".py": "python",
+    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript",
+    ".ts": "typescript", ".tsx": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".rb": "ruby",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".sh": "shell",
+}
+
+_SOURCE_ENTRY_POINTS = {
+    "main.py", "app.py", "server.py", "index.js", "index.ts", "main.go",
+    "lib.rs", "main.rs", "app.rb", "manage.py", "wsgi.py", "asgi.py", "__init__.py",
+}
+
+_SYMBOL_PATTERNS = {
+    "python": [
+        (re.compile(r"^async def (\w+)"), "async_function"),
+        (re.compile(r"^def (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+        (re.compile(r"^([A-Z_]{2,})\s*="), "constant"),
+    ],
+    "javascript": [
+        (re.compile(r"^export (?:default )?(?:async )?function (\w+)"), "function"),
+        (re.compile(r"^export (?:default )?class (\w+)"), "class"),
+        (re.compile(r"^export const (\w+)"), "constant"),
+        (re.compile(r"^function (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+    ],
+    "typescript": [
+        (re.compile(r"^export (?:default )?(?:async )?function (\w+)"), "function"),
+        (re.compile(r"^export (?:default )?class (\w+)"), "class"),
+        (re.compile(r"^export interface (\w+)"), "interface"),
+        (re.compile(r"^export type (\w+)"), "type"),
+        (re.compile(r"^export enum (\w+)"), "enum"),
+        (re.compile(r"^export const (\w+)"), "constant"),
+        (re.compile(r"^function (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+    ],
+    "go": [
+        (re.compile(r"^func (?:\(\w+ \*?\w+\) )?(\w+)"), "function"),
+        (re.compile(r"^type (\w+) struct"), "struct"),
+        (re.compile(r"^type (\w+) interface"), "interface"),
+    ],
+    "rust": [
+        (re.compile(r"^pub fn (\w+)"), "function"),
+        (re.compile(r"^pub struct (\w+)"), "struct"),
+        (re.compile(r"^pub trait (\w+)"), "trait"),
+        (re.compile(r"^pub enum (\w+)"), "enum"),
+        (re.compile(r"^pub type (\w+)"), "type"),
+    ],
+    "ruby": [
+        (re.compile(r"^def (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+        (re.compile(r"^module (\w+)"), "module"),
+    ],
+    "java": [
+        (re.compile(r"(?:public|protected) (?:class|interface|enum) (\w+)"), "class"),
+        (re.compile(r"(?:public|protected) \w+ (\w+)\s*\("), "function"),
+    ],
+    "kotlin": [
+        (re.compile(r"^fun (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+        (re.compile(r"^object (\w+)"), "class"),
+        (re.compile(r"^interface (\w+)"), "interface"),
+    ],
+    "shell": [
+        (re.compile(r"^(\w+)\(\)"), "function"),
+    ],
+}
+
 SECTION_SIGNALS: dict = {
     "## Live Issues SOP": [
         "live issue", "live-issue", "sev1", "sev2", "sev3", "rca", "[live-",
@@ -1373,6 +1446,38 @@ SECTION_SIGNALS: dict = {
         "never commit to master",
     ],
 }
+
+
+def _extract_symbols(file_path: str) -> list:
+    """Returns [{"symbol": str, "symbol_type": str, "line": int}] from file_path.
+
+    Reads at most 300 lines. Returns [] for unknown extensions or unreadable files.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    lang = _SOURCE_EXTENSIONS.get(ext)
+    if not lang:
+        return []
+    patterns = _SYMBOL_PATTERNS.get(lang, [])
+    if not patterns:
+        return []
+    results = []
+    try:
+        with open(file_path, encoding="utf-8", errors="ignore") as fh:
+            for lineno, line in enumerate(fh, 1):
+                if lineno > 300:
+                    break
+                for pattern, sym_type in patterns:
+                    m = pattern.match(line)
+                    if m:
+                        results.append({
+                            "symbol": m.group(1),
+                            "symbol_type": sym_type,
+                            "line": lineno,
+                        })
+                        break
+    except (OSError, IOError):
+        pass
+    return results
 
 
 def _scan_repo_for_docs(root: str = ".") -> dict:
