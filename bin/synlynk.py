@@ -11,7 +11,15 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
+
+TASK_STATUSES = {
+    "[ ]": "active",
+    "[x]": "done",
+    "[-]": "deferred",
+    "[~]": "superseded",
+    "[>]": "absorbed",
+}
 
 
 def _resolve_db_path() -> str:
@@ -966,6 +974,8 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     todo_content = f"""\
 # {name} — Todo
 
+<!-- Status: [ ] active  [x] done  [-] deferred  [~] superseded  [>] absorbed -->
+
 ## Active Tasks
 - [ ] Review and refine the generated roadmap.md <!-- id: 1 -->
 - [ ] Review and update memory.md with actual decisions <!-- id: 2 -->
@@ -1434,7 +1444,8 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
    - Row 3 (team mode only): Last 1 entry per teammate from project-docs/devlogs/
 
 ## During the session
-- Mark tasks `[x]` in project-docs/todo.md when complete — do NOT delete them
+- Update task status in project-docs/todo.md — do NOT delete tasks:
+  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
 - Append decisions to project-docs/memory.md with [@username] attribution
 - Run `synlynk checkpoint` at every task boundary
 - In team mode: always `git pull` before editing any project-docs file
@@ -1652,7 +1663,8 @@ alwaysApply: true
 3. Check `.synlynk/sentinel.md` for active alerts
 
 ## During Session
-- Mark tasks `[x]` in `project-docs/todo.md` when complete — do not delete them
+- Update task status in `project-docs/todo.md` — do not delete tasks:
+  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
 - Append decisions to `project-docs/memory.md` with `[@username]` attribution
 - Run `synlynk checkpoint` at every task boundary
 
@@ -1680,7 +1692,8 @@ def _build_copilot_instructions() -> str:
 3. Check `.synlynk/sentinel.md` for active alerts
 
 ### During Session
-- Mark tasks `[x]` in `project-docs/todo.md` when complete — do not delete them
+- Update task status in `project-docs/todo.md` — do not delete tasks:
+  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
 - Append decisions to `project-docs/memory.md` with `[@username]` attribution
 - Run `synlynk checkpoint` at every task boundary
 - Never commit directly to `main`/`master` — create a worktree or branch first
@@ -1695,7 +1708,7 @@ def _build_windsurf_rules() -> str:
     """Returns content for .windsurfrules synlynk block (terse directive format)."""
     return """\
 Read .synlynk/context.md at session start.
-Mark tasks [x] in project-docs/todo.md when complete.
+Update task status in project-docs/todo.md ([ ] active [x] done [-] deferred [~] superseded [>] absorbed).
 Run `synlynk checkpoint` at task boundaries.
 Never commit directly to main or master — use a worktree.
 Append decisions to project-docs/memory.md with [@username].
@@ -2491,15 +2504,23 @@ def generate_context(scope: str = "full") -> None:
                 out.write("# Sentinel Alerts\n")
                 out.write("\n".join(lines) + "\n\n---\n\n")
 
-        # Active tasks only ([ ] lines)
+        # Active + deferred tasks; superseded/absorbed/done excluded
         todo_path = os.path.join(docs_dir, "todo.md")
         if os.path.exists(todo_path):
-            out.write("## Active Tasks\n")
+            active, deferred = [], []
             with open(todo_path) as f:
                 for line in f:
                     if "- [ ]" in line:
-                        out.write(line)
-            out.write("\n---\n\n")
+                        active.append(line)
+                    elif "- [-]" in line:
+                        deferred.append(line)
+            if active or deferred:
+                out.write("## Active Tasks\n")
+                out.writelines(active)
+                if deferred:
+                    out.write("\n### Deferred\n")
+                    out.writelines(deferred)
+                out.write("\n---\n\n")
 
         # Roadmap: header rows + In Progress rows only
         roadmap_path = os.path.join(docs_dir, "roadmap.md")
@@ -2607,24 +2628,24 @@ def checkpoint() -> None:
     todo_path = "project-docs/todo.md"
     devlog_path = f"project-docs/devlogs/{username}.md"
 
-    # Collect completed tasks and remaining active lines
+    # Collect resolved tasks (done/superseded/absorbed) and keep the rest
     completed, active_lines = [], []
     if os.path.exists(todo_path):
         with open(todo_path) as f:
             for line in f:
-                if re.match(r'\s*-\s*\[x\]', line, re.IGNORECASE):
+                if re.match(r'\s*-\s*\[(x|~|>)\]', line, re.IGNORECASE):
                     id_m = re.search(r'<!--\s*id:\s*(\d+)\s*-->', line)
-                    text = re.sub(r'-\s*\[x\]\s*', '', line, flags=re.IGNORECASE).strip()
+                    text = re.sub(r'-\s*\[(x|~|>)\]\s*', '', line, flags=re.IGNORECASE).strip()
                     text = re.sub(r'<!--.*?-->', '', text).strip()
                     completed.append({"id": id_m.group(1) if id_m else None, "text": text})
                 else:
                     active_lines.append(line)
 
-    # Append completed tasks to devlog
+    # Append resolved tasks to devlog
     if completed:
         os.makedirs(os.path.dirname(devlog_path), exist_ok=True)
         with open(devlog_path, "a") as f:
-            f.write(f"\n## {time.strftime('%Y-%m-%d')}\n### Completed (checkpoint)\n")
+            f.write(f"\n## {time.strftime('%Y-%m-%d')}\n### Resolved (checkpoint)\n")
             for task in completed:
                 f.write(f"- {task['text']}\n")
         with open(todo_path, "w") as f:
