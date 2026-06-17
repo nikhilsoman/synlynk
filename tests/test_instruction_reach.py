@@ -110,3 +110,29 @@ def test_write_instruction_file_creates_parent_dirs(tmp_path, monkeypatch):
     from synlynk import _write_instruction_file
     _write_instruction_file(".github/copilot-instructions.md", "copilot", "synlynk rules", "html")
     assert os.path.exists(".github/copilot-instructions.md")
+
+
+def test_build_cursor_mdc_has_frontmatter():
+    from synlynk import _build_cursor_mdc
+    content = _build_cursor_mdc()
+    assert "alwaysApply: true" in content
+    assert "---" in content
+    assert "Session Start" in content
+    assert "Git Worktree" in content
+
+
+def test_build_copilot_instructions_no_frontmatter():
+    from synlynk import _build_copilot_instructions
+    content = _build_copilot_instructions()
+    assert "---" not in content.splitlines()[0]  # no frontmatter on first line
+    assert "Session Start" in content
+    assert "synlynk checkpoint" in content
+
+
+def test_build_windsurf_rules_is_terse():
+    from synlynk import _build_windsurf_rules
+    content = _build_windsurf_rules()
+    lines = [l for l in content.splitlines() if l.strip()]
+    assert len(lines) <= 8        # terse — no headers, bullet-style directives
+    assert "context.md" in content
+    assert "worktree" in content.lower() or "main" in content

@@ -1623,6 +1623,72 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         }, indent=2),
     }
 
+def _build_cursor_mdc() -> str:
+    """Returns content for .cursor/rules/synlynk.mdc (Cursor MDC format, no markers)."""
+    return """\
+---
+description: synlynk project protocol — session start, task tracking, git discipline
+alwaysApply: true
+---
+
+# synlynk Protocol
+
+## Session Start
+1. Run `git config user.name` — this is your @username
+2. Read `.synlynk/context.md` — full project state snapshot
+3. Check `.synlynk/sentinel.md` for active alerts
+
+## During Session
+- Mark tasks `[x]` in `project-docs/todo.md` when complete — do not delete them
+- Append decisions to `project-docs/memory.md` with `[@username]` attribution
+- Run `synlynk checkpoint` at every task boundary
+
+## Git Worktree-First Policy
+Never commit directly to `main`/`master`. Create a worktree for every feature or fix:
+```
+git worktree add .worktrees/<name> feat/<name>
+git branch --show-current   # confirm before every commit
+```
+
+## At Session End
+- Append a summary entry to `project-docs/devlogs/<username>.md`
+- Run `synlynk checkpoint` one final time
+"""
+
+
+def _build_copilot_instructions() -> str:
+    """Returns content for .github/copilot-instructions.md synlynk block (plain markdown)."""
+    return """\
+## synlynk Session Protocol
+
+### Session Start
+1. Run `git config user.name` — this is your @username
+2. Read `.synlynk/context.md` — full project state snapshot
+3. Check `.synlynk/sentinel.md` for active alerts
+
+### During Session
+- Mark tasks `[x]` in `project-docs/todo.md` when complete — do not delete them
+- Append decisions to `project-docs/memory.md` with `[@username]` attribution
+- Run `synlynk checkpoint` at every task boundary
+- Never commit directly to `main`/`master` — create a worktree or branch first
+
+### At Session End
+- Append a summary entry to `project-docs/devlogs/<username>.md`
+- Run `synlynk checkpoint` one final time
+"""
+
+
+def _build_windsurf_rules() -> str:
+    """Returns content for .windsurfrules synlynk block (terse directive format)."""
+    return """\
+Read .synlynk/context.md at session start.
+Mark tasks [x] in project-docs/todo.md when complete.
+Run `synlynk checkpoint` at task boundaries.
+Never commit directly to main or master — use a worktree.
+Append decisions to project-docs/memory.md with [@username].
+Check .synlynk/sentinel.md for active alerts before starting work.
+"""
+
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
     telemetry_file = ".synlynk/telemetry.json"
