@@ -310,3 +310,56 @@ def test_instruction_drift_sentinel_fires_once_per_change(tmp_path, monkeypatch)
     # second call — sha in manifest now matches file; must not fire again
     drifted2 = sl._check_instruction_drift()
     assert "CLAUDE.md" not in drifted2
+
+
+def test_cmd_instructions_status_shows_clean(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    content = '<!-- synlynk:start version="0.4.1" tool="claude" -->\nblock\n<!-- synlynk:end -->\n'
+    open("CLAUDE.md", "w").write(content)
+    sl = importlib.import_module("synlynk")
+    sha = sl._compute_section_sha("\nblock\n")
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": sha, "last_checked": "2026-06-17"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    sl.cmd_instructions_status()
+    out = capsys.readouterr().out
+    assert "CLAUDE.md" in out
+    assert "clean" in out
+
+
+def test_cmd_instructions_status_shows_drifted(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    open("CLAUDE.md", "w").write('<!-- synlynk:start version="0.4.1" tool="claude" -->\ncurrent\n<!-- synlynk:end -->\n')
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": "stale_sha_000", "last_checked": "2026-06-17"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    sl = importlib.import_module("synlynk")
+    sl.cmd_instructions_status()
+    out = capsys.readouterr().out
+    assert "drifted" in out
+
+
+def test_cmd_instructions_status_shows_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": "abc", "last_checked": "2026-06-17"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    sl = importlib.import_module("synlynk")
+    sl.cmd_instructions_status()
+    out = capsys.readouterr().out
+    assert "missing" in out

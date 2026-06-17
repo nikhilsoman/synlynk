@@ -1787,6 +1787,48 @@ def _check_instruction_drift() -> list:
     return drifted
 
 
+def cmd_instructions_status() -> None:
+    """Print status table for all tracked instruction files."""
+    manifest_data = _load_instruction_manifest()
+    if not manifest_data:
+        print("  No instruction manifest found. Run `synlynk init` first.")
+        return
+
+    col = {"file": 38, "tool": 10, "status": 16, "checked": 12}
+    header = (f"{'File':<{col['file']}}{'Tool':<{col['tool']}}"
+              f"{'Status':<{col['status']}}{'Last checked':<{col['checked']}}")
+    print(f"\n{_BOLD}{header}{_RESET}")
+    print("─" * (col["file"] + col["tool"] + col["status"] + col["checked"]))
+
+    for fpath, info in sorted(manifest_data.items()):
+        tool = info.get("tool", "?")
+        recorded_sha = info.get("sha", "")
+        checked = info.get("last_checked", "")[:10]
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+
+        if not os.path.exists(fpath):
+            status = f"{_YELLOW}✗ missing{_RESET}"
+        else:
+            file_content = open(fpath).read()
+            section = _extract_synlynk_section(file_content, marker_style)
+            if section is None:
+                status = f"{_YELLOW}? no markers{_RESET}"
+            elif _compute_section_sha(section) != recorded_sha:
+                status = f"{_YELLOW}⚠ drifted{_RESET}"
+            else:
+                has_user = bool(re.sub(
+                    r'<!-- synlynk:start.*?<!-- synlynk:end -->', '', file_content, flags=re.DOTALL
+                ).strip() if marker_style == "html" else re.sub(
+                    r'# synlynk:start.*?# synlynk:end', '', file_content, flags=re.DOTALL
+                ).strip())
+                status = (f"{_DIM}+ user-content{_RESET}" if has_user
+                          else f"{_GREEN}✓ clean{_RESET}")
+
+        print(f"{fpath:<{col['file']}}{tool:<{col['tool']}}"
+              f"{status:<{col['status'] + 10}}{checked}")
+    print()
+
+
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
     telemetry_file = ".synlynk/telemetry.json"
