@@ -22,6 +22,16 @@
 - **Blog post:** `docs/blog/13-v0.4.1-instruction-reach.md`
 - **Roadmap:** v0.4.1 row added between v0.4.0 and v0.5.0, marked ✅ Shipped.
 
+### Session: Quick Start Guide PDF Generation (v0.4.1)
+- **Activity:** Updated and compiled the modern, minimalist Apple-style quick start guide to reflect v0.4.1 Instruction Reach features. Relaid out Page 6 to fix overflow and edge-to-edge layout issues.
+- **Updates:**
+  - Modified `docs/synlynk-quickstart-apple.html` to bump versioning to v0.4.1 and set the theme to Instruction Reach.
+  - Added the fifth sentinel pattern `DRIFT` (Instruction file edited outside synlynk) to the Safety Systems page.
+  - Updated Command Reference on Page 6: relayout to 2-column command grid with 16mm margins (was edge-filling). Added `synlynk instructions status/diff/update/ack` commands.
+  - Updated roadmap on Page 7 back cover to show v0.5 and v0.6 as `✓ Live · June 2026`.
+  - Fixed all page containers: `min-height: 297mm` → `height: 297mm; max-height: 297mm; overflow: hidden` to prevent Chrome overflow splitting.
+  - Generated PDF using headless Google Chrome at `docs/synlynk-quickstart-apple.pdf`.
+
 ## 2026-06-14
 ### Session: v0.6.0 Job Control — R2 fix, merge PR #42
 
