@@ -1729,6 +1729,64 @@ def _write_instruction_manifest(entries: dict) -> None:
     with open(_INSTRUCTIONS_MANIFEST, "w") as f:
         json.dump(manifest, f, indent=2)
 
+_MARKER_STYLE_FOR_TOOL = {
+    "claude":    "html",
+    "agy":       "html",
+    "codex":     "html",
+    "cursor":    "none",
+    "copilot":   "html",
+    "windsurf":  "hash",
+    "universal": "html",
+}
+
+
+def _check_instruction_drift() -> list:
+    """Check tracked instruction files for external modifications to the synlynk section.
+
+    Fires INSTRUCTION_DRIFT sentinel entries for any drifted file.
+    Updates manifest SHA after each check (deduplicates re-firing).
+    Returns list of drifted file paths.
+    """
+    manifest_data = _load_instruction_manifest()
+    if not manifest_data:
+        return []
+
+    drifted = []
+    updated_entries = {}
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
+
+    for fpath, info in manifest_data.items():
+        tool = info.get("tool", "unknown")
+        recorded_sha = info.get("sha", "")
+        marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+
+        if not os.path.exists(fpath):
+            updated_entries[fpath] = {**info, "last_checked": ts}
+            continue
+
+        file_content = open(fpath).read()
+        section = _extract_synlynk_section(file_content, marker_style)
+        if section is None:
+            updated_entries[fpath] = {**info, "last_checked": ts}
+            continue
+
+        current_sha = _compute_section_sha(section)
+        updated_entries[fpath] = {**info, "sha": current_sha, "last_checked": ts}
+
+        if current_sha != recorded_sha:
+            drifted.append(fpath)
+            _write_sentinel_alert(
+                "WARN", "INSTRUCTION_DRIFT",
+                f"{fpath} (tool: {tool}) — synlynk section modified externally. "
+                f"Run `synlynk instructions diff {fpath}` to review. "
+                f"Run `synlynk instructions update {fpath}` to reset. "
+                f"[ack: synlynk instructions ack {fpath}]"
+            )
+
+    _write_instruction_manifest(updated_entries)
+    return drifted
+
+
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
     telemetry_file = ".synlynk/telemetry.json"
@@ -2989,6 +3047,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         })
         check_sentinel_patterns(output_text=output_text, exit_code=exit_code,
                                 cmd=' '.join(cmd_args))
+        _check_instruction_drift()
         daemon = WatchDaemon()
         set_state("watching" if daemon._is_running() else "stopped")
 

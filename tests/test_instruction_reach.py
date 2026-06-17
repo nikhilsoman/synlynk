@@ -239,3 +239,74 @@ def test_manifest_written_after_init(tmp_path, monkeypatch):
     manifest = json.load(open(".synlynk/instructions.json"))
     assert manifest["schema_version"] == 1
     assert "AI_INSTRUCTIONS.md" in manifest["files"]
+
+
+def test_check_instruction_drift_detects_section_change(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json
+    # Write a file with a synlynk section
+    content = '<!-- synlynk:start version="0.4.1" tool="claude" -->\noriginal\n<!-- synlynk:end -->\n'
+    open("CLAUDE.md", "w").write(content)
+    import importlib
+    sl = importlib.import_module("synlynk")
+    original_sha = sl._compute_section_sha("\noriginal\n")
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": original_sha, "last_checked": "2026-06-17T10:00:00"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    # Now modify the synlynk section externally
+    open("CLAUDE.md", "w").write('<!-- synlynk:start version="0.4.1" tool="claude" -->\nmodified\n<!-- synlynk:end -->\n')
+    drifted = sl._check_instruction_drift()
+    assert "CLAUDE.md" in drifted
+
+
+def test_check_instruction_drift_ignores_user_content_change(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    content = '# User\n<!-- synlynk:start version="0.4.1" tool="claude" -->\nblock\n<!-- synlynk:end -->\n'
+    open("CLAUDE.md", "w").write(content)
+    sl = importlib.import_module("synlynk")
+    sha = sl._compute_section_sha("\nblock\n")
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": sha, "last_checked": "2026-06-17T10:00:00"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    # Change only user content — synlynk section unchanged
+    open("CLAUDE.md", "w").write('# CHANGED USER\n<!-- synlynk:start version="0.4.1" tool="claude" -->\nblock\n<!-- synlynk:end -->\n')
+    drifted = sl._check_instruction_drift()
+    assert "CLAUDE.md" not in drifted
+
+
+def test_check_instruction_drift_returns_empty_when_no_manifest(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import importlib
+    sl = importlib.import_module("synlynk")
+    assert sl._check_instruction_drift() == []
+
+
+def test_instruction_drift_sentinel_fires_once_per_change(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, importlib
+    content = '<!-- synlynk:start version="0.4.1" tool="claude" -->\noriginal\n<!-- synlynk:end -->\n'
+    open("CLAUDE.md", "w").write(content)
+    sl = importlib.import_module("synlynk")
+    sha = sl._compute_section_sha("\noriginal\n")
+    manifest = {
+        "schema_version": 1, "generated_at": "2026-06-17T10:00:00",
+        "synlynk_version": "0.4.1",
+        "files": {"CLAUDE.md": {"tool": "claude", "sha": sha, "last_checked": "2026-06-17T10:00:00"}}
+    }
+    json.dump(manifest, open(".synlynk/instructions.json", "w"))
+    open("CLAUDE.md", "w").write('<!-- synlynk:start version="0.4.1" tool="claude" -->\nmodified\n<!-- synlynk:end -->\n')
+    sl._check_instruction_drift()  # first call — fires sentinel, updates manifest sha
+    # second call — sha in manifest now matches file; must not fire again
+    drifted2 = sl._check_instruction_drift()
+    assert "CLAUDE.md" not in drifted2
