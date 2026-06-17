@@ -1715,6 +1715,7 @@ def _load_instruction_manifest() -> dict:
 
 def _write_instruction_manifest(entries: dict) -> None:
     """Write .synlynk/instructions.json with schema_version, synlynk_version, and file SHAs."""
+    os.makedirs(os.path.dirname(_INSTRUCTIONS_MANIFEST), exist_ok=True)
     ts = time.strftime('%Y-%m-%dT%H:%M:%S')
     existing = _load_instruction_manifest()
     existing.update({
