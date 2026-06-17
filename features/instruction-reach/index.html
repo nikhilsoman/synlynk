@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polyglot agent files — Feature | synlynk</title>
+    <title>Instruction reach — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,13 +33,13 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Polyglot agent files</h1>
-    <p class="feature-lead">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</p>
+    <h1>Instruction reach</h1>
+    <p class="feature-lead">Extends synlynk context injection to Cursor, GitHub Copilot, and Windsurf</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>`synlynk init` generates three agent instruction files — `CLAUDE.md` (Claude Code), `GEMINI.md` (AntiGravity/AGY CLI), and `AGENTS.md` (Codex/OpenAI CLI) — from `_build_templates(org, repo, project_id)`. All three files contain the same session protocol, live issues SOP, git worktree policy, and GitHub Projects v2 GraphQL block. This ensures every agent in the workgroup receives identical constraints from a single source of truth. As of v0.4.1, Gemini CLI is replaced by AGY (AntiGravity) as the third trio member.</p>
+    <p>v0.4.1 extends `synlynk init` from 3 CLI targets to 7 tracked instruction files. In addition to `CLAUDE.md`, `GEMINI.md`, and `AGENTS.md`, synlynk now writes tool-native instruction blocks into `.cursor/rules/synlynk.mdc` (Cursor, with `alwaysApply: true` MDC frontmatter), `.github/copilot-instructions.md` (GitHub Copilot), `.windsurfrules` (Windsurf), and `AI_INSTRUCTIONS.md` (universal fallback). Three marker styles are used to preserve user content: `html` comments, `hash` (`# synlynk:start`), and `none` (synlynk owns the whole file). Cursor and Copilot targets are only written if their respective config directories exist.</p>
   </div>
 
   <div class="feature-section">
@@ -52,8 +52,8 @@
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.3/">v0.3.x</a>
-      — The Multi-Agent Foundation
+      <a href="/releases/v0.4.1/">v0.4.1.x</a>
+      
     </div>
   </div>
 
@@ -62,8 +62,13 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk init --agents claude,agy,codex --project-id PJ_kwDO...</code>
-      <span class="usage-note">Generates CLAUDE.md, GEMINI.md (AGY), AGENTS.md with live GraphQL blocks</span>
+      <code>$ synlynk init</code>
+      <span class="usage-note">Writes synlynk section to all 7 instruction targets; creates .cursor/rules/synlynk.mdc if .cursor/ exists</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk instructions status</code>
+      <span class="usage-note">Shows status (ok / missing / drifted / untracked / no-markers) for each tracked file</span>
     </div>
     
   </div>
@@ -86,45 +91,11 @@
           
         
           
-            <a href="/features/gh-cli-identity/">gh CLI identity</a>
-          
         
           
-        
+            <a href="/features/polyglot-agent-files/">Polyglot agent files</a>
           
         
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-      
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-            <a href="/features/parametric-init/">Parametric init</a>
           
         
           
@@ -166,9 +137,9 @@
           
         
           
-            <a href="/features/instruction-reach/">Instruction reach</a>
-          
         
+          
+            <a href="/features/drift-detection/">Instruction drift detection</a>
           
         
           
@@ -180,13 +151,6 @@
   </div>
   
 
-  
-  <div class="feature-section">
-    <h2>Upgrade notes</h2>
-    
-    <p><strong>v0.4.1:</strong> Gemini CLI replaced by AGY (AntiGravity); GEMINI.md template updated to agy-2.x, no transition note</p>
-    
-  </div>
   
 
 </div>

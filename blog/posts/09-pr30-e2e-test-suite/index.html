@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PR #30 — The E2E Safety Net | synlynk</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body class="">
+    <nav class="sticky-nav">
+        <div class="container nav-container">
+            <a href="/" class="wordmark">
+                <img src="/assets/img/logo/icon.svg" alt="Synlynk Icon" class="nav-icon">
+                <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+            </a>
+            <div class="nav-links">
+                <a href="#how-it-works">How it works</a>
+                <a href="/features/">Features</a>
+                <a href="#install">Install</a>
+                <a href="/blog/" class="teal-link">Blog</a>
+                <a href="https://github.com/nikhilsoman/synlynk" class="github-btn">GitHub ↗</a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        
+<article class="container blog-post">
+    <header class="post-header">
+        <time class="post-date monospace">Jun 10, 2026</time>
+        <h1>PR #30 — The E2E Safety Net</h1>
+        <p class="excerpt">17 black-box CLI tests, zero subprocess mocks. The E2E suite treats synlynk as a user would: real subprocess invocations, real tmp dirs, real exit codes. A safety net that grows with every feature.</p>
+    </header>
+
+    <div class="post-body">
+        <h1>PR #30 — The E2E Safety Net</h1>
+<p><strong>PR:</strong> test: add E2E test suite (17 scenarios, black-box CLI testing)<br>
+<strong>Branch:</strong> <code>feat/e2e-test-suite</code><br>
+<strong>Depends on:</strong> PR #29 (v0.3.1 — sentinel + observability hardening)<br>
+<strong>Status:</strong> open</p>
+<hr>
+<h2>The Broader Goal at the End of PR #29</h2>
+<p>v0.3.1 added nine observability features — token scraping, zombie detection, stall detection, quota-exhausted patterns, burn rate, pre-exec gate, and the <code>synlynk sentinel</code> CLI. All tested at the unit level: 123 function-level tests that run against a monkeypatched <code>project_dir</code> fixture.</p>
+<p>The gap: not a single test invoked <code>python3 bin/synlynk.py</code> as a subprocess. A broken argparse flag, a wrong exit code, a <code>finally</code> block that swallows the wrapped command's return code — none of these would fail the unit suite.</p>
+<hr>
+<h2>What This PR Shipped</h2>
+<h3><code>tests/test_e2e.py</code> — 17 Black-Box Scenarios</h3>
+<p>Every test in this file uses <code>subprocess.run</code>. No imports from <code>synlynk</code>. No monkeypatching. The CLI is treated exactly as a user would invoke it from a terminal.</p>
+<p><strong>The <code>Cli</code> helper class</strong> is the extensibility primitive:</p>
+<pre><code class="language-python">class Cli:
+    def run(self, *args, timeout=30) -&gt; subprocess.CompletedProcess
+    def write_file(self, rel_path, content)
+    def read_file(self, rel_path) -&gt; str
+    sentinel_file: Path  # .synlynk/sentinel.md
+</code></pre>
+<p>The <code>cli</code> fixture returns a <code>Cli</code> instance in a fresh initialized project. The <code>uninit_cli</code> fixture returns one in a bare directory. New tests drop into the right fixture and call <code>cli.run(...)</code>. Adding a new scenario is ~5 lines.</p>
+<p><strong>Scenarios by feature:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Tests</th>
+<th>What's verified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CLI basics</td>
+<td>4</td>
+<td><code>--version</code>, <code>--help</code>, <code>init</code>, <code>init --force</code></td>
+</tr>
+<tr>
+<td>exec</td>
+<td>4</td>
+<td>exit 0, exit code propagation, exit 127, telemetry written</td>
+</tr>
+<tr>
+<td>sentinel</td>
+<td>5</td>
+<td>list empty, list after write, clear all, clear by severity, clear by code</td>
+</tr>
+<tr>
+<td>pre-exec gate</td>
+<td>2</td>
+<td>CRITICAL blocks exec, <code>--force</code> bypasses</td>
+</tr>
+<tr>
+<td>status</td>
+<td>2</td>
+<td>exits 0, shows expected sections</td>
+</tr>
+</tbody>
+</table>
+<p><strong>One real bug found:</strong> <code>test_status_output_contains_expected_sections</code> revealed that <code>cmd_status()</code> uses uppercase section headers (<code>BUDGET</code>, <code>SENTINEL</code>, <code>WATCHER</code>, <code>ACTIVE TASKS</code>) — not title-case as documented in comments. The test was written against the actual output, not the assumption.</p>
+<p><strong><code>pytest.ini</code></strong> registers the <code>e2e</code> mark so the suite can be run in isolation:</p>
+<pre><code class="language-bash">pytest tests/test_e2e.py -v          # run E2E only
+pytest tests/test_e2e.py -m e2e -v   # same, using mark
+pytest tests/                         # run everything (unit + E2E)
+</code></pre>
+<h3>What's Deliberately Not Tested</h3>
+<pre><code class="language-python"># ---------------------------------------------------------------------------
+# TODO: watch lifecycle tests
+#
+# synlynk watch start / stop are not covered here because daemon forking
+# is unreliable in subprocess-based test environments (PID files, signal
+# handling, timing). Add these as a dedicated test module that is opt-in
+# and marked @pytest.mark.slow when the daemon API stabilises.
+# ---------------------------------------------------------------------------
+</code></pre>
+<p>The watch daemon forks a background process and writes a PID file. In a test environment with many parallel tmp dirs and process groups, timing-based daemon assertions are flaky by design. Marked as a known gap with a clear extension point.</p>
+<h3>How to Extend It</h3>
+<p>Every new feature gets a section:</p>
+<pre><code class="language-python"># --- Feature: my_new_command ---
+
+def test_my_new_command_happy_path(cli):
+    result = cli.run(&quot;my-command&quot;, &quot;--flag&quot;, &quot;value&quot;)
+    assert result.returncode == 0
+    assert &quot;expected output&quot; in result.stdout
+
+def test_my_new_command_error_case(cli):
+    result = cli.run(&quot;my-command&quot;, &quot;--bad-flag&quot;)
+    assert result.returncode != 0
+</code></pre>
+<p>The fixture handles <code>init</code>, tmp dir creation, and cleanup. The test writer provides the scenario.</p>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Unit tests verify logic. E2E tests verify behavior. An OS that an autonomous agent runs on behalf of a user must be verifiable at both levels — the unit suite guards function contracts; the E2E suite guards the user-facing contract.</p>
+<p>With both suites in place, the release checklist for v0.3.2 and beyond is:</p>
+<pre><code class="language-bash">pytest tests/test_synlynk.py   # unit: function contracts
+pytest tests/test_e2e.py       # E2E: CLI behavior
+</code></pre>
+<p>The E2E suite will grow with every PR. By v0.4.0, it will cover <code>synlynk run</code>, <code>synlynk start</code>, and the Trio pipeline. By v0.5.0, it will cover state.db operations. The <code>Cli</code> helper is the single stable interface that all future tests build on.</p>
+<hr>
+<h2>The New Goalpost</h2>
+<blockquote>
+<p>v0.4.0 — Conventions + Trio Bootstrap — is the next release. All design decisions locked. The E2E suite now has the scaffold to cover <code>synlynk run</code>, shared <code>.rules/</code> conventions, and the Architect → Build → Verify pipeline as soon as they ship.</p>
+</blockquote>
+
+    </div>
+
+    <footer class="post-footer">
+        <a href="/blog/" class="back-link">← Back to all posts</a>
+    </footer>
+</article>
+
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-container">
+            <div class="footer-left">
+                <div class="wordmark">
+                    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+                </div>
+                <div class="version">v0.4.1</div>
+            </div>
+            <div class="footer-right">
+                <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
+                <a href="https://github.com/nikhilsoman/synlynk/discussions">Discussions</a>
+                <a href="https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md">Changelog</a>
+                <a href="/releases/">Releases</a>
+                <span class="license">MIT</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/assets/js/copy.js"></script>
+</body>
+</html>

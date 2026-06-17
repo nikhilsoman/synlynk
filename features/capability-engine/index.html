@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polyglot agent files — Feature | synlynk</title>
+    <title>Capability engine — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,27 +33,27 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Polyglot agent files</h1>
-    <p class="feature-lead">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</p>
+    <h1>Capability engine</h1>
+    <p class="feature-lead">Routes tasks to the best agent based on a live SQLite ledger of quality scores</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>`synlynk init` generates three agent instruction files — `CLAUDE.md` (Claude Code), `GEMINI.md` (AntiGravity/AGY CLI), and `AGENTS.md` (Codex/OpenAI CLI) — from `_build_templates(org, repo, project_id)`. All three files contain the same session protocol, live issues SOP, git worktree policy, and GitHub Projects v2 GraphQL block. This ensures every agent in the workgroup receives identical constraints from a single source of truth. As of v0.4.1, Gemini CLI is replaced by AGY (AntiGravity) as the third trio member.</p>
+    <p>v0.5.0 introduces data-driven agent routing. `_best_agent_for_story(story_id)` queries the `capability_scores` SQLite view, which aggregates human ratings, verifier pass rates, and auto-quality signals across a 3D domain taxonomy (engineering domain × org domain × industry). A cold-start round-robin runs for the first 3 samples per (agent, domain) triple; recency-weighted scoring takes over after that. The `synlynk story create/list` and `synlynk score add/list` commands provide the CLI surface for the capability ledger.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">IPC — Agent Files &amp; Coordination</span>
+      <span class="layer-label">Scheduler — Dispatch</span>
     </div>
   </div>
 
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.3/">v0.3.x</a>
-      — The Multi-Agent Foundation
+      <a href="/releases/v0.5/">v0.5.x</a>
+      — Capability Engine
     </div>
   </div>
 
@@ -62,8 +62,18 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk init --agents claude,agy,codex --project-id PJ_kwDO...</code>
-      <span class="usage-note">Generates CLAUDE.md, GEMINI.md (AGY), AGENTS.md with live GraphQL blocks</span>
+      <code>$ synlynk story create &quot;Implement OAuth flow&quot; --domain auth</code>
+      <span class="usage-note">Creates a story record in state.db, returns a story_id</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk score add --story story-abc123 --agent claude --quality 4</code>
+      <span class="usage-note">Records a human quality rating (1–5) for a completed run</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk score list</code>
+      <span class="usage-note">Shows aggregated capability scores per agent per domain</span>
     </div>
     
   </div>
@@ -86,8 +96,6 @@
           
         
           
-            <a href="/features/gh-cli-identity/">gh CLI identity</a>
-          
         
           
         
@@ -96,39 +104,7 @@
           
         
           
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-      
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-            <a href="/features/parametric-init/">Parametric init</a>
-          
-        
-          
-        
+            <a href="/features/agent-dispatch/">Background dispatch</a>
           
         
           
@@ -166,13 +142,13 @@
           
         
           
-            <a href="/features/instruction-reach/">Instruction reach</a>
-          
         
           
         
           
         
+          
+            <a href="/features/model-version-probing/">Model version probing</a>
           
         
       
@@ -180,13 +156,6 @@
   </div>
   
 
-  
-  <div class="feature-section">
-    <h2>Upgrade notes</h2>
-    
-    <p><strong>v0.4.1:</strong> Gemini CLI replaced by AGY (AntiGravity); GEMINI.md template updated to agy-2.x, no transition note</p>
-    
-  </div>
   
 
 </div>

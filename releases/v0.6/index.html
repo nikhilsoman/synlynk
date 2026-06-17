@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Budget enforcement — Feature | synlynk</title>
+    <title>v0.6.x — Job Control + Model-Aware Capability Engine | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -27,92 +27,53 @@
         
 
 
+<div class="container release-detail">
 
+  <header class="release-detail-header">
+    <a href="/releases/" class="back-link">← All releases</a>
+    <span class="release-version">v0.6.x</span>
+    <h1>Job Control + Model-Aware Capability Engine</h1>
 
-<div class="container feature-detail">
-
-  <header class="feature-detail-header">
-    <a href="/features/" class="back-link">← All features</a>
-    <h1>Budget enforcement</h1>
-    <p class="feature-lead">Blocks exec when cumulative cost or request count exceeds configured limits</p>
+    
   </header>
 
-  <div class="feature-section">
-    <h2>What it does</h2>
-    <p>Before spawning any AI subprocess, `check_budgets()` reads `.synlynk/config.json` for `limit_usd` and `limit_requests`, then compares against totals in `.synlynk/telemetry.json`. If either limit is exceeded, the exec is blocked with a clear message. Limits are project-specific and set at `synlynk init` time.</p>
-  </div>
-
-  <div class="feature-section">
-    <h2>OS Layer</h2>
-    <div class="os-layer-badge">
-      <span class="layer-label">Filesystem — State &amp; Telemetry</span>
-    </div>
-  </div>
-
-  <div class="feature-section">
-    <h2>Introduced in</h2>
-    <div class="introduced-badge">
-      <a href="/releases/v0.1/">v0.1.x</a>
-      — Proof of Concept
-    </div>
-  </div>
-
   
-  <div class="feature-section">
-    <h2>Usage</h2>
-    
-    <div class="usage-block">
-      <code>$ synlynk exec claude</code>
-      <span class="usage-note">If over budget: Budget limit exceeded ($50.00). Run synlynk reset to continue.</span>
-    </div>
-    
-  </div>
-  
-
-  
-  <div class="feature-section">
-    <h2>Related features</h2>
-    <div class="related-features">
+  <div class="release-section">
+    <h2>What's new</h2>
+    <ul class="whats-new-list">
       
-        
-          
-        
-          
-        
-          
-            <a href="/features/cost-tracking/">Cost tracking</a>
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
+      <li>
+        <a href="/features/model-version-probing/">Model version probing</a>
+        <span class="feature-note">— Records which model version ran each job — enabling split-model detection and honest routing</span>
+      </li>
       
-    </div>
+    </ul>
   </div>
   
 
+  <div class="release-section">
+    <h2>Changelog</h2>
+    <ul class="patch-list">
+      
+      <li class="patch-item">
+        <span class="patch-version">v0.6.0</span>
+        <span class="patch-date">Jun 14, 2026</span>
+        <span class="patch-summary">Model version tier-2 probe, synlynk pr check, synlynk score attest, verifier pipeline capture, Tokq org_domain_tags capability dimension</span>
+      </li>
+      
+    </ul>
+  </div>
+
   
+  <div class="release-section">
+    <h2>From the build log</h2>
+    <a href="/blog/12-pr42-v060-job-control/" class="release-blog-link">Read the blog post →</a>
+  </div>
+  
+
+  <div class="release-section">
+    <a href="/features/" style="font-size:14px;color:var(--accent-teal);text-decoration:none">← Back to feature matrix</a>
+  </div>
 
 </div>
 

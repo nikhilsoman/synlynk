@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polyglot agent files — Feature | synlynk</title>
+    <title>Instruction drift detection — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,27 +33,27 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Polyglot agent files</h1>
-    <p class="feature-lead">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</p>
+    <h1>Instruction drift detection</h1>
+    <p class="feature-lead">Fires INSTRUCTION_DRIFT sentinel when a tracked instruction file is edited outside synlynk</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>`synlynk init` generates three agent instruction files — `CLAUDE.md` (Claude Code), `GEMINI.md` (AntiGravity/AGY CLI), and `AGENTS.md` (Codex/OpenAI CLI) — from `_build_templates(org, repo, project_id)`. All three files contain the same session protocol, live issues SOP, git worktree policy, and GitHub Projects v2 GraphQL block. This ensures every agent in the workgroup receives identical constraints from a single source of truth. As of v0.4.1, Gemini CLI is replaced by AGY (AntiGravity) as the third trio member.</p>
+    <p>Every `synlynk exec` call runs `_check_instruction_drift()`, which loads `.synlynk/instructions.json` (the SHA manifest written by `init`) and compares the SHA of each file&#39;s synlynk-owned section against the stored value. If any file has been edited, an `INSTRUCTION_DRIFT` alert is written to `sentinel.md`. The sentinel fires once per change — not once per exec — by updating the manifest SHA immediately after firing. Use `synlynk instructions update &lt;file&gt;` to regenerate the section, or `synlynk instructions ack &lt;file&gt;` to dismiss the alert without regenerating.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">IPC — Agent Files &amp; Coordination</span>
+      <span class="layer-label">Kernel — Context Engine</span>
     </div>
   </div>
 
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.3/">v0.3.x</a>
-      — The Multi-Agent Foundation
+      <a href="/releases/v0.4.1/">v0.4.1.x</a>
+      
     </div>
   </div>
 
@@ -62,8 +62,18 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk init --agents claude,agy,codex --project-id PJ_kwDO...</code>
-      <span class="usage-note">Generates CLAUDE.md, GEMINI.md (AGY), AGENTS.md with live GraphQL blocks</span>
+      <code>$ synlynk instructions diff</code>
+      <span class="usage-note">Shows user content outside synlynk markers in each tracked file</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk instructions update CLAUDE.md</code>
+      <span class="usage-note">Regenerates the synlynk section and resets its SHA in the manifest</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk instructions ack CLAUDE.md</code>
+      <span class="usage-note">Removes INSTRUCTION_DRIFT lines from sentinel.md without regenerating</span>
     </div>
     
   </div>
@@ -73,74 +83,6 @@
   <div class="feature-section">
     <h2>Related features</h2>
     <div class="related-features">
-      
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-            <a href="/features/gh-cli-identity/">gh CLI identity</a>
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-      
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-            <a href="/features/parametric-init/">Parametric init</a>
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
       
         
           
@@ -176,17 +118,44 @@
           
         
       
+        
+          
+        
+          
+            <a href="/features/flatline-detection/">Flatline detection</a>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      
     </div>
   </div>
   
 
-  
-  <div class="feature-section">
-    <h2>Upgrade notes</h2>
-    
-    <p><strong>v0.4.1:</strong> Gemini CLI replaced by AGY (AntiGravity); GEMINI.md template updated to agy-2.x, no transition note</p>
-    
-  </div>
   
 
 </div>

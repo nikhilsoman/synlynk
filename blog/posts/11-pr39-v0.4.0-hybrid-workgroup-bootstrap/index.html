@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PR #39 — v0.4.0: The Hybrid Workgroup Bootstrap | synlynk</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body class="">
+    <nav class="sticky-nav">
+        <div class="container nav-container">
+            <a href="/" class="wordmark">
+                <img src="/assets/img/logo/icon.svg" alt="Synlynk Icon" class="nav-icon">
+                <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+            </a>
+            <div class="nav-links">
+                <a href="#how-it-works">How it works</a>
+                <a href="/features/">Features</a>
+                <a href="#install">Install</a>
+                <a href="/blog/" class="teal-link">Blog</a>
+                <a href="https://github.com/nikhilsoman/synlynk" class="github-btn">GitHub ↗</a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        
+<article class="container blog-post">
+    <header class="post-header">
+        <time class="post-date monospace">Jun 14, 2026</time>
+        <h1>PR #39 — v0.4.0: The Hybrid Workgroup Bootstrap</h1>
+        <p class="excerpt">v0.4.0 delivers the dispatch plane: agent discovery, synlynk dispatch, a PID-tracked job store, synlynk jobs/logs/run --trio, and an init wizard that shows your workgroup at first run. The first release where multi-agent dispatch is literally true at the shell level.</p>
+    </header>
+
+    <div class="post-body">
+        <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>After PR #30 landed the E2E safety net, the next milestone was clear: ship v0.4.0 — the release that turns synlynk from a single-agent context injector into something that knows it's coordinating a team. The four imperatives identified in the brainstorm (post #10) set the agenda: intelligent init, agent discovery, shell-native dispatch, and the workgroup identity contract. All four had to land in this PR for the Magic Moments to be real.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Two things sharpened during implementation that weren't fully resolved in the design:</p>
+<p><strong>1. The Tokq memory unit schema gap got fixed first.</strong> Before writing a line of implementation, we discovered that the v0.4.0 design spec mapped synlynk files to Tokq memory units at the wrong grain — file-level instead of semantic-purpose-level. We redesigned the mapping into five purpose-typed DB view units (<code>strategic</code>, <code>context</code>, <code>execution</code>, <code>activity</code>, <code>capability</code>) and committed a visual explainer in <code>docs/brainstorm/tokq-data-metamorphosis/</code>. This didn't change what v0.4.0 ships, but it meant the foundation we're building on won't need a breaking schema migration at v1.0.</p>
+<p><strong>2. <code>PermissionError</code> is not the same as &quot;process is dead.&quot;</strong> When wiring PID reconciliation, the first draft caught <code>(ProcessLookupError, PermissionError)</code> in <code>_reconcile_jobs()</code>. Code review caught the semantic error: <code>PermissionError</code> from <code>os.kill(pid, 0)</code> means the process <em>exists</em> but we can't signal it — marking a live process as <code>failed</code> would be wrong. The fix was <code>except ProcessLookupError:</code> only, and the test was updated to monkeypatch <code>_reconcile_jobs</code> rather than rely on PID 1 (which raises <code>PermissionError</code> on macOS).</p>
+<h2>What This PR Shipped</h2>
+<p>Fourteen TDD tasks, 11 commits, 43 net-new tests (183 total, all green):</p>
+<h3>Constants and Baselines (Task 1)</h3>
+<p><code>VERSION = &quot;0.4.0&quot;</code>, <code>JOBS_FILE</code>, <code>LOGS_DIR</code>, <code>PROMPTS_DIR</code>, <code>AGENT_CAPABILITY_BASELINES</code> (claude/gemini/codex/agy with cli, roles, strengths, non_interactive_flags), <code>AGENT_DISCOVERY_DEFAULTS</code>, ANSI color helpers.</p>
+<h3>Job Store (Task 2)</h3>
+<p><code>_load_jobs()</code>, <code>_save_jobs(jobs)</code>, <code>_reconcile_jobs()</code>. The reconciler iterates <code>running</code> jobs, probes each PID with <code>os.kill(pid, 0)</code> (signal 0: existence check, no actual signal), marks unreachable ones <code>failed</code> with an ISO timestamp, and only writes back if something changed. Called as the first line of <code>main()</code>.</p>
+<h3>Agent Discovery (Task 3)</h3>
+<p><code>_check_agent_functional(cli)</code> — runs <code>&lt;cli&gt; --version</code> with a 5-second timeout, returns the first line of stdout on success, <code>None</code> on <code>FileNotFoundError</code>/<code>TimeoutExpired</code>/<code>OSError</code>. <code>discover_agents(config)</code> — merges <code>AGENT_DISCOVERY_DEFAULTS</code> with per-project overrides from <code>.synlynk/config.json[&quot;agent_discovery_paths&quot;]</code>, skips agents whose config directory doesn't exist, returns a list of agent dicts with <code>functional</code> flag.</p>
+<h3>Two-Pass Semantic Init (Tasks 4–6)</h3>
+<p><code>_static_scan(root)</code> reads up to 50 git log entries (<code>--oneline --no-merges</code>), extracts the README H1 as project name, sniffs languages from file extensions, counts total commits via <code>git rev-list --count HEAD</code>, and detects conventional commit style (&gt;= half of recent messages match <code>feat:/fix:/chore:/docs:/test:/refactor:/perf:</code>). <code>_write_informed_skeleton(scan, skip_existing)</code> generates <code>project-docs/roadmap.md</code>, <code>memory.md</code>, <code>todo.md</code> with project name, description, language list, and recent commit topics injected — plus a caveat banner for repos without structured commits. <code>_llm_enrich(agent_cli, scan)</code> writes a prompt to <code>.synlynk/prompts/llm-enrich.md</code> and calls the agent non-interactively via <code>subprocess.run(cmd, stdin=pf, timeout=120)</code>, replacing <code>roadmap.md</code> with the enriched output on success. Best-effort: broad <code>except Exception: return False</code>.</p>
+<h3>Init Wizard (Task 7)</h3>
+<p>Replaced the <code>init()</code> body with a 6-step progressive TUI:</p>
+<ol>
+<li><code>_static_scan(&quot;.&quot;)</code> — prints project name, commits, language, first recent topic; warns if commits aren't structured</li>
+<li><code>discover_agents()</code> — <strong>Magic Moment 1</strong>: &quot;✨ Your Hybrid Workgroup is ready:&quot; table of functional agents with roles and versions</li>
+<li>Create dirs → <code>_write_informed_skeleton()</code> → write agent instruction files via <code>_build_templates()</code></li>
+<li>LLM enrichment offer — only if functional agents found; <code>input(&quot;[y/N]&quot;)</code></li>
+<li>Cloud/team nudge — <code>input(&quot;Email or synlynk ID:&quot;)</code> stored to config as <code>workgroup_invite_email</code></li>
+<li>Write <code>.synlynk_config.json</code>, <code>_update_config()</code>, <code>set_state(&quot;stopped&quot;)</code>, print <strong>Magic Moment 2</strong> dispatch prompt</li>
+</ol>
+<p>Both <code>input()</code> calls are wrapped to swallow <code>EOFError</code> for non-interactive invocations.</p>
+<h3>Background Dispatch (Task 8)</h3>
+<p><code>dispatch_agent(agent, task, story_id)</code> — validates agent against <code>AGENT_CAPABILITY_BASELINES</code> (raises <code>ValueError</code> for unknowns), generates a unique job ID via <code>MD5(agent+task+time.time())[:8]</code>, calls <code>generate_context(scope=&quot;full&quot;)</code> (swallowing exceptions), writes prompt to <code>.synlynk/prompts/&lt;job_id&gt;.md</code>, and launches via:</p>
+<pre><code class="language-python">subprocess.Popen(cmd, stdin=prompt_in, stdout=log_out,
+                 stderr=subprocess.STDOUT, start_new_session=True)
+</code></pre>
+<p><code>start_new_session=True</code> detaches from the terminal — the job survives terminal close. Returns the job dict and persists to <code>jobs.json</code>.</p>
+<h3>Shell Commands (Tasks 9–13)</h3>
+<ul>
+<li><code>cmd_jobs(all_jobs)</code> — reconciles, then prints a formatted table of running (or all) jobs with ANSI status colouring</li>
+<li><code>cmd_logs(job_id, tail)</code> — prints last N lines of <code>.synlynk/logs/&lt;job_id&gt;.log</code></li>
+<li><code>cmd_shell(story_id)</code> — spawns <code>$SHELL</code> with <code>SYNLYNK_PROJECT_DIR</code>, <code>SYNLYNK_STORY_ID</code>, <code>SYNLYNK_CONTEXT</code> injected</li>
+<li><code>cmd_launch(agent, story_id)</code> — copies <code>context.md</code> to <code>context-&lt;agent&gt;.md</code>, runs agent interactively, logs telemetry on exit</li>
+<li><code>cmd_run_trio(task, story_id)</code> — dispatches all functional agents in parallel (<strong>Magic Moment 2</strong>); warns if fewer than 3 available</li>
+</ul>
+<h3>Subcommand Wiring + E2E (Task 14)</h3>
+<p>Six new argparse subcommands registered in <code>main()</code>: <code>dispatch</code>, <code>jobs</code>, <code>logs</code>, <code>shell</code>, <code>launch</code>, <code>run</code> (with <code>--trio</code> sub-action). <code>_reconcile_jobs()</code> added as the first call inside <code>main()</code>. Four new E2E tests in <code>test_e2e.py</code> validate <code>dispatch</code> end-to-end (fake <code>claude</code> binary via PATH), <code>jobs</code> empty state, <code>logs</code> missing-job error, and startup reconciliation of a stale PID.</p>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/tokq-data-metamorphosis/tokq-memory-metamorphosis.html</code> — informed the pre-implementation gap fix on memory unit grain; not directly relevant to v0.4.0 features but locked in the schema we're building toward</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Before this PR, <code>synlynk init</code> wrote static template files. After this PR:</p>
+<ul>
+<li>synlynk <em>sees</em> your repo (git history, README, file tree, languages)</li>
+<li>synlynk <em>discovers</em> which agents are installed and functional</li>
+<li>synlynk <em>shows you your team</em> — the Hybrid Workgroup — the moment you init</li>
+<li>You can <code>synlynk dispatch claude --task &quot;implement auth fix&quot;</code> from a shell and the job runs in the background with its output captured</li>
+<li><code>synlynk jobs</code> gives you a live-reconciled view; <code>synlynk logs --job &lt;id&gt;</code> tails the output</li>
+<li><code>synlynk run --trio --task &quot;...&quot;</code> dispatches all three agents in parallel with one command</li>
+</ul>
+<p>This is the first version where the phrase &quot;multi-agent dispatch&quot; is literally true at the shell level.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>v0.4.0 delivers the dispatch plane. The next release (v0.5.0, Capability Engine) needs to make the routing <em>smart</em>: instead of sending every agent the same task, route by capability — architect tasks to claude, verification to gemini, fast edits to codex. That requires <code>capability.json</code> → SQLite to land, and <code>AGENT_CAPABILITY_BASELINES</code> to become a data-driven registry rather than a hardcoded dict. The constants and structures laid down in this PR are the stable foundation for that work.</p>
+
+    </div>
+
+    <footer class="post-footer">
+        <a href="/blog/" class="back-link">← Back to all posts</a>
+    </footer>
+</article>
+
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-container">
+            <div class="footer-left">
+                <div class="wordmark">
+                    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+                </div>
+                <div class="version">v0.4.1</div>
+            </div>
+            <div class="footer-right">
+                <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
+                <a href="https://github.com/nikhilsoman/synlynk/discussions">Discussions</a>
+                <a href="https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md">Changelog</a>
+                <a href="/releases/">Releases</a>
+                <span class="license">MIT</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/assets/js/copy.js"></script>
+</body>
+</html>

@@ -52,6 +52,20 @@
         <tr>
           <th class="feature-col">Feature</th>
           
+            <th class="">
+              <span class="release-label muted">v0.6.x</span>
+              
+                <a href="/releases/v0.6/" class="changelog-link" style="font-size:10px">changelog →</a>
+              
+            </th>
+          
+            <th class="">
+              <span class="release-label muted">v0.5.x</span>
+              
+                <a href="/releases/v0.5/" class="changelog-link" style="font-size:10px">changelog →</a>
+              
+            </th>
+          
             <th class="current-col">
               <span class="release-label ">v0.4.x</span>
               
@@ -74,7 +88,7 @@
       <tbody>
         
           <tr class="matrix-section-header">
-            <td colspan="3">Kernel — Context Engine</td>
+            <td colspan="5">Kernel — Context Engine</td>
           </tr>
           
             
@@ -86,6 +100,18 @@
                   </a>
                   <span class="feature-subtitle">Reads project-docs/ into .synlynk/context.md before each exec</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -111,6 +137,18 @@
                   </a>
                   <span class="feature-subtitle">Alerts and halts when the last 3 runs share identical command + non-zero exit</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -147,6 +185,18 @@
                   <span class="feature-subtitle">Four --flags fill project-specific values into all generated files at init time</span>
                 </td>
                 
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
                   <td class="current-col">
                     
                       <span class="check-yes">✓</span>
@@ -167,10 +217,65 @@
                 <td class="feature-name-cell">
                   <a href="/features/agent-discovery/">
                     Agent discovery
-                    <span class="badge-new">new</span>
+                    
                   </a>
                   <span class="feature-subtitle">init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
+            
+          
+            
+          
+            
+          
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/drift-detection/">
+                    Instruction drift detection
+                    
+                  </a>
+                  <span class="feature-subtitle">Fires INSTRUCTION_DRIFT sentinel when a tracked instruction file is edited outside synlynk</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -193,7 +298,7 @@
           
         
           <tr class="matrix-section-header">
-            <td colspan="3">Filesystem — State &amp; Telemetry</td>
+            <td colspan="5">Filesystem — State &amp; Telemetry</td>
           </tr>
           
             
@@ -209,6 +314,18 @@
                   </a>
                   <span class="feature-subtitle">Appends per-session token counts and $ cost to project-docs/costs.md</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -235,6 +352,18 @@
                   <span class="feature-subtitle">Blocks exec when cumulative cost or request count exceeds configured limits</span>
                 </td>
                 
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
                   <td class="current-col">
                     
                       <span class="check-yes">✓</span>
@@ -260,6 +389,18 @@
                   <span class="feature-subtitle">Rolling 100-entry log of every exec — duration, exit code, cost, command</span>
                 </td>
                 
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
                   <td class="current-col">
                     
                       <span class="check-yes">✓</span>
@@ -287,9 +428,17 @@
           
             
           
+            
+          
+            
+          
+            
+          
+            
+          
         
           <tr class="matrix-section-header">
-            <td colspan="3">IPC — Agent Files &amp; Coordination</td>
+            <td colspan="5">IPC — Agent Files &amp; Coordination</td>
           </tr>
           
             
@@ -311,6 +460,18 @@
                   </a>
                   <span class="feature-subtitle">Resolves verified GitHub login as the canonical session actor for devlog attribution</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -334,8 +495,20 @@
                     Polyglot agent files
                     
                   </a>
-                  <span class="feature-subtitle">Generates CLAUDE.md, GEMINI.md, and AGENTS.md from a single parameterised template</span>
+                  <span class="feature-subtitle">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -361,10 +534,22 @@
                 <td class="feature-name-cell">
                   <a href="/features/agent-dispatch/">
                     Background dispatch
-                    <span class="badge-new">new</span>
+                    
                   </a>
                   <span class="feature-subtitle">Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task &quot;...&quot;</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -386,10 +571,22 @@
                 <td class="feature-name-cell">
                   <a href="/features/parallel-trio/">
                     Parallel trio dispatch
-                    <span class="badge-new">new</span>
+                    
                   </a>
                   <span class="feature-subtitle">synlynk run --trio dispatches one task to all functional agents simultaneously</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -406,9 +603,52 @@
               </tr>
             
           
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/instruction-reach/">
+                    Instruction reach
+                    
+                  </a>
+                  <span class="feature-subtitle">Extends synlynk context injection to Cursor, GitHub Copilot, and Windsurf</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
+            
+          
+            
+          
+            
+          
         
           <tr class="matrix-section-header">
-            <td colspan="3">Scheduler — Dispatch</td>
+            <td colspan="5">Scheduler — Dispatch</td>
           </tr>
           
             
@@ -431,6 +671,84 @@
           
             
           
+            
+          
+            
+          
+            
+          
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/capability-engine/">
+                    Capability engine
+                    
+                  </a>
+                  <span class="feature-subtitle">Routes tasks to the best agent based on a live SQLite ledger of quality scores</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/model-version-probing/">
+                    Model version probing
+                    <span class="badge-new">new</span>
+                  </a>
+                  <span class="feature-subtitle">Records which model version ran each job — enabling split-model detection and honest routing</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
             
           
         
@@ -443,6 +761,20 @@
         <tr>
           <th class="feature-col">Feature</th>
           
+            <th class="">
+              <span class="release-label muted">v0.6.x</span>
+              
+                <a href="/releases/v0.6/" class="changelog-link" style="font-size:10px">changelog →</a>
+              
+            </th>
+          
+            <th class="">
+              <span class="release-label muted">v0.5.x</span>
+              
+                <a href="/releases/v0.5/" class="changelog-link" style="font-size:10px">changelog →</a>
+              
+            </th>
+          
             <th class="current-col">
               <span class="release-label ">v0.4.x</span>
               
@@ -465,7 +797,7 @@
       <tbody>
         
           <tr class="matrix-section-header">
-            <td colspan="3">Context Management</td>
+            <td colspan="5">Context Management</td>
           </tr>
           
             
@@ -477,6 +809,18 @@
                   </a>
                   <span class="feature-subtitle">Reads project-docs/ into .synlynk/context.md before each exec</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -502,6 +846,18 @@
                   </a>
                   <span class="feature-subtitle">Alerts and halts when the last 3 runs share identical command + non-zero exit</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -538,6 +894,18 @@
                   <span class="feature-subtitle">Four --flags fill project-specific values into all generated files at init time</span>
                 </td>
                 
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
                   <td class="current-col">
                     
                       <span class="check-yes">✓</span>
@@ -559,9 +927,52 @@
           
             
           
+            
+          
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/drift-detection/">
+                    Instruction drift detection
+                    
+                  </a>
+                  <span class="feature-subtitle">Fires INSTRUCTION_DRIFT sentinel when a tracked instruction file is edited outside synlynk</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
+            
+          
+            
+          
         
           <tr class="matrix-section-header">
-            <td colspan="3">Cost &amp; Visibility</td>
+            <td colspan="5">Cost &amp; Visibility</td>
           </tr>
           
             
@@ -577,6 +988,18 @@
                   </a>
                   <span class="feature-subtitle">Appends per-session token counts and $ cost to project-docs/costs.md</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -603,6 +1026,18 @@
                   <span class="feature-subtitle">Blocks exec when cumulative cost or request count exceeds configured limits</span>
                 </td>
                 
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
                   <td class="current-col">
                     
                       <span class="check-yes">✓</span>
@@ -628,6 +1063,18 @@
                   <span class="feature-subtitle">Rolling 100-entry log of every exec — duration, exit code, cost, command</span>
                 </td>
                 
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
                   <td class="current-col">
                     
                       <span class="check-yes">✓</span>
@@ -655,9 +1102,52 @@
           
             
           
+            
+          
+            
+          
+            
+          
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/model-version-probing/">
+                    Model version probing
+                    <span class="badge-new">new</span>
+                  </a>
+                  <span class="feature-subtitle">Records which model version ran each job — enabling split-model detection and honest routing</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
         
           <tr class="matrix-section-header">
-            <td colspan="3">Agent Coordination</td>
+            <td colspan="5">Agent Coordination</td>
           </tr>
           
             
@@ -679,6 +1169,18 @@
                   </a>
                   <span class="feature-subtitle">Resolves verified GitHub login as the canonical session actor for devlog attribution</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -702,8 +1204,20 @@
                     Polyglot agent files
                     
                   </a>
-                  <span class="feature-subtitle">Generates CLAUDE.md, GEMINI.md, and AGENTS.md from a single parameterised template</span>
+                  <span class="feature-subtitle">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -727,10 +1241,22 @@
                 <td class="feature-name-cell">
                   <a href="/features/agent-discovery/">
                     Agent discovery
-                    <span class="badge-new">new</span>
+                    
                   </a>
                   <span class="feature-subtitle">init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -751,9 +1277,52 @@
           
             
           
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/instruction-reach/">
+                    Instruction reach
+                    
+                  </a>
+                  <span class="feature-subtitle">Extends synlynk context injection to Cursor, GitHub Copilot, and Windsurf</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
+            
+          
+            
+          
+            
+          
         
           <tr class="matrix-section-header">
-            <td colspan="3">Autonomy &amp; Dispatch</td>
+            <td colspan="5">Autonomy &amp; Dispatch</td>
           </tr>
           
             
@@ -779,10 +1348,22 @@
                 <td class="feature-name-cell">
                   <a href="/features/agent-dispatch/">
                     Background dispatch
-                    <span class="badge-new">new</span>
+                    
                   </a>
                   <span class="feature-subtitle">Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task &quot;...&quot;</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -804,10 +1385,22 @@
                 <td class="feature-name-cell">
                   <a href="/features/parallel-trio/">
                     Parallel trio dispatch
-                    <span class="badge-new">new</span>
+                    
                   </a>
                   <span class="feature-subtitle">synlynk run --trio dispatches one task to all functional agents simultaneously</span>
                 </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
                 
                   <td class="current-col">
                     
@@ -822,6 +1415,49 @@
                   </td>
                 
               </tr>
+            
+          
+            
+          
+            
+          
+            
+              <tr>
+                <td class="feature-name-cell">
+                  <a href="/features/capability-engine/">
+                    Capability engine
+                    
+                  </a>
+                  <span class="feature-subtitle">Routes tasks to the best agent based on a live SQLite ledger of quality scores</span>
+                </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-yes">✓</span>
+                    
+                  </td>
+                
+                  <td class="current-col">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+                  <td class="">
+                    
+                      <span class="check-no">—</span>
+                    
+                  </td>
+                
+              </tr>
+            
+          
             
           
         
@@ -853,7 +1489,7 @@ function setView(v) {
                 <div class="wordmark">
                     <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
                 </div>
-                <div class="version">v0.4.0</div>
+                <div class="version">v0.4.1</div>
             </div>
             <div class="footer-right">
                 <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
