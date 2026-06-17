@@ -1087,8 +1087,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_041(project_dir):
-    assert synlynk.VERSION == "0.4.1"
+def test_version_is_042(project_dir):
+    assert synlynk.VERSION == "0.4.2"
 
 
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):
@@ -1630,3 +1630,88 @@ def test_cmd_run_trio_warns_with_fewer_than_three_agents(project_dir, monkeypatc
     sl.cmd_run_trio("do thing")
     out = capsys.readouterr().out
     assert "1" in out or "agent" in out.lower()
+
+
+# ── Task Status Model (v0.4.2) ────────────────────────────────────────────────
+
+def test_task_statuses_constant_defined():
+    assert hasattr(synlynk, "TASK_STATUSES")
+    assert synlynk.TASK_STATUSES["[ ]"] == "active"
+    assert synlynk.TASK_STATUSES["[x]"] == "done"
+    assert synlynk.TASK_STATUSES["[-]"] == "deferred"
+    assert synlynk.TASK_STATUSES["[~]"] == "superseded"
+    assert synlynk.TASK_STATUSES["[>]"] == "absorbed"
+
+
+def test_generate_context_includes_deferred_tasks(project_dir):
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "## Active Tasks\n"
+        "- [ ] Active task <!-- id: 1 -->\n"
+        "- [-] Deferred task <!-- id: 2 -->\n"
+        "- [x] Done task <!-- id: 3 -->\n"
+    )
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Active task" in ctx
+    assert "Deferred task" in ctx
+    assert "Done task" not in ctx
+
+
+def test_generate_context_excludes_superseded_tasks(project_dir):
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] Active task <!-- id: 1 -->\n"
+        "- [~] Superseded task <!-- id: 2 -->\n"
+    )
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Active task" in ctx
+    assert "Superseded task" not in ctx
+
+
+def test_generate_context_excludes_absorbed_tasks(project_dir):
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] Active task <!-- id: 1 -->\n"
+        "- [>] Absorbed task <!-- id: 2 -->\n"
+    )
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Active task" in ctx
+    assert "Absorbed task" not in ctx
+
+
+def test_checkpoint_archives_superseded_tasks(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] Still active <!-- id: 1 -->\n"
+        "- [~] Superseded task <!-- id: 2 -->\n"
+    )
+    synlynk.checkpoint()
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Still active" in todo
+    assert "Superseded task" not in todo
+
+
+def test_checkpoint_archives_absorbed_tasks(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] Still active <!-- id: 1 -->\n"
+        "- [>] Absorbed task <!-- id: 2 -->\n"
+    )
+    synlynk.checkpoint()
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Still active" in todo
+    assert "Absorbed task" not in todo
+
+
+def test_checkpoint_keeps_deferred_tasks(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] Still active <!-- id: 1 -->\n"
+        "- [-] Deferred task <!-- id: 2 -->\n"
+        "- [x] Done task <!-- id: 3 -->\n"
+    )
+    synlynk.checkpoint()
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Still active" in todo
+    assert "Deferred task" in todo
+    assert "Done task" not in todo
