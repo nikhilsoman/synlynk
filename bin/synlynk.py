@@ -1689,6 +1689,51 @@ Append decisions to project-docs/memory.md with [@username].
 Check .synlynk/sentinel.md for active alerts before starting work.
 """
 
+_INSTRUCTIONS_MANIFEST = ".synlynk/instructions.json"
+
+_INSTRUCTION_TARGETS = [
+    # (path, tool, marker_style, detection_fn)
+    ("CLAUDE.md",                          "claude",    "html", lambda: True),
+    ("GEMINI.md",                          "agy",       "html", lambda: True),
+    ("AGENTS.md",                          "codex",     "html", lambda: True),
+    (".cursor/rules/synlynk.mdc",          "cursor",    "none", lambda: os.path.isdir(".cursor")),
+    (".github/copilot-instructions.md",    "copilot",   "html", lambda: os.path.isdir(".github")),
+    (".windsurfrules",                     "windsurf",  "hash", lambda: True),
+    ("AI_INSTRUCTIONS.md",                 "universal", "html", lambda: True),
+]
+
+
+def _load_instruction_manifest() -> dict:
+    """Returns files dict from .synlynk/instructions.json, or {} if absent."""
+    if not os.path.exists(_INSTRUCTIONS_MANIFEST):
+        return {}
+    try:
+        return json.load(open(_INSTRUCTIONS_MANIFEST)).get("files", {})
+    except (json.JSONDecodeError, KeyError):
+        return {}
+
+
+def _write_instruction_manifest(entries: dict) -> None:
+    """Write .synlynk/instructions.json with schema_version, synlynk_version, and file SHAs."""
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
+    existing = _load_instruction_manifest()
+    existing.update({
+        path: {
+            "tool": info["tool"],
+            "sha": info["sha"],
+            "last_checked": ts,
+        }
+        for path, info in entries.items()
+    })
+    manifest = {
+        "schema_version": 1,
+        "generated_at": ts,
+        "synlynk_version": VERSION,
+        "files": existing,
+    }
+    with open(_INSTRUCTIONS_MANIFEST, "w") as f:
+        json.dump(manifest, f, indent=2)
+
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
     telemetry_file = ".synlynk/telemetry.json"

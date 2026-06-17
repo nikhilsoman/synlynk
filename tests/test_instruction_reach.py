@@ -136,3 +136,38 @@ def test_build_windsurf_rules_is_terse():
     assert len(lines) <= 8        # terse — no headers, bullet-style directives
     assert "context.md" in content
     assert "worktree" in content.lower() or "main" in content
+
+
+def test_write_instruction_manifest_creates_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk import _write_instruction_manifest
+    import json
+    entries = {"CLAUDE.md": {"tool": "claude", "sha": "abc123"}}
+    _write_instruction_manifest(entries)
+    manifest = json.load(open(".synlynk/instructions.json"))
+    assert manifest["schema_version"] == 1
+    assert manifest["files"]["CLAUDE.md"]["sha"] == "abc123"
+    assert manifest["files"]["CLAUDE.md"]["tool"] == "claude"
+    assert "last_checked" in manifest["files"]["CLAUDE.md"]
+
+
+def test_load_instruction_manifest_returns_empty_when_absent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk import _load_instruction_manifest
+    assert _load_instruction_manifest() == {}
+
+
+def test_manifest_sha_covers_only_synlynk_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk import _extract_synlynk_section, _compute_section_sha
+    content_with_user = '# User stuff\n<!-- synlynk:start version="0.4.1" tool="claude" -->\nblock\n<!-- synlynk:end -->\n# More user'
+    section = _extract_synlynk_section(content_with_user, "html")
+    sha = _compute_section_sha(section)
+    # Changing user content outside markers must not change the sha
+    content_modified = '# CHANGED user stuff\n<!-- synlynk:start version="0.4.1" tool="claude" -->\nblock\n<!-- synlynk:end -->\n# More user'
+    section2 = _extract_synlynk_section(content_modified, "html")
+    sha2 = _compute_section_sha(section2)
+    assert sha == sha2
