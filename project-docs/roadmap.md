@@ -12,6 +12,7 @@
 | v0.4.2 | Task Status Model | Project state — 5-state `TASK_STATUSES` (`[ ]` active `[x]` done `[-]` deferred `[~]` superseded `[>]` absorbed); deferred tasks surfaced in context; checkpoint archives all resolved states; agent templates updated | Flat files | ✅ Shipped | June 2026 |
 | v0.5.0 | Capability Engine | Scheduler — model-aware routing, 3D domain taxonomy (engg·org·industry), quality signal hierarchy (human→verifier→auto), `dispatch_rework` signal, `synlynk story/score` CLI, `state.db` SQLite ledger | **SQLite WAL** | ✅ Shipped | June 2026 |
 | v0.6.0 | Job Control + Constraints | IPC complete — constraint propagation, job state machine · **+** model version tier-2 probe, `synlynk pr check`, `synlynk score attest`, verifier pipeline capture, Tokq `org_domain_tags` | SQLite extended | ✅ Shipped | June 2026 |
+| v0.6.1 | Patch release | `VERSION` constant synced to GitHub releases (was perpetually behind); bundles v0.4.1 instruction reach + v0.4.2 task status model patches into a named release | Flat files | ✅ Shipped | June 2026 |
 | v0.7.0 | Async Pipeline + Daemon | Shell — `synlynk dispatch`, daemon, `synlynk review` TUI | **HTTP Context Server** | Planned | Oct 2026 |
 | v0.8.0 | Open Context Protocol | Ecosystem interface — `context --for`, `checkpoint --from`, MCP server | HTTP server (public) | Planned | Nov 2026 |
 | v0.9.0 | Review TUI + Team Safety | Shell polish — full curses TUI, append-only event log, team guardrails | JSONL event log | Planned | Dec 2026 |

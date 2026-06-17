@@ -30,7 +30,28 @@
   - Updated Command Reference on Page 6: relayout to 2-column command grid with 16mm margins (was edge-filling). Added `synlynk instructions status/diff/update/ack` commands.
   - Updated roadmap on Page 7 back cover to show v0.5 and v0.6 as `✓ Live · June 2026`.
   - Fixed all page containers: `min-height: 297mm` → `height: 297mm; max-height: 297mm; overflow: hidden` to prevent Chrome overflow splitting.
+  - Fixed all 6 "gemini" references → "agy" in terminal/diagram samples.
   - Generated PDF using headless Google Chrome at `docs/synlynk-quickstart-apple.pdf`.
+
+### Session: v0.4.2 Task Status Model — PR #46, merged
+
+- **Merged:** PR #46 (`feat/v0.4.2-task-status-model`) — 5-state todo.md model
+- **What shipped:**
+  - **`TASK_STATUSES` constant:** `"[ ]": "active"`, `"[x]": "done"`, `"[-]": "deferred"`, `"[~]": "superseded"`, `"[>]": "absorbed"` — module-level dict, testable
+  - **`generate_context()`:** deferred `[-]` tasks now included under `### Deferred`; superseded `[~]` and absorbed `[>]` excluded (resolved, no agent attention needed)
+  - **`checkpoint()`:** archives `[x]`, `[~]`, `[>]` as "Resolved"; keeps `[ ]` and `[-]`; devlog section renamed "Resolved (checkpoint)"
+  - **Agent instruction templates:** all 3 builders (`_build_templates`, GEMINI.md/AGENTS.md variant, `_build_windsurf_rules`) updated with 5-state legend instead of "Mark tasks `[x]`"
+  - **`init()` todo template:** HTML comment legend `<!-- Status: [ ] active  [x] done  [-] deferred  [~] superseded  [>] absorbed -->`
+- **Tests:** 251 passing (7 new)
+- **Blog post:** `docs/blog/14-v0.4.2-task-status-model.md`
+
+### Session: Version sync fix — PR #47, v0.6.1 GitHub release
+
+- **Bug found:** `VERSION = "0.4.2"` while GitHub releases were at v0.6.0; `synlynk upgrade` showed "upgrade available: v0.6.0" perpetually after installing from main
+- **Root cause:** v0.5.0 and v0.6.0 features were fully in `bin/synlynk.py` but `VERSION` constant was never synced to match published GitHub release tags
+- **Fix (PR #47):** `VERSION = "0.6.1"` — reflects v0.6.0 base + v0.4.1 instruction reach + v0.4.2 task status model patches
+- **Release:** Cut GitHub release `v0.6.1` with full changelog; `synlynk upgrade` now reports "latest version" correctly
+- **Tests:** 251 passing
 
 ## 2026-06-14
 ### Session: v0.6.0 Job Control — R2 fix, merge PR #42

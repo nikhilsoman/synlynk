@@ -3,12 +3,13 @@
     "minor": "0.6",
     "label": "v0.6.x",
     "theme": "Job Control + Model-Aware Capability Engine",
-    "date": "2026-06-14",
-    "current": false,
+    "date": "2026-06-17",
+    "current": true,
     "in_window": true,
-    "install_cmd": null,
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/12-pr42-v060-job-control/",
     "patches": [
+      { "version": "0.6.1", "date": "2026-06-17", "summary": "VERSION synced to GitHub releases (was stuck at 0.4.x); instruction reach (7 IDE targets, SHA manifest, drift detection); task status model (5 states); AGY replaces Gemini CLI throughout" },
       { "version": "0.6.0", "date": "2026-06-14", "summary": "Model version tier-2 probe, synlynk pr check, synlynk score attest, verifier pipeline capture, Tokq org_domain_tags capability dimension" }
     ]
   },
@@ -30,7 +31,7 @@
     "label": "v0.4.x",
     "theme": "Hybrid Workgroup Bootstrap",
     "date": "2026-06-17",
-    "current": true,
+    "current": false,
     "in_window": true,
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/11-pr39-v040-hybrid-workgroup-bootstrap/",
