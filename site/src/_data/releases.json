@@ -35,6 +35,7 @@
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/11-pr39-v040-hybrid-workgroup-bootstrap/",
     "patches": [
+      { "version": "0.4.2", "date": "2026-06-17", "summary": "Task status model: 5 states (active/done/deferred/superseded/absorbed), deferred tasks in context, checkpoint archives all resolved states, agent template updates" },
       { "version": "0.4.1", "date": "2026-06-17", "summary": "Instruction reach to Cursor/Copilot/Windsurf, SHA manifest, runtime drift detection, synlynk instructions CLI, DB_PATH centralised to ~/.synlynk/projects/" },
       { "version": "0.4.0", "date": "2026-06-14", "summary": "Agent discovery, dispatch, job store, init wizard with Magic Moments, run --trio" }
     ]

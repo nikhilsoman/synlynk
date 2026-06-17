@@ -17,6 +17,13 @@
 - [x] Scan + maturity detection + SECTION_SIGNALS + GH ID extraction <!-- id: 13 --> [@nikhilsoman]
 - [x] Unified roadmap + archive superseded proposals <!-- id: 14 --> [@nikhilsoman]
 
+## v0.4.2 — Task Status Model (completed 2026-06-17)
+- [x] `TASK_STATUSES` constant: 5-state model `[ ]` active `[x]` done `[-]` deferred `[~]` superseded `[>]` absorbed <!-- id: 28 --> [@nikhilsoman]
+- [x] `generate_context()`: include deferred `[-]` tasks in context under `### Deferred`; exclude `[~]` and `[>]` <!-- id: 29a --> [@nikhilsoman]
+- [x] `checkpoint()`: archive `[x]`, `[~]`, `[>]` as "Resolved"; keep `[ ]` and `[-]` <!-- id: 29b --> [@nikhilsoman]
+- [x] Agent instruction templates updated with 5-state legend (CLAUDE.md, GEMINI.md/AGENTS.md, Windsurf) <!-- id: 29c --> [@nikhilsoman]
+- [x] `init()` todo template: add status legend HTML comment <!-- id: 29d --> [@nikhilsoman]
+
 ## v0.4.1 — Instruction Reach (completed 2026-06-17)
 - [x] Remove Gemini CLI, replace with AGY throughout baselines/discovery/probe <!-- id: 15 --> [@nikhilsoman]
 - [x] Section marker system (html/hash/none) + `_extract_synlynk_section` + `_compute_section_sha` <!-- id: 16 --> [@nikhilsoman]
