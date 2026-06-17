@@ -363,7 +363,7 @@ def load_config() -> dict:
         "owner": None,
         "repo": None,
         "project_id": None,
-        "agent_slots": {"claude": "claude", "agy": "gemini", "codex": "codex"},
+        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
         "team": None,
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
@@ -410,7 +410,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
     """
     probe_cmds = {
         "claude": [cli, "/status"],
-        "gemini": [cli, "--version"],
+        "agy":    [cli, "--version"],
         "codex":  [cli, "--version"],
     }
     cmd = probe_cmds.get(agent_name, [cli, "--version"])
@@ -419,6 +419,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
         text = (result.stdout or "") + (getattr(result, "stderr", "") or "")
         patterns = [
             r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
+            r"(agy-[\w.-]+)",
             r"(gemini-[\w.-]+)",
             r"(gpt-[\d.]+-[\w.-]+)",
             r"(codex-[\w-]+)",
@@ -1322,7 +1323,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
                      owner: str = None, agent_slots: dict = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
-    _agent_slots = agent_slots or {"claude": "claude", "agy": "gemini", "codex": "codex"}
+    _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex"}  # AGY CLI binary is named 'agy' — update when binary is renamed
 
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
@@ -2827,7 +2828,7 @@ def main() -> None:
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch an agent to run a task in the background")
     dispatch_parser.add_argument("agent",
-        help="Agent name: claude, gemini, codex, agy")
+        help="Agent name: claude, agy, codex")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -2850,7 +2851,7 @@ def main() -> None:
 
     launch_parser = subparsers.add_parser(
         "launch", help="Launch an agent CLI interactively with pre-loaded context")
-    launch_parser.add_argument("agent", help="Agent name: claude, gemini, codex, agy")
+    launch_parser.add_argument("agent", help="Agent name: claude, agy, codex")
     launch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 

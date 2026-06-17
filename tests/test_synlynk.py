@@ -658,7 +658,7 @@ def test_load_config_has_new_defaults(tmp_path, monkeypatch):
     assert config["owner"] is None
     assert config["project_id"] is None
     assert config["agent_slots"]["claude"] == "claude"
-    assert config["agent_slots"]["agy"] == "gemini"
+    assert config["agent_slots"]["agy"] == "agy"
     assert config["agent_slots"]["codex"] == "codex"
 
 
