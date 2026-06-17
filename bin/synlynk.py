@@ -1319,7 +1319,7 @@ def _update_config(updates: dict) -> None:
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
-_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AI_INSTRUCTIONS.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
 _SCAN_SKIP_DIRS = {".git", "node_modules", ".synlynk", "project-docs",
                    "__pycache__", ".venv", ".next", "dist", "build"}
 
@@ -1687,6 +1687,7 @@ _INSTRUCTIONS_MANIFEST = ".synlynk/instructions.json"
 
 _INSTRUCTION_TARGETS = [
     # (path, tool, marker_style, detection_fn)
+    # detection_fn: called in init() to decide whether to write the file.
     ("CLAUDE.md",                          "claude",    "html", lambda: True),
     ("GEMINI.md",                          "agy",       "html", lambda: True),
     ("AGENTS.md",                          "codex",     "html", lambda: True),
@@ -2990,20 +2991,16 @@ def init(force: bool = False, agents: list = None,
         _write_instruction_file(fname, required, content, mstyle)
 
     # Extended targets: written based on environment detection.
+    # Guards are sourced from _INSTRUCTION_TARGETS[i][3] (detection_fn).
+    _target_detection = {fpath: fn for fpath, _, _, fn in _INSTRUCTION_TARGETS}
     extended = [
         (".cursor/rules/synlynk.mdc",       "cursor",    "none", _build_cursor_mdc()),
         (".github/copilot-instructions.md",  "copilot",   "html", _build_copilot_instructions()),
         (".windsurfrules",                   "windsurf",  "hash", _build_windsurf_rules()),
         ("AI_INSTRUCTIONS.md",              "universal",  "html", templates.get("AI_INSTRUCTIONS.md", "")),
     ]
-    ext_guards = {
-        ".cursor/rules/synlynk.mdc":       lambda: os.path.isdir(".cursor"),
-        ".github/copilot-instructions.md": lambda: os.path.isdir(".github"),
-        ".windsurfrules":                  lambda: True,
-        "AI_INSTRUCTIONS.md":             lambda: True,
-    }
     for fpath, tool, mstyle, content in extended:
-        if ext_guards[fpath]():
+        if _target_detection[fpath]():
             # marker_style='none' means synlynk owns the whole file — always overwrites
             _write_instruction_file(fpath, tool, content, mstyle)
 
