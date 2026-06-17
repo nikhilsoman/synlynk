@@ -419,3 +419,19 @@ def test_cmd_instructions_diff_shows_user_content(tmp_path, monkeypatch, capsys)
     sl.cmd_instructions_diff("CLAUDE.md")
     out = capsys.readouterr().out
     assert "User rules here" in out
+
+
+def test_instructions_status_subcommand_wired(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import json, subprocess, sys
+    json.dump({"schema_version": 1, "generated_at": "...", "synlynk_version": "0.4.1", "files": {}},
+              open(".synlynk/instructions.json", "w"))
+    # Find the synlynk.py path from sys.path
+    synlynk_path = os.path.join(os.path.dirname(__file__), '..', 'bin', 'synlynk.py')
+    result = subprocess.run(
+        [sys.executable, synlynk_path, "instructions", "status"],
+        capture_output=True, text=True, cwd=str(tmp_path)
+    )
+    # Must not fail with exit code 2 (argparse error = unknown command)
+    assert result.returncode != 2, f"argparse error: {result.stderr}"
