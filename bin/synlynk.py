@@ -839,6 +839,61 @@ def _compute_section_sha(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
+def _write_instruction_file(path: str, tool: str, content: str,
+                             marker_style: str = "html") -> bool:
+    """Write or update the synlynk block in an instruction file.
+
+    marker_style='none': synlynk owns the whole file (overwrites).
+    marker_style='html': <!-- synlynk:start --> markers.
+    marker_style='hash': # synlynk:start markers.
+
+    Behaviour:
+    1. File absent            → create with markers
+    2. File present, no marks → append block at end
+    3. File present, has marks → replace section between markers
+    Returns True always.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+    if marker_style == "none":
+        with open(path, "w") as f:
+            f.write(content)
+        return True
+
+    start = f'<!-- synlynk:start version="{VERSION}" tool="{tool}" -->'
+    end = "<!-- synlynk:end -->"
+    start_pattern = "<!-- synlynk:start"
+    if marker_style == "hash":
+        start = f'# synlynk:start version="{VERSION}"'
+        end = "# synlynk:end"
+        start_pattern = "# synlynk:start"
+
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(f"{start}\n{content}\n{end}\n")
+        return True
+
+    with open(path) as f:
+        existing = f.read()
+
+    if start_pattern in existing:
+        # Replace section between markers
+        if marker_style == "html":
+            pattern = r'<!-- synlynk:start[^>]* -->.*?<!-- synlynk:end -->'
+        else:
+            pattern = r'# synlynk:start[^\n]*\n.*?\n# synlynk:end'
+        replacement = f"{start}\n{content}\n{end}"
+        new_content = re.sub(pattern, replacement, existing, flags=re.DOTALL)
+        with open(path, "w") as f:
+            f.write(new_content)
+        return True
+
+    # Append block
+    with open(path, "a") as f:
+        f.write(f"\n{start}\n{content}\n{end}\n")
+    return True
+
+
 def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
     """Writes project-docs skeleton informed by static scan results.
 

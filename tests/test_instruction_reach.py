@@ -48,3 +48,65 @@ def test_compute_section_sha_is_deterministic():
     assert _compute_section_sha("hello") == _compute_section_sha("hello")
     assert _compute_section_sha("hello") != _compute_section_sha("world")
     assert len(_compute_section_sha("hello")) == 16
+
+
+def test_write_instruction_file_creates_new_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk import _write_instruction_file
+    result = _write_instruction_file("CLAUDE.md", "claude", "synlynk content", "html")
+    assert result is True
+    text = open("CLAUDE.md").read()
+    assert "<!-- synlynk:start" in text
+    assert "synlynk content" in text
+    assert "<!-- synlynk:end -->" in text
+
+
+def test_write_instruction_file_appends_to_existing_no_markers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    open("CLAUDE.md", "w").write("# User content\nsome existing rules\n")
+    from synlynk import _write_instruction_file
+    _write_instruction_file("CLAUDE.md", "claude", "synlynk block", "html")
+    text = open("CLAUDE.md").read()
+    assert "# User content" in text          # preserved
+    assert "synlynk block" in text           # appended
+    assert text.index("# User content") < text.index("synlynk block")  # user content first
+
+
+def test_write_instruction_file_replaces_existing_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    existing = '# User\n<!-- synlynk:start version="0.4.0" tool="claude" -->\nold content\n<!-- synlynk:end -->\n# After'
+    open("CLAUDE.md", "w").write(existing)
+    from synlynk import _write_instruction_file
+    _write_instruction_file("CLAUDE.md", "claude", "new content", "html")
+    text = open("CLAUDE.md").read()
+    assert "old content" not in text
+    assert "new content" in text
+    assert "# User" in text       # user content above preserved
+    assert "# After" in text      # user content below preserved
+
+
+def test_write_instruction_file_hash_markers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk import _write_instruction_file
+    _write_instruction_file(".windsurfrules", "windsurf", "line one\nline two", "hash")
+    text = open(".windsurfrules").read()
+    assert "# synlynk:start" in text
+    assert "line one" in text
+    assert "# synlynk:end" in text
+
+
+def test_write_instruction_file_none_marker_owns_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".cursor/rules", exist_ok=True)
+    from synlynk import _write_instruction_file
+    _write_instruction_file(".cursor/rules/synlynk.mdc", "cursor", "---\nalwaysApply: true\n---\ncontent", "none")
+    text = open(".cursor/rules/synlynk.mdc").read()
+    assert "alwaysApply: true" in text
+    assert "<!-- synlynk" not in text  # no markers for "none" style
+
+
+def test_write_instruction_file_creates_parent_dirs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk import _write_instruction_file
+    _write_instruction_file(".github/copilot-instructions.md", "copilot", "synlynk rules", "html")
+    assert os.path.exists(".github/copilot-instructions.md")
