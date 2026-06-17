@@ -17,6 +17,18 @@
 - [x] Scan + maturity detection + SECTION_SIGNALS + GH ID extraction <!-- id: 13 --> [@nikhilsoman]
 - [x] Unified roadmap + archive superseded proposals <!-- id: 14 --> [@nikhilsoman]
 
+## v0.4.1 — Instruction Reach (completed 2026-06-17)
+- [x] Remove Gemini CLI, replace with AGY throughout baselines/discovery/probe <!-- id: 15 --> [@nikhilsoman]
+- [x] Section marker system (html/hash/none) + `_extract_synlynk_section` + `_compute_section_sha` <!-- id: 16 --> [@nikhilsoman]
+- [x] `_write_instruction_file` — create/append/replace-section for any instruction target <!-- id: 17 --> [@nikhilsoman]
+- [x] Tool-native templates: Cursor MDC, GitHub Copilot, Windsurf rules <!-- id: 18 --> [@nikhilsoman]
+- [x] `_INSTRUCTION_TARGETS` + SHA manifest (`.synlynk/instructions.json`) <!-- id: 19a --> [@nikhilsoman]
+- [x] `init()` refactored to write all 7 targets via `_INSTRUCTION_TARGETS` <!-- id: 19b --> [@nikhilsoman]
+- [x] `_check_instruction_drift()` hooked into `exec_command()` — INSTRUCTION_DRIFT sentinel <!-- id: 19c --> [@nikhilsoman]
+- [x] `synlynk instructions status/diff/update/ack` CLI <!-- id: 19d --> [@nikhilsoman]
+- [x] `DB_PATH` centralised to `~/.synlynk/projects/<hash>/state.db` (flat-file collision fix + worktree isolation) <!-- id: 19e --> [@nikhilsoman]
+- [x] `isolated_db` autouse fixture in `tests/conftest.py` <!-- id: 19f --> [@nikhilsoman]
+
 ## v0.4.0 — Conventions + Trio Bootstrap
 - [ ] Generate `project-docs/conventions.md` at `synlynk init` <!-- id: 20 --> [@nikhilsoman]
 - [ ] Always inject conventions.md into context alongside memory/roadmap/todo <!-- id: 21 --> [@nikhilsoman]

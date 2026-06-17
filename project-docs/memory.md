@@ -29,7 +29,7 @@
 - **Spec:** `docs/superpowers/specs/2026-06-07-agent-identity-dispatch-design.md`
 
 ## State DB & Agentic PM (decided 2026-06-07)
-- **Core invariant:** State never branches. All worktrees share one `~/.synlynk/projects/<project_id>/state.db`. [@nikhilsoman]
+- **Core invariant:** State never branches. All worktrees share one `~/.synlynk/projects/<key>/state.db` where `<key>` = 8-char MD5 of `git rev-parse --git-common-dir/..` (repo root). [@nikhilsoman] Implemented v0.4.1.
 - **project-docs/ retired:** Markdown files become gitignored. state.db is primary. Context bridge unchanged — agents still see `.synlynk/context.md`.
 - **Agentic PM hierarchy:** Project → Arc → Phase → Epic → Story → Event. Replaces time/capacity anchoring with dependency/verification anchoring.
   - **Arc** — strategic direction (pivot/archive/merge). The layer missing from every PM tool.
@@ -107,6 +107,14 @@ Any tool integrates in < 10 lines. No SDK. No fee. Published spec at v0.8.
 HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 [@nikhilsoman]
 
+## Instruction Reach (shipped v0.4.1, 2026-06-17)
+- **7 tracked instruction targets:** CLAUDE.md (html), GEMINI.md (html/agy), AGENTS.md (html/codex), `.cursor/rules/synlynk.mdc` (none — synlynk owns whole file), `.github/copilot-instructions.md` (html), `.windsurfrules` (hash), `AI_INSTRUCTIONS.md` (html/universal).
+- **`_INSTRUCTION_TARGETS`** is the single source of truth: `(path, tool, marker_style, detection_fn)`. Guards for conditional targets (`cursor`, `copilot`) are derived from `detection_fn` — no duplicate dict anywhere.
+- **Three marker styles:** `html` = `<!-- synlynk:start version="..." tool="..." -->` / `<!-- synlynk:end -->`; `hash` = `# synlynk:start` / `# synlynk:end`; `none` = synlynk owns whole file.
+- **SHA manifest** at `.synlynk/instructions.json` — tracks section SHA (not whole-file SHA) per target. User edits outside markers never trigger false drift events.
+- **Drift detection:** `_check_instruction_drift()` hooked into `exec_command()`. Fires `INSTRUCTION_DRIFT` sentinel once per change (deduplicates by updating manifest SHA immediately after firing). Reset via `synlynk instructions update` or `synlynk instructions ack`.
+- **AGY replaces Gemini CLI:** `"gemini"` removed from baselines, discovery, probe patterns. Trio is now claude/agy/codex. GEMINI.md template is AGY-only.
+
 ## Trio Protocol Core Decisions (decided 2026-06-01, ships v0.4.0)
 - Phase artifacts: `task-packet.md` (Architect) → `build-notes.md` (Build) → `verify-report.md` (Verify)
 - Roles emergent from usage: empirical scoring, no hardcoded vendor mapping
@@ -121,7 +129,7 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 - **exec exit code:** `exec_command()` returns child exit code as int. `main()` calls `sys.exit()`
   with it. Never swallow non-zero. Flatline triggers after 3 consecutive non-zero same-command exits.
 - **Attribution:** All `memory.md` and `devlogs/` entries in team mode MUST have `[@username]`.
-- **conftest.py:** Fixtures must mirror the real costs.md 6-column schema at all times.
+- **conftest.py:** Fixtures must mirror the real costs.md 6-column schema at all times. `isolated_db` autouse fixture redirects `synlynk.DB_PATH` to a per-test temp path — every test gets its own `state.db`, no cross-test DB pollution.
 
 ## Superseded Decisions
 - ~~Tier model (Solo/Team/Enterprise)~~ → retired 2026-06-06. Replaced by OS layer model.

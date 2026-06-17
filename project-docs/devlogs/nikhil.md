@@ -1,5 +1,27 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-17
+### Session: v0.4.1 Instruction Reach — PR #45, merged
+
+- **Merged:** PR #45 (`feat/v0.4.1-instruction-reach`) — v0.4.1 Instruction Reach fully shipped
+- **Method:** Subagent-driven development (session resumed from prior context). 10 TDD tasks. Final code review subagent (whole implementation), post-review fixes, R1 + R2 review cycles, then merge.
+- **What shipped:**
+  - **AGY cleanup:** `"gemini"` CLI removed from `AGENT_CAPABILITY_BASELINES`, `AGENT_DISCOVERY_DEFAULTS`, `_probe_model_version` probe commands, argparse help. `GEMINI.md` template now AGY-only (`agy-2.x`, no transition note). `agent_slots` `"agy":"gemini"` → `"agy":"agy"`.
+  - **Section marker system:** Three styles — `html` (`<!-- synlynk:start -->` / `<!-- synlynk:end -->`), `hash` (`# synlynk:start`), `none` (synlynk owns whole file). `_extract_synlynk_section()` + `_compute_section_sha()` helpers.
+  - **`_write_instruction_file(path, tool, content, marker_style)`:** Three-case logic — create (file absent), append (no markers), replace-section (markers found). SHA covers section content only — user edits outside markers never trigger false drift.
+  - **Tool-native templates:** `_build_cursor_mdc()` (MDC frontmatter, `alwaysApply: true`), `_build_copilot_instructions()`, `_build_windsurf_rules()` (6-line hash-marked).
+  - **`_INSTRUCTION_TARGETS`:** Single source of truth — 7 tracked files as `(path, tool, marker_style, detection_fn)`. Guards derived from `detection_fn` in `init()`; no duplicate `ext_guards` dict.
+  - **SHA manifest (`.synlynk/instructions.json`):** Written by `init()` and `_write_instruction_manifest()`. Tracks per-file section SHAs.
+  - **`init()` refactored:** Now writes all 7 targets; uses `_INSTRUCTION_TARGETS` for guards.
+  - **`_check_instruction_drift()`:** Hooked into `exec_command()`. SHA-compares each manifest entry against current file. Fires `INSTRUCTION_DRIFT` sentinel, updates manifest SHA (deduplication — won't re-fire next exec).
+  - **`synlynk instructions` CLI:** `status` (columnar table, 5 status values) / `diff` (user content outside markers) / `update` (re-generate + refresh manifest) / `ack` (remove INSTRUCTION_DRIFT from sentinel.md).
+  - **`DB_PATH` fix (R1):** Moved from `.synlynk/state/state.db` (flat-file collision with v0.3.0 daemon state file) to `~/.synlynk/projects/<8-char-git-root-hash>/state.db`. All worktrees for a repo now share one DB (resolves worktree isolation bug).
+  - **`isolated_db` autouse fixture (R1):** Added to `tests/conftest.py` — every test gets its own temp `state.db`; no cross-test DB pollution.
+  - **Post-review fixes:** `ext_guards` dict eliminated from `init()` (guards now from `_INSTRUCTION_TARGETS[i][3]`); `AGENTS.md` added to `_AGENT_FILE_NAMES` (scan now surfaces it).
+- **Tests:** 265 passing (34 new in `tests/test_instruction_reach.py`)
+- **Blog post:** `docs/blog/13-v0.4.1-instruction-reach.md`
+- **Roadmap:** v0.4.1 row added between v0.4.0 and v0.5.0, marked ✅ Shipped.
+
 ## 2026-06-14
 ### Session: v0.6.0 Job Control — R2 fix, merge PR #42
 
