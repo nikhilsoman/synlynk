@@ -713,7 +713,7 @@
       <text x="84" y="44" font-family="'Courier New', monospace" font-weight="500" font-size="34" fill="#1a1a1a" letter-spacing="-1">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
       <text x="86" y="62" font-family="Arial, sans-serif" font-size="10" fill="#aaa" letter-spacing="2">synaptic link for ai dev</text>
     </svg>
-    <div style="font-size:11px; color:var(--t4);">Quick Start Guide &nbsp;·&nbsp; v0.4.0</div>
+    <div style="font-size:11px; color:var(--t4);">Quick Start Guide &nbsp;·&nbsp; v0.4.1</div>
   </div>
 
   <div style="height:0.5px; background:var(--rule); margin: 5mm 14mm 0;"></div>
@@ -730,7 +730,7 @@
     </div>
 
     <div class="cover-sub">From zero to a context-aware, cost-tracked,<br>multi-agent workgroup in under two minutes.</div>
-    <div class="cover-version">v0.4.0 Hybrid Workgroup Bootstrap</div>
+    <div class="cover-version">v0.4.1 Instruction Reach</div>
 
     <div class="cover-term-wrap">
       <div class="term">
@@ -742,7 +742,7 @@
           <div><span class="tp">$ </span><span class="tc">synlynk</span> <span class="ta">init</span></div>
           <div>&nbsp;</div>
           <div><span class="ts">✓</span> <span class="to">Project context injected</span></div>
-          <div><span class="ts">✓</span> <span class="to">3 agents discovered &nbsp;· &nbsp;claude · gemini · codex</span></div>
+          <div><span class="ts">✓</span> <span class="to">3 agents discovered &nbsp;· &nbsp;claude · agy · codex</span></div>
           <div><span class="ts">✓</span> <span class="to">Budget guard active &nbsp;&nbsp;· &nbsp;$10.00 / session</span></div>
           <div><span class="ts">✓</span> <span class="to">Sentinel monitoring enabled</span></div>
           <div>&nbsp;</div>
@@ -754,7 +754,8 @@
     <div class="cover-pills">
       <div class="cover-pill">Zero dependencies</div>
       <div class="cover-pill">Python 3 stdlib only</div>
-      <div class="cover-pill">Claude · Gemini · Codex</div>
+      <div class="cover-pill">Claude · AGY · Codex</div>
+      <div class="cover-pill">Instruction reach</div>
       <div class="cover-pill">Cost tracking</div>
       <div class="cover-pill">Sentinel guard</div>
       <div class="cover-pill">Background dispatch</div>
@@ -809,7 +810,7 @@
     <div class="eyebrow">What is Synlynk?</div>
     <h1>Your AI agents,<br><span class="accent-teal">working together.</span></h1>
 
-    <p class="lead" style="max-width:140mm;">Synlynk is a single-file Python CLI that wraps AI agents — Claude, Gemini, Codex — and makes them project-aware, cost-tracked, and safe to run in parallel. One file. Zero dependencies. Works anywhere Python 3 runs.</p>
+    <p class="lead" style="max-width:140mm;">Synlynk is a single-file Python CLI that wraps AI agents — Claude, AGY, Codex — and makes them project-aware, cost-tracked, and safe to run in parallel. One file. Zero dependencies. Works anywhere Python 3 runs.</p>
 
     <div class="rule"></div>
 
@@ -836,7 +837,7 @@
       <div class="flow-node">
         <span class="flow-node-icon">🤖</span>
         <div class="flow-node-label">AI Agent</div>
-        <div class="flow-node-sub">claude · gemini · codex</div>
+        <div class="flow-node-sub">claude · agy · codex</div>
       </div>
       <div class="flow-sep">→</div>
       <div class="flow-node">
@@ -949,7 +950,7 @@
         <div>&nbsp;</div>
         <div><span class="ts">✓</span> <span class="to">Installed to ~/.synlynk/bin/synlynk</span></div>
         <div><span class="ts">✓</span> <span class="to">PATH updated in ~/.zshrc</span></div>
-        <div><span class="ts">✓</span> <span class="to">synlynk 0.4.0 ready</span></div>
+        <div><span class="ts">✓</span> <span class="to">synlynk 0.4.1 ready</span></div>
       </div>
     </div>
 
@@ -958,7 +959,7 @@
         <div class="step-n">2</div>
         <div class="step-body">
           <div class="step-title">Bootstrap any project</div>
-          <div class="step-desc">Run inside any repo. Creates <code>project-docs/</code> and writes <code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>AI_INSTRUCTIONS.md</code>. Safe to re-run — skips existing files.</div>
+          <div class="step-desc">Run inside any repo. Creates <code>project-docs/</code>, writes agent instruction files for all detected IDEs and CLIs, and generates a SHA manifest. Safe to re-run — appends to existing files without overwriting user content.</div>
         </div>
       </div>
     </div>
@@ -973,8 +974,9 @@
         <div><span class="ts">  ✓</span> <span class="to">project-docs/roadmap.md</span></div>
         <div><span class="ts">  ✓</span> <span class="to">project-docs/memory.md</span></div>
         <div><span class="ts">  ✓</span> <span class="to">project-docs/todo.md &nbsp;&amp; costs.md</span></div>
-        <div><span class="ts">  ✓</span> <span class="to">CLAUDE.md · GEMINI.md &nbsp;(context injected every session)</span></div>
-        <div><span class="ts">  ✓</span> <span class="to">Agents: </span><span style="color:#5B8DEF;">claude</span><span class="to"> · </span><span style="color:#A259F7;">gemini</span></div>
+        <div><span class="ts">  ✓</span> <span class="to">CLAUDE.md · GEMINI.md · AGENTS.md &nbsp;(trio instruction files)</span></div>
+        <div><span class="ts">  ✓</span> <span class="to">.cursor/rules/synlynk.mdc · .windsurfrules &nbsp;(IDE reach)</span></div>
+        <div><span class="ts">  ✓</span> <span class="to">Agents: </span><span style="color:#5B8DEF;">claude</span><span class="to"> · </span><span style="color:#2EC4A0;">agy</span><span class="to"> · </span><span style="color:#A259F7;">codex</span></div>
         <div>&nbsp;</div>
         <div><span class="ts">  →</span> <span class="to">synlynk exec claude</span></div>
       </div>
@@ -1046,8 +1048,8 @@
         <div><span class="tp">$ </span><span class="tc">synlynk dispatch</span> <span class="ta">claude</span> <span class="tf">--task</span> <span style="color:#ccc;">"Write unit tests for the billing module"</span></div>
         <div><span class="ts">  ✓</span> <span class="to">Dispatched job-a3f2 &nbsp;(claude) &nbsp;running in background</span></div>
         <div>&nbsp;</div>
-        <div><span class="tp">$ </span><span class="tc">synlynk dispatch</span> <span class="ta">gemini</span> <span class="tf">--task</span> <span style="color:#ccc;">"Review billing API for edge cases"</span></div>
-        <div><span class="ts">  ✓</span> <span class="to">Dispatched job-b7e1 &nbsp;(gemini) &nbsp;running in background</span></div>
+        <div><span class="tp">$ </span><span class="tc">synlynk dispatch</span> <span class="ta">agy</span> <span class="tf">--task</span> <span style="color:#ccc;">"Review billing API for edge cases"</span></div>
+        <div><span class="ts">  ✓</span> <span class="to">Dispatched job-b7e1 &nbsp;(agy) &nbsp;running in background</span></div>
         <div>&nbsp;</div>
         <div><span class="tco"># Both agents working simultaneously — terminal is yours</span></div>
       </div>
@@ -1062,7 +1064,7 @@
             <div><span class="tp">$ </span><span class="tc">synlynk jobs</span></div>
             <div>&nbsp;</div>
             <div><span class="ts">●</span> <span style="color:#ccc;">job-a3f2</span> &nbsp;<span style="color:#5B8DEF;">claude</span> &nbsp;<span class="to">running 2m14s</span></div>
-            <div><span class="ts">●</span> <span style="color:#ccc;">job-b7e1</span> &nbsp;<span style="color:#A259F7;">gemini</span> &nbsp;<span class="to">running 1m58s</span></div>
+            <div><span class="ts">●</span> <span style="color:#ccc;">job-b7e1</span> &nbsp;<span style="color:#2EC4A0;">agy</span> &nbsp;<span class="to">running 1m58s</span></div>
           </div>
         </div>
       </div>
@@ -1093,7 +1095,7 @@
         <div><span class="tp">$ </span><span class="tc">synlynk run</span> <span class="tf">--trio</span> <span style="color:#ccc;">"Add Stripe webhook handler"</span></div>
         <div>&nbsp;</div>
         <div><span class="to">  Phase 1 &nbsp;</span><span style="color:#FFD060;">Architect</span><span class="to"> (claude) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-c1a0</span></div>
-        <div><span class="to">  Phase 2 &nbsp;</span><span style="color:#A259F7;">Builder &nbsp;</span><span class="to"> (gemini) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-d4b2</span></div>
+        <div><span class="to">  Phase 2 &nbsp;</span><span style="color:#A259F7;">Builder &nbsp;</span><span class="to"> (agy) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-d4b2</span></div>
         <div><span class="to">  Phase 3 &nbsp;</span><span style="color:#5B8DEF;">Verifier</span><span class="to"> (claude) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-e9f3</span></div>
         <div>&nbsp;</div>
         <div><span class="ts">  ✓ Trio complete.</span><span class="to"> &nbsp;synlynk logs job-e9f3</span></div>
@@ -1101,10 +1103,10 @@
     </div>
 
     <div class="callout">
-      <div class="callout-dot" style="background:var(--blue);"></div>
+      <div class="callout-dot" style="background:var(--green);"></div>
       <div class="callout-body">
-        <div class="callout-title">Coming in v0.5.0 — Smart Routing</div>
-        <div class="callout-text">Dispatch will automatically route to the best-performing agent for each task domain, based on historical capability scores. Pass <code>--story &lt;id&gt;</code> now to start tracking work items.</div>
+        <div class="callout-title">Live in v0.5.0 — Smart Routing</div>
+        <div class="callout-text">Dispatch automatically routes to the best-performing agent for each task domain, based on historical capability scores from a SQLite ledger. Use <code>synlynk story create</code> and <code>synlynk score add</code> to build up routing data.</div>
       </div>
     </div>
 
@@ -1197,6 +1199,13 @@
               <div class="alert-desc">Or job has been running &gt;30 min without output (STALL). Reconciled automatically on next run.</div>
             </div>
           </div>
+          <div class="alert-row">
+            <div class="alert-badge badge-yellow">DRIFT</div>
+            <div>
+              <div class="alert-title">Instruction file edited outside synlynk</div>
+              <div class="alert-desc">A tracked file's synlynk section was modified externally. Run <code>synlynk instructions update</code> or <code>ack</code> to resolve.</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1276,6 +1285,17 @@
       </tbody>
     </table>
 
+    <h2>Instructions <span class="tag tag-teal">v0.4.1</span></h2>
+    <table class="cmd-table">
+      <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>synlynk instructions status</td><td>Show status of each tracked instruction file: ok / missing / drifted / untracked / no-markers.</td></tr>
+        <tr><td>synlynk instructions diff</td><td>Show user content outside synlynk markers in each tracked file.</td></tr>
+        <tr><td>synlynk instructions update &lt;file&gt;</td><td>Regenerate the synlynk section in a file and reset its SHA in the manifest.</td></tr>
+        <tr><td>synlynk instructions ack &lt;file&gt;</td><td>Remove INSTRUCTION_DRIFT lines from sentinel.md without regenerating.</td></tr>
+      </tbody>
+    </table>
+
     <div class="rule"></div>
 
     <div class="cols-2">
@@ -1291,10 +1311,11 @@
           <div>&nbsp; &nbsp;&nbsp;&nbsp; └── <span class="teal">nikhil.md</span> &nbsp;<span class="muted">← per-user log</span></div>
           <div>&nbsp;</div>
           <div><span class="dir">.synlynk/</span></div>
-          <div>&nbsp; ├── config.json &nbsp;&nbsp;&nbsp;<span class="muted">← budget limits</span></div>
-          <div>&nbsp; ├── context.md &nbsp;&nbsp;&nbsp;<span class="muted">← auto-generated</span></div>
-          <div>&nbsp; ├── telemetry.json <span class="muted">← rolling log</span></div>
-          <div>&nbsp; └── logs/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="muted">← job outputs</span></div>
+          <div>&nbsp; ├── config.json &nbsp;&nbsp;&nbsp;&nbsp;<span class="muted">← budget limits</span></div>
+          <div>&nbsp; ├── context.md &nbsp;&nbsp;&nbsp;&nbsp;<span class="muted">← auto-generated</span></div>
+          <div>&nbsp; ├── telemetry.json &nbsp;<span class="muted">← rolling log</span></div>
+          <div>&nbsp; ├── <span class="teal">instructions.json</span> <span class="muted">← SHA manifest</span></div>
+          <div>&nbsp; └── logs/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="muted">← job outputs</span></div>
         </div>
       </div>
       <div>
@@ -1312,8 +1333,8 @@
         <div class="callout" style="margin-top:6px;">
           <div class="callout-dot" style="background:var(--purple);"></div>
           <div class="callout-body">
-            <div class="callout-title">Use it in every repo</div>
-            <div class="callout-text"><code>synlynk init</code> + <code>synlynk exec</code> are safe to use in any project immediately. Hold off on <code>dispatch</code> in critical workflows until v0.5.0 smart routing lands in August.</div>
+            <div class="callout-title">Smart routing is live in v0.5.0</div>
+            <div class="callout-text"><code>synlynk dispatch</code> and <code>synlynk run --trio</code> now route automatically based on capability scores. Use <code>synlynk story create</code> and <code>synlynk score add</code> to build up routing data across your team.</div>
           </div>
         </div>
       </div>
@@ -1331,7 +1352,7 @@
 
   <div class="back-chrome">
     <span class="back-chrome-logo">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</span>
-    <span style="font-size:10px; color:rgba(255,255,255,0.25);">Quick Start Guide · v0.4.0</span>
+    <span style="font-size:10px; color:rgba(255,255,255,0.25);">Quick Start Guide · v0.4.1</span>
   </div>
 
   <div class="back-content">
@@ -1345,14 +1366,14 @@
         <div class="back-row">
           <div class="back-ver" style="color:#5B8DEF;">v0.5</div>
           <div>
-            <div class="back-rtitle">Capability Engine <span class="back-rdate">Aug 2026</span></div>
+            <div class="back-rtitle">Capability Engine <span class="back-rdate" style="color:#2EC4A0;">✓ Live · June 2026</span></div>
             <div class="back-rdesc">Model-aware routing · 3D domain taxonomy · quality signal hierarchy · SQLite state ledger</div>
           </div>
         </div>
         <div class="back-row">
           <div class="back-ver" style="color:#A259F7;">v0.6</div>
           <div>
-            <div class="back-rtitle">Job Control + Constraints <span class="back-rdate">Sep 2026</span></div>
+            <div class="back-rtitle">Job Control + Constraints <span class="back-rdate" style="color:#2EC4A0;">✓ Live · June 2026</span></div>
             <div class="back-rdesc">Constraint propagation · job state machine · PR attestation · verifier pipeline capture</div>
           </div>
         </div>
@@ -1392,7 +1413,7 @@
         </div>
         <div class="back-link-item">
           <div class="back-link-label">Version</div>
-          <div class="back-link-val">v0.4.0 · June 2026</div>
+          <div class="back-link-val">v0.4.1 · June 2026</div>
         </div>
       </div>
 
