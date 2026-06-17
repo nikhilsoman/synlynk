@@ -2769,24 +2769,67 @@ def init(force: bool = False, agents: list = None,
     else:
         print(f"  {_DIM}All project-docs already exist — skipped (use --force to overwrite){_RESET}")
 
-    # Write agent instruction files.
+    # Write agent instruction files using _write_instruction_file().
     agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex"}
     templates = _build_templates(org=org, repo=repo, project_id=project_id)
+
+    # Core trio: only write if agent was discovered as functional.
+    trio_content = {
+        "CLAUDE.md":   (templates.get("CLAUDE.md", ""), "html"),
+        "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
+        "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
+    }
     _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
-    for filename, content in templates.items():
-        required = _agent_guards.get(filename)
-        if required and required not in agent_set:
+    for fname, (content, mstyle) in trio_content.items():
+        required = _agent_guards[fname]
+        if required not in agent_set:
             continue
-        if filename in ("GEMINI.md", "CLAUDE.md", "AI_INSTRUCTIONS.md", "AGENTS.md", ".cursorrules"):
-            file_path = filename
-        elif filename == "config.json":
-            file_path = os.path.join(".synlynk", filename)
-        else:
-            file_path = os.path.join("project-docs", filename)
-        if os.path.exists(file_path) and not force:
+        _write_instruction_file(fname, required, content, mstyle)
+
+    # Extended targets: written based on environment detection.
+    extended = [
+        (".cursor/rules/synlynk.mdc",       "cursor",    "none", _build_cursor_mdc()),
+        (".github/copilot-instructions.md",  "copilot",   "html", _build_copilot_instructions()),
+        (".windsurfrules",                   "windsurf",  "hash", _build_windsurf_rules()),
+        ("AI_INSTRUCTIONS.md",              "universal",  "html", templates.get("AI_INSTRUCTIONS.md", "")),
+    ]
+    ext_guards = {
+        ".cursor/rules/synlynk.mdc":       lambda: os.path.isdir(".cursor"),
+        ".github/copilot-instructions.md": lambda: os.path.isdir(".github"),
+        ".windsurfrules":                  lambda: True,
+        "AI_INSTRUCTIONS.md":             lambda: True,
+    }
+    for fpath, tool, mstyle, content in extended:
+        if ext_guards[fpath]():
+            _write_instruction_file(fpath, tool, content, mstyle)
+
+    # Write manifest of all tracked files with their SHAs.
+    manifest_entries = {}
+    for fpath, tool, mstyle, _ in [
+        ("CLAUDE.md",                        "claude",    "html", None),
+        ("GEMINI.md",                        "agy",       "html", None),
+        ("AGENTS.md",                        "codex",     "html", None),
+        (".cursor/rules/synlynk.mdc",        "cursor",    "none", None),
+        (".github/copilot-instructions.md",  "copilot",   "html", None),
+        (".windsurfrules",                   "windsurf",  "hash", None),
+        ("AI_INSTRUCTIONS.md",               "universal", "html", None),
+    ]:
+        if not os.path.exists(fpath):
             continue
-        with open(file_path, "w") as f:
-            f.write(content)
+        file_content = open(fpath).read()
+        section = _extract_synlynk_section(file_content, mstyle)
+        if section is not None:
+            manifest_entries[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
+    if manifest_entries:
+        _write_instruction_manifest(manifest_entries)
+
+    # Write config.json if needed.
+    config_json_content = templates.get("config.json", "")
+    if config_json_content:
+        config_path = os.path.join(".synlynk", "config.json")
+        if not os.path.exists(config_path) or force:
+            with open(config_path, "w") as f:
+                f.write(config_json_content)
 
     # ── Step 4: LLM enrichment offer ────────────────────────────────────────
     _print_step(4, "LLM enrichment (optional)")

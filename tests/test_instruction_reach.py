@@ -171,3 +171,71 @@ def test_manifest_sha_covers_only_synlynk_section(tmp_path, monkeypatch):
     section2 = _extract_synlynk_section(content_modified, "html")
     sha2 = _compute_section_sha(section2)
     assert sha == sha2
+
+
+def test_init_writes_cursor_rules_when_cursor_dir_exists(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".cursor", exist_ok=True)
+    os.makedirs(".synlynk", exist_ok=True)
+    def mock_input(prompt):
+        if "[y/N]" in prompt: return "n"
+        if "Email" in prompt: return ""
+        if "Industry" in prompt: return ""
+        return ""
+    monkeypatch.setattr("builtins.input", mock_input)
+    from synlynk import init
+    init(force=True)
+    assert os.path.exists(".cursor/rules/synlynk.mdc")
+    content = open(".cursor/rules/synlynk.mdc").read()
+    assert "alwaysApply: true" in content
+
+
+def test_init_skips_cursor_when_no_cursor_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    def mock_input(prompt):
+        if "[y/N]" in prompt: return "n"
+        if "Email" in prompt: return ""
+        if "Industry" in prompt: return ""
+        return ""
+    monkeypatch.setattr("builtins.input", mock_input)
+    from synlynk import init
+    init(force=True)
+    assert not os.path.exists(".cursor/rules/synlynk.mdc")
+
+
+def test_init_appends_to_existing_copilot_instructions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".github", exist_ok=True)
+    os.makedirs(".synlynk", exist_ok=True)
+    open(".github/copilot-instructions.md", "w").write("# Existing rules\nDo something.\n")
+    def mock_input(prompt):
+        if "[y/N]" in prompt: return "n"
+        if "Email" in prompt: return ""
+        if "Industry" in prompt: return ""
+        return ""
+    monkeypatch.setattr("builtins.input", mock_input)
+    from synlynk import init
+    init(force=True)
+    text = open(".github/copilot-instructions.md").read()
+    assert "# Existing rules" in text           # preserved
+    assert "synlynk" in text.lower()            # appended
+    assert text.index("# Existing rules") < text.index("<!-- synlynk:start")
+
+
+def test_manifest_written_after_init(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    def mock_input(prompt):
+        if "[y/N]" in prompt: return "n"
+        if "Email" in prompt: return ""
+        if "Industry" in prompt: return ""
+        return ""
+    monkeypatch.setattr("builtins.input", mock_input)
+    from synlynk import init
+    init(force=True)
+    assert os.path.exists(".synlynk/instructions.json")
+    import json
+    manifest = json.load(open(".synlynk/instructions.json"))
+    assert manifest["schema_version"] == 1
+    assert "AI_INSTRUCTIONS.md" in manifest["files"]

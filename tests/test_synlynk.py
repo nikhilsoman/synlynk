@@ -224,7 +224,9 @@ def test_init_skips_existing_without_force(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=False)
-    assert (tmp_path / "CLAUDE.md").read_text() == "MY CUSTOM CONTENT"
+    # _write_instruction_file appends the synlynk block without removing user content
+    text = (tmp_path / "CLAUDE.md").read_text()
+    assert "MY CUSTOM CONTENT" in text
 
 
 def test_init_force_overwrites_existing(tmp_path, monkeypatch):
