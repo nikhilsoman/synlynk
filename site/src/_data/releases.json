@@ -1,14 +1,41 @@
 [
   {
+    "minor": "0.6",
+    "label": "v0.6.x",
+    "theme": "Job Control + Model-Aware Capability Engine",
+    "date": "2026-06-14",
+    "current": false,
+    "in_window": true,
+    "install_cmd": null,
+    "blog_post": "/blog/12-pr42-v060-job-control/",
+    "patches": [
+      { "version": "0.6.0", "date": "2026-06-14", "summary": "Model version tier-2 probe, synlynk pr check, synlynk score attest, verifier pipeline capture, Tokq org_domain_tags capability dimension" }
+    ]
+  },
+  {
+    "minor": "0.5",
+    "label": "v0.5.x",
+    "theme": "Capability Engine",
+    "date": "2026-06-14",
+    "current": false,
+    "in_window": true,
+    "install_cmd": null,
+    "blog_post": null,
+    "patches": [
+      { "version": "0.5.0", "date": "2026-06-14", "summary": "SQLite WAL state.db, model-aware routing, 3D domain taxonomy, quality signal hierarchy, synlynk story/score CLI" }
+    ]
+  },
+  {
     "minor": "0.4",
     "label": "v0.4.x",
     "theme": "Hybrid Workgroup Bootstrap",
-    "date": "2026-06-14",
+    "date": "2026-06-17",
     "current": true,
     "in_window": true,
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/11-pr39-v040-hybrid-workgroup-bootstrap/",
     "patches": [
+      { "version": "0.4.1", "date": "2026-06-17", "summary": "Instruction reach to Cursor/Copilot/Windsurf, SHA manifest, runtime drift detection, synlynk instructions CLI, DB_PATH centralised to ~/.synlynk/projects/" },
       { "version": "0.4.0", "date": "2026-06-14", "summary": "Agent discovery, dispatch, job store, init wizard with Magic Moments, run --trio" }
     ]
   },

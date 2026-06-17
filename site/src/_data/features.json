@@ -104,19 +104,21 @@
   {
     "slug": "polyglot-agent-files",
     "name": "Polyglot agent files",
-    "subtitle": "Generates CLAUDE.md, GEMINI.md, and AGENTS.md from a single parameterised template",
-    "description": "`synlynk init` generates three agent instruction files — `CLAUDE.md` (Claude Code), `GEMINI.md` (Gemini CLI), and `AGENTS.md` (Codex/OpenAI CLI) — from `_build_templates(org, repo, project_id)`. All three files contain the same session protocol, live issues SOP, git worktree policy, and GitHub Projects v2 GraphQL block. This ensures every agent in the workgroup receives identical constraints from a single source of truth.",
+    "subtitle": "Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template",
+    "description": "`synlynk init` generates three agent instruction files — `CLAUDE.md` (Claude Code), `GEMINI.md` (AntiGravity/AGY CLI), and `AGENTS.md` (Codex/OpenAI CLI) — from `_build_templates(org, repo, project_id)`. All three files contain the same session protocol, live issues SOP, git worktree policy, and GitHub Projects v2 GraphQL block. This ensures every agent in the workgroup receives identical constraints from a single source of truth. As of v0.4.1, Gemini CLI is replaced by AGY (AntiGravity) as the third trio member.",
     "os_layer": "ipc",
     "user_theme": "agent-coordination",
     "introduced": "0.3",
     "usage": [
       {
-        "cmd": "synlynk init --agents claude,gemini,codex --project-id PJ_kwDO...",
-        "note": "Generates CLAUDE.md, GEMINI.md, AGENTS.md with live GraphQL blocks"
+        "cmd": "synlynk init --agents claude,agy,codex --project-id PJ_kwDO...",
+        "note": "Generates CLAUDE.md, GEMINI.md (AGY), AGENTS.md with live GraphQL blocks"
       }
     ],
-    "related": ["gh-cli-identity", "parametric-init"],
-    "changelog": []
+    "related": ["gh-cli-identity", "parametric-init", "instruction-reach"],
+    "changelog": [
+      { "version": "0.4.1", "note": "Gemini CLI replaced by AGY (AntiGravity); GEMINI.md template updated to agy-2.x, no transition note" }
+    ]
   },
   {
     "slug": "parametric-init",
@@ -181,7 +183,7 @@
     "slug": "parallel-trio",
     "name": "Parallel trio dispatch",
     "subtitle": "synlynk run --trio dispatches one task to all functional agents simultaneously",
-    "description": "`synlynk run --trio <task>` dispatches the same task description to every functional agent (claude, gemini, codex, agy — whichever are installed) in parallel background jobs. Each agent runs independently; `synlynk jobs` shows all three. This is the first form of horizontal parallelism in synlynk: same task, multiple perspectives, results streamed to separate log files for human review.",
+    "description": "`synlynk run --trio <task>` dispatches the same task description to every functional agent (claude, agy, codex — whichever are installed) in parallel background jobs. Each agent runs independently; `synlynk jobs` shows all three. This is the first form of horizontal parallelism in synlynk: same task, multiple perspectives, results streamed to separate log files for human review.",
     "os_layer": "ipc",
     "user_theme": "autonomy-dispatch",
     "introduced": "0.4",
@@ -192,6 +194,98 @@
       }
     ],
     "related": ["agent-dispatch", "agent-discovery"],
+    "changelog": []
+  },
+  {
+    "slug": "instruction-reach",
+    "name": "Instruction reach",
+    "subtitle": "Extends synlynk context injection to Cursor, GitHub Copilot, and Windsurf",
+    "description": "v0.4.1 extends `synlynk init` from 3 CLI targets to 7 tracked instruction files. In addition to `CLAUDE.md`, `GEMINI.md`, and `AGENTS.md`, synlynk now writes tool-native instruction blocks into `.cursor/rules/synlynk.mdc` (Cursor, with `alwaysApply: true` MDC frontmatter), `.github/copilot-instructions.md` (GitHub Copilot), `.windsurfrules` (Windsurf), and `AI_INSTRUCTIONS.md` (universal fallback). Three marker styles are used to preserve user content: `html` comments, `hash` (`# synlynk:start`), and `none` (synlynk owns the whole file). Cursor and Copilot targets are only written if their respective config directories exist.",
+    "os_layer": "ipc",
+    "user_theme": "agent-coordination",
+    "introduced": "0.4.1",
+    "usage": [
+      {
+        "cmd": "synlynk init",
+        "note": "Writes synlynk section to all 7 instruction targets; creates .cursor/rules/synlynk.mdc if .cursor/ exists"
+      },
+      {
+        "cmd": "synlynk instructions status",
+        "note": "Shows status (ok / missing / drifted / untracked / no-markers) for each tracked file"
+      }
+    ],
+    "related": ["polyglot-agent-files", "drift-detection"],
+    "changelog": []
+  },
+  {
+    "slug": "drift-detection",
+    "name": "Instruction drift detection",
+    "subtitle": "Fires INSTRUCTION_DRIFT sentinel when a tracked instruction file is edited outside synlynk",
+    "description": "Every `synlynk exec` call runs `_check_instruction_drift()`, which loads `.synlynk/instructions.json` (the SHA manifest written by `init`) and compares the SHA of each file's synlynk-owned section against the stored value. If any file has been edited, an `INSTRUCTION_DRIFT` alert is written to `sentinel.md`. The sentinel fires once per change — not once per exec — by updating the manifest SHA immediately after firing. Use `synlynk instructions update <file>` to regenerate the section, or `synlynk instructions ack <file>` to dismiss the alert without regenerating.",
+    "os_layer": "kernel",
+    "user_theme": "context-management",
+    "introduced": "0.4.1",
+    "usage": [
+      {
+        "cmd": "synlynk instructions diff",
+        "note": "Shows user content outside synlynk markers in each tracked file"
+      },
+      {
+        "cmd": "synlynk instructions update CLAUDE.md",
+        "note": "Regenerates the synlynk section and resets its SHA in the manifest"
+      },
+      {
+        "cmd": "synlynk instructions ack CLAUDE.md",
+        "note": "Removes INSTRUCTION_DRIFT lines from sentinel.md without regenerating"
+      }
+    ],
+    "related": ["instruction-reach", "flatline-detection"],
+    "changelog": []
+  },
+  {
+    "slug": "capability-engine",
+    "name": "Capability engine",
+    "subtitle": "Routes tasks to the best agent based on a live SQLite ledger of quality scores",
+    "description": "v0.5.0 introduces data-driven agent routing. `_best_agent_for_story(story_id)` queries the `capability_scores` SQLite view, which aggregates human ratings, verifier pass rates, and auto-quality signals across a 3D domain taxonomy (engineering domain × org domain × industry). A cold-start round-robin runs for the first 3 samples per (agent, domain) triple; recency-weighted scoring takes over after that. The `synlynk story create/list` and `synlynk score add/list` commands provide the CLI surface for the capability ledger.",
+    "os_layer": "scheduler",
+    "user_theme": "autonomy-dispatch",
+    "introduced": "0.5",
+    "usage": [
+      {
+        "cmd": "synlynk story create \"Implement OAuth flow\" --domain auth",
+        "note": "Creates a story record in state.db, returns a story_id"
+      },
+      {
+        "cmd": "synlynk score add --story story-abc123 --agent claude --quality 4",
+        "note": "Records a human quality rating (1–5) for a completed run"
+      },
+      {
+        "cmd": "synlynk score list",
+        "note": "Shows aggregated capability scores per agent per domain"
+      }
+    ],
+    "related": ["agent-dispatch", "model-version-probing"],
+    "changelog": []
+  },
+  {
+    "slug": "model-version-probing",
+    "name": "Model version probing",
+    "subtitle": "Records which model version ran each job — enabling split-model detection and honest routing",
+    "description": "v0.6.0 adds four-tier model version resolution. At dispatch time, `_probe_model_version()` fires a `--version`-style call to the agent CLI and scrapes the model identifier (e.g. `claude-opus-4-8`). This becomes `model_at_dispatch` on the job record. A `# synlynk-meta` block in the agent's output can supply `model_at_completion` (Tier 1, highest trust). If both are known and differ, `split_model=1` is set, excluding the run from capability aggregation. `synlynk score attest` allows retroactive attestation when the agent reports its model post-run.",
+    "os_layer": "scheduler",
+    "user_theme": "cost-visibility",
+    "introduced": "0.6",
+    "usage": [
+      {
+        "cmd": "synlynk score attest --job job-abc123 --model claude-opus-4-8",
+        "note": "Retroactively records which model completed the job"
+      },
+      {
+        "cmd": "synlynk pr check",
+        "note": "Blocks merge if any job in the PR used an unknown or mismatched model version"
+      }
+    ],
+    "related": ["capability-engine", "agent-dispatch"],
     "changelog": []
   }
 ]
