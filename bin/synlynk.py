@@ -1724,6 +1724,56 @@ def _check_scan_cache(root: str = ".") -> list:
     return skeleton
 
 
+def _format_source_architecture(skeleton: list, head_sha: str, cache_hit: bool,
+                                 total_files: int = 0) -> str:
+    """Formats the ## Source Architecture block for context.md."""
+    if not skeleton:
+        return ""
+    status = "cache hit" if cache_hit else "refreshed"
+    sha_short = head_sha[:7] if head_sha and head_sha != "unknown" else "unknown"
+    lines = [
+        "## Source Architecture",
+        f"_Scanned: {time.strftime('%Y-%m-%dT%H:%M')} · HEAD: {sha_short}"
+        f" · {len(skeleton)} files · {status}_",
+        "",
+    ]
+    # Group by directory
+    groups: dict = {}
+    for entry in skeleton:
+        dirname = os.path.dirname(entry["file"])
+        groups.setdefault(dirname, []).append(entry)
+
+    for dirname in sorted(groups):
+        entries = groups[dirname]
+        lang_counts: dict = {}
+        for e in entries:
+            lang_counts[e["language"]] = lang_counts.get(e["language"], 0) + 1
+        lang_str = ", ".join(
+            f"{lg} · {cnt} {'file' if cnt == 1 else 'files'}"
+            for lg, cnt in sorted(lang_counts.items())
+        )
+        label = dirname if dirname else "[root]"
+        lines.append(f"### {label}/  [{lang_str}]")
+        for entry in entries:
+            syms = entry.get("symbols", [])
+            if syms:
+                lines.append(f"`{entry['file']}` — {', '.join(syms)}")
+            else:
+                lines.append(f"`{entry['file']}`")
+        lines.append("")
+
+    if total_files > len(skeleton):
+        overflow = total_files - len(skeleton)
+        noun = "file" if overflow == 1 else "files"
+        lines.append(
+            f"> {overflow} more {noun} in source-map.md"
+            " — run `synlynk scan --deep` to refresh"
+        )
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _scan_repo_for_docs(root: str = ".") -> dict:
     """Scans repo tree for project docs and agent files outside expected locations.
 
@@ -2870,6 +2920,22 @@ def generate_context(scope: str = "full") -> None:
                     out.write("\n### Deferred\n")
                     out.writelines(deferred)
                 out.write("\n---\n\n")
+
+        # Source architecture (passive cache — re-scans if HEAD changed)
+        source_skeleton = _check_scan_cache()
+        if source_skeleton:
+            meta = _load_scan_meta()
+            head_sha = meta.get("head_sha", "unknown") if meta else "unknown"
+            current_sha = _git_head_sha() or ""
+            cache_hit = bool(meta and meta.get("head_sha") == current_sha)
+            total_files = 0
+            if meta and meta.get("deep"):
+                total_files = meta["deep"].get("total_files", 0)
+            arch_section = _format_source_architecture(
+                source_skeleton, head_sha, cache_hit, total_files
+            )
+            if arch_section:
+                out.write(arch_section)
 
         # Roadmap: header rows + In Progress rows only
         roadmap_path = os.path.join(docs_dir, "roadmap.md")

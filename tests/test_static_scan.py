@@ -442,3 +442,79 @@ def test_check_scan_cache_no_meta_triggers_scan(tmp_path, monkeypatch):
     meta = synlynk._load_scan_meta()
     assert meta is not None
     assert meta["head_sha"] == fake_sha
+
+
+# --- context injection ---
+
+def test_generate_context_includes_source_architecture(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs" / "todo.md").write_text("# Todo\n")
+    (tmp_path / "project-docs" / "roadmap.md").write_text("# Roadmap\n")
+    (tmp_path / "project-docs" / "memory.md").write_text("# Memory\n")
+    (tmp_path / "project-docs" / ".synlynk_config.json").write_text('{"mode":"single"}')
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    fake_sha = "d" * 40
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    synlynk.generate_context()
+    ctx = (tmp_path / ".synlynk" / "context.md").read_text()
+    assert "## Source Architecture" in ctx
+
+
+def test_generate_context_omits_source_architecture_without_git(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs" / "todo.md").write_text("# Todo\n")
+    (tmp_path / "project-docs" / "roadmap.md").write_text("# Roadmap\n")
+    (tmp_path / "project-docs" / "memory.md").write_text("# Memory\n")
+    (tmp_path / "project-docs" / ".synlynk_config.json").write_text('{"mode":"single"}')
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: None)
+    synlynk.generate_context()
+    ctx = (tmp_path / ".synlynk" / "context.md").read_text()
+    assert "## Source Architecture" not in ctx
+
+
+def test_generate_context_source_architecture_before_roadmap(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs" / "todo.md").write_text("# Todo\n- [ ] Task one\n")
+    (tmp_path / "project-docs" / "roadmap.md").write_text(
+        "# Roadmap\n| Priority | Feature | Description | Status | Target Release | Owner |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        "| P0 | X | Y | In Progress | v1.0 | Z |\n"
+    )
+    (tmp_path / "project-docs" / "memory.md").write_text("# Memory\n")
+    (tmp_path / "project-docs" / ".synlynk_config.json").write_text('{"mode":"single"}')
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    fake_sha = "e" * 40
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    synlynk.generate_context()
+    ctx = (tmp_path / ".synlynk" / "context.md").read_text()
+    arch_pos = ctx.find("## Source Architecture")
+    roadmap_pos = ctx.find("## Roadmap")
+    assert arch_pos != -1
+    assert roadmap_pos != -1
+    assert arch_pos < roadmap_pos
+
+
+def test_format_source_architecture_groups_by_dir():
+    skeleton = [
+        {"file": "src/auth/service.py", "language": "python", "symbols": ["AuthService", "login()"]},
+        {"file": "src/auth/models.py", "language": "python", "symbols": ["User"]},
+        {"file": "main.py", "language": "python", "symbols": ["main()"]},
+    ]
+    out = synlynk._format_source_architecture(skeleton, "abc1234", cache_hit=True, total_files=5)
+    assert "### src/auth/" in out
+    assert "### [root]/" in out
+    assert "cache hit" in out
+    # 2 more files (total_files=5, skeleton has 3)
+    assert "2 more" in out
+
+
+def test_format_source_architecture_empty_returns_empty():
+    out = synlynk._format_source_architecture([], "abc1234", cache_hit=True)
+    assert out == ""
