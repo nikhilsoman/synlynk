@@ -267,6 +267,53 @@ def cmd_pr_check() -> None:
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
 
 
+def cmd_scan(deep: bool = False, status: bool = False) -> None:
+    """synlynk scan [--deep] [--status]
+
+    No flags: force-refresh skeleton (even if HEAD unchanged).
+    --deep:   full tree walk → state.db + project-docs/source-map.md.
+    --status: show cache age, HEAD SHA, file/symbol counts.
+    """
+    if status:
+        meta = _load_scan_meta()
+        if not meta:
+            print("Source scan status: not scanned yet — run `synlynk scan` to populate")
+            return
+        sha_short = meta.get("head_sha", "unknown")[:7]
+        file_count = meta.get("file_count", 0)
+        scanned_at = meta.get("scanned_at", "unknown")
+        print("Source scan status:")
+        print(f"  Skeleton:    {file_count} files · cached · HEAD {sha_short} · {scanned_at}")
+        deep_meta = meta.get("deep")
+        if deep_meta:
+            tf = deep_meta.get("total_files", "?")
+            ts = deep_meta.get("total_symbols", "?")
+            da = deep_meta.get("scanned_at", "unknown")
+            print(f"  source-map:  {tf} files · {ts} symbols · project-docs/source-map.md · {da}")
+        else:
+            print("  source-map:  not yet generated — run `synlynk scan --deep`")
+        print("  Next refresh: on next commit (HEAD change)")
+        return
+
+    if deep:
+        print(f"  {_GREEN}▶{_RESET} Deep scanning source tree...")
+        skeleton, total_files, total_syms = _scan_full_repo()
+        sha_short = (_git_head_sha() or "unknown")[:7]
+        print(f"  {_GREEN}✓{_RESET} Scanned {total_files} files · {total_syms} symbols · HEAD {sha_short}")
+        print(f"  {_CYAN}→{_RESET} project-docs/source-map.md updated")
+        return
+
+    # No flags: force-refresh skeleton (ignore HEAD comparison)
+    head_sha = _git_head_sha()
+    if head_sha is None:
+        print("  ⚠ Not in a git repository — scan requires git")
+        return
+    skeleton = _scan_source_skeleton()
+    _save_scan_meta(head_sha, skeleton)
+    sha_short = head_sha[:7]
+    print(f"  {_GREEN}✓{_RESET} Skeleton refreshed · {len(skeleton)} files · HEAD {sha_short}")
+
+
 def cmd_score_attest(story_id: str, model_version: str) -> None:
     """Retroactively sets model_version on all 'unknown' rows for a story.
 
@@ -3679,6 +3726,12 @@ def main() -> None:
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
+    scan_parser = subparsers.add_parser("scan", help="Scan source tree and update architecture context")
+    scan_parser.add_argument("--deep", action="store_true",
+                             help="Full tree walk: populate state.db and write project-docs/source-map.md")
+    scan_parser.add_argument("--status", action="store_true",
+                             help="Show cache age, HEAD SHA, file and symbol counts")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
     exec_parser.add_argument("--force", action="store_true",
@@ -3879,6 +3932,8 @@ def main() -> None:
             cmd_instructions_ack(args.file)
         else:
             instructions_parser.print_help()
+    elif args.command == "scan":
+        cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     else:
         parser.print_help()
 

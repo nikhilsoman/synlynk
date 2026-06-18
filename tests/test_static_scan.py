@@ -518,3 +518,52 @@ def test_format_source_architecture_groups_by_dir():
 def test_format_source_architecture_empty_returns_empty():
     out = synlynk._format_source_architecture([], "abc1234", cache_hit=True)
     assert out == ""
+
+
+# --- cmd_scan ---
+
+def test_cmd_scan_status_output(tmp_path, monkeypatch, capsys, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    fake_sha = "f" * 40
+    synlynk._save_scan_meta(fake_sha, [{"file": "app.py", "language": "python", "symbols": ["main()"]}])
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    synlynk.cmd_scan(status=True)
+    out = capsys.readouterr().out
+    assert "Skeleton" in out or "skeleton" in out
+    assert "HEAD" in out or fake_sha[:7] in out
+
+
+def test_cmd_scan_status_no_cache(tmp_path, monkeypatch, capsys, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: None)
+    synlynk.cmd_scan(status=True)
+    out = capsys.readouterr().out
+    assert "no scan" in out.lower() or "not scanned" in out.lower() or "none" in out.lower()
+
+
+def test_cmd_scan_deep_writes_source_map(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    fake_sha = "a" * 40
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    synlynk.cmd_scan(deep=True)
+    assert (tmp_path / "project-docs" / "source-map.md").exists()
+
+
+def test_cmd_scan_force_refresh(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "mod.py").write_text("class Widget: pass\n")
+    fake_sha = "b" * 40
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    synlynk.cmd_scan()
+    meta = synlynk._load_scan_meta()
+    assert meta is not None
+    assert meta["head_sha"] == fake_sha
+    files = [e["file"] for e in meta.get("skeleton", [])]
+    assert any("mod.py" in f for f in files)
