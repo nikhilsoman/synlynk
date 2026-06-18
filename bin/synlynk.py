@@ -2925,14 +2925,13 @@ def generate_context(scope: str = "full") -> None:
         source_skeleton = _check_scan_cache()
         if source_skeleton:
             meta = _load_scan_meta()
-            head_sha = meta.get("head_sha", "unknown") if meta else "unknown"
             current_sha = _git_head_sha() or ""
             cache_hit = bool(meta and meta.get("head_sha") == current_sha)
             total_files = 0
             if meta and meta.get("deep"):
                 total_files = meta["deep"].get("total_files", 0)
             arch_section = _format_source_architecture(
-                source_skeleton, head_sha, cache_hit, total_files
+                source_skeleton, current_sha or "unknown", cache_hit, total_files
             )
             if arch_section:
                 out.write(arch_section)
