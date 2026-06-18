@@ -1349,8 +1349,11 @@ def _update_config(updates: dict) -> None:
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
 _AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
-_SCAN_SKIP_DIRS = {".git", "node_modules", ".synlynk", "project-docs",
-                   "__pycache__", ".venv", ".next", "dist", "build"}
+_SCAN_SKIP_DIRS = {
+    ".git", "node_modules", ".synlynk", "project-docs",
+    "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
+    "vendor", ".worktrees", "coverage", ".nyc_output", "target", "out", "tmp",
+}
 
 _SOURCE_EXTENSIONS = {
     ".py": "python",
@@ -1524,6 +1527,75 @@ def _save_scan_meta(head_sha: str, skeleton: list, deep: Optional[dict] = None) 
         meta["deep"] = existing["deep"]
     with open(os.path.join(".synlynk", "scan-meta.json"), "w") as fh:
         json.dump(meta, fh, indent=2)
+
+
+def _score_source_files(root: str = ".") -> list:
+    """Returns [(score, rel_path), ...] for all source files, sorted score descending.
+
+    Scoring: +3 if filename is a known entry point, +1 per appearance in last-50
+    git commits, -1 per directory level beyond 2.
+    """
+    # Collect git activity: count file appearances in last 50 commits
+    git_counts: dict = {}
+    try:
+        result = subprocess.run(
+            ["git", "log", "--name-only", "--pretty=format:", "-50"],
+            capture_output=True, text=True, cwd=root, timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line:
+                    git_counts[line] = git_counts.get(line, 0) + 1
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+    scored = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune skip dirs in-place so os.walk doesn't descend into them
+        dirnames[:] = [d for d in dirnames if d not in _SCAN_SKIP_DIRS]
+        for fname in filenames:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in _SOURCE_EXTENSIONS:
+                continue
+            abs_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(abs_path, root)
+            # Depth = number of directory separators
+            depth = rel_path.count(os.sep)
+            # Entry point bonus: filename match OR cmd/main.go path
+            entry_bonus = 3 if (fname in _SOURCE_ENTRY_POINTS or rel_path in ("cmd/main.go",)) else 0
+            git_score = git_counts.get(rel_path, 0)
+            depth_penalty = max(0, depth - 2)
+            score = entry_bonus + git_score - depth_penalty
+            scored.append((score, rel_path))
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return scored
+
+
+def _scan_source_skeleton(root: str = ".") -> list:
+    """Top-15 prioritised files with up to 8 symbols each.
+
+    Returns list of {"file": str, "language": str, "symbols": [str]} where
+    symbols are display strings ("name()" for functions, "name" for others).
+    """
+    scored = _score_source_files(root)
+    top = scored[:15]
+    skeleton = []
+    for _score, rel_path in top:
+        ext = os.path.splitext(rel_path)[1].lower()
+        lang = _SOURCE_EXTENSIONS.get(ext, "generic")
+        abs_path = os.path.join(root, rel_path)
+        raw_syms = _extract_symbols(abs_path)[:8]
+        display_syms = []
+        for s in raw_syms:
+            name = s["symbol"]
+            if s["symbol_type"] in ("function", "async_function"):
+                display_syms.append(f"{name}()")
+            else:
+                display_syms.append(name)
+        skeleton.append({"file": rel_path, "language": lang, "symbols": display_syms})
+    return skeleton
 
 
 def _scan_repo_for_docs(root: str = ".") -> dict:

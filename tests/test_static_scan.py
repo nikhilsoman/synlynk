@@ -221,3 +221,87 @@ def test_save_scan_meta_preserves_deep_on_resave(tmp_path, monkeypatch):
     synlynk._save_scan_meta("sha2" + "0" * 36, [{"file": "app.py", "language": "python", "symbols": []}])
     meta = synlynk._load_scan_meta()
     assert meta["deep"] == deep
+
+
+# --- _scan_source_skeleton ---
+
+def _make_source_tree(root):
+    """Helper: creates a minimal source tree for skeleton tests."""
+    (root / "main.py").write_text("def main():\n    pass\n")
+    src = root / "src"
+    src.mkdir()
+    (src / "utils.py").write_text("def helper():\n    pass\n")
+    deep = root / "a" / "b" / "c"
+    deep.mkdir(parents=True)
+    (deep / "buried.py").write_text("def deep_func():\n    pass\n")
+    (root / ".synlynk").mkdir(exist_ok=True)
+    (root / "project-docs").mkdir(exist_ok=True)
+
+
+def test_skeleton_returns_at_most_15_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # Create 20 .py files
+    for i in range(20):
+        (tmp_path / f"mod_{i}.py").write_text(f"def func_{i}():\n    pass\n")
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    assert len(skeleton) <= 15
+
+
+def test_skeleton_entry_point_scored_higher(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_source_tree(tmp_path)
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    files = [e["file"] for e in skeleton]
+    # main.py is an entry point (+3) so it should appear in skeleton
+    assert any("main.py" in f for f in files)
+
+
+def test_skeleton_skips_scan_skip_dirs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "dep.js").write_text("function x(){}")
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    files = [e["file"] for e in skeleton]
+    assert not any("node_modules" in f for f in files)
+
+
+def test_skeleton_depth_penalty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # Entry point at depth 0 vs same-name file deeply nested
+    (tmp_path / "index.js").write_text("function main(){}")
+    deep = tmp_path / "a" / "b" / "c" / "d"
+    deep.mkdir(parents=True)
+    (deep / "index.js").write_text("function main(){}")
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    files = [e["file"] for e in skeleton]
+    # Root index.js should appear before the deeply nested one
+    root_idx = next((i for i, f in enumerate(files) if f == "index.js"), None)
+    deep_idx = next((i for i, f in enumerate(files) if "a/b/c/d" in f), None)
+    if root_idx is not None and deep_idx is not None:
+        assert root_idx < deep_idx
+
+
+def test_skeleton_symbols_capped_at_8(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    lines = "\n".join(f"def func_{i}(): pass" for i in range(20))
+    (tmp_path / "big.py").write_text(lines + "\n")
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    entry = next((e for e in skeleton if "big.py" in e["file"]), None)
+    assert entry is not None
+    assert len(entry["symbols"]) <= 8
+
+
+def test_skeleton_language_detected(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    entry = next((e for e in skeleton if "app.py" in e["file"]), None)
+    assert entry is not None
+    assert entry["language"] == "python"
+
+
+def test_skeleton_empty_repo(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skeleton = synlynk._scan_source_skeleton(str(tmp_path))
+    assert skeleton == []
