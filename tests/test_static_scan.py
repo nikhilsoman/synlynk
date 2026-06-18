@@ -393,3 +393,52 @@ def test_scan_full_repo_source_map_format(tmp_path, monkeypatch, isolated_db):
     assert "svc.py" in content
     assert "Service" in content
     assert "connect()" in content
+
+
+# --- _check_scan_cache ---
+
+def test_check_scan_cache_returns_cached_on_sha_match(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    skeleton_saved = [{"file": "app.py", "language": "python", "symbols": ["main()"]}]
+    fake_sha = "a" * 40
+    synlynk._save_scan_meta(fake_sha, skeleton_saved)
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    result = synlynk._check_scan_cache(str(tmp_path))
+    assert result == skeleton_saved
+
+
+def test_check_scan_cache_rescans_on_sha_change(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def fresh_func(): pass\n")
+    stale = [{"file": "old.py", "language": "python", "symbols": ["stale()"]}]
+    synlynk._save_scan_meta("old_sha_" + "0" * 32, stale)
+    new_sha = "b" * 40
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: new_sha)
+    result = synlynk._check_scan_cache(str(tmp_path))
+    files = [e["file"] for e in result]
+    assert any("app.py" in f for f in files)
+
+
+def test_check_scan_cache_no_git_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "app.py").write_text("def main(): pass\n")
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: None)
+    result = synlynk._check_scan_cache(str(tmp_path))
+    assert result == []
+
+
+def test_check_scan_cache_no_meta_triggers_scan(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "svc.py").write_text("class Service: pass\n")
+    fake_sha = "c" * 40
+    monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
+    result = synlynk._check_scan_cache(str(tmp_path))
+    assert any("svc.py" in e["file"] for e in result)
+    meta = synlynk._load_scan_meta()
+    assert meta is not None
+    assert meta["head_sha"] == fake_sha

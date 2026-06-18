@@ -1707,6 +1707,23 @@ def _scan_full_repo(root: str = ".") -> tuple:
     return skeleton, total_files, total_syms
 
 
+def _check_scan_cache(root: str = ".") -> list:
+    """Returns skeleton from cache if HEAD unchanged, else re-scans.
+
+    Returns [] if not in a git repo (no commits). On re-scan, writes updated
+    scan-meta.json but does NOT write source-map.md or the DB — that's --deep only.
+    """
+    current_sha = _git_head_sha()
+    if current_sha is None:
+        return []
+    meta = _load_scan_meta()
+    if meta and meta.get("head_sha") == current_sha:
+        return meta.get("skeleton", [])
+    skeleton = _scan_source_skeleton(root)
+    _save_scan_meta(current_sha, skeleton)
+    return skeleton
+
+
 def _scan_repo_for_docs(root: str = ".") -> dict:
     """Scans repo tree for project docs and agent files outside expected locations.
 
