@@ -1421,6 +1421,7 @@ _SYMBOL_PATTERNS = {
         (re.compile(r"^interface (\w+)"), "interface"),
     ],
     "shell": [
+        (re.compile(r"^function (\w+)"), "function"),
         (re.compile(r"^(\w+)\(\)"), "function"),
     ],
 }

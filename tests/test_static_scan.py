@@ -118,13 +118,35 @@ def test_extract_generic_returns_empty(tmp_path):
 
 
 def test_extract_max_300_lines(tmp_path):
-    content = "\n".join(f"x = {i}" for i in range(295)) + "\n"
-    content += "def visible():\n    pass\n"
+    # Lines 1-298: filler assignments
+    lines = [f"x_{i} = {i}" for i in range(298)]
+    # Line 299: def within limit — must be found
+    lines.append("def within_limit():")
+    lines.append("    pass")
+    # Line 301: def beyond limit — must NOT be found
+    lines.append("def beyond_limit():")
+    lines.append("    pass")
     f = tmp_path / "big.py"
-    f.write_text(content)
+    f.write_text("\n".join(lines) + "\n")
     syms = synlynk._extract_symbols(str(f))
     names = {s["symbol"] for s in syms}
-    assert "visible" in names
+    assert "within_limit" in names
+    assert "beyond_limit" not in names
+
+
+def test_extract_shell_function_keyword(tmp_path):
+    f = tmp_path / "build.sh"
+    f.write_text(
+        "#!/bin/bash\n"
+        "function build_release() {\n"
+        "  echo building\n"
+        "}\n"
+        "cleanup() {}\n"
+    )
+    syms = synlynk._extract_symbols(str(f))
+    names = {s["symbol"] for s in syms}
+    assert "build_release" in names
+    assert "cleanup" in names
 
 
 def test_extract_missing_file_returns_empty():
