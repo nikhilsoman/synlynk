@@ -1611,6 +1611,102 @@ def _scan_source_skeleton(root: str = ".") -> list:
     return skeleton
 
 
+def _scan_full_repo(root: str = ".") -> tuple:
+    """Deep scan: extracts all symbols, writes DB + project-docs/source-map.md.
+
+    Returns (skeleton, total_files, total_symbols).
+    Clears rows for any head_sha != current HEAD before inserting.
+    """
+    head_sha = _git_head_sha() or "unknown"
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    all_entries = []  # list of {"file": str, "language": str, "symbols": [raw_dict]}
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _SCAN_SKIP_DIRS]
+        for fname in filenames:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in _SOURCE_EXTENSIONS:
+                continue
+            abs_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(abs_path, root)
+            lang = _SOURCE_EXTENSIONS[ext]
+            raw_syms = _extract_symbols(abs_path)
+            all_entries.append({"file": rel_path, "language": lang, "symbols": raw_syms})
+
+    total_files = len(all_entries)
+    total_syms = sum(len(e["symbols"]) for e in all_entries)
+
+    # Write DB
+    try:
+        conn = _get_db()
+        conn.execute("DELETE FROM source_symbols WHERE head_sha != ?", (head_sha,))
+        rows = []
+        for entry in all_entries:
+            for sym in entry["symbols"]:
+                rows.append((
+                    head_sha, entry["file"], entry["language"],
+                    sym["symbol"], sym["symbol_type"], sym.get("line"), now,
+                ))
+        conn.executemany(
+            "INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, line, scanned_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"  ⚠ source_symbols DB write failed: {e}")
+
+    # Write project-docs/source-map.md
+    source_map_path = os.path.join("project-docs", "source-map.md")
+    try:
+        os.makedirs("project-docs", exist_ok=True)
+        sha_short = head_sha[:7] if head_sha != "unknown" else "unknown"
+        lines = [
+            "# Source Map",
+            f"_Generated: {now} · HEAD: {sha_short} · {total_files} files_",
+            "",
+        ]
+        # Group by directory
+        groups: dict = {}
+        for entry in sorted(all_entries, key=lambda e: e["file"]):
+            dirname = os.path.dirname(entry["file"])
+            groups.setdefault(dirname, []).append(entry)
+
+        for dirname, entries in sorted(groups.items()):
+            lang_counts: dict = {}
+            for e in entries:
+                lang_counts[e["language"]] = lang_counts.get(e["language"], 0) + 1
+            lang_str = ", ".join(
+                f"{lg} · {cnt}" for lg, cnt in sorted(lang_counts.items())
+            )
+            label = dirname if dirname else "[root]"
+            lines.append(f"## {label}/  [{lang_str}]")
+            for entry in entries:
+                sym_count = len(entry["symbols"])
+                lines.append(f"`{entry['file']}` · {sym_count} symbols")
+                display_parts = []
+                for s in entry["symbols"]:
+                    name = s["symbol"]
+                    disp = f"{name}()" if s["symbol_type"] in ("function", "async_function") else name
+                    disp += f" [{s['symbol_type']}:{s.get('line', '?')}]"
+                    display_parts.append(disp)
+                if display_parts:
+                    lines.append("  " + ", ".join(display_parts))
+                lines.append("")
+
+        with open(source_map_path, "w") as fh:
+            fh.write("\n".join(lines))
+    except OSError as e:
+        print(f"  ⚠ source-map.md write failed: {e}")
+
+    # Build and persist skeleton
+    skeleton = _scan_source_skeleton(root)
+    deep_meta = {"total_files": total_files, "total_symbols": total_syms, "scanned_at": now}
+    _save_scan_meta(head_sha, skeleton, deep=deep_meta)
+
+    return skeleton, total_files, total_syms
+
+
 def _scan_repo_for_docs(root: str = ".") -> dict:
     """Scans repo tree for project docs and agent files outside expected locations.
 

@@ -322,3 +322,74 @@ def test_source_symbols_schema(isolated_db):
     cursor = conn.execute("PRAGMA table_info(source_symbols)")
     cols = {row[1] for row in cursor.fetchall()}
     assert cols == {"id", "head_sha", "file", "language", "symbol", "symbol_type", "line", "scanned_at"}
+
+
+# --- _scan_full_repo ---
+
+def test_scan_full_repo_writes_source_map(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "app.py").write_text("def main():\n    pass\nclass App:\n    pass\n")
+    (tmp_path / "utils.py").write_text("def helper():\n    pass\n")
+    skeleton, total_files, total_syms = synlynk._scan_full_repo(str(tmp_path))
+    source_map = tmp_path / "project-docs" / "source-map.md"
+    assert source_map.exists()
+    content = source_map.read_text()
+    assert "# Source Map" in content
+    assert "app.py" in content
+    assert "main()" in content
+
+
+def test_scan_full_repo_populates_db(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "app.py").write_text("def alpha():\n    pass\ndef beta():\n    pass\n")
+    synlynk._scan_full_repo(str(tmp_path))
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT symbol FROM source_symbols").fetchall()
+    names = {r[0] for r in rows}
+    assert "alpha" in names
+    assert "beta" in names
+
+
+def test_scan_full_repo_returns_counts(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "app.py").write_text("def a():\n    pass\ndef b():\n    pass\n")
+    skeleton, total_files, total_syms = synlynk._scan_full_repo(str(tmp_path))
+    assert total_files >= 1
+    assert total_syms >= 2
+
+
+def test_scan_full_repo_clears_stale_db_rows(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "app.py").write_text("def func_a():\n    pass\n")
+    # Insert a stale row with a different head_sha
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, scanned_at)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        ("old_sha", "old.py", "python", "stale_func", "function", "2026-01-01T00:00:00"),
+    )
+    conn.commit()
+    synlynk._scan_full_repo(str(tmp_path))
+    rows = conn.execute("SELECT symbol FROM source_symbols WHERE symbol='stale_func'").fetchall()
+    assert rows == []
+
+
+def test_scan_full_repo_source_map_format(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "svc.py").write_text("class Service:\n    pass\ndef connect():\n    pass\n")
+    synlynk._scan_full_repo(str(tmp_path))
+    content = (tmp_path / "project-docs" / "source-map.md").read_text()
+    assert "HEAD:" in content
+    assert "svc.py" in content
+    assert "Service" in content
+    assert "connect()" in content
