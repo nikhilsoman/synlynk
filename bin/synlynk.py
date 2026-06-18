@@ -87,6 +87,19 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     ed25519_sig           TEXT,
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS source_symbols (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    head_sha    TEXT NOT NULL,
+    file        TEXT NOT NULL,
+    language    TEXT NOT NULL,
+    symbol      TEXT NOT NULL,
+    symbol_type TEXT NOT NULL,
+    line        INTEGER,
+    scanned_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_source_symbols_head ON source_symbols(head_sha);
+CREATE INDEX IF NOT EXISTS idx_source_symbols_file ON source_symbols(file);
 """
 
 _DB_SCORES_VIEW = """

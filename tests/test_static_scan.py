@@ -305,3 +305,20 @@ def test_skeleton_empty_repo(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     skeleton = synlynk._scan_source_skeleton(str(tmp_path))
     assert skeleton == []
+
+
+# --- source_symbols DB table ---
+
+def test_source_symbols_table_created(isolated_db):
+    conn = synlynk._get_db()
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='source_symbols'"
+    )
+    assert cursor.fetchone() is not None
+
+
+def test_source_symbols_schema(isolated_db):
+    conn = synlynk._get_db()
+    cursor = conn.execute("PRAGMA table_info(source_symbols)")
+    cols = {row[1] for row in cursor.fetchall()}
+    assert cols == {"id", "head_sha", "file", "language", "symbol", "symbol_type", "line", "scanned_at"}
