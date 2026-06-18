@@ -1486,12 +1486,12 @@ def _git_head_sha() -> Optional[str]:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, timeout=3,
         )
         if result.returncode == 0:
             sha = result.stdout.strip()
             return sha if len(sha) == 40 else None
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
     return None
 
@@ -1514,7 +1514,7 @@ def _save_scan_meta(head_sha: str, skeleton: list, deep: Optional[dict] = None) 
     meta = {
         "schema_version": 1,
         "head_sha": head_sha,
-        "scanned_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "file_count": len(skeleton),
         "skeleton": skeleton,
     }

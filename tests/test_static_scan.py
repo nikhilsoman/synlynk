@@ -210,3 +210,14 @@ def test_save_scan_meta_creates_synlynk_dir(tmp_path, monkeypatch):
     # .synlynk does NOT exist yet
     synlynk._save_scan_meta("deadbeef", [])
     assert (tmp_path / ".synlynk" / "scan-meta.json").exists()
+
+
+def test_save_scan_meta_preserves_deep_on_resave(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    deep = {"total_files": 47, "total_symbols": 312, "scanned_at": "2026-06-17T21:00:00"}
+    synlynk._save_scan_meta("sha1" + "0" * 36, [], deep=deep)
+    # Re-save without deep — deep should be preserved from existing meta
+    synlynk._save_scan_meta("sha2" + "0" * 36, [{"file": "app.py", "language": "python", "symbols": []}])
+    meta = synlynk._load_scan_meta()
+    assert meta["deep"] == deep
