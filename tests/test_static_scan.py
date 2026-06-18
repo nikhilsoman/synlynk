@@ -161,3 +161,52 @@ def test_extract_line_numbers(tmp_path):
     by_name = {s["symbol"]: s["line"] for s in syms}
     assert by_name["Alpha"] == 1
     assert by_name["beta"] == 3
+
+
+# --- _git_head_sha ---
+
+def test_git_head_sha_returns_string_or_none():
+    sha = synlynk._git_head_sha()
+    # In the synlynk repo with commits this should return a 40-char hex string
+    assert sha is None or (isinstance(sha, str) and len(sha) == 40)
+
+
+def test_git_head_sha_no_git(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    sha = synlynk._git_head_sha()
+    assert sha is None
+
+
+# --- _load_scan_meta / _save_scan_meta ---
+
+def test_scan_meta_round_trip(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    skeleton = [{"file": "app.py", "language": "python", "symbols": ["main()"]}]
+    synlynk._save_scan_meta("abc1234", skeleton)
+    meta = synlynk._load_scan_meta()
+    assert meta is not None
+    assert meta["head_sha"] == "abc1234"
+    assert meta["skeleton"] == skeleton
+    assert meta["schema_version"] == 1
+    assert "scanned_at" in meta
+
+
+def test_load_scan_meta_missing_returns_none(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    assert synlynk._load_scan_meta() is None
+
+
+def test_load_scan_meta_corrupt_returns_none(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "scan-meta.json").write_text("not json{{")
+    assert synlynk._load_scan_meta() is None
+
+
+def test_save_scan_meta_creates_synlynk_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # .synlynk does NOT exist yet
+    synlynk._save_scan_meta("deadbeef", [])
+    assert (tmp_path / ".synlynk" / "scan-meta.json").exists()

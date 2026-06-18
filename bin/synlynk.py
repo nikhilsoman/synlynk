@@ -1481,6 +1481,51 @@ def _extract_symbols(file_path: str) -> list:
     return results
 
 
+def _git_head_sha() -> Optional[str]:
+    """Returns the full SHA of HEAD, or None if not in a git repo or no commits."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            sha = result.stdout.strip()
+            return sha if len(sha) == 40 else None
+    except FileNotFoundError:
+        pass
+    return None
+
+
+def _load_scan_meta() -> Optional[dict]:
+    """Reads .synlynk/scan-meta.json. Returns None if absent or malformed."""
+    path = os.path.join(".synlynk", "scan-meta.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        return json.loads(open(path).read())
+    except (ValueError, OSError):
+        return None
+
+
+def _save_scan_meta(head_sha: str, skeleton: list, deep: Optional[dict] = None) -> None:
+    """Writes skeleton + metadata to .synlynk/scan-meta.json."""
+    os.makedirs(".synlynk", exist_ok=True)
+    existing = _load_scan_meta()
+    meta = {
+        "schema_version": 1,
+        "head_sha": head_sha,
+        "scanned_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "file_count": len(skeleton),
+        "skeleton": skeleton,
+    }
+    if deep is not None:
+        meta["deep"] = deep
+    elif existing and existing.get("deep"):
+        meta["deep"] = existing["deep"]
+    with open(os.path.join(".synlynk", "scan-meta.json"), "w") as fh:
+        json.dump(meta, fh, indent=2)
+
+
 def _scan_repo_for_docs(root: str = ".") -> dict:
     """Scans repo tree for project docs and agent files outside expected locations.
 
