@@ -1517,7 +1517,12 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
 
 
 def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
-    """codex exec + stdin mode must be used so dispatch works without a TTY."""
+    """codex exec + stdin mode must be used so dispatch works without a TTY.
+
+    Flags must be: codex exec - -s workspace-write
+    Must NOT include --dangerously-bypass-approvals-and-sandbox: that flag
+    silently overrides -s and runs at danger-full-access (full host access).
+    """
     import synlynk as sl
     captured = {}
     class FakeProc:
@@ -1529,7 +1534,8 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
-    assert "--dangerously-bypass-approvals-and-sandbox" in shell_cmd
+    assert "workspace-write" in shell_cmd
+    assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
 
 
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):

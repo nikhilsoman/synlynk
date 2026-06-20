@@ -377,12 +377,13 @@ AGENT_CAPABILITY_BASELINES = {
     "codex": {
         "cli": "codex",
         # 'exec' subcommand + '-' reads prompt from stdin without requiring a TTY.
-        # '-s read-only' sandboxes shell commands; '--dangerously-bypass-approvals-and-sandbox'
-        # skips interactive approval prompts so the process runs unattended.
+        # 'codex exec' sets approval:never by default — no bypass flag needed.
+        # '-s workspace-write' confines writes to workdir + /tmp while allowing
+        # model-generated file edits. Do NOT add --dangerously-bypass-approvals-and-sandbox:
+        # it silently overrides -s and runs at danger-full-access (full host access).
         "non_interactive_flags": [
             "exec", "-",
-            "-s", "read-only",
-            "--dangerously-bypass-approvals-and-sandbox",
+            "-s", "workspace-write",
         ],
         "roles": ["builder"],
         "strengths": ["code completion", "inline edits", "fast iteration"],
