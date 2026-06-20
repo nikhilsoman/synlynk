@@ -1122,14 +1122,19 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
         return False
 
 
-def dispatch_agent(agent: str, task: str, story_id: str = None) -> dict:
+def dispatch_agent(agent: str, task: str, story_id: str = None,
+                   force_agent: bool = False) -> dict:
     """Dispatches an agent to run a task in the background.
 
     Uses non-interactive agent mode (no PTY). Stdout captured to
     .synlynk/logs/<job_id>.log. Returns the job dict.
     Raises ValueError for unknown agent names.
+
+    When force_agent=False (default) and a story_id is given, the capability
+    router may override 'agent' with a better-scoring one. Set force_agent=True
+    to bypass routing and dispatch to the exact agent specified.
     """
-    if story_id:
+    if story_id and not force_agent:
         best = _best_agent_for_story(story_id)
         if best and best in AGENT_CAPABILITY_BASELINES:
             agent = best
@@ -3280,6 +3285,24 @@ def cmd_status(json_output: bool = False) -> None:
         print(" TEAMMATES")
         for tm in teammates:
             print(f"   @{tm['user']:<12} · last active {tm['last_active']}")
+    print()
+    print(f" {_CYAN}CAPABILITY LEDGER{_RESET}")
+    try:
+        _cl_conn = _get_db()
+        _cl_rows = _cl_conn.execute(
+            "SELECT agent, model_version, engg_domain, phase, weighted_score, sample_count "
+            "FROM capability_scores ORDER BY weighted_score DESC LIMIT 3"
+        ).fetchall()
+        _cl_conn.close()
+    except Exception:
+        _cl_rows = []
+    if _cl_rows:
+        print(f"   {'Agent':<10} {'Model':<22} {'Domain':<8} {'Phase':<10} {'Score':>6}  N")
+        for _ag, _mv, _dom, _ph, _sc, _n in _cl_rows:
+            _sc_str = f"{_sc:.2f}" if _sc is not None else "  —  "
+            print(f"   {_GREEN}{_ag:<10}{_RESET} {_mv:<22} {_dom:<8} {_ph:<10} {_sc_str:>6}  {_n}")
+    else:
+        print("   No capability data yet.")
     print(sep)
     sys.exit(1 if has_alert else 0)
 
@@ -3767,6 +3790,8 @@ def main() -> None:
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story/task ID for context labelling")
+    dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
+        help="Bypass capability routing — dispatch to the exact agent specified")
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -3884,7 +3909,8 @@ def main() -> None:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
         try:
-            job = dispatch_agent(args.agent, args.task, story_id=args.story_id)
+            job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
+                                 force_agent=getattr(args, "force_agent", False))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
         except ValueError as e:
