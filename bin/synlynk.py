@@ -11,7 +11,7 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.6.1"
+VERSION = "0.7.0"
 
 TASK_STATUSES = {
     "[ ]": "active",
@@ -87,6 +87,19 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     ed25519_sig           TEXT,
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS source_symbols (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    head_sha    TEXT NOT NULL,
+    file        TEXT NOT NULL,
+    language    TEXT NOT NULL,
+    symbol      TEXT NOT NULL,
+    symbol_type TEXT NOT NULL,
+    line        INTEGER,
+    scanned_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_source_symbols_head ON source_symbols(head_sha);
+CREATE INDEX IF NOT EXISTS idx_source_symbols_file ON source_symbols(file);
 """
 
 _DB_SCORES_VIEW = """
@@ -252,6 +265,53 @@ def cmd_pr_check() -> None:
         print("\n  Fix with: synlynk score attest <story-id> --model <version>")
         raise SystemExit(1)
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
+
+
+def cmd_scan(deep: bool = False, status: bool = False) -> None:
+    """synlynk scan [--deep] [--status]
+
+    No flags: force-refresh skeleton (even if HEAD unchanged).
+    --deep:   full tree walk → state.db + project-docs/source-map.md.
+    --status: show cache age, HEAD SHA, file/symbol counts.
+    """
+    if status:
+        meta = _load_scan_meta()
+        if not meta:
+            print("Source scan status: not scanned yet — run `synlynk scan` to populate")
+            return
+        sha_short = meta.get("head_sha", "unknown")[:7]
+        file_count = meta.get("file_count", 0)
+        scanned_at = meta.get("scanned_at", "unknown")
+        print("Source scan status:")
+        print(f"  Skeleton:    {file_count} files · cached · HEAD {sha_short} · {scanned_at}")
+        deep_meta = meta.get("deep")
+        if deep_meta:
+            tf = deep_meta.get("total_files", "?")
+            ts = deep_meta.get("total_symbols", "?")
+            da = deep_meta.get("scanned_at", "unknown")
+            print(f"  source-map:  {tf} files · {ts} symbols · project-docs/source-map.md · {da}")
+        else:
+            print("  source-map:  not yet generated — run `synlynk scan --deep`")
+        print("  Next refresh: on next commit (HEAD change)")
+        return
+
+    if deep:
+        print(f"  {_GREEN}▶{_RESET} Deep scanning source tree...")
+        skeleton, total_files, total_syms = _scan_full_repo()
+        sha_short = (_git_head_sha() or "unknown")[:7]
+        print(f"  {_GREEN}✓{_RESET} Scanned {total_files} files · {total_syms} symbols · HEAD {sha_short}")
+        print(f"  {_CYAN}→{_RESET} project-docs/source-map.md updated")
+        return
+
+    # No flags: force-refresh skeleton (ignore HEAD comparison)
+    head_sha = _git_head_sha()
+    if head_sha is None:
+        print("  ⚠ Not in a git repository — scan requires git")
+        return
+    skeleton = _scan_source_skeleton()
+    _save_scan_meta(head_sha, skeleton)
+    sha_short = head_sha[:7]
+    print(f"  {_GREEN}✓{_RESET} Skeleton refreshed · {len(skeleton)} files · HEAD {sha_short}")
 
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:
@@ -1349,8 +1409,85 @@ def _update_config(updates: dict) -> None:
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
 _AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
-_SCAN_SKIP_DIRS = {".git", "node_modules", ".synlynk", "project-docs",
-                   "__pycache__", ".venv", ".next", "dist", "build"}
+_SCAN_SKIP_DIRS = {
+    ".git", "node_modules", ".synlynk", "project-docs",
+    "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
+    "vendor", ".worktrees", "coverage", ".nyc_output", "target", "out", "tmp",
+}
+
+_SOURCE_EXTENSIONS = {
+    ".py": "python",
+    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript",
+    ".ts": "typescript", ".tsx": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".rb": "ruby",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".sh": "shell",
+}
+
+_SOURCE_ENTRY_POINTS = {
+    "main.py", "app.py", "server.py", "index.js", "index.ts", "main.go",
+    "lib.rs", "main.rs", "app.rb", "manage.py", "wsgi.py", "asgi.py", "__init__.py",
+}
+
+_SYMBOL_PATTERNS = {
+    "python": [
+        (re.compile(r"^async def (\w+)"), "async_function"),
+        (re.compile(r"^def (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+        (re.compile(r"^([A-Z_]{2,})\s*="), "constant"),
+    ],
+    "javascript": [
+        (re.compile(r"^export (?:default )?(?:async )?function (\w+)"), "function"),
+        (re.compile(r"^export (?:default )?class (\w+)"), "class"),
+        (re.compile(r"^export const (\w+)"), "constant"),
+        (re.compile(r"^function (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+    ],
+    "typescript": [
+        (re.compile(r"^export (?:default )?(?:async )?function (\w+)"), "function"),
+        (re.compile(r"^export (?:default )?class (\w+)"), "class"),
+        (re.compile(r"^export interface (\w+)"), "interface"),
+        (re.compile(r"^export type (\w+)"), "type"),
+        (re.compile(r"^export enum (\w+)"), "enum"),
+        (re.compile(r"^export const (\w+)"), "constant"),
+        (re.compile(r"^function (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+    ],
+    "go": [
+        (re.compile(r"^func (?:\(\w+ \*?\w+\) )?(\w+)"), "function"),
+        (re.compile(r"^type (\w+) struct"), "struct"),
+        (re.compile(r"^type (\w+) interface"), "interface"),
+    ],
+    "rust": [
+        (re.compile(r"^pub fn (\w+)"), "function"),
+        (re.compile(r"^pub struct (\w+)"), "struct"),
+        (re.compile(r"^pub trait (\w+)"), "trait"),
+        (re.compile(r"^pub enum (\w+)"), "enum"),
+        (re.compile(r"^pub type (\w+)"), "type"),
+    ],
+    "ruby": [
+        (re.compile(r"^def (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+        (re.compile(r"^module (\w+)"), "module"),
+    ],
+    "java": [
+        (re.compile(r"(?:public|protected) (?:class|interface|enum) (\w+)"), "class"),
+        (re.compile(r"(?:public|protected) \w+ (\w+)\s*\("), "function"),
+    ],
+    "kotlin": [
+        (re.compile(r"^fun (\w+)"), "function"),
+        (re.compile(r"^class (\w+)"), "class"),
+        (re.compile(r"^object (\w+)"), "class"),
+        (re.compile(r"^interface (\w+)"), "interface"),
+    ],
+    "shell": [
+        (re.compile(r"^function (\w+)"), "function"),
+        (re.compile(r"^(\w+)\(\)"), "function"),
+    ],
+}
 
 SECTION_SIGNALS: dict = {
     "## Live Issues SOP": [
@@ -1373,6 +1510,315 @@ SECTION_SIGNALS: dict = {
         "never commit to master",
     ],
 }
+
+
+def _extract_symbols(file_path: str) -> list:
+    """Returns [{"symbol": str, "symbol_type": str, "line": int}] from file_path.
+
+    Reads at most 300 lines. Returns [] for unknown extensions or unreadable files.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    lang = _SOURCE_EXTENSIONS.get(ext)
+    if not lang:
+        return []
+    patterns = _SYMBOL_PATTERNS.get(lang, [])
+    if not patterns:
+        return []
+    results = []
+    try:
+        with open(file_path, encoding="utf-8", errors="ignore") as fh:
+            for lineno, line in enumerate(fh, 1):
+                if lineno > 300:
+                    break
+                for pattern, sym_type in patterns:
+                    m = pattern.match(line)
+                    if m:
+                        results.append({
+                            "symbol": m.group(1),
+                            "symbol_type": sym_type,
+                            "line": lineno,
+                        })
+                        break
+    except (OSError, IOError):
+        pass
+    return results
+
+
+def _git_head_sha() -> Optional[str]:
+    """Returns the full SHA of HEAD, or None if not in a git repo or no commits."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode == 0:
+            sha = result.stdout.strip()
+            return sha if len(sha) == 40 else None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _load_scan_meta() -> Optional[dict]:
+    """Reads .synlynk/scan-meta.json. Returns None if absent or malformed."""
+    path = os.path.join(".synlynk", "scan-meta.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        return json.loads(open(path).read())
+    except (ValueError, OSError):
+        return None
+
+
+def _save_scan_meta(head_sha: str, skeleton: list, deep: Optional[dict] = None) -> None:
+    """Writes skeleton + metadata to .synlynk/scan-meta.json."""
+    os.makedirs(".synlynk", exist_ok=True)
+    existing = _load_scan_meta()
+    meta = {
+        "schema_version": 1,
+        "head_sha": head_sha,
+        "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "file_count": len(skeleton),
+        "skeleton": skeleton,
+    }
+    if deep is not None:
+        meta["deep"] = deep
+    elif existing and existing.get("deep"):
+        meta["deep"] = existing["deep"]
+    with open(os.path.join(".synlynk", "scan-meta.json"), "w") as fh:
+        json.dump(meta, fh, indent=2)
+
+
+def _score_source_files(root: str = ".") -> list:
+    """Returns [(score, rel_path), ...] for all source files, sorted score descending.
+
+    Scoring: +3 if filename is a known entry point, +1 per appearance in last-50
+    git commits, -1 per directory level beyond 2.
+    """
+    # Collect git activity: count file appearances in last 50 commits
+    git_counts: dict = {}
+    try:
+        result = subprocess.run(
+            ["git", "log", "--name-only", "--pretty=format:", "-50"],
+            capture_output=True, text=True, cwd=root, timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line:
+                    git_counts[line] = git_counts.get(line, 0) + 1
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+    scored = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune skip dirs in-place so os.walk doesn't descend into them
+        dirnames[:] = [d for d in dirnames if d not in _SCAN_SKIP_DIRS]
+        for fname in filenames:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in _SOURCE_EXTENSIONS:
+                continue
+            abs_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(abs_path, root)
+            # Depth = number of directory separators
+            depth = rel_path.count(os.sep)
+            # Entry point bonus: filename match OR cmd/main.go path
+            entry_bonus = 3 if (fname in _SOURCE_ENTRY_POINTS or rel_path in ("cmd/main.go",)) else 0
+            git_score = git_counts.get(rel_path, 0)
+            depth_penalty = max(0, depth - 2)
+            score = entry_bonus + git_score - depth_penalty
+            scored.append((score, rel_path))
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return scored
+
+
+def _scan_source_skeleton(root: str = ".") -> list:
+    """Top-15 prioritised files with up to 8 symbols each.
+
+    Returns list of {"file": str, "language": str, "symbols": [str]} where
+    symbols are display strings ("name()" for functions, "name" for others).
+    """
+    scored = _score_source_files(root)
+    top = scored[:15]
+    skeleton = []
+    for _score, rel_path in top:
+        ext = os.path.splitext(rel_path)[1].lower()
+        lang = _SOURCE_EXTENSIONS.get(ext, "generic")
+        abs_path = os.path.join(root, rel_path)
+        raw_syms = _extract_symbols(abs_path)[:8]
+        display_syms = []
+        for s in raw_syms:
+            name = s["symbol"]
+            if s["symbol_type"] in ("function", "async_function"):
+                display_syms.append(f"{name}()")
+            else:
+                display_syms.append(name)
+        skeleton.append({"file": rel_path, "language": lang, "symbols": display_syms})
+    return skeleton
+
+
+def _scan_full_repo(root: str = ".") -> tuple:
+    """Deep scan: extracts all symbols, writes DB + project-docs/source-map.md.
+
+    Returns (skeleton, total_files, total_symbols).
+    Clears rows for any head_sha != current HEAD before inserting.
+    """
+    head_sha = _git_head_sha() or "unknown"
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    all_entries = []  # list of {"file": str, "language": str, "symbols": [raw_dict]}
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _SCAN_SKIP_DIRS]
+        for fname in filenames:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in _SOURCE_EXTENSIONS:
+                continue
+            abs_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(abs_path, root)
+            lang = _SOURCE_EXTENSIONS[ext]
+            raw_syms = _extract_symbols(abs_path)
+            all_entries.append({"file": rel_path, "language": lang, "symbols": raw_syms})
+
+    total_files = len(all_entries)
+    total_syms = sum(len(e["symbols"]) for e in all_entries)
+
+    # Write DB
+    try:
+        conn = _get_db()
+        conn.execute("DELETE FROM source_symbols WHERE head_sha != ?", (head_sha,))
+        rows = []
+        for entry in all_entries:
+            for sym in entry["symbols"]:
+                rows.append((
+                    head_sha, entry["file"], entry["language"],
+                    sym["symbol"], sym["symbol_type"], sym.get("line"), now,
+                ))
+        conn.executemany(
+            "INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, line, scanned_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"  ⚠ source_symbols DB write failed: {e}")
+
+    # Write project-docs/source-map.md
+    source_map_path = os.path.join("project-docs", "source-map.md")
+    try:
+        os.makedirs("project-docs", exist_ok=True)
+        sha_short = head_sha[:7] if head_sha != "unknown" else "unknown"
+        lines = [
+            "# Source Map",
+            f"_Generated: {now} · HEAD: {sha_short} · {total_files} files_",
+            "",
+        ]
+        # Group by directory
+        groups: dict = {}
+        for entry in sorted(all_entries, key=lambda e: e["file"]):
+            dirname = os.path.dirname(entry["file"])
+            groups.setdefault(dirname, []).append(entry)
+
+        for dirname, entries in sorted(groups.items()):
+            lang_counts: dict = {}
+            for e in entries:
+                lang_counts[e["language"]] = lang_counts.get(e["language"], 0) + 1
+            lang_str = ", ".join(
+                f"{lg} · {cnt}" for lg, cnt in sorted(lang_counts.items())
+            )
+            label = dirname if dirname else "[root]"
+            lines.append(f"## {label}/  [{lang_str}]")
+            for entry in entries:
+                sym_count = len(entry["symbols"])
+                lines.append(f"`{entry['file']}` · {sym_count} symbols")
+                display_parts = []
+                for s in entry["symbols"]:
+                    name = s["symbol"]
+                    disp = f"{name}()" if s["symbol_type"] in ("function", "async_function") else name
+                    disp += f" [{s['symbol_type']}:{s.get('line', '?')}]"
+                    display_parts.append(disp)
+                if display_parts:
+                    lines.append("  " + ", ".join(display_parts))
+                lines.append("")
+
+        with open(source_map_path, "w") as fh:
+            fh.write("\n".join(lines))
+    except OSError as e:
+        print(f"  ⚠ source-map.md write failed: {e}")
+
+    # Build and persist skeleton
+    skeleton = _scan_source_skeleton(root)
+    deep_meta = {"total_files": total_files, "total_symbols": total_syms, "scanned_at": now}
+    _save_scan_meta(head_sha, skeleton, deep=deep_meta)
+
+    return skeleton, total_files, total_syms
+
+
+def _check_scan_cache(root: str = ".") -> list:
+    """Returns skeleton from cache if HEAD unchanged, else re-scans.
+
+    Returns [] if not in a git repo (no commits). On re-scan, writes updated
+    scan-meta.json but does NOT write source-map.md or the DB — that's --deep only.
+    """
+    current_sha = _git_head_sha()
+    if current_sha is None:
+        return []
+    meta = _load_scan_meta()
+    if meta and meta.get("head_sha") == current_sha:
+        return meta.get("skeleton", [])
+    skeleton = _scan_source_skeleton(root)
+    _save_scan_meta(current_sha, skeleton)
+    return skeleton
+
+
+def _format_source_architecture(skeleton: list, head_sha: str, cache_hit: bool,
+                                 total_files: int = 0) -> str:
+    """Formats the ## Source Architecture block for context.md."""
+    if not skeleton:
+        return ""
+    status = "cache hit" if cache_hit else "refreshed"
+    sha_short = head_sha[:7] if head_sha and head_sha != "unknown" else "unknown"
+    lines = [
+        "## Source Architecture",
+        f"_Scanned: {time.strftime('%Y-%m-%dT%H:%M')} · HEAD: {sha_short}"
+        f" · {len(skeleton)} files · {status}_",
+        "",
+    ]
+    # Group by directory
+    groups: dict = {}
+    for entry in skeleton:
+        dirname = os.path.dirname(entry["file"])
+        groups.setdefault(dirname, []).append(entry)
+
+    for dirname in sorted(groups):
+        entries = groups[dirname]
+        lang_counts: dict = {}
+        for e in entries:
+            lang_counts[e["language"]] = lang_counts.get(e["language"], 0) + 1
+        lang_str = ", ".join(
+            f"{lg} · {cnt} {'file' if cnt == 1 else 'files'}"
+            for lg, cnt in sorted(lang_counts.items())
+        )
+        label = dirname if dirname else "[root]"
+        lines.append(f"### {label}/  [{lang_str}]")
+        for entry in entries:
+            syms = entry.get("symbols", [])
+            if syms:
+                lines.append(f"`{entry['file']}` — {', '.join(syms)}")
+            else:
+                lines.append(f"`{entry['file']}`")
+        lines.append("")
+
+    if total_files > len(skeleton):
+        overflow = total_files - len(skeleton)
+        noun = "file" if overflow == 1 else "files"
+        lines.append(
+            f"> {overflow} more {noun} in source-map.md"
+            " — run `synlynk scan --deep` to refresh"
+        )
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _scan_repo_for_docs(root: str = ".") -> dict:
@@ -2522,6 +2968,21 @@ def generate_context(scope: str = "full") -> None:
                     out.writelines(deferred)
                 out.write("\n---\n\n")
 
+        # Source architecture (passive cache — re-scans if HEAD changed)
+        source_skeleton = _check_scan_cache()
+        if source_skeleton:
+            meta = _load_scan_meta()
+            current_sha = _git_head_sha() or ""
+            cache_hit = bool(meta and meta.get("head_sha") == current_sha)
+            total_files = 0
+            if meta and meta.get("deep"):
+                total_files = meta["deep"].get("total_files", 0)
+            arch_section = _format_source_architecture(
+                source_skeleton, current_sha or "unknown", cache_hit, total_files
+            )
+            if arch_section:
+                out.write(arch_section)
+
         # Roadmap: header rows + In Progress rows only
         roadmap_path = os.path.join(docs_dir, "roadmap.md")
         if os.path.exists(roadmap_path):
@@ -3265,6 +3726,12 @@ def main() -> None:
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
+    scan_parser = subparsers.add_parser("scan", help="Scan source tree and update architecture context")
+    scan_parser.add_argument("--deep", action="store_true",
+                             help="Full tree walk: populate state.db and write project-docs/source-map.md")
+    scan_parser.add_argument("--status", action="store_true",
+                             help="Show cache age, HEAD SHA, file and symbol counts")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
     exec_parser.add_argument("--force", action="store_true",
@@ -3465,6 +3932,8 @@ def main() -> None:
             cmd_instructions_ack(args.file)
         else:
             instructions_parser.print_help()
+    elif args.command == "scan":
+        cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     else:
         parser.print_help()
 
