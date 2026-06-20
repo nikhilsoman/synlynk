@@ -1133,7 +1133,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     When force_agent=False (default) and a story_id is given, the capability
     router may override 'agent' with a better-scoring one. Set force_agent=True
-    to bypass routing and dispatch to the exact agent specified.
+    to disable the router override and dispatch to the exact agent specified.
+    force_agent has no effect when story_id is None (no routing can occur).
     """
     if story_id and not force_agent:
         best = _best_agent_for_story(story_id)

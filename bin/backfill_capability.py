@@ -17,33 +17,16 @@ import os
 import sqlite3
 import subprocess
 import sys
-import hashlib
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
-# Reproduce DB_PATH logic from synlynk.py
+# Borrow DB_PATH from synlynk.py — single source of truth for path resolution.
+# The scripts live alongside synlynk.py in bin/, so a direct import is safe.
 # ---------------------------------------------------------------------------
 
-def _get_git_root() -> str | None:
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
-            capture_output=True, text=True,
-            cwd=os.path.dirname(os.path.abspath(__file__))
-        )
-        if r.returncode == 0:
-            git_common = r.stdout.strip()
-            return os.path.dirname(os.path.abspath(git_common))
-    except Exception:
-        pass
-    return None
-
-_GIT_ROOT = _get_git_root()
-if _GIT_ROOT:
-    _root_hash = hashlib.md5(_GIT_ROOT.encode()).hexdigest()[:8]
-    DB_PATH = os.path.expanduser(f"~/.synlynk/projects/{_root_hash}/state.db")
-else:
-    DB_PATH = os.path.expanduser("~/.synlynk/state.db")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import synlynk  # noqa: E402
+DB_PATH = synlynk.DB_PATH
 
 # ---------------------------------------------------------------------------
 # Domain inference
@@ -171,7 +154,7 @@ def main() -> None:
         title  = pr["title"]
         files  = [f["path"] for f in (pr.get("files") or [])]
         reviews = pr.get("reviews") or []
-        merged_at = pr.get("mergedAt", "")[:19].replace("T", " ")
+        merged_at = (pr.get("mergedAt") or "")[:19].replace("T", " ")
 
         story_id   = f"story-pr{number}"
         engg       = infer_engg_domain(title, files)

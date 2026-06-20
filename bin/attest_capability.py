@@ -9,36 +9,18 @@ Usage:
     python3 bin/attest_capability.py [--dry-run]
 """
 
-import hashlib
 import os
 import sqlite3
 import subprocess
 import sys
 
 # ---------------------------------------------------------------------------
-# DB path (mirrors synlynk.py)
+# Borrow DB_PATH from synlynk.py — single source of truth for path resolution.
 # ---------------------------------------------------------------------------
 
-def _get_git_root() -> str | None:
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
-            capture_output=True, text=True,
-            cwd=os.path.dirname(os.path.abspath(__file__))
-        )
-        if r.returncode == 0:
-            git_common = r.stdout.strip()
-            return os.path.dirname(os.path.abspath(git_common))
-    except Exception:
-        pass
-    return None
-
-_GIT_ROOT = _get_git_root()
-if _GIT_ROOT:
-    _root_hash = hashlib.md5(_GIT_ROOT.encode()).hexdigest()[:8]
-    DB_PATH = os.path.expanduser(f"~/.synlynk/projects/{_root_hash}/state.db")
-else:
-    DB_PATH = os.path.expanduser("~/.synlynk/state.db")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import synlynk  # noqa: E402
+DB_PATH = synlynk.DB_PATH
 
 # ---------------------------------------------------------------------------
 # Attestation data
@@ -176,12 +158,17 @@ def main() -> None:
     skipped = 0
     for story_id, data in ATTESTATIONS.items():
         row = conn.execute(
-            "SELECT id, quality, signal_source FROM capability_ratings WHERE story_id=? AND signal_source='backfill'",
+            "SELECT id, quality, signal_source FROM capability_ratings WHERE story_id=?",
             (story_id,)
         ).fetchone()
 
         if not row:
-            print(f"  [skip] {story_id} — no backfill row found")
+            print(f"  [skip] {story_id} — not in database")
+            skipped += 1
+            continue
+
+        if row[2] != "backfill":
+            print(f"  [skip] {story_id} — already attested (source: '{row[2]}', quality: {row[1]})")
             skipped += 1
             continue
 
