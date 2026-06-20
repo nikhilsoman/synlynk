@@ -1760,3 +1760,12 @@ def test_checkpoint_keeps_deferred_tasks(project_dir, monkeypatch):
     assert "Still active" in todo
     assert "Deferred task" in todo
     assert "Done task" not in todo
+
+
+def test_autopilot_runs_table_exists(project_dir):
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='autopilot_runs'"
+    ).fetchone()
+    conn.close()
+    assert row is not None, "autopilot_runs table must exist after _get_db()"

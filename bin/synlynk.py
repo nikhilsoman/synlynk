@@ -100,6 +100,21 @@ CREATE TABLE IF NOT EXISTS source_symbols (
 );
 CREATE INDEX IF NOT EXISTS idx_source_symbols_head ON source_symbols(head_sha);
 CREATE INDEX IF NOT EXISTS idx_source_symbols_file ON source_symbols(file);
+
+CREATE TABLE IF NOT EXISTS autopilot_runs (
+    id            TEXT PRIMARY KEY,
+    agent_name    TEXT NOT NULL,
+    signal_type   TEXT NOT NULL,
+    signal_hash   TEXT NOT NULL,
+    severity      TEXT NOT NULL,
+    summary       TEXT NOT NULL,
+    status        TEXT NOT NULL,
+    gh_issue_url  TEXT,
+    pr_url        TEXT,
+    story_id      TEXT,
+    ts            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_autopilot_runs_hash ON autopilot_runs(signal_hash, ts);
 """
 
 _DB_SCORES_VIEW = """
