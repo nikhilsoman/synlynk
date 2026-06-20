@@ -1516,6 +1516,22 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     assert len(sl._load_jobs()) == 2
 
 
+def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
+    """codex exec + stdin mode must be used so dispatch works without a TTY."""
+    import synlynk as sl
+    captured = {}
+    class FakeProc:
+        pid = 777
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    sl.dispatch_agent("codex", "review the codebase")
+    shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
+    assert "codex exec" in shell_cmd
+    assert "--dangerously-bypass-approvals-and-sandbox" in shell_cmd
+
+
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
     import synlynk as sl
     monkeypatch.setattr(sl, "_reconcile_jobs", lambda: None)  # bypass PID probing

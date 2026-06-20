@@ -376,7 +376,14 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "codex": {
         "cli": "codex",
-        "non_interactive_flags": [],
+        # 'exec' subcommand + '-' reads prompt from stdin without requiring a TTY.
+        # '-s read-only' sandboxes shell commands; '--dangerously-bypass-approvals-and-sandbox'
+        # skips interactive approval prompts so the process runs unattended.
+        "non_interactive_flags": [
+            "exec", "-",
+            "-s", "read-only",
+            "--dangerously-bypass-approvals-and-sandbox",
+        ],
         "roles": ["builder"],
         "strengths": ["code completion", "inline edits", "fast iteration"],
     },
