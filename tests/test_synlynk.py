@@ -1769,3 +1769,23 @@ def test_autopilot_runs_table_exists(project_dir):
     ).fetchone()
     conn.close()
     assert row is not None, "autopilot_runs table must exist after _get_db()"
+
+
+def test_load_agent_config_success(project_dir):
+    (project_dir / ".agents").mkdir()
+    cfg = {
+        "name": "test-agent",
+        "investigator": "claude",
+        "fixer": "claude",
+        "signals": [{"type": "test_suite", "command": "pytest tests/ -q"}],
+        "hitl": {"auto_merge": False}
+    }
+    (project_dir / ".agents" / "test-agent.json").write_text(json.dumps(cfg))
+    loaded = synlynk._load_agent_config("test-agent")
+    assert loaded["name"] == "test-agent"
+    assert loaded["investigator"] == "claude"
+
+
+def test_load_agent_config_missing_raises(project_dir):
+    with pytest.raises(FileNotFoundError, match="No agent config found"):
+        synlynk._load_agent_config("nonexistent")

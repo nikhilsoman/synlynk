@@ -195,6 +195,16 @@ def cmd_story_list() -> None:
         print(f"  {r[0]:<14} {(r[1] or '')[:29]:<30} {r[2]:<12} {r[3]:<14} {r[4]:<12} {r[5]}")
 
 
+def _load_agent_config(name: str) -> dict:
+    """Load .agents/<name>.json. Raises FileNotFoundError with clear message."""
+    import json as _json
+    path = os.path.join(".agents", f"{name}.json")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"No agent config found at {path}")
+    with open(path) as f:
+        return _json.load(f)
+
+
 def cmd_score_add(story_id: str, rating: float, note: str = None,
                   rework: bool = False) -> None:
     """Add a human quality rating for a story. Inserts a new 'human' row."""

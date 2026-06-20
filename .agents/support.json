@@ -1,0 +1,17 @@
+{
+  "name": "support-engineer",
+  "description": "Broad health monitor — tests, sentinel alerts, telemetry, capability ledger, GitHub issues",
+  "investigator": "claude",
+  "fixer": "claude",
+  "signals": [
+    {"type": "test_suite", "command": "pytest tests/ -q --tb=short"},
+    {"type": "sentinel_alerts", "path": ".synlynk/sentinel.md"},
+    {"type": "telemetry_anomaly", "failure_rate_threshold": 0.30},
+    {"type": "capability_drop", "drop_threshold": 1.5},
+    {"type": "github_issues", "labels": ["bug", "needs-triage"]}
+  ],
+  "hitl": {
+    "auto_merge": false,
+    "auto_approve": ["github.create_issue", "github.create_draft_pr", "synlynk.dispatch"]
+  }
+}
