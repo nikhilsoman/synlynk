@@ -1,10 +1,23 @@
 [
   {
+    "minor": "0.7",
+    "label": "v0.7.x",
+    "theme": "Static Scan Quality",
+    "date": "2026-06-20",
+    "current": true,
+    "in_window": true,
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
+    "blog_post": "/blog/15-pr-v070-static-scan-quality/",
+    "patches": [
+      { "version": "0.7.0", "date": "2026-06-20", "summary": "Language-agnostic source scanner injects ## Source Architecture into every exec context; passive git-HEAD cache; synlynk scan CLI; dual storage (SQLite source_symbols + source-map.md); 316 tests" }
+    ]
+  },
+  {
     "minor": "0.6",
     "label": "v0.6.x",
     "theme": "Job Control + Model-Aware Capability Engine",
     "date": "2026-06-17",
-    "current": true,
+    "current": false,
     "in_window": true,
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/12-pr42-v060-job-control/",

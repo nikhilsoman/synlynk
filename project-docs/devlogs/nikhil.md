@@ -334,3 +334,30 @@ implementation plan.
 - **Verification:** Verified token parsing and cost logging via simulated CLI output.
 - **Activity:** Discussed and defined architectural strategies for Context Compaction (Active vs. Archive) and Sub-Agent Context Routing (Task-scoped views).
 - **Milestone:** Core "Lite Tier" infrastructure is verified and documented. Next phase focuses on token extraction and scaling strategies.
+
+## 2026-06-20 — Session: v0.7.0 Static Scan Quality
+
+### Shipped
+- **PR #49 merged → v0.7.0** — Static Scan Quality: language-agnostic source scanner injects `## Source Architecture` into every `synlynk exec` context
+- **316 tests passing** (65 new in `tests/test_static_scan.py`)
+- **GitHub release v0.7.0** cut at https://github.com/nikhilsoman/synlynk/releases/tag/v0.7.0
+
+### Key decisions & implementation notes
+- Passive cache invalidation: `_check_scan_cache()` compares `git rev-parse HEAD` to `.synlynk/scan-meta.json` — zero overhead on every exec when HEAD unchanged
+- File prioritization: +3 entry-point bonus, +1/commit appearance (last 50), −1/dir level beyond 2; top 15 cap
+- Symbol extraction: 9 languages, regex only, ≤300 lines/file, up to 8 symbols in skeleton
+- Shell patterns: both `name()` and `function name()` syntax; discovered and fixed during code quality review
+- `scanned_at` uses ISO 8601 T-separator (`%Y-%m-%dT%H:%M:%S`) to match rest of codebase
+- `_format_source_architecture` uses `current_sha` (not stale meta SHA) to avoid stale header on cache miss
+- Dual storage: SQLite `source_symbols` table (Tokq-sync-ready) + `project-docs/source-map.md` + hot skeleton cache
+- `synlynk scan / scan --deep / scan --status` CLI added
+
+### Updated
+- `project-docs/roadmap.md` — v0.7.0 marked Shipped; v0.8.0 is next (Async Pipeline + Daemon)
+- `site/src/_data/releases.json` — v0.7.0 entry added, v0.6.x marked not current
+- `README.md` — intro copy, commands table, roadmap table all updated
+- Memory updated: project-synlynk.md
+
+### Next
+- v0.8.0 Async Pipeline + Daemon (HTTP Context Server, `synlynk daemon start/stop`, `synlynk review` TUI)
+- Capability Dogfood initiative: use synlynk to dispatch real tasks and accumulate capability ledger data

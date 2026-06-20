@@ -13,9 +13,10 @@
 | v0.5.0 | Capability Engine | Scheduler — model-aware routing, 3D domain taxonomy (engg·org·industry), quality signal hierarchy (human→verifier→auto), `dispatch_rework` signal, `synlynk story/score` CLI, `state.db` SQLite ledger | **SQLite WAL** | ✅ Shipped | June 2026 |
 | v0.6.0 | Job Control + Constraints | IPC complete — constraint propagation, job state machine · **+** model version tier-2 probe, `synlynk pr check`, `synlynk score attest`, verifier pipeline capture, Tokq `org_domain_tags` | SQLite extended | ✅ Shipped | June 2026 |
 | v0.6.1 | Patch release | `VERSION` constant synced to GitHub releases (was perpetually behind); bundles v0.4.1 instruction reach + v0.4.2 task status model patches into a named release | Flat files | ✅ Shipped | June 2026 |
-| v0.7.0 | Async Pipeline + Daemon | Shell — `synlynk dispatch`, daemon, `synlynk review` TUI | **HTTP Context Server** | Planned | Oct 2026 |
-| v0.8.0 | Open Context Protocol | Ecosystem interface — `context --for`, `checkpoint --from`, MCP server | HTTP server (public) | Planned | Nov 2026 |
-| v0.9.0 | Review TUI + Team Safety | Shell polish — full curses TUI, append-only event log, team guardrails | JSONL event log | Planned | Dec 2026 |
+| v0.7.0 | Static Scan Quality | Context enrichment — language-agnostic source scanner, `## Source Architecture` injection, git-HEAD cache, `synlynk scan` CLI, dual storage (SQLite + source-map.md), 316 tests | SQLite extended | ✅ Shipped | June 2026 |
+| v0.8.0 | Async Pipeline + Daemon | Shell — `synlynk dispatch`, daemon, `synlynk review` TUI | **HTTP Context Server** | Planned | Oct 2026 |
+| v0.9.0 | Open Context Protocol | Ecosystem interface — `context --for`, `checkpoint --from`, MCP server | HTTP server (public) | Planned | Nov 2026 |
+| v1.0.0-rc | Review TUI + Team Safety | Shell polish — full curses TUI, append-only event log, team guardrails | JSONL event log | Planned | Dec 2026 |
 | v1.0.0 | Stable OS + Tokq Bridge Ready | Platform — frozen CLI, pipx/Homebrew, NATS leaf schema defined | **NATS leaf node schema** | Planned | Q1 2027 |
 | Tokq Alpha | Cloud Bridge | Synlynk→Tokq sync over NATS leaf→hub | NATS + MessagePack | Planned | Q3 2027 |
 | Tokq GA | Knowledge Marketplace | Agent identity, gas tank, publish/subscribe conventions | Full Tokq cloud | Planned | Q4 2027 |
