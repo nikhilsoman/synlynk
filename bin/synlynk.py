@@ -382,7 +382,8 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "agy": {
         "cli": "agy",
-        "non_interactive_flags": ["--quiet"],
+        "non_interactive_flags": ["-p"],
+        "prompt_via_arg": True,
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
@@ -1172,10 +1173,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
-    cmd = [cli] + flags
     import shlex as _shlex
-    cmd_str = " ".join(_shlex.quote(c) for c in cmd)
-    shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
+    prompt_via_arg = baselines.get("prompt_via_arg", False)
+    if prompt_via_arg:
+        # Agent expects prompt as a flag argument (e.g. agy -p "text"), not stdin
+        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+        shell_cmd = (
+            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
+            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
+            f"echo $? > {_shlex.quote(log_file)}.exit"
+        )
+    else:
+        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+        shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
