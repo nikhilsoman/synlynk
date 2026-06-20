@@ -1277,6 +1277,39 @@ def cmd_jobs(all_jobs: bool = False) -> None:
         print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
 
 
+def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
+    """Run named agent once (collect signals → dedup → investigate → file → fix)."""
+    cfg = _load_agent_config(name)
+    if install_cron:
+        _install_cron_entry()
+        return
+    # Full implementation added in Task 13
+    print(f"  [agent] {name} — stub, not yet implemented")
+
+
+def cmd_agent_list() -> None:
+    """List .agents/ config files and their last run status."""
+    import json as _json
+    agents_dir = ".agents"
+    if not os.path.exists(agents_dir):
+        print("  No .agents/ directory found")
+        return
+    files = [f for f in os.listdir(agents_dir) if f.endswith(".json")]
+    if not files:
+        print("  No agent configs in .agents/")
+        return
+    conn = _get_db()
+    for fname in sorted(files):
+        agent_name = fname[:-5]
+        row = conn.execute(
+            "SELECT ts, status FROM autopilot_runs WHERE agent_name=? ORDER BY ts DESC LIMIT 1",
+            (agent_name,)
+        ).fetchone()
+        last_run = f"{row[0]}  status={row[1]}" if row else "never run"
+        print(f"  {agent_name:<25}  {last_run}")
+    conn.close()
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
@@ -3799,6 +3832,16 @@ def main() -> None:
     scan_parser.add_argument("--status", action="store_true",
                              help="Show cache age, HEAD SHA, file and symbol counts")
 
+    agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
+    agent_sub = agent_parser.add_subparsers(dest="agent_action")
+    agent_run_parser = agent_sub.add_parser("run", help="Run a named agent once")
+    agent_run_parser.add_argument("name", help="Agent name (matches .agents/<name>.json)")
+    agent_run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                                  help="Collect signals and print findings; no dispatch/issue/PR")
+    agent_run_parser.add_argument("--install-cron", action="store_true", dest="install_cron",
+                                  help="Install local crontab entry for this agent")
+    agent_sub.add_parser("list", help="List .agents/ configs and last run status")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
     exec_parser.add_argument("--force", action="store_true",
@@ -4002,6 +4045,18 @@ def main() -> None:
             cmd_instructions_ack(args.file)
         else:
             instructions_parser.print_help()
+    elif args.command == "agent":
+        action = getattr(args, "agent_action", None)
+        if action == "run":
+            cmd_agent_run(
+                args.name,
+                dry_run=getattr(args, "dry_run", False),
+                install_cron=getattr(args, "install_cron", False),
+            )
+        elif action == "list":
+            cmd_agent_list()
+        else:
+            agent_parser.print_help()
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     else:

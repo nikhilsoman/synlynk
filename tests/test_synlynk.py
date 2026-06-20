@@ -1789,3 +1789,8 @@ def test_load_agent_config_success(project_dir):
 def test_load_agent_config_missing_raises(project_dir):
     with pytest.raises(FileNotFoundError, match="No agent config found"):
         synlynk._load_agent_config("nonexistent")
+
+
+def test_agent_run_unknown_agent_raises(project_dir):
+    with pytest.raises(FileNotFoundError, match="No agent config found"):
+        synlynk.cmd_agent_run("nonexistent")
