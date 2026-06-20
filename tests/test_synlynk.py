@@ -408,6 +408,29 @@ def test_status_shows_active_tasks(project_dir, monkeypatch, capsys):
     assert "Task one" in captured.out
     assert "Task two" in captured.out
 
+def test_status_shows_capability_ledger(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    monkeypatch.setattr(synlynk, 'get_mode', lambda: "single")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase) "
+        "VALUES ('story-test-ledger', 'Test story', 'cli', 'product', 'developer-tools', 'build')"
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality) VALUES "
+        "('story-test-ledger', 'claude', 'claude-sonnet-4-6', 'cli', 'product', "
+        " 'developer-tools', 'build', 'human', 8.5)"
+    )
+    conn.commit()
+    conn.close()
+    with pytest.raises(SystemExit):
+        synlynk.cmd_status(json_output=False)
+    captured = capsys.readouterr()
+    assert "CAPABILITY LEDGER" in captured.out
+    assert "claude" in captured.out
+
 def test_upgrade_reports_up_to_date(monkeypatch, capsys):
     fake_gh = type('R', (), {
         'stdout': f"v{synlynk.VERSION}\n",
