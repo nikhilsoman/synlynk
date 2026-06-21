@@ -1,10 +1,36 @@
 [
   {
+    "minor": "0.9",
+    "label": "v0.9.x",
+    "theme": "Kernel Fixes + Package Split",
+    "date": "2026-06-21",
+    "current": true,
+    "in_window": true,
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
+    "blog_post": "/blog/19-v0-9-0-kernel-fixes/",
+    "patches": [
+      { "version": "0.9.0", "date": "2026-06-21", "summary": "Scoped dispatch context (task-level instead of full devlog), ## Relevant Files injection from source-map, ## How to Verify contract per dispatch, per-agent framing (Codex/AGY/Claude), Ed25519 capability rating signing, anti-gaming quality cap (test_count<3 capped at 5.0), synlynk/ package split; 365 tests" }
+    ]
+  },
+  {
+    "minor": "0.8",
+    "label": "v0.8.x",
+    "theme": "Support Engineer Agent",
+    "date": "2026-06-21",
+    "current": false,
+    "in_window": true,
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
+    "blog_post": null,
+    "patches": [
+      { "version": "0.8.0", "date": "2026-06-21", "summary": "Maintainer archetype #1 — 5 signal collectors (failing tests, flaky tests, coverage gaps, stale deps, open issues), 7/30-day dedup, foreground investigation, GH issue filing, draft fix PRs; .agents/ config system" }
+    ]
+  },
+  {
     "minor": "0.7",
     "label": "v0.7.x",
     "theme": "Static Scan Quality",
     "date": "2026-06-20",
-    "current": true,
+    "current": false,
     "in_window": true,
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/15-pr-v070-static-scan-quality/",
@@ -45,7 +71,7 @@
     "theme": "Hybrid Workgroup Bootstrap",
     "date": "2026-06-17",
     "current": false,
-    "in_window": true,
+    "in_window": false,
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
     "blog_post": "/blog/11-pr39-v040-hybrid-workgroup-bootstrap/",
     "patches": [
@@ -60,7 +86,7 @@
     "theme": "The Multi-Agent Foundation",
     "date": "2026-06-03",
     "current": false,
-    "in_window": true,
+    "in_window": false,
     "install_cmd": null,
     "blog_post": "/blog/05-pr26-v0-3-0-multi-agent-foundation/",
     "patches": [

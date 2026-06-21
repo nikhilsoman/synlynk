@@ -5,7 +5,9 @@
 <p align="center"><strong>Keep your AI tools in sync with your project.</strong></p>
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
-synlynk is a single-file Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects project context into every AI session — including a live `## Source Architecture` snapshot of your codebase — tracks costs, detects hallucination loops, and dispatches background agent jobs with a single command. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Gemini CLI, Codex, and AGY all read the same context, decisions, and progress.
+synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects scoped project context into every agent dispatch, routes tasks to the best available agent using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+
+**v0.9.0:** Dispatch quality — scoped context, `## Relevant Files` + `## How to Verify` injected per dispatch, per-agent prompt framing, Ed25519 capability signing, anti-gaming quality cap. Package split: all logic now in `synlynk/` package.
 
 ## Install
 
@@ -75,6 +77,7 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 | `synlynk status [--json]` | Dashboard: active tasks, budget, sentinel alerts, watcher state |
 | `synlynk sentinel list\|clear [--severity] [--code]` | View or dismiss sentinel alerts |
 | `synlynk scan [--deep] [--status]` | Scan source tree and inject `## Source Architecture` into context; `--deep` writes `state.db` + `project-docs/source-map.md`; `--status` shows cache age and counts |
+| `synlynk identity init` | Create `~/.synlynk/identity.key` (Ed25519) and print public key |
 | `synlynk upgrade` | Check GitHub releases for a newer version |
 | `synlynk --version` | Print current version |
 
@@ -173,8 +176,10 @@ synlynk's goal is to become the OS for multi-agent development — the substrate
 | v0.5.0 | Capability Engine — data-driven agent routing, SQLite state | ✅ Shipped | Jun 2026 |
 | v0.6.x | Job Control + Constraints — constraint propagation, job state machine, `synlynk pr check`, model version probes | ✅ Shipped | Jun 2026 |
 | v0.7.0 | Static Scan Quality — `## Source Architecture` in every exec session, `synlynk scan`, 9-language symbol extraction | ✅ Shipped | Jun 2026 |
-| v0.8.0 | Async Pipeline + Daemon — HTTP context server, daemon, `synlynk review` TUI | 🔜 Next | Oct 2026 |
-| v0.9.0 | Open Context Protocol — MCP server, cross-tool context API | Planned | Nov 2026 |
-| v1.0.0 | Stable OS — frozen CLI, pipx/Homebrew, Tokq bridge ready | Planned | Q1 2027 |
+| v0.8.0 | Support Engineer Agent — 5 signal collectors, GH issue filing, draft fix PRs, `.agents/` config | ✅ Shipped | Jun 2026 |
+| **v0.9.0** | Kernel Fixes + Package Split — scoped dispatch context, relevant files, verify contract, per-agent framing, Ed25519 signing, anti-gaming cap | ✅ Shipped | Jun 2026 |
+| v0.9.1 | Team Onboarding + Consensus — `synlynk join`, team digest, write-arbitration, token budgets | 🔜 Next | Jul 2026 |
+| v0.9.3 | Workgroup Relay — community relay (`relay.synlynk.com`), `--enterprise` self-host | Planned | Jul 2026 |
+| v1.0.0 | Community Layer — signed capability ledger, pipx/Homebrew, synlynk.com public launch | Planned | Sep 2026 |
 
 **We're looking for community input on what to build next.** See the [Discussions](../../discussions) tab to vote on feature direction and share use cases.

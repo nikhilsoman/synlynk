@@ -287,5 +287,85 @@
     ],
     "related": ["capability-engine", "agent-dispatch"],
     "changelog": []
+  },
+  {
+    "slug": "source-architecture",
+    "name": "Source architecture injection",
+    "subtitle": "## Source Architecture snapshot injected into every exec context from a passive git-HEAD cache",
+    "description": "v0.7.0 adds a language-agnostic static scanner that extracts symbols from up to 9 languages (Python, JS, TS, Go, Rust, Ruby, Java, Kotlin, Shell) and injects a `## Source Architecture` section into every `synlynk exec` context. The scan cache is keyed by git HEAD SHA — zero overhead on cache hit. A file scoring formula (entry-point bonus, git frequency, depth penalty) surfaces the 15 most relevant files. Full results are stored in the `source_symbols` SQLite table and `project-docs/source-map.md`. `synlynk scan [--deep] [--status]` provides manual control.",
+    "os_layer": "filesystem",
+    "user_theme": "context-management",
+    "introduced": "0.7",
+    "usage": [
+      {
+        "cmd": "synlynk scan",
+        "note": "Scans source tree and injects ## Source Architecture into context; zero cost on cache hit"
+      },
+      {
+        "cmd": "synlynk scan --deep",
+        "note": "Full scan: writes source_symbols to state.db and source-map.md"
+      },
+      {
+        "cmd": "synlynk scan --status",
+        "note": "Shows cache age, git HEAD SHA, and file/symbol counts"
+      }
+    ],
+    "related": ["context-injection", "capability-engine"],
+    "changelog": []
+  },
+  {
+    "slug": "scoped-dispatch-context",
+    "name": "Scoped dispatch context",
+    "subtitle": "Task-level context slice replaces 7-day devlog dump in every agent dispatch",
+    "description": "v0.9.0 introduces `generate_context(scope=\"task:<story_id>\")`. Instead of injecting the full project context (7-day devlog, all teammate activity, complete memory file) into every dispatch, `_generate_task_context()` builds a minimal snapshot: story metadata from state.db, active tasks only from todo.md, and up to 20 source files filtered by the story's engineering domain from the scan cache. This reduces token overhead per dispatch by 60–80% and keeps agents focused on the relevant subsystem.",
+    "os_layer": "scheduler",
+    "user_theme": "autonomy-dispatch",
+    "introduced": "0.9",
+    "usage": [
+      {
+        "cmd": "synlynk dispatch claude --story story-abc123 --task \"add OAuth flow\"",
+        "note": "Agent receives story metadata + active tasks + domain-filtered source files only"
+      }
+    ],
+    "related": ["agent-dispatch", "source-architecture", "capability-engine"],
+    "changelog": []
+  },
+  {
+    "slug": "dispatch-quality",
+    "name": "Dispatch quality enhancements",
+    "subtitle": "## Relevant Files, ## How to Verify, and per-agent prompt framing in every dispatch",
+    "description": "v0.9.0 adds three quality layers to every agent dispatch. `_relevant_files_for_story()` injects a `## Relevant Files` section (up to 10 paths from the source-map, filtered by engineering domain) so agents know exactly which files to touch. `_verify_contract_for_story()` injects a `## How to Verify` section with a concrete pytest invocation derived from the story title. `_format_prompt_for_agent()` applies agent-specific framing: Codex receives `## Task Criteria` as scannable bullets; AGY receives a concise `Task:` prefix with 2000-char context; Claude receives the full narrative prompt.",
+    "os_layer": "scheduler",
+    "user_theme": "autonomy-dispatch",
+    "introduced": "0.9",
+    "usage": [
+      {
+        "cmd": "synlynk dispatch codex --story story-abc123 --task \"fix token extraction\"",
+        "note": "Codex receives Task Criteria bullets + Relevant Files list + How to Verify pytest command"
+      }
+    ],
+    "related": ["scoped-dispatch-context", "agent-dispatch", "source-architecture"],
+    "changelog": []
+  },
+  {
+    "slug": "ed25519-signing",
+    "name": "Ed25519 capability signing",
+    "subtitle": "Every capability rating is signed with a local Ed25519 key — tamper-evident from day one",
+    "description": "v0.9.0 wires the `ed25519_sig` column in the `capability_ratings` table that has existed since v0.5.0. `_ensure_identity_key()` creates `~/.synlynk/identity.key` via `ssh-keygen -t ed25519` on first use. `_sign_capability_rating()` signs a canonical `json.dumps(..., sort_keys=True)` payload of the rating fields via `ssh-keygen -Y sign`, then stores the signature alongside the rating. This is the first step toward the Tokq-compatible signed capability ledger planned for v1.0.0.",
+    "os_layer": "scheduler",
+    "user_theme": "agent-coordination",
+    "introduced": "0.9",
+    "usage": [
+      {
+        "cmd": "synlynk identity init",
+        "note": "Creates ~/.synlynk/identity.key and prints the public key"
+      },
+      {
+        "cmd": "synlynk score add --story story-abc123 --agent claude --quality 4",
+        "note": "Rating INSERT now includes ed25519_sig field populated automatically"
+      }
+    ],
+    "related": ["capability-engine", "model-version-probing"],
+    "changelog": []
   }
 ]
