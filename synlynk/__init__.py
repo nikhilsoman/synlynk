@@ -463,8 +463,8 @@ def get_username() -> str:
 
 
 def get_mode() -> str:
-    """Returns 'single' or 'team' from project-docs/.synlynk_config.json."""
-    config_path = "project-docs/.synlynk_config.json"
+    """Returns 'single' or 'team' from <docs_dir>/.synlynk_config.json."""
+    config_path = os.path.join(_docs_dir(), ".synlynk_config.json")
     if os.path.exists(config_path):
         try:
             with open(config_path) as f:
@@ -472,6 +472,23 @@ def get_mode() -> str:
         except (json.JSONDecodeError, IOError):
             pass
     return "single"
+
+
+def _docs_dir() -> str:
+    """Returns the configured project docs directory (defaults to 'project-docs').
+
+    Reads project_docs_dir from .synlynk/config.json. Pass --docs-dir to
+    synlynk init to set a custom location (e.g. '.' for repos that keep docs
+    at the root).
+    """
+    config_file = ".synlynk/config.json"
+    if os.path.exists(config_file):
+        try:
+            with open(config_file) as f:
+                return json.load(f).get("project_docs_dir", "project-docs")
+        except (json.JSONDecodeError, IOError):
+            pass
+    return "project-docs"
 
 
 def load_config() -> dict:
@@ -484,6 +501,7 @@ def load_config() -> dict:
         "owner": None,
         "repo": None,
         "project_id": None,
+        "project_docs_dir": "project-docs",
         "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
         "team": None,
         "sync_endpoint": None,
@@ -1154,10 +1172,11 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
 ## Completed
 """
 
+    dd = _docs_dir()
     files = {
-        "project-docs/roadmap.md": roadmap_content,
-        "project-docs/memory.md": memory_content,
-        "project-docs/todo.md": todo_content,
+        os.path.join(dd, "roadmap.md"): roadmap_content,
+        os.path.join(dd, "memory.md"): memory_content,
+        os.path.join(dd, "todo.md"): todo_content,
     }
 
     written = []
@@ -1562,7 +1581,7 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
 
     conn.close()
 
-    devlog_dir = "project-docs/devlogs"
+    devlog_dir = os.path.join(_docs_dir(), "devlogs")
     if os.path.exists(devlog_dir):
         devlog_path = os.path.join(devlog_dir, f"{name}.md")
         n_high = sum(1 for f in to_process if f.get("severity") == "high")
@@ -2117,7 +2136,7 @@ def cmd_run_trio(task: str, story_id: str = None) -> None:
 
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
-    costs_file = "project-docs/costs.md"
+    costs_file = os.path.join(_docs_dir(), "costs.md")
     total_usd = 0.0
     total_requests = 0
     if not os.path.exists(costs_file):
@@ -2484,7 +2503,7 @@ def _scan_full_repo(root: str = ".") -> tuple:
         print(f"  ⚠ source_symbols DB write failed: {e}")
 
     # Write project-docs/source-map.md
-    source_map_path = os.path.join("project-docs", "source-map.md")
+    source_map_path = os.path.join(_docs_dir(), "source-map.md")
     try:
         os.makedirs("project-docs", exist_ok=True)
         sha_short = head_sha[:7] if head_sha != "unknown" else "unknown"
@@ -3217,7 +3236,7 @@ def log_telemetry_event(event: dict) -> None:
 
 def _check_costs_freshness() -> None:
     """Warns if costs.md hasn't been updated in the current session (>1 hour)."""
-    costs_file = "project-docs/costs.md"
+    costs_file = os.path.join(_docs_dir(), "costs.md")
     if not os.path.exists(costs_file):
         return
     if time.time() - os.path.getmtime(costs_file) > 3600:
@@ -3387,7 +3406,7 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
     """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
-    costs_file = "project-docs/costs.md"
+    costs_file = os.path.join(_docs_dir(), "costs.md")
     if not os.path.exists(costs_file):
         return
     est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
@@ -3762,7 +3781,7 @@ def _generate_task_context(story_id: str) -> None:
 
 def generate_context(scope: str = "full") -> None:
     """Aggregates project-docs into .synlynk/context.md (active items only)."""
-    docs_dir = "project-docs"
+    docs_dir = _docs_dir()
     context_file = ".synlynk/context.md"
     sentinel_file = ".synlynk/sentinel.md"
 
@@ -4323,8 +4342,9 @@ def init(force: bool = False, agents: list = None,
             print(f"    {_DIM}✗ {ag['name']} — check API key / install{_RESET}")
 
     # ── Step 3: Create directories + write skeleton ─────────────────────────
-    _print_step(3, "Bootstrapping project-docs")
-    for d in ["project-docs", "project-docs/devlogs", ".synlynk",
+    dd = _docs_dir()
+    _print_step(3, f"Bootstrapping {dd}/")
+    for d in [dd, os.path.join(dd, "devlogs"), ".synlynk",
               LOGS_DIR, PROMPTS_DIR]:
         if not os.path.exists(d):
             os.makedirs(d)
@@ -4585,6 +4605,9 @@ def main() -> None:
                              help="GitHub repository name (stored in .synlynk/config.json)")
     init_parser.add_argument("--project-id", default=None, dest="project_id",
                              help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in agent files)")
+    init_parser.add_argument("--docs-dir", default=None, dest="docs_dir",
+                             help="Directory for project docs (default: project-docs). "
+                                  "Use '.' for repos that keep docs at the repo root.")
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
@@ -4732,6 +4755,10 @@ def main() -> None:
 
     if args.command == "init":
         agents = [a.strip() for a in args.agents.split(",") if a.strip()]
+        if getattr(args, "docs_dir", None):
+            # Write docs_dir to config before init() runs so _docs_dir() picks it up
+            os.makedirs(".synlynk", exist_ok=True)
+            _update_config({"project_docs_dir": args.docs_dir})
         init(force=args.force, agents=agents, mode=args.mode,
              org=args.org, repo=args.repo, project_id=args.project_id)
     elif args.command == "exec":
