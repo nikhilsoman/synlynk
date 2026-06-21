@@ -187,9 +187,56 @@ def test_generate_context_omits_sentinel_section_when_empty(project_dir):
 def test_generate_context_scope_stub_falls_back(project_dir, capsys):
     synlynk.generate_context(scope="task:99")
     captured = capsys.readouterr()
-    assert "not yet implemented" in captured.out
-    # Still generates full context
+    # Task-scoped context is now implemented, not a stub
+    assert "Task-scoped context saved" in captured.out
+    # Context file is generated
     assert (project_dir / ".synlynk" / "context.md").exists()
+
+
+def test_generate_context_task_scope_writes_story(project_dir):
+    """Task-scoped context includes the story's metadata."""
+    import synlynk as sl
+    story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
+    sl.generate_context(scope=f"task:{story_id}")
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Fix auth timeout" in ctx
+    assert "task-scoped" in ctx.lower()
+
+
+def test_generate_context_task_scope_smaller_than_full(project_dir):
+    """Task-scoped context is smaller than full context."""
+    import synlynk as sl
+    (project_dir / "project-docs" / "devlogs" / "nikhilsoman.md").write_text(
+        "# Devlog\n## 2026-06-01\nDid a lot of work today.\n" * 20
+    )
+    story_id = sl.cmd_story_create("Small fix", engg_domain="backend")
+    sl.generate_context(scope="full")
+    full_size = (project_dir / ".synlynk" / "context.md").stat().st_size
+    sl.generate_context(scope=f"task:{story_id}")
+    task_size = (project_dir / ".synlynk" / "context.md").stat().st_size
+    assert task_size < full_size
+
+
+def test_generate_context_task_scope_unknown_story(project_dir):
+    """Task-scoped context for unknown story_id still writes without crashing."""
+    import synlynk as sl
+    sl.generate_context(scope="task:story-deadbeef")
+    assert (project_dir / ".synlynk" / "context.md").exists()
+
+
+def test_generate_context_task_scope_no_teammate_devlogs(project_dir):
+    """Task-scoped context does NOT include teammate devlogs."""
+    import synlynk as sl
+    (project_dir / "project-docs" / ".synlynk_config.json").write_text(
+        '{"mode": "team", "version": "1.1.0"}'
+    )
+    (project_dir / "project-docs" / "devlogs" / "alice.md").write_text(
+        "# Alice Devlog\n## 2026-06-01\nAlice did things.\n"
+    )
+    story_id = sl.cmd_story_create("Fix thing")
+    sl.generate_context(scope=f"task:{story_id}")
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "alice" not in ctx.lower()
 
 
 def test_init_creates_project_structure(tmp_path, monkeypatch):

@@ -1194,7 +1194,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
 
     try:
-        generate_context(scope="full")
+        generate_context(scope=f"task:{story_id}" if story_id else "full")
     except Exception:
         pass
     context_path = ".synlynk/context.md"
@@ -3497,6 +3497,65 @@ def _write_last_devlog_section(out, filepath: str) -> None:
         out.writelines(sections[-1])
 
 
+def _generate_task_context(story_id: str) -> None:
+    """Writes minimal scoped context for a single story dispatch."""
+    context_file = ".synlynk/context.md"
+    if not os.path.exists(".synlynk"):
+        os.makedirs(".synlynk")
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT title, engg_domain, org_domain, phase FROM stories WHERE story_id=?",
+        (story_id,)
+    ).fetchone()
+    conn.close()
+
+    with open(context_file, "w") as out:
+        out.write("# synlynk Context Snapshot (task-scoped)\n\n")
+        out.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+        if row:
+            out.write("## Story\n")
+            out.write(f"**ID:** {story_id}  \n")
+            out.write(f"**Title:** {row[0] or ''}  \n")
+            out.write(
+                f"**Domain:** {row[1] or 'unknown'} · "
+                f"{row[2] or 'unknown'} · {row[3] or 'build'}  \n\n---\n\n"
+            )
+
+        # Active tasks only (not deferred, not done)
+        todo_path = os.path.join("project-docs", "todo.md")
+        if os.path.exists(todo_path):
+            active = [l for l in open(todo_path) if "- [ ]" in l]
+            if active:
+                out.write("## Active Tasks\n")
+                out.writelines(active)
+                out.write("\n---\n\n")
+
+        # Source architecture (relevant files only, up to 20 entries)
+        source_skeleton = _check_scan_cache()
+        if source_skeleton:
+            engg = row[1] if row and row[1] != "unknown" else None
+            if engg:
+                relevant = [
+                    f for f in source_skeleton
+                    if engg in f.get("file", "")
+                    or engg in " ".join(f.get("symbols", []))
+                ]
+                if not relevant:
+                    relevant = source_skeleton
+            else:
+                relevant = source_skeleton
+            meta = _load_scan_meta()
+            current_sha = _git_head_sha() or ""
+            cache_hit = bool(meta and meta.get("head_sha") == current_sha)
+            arch = _format_source_architecture(relevant[:20], current_sha, cache_hit, len(relevant))
+            if arch:
+                out.write(arch)
+
+    print(f"  ✓ Task-scoped context saved to {context_file}")
+
+
 def generate_context(scope: str = "full") -> None:
     """Aggregates project-docs into .synlynk/context.md (active items only)."""
     docs_dir = "project-docs"
@@ -3507,7 +3566,9 @@ def generate_context(scope: str = "full") -> None:
         return
 
     if scope != "full":
-        # TODO(v1.3.0): implement task-scoped context slices for sub-agent routing
+        if scope.startswith("task:"):
+            _generate_task_context(scope[5:])
+            return
         print(f"  ⚠ scope='{scope}' not yet implemented, falling back to full context")
         scope = "full"
 
