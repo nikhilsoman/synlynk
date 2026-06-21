@@ -1563,6 +1563,55 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     assert len(sl._load_jobs()) == 2
 
 
+def test_dispatch_agent_injects_relevant_files(project_dir, monkeypatch):
+    """dispatch_agent includes ## Relevant Files when story has scan data."""
+    import synlynk as sl, json
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    # Write scan cache with a backend file
+    meta = {"head_sha": "abc123", "skeleton": [
+        {"file": "backend/auth.py", "symbols": ["login", "logout"], "language": "python"}
+    ]}
+    (project_dir / ".synlynk").mkdir(exist_ok=True)
+    (project_dir / ".synlynk" / "scan-meta.json").write_text(json.dumps(meta))
+    story_id = sl.cmd_story_create("Fix auth", engg_domain="backend")
+    # Mock _git_head_sha to avoid subprocess.run call
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: "abc123")
+    job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Relevant Files" in prompt
+    assert "backend/auth.py" in prompt
+
+
+def test_dispatch_agent_no_relevant_files_without_scan(project_dir, monkeypatch):
+    """dispatch_agent omits ## Relevant Files when no scan cache exists."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix thing", engg_domain="backend")
+    # Mock _git_head_sha to avoid subprocess.run call
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
+    job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Relevant Files" not in prompt
+
+
+def test_relevant_files_for_story_returns_matching_files(project_dir):
+    """_relevant_files_for_story matches engg_domain to file paths."""
+    import synlynk as sl, json
+    meta = {"head_sha": "abc", "skeleton": [
+        {"file": "src/backend/api.py", "symbols": ["get_user"], "language": "python"},
+        {"file": "src/frontend/App.tsx", "symbols": ["App"], "language": "typescript"},
+    ]}
+    (project_dir / ".synlynk" / "scan-meta.json").write_text(json.dumps(meta))
+    story_id = sl.cmd_story_create("API fix", engg_domain="backend")
+    files = sl._relevant_files_for_story(story_id)
+    assert any("backend" in f for f in files)
+    assert not any("frontend" in f for f in files)
+
+
 def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     """codex exec + stdin mode must be used so dispatch works without a TTY.
 

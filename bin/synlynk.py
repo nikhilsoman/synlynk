@@ -1156,6 +1156,38 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
         return False
 
 
+def _relevant_files_for_story(story_id: str) -> list:
+    """Returns up to 10 source file paths relevant to the story's engg_domain."""
+    if not story_id:
+        return []
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT engg_domain FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    if not row or row[0] == "unknown":
+        return []
+    engg = row[0]
+    # Try to load cached scan meta first (faster, avoids git operations)
+    meta = _load_scan_meta()
+    skeleton = meta.get("skeleton", []) if meta else None
+    # If no cached meta, try to check scan cache (may re-scan if HEAD changed)
+    if skeleton is None:
+        try:
+            skeleton = _check_scan_cache()
+        except Exception:
+            skeleton = []
+    if not skeleton:
+        return []
+    relevant = []
+    for entry in skeleton:
+        path = entry.get("file", "")
+        symbols_str = " ".join(entry.get("symbols", []))
+        if engg in path or engg in symbols_str:
+            relevant.append(path)
+    return relevant[:10]
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False) -> dict:
     """Dispatches an agent to run a task in the background.
@@ -1203,7 +1235,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         context_text = open(context_path).read()
 
     story_line = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
-    prompt = f"{context_text}{story_line}\n\n## Your Task\n{task}\n"
+
+    # Inject relevant file list
+    file_list = _relevant_files_for_story(story_id) if story_id else []
+    file_section = ""
+    if file_list:
+        file_section = "\n\n## Relevant Files\n" + "\n".join(f"- `{f}`" for f in file_list)
+
+    prompt = f"{context_text}{story_line}{file_section}\n\n## Your Task\n{task}\n"
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
