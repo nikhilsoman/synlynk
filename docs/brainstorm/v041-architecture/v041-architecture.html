@@ -1,0 +1,156 @@
+<h2>v0.4.1 — Instruction Reach Architecture</h2>
+<p class="subtitle">How init, update, and drift detection connect</p>
+
+<div style="font-family: var(--font-mono, monospace); font-size: 0.78rem; line-height: 1.7; margin: 1.5rem 0;">
+
+  <!-- Row 1: Init flow -->
+  <div style="display:grid; grid-template-columns: 1fr 40px 1fr 40px 1fr 40px 1fr; gap:0; align-items:center; margin-bottom:0.5rem;">
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Step 1</div>
+      <strong>synlynk init</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">_static_scan() +<br>discover_agents()</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Step 2</div>
+      <strong>Scan existing files</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">Read CLAUDE.md,<br>.cursor/rules, etc.<br>Extract non-synlynk content</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Step 3</div>
+      <strong>Generate + Append</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">Build tool-native block<br>Insert between markers<br>Preserve user content</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Step 4</div>
+      <strong>Write Manifest</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">.synlynk/<br>instructions.json<br>SHA per file+section</div>
+    </div>
+  </div>
+
+  <!-- Separator -->
+  <div style="border-top:1px dashed var(--border); margin:1.25rem 0;"></div>
+
+  <!-- Row 2: Runtime drift detection -->
+  <div style="display:grid; grid-template-columns: 1fr 40px 1fr 40px 1fr 40px 1fr; gap:0; align-items:center; margin-bottom:0.5rem;">
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#f59e0b; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Runtime</div>
+      <strong>synlynk exec</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">Every agent invocation</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#f59e0b; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Runtime</div>
+      <strong>_check_instruction_drift()</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">Hash synlynk sections<br>Compare vs manifest</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#ef4444; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Sentinel</div>
+      <strong>INSTRUCTION_DRIFT</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">New event type<br>Sev2 by default<br>Ack suppresses</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#ef4444; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">Output</div>
+      <strong>sentinel.md</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">File + section<br>that drifted<br>Line-diff summary</div>
+    </div>
+  </div>
+
+  <!-- Separator -->
+  <div style="border-top:1px dashed var(--border); margin:1.25rem 0;"></div>
+
+  <!-- Row 3: on-demand review -->
+  <div style="display:grid; grid-template-columns: 1fr 40px 1fr 40px 1fr; gap:0; align-items:center;">
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#8b5cf6; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">On-Demand</div>
+      <strong>synlynk instructions</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">status / diff / update</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#8b5cf6; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">On-Demand</div>
+      <strong>Human review</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">Absorb new patterns<br>into template</div>
+    </div>
+    <div style="text-align:center; color:var(--accent); font-size:1.2rem">→</div>
+    <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center;">
+      <div style="font-size:0.7rem; color:#8b5cf6; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.25rem">On-Demand</div>
+      <strong>synlynk instructions update</strong>
+      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem">Re-generates synlynk<br>section, refreshes manifest</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Tool targets table -->
+<div style="margin-top:1.5rem;">
+  <h3>Instruction File Targets</h3>
+  <table style="width:100%; font-size:0.82rem; border-collapse:collapse;">
+    <thead>
+      <tr style="border-bottom:1px solid var(--border); color:var(--text-secondary); text-align:left;">
+        <th style="padding:0.5rem 0.75rem">Tool</th>
+        <th style="padding:0.5rem 0.75rem">File</th>
+        <th style="padding:0.5rem 0.75rem">Marker syntax</th>
+        <th style="padding:0.5rem 0.75rem">Native features used</th>
+        <th style="padding:0.5rem 0.75rem">Detection</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.5rem 0.75rem"><strong>Claude Code</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>CLAUDE.md</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>&lt;!-- synlynk:start --&gt;</code></td>
+        <td style="padding:0.5rem 0.75rem">Section headers, code blocks</td>
+        <td style="padding:0.5rem 0.75rem"><code>claude --version</code></td>
+      </tr>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.5rem 0.75rem"><strong>AGY / Gemini</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>GEMINI.md</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>&lt;!-- synlynk:start --&gt;</code></td>
+        <td style="padding:0.5rem 0.75rem">Section headers, code blocks</td>
+        <td style="padding:0.5rem 0.75rem"><code>agy --version</code></td>
+      </tr>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.5rem 0.75rem"><strong>Codex</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>AGENTS.md</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>&lt;!-- synlynk:start --&gt;</code></td>
+        <td style="padding:0.5rem 0.75rem">Section headers, code blocks</td>
+        <td style="padding:0.5rem 0.75rem"><code>codex --version</code></td>
+      </tr>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.5rem 0.75rem"><strong>Cursor</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>.cursor/rules/synlynk.mdc</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>&lt;!-- synlynk:start --&gt;</code></td>
+        <td style="padding:0.5rem 0.75rem">Frontmatter: <code>globs</code>, <code>alwaysApply</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>.cursor/</code> dir exists</td>
+      </tr>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.5rem 0.75rem"><strong>GitHub Copilot</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>.github/copilot-instructions.md</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>&lt;!-- synlynk:start --&gt;</code></td>
+        <td style="padding:0.5rem 0.75rem">Plain markdown, no frontmatter</td>
+        <td style="padding:0.5rem 0.75rem"><code>.github/</code> dir exists</td>
+      </tr>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.5rem 0.75rem"><strong>Windsurf</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>.windsurfrules</code></td>
+        <td style="padding:0.5rem 0.75rem"><code># synlynk:start</code></td>
+        <td style="padding:0.5rem 0.75rem">Hash-comment rules format</td>
+        <td style="padding:0.5rem 0.75rem"><code>.windsurfrules</code> exists</td>
+      </tr>
+      <tr>
+        <td style="padding:0.5rem 0.75rem"><strong>Universal</strong></td>
+        <td style="padding:0.5rem 0.75rem"><code>AI_INSTRUCTIONS.md</code></td>
+        <td style="padding:0.5rem 0.75rem"><code>&lt;!-- synlynk:start --&gt;</code></td>
+        <td style="padding:0.5rem 0.75rem">Always written — manual paste target</td>
+        <td style="padding:0.5rem 0.75rem">Always</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<p style="margin-top:1.5rem; font-size:0.875rem; color:var(--text-secondary)">Does this architecture look right? Let me know in the terminal and we'll move to the detailed design sections.</p>

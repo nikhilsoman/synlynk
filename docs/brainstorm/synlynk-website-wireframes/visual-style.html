@@ -1,0 +1,62 @@
+<h2>Which visual direction feels right for synlynk.com?</h2>
+<p class="subtitle">This sets the aesthetic for every section — hero, features, blog</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="dark-terminal" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0E0E0F; padding:16px; font-family:'Courier New',monospace; height:180px; position:relative; overflow:hidden;">
+      <div style="background:#1A1A1C; border-radius:6px; padding:8px 12px; margin-bottom:10px; display:flex; gap:6px; align-items:center;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#FF5F57;display:inline-block"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#FEBC2E;display:inline-block"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#28C840;display:inline-block"></span>
+      </div>
+      <div style="color:#2EC4A0; font-size:11px; margin-bottom:6px;">▶ synlynk exec claude</div>
+      <div style="color:#5B8DEF; font-size:22px; font-weight:600; margin-bottom:4px;">syn<span style="color:#5B8DEF">l</span><span style="color:#A259F7">y</span><span style="color:#2EC4A0">n</span>k</div>
+      <div style="color:#666; font-size:10px; letter-spacing:2px;">SYNAPTIC LINK FOR AI DEV</div>
+      <div style="color:#444; font-size:10px; margin-top:12px;">keep your ai tools in sync with your project</div>
+      <div style="position:absolute; bottom:10px; right:12px; color:#333; font-size:9px;">v0.2.0</div>
+    </div>
+    <div class="card-body">
+      <h3>A — Dark Terminal</h3>
+      <p>All-dark site that matches the icon. Monospace accents, teal/purple/blue palette throughout. Feels like the product itself — immersive, hacker aesthetic. Strong identity, harder to read long-form.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="clean-light" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff; padding:16px; height:180px; position:relative; overflow:hidden; border:1px solid #eee; border-radius:6px 6px 0 0;">
+      <div style="color:#1a1a1a; font-size:22px; font-weight:600; font-family:'Courier New',monospace; margin-bottom:4px;">syn<span style="color:#5B8DEF">l</span><span style="color:#A259F7">y</span><span style="color:#2EC4A0">n</span>k</div>
+      <div style="color:#aaa; font-size:10px; letter-spacing:2px; margin-bottom:16px;">SYNAPTIC LINK FOR AI DEV</div>
+      <div style="color:#1a1a1a; font-size:15px; font-weight:500; margin-bottom:6px;">Keep your AI tools in sync.</div>
+      <div style="color:#666; font-size:11px; line-height:1.6;">A single-file Python CLI that injects project context into every AI session.</div>
+      <div style="margin-top:16px; display:flex; gap:8px;">
+        <div style="background:#0E0E0F; color:#2EC4A0; font-size:10px; padding:5px 12px; border-radius:4px; font-family:monospace;">pip install synlynk</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Clean Light</h3>
+      <p>White background, dark text, logo colors as accents only. Developer-docs aesthetic (think Linear, Vercel). Highly readable, easy to scan. Blog posts breathe. Feels more "product landing page."</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="dark-hero-light-body" onclick="toggleSelect(this)">
+    <div class="card-image" style="height:180px; overflow:hidden; border-radius:6px 6px 0 0; position:relative;">
+      <div style="background:#0E0E0F; padding:14px 16px 10px; height:90px; box-sizing:border-box;">
+        <div style="color:#1a1a1a; font-size:18px; font-weight:600; font-family:'Courier New',monospace; color:#fff; margin-bottom:2px;">syn<span style="color:#5B8DEF">l</span><span style="color:#A259F7">y</span><span style="color:#2EC4A0">n</span>k</div>
+        <div style="color:#888; font-size:9px; letter-spacing:2px; margin-bottom:8px;">SYNAPTIC LINK FOR AI DEV</div>
+        <div style="color:#ccc; font-size:11px;">Keep your AI tools in sync with your project.</div>
+      </div>
+      <div style="background:#f9f9f9; padding:12px 16px; height:90px; box-sizing:border-box; border-top:1px solid #eee;">
+        <div style="color:#333; font-size:11px; font-weight:500; margin-bottom:6px;">✦ Context injection &nbsp; ✦ Cost tracking &nbsp; ✦ Checkpoint archiving</div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <div style="background:#0E0E0F; color:#2EC4A0; font-size:9px; padding:4px 10px; border-radius:4px; font-family:monospace;">synlynk exec claude</div>
+          <div style="border:1px solid #ddd; color:#555; font-size:9px; padding:4px 10px; border-radius:4px;">Read the docs →</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Dark Hero, Light Body</h3>
+      <p>Dark, dramatic hero section with logo + CTA. Light background for everything below — features, install, blog. Strong first impression, maximum readability for content. The most common pattern for dev tools.</p>
+    </div>
+  </div>
+
+</div>

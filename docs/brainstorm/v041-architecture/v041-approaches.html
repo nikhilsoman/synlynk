@@ -1,0 +1,100 @@
+<h2>v0.4.1 — Instruction Reach: Three Approaches</h2>
+<p class="subtitle">All three solve generation + append. They differ on how the feedback loop works.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="A" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.6rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; width:100%">
+      <div class="letter">A</div>
+      <div>
+        <h3 style="margin:0">Section Markers + Manifest</h3>
+        <span style="font-size:0.8rem; color:#888; font-weight:500">Recommended</span>
+      </div>
+    </div>
+    <p style="margin:0; font-size:0.875rem; line-height:1.6; color:var(--text-secondary)">
+      Synlynk wraps its contribution in every instruction file with signed markers:<br>
+      <code style="font-size:0.8rem">&lt;!-- synlynk:start v0.4.1 --&gt; ... &lt;!-- synlynk:end --&gt;</code><br>
+      At init: reads existing file, appends/replaces only the synlynk section. Stores a SHA manifest of what it wrote to <code>.synlynk/instructions.json</code>.
+      <br><br>
+      <strong>Feedback loop:</strong> <code>synlynk instructions status</code> — compares current files against manifest. Reports: <em>synlynk-section unchanged · user-section added 3 lines · external-section detected above synlynk block</em>. Surfaces new sections added by the user or the tool itself for you to review and optionally absorb into the template.
+    </p>
+    <div class="pros-cons" style="width:100%; margin-top:0.5rem">
+      <div class="pros"><h4>Pros</h4><ul>
+        <li>Clean boundary — synlynk never touches user content</li>
+        <li>Idempotent — <code>synlynk init --force</code> only re-writes the synlynk section</li>
+        <li>Feedback loop is precise — knows exactly what changed and where</li>
+        <li>Works for all file formats (markdown, JSON, YAML)</li>
+      </ul></div>
+      <div class="cons"><h4>Cons</h4><ul>
+        <li>Marker syntax varies per tool (HTML comments vs # comments vs YAML keys)</li>
+        <li>Manifest adds a file to .synlynk/ to maintain</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="B" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.6rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; width:100%">
+      <div class="letter">B</div>
+      <div>
+        <h3 style="margin:0">Git-Native Drift Detection</h3>
+        <span style="font-size:0.8rem; color:#888; font-weight:500">Heavier, more powerful</span>
+      </div>
+    </div>
+    <p style="margin:0; font-size:0.875rem; line-height:1.6; color:var(--text-secondary)">
+      At init, synlynk commits instruction files as a single <em>"synlynk: init instructions"</em> commit and tags the SHAs in <code>.synlynk/instructions.json</code>. Feedback loop uses <code>git diff</code> against those SHAs — any changes to instruction files since that commit are surfaced verbatim.
+      <br><br>
+      <strong>Feedback loop:</strong> <code>synlynk instructions diff</code> — shows a <code>git diff</code>-style output of every instruction file change since synlynk last wrote them. Can be piped to an agent for review: <em>"here's what changed in .cursor/rules since we last generated it — should any of this be absorbed into our template?"</em>
+    </p>
+    <div class="pros-cons" style="width:100%; margin-top:0.5rem">
+      <div class="pros"><h4>Pros</h4><ul>
+        <li>No markers needed — works with any file format natively</li>
+        <li>Full git history available for deeper analysis</li>
+        <li>Diff is human-readable and agent-readable</li>
+      </ul></div>
+      <div class="cons"><h4>Cons</h4><ul>
+        <li>Requires repo to be git-tracked (instruction files must be committed)</li>
+        <li>Depends on user not rebasing/squashing the init commit</li>
+        <li>Harder to distinguish "user added" vs "tool auto-modified"</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="C" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.6rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; width:100%">
+      <div class="letter">C</div>
+      <div>
+        <h3 style="margin:0">Sentinel Extension (no new primitives)</h3>
+        <span style="font-size:0.8rem; color:#888; font-weight:500">Lightest, reuses existing system</span>
+      </div>
+    </div>
+    <p style="margin:0; font-size:0.875rem; line-height:1.6; color:var(--text-secondary)">
+      Extend the existing sentinel system to watch instruction files. Store hashes of all generated files in <code>.synlynk/telemetry.json</code>. On each <code>synlynk exec</code>, re-hash instruction files and add a <code>INSTRUCTION_DRIFT</code> sentinel event if any changed outside synlynk.
+      <br><br>
+      <strong>Feedback loop:</strong> surfaced in <code>sentinel.md</code> — same severity/ack system already in place. No new commands needed. Integrates with the existing checkpoint flow.
+    </p>
+    <div class="pros-cons" style="width:100%; margin-top:0.5rem">
+      <div class="pros"><h4>Pros</h4><ul>
+        <li>Zero new CLI surface — reuses sentinel + ack</li>
+        <li>Feedback surfaces automatically on every exec, not on-demand</li>
+        <li>Consistent with existing observability model</li>
+      </ul></div>
+      <div class="cons"><h4>Cons</h4><ul>
+        <li>Hash only — no line-level diff, just "changed / not changed"</li>
+        <li>No way to absorb external changes back into template</li>
+        <li>Sentinel designed for agent behaviour, not file state — conceptual stretch</li>
+      </ul></div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:1.5rem; padding:1rem 1.25rem; background:var(--bg-secondary); border-radius:8px; border-left:3px solid var(--accent);">
+  <p style="margin:0; font-size:0.875rem; color:var(--text-secondary)">
+    <strong style="color:var(--text-primary)">My recommendation: A + C hybrid.</strong>
+    Section markers (A) for clean append/update. Sentinel extension (C) for automatic background detection on every exec — no new command needed to surface drift. The manifest in A gives the diff fidelity that C alone lacks.
+    <br><br>
+    Approach B (git-native) is powerful but too fragile — instruction files often aren't committed immediately, and the init commit assumption breaks in real repos.
+  </p>
+</div>
+
+<p style="margin-top:1.2rem; font-size:0.875rem; color:var(--text-secondary)">Take a look and let me know what resonates — or if you want to combine differently.</p>

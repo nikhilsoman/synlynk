@@ -1,0 +1,132 @@
+<h2>Hero code blocks — v2</h2>
+<p class="subtitle">Wider layout, high-contrast copy icon, command no longer overflows.</p>
+
+<div class="mockup" style="max-width:920px; margin:0 auto;">
+  <div class="mockup-header">Hero section — 1200px desktop (scaled to 920px preview)</div>
+  <div class="mockup-body" style="padding:0; overflow:hidden; font-family:system-ui,sans-serif;">
+
+    <!-- NAV -->
+    <div style="background:#0E0E0F; padding:14px 56px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1d1d1f;">
+      <div style="font-family:'Courier New',monospace; font-size:15px; color:#fff; font-weight:600;">syn<span style="color:#5B8DEF">l</span><span style="color:#A259F7">y</span><span style="color:#2EC4A0">n</span>k</div>
+      <div style="display:flex; gap:28px; font-size:12px; color:#888;">
+        <span>How it works</span><span>Install</span><span style="color:#2EC4A0;">Blog</span>
+        <span style="background:#1d1d1f; padding:4px 14px; border-radius:4px; color:#ccc;">GitHub ↗</span>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div style="background:#0E0E0F; padding:80px 56px 72px; text-align:center; background-image:radial-gradient(ellipse at 50% 0%, #1a1040 0%, #0E0E0F 65%);">
+
+      <!-- Logo lockup -->
+      <div style="display:inline-flex; align-items:center; gap:12px; margin-bottom:22px;">
+        <svg width="52" height="52" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(100,100)">
+            <rect x="-90" y="-90" width="180" height="180" rx="36" fill="#0E0E0F" stroke="#888" stroke-width="8"/>
+            <rect x="-90" y="-90" width="180" height="32" rx="36" fill="#1A1A1C"/>
+            <rect x="-90" y="-72" width="180" height="14" fill="#1A1A1C"/>
+            <circle cx="-62" cy="-74" r="5" fill="#FF5F57"/>
+            <circle cx="-46" cy="-74" r="5" fill="#FEBC2E"/>
+            <circle cx="-30" cy="-74" r="5" fill="#28C840"/>
+            <path d="M 6 -46 C 6 -46 -28 -46 -28 -22 C -28 2 14 2 14 26" fill="none" stroke="#5B8DEF" stroke-width="11" stroke-linecap="round"/>
+            <path d="M 14 26 C 14 26 46 26 46 2 C 46 -22 6 -22 6 -46" fill="none" stroke="#A259F7" stroke-width="11" stroke-linecap="round"/>
+            <path d="M 14 26 L 14 50" fill="none" stroke="#2EC4A0" stroke-width="11" stroke-linecap="round"/>
+            <circle cx="6" cy="-46" r="8" fill="#5B8DEF"/>
+            <circle cx="14" cy="50" r="8" fill="#2EC4A0"/>
+          </g>
+        </svg>
+        <span style="font-family:'Courier New',monospace; font-size:34px; font-weight:600; color:#fff; letter-spacing:-1px;">syn<span style="color:#5B8DEF">l</span><span style="color:#A259F7">y</span><span style="color:#2EC4A0">n</span>k</span>
+      </div>
+
+      <div style="color:#ccc; font-size:19px; margin-bottom:10px; line-height:1.5;">Keep your AI tools in sync with your project.</div>
+      <div style="color:#666; font-size:13px; margin-bottom:36px; max-width:520px; margin-left:auto; margin-right:auto; line-height:1.8;">A single-file Python CLI that injects project context into every AI session — no lost state, no repeated setup, no invisible costs.</div>
+
+      <!-- Primary install block -->
+      <div style="position:relative; max-width:700px; margin:0 auto 12px; text-align:left;">
+        <div style="
+          background:#252526;
+          border:1px solid #3a3a3c;
+          border-radius:8px;
+          padding:14px 56px 14px 20px;
+          font-family:'Courier New',monospace;
+          font-size:13px;
+          color:#2EC4A0;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
+        ">$ curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash</div>
+        <button
+          id="copy-btn-1"
+          onclick="
+            navigator.clipboard.writeText('curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash');
+            this.innerHTML = '<svg width=&quot;18&quot; height=&quot;18&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;#2EC4A0&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;20 6 9 17 4 12&quot;></polyline></svg>';
+            setTimeout(() => { this.innerHTML = copyIcon }, 1500);
+          "
+          style="
+            position:absolute; right:10px; top:50%; transform:translateY(-50%);
+            background:none; border:none; cursor:pointer;
+            color:#fff; padding:4px; display:flex; align-items:center; justify-content:center;
+            border-radius:4px; transition:background 0.15s;
+          "
+          onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+          onmouseout="this.style.background='none'"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Secondary: run without installing -->
+      <div style="position:relative; max-width:700px; margin:0 auto 32px; text-align:left;">
+        <div style="
+          background:#1a1a1c;
+          border:1px solid #2a2a2c;
+          border-radius:6px;
+          padding:10px 56px 10px 20px;
+          font-family:'Courier New',monospace;
+          font-size:12px;
+          color:#666;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
+        ">$ python3 bin/synlynk.py &lt;command&gt; &nbsp;·&nbsp; no install required</div>
+        <button
+          onclick="
+            navigator.clipboard.writeText('python3 bin/synlynk.py');
+            this.innerHTML = '<svg width=&quot;16&quot; height=&quot;16&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;#2EC4A0&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;20 6 9 17 4 12&quot;></polyline></svg>';
+            setTimeout(() => { this.innerHTML = '<svg width=&quot;16&quot; height=&quot;16&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;><rect x=&quot;9&quot; y=&quot;9&quot; width=&quot;13&quot; height=&quot;13&quot; rx=&quot;2&quot;></rect><path d=&quot;M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1&quot;></path></svg>' }, 1500);
+          "
+          style="
+            position:absolute; right:10px; top:50%; transform:translateY(-50%);
+            background:none; border:none; cursor:pointer;
+            color:#888; padding:4px; display:flex; align-items:center; justify-content:center;
+            border-radius:4px; transition:background 0.15s;
+          "
+          onmouseover="this.style.background='rgba(255,255,255,0.08)'; this.style.color='#fff'"
+          onmouseout="this.style.background='none'; this.style.color='#888'"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- CTAs -->
+      <div style="display:flex; gap:12px; justify-content:center; margin-bottom:16px;">
+        <div style="background:#5B8DEF; color:#fff; padding:11px 28px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer;">Get started →</div>
+        <div style="border:1px solid #333; color:#aaa; padding:11px 28px; border-radius:6px; font-size:13px; cursor:pointer;">View on GitHub</div>
+      </div>
+      <div style="color:#3a3a3c; font-size:11px; font-family:'Courier New',monospace;">Python 3.8+ · stdlib only · MIT</div>
+
+    </div>
+
+    <div style="background:#fff; padding:28px 40px; text-align:center; color:#aaa; font-size:13px; border-top:1px solid #f0f0f0;">
+      ↓ Problem · How it works · Features · Install · Roadmap · Blog · Footer
+    </div>
+
+  </div>
+</div>
+
+<p class="subtitle" style="text-align:center; margin-top:16px;">Copy icon is white, 18px, SVG clipboard — fully functional. Command truncates cleanly with ellipsis if viewport is narrow; copy still gets the full string.</p>

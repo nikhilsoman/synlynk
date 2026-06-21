@@ -1,0 +1,73 @@
+<h2>rxcc CLAUDE.md — what's already there</h2>
+<p class="subtitle">Key finding: rxcc already has synlynk-equivalent content, just under different headers</p>
+
+<div class="section">
+  <h3>Current section structure (284 lines)</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.9">
+      <span style="color:#a78bfa">## Project</span> <span style="color:#94a3b8">← rxcc-specific</span><br>
+      <span style="color:#f97316">## Mandatory Document Maintenance</span> <span style="color:#94a3b8">← contains anti-amnesia + 4-doc discipline</span><br>
+      <span style="color:#a78bfa">## Key Context</span> <span style="color:#94a3b8">← rxcc-specific (India, DPDP, tech stack)</span><br>
+      <span style="color:#a78bfa">## Code Standards</span> <span style="color:#94a3b8">← rxcc-specific (full tech stack, conventions)</span><br>
+      <span style="color:#f97316">## Git Workflow</span> <span style="color:#94a3b8">← contains live issues SOP + GH Projects v2 IDs + agent routing</span><br>
+      <span style="color:#a78bfa">## Encryption Engineering Practice</span> <span style="color:#94a3b8">← rxcc-specific</span><br>
+      <span style="color:#a78bfa">## Lessons Learned</span> <span style="color:#94a3b8">← rxcc-specific</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Overlap with synlynk v0.3.0 template sections</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.85em">
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.1)">
+      <th style="text-align:left;padding:8px 12px;color:#94a3b8">synlynk section header</th>
+      <th style="text-align:left;padding:8px 12px;color:#94a3b8">In rxcc CLAUDE.md?</th>
+      <th style="text-align:left;padding:8px 12px;color:#94a3b8">How</th>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+      <td style="padding:8px 12px;font-family:monospace">## Live Issues SOP</td>
+      <td style="padding:8px 12px"><span style="color:#fbbf24">⚠ Yes — different header</span></td>
+      <td style="padding:8px 12px">Nested under <code>## Git Workflow → ### Live Issues</code></td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+      <td style="padding:8px 12px;font-family:monospace">## Mid-Session Anti-Amnesia</td>
+      <td style="padding:8px 12px"><span style="color:#fbbf24">⚠ Yes — different header</span></td>
+      <td style="padding:8px 12px">Under <code>## Mandatory Document Maintenance → ### Mid-Session Persistence</code></td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+      <td style="padding:8px 12px;font-family:monospace">## Mandatory 4-Doc Discipline</td>
+      <td style="padding:8px 12px"><span style="color:#fbbf24">⚠ Yes — different header</span></td>
+      <td style="padding:8px 12px">Covered by <code>## Mandatory Document Maintenance</code></td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+      <td style="padding:8px 12px;font-family:monospace">## GitHub Projects v2 Integration</td>
+      <td style="padding:8px 12px"><span style="color:#ef4444">⚠ Real IDs already hardcoded!</span></td>
+      <td style="padding:8px 12px">Under <code>## Git Workflow</code> — real project ID + field IDs + option IDs</td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+      <td style="padding:8px 12px;font-family:monospace">## Git Worktree-First Policy</td>
+      <td style="padding:8px 12px"><span style="color:#4ade80">Partially</span></td>
+      <td style="padding:8px 12px">Git Workflow covers branch discipline, not worktrees explicitly</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;font-family:monospace">## synlynk Start</td>
+      <td style="padding:8px 12px"><span style="color:#94a3b8">No</span></td>
+      <td style="padding:8px 12px">New — not yet in rxcc</td>
+    </tr>
+  </table>
+</div>
+
+<div style="margin-top:20px;padding:16px;background:rgba(251,191,36,0.1);border-radius:8px;border-left:3px solid #fbbf24">
+  <p class="label">Key finding — no Superpowers sections yet</p>
+  <p style="margin:4px 0 0">rxcc's CLAUDE.md is <strong>entirely hand-written rxcc content</strong>. No Superpowers sections exist yet. The overlap is between rxcc's own content and what synlynk's generic templates would add — not between plugins.</p>
+</div>
+
+<div style="margin-top:16px;padding:16px;background:rgba(239,68,68,0.1);border-radius:8px;border-left:3px solid #ef4444">
+  <p class="label">Critical: real GH Projects v2 IDs already in CLAUDE.md</p>
+  <p style="margin:4px 0 0">Project ID <code>PVT_kwDOAAUx684BYYIM</code>, Agent field ID, Status field ID, and per-agent option IDs are hardcoded in the Git Workflow section. <code>synlynk start</code> needs these — they should be extracted into <code>.synlynk/config.json</code>, not re-added as TODO placeholders.</p>
+</div>
+
+<div style="margin-top:16px;padding:16px;background:rgba(74,222,128,0.1);border-radius:8px;border-left:3px solid #4ade80">
+  <p class="label">What this means for migration</p>
+  <p style="margin:4px 0 0"><strong>Don't touch CLAUDE.md content at all for rxcc.</strong> The content is richer than synlynk's generic template. Migration for rxcc = extract real GH Projects v2 IDs into <code>.synlynk/config.json</code> + create AGENTS.md + move project docs to <code>project-docs/</code>.</p>
+</div>

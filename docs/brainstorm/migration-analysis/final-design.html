@@ -1,0 +1,191 @@
+<h2>synlynk v0.4.0 — Final Design</h2>
+<p class="subtitle">Complete spec for review and sign-off</p>
+
+<div class="section">
+  <h3>1. Remote auto-detection (shared by init + migrate)</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      git remote get-url origin<br>
+      <span style="color:#94a3b8"># https://github.com/Dialify/rxcc.git</span><br>
+      <span style="color:#94a3b8"># git@github.com:Dialify/rxcc.git</span><br>
+      → owner = "Dialify", repo = "rxcc"<br>
+      → written to .synlynk/config.json at init/migrate time<br>
+      → no flags, no prompts
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. <code>synlynk migrate</code> — full flow</h3>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div>
+      <p class="label">Step 1 — Scan</p>
+      <div class="mockup">
+        <div class="mockup-body" style="font-size:0.8em;line-height:1.7">
+          Walk repo tree. Flag any file whose name matches:<br>
+          <code>roadmap.md, todo.md, memory.md, costs.md,</code><br>
+          <code>devlog.md, devlogs/</code><br>
+          …that lives outside <code>project-docs/</code><br><br>
+          Also flag agent files at root:<br>
+          <code>CLAUDE.md, GEMINI.md, AI_INSTRUCTIONS.md</code><br>
+          that have substantial content (&gt;100 lines or 3+ unknown sections)
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="label">Step 2 — Maturity check</p>
+      <div class="mockup">
+        <div class="mockup-body" style="font-size:0.8em;line-height:1.7">
+          <span style="color:#4ade80">Fresh repo:</span> agent files absent or &lt;30 lines<br>
+          → normal init flow, move docs to project-docs/<br><br>
+          <span style="color:#fbbf24">Evolved repo:</span> agent file &gt;100 lines<br>
+          OR 3+ sections not in synlynk template<br>
+          → show 3-option menu (A/B/C)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="label">Step 3 — Evolved repo menu</p>
+  <div class="mockup" style="margin-bottom:14px">
+    <div class="mockup-header">Terminal prompt</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      <span style="color:#4ade80">synlynk migrate</span> — rxcc (Dialify/rxcc)<br><br>
+      Found evolved agent instructions (CLAUDE.md: 284 lines, 7 sections).<br>
+      Your existing content is richer than synlynk's generic template.<br><br>
+      <span style="color:#4ade80">[A]</span> Adopt + combine — preserve your content, add only what's missing<br>
+      <span style="color:#94a3b8">[B]</span> Exit — no changes (you can re-run migrate later)<br>
+      <span style="color:#ef4444">[C]</span> Full replace — overwrite with synlynk templates (type 'replace' to confirm)<br><br>
+      Choice [A/b/c]:
+    </div>
+  </div>
+
+  <p class="label">Option A output — rxcc example</p>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      Analysing CLAUDE.md sections...<br>
+      <span style="color:#4ade80">✓ covered</span>  Live Issues SOP → your "### Live Issues" (keeping yours)<br>
+      <span style="color:#4ade80">✓ covered</span>  Anti-Amnesia → your "### Mid-Session Persistence" (keeping yours)<br>
+      <span style="color:#4ade80">✓ covered</span>  4-Doc Discipline → your "## Mandatory Document Maintenance" (keeping yours)<br>
+      <span style="color:#4ade80">✓ extracted</span> GH Projects v2 IDs → .synlynk/config.json<br>
+      <span style="color:#fbbf24">+ appending</span>  ## synlynk Start (not present)<br><br>
+      <span style="color:#4ade80">✓ creating</span>  AGENTS.md<br>
+      <span style="color:#4ade80">✓ auto-detected</span> owner=Dialify repo=rxcc → .synlynk/config.json<br><br>
+      CLAUDE.md: 1 section appended, 0 replaced, 0 deleted<br>
+      Proceed? [Y/n]
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Semantic section matching — how it works</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:0.85em;line-height:1.8">
+      synlynk maintains an internal map of section coverage signals:<br><br>
+      <code>SECTION_SIGNALS = {</code><br>
+      <code>&nbsp;&nbsp;"live issues sop": ["live issue", "live-issue", "sev1", "sev2", "rca"],</code><br>
+      <code>&nbsp;&nbsp;"mid-session anti-amnesia": ["25,000 tokens", "compaction", "checkpoint"],</code><br>
+      <code>&nbsp;&nbsp;"mandatory 4-doc discipline": ["roadmap.md", "devlog", "costs.md", "memory.md"],</code><br>
+      <code>&nbsp;&nbsp;"github projects v2 integration": ["projectId", "updateProjectV2", "PVT_"],</code><br>
+      <code>}</code><br><br>
+      For each synlynk section: scan all headers + first 20 lines of each existing section for signals.<br>
+      2+ signals matched → section considered "covered". Skip append, note as ✓ covered.
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. <code>synlynk start &lt;issue-id&gt;</code> — full flow</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:2">
+      <span style="color:#4ade80">1. Read issue</span><br>
+      &nbsp;&nbsp;gh api repos/{owner}/{repo}/issues/{id}<br>
+      &nbsp;&nbsp;→ title, body, labels<br><br>
+      <span style="color:#4ade80">2. Infer agent</span><br>
+      &nbsp;&nbsp;labels → find "agent:*" → strip prefix → look up exec in config<br>
+      &nbsp;&nbsp;No agent label → warn + ask: "No agent label found. Which agent? [claude/agy/codex]"<br><br>
+      <span style="color:#4ade80">3. Board field discovery</span><br>
+      &nbsp;&nbsp;Check .synlynk/board-cache.json (valid if &lt;7 days old)<br>
+      &nbsp;&nbsp;If missing/stale: gh api graphql → discover Status + Agent fields + all options<br>
+      &nbsp;&nbsp;Cache result with timestamp<br><br>
+      <span style="color:#4ade80">4. Move board</span><br>
+      &nbsp;&nbsp;Set Status = "In Progress" option<br>
+      &nbsp;&nbsp;Set Agent = matched option for inferred agent name<br><br>
+      <span style="color:#4ade80">5. Build context</span><br>
+      &nbsp;&nbsp;generate_context() → .synlynk/context.md<br>
+      &nbsp;&nbsp;Prepend to context.md:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;# Active Issue: #{id} — {title}<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;{issue body}<br><br>
+      <span style="color:#4ade80">6. Launch</span><br>
+      &nbsp;&nbsp;exec_command([agent_exec])
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>5. board-cache.json schema</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      {<br>
+      &nbsp;&nbsp;"cached_at": "2026-06-04T10:00:00",<br>
+      &nbsp;&nbsp;"project_id": "PVT_kwDOAAUx684BYYIM",<br>
+      &nbsp;&nbsp;"status_field_id": "PVTSSF_...",<br>
+      &nbsp;&nbsp;"agent_field_id": "PVTSSF_...",<br>
+      &nbsp;&nbsp;"status_options": { "In Progress": "47fc9ee4", "Done": "...", ... },<br>
+      &nbsp;&nbsp;"agent_options": { "claude": "ecf901a8", "agy": "...", "codex": "..." }<br>
+      }
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>6. Error handling</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.83em">
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.1)">
+      <th style="text-align:left;padding:7px 10px;color:#94a3b8">Failure</th>
+      <th style="text-align:left;padding:7px 10px;color:#94a3b8">Response</th>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.07)">
+      <td style="padding:7px 10px">No git remote</td>
+      <td style="padding:7px 10px">Warn, skip owner/repo detection, continue</td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.07)">
+      <td style="padding:7px 10px">No project_id in config</td>
+      <td style="padding:7px 10px"><code>synlynk start</code> fails fast: "Run synlynk init --project-id &lt;id&gt; first"</td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.07)">
+      <td style="padding:7px 10px">No agent label on issue</td>
+      <td style="padding:7px 10px">Prompt user to choose agent interactively</td>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.07)">
+      <td style="padding:7px 10px">Board field discovery fails</td>
+      <td style="padding:7px 10px">Warn, skip board move, continue to context + launch</td>
+    </tr>
+    <tr>
+      <td style="padding:7px 10px">Agent exec not found</td>
+      <td style="padding:7px 10px">Fail with: "Agent 'claude' exec not found. Is it installed?"</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>7. CLI surface</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.9">
+      synlynk migrate                    <span style="color:#94a3b8"># scan, detect, prompt</span><br>
+      synlynk migrate --dry-run          <span style="color:#94a3b8"># show what would happen, no writes</span><br>
+      synlynk start &lt;issue-id&gt;          <span style="color:#94a3b8"># full flow</span><br>
+      synlynk start &lt;issue-id&gt; --dry-run <span style="color:#94a3b8"># show plan, don't move board or launch</span><br>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;padding:16px;background:rgba(74,222,128,0.08);border-radius:8px;border-left:3px solid #4ade80">
+  <p class="label">What this gives rxcc on day 1</p>
+  <p style="margin:4px 0 0;font-size:0.88em">
+    Run <code>synlynk migrate</code> → rxcc bootstrapped safely, GH IDs extracted, AGENTS.md created.<br>
+    Run <code>synlynk start 42</code> → issue read, board moved, context injected, Claude launched.<br>
+    No more manual GraphQL. No more copy-pasting context. The board is the source of truth.
+  </p>
+</div>

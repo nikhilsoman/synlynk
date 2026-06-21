@@ -1,0 +1,115 @@
+<h2>Agent Architecture — Archetypes × Levels</h2>
+<p class="subtitle">Same archetype, deployed at any level — scope defines what it monitors, executes, and communicates</p>
+
+<div class="section">
+  <span class="label">Three core archetypes (v0.8.x series — ship rapidly)</span>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px;">
+
+    <div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:10px;padding:16px;">
+      <div style="font-size:13px;font-weight:700;color:#818cf8;margin-bottom:4px;">🔧 Maintainers</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;font-style:italic;">Self-healing · SOP keepers · Environmental health</div>
+      <div style="font-size:12px;color:#e2e8f0;line-height:1.8;">
+        <span style="color:#34d399;">✅ Support Engineer</span> — tests, sentinel, telemetry, costs, GitHub issues<br>
+        <span style="color:#fbbf24;">v0.8.1</span> Security Guard — dep vulns, secret leaks, CVEs<br>
+        <span style="color:#fbbf24;">v0.8.2</span> Compliance Officer — convention drift, instruction staleness<br>
+        <span style="color:#94a3b8;">later</span> Incident Responder — live issue triage + RCA
+      </div>
+    </div>
+
+    <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:16px;">
+      <div style="font-size:13px;font-weight:700;color:#34d399;margin-bottom:4px;">📣 Communicators</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;font-style:italic;">Content · Marketing · Community voice</div>
+      <div style="font-size:12px;color:#e2e8f0;line-height:1.8;">
+        <span style="color:#fbbf24;">v0.8.3</span> Marketing Intern — blog, release notes, social copy<br>
+        <span style="color:#fbbf24;">v0.8.4</span> Docs Keeper — keeps docs current with code changes<br>
+        <span style="color:#94a3b8;">later</span> Community Manager — GitHub discussions, issue responses<br>
+        <span style="color:#94a3b8;">later</span> Changelog Publisher — auto release notes
+      </div>
+    </div>
+
+    <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:16px;">
+      <div style="font-size:13px;font-weight:700;color:#fbbf24;margin-bottom:4px;">🎯 Orchestrators</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;font-style:italic;">Work management · Signals · Cross-agent coordination</div>
+      <div style="font-size:12px;color:#e2e8f0;line-height:1.8;">
+        <span style="color:#fbbf24;">v0.8.5</span> PM Agent — growth signals, story routing, sprint pulse<br>
+        <span style="color:#fbbf24;">v0.8.6</span> Growth Scout — stars, clones, adoption signals<br>
+        <span style="color:#94a3b8;">later</span> Sprint Captain — cross-repo epic coordination<br>
+        <span style="color:#94a3b8;">later</span> Budget Sentinel — token quota across team/workspace
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <span class="label">Deployment levels — same archetype, scoped to context</span>
+
+  <div style="overflow-x:auto;margin-top:12px;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid rgba(99,102,241,0.3);color:#818cf8;font-size:11px;letter-spacing:.06em;text-transform:uppercase;width:160px;">Level</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid rgba(99,102,241,0.3);color:#818cf8;font-size:11px;letter-spacing:.06em;text-transform:uppercase;">🔧 Maintainers monitor…</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid rgba(99,102,241,0.3);color:#818cf8;font-size:11px;letter-spacing:.06em;text-transform:uppercase;">📣 Communicators send to…</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid rgba(99,102,241,0.3);color:#818cf8;font-size:11px;letter-spacing:.06em;text-transform:uppercase;">🎯 Orchestrators manage…</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:rgba(99,102,241,0.06);">
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);font-weight:700;color:#c7d2fe;">
+            🏠 Workgroup<br>
+            <span style="font-weight:400;color:#6b7280;font-size:11px;">human + agents + autopilots, 1 project</span>
+          </td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Tests · sentinel alerts · telemetry · per-repo costs · open issues</td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">GitHub repo · PR descriptions · project blog · devlogs</td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Stories · epics · routing · token budget per story</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);font-weight:700;color:#6ee7b7;">
+            👥 Team<br>
+            <span style="font-weight:400;color:#6b7280;font-size:11px;">across workgroups, same product/multi-repo</span>
+          </td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Cross-repo health · integration failures · drift across repos · shared capability drops</td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Team channels (Slack/email) · cross-repo status digest · public changelog</td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Cross-repo epics · team token budgets · agent routing across workgroups</td>
+        </tr>
+        <tr style="background:rgba(99,102,241,0.06);">
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);font-weight:700;color:#fbbf24;">
+            🏢 Enterprise Workspace<br>
+            <span style="font-weight:400;color:#6b7280;font-size:11px;">across teams, org-wide</span>
+          </td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Org-wide cost burn · compliance across repos · security posture · capability benchmarks</td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Leadership dashboards · org-level blog · compliance reports</td>
+          <td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;line-height:1.6;">Org portfolio · cross-team budget allocation · agent entitlements</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:700;color:#f87171;">
+            🌐 Domain/Community<br>
+            <span style="font-weight:400;color:#6b7280;font-size:11px;">discipline or functional domain</span>
+          </td>
+          <td style="padding:10px 14px;color:#e2e8f0;line-height:1.6;">Domain health signals · community adoption · best-practice drift</td>
+          <td style="padding:10px 14px;color:#e2e8f0;line-height:1.6;">Public community channels · domain newsletters · Tokq marketplace</td>
+          <td style="padding:10px 14px;color:#e2e8f0;line-height:1.6;">Convention packages · shared routing intelligence · community epics</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:14px;">
+  <span class="label" style="color:#34d399;">Context portability — the key design principle</span>
+  <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.8;">
+    A <strong>Support Engineer</strong> in the synlynk repo monitors synlynk's health.<br>
+    The same <strong>Support Engineer</strong> archetype deployed in a customer's Superagents workgroup monitors their project's health.<br>
+    At team level it monitors cross-repo integration health. At workspace level, org-wide posture.<br>
+    <span style="color:#34d399;">The archetype is the pattern. The <code>.agents/&lt;name&gt;.json</code> config + deployment scope give it its specific purpose.</span>
+  </div>
+</div>
+
+<div style="margin-top:20px;text-align:center;">
+  <div style="font-size:13px;color:#94a3b8;">
+    Does this archetype model + level coverage feel right?<br>
+    <span style="font-size:12px;">Any archetypes missing? Any agents in the wrong v0.8.x slot?</span>
+  </div>
+</div>

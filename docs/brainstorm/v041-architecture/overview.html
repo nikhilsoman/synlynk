@@ -1,0 +1,78 @@
+<h2>4 Challenges → Minor Releases</h2>
+<p class="subtitle">Each challenge becomes a spec. Pick the order we brainstorm them — or confirm this sequence.</p>
+
+<div style="margin: 2rem 0 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem;">
+
+  <div class="option" data-choice="1" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.5rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <div class="letter">1</div>
+      <div>
+        <h3 style="margin:0">Instruction Reach</h3>
+        <span style="font-size:0.8rem; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">v0.4.1</span>
+      </div>
+    </div>
+    <p style="margin:0.5rem 0 0 0; font-size:0.9rem; line-height:1.5; color:var(--text-secondary)">
+      Detect &amp; inject instructions into <strong>Cursor, Windsurf, Copilot, web UIs</strong> and any tool beyond the core trio. No more manual copy-paste of AI_INSTRUCTIONS.md.
+    </p>
+    <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-muted)">
+      → New file targets: <code>.cursor/rules</code>, <code>.github/copilot-instructions.md</code>, <code>.windsurfrules</code>, Claude Projects system prompt export
+    </div>
+  </div>
+
+  <div class="option" data-choice="2" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.5rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <div class="letter">2</div>
+      <div>
+        <h3 style="margin:0">Deep Repo Scan</h3>
+        <span style="font-size:0.8rem; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">v0.5.1</span>
+      </div>
+    </div>
+    <p style="margin:0.5rem 0 0 0; font-size:0.9rem; line-height:1.5; color:var(--text-secondary)">
+      Move beyond README + git log. Read <strong>source structure, existing docs, module boundaries</strong> to seed a genuinely useful memory.md — not just scaffolding.
+    </p>
+    <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-muted)">
+      → Agents read key files &amp; synthesise architecture summary. First real multi-model dispatch inside synlynk itself.
+    </div>
+  </div>
+
+  <div class="option" data-choice="3" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.5rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <div class="letter">3</div>
+      <div>
+        <h3 style="margin:0">Capability Dogfood</h3>
+        <span style="font-size:0.8rem; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">v0.6.1</span>
+      </div>
+    </div>
+    <p style="margin:0.5rem 0 0 0; font-size:0.9rem; line-height:1.5; color:var(--text-secondary)">
+      Use synlynk to build synlynk. <strong>Dispatch Claude, Codex &amp; Gemini on real tasks</strong> from the backlog, let capability scores accumulate, and validate the routing engine with actual comparative data.
+    </p>
+    <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-muted)">
+      → First evidence of which model performs best at which domain. Closes the feedback loop.
+    </div>
+  </div>
+
+  <div class="option" data-choice="4" onclick="toggleSelect(this)" style="align-items:flex-start; flex-direction:column; gap:0.5rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <div class="letter">4</div>
+      <div>
+        <h3 style="margin:0">Task Status Model</h3>
+        <span style="font-size:0.8rem; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">v0.4.2</span>
+      </div>
+    </div>
+    <p style="margin:0.5rem 0 0 0; font-size:0.9rem; line-height:1.5; color:var(--text-secondary)">
+      Replace binary <code>[ ] / [x]</code> with a <strong>5-state model</strong>: active · done · deferred · superseded · absorbed. Retire orphaned v0.4.0 tasks cleanly.
+    </p>
+    <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-muted)">
+      → todo.md becomes a living document instead of a graveyard. Enables accurate drift detection.
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:1.5rem; padding:1rem 1.25rem; background:var(--bg-secondary); border-radius:8px; border-left:3px solid var(--accent);">
+  <p style="margin:0; font-size:0.9rem; color:var(--text-secondary)">
+    <strong style="color:var(--text-primary)">Overarching theme:</strong> Synlynk itself must be the demo. Every feature we build should be built <em>using</em> Claude + Codex + Gemini/AntiGravity dispatched through synlynk — so we accumulate real multi-model evidence as we ship.
+  </p>
+</div>
+
+<p style="margin-top:1.5rem; font-size:0.9rem; color:var(--text-secondary)">Click the ones you want to adjust the order, or just tell me in the terminal which to tackle first.</p>

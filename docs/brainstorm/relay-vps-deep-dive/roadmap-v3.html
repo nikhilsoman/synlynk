@@ -1,0 +1,141 @@
+<h2>Revised Roadmap v3 — v0.9.x Split + Relay Design + Consensus</h2>
+<p class="subtitle">v0.9.0 broken into four shippable minor releases. Relay designed for revolving host + VPS migration.</p>
+
+<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;">
+
+  <!-- SHIPPED -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#6b7280;padding-top:6px;font-style:italic;">SHIPPED<br>v0.1–v0.8.0</div>
+    <div style="background:rgba(30,30,40,0.5);border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:10px 14px;">
+      <span style="color:#818cf8;font-weight:700;">Kernel · IPC · Capability Engine · Source Scan · Support Engineer ✅</span>
+    </div>
+  </div>
+
+  <!-- v0.9.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#fbbf24;padding-top:6px;font-weight:700;">WEEK 1<br>v0.9.0</div>
+    <div style="background:rgba(245,158,11,0.08);border:2px solid rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fbbf24;margin-bottom:8px;">Kernel Fixes + Package Split</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • <code>generate_context(scope=task)</code> — scoped context pulled from v1.3.0<br>
+        • Task → file-path mapping + verify contract injected per dispatch<br>
+        • Per-agent framing: Codex prompt ≠ Claude stdin ≠ AGY arg<br>
+        • Wire Ed25519 signing into <code>_write_capability_rating</code><br>
+        • Anti-gaming baseline in quality scoring<br>
+        • <strong>Package split:</strong> <code>bin/synlynk.py</code> → <code>synlynk/</code> package before agent series lands
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.9.1 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#fbbf24;padding-top:6px;font-weight:700;">WEEK 2<br>v0.9.1</div>
+    <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.35);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fcd34d;margin-bottom:8px;">Team Onboarding + Consensus Framework</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • <code>synlynk join</code> — 60-second onboard: scan → AI context files → devlog → team digest → task rec<br>
+        • Pull-before-write arbitration (conflict warn, not block)<br>
+        • Token budgets at story creation + PR merge audit (estimated vs actual)<br>
+        • <code>synlynk team status</code> — who's active, in-progress, just shipped<br>
+        • <span style="color:#a5b4fc;font-weight:600;">synlynk decide "&lt;topic&gt;" --panel claude,agy,codex</span> — consensus decision command<br>
+        &nbsp;&nbsp;→ Convenes panel, records input, produces signed Decision record + links to artifacts
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.9.2 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#fbbf24;padding-top:6px;font-weight:700;">WEEK 3<br>v0.9.2</div>
+    <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fde68a;margin-bottom:8px;">Async Daemon</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • <code>synlynk daemon start/stop/status/restart</code><br>
+        • launchd (macOS) / systemd (Linux) integration<br>
+        • Job queue in <code>state.db</code> — persist + crash recovery<br>
+        • HTTP context server on <code>localhost:27471</code><br>
+        • Schedule-triggered agents now work properly (Security Guard, etc.)<br>
+        • Agent series v0.8.1–v0.8.4 fully unblocked from here
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.9.3 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#fbbf24;padding-top:6px;font-weight:700;">WEEK 4<br>v0.9.3</div>
+    <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.22);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fef3c7;margin-bottom:8px;">Workgroup Relay — Revolving Host Model</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • Stateless relay — events stored in each member's <code>state.db</code>, relay just routes<br>
+        • <strong>Any active member can be host</strong> — relay bootstraps from any online member's state<br>
+        • <span style="color:#f87171;font-weight:600;">Revolving host protocol:</span> loud broadcast on host change — all daemons notified, grace period (old host stays alive 10 min), new URL announced via signed message<br>
+        • Offline resilience: local-first queue, events flush on reconnect<br>
+        • Self-hosted v0.9.3 → VPS migration: change one URL, zero data migration (relay is stateless)<br>
+        • <code>synlynk relay start/status/handover &lt;member&gt;</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent series parallel -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#34d399;padding-top:6px;font-weight:600;">PARALLEL<br>v0.8.1–0.8.4</div>
+    <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.28);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#34d399;margin-bottom:6px;">Agent Series — unblocked after v0.9.2</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        v0.8.1 Security Guard · v0.8.2 Marketing Intern · v0.8.3 PM Agent · v0.8.4 Compliance Officer + Docs Keeper<br>
+        <span style="color:#6b7280;font-size:11px;">SME archetype (event bus + non-mutating job role) deferred to v1.0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.10.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">v0.10.0</div>
+    <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:6px;padding:10px 14px;">
+      <div style="font-weight:700;color:#a5b4fc;margin-bottom:4px;">Multi-Repo Workspace</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;"><code>synlynk workspace init/join</code> · cross-repo epics · relay extended to workspace scope</div>
+    </div>
+  </div>
+
+  <!-- v1.0.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">v1.0.0</div>
+    <div style="background:rgba(99,102,241,0.09);border:1px solid rgba(99,102,241,0.28);border-radius:6px;padding:10px 14px;">
+      <div style="font-weight:700;color:#c7d2fe;margin-bottom:4px;">Community Layer: Local Workgroup + Public Launch</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">Workgroup protocol · SME archetype · signed capability ledger · pipx/Homebrew · synlynk.com · public blog</div>
+    </div>
+  </div>
+
+  <!-- v1.1+ -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">v1.1+</div>
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:6px;padding:10px 14px;">
+      <div style="font-weight:700;color:#fca5a5;margin-bottom:4px;">Community Expansion — relay graduates to community server</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">v1.1 Cross-workgroup + community server (learnings from relay) · v1.2 Enterprise · v1.3 Domain communities + Tokq + MCP</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Relay VPS options -->
+<div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:14px;margin-bottom:14px;">
+  <div style="font-size:11px;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">📡 Relay VPS Options (separate deep-dive brainstorm)</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;">
+    <div><strong style="color:#e2e8f0;">Fly.io</strong><br><span style="color:#94a3b8;">Best for small teams — free tier covers relay, edge deployment, ~$5-10/mo paid. Simplest path.</span></div>
+    <div><strong style="color:#e2e8f0;">Hetzner Cloud</strong><br><span style="color:#94a3b8;">Cheapest raw compute (~$3-5/mo 1-core VM). Self-managed but total cost winner for persistent relay.</span></div>
+    <div><strong style="color:#e2e8f0;">E2B / Modal</strong><br><span style="color:#94a3b8;">AI-native agent infra. E2B better for persistent relay; Modal better for event-triggered agents. Higher cost.</span></div>
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:#6b7280;">Railway + Render also viable. Deep dive: architecture, pricing, agentic ops features, migration path from self-hosted → VPS.</div>
+</div>
+
+<!-- Consensus framework -->
+<div style="background:rgba(165,180,252,0.08);border:1px solid rgba(165,180,252,0.3);border-radius:8px;padding:14px;">
+  <div style="font-size:11px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">🗳 Consensus Decision Framework — first-class in v0.9.1</div>
+  <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+    <code>synlynk decide "&lt;topic&gt;" --panel claude,agy,codex [--record]</code><br>
+    → Convenes panel · records each participant's input · synthesizes into a signed <strong>Decision record</strong><br>
+    → Decision record: immutable, append-only, signed by all participants, linked to resulting artifacts (spec, roadmap, todo)<br>
+    → Lives in <code>project-docs/decisions/YYYY-MM-DD-&lt;slug&gt;.md</code> + indexed in <code>state.db</code><br>
+    → A Decision is a peer to Epic in the PM hierarchy — deliberation that produces direction, not work items<br>
+    → This roadmap realignment <em>is</em> the first Decision record to be created
+  </div>
+</div>
