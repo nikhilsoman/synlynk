@@ -2098,3 +2098,27 @@ def test_agent_run_dry_run_no_side_effects(project_dir, monkeypatch):
     rows = conn.execute("SELECT id FROM autopilot_runs").fetchall()
     conn.close()
     assert rows == [], "autopilot_runs must be empty in dry-run"
+
+
+def test_install_cron_idempotent(project_dir, monkeypatch):
+    crontab_contents = [""]
+
+    def fake_run(cmd, **kw):
+        cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+        if "crontab" in cmd_str and "-l" in cmd_str:
+            return type("R", (), {"returncode": 0, "stdout": crontab_contents[0]})()
+        if "crontab" in cmd_str and kw.get("input"):
+            crontab_contents[0] = kw["input"]
+            return type("R", (), {"returncode": 0})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    synlynk._install_cron_entry()
+    first = crontab_contents[0]
+    assert "synlynk.py agent run support" in first
+
+    # Call again — must be idempotent
+    synlynk._install_cron_entry()
+    second = crontab_contents[0]
+    assert second.count("synlynk.py agent run support") == 1

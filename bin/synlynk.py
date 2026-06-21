@@ -1382,6 +1382,25 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
     print(f"  [agent:{name}] done — {len(to_process)} findings processed")
 
 
+def _install_cron_entry() -> None:
+    """Install local crontab entry for synlynk agent run support (idempotent)."""
+    repo_path = os.path.abspath(".")
+    synlynk_bin = os.path.abspath(__file__)
+    entry = (
+        f"0 */6 * * * cd {repo_path} && "
+        f"python3 {synlynk_bin} agent run support "
+        f">> ~/.synlynk/autopilot.log 2>&1"
+    )
+    result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    current = result.stdout if result.returncode == 0 else ""
+    if entry in current:
+        print("  [cron] Entry already installed (idempotent)")
+        return
+    new_crontab = current.rstrip("\n") + "\n" + entry + "\n"
+    subprocess.run(["crontab", "-"], input=new_crontab, text=True)
+    print(f"  [cron] Installed: {entry}")
+
+
 def cmd_agent_list() -> None:
     """List .agents/ config files and their last run status."""
     agents_dir = ".agents"
