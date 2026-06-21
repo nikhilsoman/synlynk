@@ -1188,6 +1188,42 @@ def _relevant_files_for_story(story_id: str) -> list:
     return relevant[:10]
 
 
+def _verify_contract_for_story(story_id: str, task: str) -> str:
+    """Returns a ## How to Verify section with a pytest invocation. Empty string if no tests/ dir."""
+    if not os.path.exists("tests"):
+        return ""
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT title FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone() if story_id else None
+    conn.close()
+    title = (row[0] if row else "") or task
+
+    # Derive test pattern: lowercase, alphanumeric + underscores, max 40 chars
+    pattern = re.sub(r"[^a-z0-9_]", "", title.lower().replace(" ", "_"))[:40]
+
+    # Find first test file
+    test_file = None
+    for root, _dirs, files in os.walk("tests"):
+        for f in sorted(files):
+            if f.startswith("test_") and f.endswith(".py"):
+                test_file = os.path.join(root, f)
+                break
+        if test_file:
+            break
+
+    if not test_file:
+        return ""
+
+    cmd = f"pytest {test_file} -k '{pattern}' -v" if pattern else f"pytest {test_file} -v"
+    return (
+        "\n\n## How to Verify\n"
+        f"Run: `{cmd}`\n"
+        "Expected: all matched tests pass, no new failures.\n"
+    )
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False) -> dict:
     """Dispatches an agent to run a task in the background.
@@ -1242,7 +1278,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if file_list:
         file_section = "\n\n## Relevant Files\n" + "\n".join(f"- `{f}`" for f in file_list)
 
-    prompt = f"{context_text}{story_line}{file_section}\n\n## Your Task\n{task}\n"
+    verify_section = _verify_contract_for_story(story_id, task) if story_id else ""
+
+    prompt = f"{context_text}{story_line}{file_section}\n\n## Your Task\n{task}{verify_section}\n"
     with open(prompt_file, "w") as f:
         f.write(prompt)
 

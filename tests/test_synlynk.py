@@ -1612,6 +1612,44 @@ def test_relevant_files_for_story_returns_matching_files(project_dir):
     assert not any("frontend" in f for f in files)
 
 
+def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
+    """dispatch_agent appends ## How to Verify when tests/ directory exists."""
+    import synlynk as sl
+    (project_dir / "tests").mkdir()
+    (project_dir / "tests" / "test_auth.py").write_text("# placeholder\n")
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
+    job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## How to Verify" in prompt
+    assert "pytest" in prompt
+
+
+def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
+    """dispatch_agent omits ## How to Verify when no tests/ directory exists."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix thing")
+    job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## How to Verify" not in prompt
+
+
+def test_verify_contract_derives_pattern_from_story_title(project_dir):
+    """_verify_contract_for_story derives a lowercase underscore pattern."""
+    import synlynk as sl
+    (project_dir / "tests").mkdir()
+    (project_dir / "tests" / "test_things.py").write_text("")
+    story_id = sl.cmd_story_create("Fix Auth Timeout")
+    section = sl._verify_contract_for_story(story_id, "fix it")
+    assert "fix_auth_timeout" in section
+    assert "pytest" in section
+
+
 def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     """codex exec + stdin mode must be used so dispatch works without a TTY.
 
