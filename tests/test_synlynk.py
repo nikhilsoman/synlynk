@@ -5,7 +5,7 @@ import json
 import pytest
 import subprocess
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
 

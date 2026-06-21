@@ -4,7 +4,7 @@ import tempfile
 import sys
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 def test_get_db_creates_state_db(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -757,7 +757,6 @@ def test_org_domain_tags_not_used_in_routing(tmp_path, monkeypatch):
     # verifies org_domain_tags don't substitute for org_domain in routing
     result = _best_agent_for_story("s-1")
     assert result is None
-
 
 
 
