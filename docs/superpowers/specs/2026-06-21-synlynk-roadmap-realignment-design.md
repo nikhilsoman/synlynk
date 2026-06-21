@@ -237,6 +237,34 @@ But it only becomes a moat if:
 
 ---
 
+## Relay Ownership Model (decided 2026-06-21)
+
+**Decision: Hybrid (C), community-first.**
+
+The community relay (B) is the default experience for all users. Self-provisioned VPS (A) is gated behind an enterprise/exception flag. Users should never need to think about VPS hosting.
+
+### Three relay tiers
+
+| Tier | Default? | Who | What |
+|---|---|---|---|
+| **Community Relay** | ✅ Default | All workgroups | `synlynk relay join` → `relay.synlynk.com` · namespaced · WSS/443 · Fly.io hosted by synlynk |
+| **LAN / CF Tunnel** | Fallback | Local or VPN teams | Day-1 prototype mode; graduates to community relay via `synlynk relay upgrade` |
+| **Self-Provisioned VPS** | 🔒 Gated | Enterprise / exceptions | Requires `--enterprise` flag or exception token; synlynk ships ready-made `fly.toml` |
+
+### Feature gate design
+
+- v0.9.3: `synlynk relay join` already points at `relay.synlynk.com` but shows graceful "launching with v1.0 — using LAN mode now" until server is live. Zero UX change at v1.0 launch.
+- v1.0.0: Community relay goes live on Fly.io. Self-host gated.
+- v1.1.0+: Community relay graduates to community server with team-level namespaces.
+
+### Why community-first
+
+- Every workgroup on the community relay contributes to the routing graph (signed, game-resistant) — the real moat.
+- Self-provisioned relay fragments the network. Users who need it (regulated industries, air-gapped) get it via the enterprise gate.
+- Fly.io is the recommended VPS for self-hosted path: $3–5/mo, WSS/443 trivial, global Anycast, ready-made `fly.toml`.
+
+---
+
 ## Deferred
 
 | Item | Deferred to | Reason |
@@ -245,7 +273,7 @@ But it only becomes a moat if:
 | HTTP context server | v0.9.2 | Bundled with daemon |
 | MCP / Open Context Protocol | v1.3.0 | Needs server to serve it from |
 | SME archetype | v1.0.0 | Needs event bus + new job model |
-| VPS deep-dive brainstorm | Research task | Evaluate Fly.io, Hetzner, E2B, Modal, Railway for relay hosting |
+| ~~VPS deep-dive~~ | ✅ Resolved | Fly.io for community relay + self-host; Hetzner as budget enterprise option |
 
 ---
 

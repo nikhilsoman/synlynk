@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Relay Ownership Decision</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --accent3: #ff6b6b;
+    --text: #e2e8f0;
+    --muted: #718096;
+    --green: #48bb78;
+    --yellow: #ecc94b;
+    --red: #fc8181;
+    --blue: #63b3ed;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; line-height: 1.6; }
+  h1 { font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 32px; }
+  h2 { font-size: 14px; font-weight: 600; color: var(--accent2); margin: 32px 0 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  .decision-banner { background: linear-gradient(135deg, #0d1a12, #0d1a1a); border: 2px solid var(--accent2); border-radius: 12px; padding: 24px; margin-bottom: 32px; }
+  .decision-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 8px; }
+  .decision-title { font-size: 20px; font-weight: 700; color: var(--accent2); margin-bottom: 8px; }
+  .decision-sub { font-size: 13px; color: var(--text); }
+
+  .tiers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .tier { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .tier.default { border-color: var(--accent2); box-shadow: 0 0 20px rgba(0,212,170,0.1); }
+  .tier.gated { border-color: var(--accent); }
+  .tier.future { opacity: 0.6; }
+  .tier-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  .badge-default { background: rgba(0,212,170,0.2); color: var(--accent2); }
+  .badge-gated { background: rgba(108,99,255,0.2); color: var(--accent); }
+  .badge-future { background: rgba(113,128,150,0.2); color: var(--muted); }
+  .tier-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .tier-subtitle { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .tier-bullets { font-size: 11px; }
+  .tier-bullets li { list-style: none; margin-bottom: 6px; padding-left: 0; }
+  .tier-bullets li::before { content: '→ '; color: var(--accent2); }
+  .tier.gated .tier-bullets li::before { color: var(--accent); }
+  .tier-gate { background: rgba(108,99,255,0.1); border: 1px dashed var(--accent); border-radius: 6px; padding: 8px 12px; margin-top: 12px; font-size: 11px; color: var(--accent); }
+
+  .cmd-block { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 8px 0; font-size: 12px; }
+  .cmd-block .comment { color: var(--muted); }
+  .cmd-block .cmd { color: var(--accent2); }
+  .cmd-block .flag { color: var(--accent); }
+
+  .flow { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 32px; }
+  .flow-row { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+  .flow-step { background: var(--accent); color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+  .flow-step.community { background: var(--accent2); }
+  .flow-content { font-size: 12px; }
+  .flow-title { font-weight: 700; margin-bottom: 2px; }
+  .flow-desc { color: var(--muted); font-size: 11px; }
+
+  .version-map { font-size: 12px; }
+  .version-map table { width: 100%; border-collapse: collapse; }
+  .version-map td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .version-map td:first-child { color: var(--accent); font-weight: 700; white-space: nowrap; width: 80px; }
+  .version-map td:nth-child(2) { font-weight: 600; width: 200px; }
+  .version-map td:last-child { color: var(--muted); }
+
+  .note { background: rgba(236,201,75,0.08); border: 1px solid rgba(236,201,75,0.3); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--yellow); margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<h1>synlynk Relay — Ownership Decision</h1>
+<p class="subtitle">Decided 2026-06-21 · workgroup (Nikhil + Claude)</p>
+
+<div class="decision-banner">
+  <div class="decision-label">Decision</div>
+  <div class="decision-title">Hybrid — Community-First (C, B-leaning)</div>
+  <div class="decision-sub">Community relay (B) is the default experience. Self-provisioned VPS (A) is gated behind enterprise/exception. The progression: LAN → Cloudflare Tunnel → Community Relay (default) → Self-Hosted (enterprise).</div>
+</div>
+
+<h2>Three Relay Tiers</h2>
+<div class="tiers">
+  <div class="tier default">
+    <div class="tier-badge badge-default">Default · All users</div>
+    <div class="tier-title">Community Relay</div>
+    <div class="tier-subtitle">Hosted by synlynk · relay.synlynk.com</div>
+    <ul class="tier-bullets">
+      <li>Free for workgroups (up to N members)</li>
+      <li>Namespace isolation per workspace</li>
+      <li>WSS/443 · Let's Encrypt · global Fly.io edge</li>
+      <li><code>synlynk relay join</code> — one command</li>
+      <li>No VPS to manage</li>
+      <li>Drives network effect + moat data</li>
+    </ul>
+  </div>
+  <div class="tier gated">
+    <div class="tier-badge badge-gated">Enterprise / Exception</div>
+    <div class="tier-title">Self-Provisioned VPS</div>
+    <div class="tier-subtitle">Fly.io · Hetzner · bring your own</div>
+    <ul class="tier-bullets">
+      <li>Full data sovereignty</li>
+      <li>Custom domain + private namespace</li>
+      <li>synlynk ships ready-made <code>fly.toml</code></li>
+      <li>Same protocol — all clients compatible</li>
+      <li>Target: regulated industries, air-gapped</li>
+    </ul>
+    <div class="tier-gate">🔒 Feature gate: requires <code>--enterprise</code> flag or explicit exception token</div>
+  </div>
+  <div class="tier future">
+    <div class="tier-badge badge-future">v0.9.3 prototype</div>
+    <div class="tier-title">LAN / CF Tunnel</div>
+    <div class="tier-subtitle">Self-hosted · no VPS · local only</div>
+    <ul class="tier-bullets">
+      <li>Day-1 option during v0.9.3 build</li>
+      <li>Good for fully local teams on VPN</li>
+      <li>Graduates to Community Relay via <code>synlynk relay upgrade</code></li>
+      <li>Always available as fallback</li>
+    </ul>
+  </div>
+</div>
+
+<h2>UX Flow — What users see</h2>
+<div class="flow">
+  <div class="flow-row">
+    <div class="flow-step community">1</div>
+    <div class="flow-content">
+      <div class="flow-title">synlynk relay join</div>
+      <div class="flow-desc">Default path. Auto-connects to relay.synlynk.com. Namespace = workspace ID. No config needed.</div>
+    </div>
+  </div>
+  <div class="flow-row">
+    <div class="flow-step community">2</div>
+    <div class="flow-content">
+      <div class="flow-title">Team members join</div>
+      <div class="flow-desc"><code>synlynk relay join --workspace &lt;name&gt;</code> — member connects to same namespace. Relay authenticates via Ed25519.</div>
+    </div>
+  </div>
+  <div class="flow-row">
+    <div class="flow-step">E</div>
+    <div class="flow-content">
+      <div class="flow-title">Enterprise / Exception path (gated)</div>
+      <div class="flow-desc"><code>synlynk relay self-host --fly</code> or <code>--hetzner</code> — deploy your own relay. Requires enterprise flag or exception token from synlynk.com.</div>
+    </div>
+  </div>
+</div>
+
+<div class="cmd-block">
+  <div class="comment"># Default — community relay (what 95% of users see</div>
+  <div class="cmd">$ synlynk relay join</div>
+  <br>
+  <div class="comment"># Output:</div>
+  <div style="color:var(--text)">✅ Connected to relay.synlynk.com/ws/<span style="color:var(--accent2)">workspace-abc123</span></div>
+  <div style="color:var(--muted)">   3 members online · host: nikhil@machine · WSS/443</div>
+</div>
+
+<div class="cmd-block">
+  <div class="comment"># Enterprise / exception path (gated)</div>
+  <div class="cmd">$ synlynk relay self-host <span class="flag">--fly --enterprise</span></div>
+  <div style="color:var(--muted); margin-top:4px;">  # deploys fly.toml to user's Fly.io account</div>
+  <div style="color:var(--muted);">  # requires SYNLYNK_ENTERPRISE_KEY or exception token</div>
+</div>
+
+<h2>Version Map</h2>
+<div class="version-map">
+<table>
+  <tr>
+    <td>v0.9.3</td>
+    <td>Relay prototype</td>
+    <td>LAN + CF Tunnel mode. Community relay endpoint stubbed (connects to future relay.synlynk.com). <code>--self-host</code> works ungated.</td>
+  </tr>
+  <tr>
+    <td>v1.0.0</td>
+    <td>Community relay live</td>
+    <td>relay.synlynk.com on Fly.io. Default for all new workgroups. Self-host gated behind enterprise flag.</td>
+  </tr>
+  <tr>
+    <td>v1.1.0</td>
+    <td>Community server</td>
+    <td>Relay graduates to persistent community server. Workgroup namespaces → team namespaces. Network effect on routing graph accelerates.</td>
+  </tr>
+</table>
+</div>
+
+<div class="note">
+  ⚠️ Feature gate design (v0.9.3 → v1.0.0 transition): the <code>synlynk relay join</code> command already points at <code>relay.synlynk.com</code> even in v0.9.3, but shows a "community relay launches with v1.0 — using LAN mode for now" message until the server is live. No UX change at v1.0 launch — just the server turning on.
+</div>
+
+</body>
+</html>

@@ -93,16 +93,18 @@
 - [ ] Tests: daemon lifecycle, job queue persistence, crash recovery, context server <!-- id:226 -->
 
 ## v0.9.3 — Workgroup Relay
-- [ ] `synlynk relay start [--port 8443]` — stateless WSS relay on port 443/8443 <!-- id:230 -->
-- [ ] mDNS announcement (Bonjour/Avahi) for LAN auto-discovery <!-- id:231 -->
-- [ ] Self-signed TLS cert auto-generated on first start <!-- id:232 -->
+- [ ] `synlynk relay join` — default path: connects to `relay.synlynk.com/<workspace-id>` (community relay); shows graceful "launching v1.0" if server not yet live, falls back to LAN <!-- id:230 -->
+- [ ] mDNS announcement (Bonjour/Avahi) for LAN auto-discovery (fallback mode) <!-- id:231 -->
+- [ ] Self-signed TLS cert auto-generated on first start (LAN mode) <!-- id:232 -->
 - [ ] Daemon auto-connects to relay on discovery; offline queue → flush on reconnect <!-- id:233 -->
-- [ ] Cloudflare Tunnel integration: `synlynk relay tunnel start` wraps `cloudflared tunnel` <!-- id:234 -->
-- [ ] `synlynk relay connect <wss-url>` — manual relay URL for VPS mode <!-- id:235 -->
+- [ ] Cloudflare Tunnel integration: `synlynk relay tunnel start` wraps `cloudflared tunnel` (hybrid/WFH teams) <!-- id:234 -->
+- [ ] `synlynk relay self-host --fly` — deploy self-provisioned relay; requires `--enterprise` flag or exception token <!-- id:235 -->
+- [ ] `synlynk relay upgrade` — migrate from LAN/CF Tunnel to community relay; update one URL <!-- id:235b -->
 - [ ] `synlynk relay handover <member>` — revolving host protocol: signed broadcast, 10-min grace, degraded-mode warning <!-- id:236 -->
 - [ ] `synlynk relay status` — connected members, host identity, events/min <!-- id:237 -->
 - [ ] All events signed with member's Ed25519 identity <!-- id:238 -->
-- [ ] Tests: LAN discovery, offline queue, handover protocol, degraded-mode warning <!-- id:239 -->
+- [ ] Feature gate: `--enterprise` flag + exception token system for self-host path <!-- id:238b -->
+- [ ] Tests: LAN discovery, offline queue, handover protocol, degraded-mode warning, community relay join, enterprise gate <!-- id:239 -->
 
 ---
 
@@ -141,4 +143,4 @@
 ---
 
 ## Research & Investigation
-- [ ] **VPS deep-dive brainstorm** — evaluate Fly.io, Hetzner, E2B, Modal, Railway, Cloudflare Workers for relay hosting; pricing, agentic ops features, migration path from self-hosted → VPS; run as separate brainstorm session with AGY + Codex <!-- id:290 -->
+- [x] **VPS deep-dive brainstorm** — Fly.io for community relay + self-host; Hetzner budget enterprise option. Decision: community-first hybrid, self-host gated. Resolved 2026-06-21. <!-- id:290 -->
