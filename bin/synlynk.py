@@ -1352,6 +1352,36 @@ def _collect_sentinel_alerts(signal_cfg: dict) -> list:
     return findings
 
 
+def _collect_telemetry_anomaly(signal_cfg: dict) -> list:
+    """Compute failure rate over last 20 telemetry entries; return finding if above threshold."""
+    import json as _json, hashlib as _hashlib
+    path = ".synlynk/telemetry.json"
+    if not os.path.exists(path):
+        return []
+    try:
+        entries = _json.loads(open(path).read())
+    except Exception:
+        return []
+    recent = entries[-20:]
+    if len(recent) < 5:
+        return []
+    failures = sum(1 for e in recent if e.get("exit_code", 0) != 0)
+    threshold = signal_cfg.get("failure_rate_threshold", 0.30)
+    rate = failures / len(recent)
+    if rate < threshold:
+        return []
+    severity = "high" if rate >= 0.60 else "medium"
+    summary = f"High failure rate: {failures}/{len(recent)} sessions failed ({rate:.0%})"
+    signal_hash = _hashlib.md5(summary.encode()).hexdigest()[:16]
+    return [{
+        "type": "telemetry_anomaly",
+        "severity": severity,
+        "summary": summary,
+        "detail": summary,
+        "signal_hash": signal_hash,
+    }]
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

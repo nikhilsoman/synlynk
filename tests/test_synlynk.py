@@ -1828,3 +1828,25 @@ def test_collect_sentinel_alerts_empty(project_dir):
     (project_dir / ".synlynk" / "sentinel.md").write_text("# Sentinel Alerts\n(none)\n")
     findings = synlynk._collect_sentinel_alerts({"type": "sentinel_alerts", "path": ".synlynk/sentinel.md"})
     assert findings == []
+
+
+def test_collect_telemetry_anomaly_medium(project_dir):
+    import json
+    # 8 failures out of 20 = 40% — above 30% threshold, below 60%
+    entries = [{"exit_code": (1 if i < 8 else 0)} for i in range(20)]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(entries))
+    findings = synlynk._collect_telemetry_anomaly({
+        "type": "telemetry_anomaly", "failure_rate_threshold": 0.30
+    })
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "medium"
+
+
+def test_collect_telemetry_anomaly_no_finding(project_dir):
+    import json
+    entries = [{"exit_code": (1 if i < 2 else 0)} for i in range(20)]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(entries))
+    findings = synlynk._collect_telemetry_anomaly({
+        "type": "telemetry_anomaly", "failure_rate_threshold": 0.30
+    })
+    assert findings == []
