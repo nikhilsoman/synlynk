@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telemetry log — Feature | synlynk</title>
+    <title>Scoped dispatch context — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,27 +33,27 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Telemetry log</h1>
-    <p class="feature-lead">Rolling 100-entry log of every exec — duration, exit code, cost, command</p>
+    <h1>Scoped dispatch context</h1>
+    <p class="feature-lead">Task-level context slice replaces 7-day devlog dump in every agent dispatch</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>Every `synlynk exec` invocation appends a structured JSON record to `.synlynk/telemetry.json`, keeping only the last 100 entries. Each record includes: timestamp, command, duration_seconds, exit_code, input_tokens, output_tokens, and estimated_cost_usd. This log powers both flatline detection and budget enforcement.</p>
+    <p>v0.9.0 introduces `generate_context(scope=&quot;task:&lt;story_id&gt;&quot;)`. Instead of injecting the full project context (7-day devlog, all teammate activity, complete memory file) into every dispatch, `_generate_task_context()` builds a minimal snapshot: story metadata from state.db, active tasks only from todo.md, and up to 20 source files filtered by the story&#39;s engineering domain from the scan cache. This reduces token overhead per dispatch by 60–80% and keeps agents focused on the relevant subsystem.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">Filesystem — State &amp; Telemetry</span>
+      <span class="layer-label">Scheduler — Dispatch</span>
     </div>
   </div>
 
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.1/">v0.1.x</a>
-      — Proof of Concept
+      <a href="/releases/v0.9/">v0.9.x</a>
+      — Kernel Fixes + Package Split
     </div>
   </div>
 
@@ -62,8 +62,8 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ cat .synlynk/telemetry.json | python3 -m json.tool | tail -30</code>
-      <span class="usage-note">Inspect last 100 exec records</span>
+      <code>$ synlynk dispatch claude --story story-abc123 --task &quot;add OAuth flow&quot;</code>
+      <span class="usage-note">Agent receives story metadata + active tasks + domain-filtered source files only</span>
     </div>
     
   </div>
@@ -80,8 +80,6 @@
           
         
           
-            <a href="/features/cost-tracking/">Cost tracking</a>
-          
         
           
         
@@ -96,47 +94,7 @@
           
         
           
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-      
-        
-          
-        
-          
-            <a href="/features/flatline-detection/">Flatline detection</a>
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
+            <a href="/features/agent-dispatch/">Background dispatch</a>
           
         
           
@@ -166,8 +124,6 @@
           
         
           
-            <a href="/features/budget-enforcement/">Budget enforcement</a>
-          
         
           
         
@@ -187,6 +143,50 @@
         
           
         
+          
+        
+          
+        
+          
+            <a href="/features/source-architecture/">Source architecture injection</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <a href="/features/capability-engine/">Capability engine</a>
           
         
           

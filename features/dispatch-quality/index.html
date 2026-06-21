@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telemetry log — Feature | synlynk</title>
+    <title>Dispatch quality enhancements — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,27 +33,27 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Telemetry log</h1>
-    <p class="feature-lead">Rolling 100-entry log of every exec — duration, exit code, cost, command</p>
+    <h1>Dispatch quality enhancements</h1>
+    <p class="feature-lead">## Relevant Files, ## How to Verify, and per-agent prompt framing in every dispatch</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>Every `synlynk exec` invocation appends a structured JSON record to `.synlynk/telemetry.json`, keeping only the last 100 entries. Each record includes: timestamp, command, duration_seconds, exit_code, input_tokens, output_tokens, and estimated_cost_usd. This log powers both flatline detection and budget enforcement.</p>
+    <p>v0.9.0 adds three quality layers to every agent dispatch. `_relevant_files_for_story()` injects a `## Relevant Files` section (up to 10 paths from the source-map, filtered by engineering domain) so agents know exactly which files to touch. `_verify_contract_for_story()` injects a `## How to Verify` section with a concrete pytest invocation derived from the story title. `_format_prompt_for_agent()` applies agent-specific framing: Codex receives `## Task Criteria` as scannable bullets; AGY receives a concise `Task:` prefix with 2000-char context; Claude receives the full narrative prompt.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">Filesystem — State &amp; Telemetry</span>
+      <span class="layer-label">Scheduler — Dispatch</span>
     </div>
   </div>
 
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.1/">v0.1.x</a>
-      — Proof of Concept
+      <a href="/releases/v0.9/">v0.9.x</a>
+      — Kernel Fixes + Package Split
     </div>
   </div>
 
@@ -62,8 +62,8 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ cat .synlynk/telemetry.json | python3 -m json.tool | tail -30</code>
-      <span class="usage-note">Inspect last 100 exec records</span>
+      <code>$ synlynk dispatch codex --story story-abc123 --task &quot;fix token extraction&quot;</code>
+      <span class="usage-note">Codex receives Task Criteria bullets + Relevant Files list + How to Verify pytest command</span>
     </div>
     
   </div>
@@ -80,7 +80,19 @@
           
         
           
-            <a href="/features/cost-tracking/">Cost tracking</a>
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
           
         
           
@@ -95,6 +107,36 @@
         
           
         
+          
+            <a href="/features/scoped-dispatch-context/">Scoped dispatch context</a>
+          
+        
+          
+        
+          
+        
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <a href="/features/agent-dispatch/">Background dispatch</a>
           
         
           
@@ -120,8 +162,6 @@
           
         
           
-            <a href="/features/flatline-detection/">Flatline detection</a>
-          
         
           
         
@@ -150,47 +190,7 @@
           
         
           
-        
-          
-        
-          
-        
-          
-        
-      
-        
-          
-        
-          
-        
-          
-        
-          
-            <a href="/features/budget-enforcement/">Budget enforcement</a>
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
+            <a href="/features/source-architecture/">Source architecture injection</a>
           
         
           

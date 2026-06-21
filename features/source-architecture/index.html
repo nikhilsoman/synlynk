@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telemetry log — Feature | synlynk</title>
+    <title>Source architecture injection — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,13 +33,13 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Telemetry log</h1>
-    <p class="feature-lead">Rolling 100-entry log of every exec — duration, exit code, cost, command</p>
+    <h1>Source architecture injection</h1>
+    <p class="feature-lead">## Source Architecture snapshot injected into every exec context from a passive git-HEAD cache</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>Every `synlynk exec` invocation appends a structured JSON record to `.synlynk/telemetry.json`, keeping only the last 100 entries. Each record includes: timestamp, command, duration_seconds, exit_code, input_tokens, output_tokens, and estimated_cost_usd. This log powers both flatline detection and budget enforcement.</p>
+    <p>v0.7.0 adds a language-agnostic static scanner that extracts symbols from up to 9 languages (Python, JS, TS, Go, Rust, Ruby, Java, Kotlin, Shell) and injects a `## Source Architecture` section into every `synlynk exec` context. The scan cache is keyed by git HEAD SHA — zero overhead on cache hit. A file scoring formula (entry-point bonus, git frequency, depth penalty) surfaces the 15 most relevant files. Full results are stored in the `source_symbols` SQLite table and `project-docs/source-map.md`. `synlynk scan [--deep] [--status]` provides manual control.</p>
   </div>
 
   <div class="feature-section">
@@ -52,8 +52,8 @@
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.1/">v0.1.x</a>
-      — Proof of Concept
+      <a href="/releases/v0.7/">v0.7.x</a>
+      — Static Scan Quality
     </div>
   </div>
 
@@ -62,8 +62,18 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ cat .synlynk/telemetry.json | python3 -m json.tool | tail -30</code>
-      <span class="usage-note">Inspect last 100 exec records</span>
+      <code>$ synlynk scan</code>
+      <span class="usage-note">Scans source tree and injects ## Source Architecture into context; zero cost on cache hit</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk scan --deep</code>
+      <span class="usage-note">Full scan: writes source_symbols to state.db and source-map.md</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk scan --status</code>
+      <span class="usage-note">Shows cache age, git HEAD SHA, and file/symbol counts</span>
     </div>
     
   </div>
@@ -76,51 +86,9 @@
       
         
           
-        
+            <a href="/features/context-injection/">Context injection</a>
           
         
-          
-            <a href="/features/cost-tracking/">Cost tracking</a>
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-          
-        
-      
-        
-          
-        
-          
-            <a href="/features/flatline-detection/">Flatline detection</a>
           
         
           
@@ -166,8 +134,6 @@
           
         
           
-            <a href="/features/budget-enforcement/">Budget enforcement</a>
-          
         
           
         
@@ -187,6 +153,8 @@
         
           
         
+          
+            <a href="/features/capability-engine/">Capability engine</a>
           
         
           

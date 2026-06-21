@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v0.2.x — The Kernel | synlynk</title>
+    <title>v0.9.x — Kernel Fixes + Package Split | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -31,9 +31,13 @@
 
   <header class="release-detail-header">
     <a href="/releases/" class="back-link">← All releases</a>
-    <span class="release-version">v0.2.x</span>
-    <h1>The Kernel</h1>
+    <span class="release-version">v0.9.x</span>
+    <h1>Kernel Fixes + Package Split</h1>
 
+    
+    <div class="release-install-block">
+      curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
+    </div>
     
   </header>
 
@@ -43,8 +47,18 @@
     <ul class="whats-new-list">
       
       <li>
-        <a href="/features/gh-cli-identity/">gh CLI identity</a>
-        <span class="feature-note">— Resolves verified GitHub login as the canonical session actor for devlog attribution</span>
+        <a href="/features/scoped-dispatch-context/">Scoped dispatch context</a>
+        <span class="feature-note">— Task-level context slice replaces 7-day devlog dump in every agent dispatch</span>
+      </li>
+      
+      <li>
+        <a href="/features/dispatch-quality/">Dispatch quality enhancements</a>
+        <span class="feature-note">— ## Relevant Files, ## How to Verify, and per-agent prompt framing in every dispatch</span>
+      </li>
+      
+      <li>
+        <a href="/features/ed25519-signing/">Ed25519 capability signing</a>
+        <span class="feature-note">— Every capability rating is signed with a local Ed25519 key — tamper-evident from day one</span>
       </li>
       
     </ul>
@@ -56,21 +70,9 @@
     <ul class="patch-list">
       
       <li class="patch-item">
-        <span class="patch-version">v0.2.2</span>
-        <span class="patch-date">May 20, 2026</span>
-        <span class="patch-summary">gh CLI identity resolution, upgrade check via gh API</span>
-      </li>
-      
-      <li class="patch-item">
-        <span class="patch-version">v0.2.1</span>
-        <span class="patch-date">May 17, 2026</span>
-        <span class="patch-summary">Token extraction correctness, test suite reliability</span>
-      </li>
-      
-      <li class="patch-item">
-        <span class="patch-version">v0.2.0</span>
-        <span class="patch-date">May 17, 2026</span>
-        <span class="patch-summary">Initial kernel: context injection, cost tracking, telemetry, flatline detection, budget enforcement</span>
+        <span class="patch-version">v0.9.0</span>
+        <span class="patch-date">Jun 21, 2026</span>
+        <span class="patch-summary">Scoped dispatch context (task-level instead of full devlog), ## Relevant Files injection from source-map, ## How to Verify contract per dispatch, per-agent framing (Codex/AGY/Claude), Ed25519 capability rating signing, anti-gaming quality cap (test_count&lt;3 capped at 5.0), synlynk/ package split; 365 tests</span>
       </li>
       
     </ul>
@@ -79,7 +81,7 @@
   
   <div class="release-section">
     <h2>From the build log</h2>
-    <a href="/blog/02-pr1-v0-2-0-the-kernel/" class="release-blog-link">Read the blog post →</a>
+    <a href="/blog/19-v0-9-0-kernel-fixes/" class="release-blog-link">Read the blog post →</a>
   </div>
   
 
