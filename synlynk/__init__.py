@@ -694,10 +694,13 @@ def _ensure_identity_key() -> str:
     key_path = os.path.join(key_dir, "identity.key")
     if not os.path.exists(key_path):
         os.makedirs(key_dir, exist_ok=True)
-        subprocess.run(
-            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", key_path, "-C", "synlynk-identity"],
-            capture_output=True
-        )
+        try:
+            subprocess.run(
+                ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", key_path, "-C", "synlynk-identity"],
+                capture_output=True
+            )
+        except (FileNotFoundError, OSError):
+            pass
     return key_path
 
 
@@ -708,25 +711,30 @@ def _sign_capability_rating(data: dict) -> str:
         return ""
     canonical = _json.dumps(data, sort_keys=True).encode()
     msg_file = None
+    sig_file = None
     try:
         with _tmp.NamedTemporaryFile(mode="wb", suffix=".rating", delete=False) as f:
             f.write(canonical)
             msg_file = f.name
+        sig_file = msg_file + ".sig"
         subprocess.run(
             ["ssh-keygen", "-Y", "sign", "-f", key_path, "-n", "synlynk-rating", msg_file],
             capture_output=True
         )
-        sig_file = msg_file + ".sig"
         if os.path.exists(sig_file):
-            sig = open(sig_file).read().strip()
-            os.unlink(sig_file)
-            return sig
+            with open(sig_file) as fh:
+                return fh.read().strip()
     except Exception:
         pass
     finally:
         if msg_file:
             try:
                 os.unlink(msg_file)
+            except Exception:
+                pass
+        if sig_file and os.path.exists(sig_file):
+            try:
+                os.unlink(sig_file)
             except Exception:
                 pass
     return ""
@@ -737,7 +745,8 @@ def cmd_identity_init() -> None:
     pub_path = key_path + ".pub"
     print(f"  identity key: {key_path}")
     if os.path.exists(pub_path):
-        pub = open(pub_path).read().strip()
+        with open(pub_path) as fh:
+            pub = fh.read().strip()
         print(f"  Public key: {pub}")
     else:
         print("  (public key file not found)")
@@ -1249,7 +1258,7 @@ def _relevant_files_for_story(story_id: str) -> list:
     relevant = []
     for entry in skeleton:
         path = entry.get("file", "")
-        symbols_str = " ".join(entry.get("symbols", []))
+        symbols_str = " ".join(entry.get("symbols") or [])
         if engg in path or engg in symbols_str:
             relevant.append(path)
     return relevant[:10]
@@ -1269,6 +1278,8 @@ def _verify_contract_for_story(story_id: str, task: str) -> str:
 
     # Derive test pattern: lowercase, alphanumeric + underscores, max 40 chars
     pattern = re.sub(r"[^a-z0-9_]", "", title.lower().replace(" ", "_"))[:40]
+    if not pattern:
+        return ""
 
     # Find first test file
     test_file = None
@@ -2571,7 +2582,7 @@ def _format_source_architecture(skeleton: list, head_sha: str, cache_hit: bool,
         label = dirname if dirname else "[root]"
         lines.append(f"### {label}/  [{lang_str}]")
         for entry in entries:
-            syms = entry.get("symbols", [])
+            syms = entry.get("symbols") or []
             if syms:
                 lines.append(f"`{entry['file']}` — {', '.join(syms)}")
             else:
