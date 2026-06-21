@@ -1,5 +1,36 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-22 — Session: Post-v0.9.0 Install + Init Hardening
+
+### Context
+First use of synlynk in an external repo (rxcc). Exposed two production gaps immediately — neither caught by the 365-test suite.
+
+### Shipped (3 hotfix commits to main)
+
+**1. Install broken after package split (`fix: update install.sh for v0.9.0 package split`)**
+- Root cause: `install.sh` was written when `bin/synlynk.py` was self-contained. After the v0.9.0 package split, the installed shim's `sys.path.insert` resolved to `~/.synlynk/` — which has no `synlynk/` package.
+- Fix: install.sh now copies `synlynk/` to `~/.synlynk/lib/synlynk/`. Shim's path line patched at install time to use `~/.synlynk/lib`. Curl install downloads `synlynk/__init__.py` directly. Also patched the already-installed shim immediately for the user.
+
+**2. Configurable `project_docs_dir` (`fix: configurable project_docs_dir`)**
+- All ~35 hardcoded `"project-docs/"` strings replaced with `_docs_dir()` helper.
+- Reads `project_docs_dir` from `.synlynk/config.json` (default `"project-docs"` — no change for existing repos).
+- `synlynk init --docs-dir .` writes the setting before any file creation. All downstream functions (generate_context, checkpoint, update_costs, get_mode, _deep_scan) respect it.
+
+**3. Doc migration on init (`feat: synlynk init migrates existing docs instead of generating blank skeletons`)**
+- `_find_existing_doc()` searches root, `project-docs/`, project-prefixed variants (`rxcc_memory.md`), uppercase names. First match >200 bytes wins.
+- `_write_informed_skeleton()` now migrates found content verbatim; generates blank skeleton from git history only as last resort.
+- Output now shows: `✓ ./roadmap.md  (migrated from project-docs/roadmap.md)` vs `(generated from git history)`.
+
+### Key decisions
+- AGY ran `synlynk init` in rxcc, saw two doc sets, proposed symlinks. User declined. This exposed the gap cleanly. Fixed the root cause rather than the symptom.
+- `_find_existing_doc()` logic will be reused in `synlynk migrate` (invisible-state spec step 6).
+
+### Tests
+- 365 passing (unchanged — no regressions, hotfixes were structural only)
+
+### Next
+- User review of invisible-state spec (`docs/superpowers/specs/2026-06-21-invisible-state-design.md`) before v0.9.1 implementation plan
+
 ## 2026-06-21
 ### Session: v0.9.0 Kernel Fixes + Package Split — PR #53, merged
 

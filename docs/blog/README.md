@@ -20,6 +20,13 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [11](./11-pr39-v0.4.0-hybrid-workgroup-bootstrap.md) | PR #39 — v0.4.0: The Hybrid Workgroup Bootstrap | [#39](https://github.com/nikhilsoman/synlynk/pull/39) | open |
 | [12](./12-pr42-v0.6.0-job-control.md) | PR #42 — v0.6.0: Job Control + Model-Aware Capability Engine | [#42](https://github.com/nikhilsoman/synlynk/pull/42) | open |
 | [13](./13-v0.4.1-instruction-reach.md) | v0.4.1 — Instruction Reach: Context Injection Across Every IDE | TBD | 2026-06-17 |
+| [14](./14-v0.4.2-task-status-model.md) | v0.4.2 — Task Status Model | TBD | — |
+| [15](./15-pr-v0.7.0-static-scan-quality.md) | v0.7.0 — Static Scan Quality | TBD | — |
+| [16](./16-pr-capability-dogfood.md) | Capability Dogfood | TBD | — |
+| [17](./17-pr-codex-headless-dispatch.md) | Codex Headless Dispatch | TBD | — |
+| [18](./18-pr52-v0.8.0-support-engineer-agent.md) | PR #52 — v0.8.0: Support Engineer Agent | [#52](https://github.com/nikhilsoman/synlynk/pull/52) | — |
+| [19](./19-v0.9.0-kernel-fixes.md) | PR #53 — v0.9.0: Kernel Fixes + Package Split | [#53](https://github.com/nikhilsoman/synlynk/pull/53) | 2026-06-21 |
+| [20](./20-post-v0.9.0-install-init-hardening.md) | Post v0.9.0 — The Gap Between Shipping and Working | hotfix | 2026-06-22 |
 
 ## Per-PR Post Template
 
