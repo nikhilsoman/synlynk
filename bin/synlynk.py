@@ -1289,7 +1289,6 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
 
 def cmd_agent_list() -> None:
     """List .agents/ config files and their last run status."""
-    import json as _json
     agents_dir = ".agents"
     if not os.path.exists(agents_dir):
         print("  No .agents/ directory found")
