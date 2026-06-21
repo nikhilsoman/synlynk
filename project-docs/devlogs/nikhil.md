@@ -361,3 +361,16 @@ implementation plan.
 ### Next
 - v0.8.0 Async Pipeline + Daemon (HTTP Context Server, `synlynk daemon start/stop`, `synlynk review` TUI)
 - Capability Dogfood initiative: use synlynk to dispatch real tasks and accumulate capability ledger data
+
+## 2026-06-21 — Session: Ed25519 Signing for Capability Ratings
+
+### Shipped
+- **Feature:** Ed25519 identity signing for capability ratings in `bin/synlynk.py`.
+- **Feature:** Added `synlynk identity init` CLI subcommand to manage agent identity key pairs.
+- **346 tests passing** (4 new tests added to `tests/test_synlynk.py`)
+
+### Key decisions & implementation notes
+- Key pair generation is handled using standard `ssh-keygen` command, storing keys in `~/.synlynk/identity.key`.
+- Implemented `_sign_capability_rating` using SSH signing mechanisms (`ssh-keygen -Y sign`) with a custom namespace `"synlynk-rating"`.
+- Wired signature validation automatically into capability rating writes, inserting signatures into the database table row.
+- Updated CLI subcommand list in `main` to expose `identity init` parser under the `identity` namespace.
