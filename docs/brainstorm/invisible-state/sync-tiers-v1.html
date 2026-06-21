@@ -1,0 +1,127 @@
+<h2>synlynk state: local-first, sync is optional</h2>
+<p class="subtitle">Every tier works standalone. Upper tiers add reach, not dependency.</p>
+
+<style>
+  .tier { border-radius:8px; padding:16px; margin-bottom:12px; position:relative; }
+  .tier-label { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:10px; }
+  .tier-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+  .tier-pill { font-size:11px; padding:3px 10px; border-radius:12px; font-family:monospace; }
+  .tier-note { font-size:12px; color:#bbb; margin-top:8px; line-height:1.6; }
+  .sync-arrow { text-align:center; color:#555; font-size:20px; margin:2px 0; letter-spacing:2px; }
+  .badge { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:700; display:inline-block; margin-left:8px; vertical-align:middle; }
+  .works-offline { background:#1a3a1a; color:#5dbb7a; }
+  .optional { background:#1a1a3a; color:#7ab8e8; }
+  .future { background:#2a1a2a; color:#c084e8; }
+</style>
+
+<!-- TIER 0 -->
+<div class="tier" style="background:#1a2a1a;border:2px solid #27ae60">
+  <div class="tier-label" style="color:#5dbb7a">
+    Tier 0 — Solo / Offline / Air-gapped
+    <span class="badge works-offline">✓ always works</span>
+  </div>
+  <div class="tier-row">
+    <span class="tier-pill" style="background:#0d2a0d;color:#7ec8a0;border:1px solid #27ae60">~/.synlynk/projects/&lt;hash&gt;/state.db</span>
+    <span class="tier-pill" style="background:#0d2a0d;color:#7ec8a0;border:1px solid #27ae60">~/.synlynk/projects/&lt;hash&gt;/context.md</span>
+    <span class="tier-pill" style="background:#0d2a0d;color:#7ec8a0;border:1px solid #27ae60">~/.synlynk/projects/&lt;hash&gt;/memory.md</span>
+    <span class="tier-pill" style="background:#0d2a0d;color:#7ec8a0;border:1px solid #27ae60">~/.synlynk/projects/&lt;hash&gt;/devlog.md</span>
+  </div>
+  <div class="tier-note">
+    SQLite is the source of truth. Markdown files are <strong style="color:#fff">generated views</strong> — written by synlynk, readable by humans, editable offline (changes sync back to DB on next run).<br>
+    <strong style="color:#fff">No git involvement. No conflicts. No network.</strong><br>
+    Human asks their preferred agent anything → agent reads from state.db + context.md. Other agents are invisible workers.
+  </div>
+</div>
+
+<div class="sync-arrow">↕ optional sync</div>
+
+<!-- TIER 1 -->
+<div class="tier" style="background:#1a1f2e;border:2px solid #3498db">
+  <div class="tier-label" style="color:#5ba4d4">
+    Tier 1 — Team (relay, v0.9.3)
+    <span class="badge optional">optional</span>
+    <span class="badge" style="background:#2a2a0d;color:#ffd966">graceful degradation ↓ Tier 0 on failure</span>
+  </div>
+  <div class="tier-row">
+    <span class="tier-pill" style="background:#0d1a2a;color:#7ab8e8;border:1px solid #3498db">relay.synlynk.com (community)</span>
+    <span class="tier-pill" style="background:#0d1a2a;color:#7ab8e8;border:1px solid #3498db">self-hosted --enterprise</span>
+    <span class="tier-pill" style="background:#0d1a2a;color:#7ab8e8;border:1px solid #3498db">LAN mode (no internet)</span>
+  </div>
+  <div class="tier-note">
+    Relay syncs <strong style="color:#fff">state.db deltas</strong> between teammates over WSS/443. Each developer's machine is authoritative for their own writes; relay is a broadcast bus, not a source of truth.<br>
+    <strong style="color:#ffd966">If relay goes down:</strong> each machine continues working fully on Tier 0. State.db accumulates local changes. On reconnect, relay merges deltas (last-write-wins per story_id, conflict-free for append-only tables like capability_ratings + devlogs).<br>
+    <strong style="color:#ffd966">If security blocks relay:</strong> LAN mode uses mDNS discovery + direct WSS on local network. No internet required. Air-gapped teams use git transport (see below).
+  </div>
+</div>
+
+<div class="sync-arrow">↕ optional sync</div>
+
+<!-- TIER 1b — git transport -->
+<div class="tier" style="background:#2a2000;border:2px dashed #856404">
+  <div class="tier-label" style="color:#ffd966">
+    Tier 1b — Air-gapped / relay-blocked teams: git transport
+    <span class="badge" style="background:#2a2a0d;color:#ffd966">fallback</span>
+  </div>
+  <div class="tier-note" style="color:#e0c97a">
+    For teams whose security policy blocks all relay options: synlynk exports a compact <strong style="color:#fff">state delta bundle</strong> (JSON, not markdown) that can be committed to a separate <code style="color:#ffd966">synlynk-state</code> branch or sidecar repo. Teammates pull and import. Same conflict-free merge model as relay, just async via git instead of real-time WSS.<br>
+    No markdown files in git. No conflicts. The bundle is binary-safe and opaque to git diff.
+  </div>
+</div>
+
+<div class="sync-arrow">↕ optional</div>
+
+<!-- TIER 2 -->
+<div class="tier" style="background:#1f1a2a;border:2px solid #9b59b6">
+  <div class="tier-label" style="color:#c084e8">
+    Tier 2 — Workspace (multi-repo, v0.10.0)
+    <span class="badge future">v0.10.0</span>
+  </div>
+  <div class="tier-note">
+    Relay scope expands: stories and capability ratings federate across repos in a workspace. Cross-repo epics live in a workspace state.db. Each repo's local Tier 0 stays independent; workspace relay adds a coordination layer above it.
+  </div>
+</div>
+
+<div class="sync-arrow">↕ optional</div>
+
+<!-- TIER 3 -->
+<div class="tier" style="background:#2a1a1a;border:2px solid #e74c3c">
+  <div class="tier-label" style="color:#ff8080">
+    Tier 3 — Community / Tokq (v1.1–v1.3)
+    <span class="badge future">v1.1+</span>
+  </div>
+  <div class="tier-note">
+    Capability ratings (Ed25519-signed at Tier 0) propagate to the community server. Cross-workgroup agent reputation emerges from aggregated, tamper-evident ratings. Tokq bridge at v1.3 makes these ratings portable across organisations. The signed ledger that starts at Tier 0 becomes the community trust anchor.
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:14px;background:#0d0d0d;border:1px solid #444;border-radius:8px;font-size:12px;color:#ccc;line-height:1.8">
+  <strong style="color:#fff;font-size:13px">Key principle: local-first, sync is additive</strong><br>
+  Every tier works without the tier above it. Relay failure → Tier 0, not broken.<br>
+  Security blocks relay → Tier 1b git transport or stay on Tier 0.<br>
+  Community server down → workspace, team, solo all unaffected.<br>
+  <strong style="color:#5dbb7a">The human never sees any of this. They just talk to their agent.</strong>
+</div>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>This is the right model</h3>
+      <p>Local-first SQLite + generated markdown views in ~/.synlynk/. Relay is optional sync. Git transport fallback for air-gapped teams. Let's go deep on Tier 0 design.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Right direction, but revise the relay model</h3>
+      <p>The tier structure is right but I want to rethink how relay deltas work, or what LAN mode looks like, or the git transport option.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Missing something — let's discuss</h3>
+      <p>There's a scenario or constraint not captured here. Tell me what's missing.</p>
+    </div>
+  </div>
+</div>
