@@ -2084,6 +2084,60 @@ def test_collect_capability_drop_insufficient_data(project_dir):
     assert findings == []
 
 
+def test_ensure_identity_key_creates_key(tmp_path, monkeypatch):
+    import synlynk as sl, os
+    calls = []
+    monkeypatch.setenv("HOME", str(tmp_path))
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        key_file = tmp_path / ".synlynk" / "identity.key"
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.touch()
+        return type("R", (), {"returncode": 0})()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl._ensure_identity_key()
+    assert any("ssh-keygen" in str(c) for c in calls)
+
+def test_sign_capability_rating_returns_empty_when_no_key(project_dir, monkeypatch):
+    import synlynk as sl, os
+    orig_exists = os.path.exists
+    monkeypatch.setattr("os.path.exists", lambda p: False if "identity" in str(p) else orig_exists(p))
+    result = sl._sign_capability_rating({"quality": 8.0, "agent": "claude"})
+    assert result == ""
+
+def test_write_capability_rating_populates_sig_column(project_dir, monkeypatch):
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+    story_id = sl.cmd_story_create("Auth fix", engg_domain="backend")
+    job = {
+        "story_id": story_id, "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "47 passed in 3.2s")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT ed25519_sig FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+
+def test_identity_init_command_prints_key_path(project_dir, monkeypatch, capsys):
+    import synlynk as sl, tempfile, os
+    with tempfile.TemporaryDirectory() as d:
+        key_path = os.path.join(d, ".synlynk", "identity.key")
+        os.makedirs(os.path.dirname(key_path), exist_ok=True)
+        open(key_path, "w").close()
+        pub_path = key_path + ".pub"
+        open(pub_path, "w").write("ssh-ed25519 AAAA synlynk-identity")
+        monkeypatch.setattr("os.path.expanduser", lambda p: p.replace("~", d))
+        monkeypatch.setattr("subprocess.run", lambda cmd, **kw: type("R", (), {"returncode": 0})())
+        sl.cmd_identity_init()
+    captured = capsys.readouterr()
+    assert "identity" in captured.out.lower()
+
+
+
 def test_collect_github_issues(project_dir, monkeypatch):
     import json
     issues = [
