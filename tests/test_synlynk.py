@@ -1650,6 +1650,66 @@ def test_verify_contract_derives_pattern_from_story_title(project_dir):
     assert "pytest" in section
 
 
+def test_format_prompt_for_claude_is_narrative(project_dir):
+    """Claude prompt leads with full context text."""
+    import synlynk as sl
+    result = sl._format_prompt_for_agent(
+        "claude", "## Context\nsome context", "story-1", "fix auth",
+        "\n\n## Relevant Files\n- `auth.py`", "\n\n## How to Verify\nRun pytest\n"
+    )
+    assert result.startswith("## Context")
+    assert "## Your Task" in result
+    assert "fix auth" in result
+
+
+def test_format_prompt_for_codex_leads_with_criteria(project_dir):
+    """Codex prompt leads with ## Task Criteria and file list."""
+    import synlynk as sl
+    result = sl._format_prompt_for_agent(
+        "codex", "## Context\nsome context", "story-1", "fix auth. add test.",
+        "\n\n## Relevant Files\n- `auth.py`", ""
+    )
+    assert result.startswith("## Task Criteria")
+    assert "- fix auth" in result or "- add test" in result
+    assert "auth.py" in result
+
+
+def test_format_prompt_for_agy_is_concise(project_dir):
+    """AGY prompt leads with Task: directive and truncates context to 2000 chars."""
+    import synlynk as sl
+    long_context = "x" * 5000
+    result = sl._format_prompt_for_agent(
+        "agy", long_context, "story-1", "fix auth", "", ""
+    )
+    assert result.startswith("Task: fix auth")
+    assert len(result) < len(long_context) + 200  # context was truncated
+
+
+def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
+    """dispatch_agent uses _format_prompt_for_agent for claude."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix login")
+    job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Your Task" in prompt
+    assert "fix the login bug" in prompt
+
+
+def test_dispatch_agent_codex_prompt_format(project_dir, monkeypatch):
+    """dispatch_agent uses _format_prompt_for_agent for codex."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Add tests")
+    job = sl.dispatch_agent("codex", "add tests for auth module", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Task Criteria" in prompt
+
+
 def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     """codex exec + stdin mode must be used so dispatch works without a TTY.
 

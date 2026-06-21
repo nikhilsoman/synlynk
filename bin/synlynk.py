@@ -1224,6 +1224,48 @@ def _verify_contract_for_story(story_id: str, task: str) -> str:
     )
 
 
+def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
+                              task: str, file_section: str, verify_section: str) -> str:
+    """Returns a prompt formatted for the agent's preferred input style.
+
+    Codex: criteria list + file list first (ignores narrative prose).
+    AGY: concise directive (prompt_via_arg — shell-escaping limits length).
+    Claude: full context narrative (default).
+    """
+    story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
+
+    if agent == "codex":
+        # Codex works best with explicit, scannable criteria and a concrete file list
+        sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
+        criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
+        return (
+            f"## Task Criteria\n{criteria}\n"
+            f"{file_section}\n"
+            f"{verify_section}\n"
+            f"## Context\n{context_text}"
+            f"{story_ref}\n"
+        )
+
+    if agent == "agy":
+        # AGY receives the prompt as a CLI arg — keep short, lead with directive
+        return (
+            f"Task: {task}\n"
+            f"{story_ref}\n"
+            f"{file_section}\n"
+            f"{verify_section}\n"
+            f"Context summary:\n{context_text[:2000]}"
+        )
+
+    # Default (claude): full context narrative
+    return (
+        f"{context_text}"
+        f"{story_ref}"
+        f"{file_section}"
+        f"\n\n## Your Task\n{task}"
+        f"{verify_section}\n"
+    )
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False) -> dict:
     """Dispatches an agent to run a task in the background.
@@ -1270,8 +1312,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if os.path.exists(context_path):
         context_text = open(context_path).read()
 
-    story_line = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
-
     # Inject relevant file list
     file_list = _relevant_files_for_story(story_id) if story_id else []
     file_section = ""
@@ -1280,7 +1320,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     verify_section = _verify_contract_for_story(story_id, task) if story_id else ""
 
-    prompt = f"{context_text}{story_line}{file_section}\n\n## Your Task\n{task}{verify_section}\n"
+    prompt = _format_prompt_for_agent(
+        agent, context_text, story_id or "", task, file_section, verify_section
+    )
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
