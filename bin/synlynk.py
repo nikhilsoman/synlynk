@@ -1459,6 +1459,23 @@ def _collect_github_issues(signal_cfg: dict) -> list:
     return findings
 
 
+def _dedup_findings(findings: list) -> list:
+    """Filter findings whose signal_hash appeared in autopilot_runs within last 7 days."""
+    if not findings:
+        return []
+    conn = _get_db()
+    new_findings = []
+    for f in findings:
+        row = conn.execute(
+            "SELECT id FROM autopilot_runs WHERE signal_hash=? AND ts > datetime('now', '-7 days')",
+            (f["signal_hash"],)
+        ).fetchone()
+        if row is None:
+            new_findings.append(f)
+    conn.close()
+    return new_findings
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

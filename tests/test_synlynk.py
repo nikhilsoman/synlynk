@@ -1903,3 +1903,31 @@ def test_collect_github_issues(project_dir, monkeypatch):
     assert findings[0]["type"] == "github_issues"
     assert findings[0]["severity"] == "medium"
     assert "#42" in findings[0]["summary"]
+
+
+def test_dedup_skips_recent_signal(project_dir):
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO autopilot_runs (id, agent_name, signal_type, signal_hash, severity, summary, status, ts) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '-3 days'))",
+        ("run-001", "support-engineer", "test_suite", "abc123", "high", "test failure", "filed")
+    )
+    conn.commit()
+    conn.close()
+    findings = [{"signal_hash": "abc123", "type": "test_suite", "severity": "high", "summary": "x", "detail": "x"}]
+    result = synlynk._dedup_findings(findings)
+    assert result == [], "Recent signal should be filtered out by dedup"
+
+
+def test_dedup_reinvestigates_after_7_days(project_dir):
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO autopilot_runs (id, agent_name, signal_type, signal_hash, severity, summary, status, ts) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '-8 days'))",
+        ("run-001", "support-engineer", "test_suite", "abc123", "high", "test failure", "filed")
+    )
+    conn.commit()
+    conn.close()
+    findings = [{"signal_hash": "abc123", "type": "test_suite", "severity": "high", "summary": "x", "detail": "x"}]
+    result = synlynk._dedup_findings(findings)
+    assert len(result) == 1, "8-day-old signal should pass dedup (>7 days)"
