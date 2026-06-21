@@ -1794,3 +1794,20 @@ def test_load_agent_config_missing_raises(project_dir):
 def test_agent_run_unknown_agent_raises(project_dir):
     with pytest.raises(FileNotFoundError, match="No agent config found"):
         synlynk.cmd_agent_run("nonexistent")
+
+
+def test_collect_test_suite_high_on_failure(project_dir, monkeypatch):
+    fake_result = type("R", (), {"returncode": 1, "stdout": "FAILED tests/test_foo.py::test_bar\n1 failed"})()
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
+    findings = synlynk._collect_test_suite({"type": "test_suite", "command": "pytest tests/ -q --tb=short"})
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "high"
+    assert findings[0]["type"] == "test_suite"
+    assert "signal_hash" in findings[0]
+
+
+def test_collect_test_suite_no_finding_on_pass(project_dir, monkeypatch):
+    fake_result = type("R", (), {"returncode": 0, "stdout": "1 passed"})()
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
+    findings = synlynk._collect_test_suite({"type": "test_suite", "command": "pytest tests/ -q --tb=short"})
+    assert findings == []

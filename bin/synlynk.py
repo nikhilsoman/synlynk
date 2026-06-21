@@ -1309,6 +1309,24 @@ def cmd_agent_list() -> None:
     conn.close()
 
 
+def _collect_test_suite(signal_cfg: dict) -> list:
+    """Run pytest; return a high-severity finding if any test fails."""
+    import hashlib as _hashlib
+    cmd = signal_cfg.get("command", "pytest tests/ -q --tb=short").split()
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if result.returncode == 0:
+        return []
+    output = result.stdout or ""
+    signal_hash = _hashlib.md5(output[:500].encode()).hexdigest()[:16]
+    return [{
+        "type": "test_suite",
+        "severity": "high",
+        "summary": f"Test suite failure: {output.splitlines()[-1][:120] if output.splitlines() else 'unknown'}",
+        "detail": output[:3000],
+        "signal_hash": signal_hash,
+    }]
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
