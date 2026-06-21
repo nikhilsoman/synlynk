@@ -1283,7 +1283,7 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
 
     cfg = _load_agent_config(name)
     if install_cron:
-        _install_cron_entry()
+        _install_cron_entry(name)
         return
 
     is_ci = os.environ.get("GITHUB_ACTIONS") == "true"
@@ -1384,13 +1384,13 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
     print(f"  [agent:{name}] done — {len(to_process)} findings processed")
 
 
-def _install_cron_entry() -> None:
-    """Install local crontab entry for synlynk agent run support (idempotent)."""
+def _install_cron_entry(name: str) -> None:
+    """Install local crontab entry for the named agent (idempotent)."""
     repo_path = os.path.abspath(".")
     synlynk_bin = os.path.abspath(__file__)
     entry = (
         f"0 */6 * * * cd {repo_path} && "
-        f"python3 {synlynk_bin} agent run support "
+        f"python3 {synlynk_bin} agent run {name} "
         f">> ~/.synlynk/autopilot.log 2>&1"
     )
     result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
@@ -1555,7 +1555,7 @@ def _collect_github_issues(signal_cfg: dict) -> list:
     label_str = ",".join(labels)
     result = subprocess.run(
         ["gh", "issue", "list", "--label", label_str,
-         "--json", "number,title,body,createdAt", "--limit", "20"],
+         "--json", "number,title,body,createdAt,labels", "--limit", "20"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -1567,6 +1567,9 @@ def _collect_github_issues(signal_cfg: dict) -> list:
         return []
     findings = []
     for issue in issues:
+        issue_labels = [lbl.get("name", "") for lbl in issue.get("labels", [])]
+        if "support-engineer" in issue_labels:
+            continue
         signal_hash = _hashlib.md5(str(issue.get("number", "")).encode()).hexdigest()[:16]
         findings.append({
             "type": "github_issues",

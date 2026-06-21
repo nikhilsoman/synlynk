@@ -2115,11 +2115,11 @@ def test_install_cron_idempotent(project_dir, monkeypatch):
 
     monkeypatch.setattr("subprocess.run", fake_run)
 
-    synlynk._install_cron_entry()
+    synlynk._install_cron_entry("support")
     first = crontab_contents[0]
     assert "synlynk.py agent run support" in first
 
     # Call again — must be idempotent
-    synlynk._install_cron_entry()
+    synlynk._install_cron_entry("support")
     second = crontab_contents[0]
     assert second.count("synlynk.py agent run support") == 1
