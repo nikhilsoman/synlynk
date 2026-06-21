@@ -1811,3 +1811,20 @@ def test_collect_test_suite_no_finding_on_pass(project_dir, monkeypatch):
     monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
     findings = synlynk._collect_test_suite({"type": "test_suite", "command": "pytest tests/ -q --tb=short"})
     assert findings == []
+
+
+def test_collect_sentinel_alerts_flatline(project_dir):
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "# Sentinel Alerts\n"
+        "- [2026-06-21 10:00] ⚠ FLATLINE: 3 consecutive exec failures\n"
+    )
+    findings = synlynk._collect_sentinel_alerts({"type": "sentinel_alerts", "path": ".synlynk/sentinel.md"})
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "high"
+    assert "FLATLINE" in findings[0]["summary"]
+
+
+def test_collect_sentinel_alerts_empty(project_dir):
+    (project_dir / ".synlynk" / "sentinel.md").write_text("# Sentinel Alerts\n(none)\n")
+    findings = synlynk._collect_sentinel_alerts({"type": "sentinel_alerts", "path": ".synlynk/sentinel.md"})
+    assert findings == []

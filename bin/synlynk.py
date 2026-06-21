@@ -1327,6 +1327,31 @@ def _collect_test_suite(signal_cfg: dict) -> list:
     }]
 
 
+def _collect_sentinel_alerts(signal_cfg: dict) -> list:
+    """Read sentinel.md, return a finding per ⚠ alert line."""
+    import hashlib as _hashlib
+    path = signal_cfg.get("path", ".synlynk/sentinel.md")
+    if not os.path.exists(path):
+        return []
+    lines = [l for l in open(path).read().splitlines() if "⚠" in l]
+    findings = []
+    for line in lines:
+        upper = line.upper()
+        if "FLATLINE" in upper or "QUOTA_EXHAUSTED" in upper or "CRITICAL" in upper:
+            severity = "high"
+        else:
+            severity = "medium"
+        signal_hash = _hashlib.md5(line.encode()).hexdigest()[:16]
+        findings.append({
+            "type": "sentinel_alerts",
+            "severity": severity,
+            "summary": line.strip()[:200],
+            "detail": line.strip(),
+            "signal_hash": signal_hash,
+        })
+    return findings
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
