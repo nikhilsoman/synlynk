@@ -1429,6 +1429,36 @@ def _collect_capability_drop(signal_cfg: dict) -> list:
     return findings
 
 
+def _collect_github_issues(signal_cfg: dict) -> list:
+    """List open GitHub issues with matching labels via `gh issue list`."""
+    import json as _json, hashlib as _hashlib
+    labels = signal_cfg.get("labels", ["bug"])
+    label_str = ",".join(labels)
+    result = subprocess.run(
+        ["gh", "issue", "list", "--label", label_str,
+         "--json", "number,title,body,createdAt", "--limit", "20"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  [support] gh issue list failed: {result.stderr[:100]}")
+        return []
+    try:
+        issues = _json.loads(result.stdout)
+    except Exception:
+        return []
+    findings = []
+    for issue in issues:
+        signal_hash = _hashlib.md5(str(issue.get("number", "")).encode()).hexdigest()[:16]
+        findings.append({
+            "type": "github_issues",
+            "severity": "medium",
+            "summary": f"#{issue['number']}: {issue.get('title', '')[:100]}",
+            "detail": issue.get("body", "")[:500],
+            "signal_hash": signal_hash,
+        })
+    return findings
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

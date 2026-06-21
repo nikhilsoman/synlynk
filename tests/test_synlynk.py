@@ -1888,3 +1888,18 @@ def test_collect_capability_drop_insufficient_data(project_dir):
     # No ratings — should return empty
     findings = synlynk._collect_capability_drop({"type": "capability_drop", "drop_threshold": 1.5})
     assert findings == []
+
+
+def test_collect_github_issues(project_dir, monkeypatch):
+    import json
+    issues = [
+        {"number": 42, "title": "Crash on empty input", "body": "Steps to repro: ...", "createdAt": "2026-06-21T10:00:00Z"},
+        {"number": 43, "title": "Wrong score shown", "body": "Score is 0 always", "createdAt": "2026-06-21T11:00:00Z"},
+    ]
+    fake_result = type("R", (), {"returncode": 0, "stdout": json.dumps(issues)})()
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
+    findings = synlynk._collect_github_issues({"type": "github_issues", "labels": ["bug", "needs-triage"]})
+    assert len(findings) == 2
+    assert findings[0]["type"] == "github_issues"
+    assert findings[0]["severity"] == "medium"
+    assert "#42" in findings[0]["summary"]
