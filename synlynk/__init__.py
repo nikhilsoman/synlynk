@@ -1917,7 +1917,7 @@ def _file_gh_issue(finding: dict, investigation: dict, dry_run: bool) -> str:
     return result.stdout.strip()
 
 
-def _extract_diff(text: str) -> str | None:
+def _extract_diff(text: str) -> Optional[str]:
     """Extract first unified diff block from text (fenced or raw)."""
     import re as _re
     # Prefer fenced ```diff block
