@@ -1476,6 +1476,99 @@ def _dedup_findings(findings: list) -> list:
     return new_findings
 
 
+def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
+    """Build prompt, dispatch investigator foreground (5-min timeout), parse output."""
+    import hashlib as _hashlib, shlex as _shlex
+
+    agent = agent_cfg.get("investigator", "claude")
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        agent = "claude"
+
+    # Create story in DB
+    story_id = "support-" + _hashlib.md5(finding["signal_hash"].encode()).hexdigest()[:8]
+    conn = _get_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO stories (story_id, title, engg_domain, phase) VALUES (?, ?, ?, ?)",
+            (story_id, finding["summary"][:100], "test", "scale")
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Build prompt
+    try:
+        generate_context(scope="full")
+    except Exception:
+        pass
+    context_text = ""
+    if os.path.exists(".synlynk/context.md"):
+        context_text = open(".synlynk/context.md").read()
+
+    prompt = (
+        f"## Signal: {finding['type']} (severity={finding['severity']})\n\n"
+        f"{finding['detail']}\n\n"
+        f"---\n\n{context_text}\n\n"
+        "## Task\n"
+        "Identify the root cause. If a code fix is possible, produce a unified diff with "
+        "exact file paths. If not fixable, summarise your investigation findings. "
+        "If providing a fix, include a line starting with `# FIX:` before the diff block."
+    )
+
+    # Write prompt file
+    job_id = "support-" + _hashlib.md5(
+        f"{finding['signal_hash']}{time.time()}".encode()
+    ).hexdigest()[:8]
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+    log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
+    prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+
+    # Build shell command (same pattern as dispatch_agent)
+    baselines = AGENT_CAPABILITY_BASELINES[agent]
+    cli = baselines["cli"]
+    flags = baselines["non_interactive_flags"]
+    prompt_via_arg = baselines.get("prompt_via_arg", False)
+    cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+
+    if prompt_via_arg:
+        shell_cmd = (
+            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
+            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
+            f"echo $? > {_shlex.quote(log_file)}.exit"
+        )
+    else:
+        shell_cmd = (
+            f"{cmd_str} < {_shlex.quote(prompt_file)} "
+            f"> {_shlex.quote(log_file)} 2>&1; "
+            f"echo $? > {_shlex.quote(log_file)}.exit"
+        )
+
+    try:
+        subprocess.run(["sh", "-c", shell_cmd], timeout=300)
+    except subprocess.TimeoutExpired:
+        pass
+
+    log_text = ""
+    if os.path.exists(log_file):
+        log_text = open(log_file).read()
+
+    import re as _re
+    fix_signal = "# FIX:" in log_text or bool(
+        _re.search(r"^--- a/", log_text, _re.MULTILINE)
+    )
+
+    return {
+        "summary": log_text[:500] if log_text else "(no output)",
+        "fix_signal": fix_signal,
+        "log_text": log_text,
+        "story_id": story_id,
+        "log_file": log_file,
+    }
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

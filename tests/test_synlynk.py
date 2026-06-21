@@ -1931,3 +1931,45 @@ def test_dedup_reinvestigates_after_7_days(project_dir):
     findings = [{"signal_hash": "abc123", "type": "test_suite", "severity": "high", "summary": "x", "detail": "x"}]
     result = synlynk._dedup_findings(findings)
     assert len(result) == 1, "8-day-old signal should pass dedup (>7 days)"
+
+
+def test_run_investigation_creates_story_and_returns_summary(project_dir, monkeypatch):
+    import re
+
+    captured_cmds = []
+
+    def fake_run(cmd, **kw):
+        captured_cmds.append(cmd)
+        # Simulate agent writing to log file
+        if isinstance(cmd, list) and cmd[0] == "sh":
+            shell_cmd = cmd[2] if len(cmd) > 2 else ""
+            m = re.search(r"> (\S+\.log)\b", shell_cmd)
+            if m:
+                import os
+                os.makedirs(os.path.dirname(m.group(1)), exist_ok=True)
+                open(m.group(1), "w").write("Root cause: the test was broken.\n# FIX: replace line 42\n")
+                open(m.group(1) + ".exit", "w").write("0\n")
+        return type("R", (), {"returncode": 0})()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    finding = {
+        "type": "test_suite",
+        "severity": "high",
+        "summary": "Test failure: test_foo",
+        "detail": "FAILED tests/test_foo.py\n1 failed",
+        "signal_hash": "deadbeef12345678",
+    }
+    result = synlynk._run_investigation(finding, {"investigator": "claude"})
+
+    assert "summary" in result
+    assert result["fix_signal"] is True
+    assert "story_id" in result
+
+    # Confirm story was created in DB
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT story_id FROM stories WHERE story_id=?", (result["story_id"],)
+    ).fetchone()
+    conn.close()
+    assert row is not None
