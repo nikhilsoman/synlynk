@@ -1382,6 +1382,53 @@ def _collect_telemetry_anomaly(signal_cfg: dict) -> list:
     }]
 
 
+def _collect_capability_drop(signal_cfg: dict) -> list:
+    """Compare each agent's avg quality: last 7 days vs. prior 7 days.
+    Skip agents with fewer than 2 ratings in either window."""
+    import hashlib as _hashlib
+    drop_threshold = signal_cfg.get("drop_threshold", 1.5)
+    conn = _get_db()
+    agents = [r[0] for r in conn.execute(
+        "SELECT DISTINCT agent FROM capability_ratings"
+    ).fetchall()]
+    findings = []
+    for agent in agents:
+        recent = conn.execute(
+            "SELECT AVG(quality), COUNT(*) FROM capability_ratings "
+            "WHERE agent=? AND ts > datetime('now', '-7 days')",
+            (agent,)
+        ).fetchone()
+        prior = conn.execute(
+            "SELECT AVG(quality), COUNT(*) FROM capability_ratings "
+            "WHERE agent=? AND ts <= datetime('now', '-7 days') "
+            "  AND ts > datetime('now', '-14 days')",
+            (agent,)
+        ).fetchone()
+        if not recent or not prior:
+            continue
+        recent_avg, recent_n = recent
+        prior_avg, prior_n = prior
+        if recent_n < 2 or prior_n < 2:
+            continue
+        if recent_avg is None or prior_avg is None:
+            continue
+        drop = prior_avg - recent_avg
+        if drop < drop_threshold:
+            continue
+        severity = "high" if drop >= 3.0 else "medium"
+        summary = f"Capability drop for {agent}: {prior_avg:.1f} → {recent_avg:.1f} (Δ{drop:.1f}pts)"
+        signal_hash = _hashlib.md5(f"{agent}{round(drop, 1)}".encode()).hexdigest()[:16]
+        findings.append({
+            "type": "capability_drop",
+            "severity": severity,
+            "summary": summary,
+            "detail": summary,
+            "signal_hash": signal_hash,
+        })
+    conn.close()
+    return findings
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

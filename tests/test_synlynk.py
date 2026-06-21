@@ -1850,3 +1850,41 @@ def test_collect_telemetry_anomaly_no_finding(project_dir):
         "type": "telemetry_anomaly", "failure_rate_threshold": 0.30
     })
     assert findings == []
+
+
+def test_collect_capability_drop_returns_finding(project_dir):
+    conn = synlynk._get_db()
+    # Insert a story first (FK requirement)
+    conn.execute(
+        "INSERT INTO stories (story_id, title) VALUES (?, ?)",
+        ("s-drop-test", "drop test story")
+    )
+    # Use timestamps that will fall into the correct windows relative to datetime('now')
+    recent_ts = "2026-06-21T12:00:00"  # Recent window (last 7 days)
+    prior_ts = "2026-06-10T12:00:00"   # Prior window (7-14 days ago)
+    # Recent window: quality 5.0
+    for _ in range(2):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, model_version, quality, ts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("s-drop-test", "claude", "claude-sonnet-4-6", 5.0, recent_ts)
+        )
+    # Older window: quality 8.0
+    for _ in range(2):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, model_version, quality, ts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("s-drop-test", "claude", "claude-sonnet-4-6", 8.0, prior_ts)
+        )
+    conn.commit()
+    conn.close()
+    findings = synlynk._collect_capability_drop({"type": "capability_drop", "drop_threshold": 1.5})
+    assert len(findings) == 1
+    assert findings[0]["severity"] in ("medium", "high")
+    assert "claude" in findings[0]["summary"]
+
+
+def test_collect_capability_drop_insufficient_data(project_dir):
+    # No ratings — should return empty
+    findings = synlynk._collect_capability_drop({"type": "capability_drop", "drop_threshold": 1.5})
+    assert findings == []
