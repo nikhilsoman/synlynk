@@ -1,118 +1,144 @@
 # Project Todo List
 
-## Completed (v0.1 – v0.3.0)
-- [x] Implement core logic - `synlynk init` <!-- id: 0 --> [@nikhilsoman]
-- [x] Implement `synlynk exec` wrapper for context injection <!-- id: 1 --> [@nikhilsoman]
-- [x] Implement `synlynk upgrade` auto-update logic <!-- id: 2 --> [@nikhilsoman]
-- [x] Implement `install.sh` for global installation <!-- id: 3 --> [@nikhilsoman]
-- [x] Refine AI instructions (GEMINI.md, CLAUDE.md, AGENTS.md) <!-- id: 4 --> [@nikhilsoman]
-- [x] Implement telemetry logging (`telemetry.json`) <!-- id: 5 --> [@nikhilsoman]
-- [x] Implement flatline sentinel (hallucination detection) <!-- id: 6 --> [@nikhilsoman]
-- [x] Add token count extraction from CLI outputs <!-- id: 7 --> [@nikhilsoman]
-- [x] Add request counting and Budget Pulse summary <!-- id: 8 --> [@nikhilsoman]
-- [x] Add per-project budget limit alerts <!-- id: 9 --> [@nikhilsoman]
-- [x] Implement multi-environment PATH auto-setup <!-- id: 10 --> [@nikhilsoman]
-- [x] Enrich init templates (CLAUDE.md, GEMINI.md, AGENTS.md, AI_INSTRUCTIONS.md) <!-- id: 11 --> [@nikhilsoman]
-- [x] Add init flags: --agents, --mode, --org, --repo, --project-id <!-- id: 12 --> [@nikhilsoman]
-- [x] Scan + maturity detection + SECTION_SIGNALS + GH ID extraction <!-- id: 13 --> [@nikhilsoman]
-- [x] Unified roadmap + archive superseded proposals <!-- id: 14 --> [@nikhilsoman]
+<!-- Status: [ ] active  [x] done  [-] deferred  [~] superseded  [>] absorbed -->
 
-## v0.4.2 — Task Status Model (completed 2026-06-17)
-- [x] `TASK_STATUSES` constant: 5-state model `[ ]` active `[x]` done `[-]` deferred `[~]` superseded `[>]` absorbed <!-- id: 28 --> [@nikhilsoman]
-- [x] `generate_context()`: include deferred `[-]` tasks in context under `### Deferred`; exclude `[~]` and `[>]` <!-- id: 29a --> [@nikhilsoman]
-- [x] `checkpoint()`: archive `[x]`, `[~]`, `[>]` as "Resolved"; keep `[ ]` and `[-]` <!-- id: 29b --> [@nikhilsoman]
-- [x] Agent instruction templates updated with 5-state legend (CLAUDE.md, GEMINI.md/AGENTS.md, Windsurf) <!-- id: 29c --> [@nikhilsoman]
-- [x] `init()` todo template: add status legend HTML comment <!-- id: 29d --> [@nikhilsoman]
+## Completed (v0.1 – v0.8.0)
+- [x] Core CLI: init, exec, upgrade, install.sh, telemetry, flatline, budget, token extraction <!-- id:0-9 -->
+- [x] Enriched AI instruction templates (CLAUDE.md, GEMINI.md, AGENTS.md, AI_INSTRUCTIONS.md, Cursor MDC, Copilot, Windsurf) <!-- id:11,18 -->
+- [x] Section marker system + SHA manifest + instruction drift detection + `synlynk instructions` CLI <!-- id:16-19d -->
+- [x] DB_PATH centralised to `~/.synlynk/projects/<hash>/state.db` <!-- id:19e -->
+- [x] 5-state task model `[ ] [x] [-] [~] [>]` + checkpoint archives <!-- id:28-29d -->
+- [x] Capability engine: SQLite WAL, 3D domain taxonomy, quality signals, `synlynk story/score` CLI <!-- id:30-32 -->
+- [x] Static source scanner: language-agnostic, `## Source Architecture` injection, `synlynk scan` CLI <!-- id: v0.7.0 -->
+- [x] Support Engineer Agent: 5 signal collectors, 7/30-day dedup, foreground investigation, GH issue + draft PR, `.agents/` config system <!-- id: v0.8.0 -->
 
-## v0.4.1 — Instruction Reach (completed 2026-06-17)
-- [x] Remove Gemini CLI, replace with AGY throughout baselines/discovery/probe <!-- id: 15 --> [@nikhilsoman]
-- [x] Section marker system (html/hash/none) + `_extract_synlynk_section` + `_compute_section_sha` <!-- id: 16 --> [@nikhilsoman]
-- [x] `_write_instruction_file` — create/append/replace-section for any instruction target <!-- id: 17 --> [@nikhilsoman]
-- [x] Tool-native templates: Cursor MDC, GitHub Copilot, Windsurf rules <!-- id: 18 --> [@nikhilsoman]
-- [x] `_INSTRUCTION_TARGETS` + SHA manifest (`.synlynk/instructions.json`) <!-- id: 19a --> [@nikhilsoman]
-- [x] `init()` refactored to write all 7 targets via `_INSTRUCTION_TARGETS` <!-- id: 19b --> [@nikhilsoman]
-- [x] `_check_instruction_drift()` hooked into `exec_command()` — INSTRUCTION_DRIFT sentinel <!-- id: 19c --> [@nikhilsoman]
-- [x] `synlynk instructions status/diff/update/ack` CLI <!-- id: 19d --> [@nikhilsoman]
-- [x] `DB_PATH` centralised to `~/.synlynk/projects/<hash>/state.db` (flat-file collision fix + worktree isolation) <!-- id: 19e --> [@nikhilsoman]
-- [x] `isolated_db` autouse fixture in `tests/conftest.py` <!-- id: 19f --> [@nikhilsoman]
+## Superseded by roadmap realignment 2026-06-21
+- [~] Trio bootstrap: `synlynk trio init`, `synlynk run`, phase artifacts, domain inference <!-- id:20-27 — absorbed into broader dispatch model -->
+- [~] Old v0.8.0 scope: async pipeline + daemon (now v0.9.2) <!-- id:50-55 -->
+- [~] Old v0.9.0 scope: Open Context Protocol + MCP (now v1.3.0) <!-- id:60-66 -->
+- [~] Old v1.0.0-rc scope: curses TUI, JSONL event log (absorbed into v0.9.2 daemon + v1.0.0) <!-- id:70-76 -->
 
-## v0.4.0 — Conventions + Trio Bootstrap
-- [ ] Generate `project-docs/conventions.md` at `synlynk init` <!-- id: 20 --> [@nikhilsoman]
-- [ ] Always inject conventions.md into context alongside memory/roadmap/todo <!-- id: 21 --> [@nikhilsoman]
-- [ ] `synlynk trio init` — configure three named agent slots, write `.synlynk/trio.json` <!-- id: 22 --> [@nikhilsoman]
-- [ ] `synlynk run "<task>"` — foreground Architect→Build→Verify pipeline <!-- id: 23 --> [@nikhilsoman]
-- [ ] Phase artifact format: task-packet.md · build-notes.md · verify-report.md <!-- id: 24 --> [@nikhilsoman]
-- [ ] Domain keyword inference from task description <!-- id: 25 --> [@nikhilsoman]
-- [ ] Round-robin cold-start routing (first 3 samples per domain) <!-- id: 26 --> [@nikhilsoman]
-- [ ] `synlynk doctor` — diagnose trio.json, conventions.md, agent CLIs <!-- id: 27 --> [@nikhilsoman]
+## Deferred
+- [-] `synlynk trio status` — routing matrix with scores <!-- id:33 -->
+- [-] Shell completions: `synlynk completions <zsh|bash|fish>` <!-- id:35 -->
+- [-] **HOTFIX** Issue #43: Normalise quality_auto when tests absent <!-- id:36 — address in v0.9.0 anti-gaming work -->
+- [-] `synlynk constraint add/remove/list` — constraint propagation <!-- id:40 -->
+- [-] `synlynk next` — recommend next task from todo.md <!-- id:44 — address in v0.9.1 join flow -->
 
-## v0.5.0 — Capability Engine
-- [x] Migrate capability scores + telemetry to SQLite WAL (`.synlynk/state.db`) <!-- id: 30 --> [@nikhilsoman]
-- [x] Recency-weighted routing after 3 samples per (agent, phase, domain) <!-- id: 31 --> [@nikhilsoman]
-- [x] `synlynk score show / add / reset` <!-- id: 32 --> [@nikhilsoman]
-- [ ] `synlynk trio status` — routing matrix with scores and sample counts <!-- id: 33 --> [@nikhilsoman]
-- [ ] `synlynk cost add` — structured cost entry <!-- id: 34 --> [@nikhilsoman]
-- [ ] Shell completions: `synlynk completions <zsh|bash|fish>` <!-- id: 35 --> [@nikhilsoman]
-- [ ] **HOTFIX** (Issue #43): Normalise quality_auto calculation in capability_ratings when tests are absent <!-- id: 36 --> [@claude]
+---
 
+## v0.8.1 — Security Guard (Maintainer)
+- [ ] `.agents/security.json` — dep vulns, secret leaks, CVEs signal config <!-- id:100 -->
+- [ ] `_collect_dependency_vulns` — run `pip-audit` or `npm audit`, parse JSON output <!-- id:101 -->
+- [ ] `_collect_secret_scan` — regex scan staged/committed files for API keys, tokens <!-- id:102 -->
+- [ ] Severity mapping: critical CVE → high, moderate → medium <!-- id:103 -->
+- [ ] Tests: vuln collector, secret scan, dedup, engine integration <!-- id:104 -->
+- [ ] GitHub Actions: `security-guard.yml` trigger on push + schedule <!-- id:105 -->
 
-## v0.6.0 — Job Control + Constraints
-- [ ] `synlynk constraint add/remove/list` — propagate to all agent contexts <!-- id: 40 --> [@nikhilsoman]
-- [ ] SQLite job state machine (pending→architect→build→verify→awaiting_review→done) <!-- id: 41 --> [@nikhilsoman]
-- [ ] `synlynk status / cancel / retry` <!-- id: 42 --> [@nikhilsoman]
-- [ ] `synlynk context --task N / --changed` scoped context slices <!-- id: 43 --> [@nikhilsoman]
-- [ ] `synlynk next` — recommend next task from todo.md <!-- id: 44 --> [@nikhilsoman]
-- [ ] Auto-retry on phase failure (next-best agent, once) <!-- id: 45 --> [@nikhilsoman]
+## v0.8.2 — Marketing Intern (Communicator)
+- [ ] `.agents/marketing.json` — blog, release notes, social copy signal config <!-- id:110 -->
+- [ ] `_collect_merged_prs` — list PRs merged since last run via `gh pr list --state merged` <!-- id:111 -->
+- [ ] `_collect_milestone_signals` — detect version tags, release events <!-- id:112 -->
+- [ ] Draft blog post generation via investigator dispatch <!-- id:113 -->
+- [ ] Output: draft post to `docs/blog/drafts/` — human reviews before publish <!-- id:114 -->
+- [ ] Tests: PR collector, milestone signal, dry-run no side effects <!-- id:115 -->
 
-## v0.7.0 — Async Pipeline + Daemon
-- [ ] `synlynk daemon start/stop/restart/status` (launchd / systemd) <!-- id: 50 --> [@nikhilsoman]
-- [ ] `synlynk dispatch "<task>"` — async job submission <!-- id: 51 --> [@nikhilsoman]
-- [ ] HTTP Context Server on `localhost:27471` <!-- id: 52 --> [@nikhilsoman]
-- [ ] `synlynk review [<job-id>]` — curses TUI review bundle <!-- id: 53 --> [@nikhilsoman]
-- [ ] `synlynk schedule add / queue add / queue run` <!-- id: 54 --> [@nikhilsoman]
-- [ ] Daemon crash recovery from last completed phase artifact <!-- id: 55 --> [@nikhilsoman]
+## v0.8.3 — PM Agent (Orchestrator)
+- [ ] `.agents/pm.json` — growth signals, story routing, sprint pulse config <!-- id:120 -->
+- [ ] `_collect_growth_signals` — GitHub stars velocity, clone counts, install rate <!-- id:121 -->
+- [ ] `_collect_story_health` — stories blocked >3 days, no assignee, overdue estimates <!-- id:122 -->
+- [ ] `_collect_sprint_pulse` — % stories in-progress vs done this week <!-- id:123 -->
+- [ ] Sprint digest written to `project-docs/devlogs/pm-agent.md` <!-- id:124 -->
+- [ ] Tests: growth collector, story health, sprint pulse <!-- id:125 -->
 
-## v0.8.0 — Open Context Protocol
-- [ ] `synlynk context --for <tool>` CLI shorthand <!-- id: 60 --> [@nikhilsoman]
-- [ ] `synlynk checkpoint --from <tool>` CLI shorthand <!-- id: 61 --> [@nikhilsoman]
-- [ ] `synlynk mcp start` — MCP server over stdio <!-- id: 62 --> [@nikhilsoman]
-- [ ] Open Context Protocol spec published (standalone Markdown doc) <!-- id: 63 --> [@nikhilsoman]
-- [ ] SuperPowers native integration skill <!-- id: 64 --> [@nikhilsoman]
-- [ ] GStack context bridge <!-- id: 65 --> [@nikhilsoman]
-- [ ] GitHub Actions sync gateway step <!-- id: 66 --> [@nikhilsoman]
+## v0.8.4 — Compliance Officer + Docs Keeper
+- [ ] `.agents/compliance.json` — convention drift, instruction staleness <!-- id:130 -->
+- [ ] `_collect_convention_drift` — diff current CLAUDE.md/GEMINI.md against SHA manifest <!-- id:131 -->
+- [ ] `.agents/docs-keeper.json` — docs staleness relative to code changes <!-- id:132 -->
+- [ ] `_collect_stale_docs` — files in `docs/` not touched in 30d while linked code changed <!-- id:133 -->
+- [ ] Tests: drift detector, stale docs, both agents dry-run <!-- id:134 -->
 
-## v0.9.0 — Review TUI + Team Safety + Agent Identity
-- [ ] Full curses TUI with keyboard navigation (←/→, a=accept, r=reject, 1-5=rate) <!-- id: 70 --> [@nikhilsoman]
-- [ ] Per-job cost roll-up in review header + costs.md <!-- id: 71 --> [@nikhilsoman]
-- [ ] Append-only JSONL event log (`.synlynk/events.jsonl`) <!-- id: 72 --> [@nikhilsoman]
-- [ ] Pull-before-write conflict detection in daemon <!-- id: 73 --> [@nikhilsoman]
-- [ ] Attribution validation in team mode <!-- id: 74 --> [@nikhilsoman]
-- [ ] `synlynk team status` rollup view <!-- id: 75 --> [@nikhilsoman]
-- [ ] Textual TUI option behind `--ui textual` flag <!-- id: 76 --> [@nikhilsoman]
-- [ ] `synlynk identity init` — generate UUID + Ed25519 keypair via ssh-keygen, write `.synlynk/identity.json` + `.synlynk/identity.key` <!-- id: 77 --> [@nikhilsoman]
-- [ ] `synlynk identity show / rotate` commands <!-- id: 78 --> [@nikhilsoman]
-- [ ] Auto-call `identity init` from `synlynk init` if no identity exists <!-- id: 79 --> [@nikhilsoman]
+---
 
-## v1.0.0 — Stable OS + Tokq Bridge Ready
-- [ ] Freeze CLI/schema contract, add MIGRATION.md process <!-- id: 80 --> [@nikhilsoman]
-- [ ] pipx distribution (pipx install synlynk) <!-- id: 81 --> [@nikhilsoman]
-- [ ] Homebrew tap (brew install nikhilsoman/tap/synlynk) <!-- id: 82 --> [@nikhilsoman]
-- [ ] `synlynk migrate` — in-place schema upgrade for pre-1.0 projects <!-- id: 83 --> [@nikhilsoman]
-- [ ] Cross-platform CI matrix (macOS Intel + Apple Silicon + Ubuntu LTS) <!-- id: 84 --> [@nikhilsoman]
-- [ ] NATS leaf node schema defined in `.synlynk/tokq.json` <!-- id: 85 --> [@nikhilsoman]
-- [ ] Complete docs: CLI reference, project-docs schema, OCP spec, Trio spec, infra arc <!-- id: 86 --> [@nikhilsoman]
-- [ ] Publish memory unit schema spec (`docs/tokq-memory-unit-schema.md`) and freeze it <!-- id: 85b --> [@nikhilsoman]
-- [ ] `synlynk sync --dry-run` — show what would be sent without connecting <!-- id: 86b --> [@nikhilsoman]
-- [ ] `synlynk tokq balance` stub (returns "not connected" until Tokq Alpha) <!-- id: 86c --> [@nikhilsoman]
-- [ ] Public launch (HN + Product Hunt) <!-- id: 87 --> [@nikhilsoman]
+## v0.9.0 — Kernel Fixes + Package Split
+- [ ] `generate_context(scope=task)` — scoped context slice; currently falls back to full (line ~2955) <!-- id:200 -->
+- [ ] Task → file-path mapping: inject `## Relevant Files` into dispatch prompt from source-map <!-- id:201 -->
+- [ ] Verify contract: inject `## How to verify: pytest tests/test_x.py` per dispatch <!-- id:202 -->
+- [ ] Per-agent dispatch framing: Codex (criteria+filelist) ≠ Claude (narrative) ≠ AGY (arg framing) <!-- id:203 -->
+- [ ] Wire Ed25519 signing into `_write_capability_rating` (col exists, signing not called) <!-- id:204 -->
+- [ ] Anti-gaming baseline: minimum complexity threshold in `quality_auto` scoring <!-- id:205 -->
+- [ ] **Package split:** `bin/synlynk.py` → `synlynk/` package (db · scan · context · instructions · dispatch · sentinel · daemon modules) <!-- id:206 -->
+- [ ] Update all imports, entry point, install.sh, tests after split <!-- id:207 -->
+- [ ] 342 existing tests must pass after split <!-- id:208 -->
 
-## Tokq Alpha — Cloud Bridge + ZK Encryption + Marketplace
-- [ ] `synlynk tokq connect` — Ed25519 challenge-response auth with Tokq, write connection token <!-- id: 90 --> [@nikhilsoman]
-- [ ] ZK encryption layer: AES-256-GCM, key derived from Ed25519 via HKDF-SHA256, `pip install synlynk[tokq]` <!-- id: 91 --> [@nikhilsoman]
-- [ ] `synlynk sync` — serialize project-docs/ → Tokq memory units, encrypt, push via NATS leaf <!-- id: 92 --> [@nikhilsoman]
-- [ ] `synlynk sync --pull` — retrieve + decrypt + merge from Tokq <!-- id: 93 --> [@nikhilsoman]
-- [ ] Auto-sync in daemon with `--tokq-sync-interval` option <!-- id: 94 --> [@nikhilsoman]
-- [ ] `synlynk publish conventions` — package conventions.md as marketplace collection with metadata + pricing <!-- id: 95 --> [@nikhilsoman]
-- [ ] `synlynk subscribe <collection-id>` — subscribe to published conventions, gas tank deduction <!-- id: 96 --> [@nikhilsoman]
-- [ ] `synlynk tokq earnings` — show revenue from published collections (70/30 split) <!-- id: 97 --> [@nikhilsoman]
-- [ ] Key rotation: `identity rotate` re-encrypts all memory units with new key <!-- id: 98 --> [@nikhilsoman]
+## v0.9.1 — Team Onboarding + Consensus Framework
+- [ ] `synlynk join` command: source scan → AI context files → devlog seed → team digest → task recommendation <!-- id:210 -->
+- [ ] Mature-project onboarding: read existing README/conventions/architecture before generating context files <!-- id:211 -->
+- [ ] `synlynk team status` — who's active (last devlog entry), in-progress stories, just-shipped <!-- id:212 -->
+- [ ] Pull-before-write arbitration: warn on concurrent edit conflict, don't hard-block <!-- id:213 -->
+- [ ] Token budgets at story creation: `synlynk story add` prompts `estimated_tokens` <!-- id:214 -->
+- [ ] PR merge audit: Support Engineer posts estimated vs actual token delta to PR description <!-- id:215 -->
+- [ ] `synlynk decide "<topic>" --panel <agents> [--record]` — consensus decision command <!-- id:216 -->
+- [ ] Decision record schema: `project-docs/decisions/YYYY-MM-DD-<slug>.md` + `decisions` table in state.db <!-- id:217 -->
+- [ ] Retroactively create Decision record for this roadmap realignment <!-- id:218 -->
+- [ ] Tests: join flow, team status, write-arbitration, decide command, decision record <!-- id:219 -->
+
+## v0.9.2 — Async Daemon
+- [ ] `synlynk daemon start/stop/status/restart` <!-- id:220 -->
+- [ ] launchd plist generation (macOS) + systemd unit generation (Linux) <!-- id:221 -->
+- [ ] Job queue persisted in `state.db` — survive daemon restarts <!-- id:222 -->
+- [ ] Crash recovery: resume from last completed phase artifact <!-- id:223 -->
+- [ ] HTTP context server on `localhost:27471` — serves `context.md` to local tools <!-- id:224 -->
+- [ ] Scheduled agent dispatch via daemon (replaces crontab entries from `--install-cron`) <!-- id:225 -->
+- [ ] Tests: daemon lifecycle, job queue persistence, crash recovery, context server <!-- id:226 -->
+
+## v0.9.3 — Workgroup Relay
+- [ ] `synlynk relay start [--port 8443]` — stateless WSS relay on port 443/8443 <!-- id:230 -->
+- [ ] mDNS announcement (Bonjour/Avahi) for LAN auto-discovery <!-- id:231 -->
+- [ ] Self-signed TLS cert auto-generated on first start <!-- id:232 -->
+- [ ] Daemon auto-connects to relay on discovery; offline queue → flush on reconnect <!-- id:233 -->
+- [ ] Cloudflare Tunnel integration: `synlynk relay tunnel start` wraps `cloudflared tunnel` <!-- id:234 -->
+- [ ] `synlynk relay connect <wss-url>` — manual relay URL for VPS mode <!-- id:235 -->
+- [ ] `synlynk relay handover <member>` — revolving host protocol: signed broadcast, 10-min grace, degraded-mode warning <!-- id:236 -->
+- [ ] `synlynk relay status` — connected members, host identity, events/min <!-- id:237 -->
+- [ ] All events signed with member's Ed25519 identity <!-- id:238 -->
+- [ ] Tests: LAN discovery, offline queue, handover protocol, degraded-mode warning <!-- id:239 -->
+
+---
+
+## v0.10.0 — Multi-Repo Workspace
+- [ ] `synlynk workspace init <name>` — create workspace, register first repo <!-- id:250 -->
+- [ ] `synlynk workspace join <name>` — add current repo to workspace <!-- id:251 -->
+- [ ] `repos` table in state.db + `repo_id` FK on stories/events/costs <!-- id:252 -->
+- [ ] Cross-repo Epic: one Epic spans N repos, stories have repo_id <!-- id:253 -->
+- [ ] Workspace context slice: injected alongside per-repo context <!-- id:254 -->
+- [ ] Relay extended to workspace scope (all repos share one relay) <!-- id:255 -->
+- [ ] Support Engineer workspace mode: monitors all repos, cross-repo health signals <!-- id:256 -->
+- [ ] Tests: workspace init/join, cross-repo epic, workspace context slice <!-- id:257 -->
+
+---
+
+## v1.0.0 — Community Layer: Local Workgroup + Public Launch
+- [ ] Workgroup protocol: shared, signed capability ledger across humans + agents + autopilots <!-- id:260 -->
+- [ ] SME archetype: event bus, domain-tag subscriptions, file-path triggers, non-mutating review job role <!-- id:261 -->
+- [ ] `synlynk consult <sme-name> "<question>"` — explicit SME invocation <!-- id:262 -->
+- [ ] Game-resistance hardened: review-weighted scoring, minimum complexity threshold <!-- id:263 -->
+- [ ] Stable CLI contract + MIGRATION.md + `synlynk migrate` for pre-1.0 projects <!-- id:264 -->
+- [ ] pipx distribution + Homebrew tap <!-- id:265 -->
+- [ ] Cross-platform CI matrix (macOS Intel + Apple Silicon + Ubuntu LTS) <!-- id:266 -->
+- [ ] synlynk.com live on independent hosting (Vercel/Netlify/Cloudflare Pages) <!-- id:267 -->
+- [ ] Public blog live — Marketing Intern Autopilot maintains it <!-- id:268 -->
+- [ ] Public launch (HN + Product Hunt) <!-- id:269 -->
+
+---
+
+## v1.1.0+ — Community Expansion
+- [ ] v1.1: Relay → community server · cross-workgroup epics · agent entitlements at team level <!-- id:280 -->
+- [ ] v1.2: Enterprise workspace · org-level governance agents · cross-team budget allocation <!-- id:281 -->
+- [ ] v1.3: Domain/discipline communities · Tokq convergence · MCP / Open Context Protocol <!-- id:282 -->
+- [ ] v1.3: Ed25519 identity → Tokq auth; `synlynk tokq connect/sync/balance` <!-- id:283 -->
+
+---
+
+## Research & Investigation
+- [ ] **VPS deep-dive brainstorm** — evaluate Fly.io, Hetzner, E2B, Modal, Railway, Cloudflare Workers for relay hosting; pricing, agentic ops features, migration path from self-hosted → VPS; run as separate brainstorm session with AGY + Codex <!-- id:290 -->

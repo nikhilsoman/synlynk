@@ -1,5 +1,18 @@
 # synlynk Memory
 
+## Roadmap Realignment (decided 2026-06-21 — workgroup consensus: Claude + AGY + Codex + Nikhil)
+- **Tiers are permanently off.** "Team edition" = networked collaboration features, not billing tiers. [@nikhilsoman]
+- **Agent archetypes:** Four types — Maintainers (schedule-triggered, self-healing) · Communicators (release-triggered, outward publishing) · Orchestrators (story/signal-triggered, work management) · SMEs (domain-tag/file-path-triggered, reactive expertise). Same archetype deployed at different levels (workgroup → team → enterprise → domain) behaves differently by scope.
+- **Context portability principle:** The `.agents/<name>.json` config + deployment level define what an agent monitors and who it communicates with. Archetype is the pattern; context gives it purpose.
+- **Kernel fix is highest priority [Codex/AGY]:** `generate_context(scope=task)` silently falls back to full context (bin/synlynk.py ~line 2955, deferred to v1.3.0 — PULLED to v0.9.0). Every agent dispatch is degraded without scoped context.
+- **Package split before agent series [Codex]:** bin/synlynk.py at ~4000 lines is a merge conflict timebomb. Split into `synlynk/` package in v0.9.0 before more agents land.
+- **Capability ledger integrity [AGY]:** Ed25519 sig column exists but signing not wired into `_write_capability_rating`. Wire in v0.9.0. `quality_auto` formula is gameable — anti-gaming baseline in v0.9.0, hardened in v1.0.0.
+- **Real moat [AGY]:** Not "shared capability ledger" (anyone can clone a SQLite table). The moat is the accumulated routing graph — which agent/model/version succeeded on which (engg × org × industry × phase) cell, decayed over time. Only defensible if signed, game-resistant, and large.
+- **Relay design:** Stateless WSS relay on port 443. Three modes: LAN (mDNS auto-discovery) → Cloudflare Tunnel (no open ports, firewall-transparent) → VPS (always-on). Revolving host: any active member can be host, relay bootstraps from any online member. Loud handover protocol (signed broadcast, 10-min grace, degraded-mode warning). Daemon on localhost:27471 only.
+- **Consensus decision framework:** `synlynk decide "<topic>" --panel <agents>` — first-class command. Produces signed Decision record in `project-docs/decisions/`. A Decision is a peer to Epic in the PM hierarchy.
+- **VPS deep-dive:** Deferred to research task in todo.md — evaluate Fly.io, Hetzner, E2B, Modal, Railway.
+- **Spec:** `docs/superpowers/specs/2026-06-21-synlynk-roadmap-realignment-design.md`
+
 ## Positioning (decided 2026-06-06)
 - **Name:** synlynk — "The OS for multi-agent development." [@nikhilsoman]
 - **Framing:** Not a context injector, skill package, or SaaS dashboard. An OS layer beneath every
