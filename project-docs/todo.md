@@ -66,7 +66,7 @@
 - [ ] Verify contract: inject `## How to verify: pytest tests/test_x.py` per dispatch <!-- id:202 -->
 - [ ] Per-agent dispatch framing: Codex (criteria+filelist) ≠ Claude (narrative) ≠ AGY (arg framing) <!-- id:203 -->
 - [x] Wire Ed25519 signing into `_write_capability_rating` (col exists, signing not called) <!-- id:204 -->
-- [ ] Anti-gaming baseline: minimum complexity threshold in `quality_auto` scoring <!-- id:205 -->
+- [x] Anti-gaming baseline: minimum complexity threshold in `quality_auto` scoring <!-- id:205 -->
 - [ ] **Package split:** `bin/synlynk.py` → `synlynk/` package (db · scan · context · instructions · dispatch · sentinel · daemon modules) <!-- id:206 -->
 - [ ] Update all imports, entry point, install.sh, tests after split <!-- id:207 -->
 - [ ] 342 existing tests must pass after split <!-- id:208 -->

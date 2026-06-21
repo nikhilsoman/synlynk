@@ -470,6 +470,53 @@ def test_write_capability_rating_populates_sig_column(project_dir, monkeypatch):
     conn.close()
     assert row is not None
 
+def test_extract_auto_signals_returns_test_count(project_dir):
+    import synlynk as sl
+    log = "47 passed in 3.2s"
+    signals = sl._extract_auto_signals(log)
+    assert signals["test_pass_rate"] == 1.0
+    assert signals.get("test_count") == 47
+
+def test_extract_auto_signals_test_count_none_when_no_tests(project_dir):
+    import synlynk as sl
+    log = "Build completed successfully."
+    signals = sl._extract_auto_signals(log)
+    assert signals.get("test_count") is None
+
+def test_write_capability_rating_caps_quality_for_trivial_tests(project_dir, monkeypatch):
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+    story_id = sl.cmd_story_create("Trivial task", engg_domain="backend")
+    job = {
+        "story_id": story_id, "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "1 passed in 0.1s")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT quality_auto FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] <= 5.0
+
+def test_write_capability_rating_no_cap_for_real_test_suite(project_dir, monkeypatch):
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+    story_id = sl.cmd_story_create("Real task", engg_domain="backend")
+    job = {
+        "story_id": story_id, "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "47 passed in 3.2s")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT quality_auto FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] > 5.0
+
 def test_identity_init_command_prints_key_path(project_dir, monkeypatch, capsys):
     import synlynk as sl, tempfile, os
     with tempfile.TemporaryDirectory() as d:

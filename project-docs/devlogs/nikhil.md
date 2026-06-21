@@ -374,3 +374,15 @@ implementation plan.
 - Implemented `_sign_capability_rating` using SSH signing mechanisms (`ssh-keygen -Y sign`) with a custom namespace `"synlynk-rating"`.
 - Wired signature validation automatically into capability rating writes, inserting signatures into the database table row.
 - Updated CLI subcommand list in `main` to expose `identity init` parser under the `identity` namespace.
+
+## 2026-06-21 — Session: Anti-gaming Quality Cap & test_count Extraction
+
+### Shipped
+- **Feature:** Extracted `test_count` inside `_extract_auto_signals` and added it to auto signals.
+- **Feature:** Implemented anti-gaming cap in `_write_capability_rating` to cap `quality_auto` at 5.0 for trivial test suites (where `< 3` tests ran with a perfect pass rate of 1.0).
+- **350 tests passing** (4 new tests added to `tests/test_synlynk.py`).
+
+### Key decisions & implementation notes
+- Parsed test count from logs in `_extract_auto_signals` for both the standard multi-pattern matches and the all-passed shortcut case.
+- Applied anti-gaming baseline cap of 5.0 in `_write_capability_rating` if `test_count` is less than 3 and the pass rate is 1.0.
+

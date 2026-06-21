@@ -638,6 +638,13 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     total_weight += 0.35
     quality_auto = (weighted_sum / total_weight) if total_weight else 5.0
 
+    # Anti-gaming: cap quality_auto at 5.0 when < 3 tests ran with perfect pass rate.
+    test_count = signals.get("test_count")
+    if (signals["test_pass_rate"] == 1.0
+            and test_count is not None
+            and test_count < 3):
+        quality_auto = min(quality_auto, 5.0)
+
     # Check for verifier meta block — upgrades signal_source from 'auto' to 'verifier'
     verifier_meta = extract_verifier_meta(log_text)
     if verifier_meta:
@@ -3197,6 +3204,7 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
         "test_pass_rate": None,
         "build_success": None,
         "duration_seconds": None,
+        "test_count": None,
     }
 
     # Test pass rate — multiple runner formats
@@ -3215,6 +3223,7 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
             else:
                 total = second
             signals["test_pass_rate"] = passed / total if total else None
+            signals["test_count"] = passed
             break
 
     # All-passed shortcut: "X passed" with no failures mentioned
@@ -3222,6 +3231,7 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
         m = re.search(r"(\d+)\s+passed", log_text, re.IGNORECASE)
         if m and "failed" not in log_text.lower() and "error" not in log_text.lower():
             signals["test_pass_rate"] = 1.0
+            signals["test_count"] = int(m.group(1))
 
     # Build success from exit code
     if exit_code is not None:
