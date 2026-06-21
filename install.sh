@@ -5,9 +5,11 @@
 
 set -e
 
-VERSION="0.4.0"
+VERSION="0.9.0"
 INSTALL_DIR="$HOME/.synlynk/bin"
+LIB_DIR="$HOME/.synlynk/lib"
 BINARY_PATH="$INSTALL_DIR/synlynk"
+PACKAGE_DIR="$LIB_DIR/synlynk"
 
 echo "🔗 Installing synlynk $VERSION..."
 
@@ -18,15 +20,44 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # 2. Create Directory Structure
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR" "$LIB_DIR"
 
-# 3. Copy Binary (or download if running via curl)
-if [ -f "bin/synlynk.py" ]; then
+# 3. Install package + shim (or download if running via curl)
+if [ -f "synlynk/__init__.py" ]; then
+    # Local install from repo checkout
+    cp -r synlynk "$LIB_DIR/"
     cp "bin/synlynk.py" "$BINARY_PATH"
 else
-    echo "  Downloading synlynk..."
-    curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/bin/synlynk.py" -o "$BINARY_PATH"
+    # Remote install via curl
+    echo "  Downloading synlynk package..."
+    mkdir -p "$PACKAGE_DIR"
+    curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/__init__.py" -o "$PACKAGE_DIR/__init__.py"
+    # Write shim directly (bin/synlynk.py references package via sys.path)
+    cat > "$BINARY_PATH" <<'SHIM'
+#!/usr/bin/env python3
+import sys, os
+sys.path.insert(0, os.path.join(os.path.expanduser("~"), ".synlynk", "lib"))
+from synlynk import main
+if __name__ == "__main__":
+    main()
+SHIM
 fi
+
+# Patch sys.path in the installed shim to always point at ~/.synlynk/lib
+# (bin/synlynk.py uses a relative path that works in the dev repo but not when
+# installed to ~/.synlynk/bin/ — rewrite that line for the installed copy)
+python3 - "$BINARY_PATH" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+patched = content.replace(
+    'sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))',
+    'sys.path.insert(0, os.path.join(os.path.expanduser("~"), ".synlynk", "lib"))'
+)
+with open(path, 'w') as f:
+    f.write(patched)
+PYEOF
 
 chmod +x "$BINARY_PATH"
 
