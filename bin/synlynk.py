@@ -654,6 +654,13 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         # Auto: infer correctness from build success (default 1 if unknown)
         correct = 1 if signals.get("build_success") is not False else 0
 
+    sig_payload = {
+        "story_id": story_id, "agent": agent, "model_version": model_version,
+        "quality": quality, "quality_auto": quality_auto,
+        "signal_source": signal_source, "engg_domain": engg_domain,
+    }
+    ed25519_sig = _sign_capability_rating(sig_payload)
+
     conn.execute(
         """INSERT INTO capability_ratings
            (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
@@ -662,18 +669,72 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework,
-            duration_vs_estimate, verified_by_ci, correct)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            duration_vs_estimate, verified_by_ci, correct, ed25519_sig)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
          engg_domain, org_domain, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
          signals["test_pass_rate"], 1 if signals["build_success"] else 0,
          dispatch_rework, micro_rework,
-         None, None, correct)
+         None, None, correct, ed25519_sig)
     )
     conn.commit()
     conn.close()
+
+
+def _ensure_identity_key() -> str:
+    key_dir = os.path.expanduser("~/.synlynk")
+    key_path = os.path.join(key_dir, "identity.key")
+    if not os.path.exists(key_path):
+        os.makedirs(key_dir, exist_ok=True)
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", key_path, "-C", "synlynk-identity"],
+            capture_output=True
+        )
+    return key_path
+
+
+def _sign_capability_rating(data: dict) -> str:
+    import json as _json, tempfile as _tmp
+    key_path = _ensure_identity_key()
+    if not os.path.exists(key_path):
+        return ""
+    canonical = _json.dumps(data, sort_keys=True).encode()
+    msg_file = None
+    try:
+        with _tmp.NamedTemporaryFile(mode="wb", suffix=".rating", delete=False) as f:
+            f.write(canonical)
+            msg_file = f.name
+        subprocess.run(
+            ["ssh-keygen", "-Y", "sign", "-f", key_path, "-n", "synlynk-rating", msg_file],
+            capture_output=True
+        )
+        sig_file = msg_file + ".sig"
+        if os.path.exists(sig_file):
+            sig = open(sig_file).read().strip()
+            os.unlink(sig_file)
+            return sig
+    except Exception:
+        pass
+    finally:
+        if msg_file:
+            try:
+                os.unlink(msg_file)
+            except Exception:
+                pass
+    return ""
+
+
+def cmd_identity_init() -> None:
+    key_path = _ensure_identity_key()
+    pub_path = key_path + ".pub"
+    print(f"  identity key: {key_path}")
+    if os.path.exists(pub_path):
+        pub = open(pub_path).read().strip()
+        print(f"  Public key: {pub}")
+    else:
+        print("  (public key file not found)")
 
 
 def _best_agent_for_story(story_id: str) -> Optional[str]:
@@ -4329,6 +4390,10 @@ def main() -> None:
     scan_parser.add_argument("--status", action="store_true",
                              help="Show cache age, HEAD SHA, file and symbol counts")
 
+    identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
+    identity_sub = identity_parser.add_subparsers(dest="identity_action")
+    identity_sub.add_parser("init", help="Create local Ed25519 identity key")
+
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
     agent_run_parser = agent_sub.add_parser("run", help="Run a named agent once")
@@ -4556,6 +4621,12 @@ def main() -> None:
             agent_parser.print_help()
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
+    elif args.command == "identity":
+        action = getattr(args, "identity_action", None)
+        if action == "init" or action is None:
+            cmd_identity_init()
+        else:
+            identity_parser.print_help()
     else:
         parser.print_help()
 
