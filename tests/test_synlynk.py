@@ -5,7 +5,7 @@ import json
 import pytest
 import subprocess
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
 
@@ -187,9 +187,56 @@ def test_generate_context_omits_sentinel_section_when_empty(project_dir):
 def test_generate_context_scope_stub_falls_back(project_dir, capsys):
     synlynk.generate_context(scope="task:99")
     captured = capsys.readouterr()
-    assert "not yet implemented" in captured.out
-    # Still generates full context
+    # Task-scoped context is now implemented, not a stub
+    assert "Task-scoped context saved" in captured.out
+    # Context file is generated
     assert (project_dir / ".synlynk" / "context.md").exists()
+
+
+def test_generate_context_task_scope_writes_story(project_dir):
+    """Task-scoped context includes the story's metadata."""
+    import synlynk as sl
+    story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
+    sl.generate_context(scope=f"task:{story_id}")
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "Fix auth timeout" in ctx
+    assert "task-scoped" in ctx.lower()
+
+
+def test_generate_context_task_scope_smaller_than_full(project_dir):
+    """Task-scoped context is smaller than full context."""
+    import synlynk as sl
+    (project_dir / "project-docs" / "devlogs" / "nikhilsoman.md").write_text(
+        "# Devlog\n## 2026-06-01\nDid a lot of work today.\n" * 20
+    )
+    story_id = sl.cmd_story_create("Small fix", engg_domain="backend")
+    sl.generate_context(scope="full")
+    full_size = (project_dir / ".synlynk" / "context.md").stat().st_size
+    sl.generate_context(scope=f"task:{story_id}")
+    task_size = (project_dir / ".synlynk" / "context.md").stat().st_size
+    assert task_size < full_size
+
+
+def test_generate_context_task_scope_unknown_story(project_dir):
+    """Task-scoped context for unknown story_id still writes without crashing."""
+    import synlynk as sl
+    sl.generate_context(scope="task:story-deadbeef")
+    assert (project_dir / ".synlynk" / "context.md").exists()
+
+
+def test_generate_context_task_scope_no_teammate_devlogs(project_dir):
+    """Task-scoped context does NOT include teammate devlogs."""
+    import synlynk as sl
+    (project_dir / "project-docs" / ".synlynk_config.json").write_text(
+        '{"mode": "team", "version": "1.1.0"}'
+    )
+    (project_dir / "project-docs" / "devlogs" / "alice.md").write_text(
+        "# Alice Devlog\n## 2026-06-01\nAlice did things.\n"
+    )
+    story_id = sl.cmd_story_create("Fix thing")
+    sl.generate_context(scope=f"task:{story_id}")
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "alice" not in ctx.lower()
 
 
 def test_init_creates_project_structure(tmp_path, monkeypatch):
@@ -1516,6 +1563,153 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     assert len(sl._load_jobs()) == 2
 
 
+def test_dispatch_agent_injects_relevant_files(project_dir, monkeypatch):
+    """dispatch_agent includes ## Relevant Files when story has scan data."""
+    import synlynk as sl, json
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    # Write scan cache with a backend file
+    meta = {"head_sha": "abc123", "skeleton": [
+        {"file": "backend/auth.py", "symbols": ["login", "logout"], "language": "python"}
+    ]}
+    (project_dir / ".synlynk").mkdir(exist_ok=True)
+    (project_dir / ".synlynk" / "scan-meta.json").write_text(json.dumps(meta))
+    story_id = sl.cmd_story_create("Fix auth", engg_domain="backend")
+    # Mock _git_head_sha to avoid subprocess.run call
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: "abc123")
+    job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Relevant Files" in prompt
+    assert "backend/auth.py" in prompt
+
+
+def test_dispatch_agent_no_relevant_files_without_scan(project_dir, monkeypatch):
+    """dispatch_agent omits ## Relevant Files when no scan cache exists."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix thing", engg_domain="backend")
+    # Mock _git_head_sha to avoid subprocess.run call
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
+    job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Relevant Files" not in prompt
+
+
+def test_relevant_files_for_story_returns_matching_files(project_dir):
+    """_relevant_files_for_story matches engg_domain to file paths."""
+    import synlynk as sl, json
+    meta = {"head_sha": "abc", "skeleton": [
+        {"file": "src/backend/api.py", "symbols": ["get_user"], "language": "python"},
+        {"file": "src/frontend/App.tsx", "symbols": ["App"], "language": "typescript"},
+    ]}
+    (project_dir / ".synlynk" / "scan-meta.json").write_text(json.dumps(meta))
+    story_id = sl.cmd_story_create("API fix", engg_domain="backend")
+    files = sl._relevant_files_for_story(story_id)
+    assert any("backend" in f for f in files)
+    assert not any("frontend" in f for f in files)
+
+
+def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
+    """dispatch_agent appends ## How to Verify when tests/ directory exists."""
+    import synlynk as sl
+    (project_dir / "tests").mkdir()
+    (project_dir / "tests" / "test_auth.py").write_text("# placeholder\n")
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
+    job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## How to Verify" in prompt
+    assert "pytest" in prompt
+
+
+def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
+    """dispatch_agent omits ## How to Verify when no tests/ directory exists."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix thing")
+    job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## How to Verify" not in prompt
+
+
+def test_verify_contract_derives_pattern_from_story_title(project_dir):
+    """_verify_contract_for_story derives a lowercase underscore pattern."""
+    import synlynk as sl
+    (project_dir / "tests").mkdir()
+    (project_dir / "tests" / "test_things.py").write_text("")
+    story_id = sl.cmd_story_create("Fix Auth Timeout")
+    section = sl._verify_contract_for_story(story_id, "fix it")
+    assert "fix_auth_timeout" in section
+    assert "pytest" in section
+
+
+def test_format_prompt_for_claude_is_narrative(project_dir):
+    """Claude prompt leads with full context text."""
+    import synlynk as sl
+    result = sl._format_prompt_for_agent(
+        "claude", "## Context\nsome context", "story-1", "fix auth",
+        "\n\n## Relevant Files\n- `auth.py`", "\n\n## How to Verify\nRun pytest\n"
+    )
+    assert result.startswith("## Context")
+    assert "## Your Task" in result
+    assert "fix auth" in result
+
+
+def test_format_prompt_for_codex_leads_with_criteria(project_dir):
+    """Codex prompt leads with ## Task Criteria and file list."""
+    import synlynk as sl
+    result = sl._format_prompt_for_agent(
+        "codex", "## Context\nsome context", "story-1", "fix auth. add test.",
+        "\n\n## Relevant Files\n- `auth.py`", ""
+    )
+    assert result.startswith("## Task Criteria")
+    assert "- fix auth" in result or "- add test" in result
+    assert "auth.py" in result
+
+
+def test_format_prompt_for_agy_is_concise(project_dir):
+    """AGY prompt leads with Task: directive and truncates context to 2000 chars."""
+    import synlynk as sl
+    long_context = "x" * 5000
+    result = sl._format_prompt_for_agent(
+        "agy", long_context, "story-1", "fix auth", "", ""
+    )
+    assert result.startswith("Task: fix auth")
+    assert len(result) < len(long_context) + 200  # context was truncated
+
+
+def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
+    """dispatch_agent uses _format_prompt_for_agent for claude."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Fix login")
+    job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Your Task" in prompt
+    assert "fix the login bug" in prompt
+
+
+def test_dispatch_agent_codex_prompt_format(project_dir, monkeypatch):
+    """dispatch_agent uses _format_prompt_for_agent for codex."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    story_id = sl.cmd_story_create("Add tests")
+    job = sl.dispatch_agent("codex", "add tests for auth module", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "## Task Criteria" in prompt
+
+
 def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     """codex exec + stdin mode must be used so dispatch works without a TTY.
 
@@ -1888,6 +2082,60 @@ def test_collect_capability_drop_insufficient_data(project_dir):
     # No ratings — should return empty
     findings = synlynk._collect_capability_drop({"type": "capability_drop", "drop_threshold": 1.5})
     assert findings == []
+
+
+def test_ensure_identity_key_creates_key(tmp_path, monkeypatch):
+    import synlynk as sl, os
+    calls = []
+    monkeypatch.setenv("HOME", str(tmp_path))
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        key_file = tmp_path / ".synlynk" / "identity.key"
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.touch()
+        return type("R", (), {"returncode": 0})()
+    monkeypatch.setattr("subprocess.run", fake_run)
+    sl._ensure_identity_key()
+    assert any("ssh-keygen" in str(c) for c in calls)
+
+def test_sign_capability_rating_returns_empty_when_no_key(project_dir, monkeypatch):
+    import synlynk as sl, os
+    orig_exists = os.path.exists
+    monkeypatch.setattr("os.path.exists", lambda p: False if "identity" in str(p) else orig_exists(p))
+    result = sl._sign_capability_rating({"quality": 8.0, "agent": "claude"})
+    assert result == ""
+
+def test_write_capability_rating_populates_sig_column(project_dir, monkeypatch):
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+    story_id = sl.cmd_story_create("Auth fix", engg_domain="backend")
+    job = {
+        "story_id": story_id, "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "47 passed in 3.2s")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT ed25519_sig FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+
+def test_identity_init_command_prints_key_path(project_dir, monkeypatch, capsys):
+    import synlynk as sl, tempfile, os
+    with tempfile.TemporaryDirectory() as d:
+        key_path = os.path.join(d, ".synlynk", "identity.key")
+        os.makedirs(os.path.dirname(key_path), exist_ok=True)
+        open(key_path, "w").close()
+        pub_path = key_path + ".pub"
+        open(pub_path, "w").write("ssh-ed25519 AAAA synlynk-identity")
+        monkeypatch.setattr("os.path.expanduser", lambda p: p.replace("~", d))
+        monkeypatch.setattr("subprocess.run", lambda cmd, **kw: type("R", (), {"returncode": 0})())
+        sl.cmd_identity_init()
+    captured = capsys.readouterr()
+    assert "identity" in captured.out.lower()
+
 
 
 def test_collect_github_issues(project_dir, monkeypatch):
