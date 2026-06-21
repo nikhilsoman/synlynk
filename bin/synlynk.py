@@ -1334,8 +1334,9 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
         gh_issue_url = _file_gh_issue(finding, investigation, dry_run=False)
         status = "filed"
 
+        fix_pr_url = ""
         if investigation["fix_signal"]:
-            fix_status = _attempt_fix(
+            fix_status, fix_pr_url = _attempt_fix(
                 finding, investigation,
                 fixer=cfg.get("fixer", "claude"), dry_run=False
             )
@@ -1347,13 +1348,14 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
         run_id = "run-" + _hashlib.md5(
             f"{finding['signal_hash']}{time.time()}".encode()
         ).hexdigest()[:8]
+        pr_url_to_store = fix_pr_url if investigation["fix_signal"] else ""
         conn.execute(
             "INSERT INTO autopilot_runs "
-            "(id, agent_name, signal_type, signal_hash, severity, summary, status, gh_issue_url, story_id, ts) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            "(id, agent_name, signal_type, signal_hash, severity, summary, status, gh_issue_url, pr_url, story_id, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
             (run_id, name, finding["type"], finding["signal_hash"],
              finding["severity"], finding["summary"][:200],
-             status, gh_issue_url, investigation.get("story_id", ""))
+             status, gh_issue_url, pr_url_to_store, investigation.get("story_id", ""))
         )
         conn.commit()
         run_summary_lines.append(
@@ -1397,7 +1399,10 @@ def _install_cron_entry() -> None:
         print("  [cron] Entry already installed (idempotent)")
         return
     new_crontab = current.rstrip("\n") + "\n" + entry + "\n"
-    subprocess.run(["crontab", "-"], input=new_crontab, text=True)
+    result2 = subprocess.run(["crontab", "-"], input=new_crontab, text=True)
+    if result2.returncode != 0:
+        print(f"  [cron] Failed to install crontab entry (exit {result2.returncode})")
+        return
     print(f"  [cron] Installed: {entry}")
 
 
@@ -1574,15 +1579,17 @@ def _collect_github_issues(signal_cfg: dict) -> list:
 
 
 def _dedup_findings(findings: list) -> list:
-    """Filter findings whose signal_hash appeared in autopilot_runs within last 7 days."""
+    """Filter findings whose signal_hash appeared in autopilot_runs within dedup window.
+    github_issues uses 30-day window to avoid re-filing same issue every 8 days."""
     if not findings:
         return []
     conn = _get_db()
     new_findings = []
     for f in findings:
+        days = 30 if f.get("type") == "github_issues" else 7
         row = conn.execute(
-            "SELECT id FROM autopilot_runs WHERE signal_hash=? AND ts > datetime('now', '-7 days')",
-            (f["signal_hash"],)
+            "SELECT id FROM autopilot_runs WHERE signal_hash=? AND ts > datetime('now', ?)",
+            (f["signal_hash"], f"-{days} days")
         ).fetchone()
         if row is None:
             new_findings.append(f)
@@ -1720,16 +1727,17 @@ def _extract_diff(text: str) -> str | None:
     return None
 
 
-def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) -> str:
-    """Branch, apply diff, run tests. Returns 'fix_attempted'|'fix_failed'|'no_diff'|'dry_run'."""
+def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) -> tuple:
+    """Branch, apply diff, run tests. Returns (status, pr_url) tuple.
+    status: 'fix_attempted'|'fix_failed'|'no_diff'|'dry_run'"""
     import tempfile as _tempfile
 
     if dry_run:
-        return "dry_run"
+        return "dry_run", ""
 
     diff = _extract_diff(investigation.get("log_text", ""))
     if diff is None:
-        return "no_diff"
+        return "no_diff", ""
 
     branch = f"support/fix-{finding['signal_hash'][:8]}"
     base_branch_result = subprocess.run(
@@ -1748,11 +1756,18 @@ def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) 
         tf.write(diff)
         patch_path = tf.name
 
-    apply = subprocess.run(["git", "apply", patch_path], capture_output=True)
+    try:
+        apply = subprocess.run(["git", "apply", patch_path], capture_output=True)
+    finally:
+        try:
+            os.unlink(patch_path)
+        except OSError:
+            pass
+
     if apply.returncode != 0:
         subprocess.run(["git", "checkout", base_branch], capture_output=True)
         subprocess.run(["git", "branch", "-D", branch], capture_output=True)
-        return "fix_failed"
+        return "fix_failed", ""
 
     # Commit the patch
     subprocess.run(["git", "add", "-A"], capture_output=True)
@@ -1768,7 +1783,7 @@ def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) 
     )
 
     if test_result.returncode == 0:
-        subprocess.run(
+        pr_result = subprocess.run(
             ["gh", "pr", "create", "--draft",
              "--title", f"[support] fix: {finding['summary'][:60]}",
              "--body", (
@@ -1778,12 +1793,15 @@ def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) 
              )],
             capture_output=True, text=True,
         )
+        if pr_result.returncode != 0:
+            print(f"  [support] gh pr create failed: {pr_result.stderr[:200]}")
+        pr_url = pr_result.stdout.strip() if pr_result.returncode == 0 else ""
         subprocess.run(["git", "checkout", base_branch], capture_output=True)
-        return "fix_attempted"
+        return "fix_attempted", pr_url
     else:
         subprocess.run(["git", "checkout", base_branch], capture_output=True)
         subprocess.run(["git", "branch", "-D", branch], capture_output=True)
-        return "fix_failed"
+        return "fix_failed", ""
 
 
 def cmd_logs(job_id: str, tail: int = 50) -> None:

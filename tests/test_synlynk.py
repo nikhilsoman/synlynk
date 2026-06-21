@@ -2028,8 +2028,9 @@ def test_attempt_fix_returns_no_diff_when_no_diff_in_log(project_dir, monkeypatc
         "story_id": "support-abc",
         "log_file": str(project_dir / ".synlynk" / "job.log"),
     }
-    status = synlynk._attempt_fix(finding, investigation, fixer="claude", dry_run=False)
+    status, pr_url = synlynk._attempt_fix(finding, investigation, fixer="claude", dry_run=False)
     assert status == "no_diff"
+    assert pr_url == ""
     assert calls == [], "No subprocess calls when no diff in log"
 
 
