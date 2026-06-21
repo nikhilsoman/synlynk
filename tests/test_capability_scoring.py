@@ -177,6 +177,67 @@ def test_extract_auto_signals_all_zeros_on_empty_log():
     assert signals["build_success"] is None
 
 
+def test_extract_auto_signals_returns_test_count(tmp_path, monkeypatch):
+    """_extract_auto_signals returns test_count when tests are mentioned in log."""
+    monkeypatch.chdir(tmp_path)
+    from synlynk import _extract_auto_signals
+    log = "47 passed in 3.2s"
+    signals = _extract_auto_signals(log)
+    assert signals["test_pass_rate"] == 1.0
+    assert signals.get("test_count") == 47
+
+
+def test_extract_auto_signals_test_count_none_when_no_tests(tmp_path, monkeypatch):
+    """_extract_auto_signals returns test_count=None when no test lines in log."""
+    monkeypatch.chdir(tmp_path)
+    from synlynk import _extract_auto_signals
+    log = "Build completed successfully."
+    signals = _extract_auto_signals(log)
+    assert signals.get("test_count") is None
+
+
+def test_write_capability_rating_caps_quality_for_trivial_tests(tmp_path, monkeypatch):
+    """quality_auto is capped at 5.0 when test_pass_rate=1.0 but only 1 test ran."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+    story_id = sl.cmd_story_create("Trivial task", engg_domain="backend")
+    job = {
+        "story_id": story_id, "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "1 passed in 0.1s")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT quality_auto FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] <= 5.0
+
+
+def test_write_capability_rating_no_cap_for_real_test_suite(tmp_path, monkeypatch):
+    """quality_auto is NOT capped when 47 tests ran."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+    story_id = sl.cmd_story_create("Real task", engg_domain="backend")
+    job = {
+        "story_id": story_id, "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "47 passed in 3.2s")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT quality_auto FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] > 5.0
+
+
 # --- Hotfix #43: quality_auto normalization ---
 
 def test_quality_auto_normalizes_when_tests_absent(tmp_path, monkeypatch):
