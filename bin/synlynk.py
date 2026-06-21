@@ -1569,6 +1569,29 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
     }
 
 
+def _file_gh_issue(finding: dict, investigation: dict, dry_run: bool) -> str:
+    """File a GitHub issue via `gh issue create`. Returns issue URL or '' in dry-run."""
+    if dry_run:
+        return ""
+    title = f"[support] {finding['type']}: {finding['summary'][:80]}"
+    body = (
+        f"## Signal\n\n**Type:** {finding['type']}  \n**Severity:** {finding.get('severity', '?')}\n\n"
+        f"## Investigation\n\n{investigation['summary']}\n\n"
+        f"**Story:** `{investigation.get('story_id', 'n/a')}`\n"
+    )
+    result = subprocess.run(
+        ["gh", "issue", "create",
+         "--title", title,
+         "--body", body,
+         "--label", "bug,support-engineer"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  [support] gh issue create failed: {result.stderr[:200]}")
+        return ""
+    return result.stdout.strip()
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

@@ -1973,3 +1973,28 @@ def test_run_investigation_creates_story_and_returns_summary(project_dir, monkey
     ).fetchone()
     conn.close()
     assert row is not None
+
+
+def test_file_gh_issue_calls_gh(project_dir, monkeypatch):
+    captured = {}
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        return type("R", (), {"returncode": 0, "stdout": "https://github.com/org/repo/issues/99"})()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    finding = {"type": "test_suite", "severity": "high", "summary": "Test failure", "detail": "1 failed"}
+    investigation = {"summary": "Root cause: missing mock", "story_id": "support-abc123"}
+    url = synlynk._file_gh_issue(finding, investigation, dry_run=False)
+    assert url == "https://github.com/org/repo/issues/99"
+    assert "issue" in captured["cmd"]
+    assert "create" in captured["cmd"]
+
+
+def test_file_gh_issue_dry_run_no_subprocess(project_dir, monkeypatch):
+    called = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: called.append(a))
+    finding = {"type": "test_suite", "severity": "high", "summary": "Test failure", "detail": "x"}
+    investigation = {"summary": "y", "story_id": "support-abc"}
+    url = synlynk._file_gh_issue(finding, investigation, dry_run=True)
+    assert url == ""
+    assert called == [], "subprocess.run must not be called in dry-run"
