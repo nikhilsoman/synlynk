@@ -1109,12 +1109,47 @@ def _write_instruction_file(path: str, tool: str, content: str,
     return True
 
 
-def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
-    """Writes project-docs skeleton informed by static scan results.
+def _find_existing_doc(basename: str, target_dir: str, project_name: str) -> Optional[str]:
+    """Searches for existing project doc content at alternate locations.
 
-    Returns list of file paths written. Skips files that already exist
-    when skip_existing=True. The wizard surfaces a caveat for repos
-    without structured commits.
+    Checks: root-level, project-docs/, project-prefixed variants (rxcc_memory.md),
+    and uppercase variants. Returns the first path with >200 bytes of content,
+    or None if nothing substantial exists.
+    """
+    slug = re.sub(r"[^a-z0-9]", "", project_name.lower()) if project_name else ""
+    candidates = []
+    # Root level (if target isn't already root)
+    if target_dir not in (".", ""):
+        candidates.append(basename)
+    # project-docs/ (if target isn't project-docs)
+    if target_dir != "project-docs":
+        candidates.append(os.path.join("project-docs", basename))
+    # Project-prefixed variants: rxcc_memory.md, rxcc-memory.md
+    stem, ext = os.path.splitext(basename)
+    if slug:
+        candidates += [f"{slug}_{stem}{ext}", f"{slug}-{stem}{ext}"]
+        candidates += [os.path.join("project-docs", f"{slug}_{stem}{ext}")]
+    # Uppercase / alternative names
+    candidates.append(basename.upper())
+    for c in candidates:
+        if os.path.exists(c):
+            try:
+                if os.path.getsize(c) > 200:
+                    return c
+            except OSError:
+                pass
+    return None
+
+
+def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
+    """Writes project-docs skeleton, seeding from existing docs when available.
+
+    Priority order for each file:
+    1. File already exists at target path → skip (when skip_existing=True)
+    2. Rich existing doc found at an alternate location → migrate content
+    3. No existing content → generate skeleton from git history
+
+    Returns list of (path, source) tuples describing what was written and why.
     """
     name = scan.get("project_name", "this project")
     desc = scan.get("description") or f"A project named {name}."
@@ -1129,7 +1164,7 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
 
     recent_work = "\n".join(f"- {t}" for t in topics[:5]) or "- (no commits found)"
 
-    roadmap_content = f"""\
+    fallback_roadmap = f"""\
 # {name} Roadmap
 {caveat}
 **Positioning:** [Describe what {name} is building toward]
@@ -1143,7 +1178,7 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
 {recent_work}
 """
 
-    memory_content = f"""\
+    fallback_memory = f"""\
 # {name} Memory
 
 ## Project Overview
@@ -1159,7 +1194,7 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
 [Document key architectural decisions here]
 """
 
-    todo_content = f"""\
+    fallback_todo = f"""\
 # {name} — Todo
 
 <!-- Status: [ ] active  [x] done  [-] deferred  [~] superseded  [>] absorbed -->
@@ -1173,20 +1208,31 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
 """
 
     dd = _docs_dir()
-    files = {
-        os.path.join(dd, "roadmap.md"): roadmap_content,
-        os.path.join(dd, "memory.md"): memory_content,
-        os.path.join(dd, "todo.md"): todo_content,
-    }
+    targets = [
+        (os.path.join(dd, "roadmap.md"), fallback_roadmap),
+        (os.path.join(dd, "memory.md"),  fallback_memory),
+        (os.path.join(dd, "todo.md"),    fallback_todo),
+    ]
 
     written = []
-    for path, content in files.items():
+    for path, fallback in targets:
         if skip_existing and os.path.exists(path):
             continue
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        basename = os.path.basename(path)
+        source = _find_existing_doc(basename, dd, name)
+        if source:
+            with open(source) as fh:
+                content = fh.read()
+            label = f"migrated from {source}"
+        else:
+            content = fallback
+            label = "generated from git history"
+
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w") as f:
             f.write(content)
-        written.append(path)
+        written.append((path, label))
     return written
 
 
@@ -4351,10 +4397,10 @@ def init(force: bool = False, agents: list = None,
 
     written = _write_informed_skeleton(scan, skip_existing=not force)
     if written:
-        for p in written:
-            print(f"  {_GREEN}✓{_RESET} Created {p}")
+        for p, label in written:
+            print(f"  {_GREEN}✓{_RESET} {p}  {_DIM}({label}){_RESET}")
     else:
-        print(f"  {_DIM}All project-docs already exist — skipped (use --force to overwrite){_RESET}")
+        print(f"  {_DIM}All docs already exist — skipped (use --force to overwrite){_RESET}")
 
     # Write agent instruction files using _write_instruction_file().
     agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex"}
