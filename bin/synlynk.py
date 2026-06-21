@@ -1592,6 +1592,86 @@ def _file_gh_issue(finding: dict, investigation: dict, dry_run: bool) -> str:
     return result.stdout.strip()
 
 
+def _extract_diff(text: str) -> str | None:
+    """Extract first unified diff block from text (fenced or raw)."""
+    import re as _re
+    # Prefer fenced ```diff block
+    m = _re.search(r"```(?:diff)?\n(---[\s\S]+?)```", text)
+    if m:
+        return m.group(1)
+    # Fall back to raw unified diff
+    m = _re.search(r"(--- a/[\s\S]+?)(?=\n[^+\-@ \t]|\Z)", text)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) -> str:
+    """Branch, apply diff, run tests. Returns 'fix_attempted'|'fix_failed'|'no_diff'|'dry_run'."""
+    import tempfile as _tempfile
+
+    if dry_run:
+        return "dry_run"
+
+    diff = _extract_diff(investigation.get("log_text", ""))
+    if diff is None:
+        return "no_diff"
+
+    branch = f"support/fix-{finding['signal_hash'][:8]}"
+    base_branch_result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True,
+    )
+    base_branch = base_branch_result.stdout.strip() or "main"
+
+    # Create fix branch
+    br = subprocess.run(["git", "checkout", "-b", branch], capture_output=True)
+    if br.returncode != 0:
+        subprocess.run(["git", "checkout", branch], capture_output=True)
+
+    # Write diff to temp file and apply
+    with _tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as tf:
+        tf.write(diff)
+        patch_path = tf.name
+
+    apply = subprocess.run(["git", "apply", patch_path], capture_output=True)
+    if apply.returncode != 0:
+        subprocess.run(["git", "checkout", base_branch], capture_output=True)
+        subprocess.run(["git", "branch", "-D", branch], capture_output=True)
+        return "fix_failed"
+
+    # Commit the patch
+    subprocess.run(["git", "add", "-A"], capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", f"[support] fix: {finding['summary'][:60]}"],
+        capture_output=True,
+    )
+
+    # Run tests
+    test_result = subprocess.run(
+        ["pytest", "tests/", "-q", "--tb=no"],
+        capture_output=True, text=True,
+    )
+
+    if test_result.returncode == 0:
+        subprocess.run(
+            ["gh", "pr", "create", "--draft",
+             "--title", f"[support] fix: {finding['summary'][:60]}",
+             "--body", (
+                 f"Auto-generated fix.\n\n"
+                 f"**Story:** `{investigation.get('story_id', 'n/a')}`\n\n"
+                 f"**Investigation:**\n{investigation.get('summary', '')[:300]}"
+             )],
+            capture_output=True, text=True,
+        )
+        subprocess.run(["git", "checkout", base_branch], capture_output=True)
+        return "fix_attempted"
+    else:
+        subprocess.run(["git", "checkout", base_branch], capture_output=True)
+        subprocess.run(["git", "branch", "-D", branch], capture_output=True)
+        return "fix_failed"
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()

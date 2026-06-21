@@ -1998,3 +1998,36 @@ def test_file_gh_issue_dry_run_no_subprocess(project_dir, monkeypatch):
     url = synlynk._file_gh_issue(finding, investigation, dry_run=True)
     assert url == ""
     assert called == [], "subprocess.run must not be called in dry-run"
+
+
+def test_extract_diff_from_fenced_block():
+    text = (
+        "Here is the fix:\n\n```diff\n"
+        "--- a/bin/synlynk.py\n"
+        "+++ b/bin/synlynk.py\n"
+        "@@ -1,3 +1,3 @@\n"
+        "-old\n+new\n"
+        "```\n"
+    )
+    diff = synlynk._extract_diff(text)
+    assert diff is not None
+    assert "--- a/bin/synlynk.py" in diff
+
+
+def test_extract_diff_returns_none_when_absent():
+    assert synlynk._extract_diff("No diff here, just prose.") is None
+
+
+def test_attempt_fix_returns_no_diff_when_no_diff_in_log(project_dir, monkeypatch):
+    calls = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a) or type("R", (), {"returncode": 0, "stdout": ""})())
+    finding = {"type": "test_suite", "summary": "Test broke", "signal_hash": "deadbeef12345678"}
+    investigation = {
+        "log_text": "Root cause found but no fix provided.",
+        "summary": "Root cause summary",
+        "story_id": "support-abc",
+        "log_file": str(project_dir / ".synlynk" / "job.log"),
+    }
+    status = synlynk._attempt_fix(finding, investigation, fixer="claude", dry_run=False)
+    assert status == "no_diff"
+    assert calls == [], "No subprocess calls when no diff in log"
