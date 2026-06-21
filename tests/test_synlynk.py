@@ -1760,3 +1760,366 @@ def test_checkpoint_keeps_deferred_tasks(project_dir, monkeypatch):
     assert "Still active" in todo
     assert "Deferred task" in todo
     assert "Done task" not in todo
+
+
+def test_autopilot_runs_table_exists(project_dir):
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='autopilot_runs'"
+    ).fetchone()
+    conn.close()
+    assert row is not None, "autopilot_runs table must exist after _get_db()"
+
+
+def test_load_agent_config_success(project_dir):
+    (project_dir / ".agents").mkdir()
+    cfg = {
+        "name": "test-agent",
+        "investigator": "claude",
+        "fixer": "claude",
+        "signals": [{"type": "test_suite", "command": "pytest tests/ -q"}],
+        "hitl": {"auto_merge": False}
+    }
+    (project_dir / ".agents" / "test-agent.json").write_text(json.dumps(cfg))
+    loaded = synlynk._load_agent_config("test-agent")
+    assert loaded["name"] == "test-agent"
+    assert loaded["investigator"] == "claude"
+
+
+def test_load_agent_config_missing_raises(project_dir):
+    with pytest.raises(FileNotFoundError, match="No agent config found"):
+        synlynk._load_agent_config("nonexistent")
+
+
+def test_agent_run_unknown_agent_raises(project_dir):
+    with pytest.raises(FileNotFoundError, match="No agent config found"):
+        synlynk.cmd_agent_run("nonexistent")
+
+
+def test_collect_test_suite_high_on_failure(project_dir, monkeypatch):
+    fake_result = type("R", (), {"returncode": 1, "stdout": "FAILED tests/test_foo.py::test_bar\n1 failed"})()
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
+    findings = synlynk._collect_test_suite({"type": "test_suite", "command": "pytest tests/ -q --tb=short"})
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "high"
+    assert findings[0]["type"] == "test_suite"
+    assert "signal_hash" in findings[0]
+
+
+def test_collect_test_suite_no_finding_on_pass(project_dir, monkeypatch):
+    fake_result = type("R", (), {"returncode": 0, "stdout": "1 passed"})()
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
+    findings = synlynk._collect_test_suite({"type": "test_suite", "command": "pytest tests/ -q --tb=short"})
+    assert findings == []
+
+
+def test_collect_sentinel_alerts_flatline(project_dir):
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "# Sentinel Alerts\n"
+        "- [2026-06-21 10:00] ⚠ FLATLINE: 3 consecutive exec failures\n"
+    )
+    findings = synlynk._collect_sentinel_alerts({"type": "sentinel_alerts", "path": ".synlynk/sentinel.md"})
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "high"
+    assert "FLATLINE" in findings[0]["summary"]
+
+
+def test_collect_sentinel_alerts_empty(project_dir):
+    (project_dir / ".synlynk" / "sentinel.md").write_text("# Sentinel Alerts\n(none)\n")
+    findings = synlynk._collect_sentinel_alerts({"type": "sentinel_alerts", "path": ".synlynk/sentinel.md"})
+    assert findings == []
+
+
+def test_collect_telemetry_anomaly_medium(project_dir):
+    import json
+    # 8 failures out of 20 = 40% — above 30% threshold, below 60%
+    entries = [{"exit_code": (1 if i < 8 else 0)} for i in range(20)]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(entries))
+    findings = synlynk._collect_telemetry_anomaly({
+        "type": "telemetry_anomaly", "failure_rate_threshold": 0.30
+    })
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "medium"
+
+
+def test_collect_telemetry_anomaly_no_finding(project_dir):
+    import json
+    entries = [{"exit_code": (1 if i < 2 else 0)} for i in range(20)]
+    (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(entries))
+    findings = synlynk._collect_telemetry_anomaly({
+        "type": "telemetry_anomaly", "failure_rate_threshold": 0.30
+    })
+    assert findings == []
+
+
+def test_collect_capability_drop_returns_finding(project_dir):
+    conn = synlynk._get_db()
+    # Insert a story first (FK requirement)
+    conn.execute(
+        "INSERT INTO stories (story_id, title) VALUES (?, ?)",
+        ("s-drop-test", "drop test story")
+    )
+    # Use timestamps that will fall into the correct windows relative to datetime('now')
+    recent_ts = "2026-06-21T12:00:00"  # Recent window (last 7 days)
+    prior_ts = "2026-06-10T12:00:00"   # Prior window (7-14 days ago)
+    # Recent window: quality 5.0
+    for _ in range(2):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, model_version, quality, ts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("s-drop-test", "claude", "claude-sonnet-4-6", 5.0, recent_ts)
+        )
+    # Older window: quality 8.0
+    for _ in range(2):
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, model_version, quality, ts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("s-drop-test", "claude", "claude-sonnet-4-6", 8.0, prior_ts)
+        )
+    conn.commit()
+    conn.close()
+    findings = synlynk._collect_capability_drop({"type": "capability_drop", "drop_threshold": 1.5})
+    assert len(findings) == 1
+    assert findings[0]["severity"] in ("medium", "high")
+    assert "claude" in findings[0]["summary"]
+
+
+def test_collect_capability_drop_insufficient_data(project_dir):
+    # No ratings — should return empty
+    findings = synlynk._collect_capability_drop({"type": "capability_drop", "drop_threshold": 1.5})
+    assert findings == []
+
+
+def test_collect_github_issues(project_dir, monkeypatch):
+    import json
+    issues = [
+        {"number": 42, "title": "Crash on empty input", "body": "Steps to repro: ...", "createdAt": "2026-06-21T10:00:00Z"},
+        {"number": 43, "title": "Wrong score shown", "body": "Score is 0 always", "createdAt": "2026-06-21T11:00:00Z"},
+    ]
+    fake_result = type("R", (), {"returncode": 0, "stdout": json.dumps(issues)})()
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: fake_result)
+    findings = synlynk._collect_github_issues({"type": "github_issues", "labels": ["bug", "needs-triage"]})
+    assert len(findings) == 2
+    assert findings[0]["type"] == "github_issues"
+    assert findings[0]["severity"] == "medium"
+    assert "#42" in findings[0]["summary"]
+
+
+def test_dedup_skips_recent_signal(project_dir):
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO autopilot_runs (id, agent_name, signal_type, signal_hash, severity, summary, status, ts) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '-3 days'))",
+        ("run-001", "support-engineer", "test_suite", "abc123", "high", "test failure", "filed")
+    )
+    conn.commit()
+    conn.close()
+    findings = [{"signal_hash": "abc123", "type": "test_suite", "severity": "high", "summary": "x", "detail": "x"}]
+    result = synlynk._dedup_findings(findings)
+    assert result == [], "Recent signal should be filtered out by dedup"
+
+
+def test_dedup_reinvestigates_after_7_days(project_dir):
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO autopilot_runs (id, agent_name, signal_type, signal_hash, severity, summary, status, ts) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '-8 days'))",
+        ("run-001", "support-engineer", "test_suite", "abc123", "high", "test failure", "filed")
+    )
+    conn.commit()
+    conn.close()
+    findings = [{"signal_hash": "abc123", "type": "test_suite", "severity": "high", "summary": "x", "detail": "x"}]
+    result = synlynk._dedup_findings(findings)
+    assert len(result) == 1, "8-day-old signal should pass dedup (>7 days)"
+
+
+def test_run_investigation_creates_story_and_returns_summary(project_dir, monkeypatch):
+    import re
+
+    captured_cmds = []
+
+    def fake_run(cmd, **kw):
+        captured_cmds.append(cmd)
+        # Simulate agent writing to log file
+        if isinstance(cmd, list) and cmd[0] == "sh":
+            shell_cmd = cmd[2] if len(cmd) > 2 else ""
+            m = re.search(r"> (\S+\.log)\b", shell_cmd)
+            if m:
+                import os
+                os.makedirs(os.path.dirname(m.group(1)), exist_ok=True)
+                open(m.group(1), "w").write("Root cause: the test was broken.\n# FIX: replace line 42\n")
+                open(m.group(1) + ".exit", "w").write("0\n")
+        return type("R", (), {"returncode": 0})()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    finding = {
+        "type": "test_suite",
+        "severity": "high",
+        "summary": "Test failure: test_foo",
+        "detail": "FAILED tests/test_foo.py\n1 failed",
+        "signal_hash": "deadbeef12345678",
+    }
+    result = synlynk._run_investigation(finding, {"investigator": "claude"})
+
+    assert "summary" in result
+    assert result["fix_signal"] is True
+    assert "story_id" in result
+
+    # Confirm story was created in DB
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT story_id FROM stories WHERE story_id=?", (result["story_id"],)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+
+
+def test_file_gh_issue_calls_gh(project_dir, monkeypatch):
+    captured = {}
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        return type("R", (), {"returncode": 0, "stdout": "https://github.com/org/repo/issues/99"})()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    finding = {"type": "test_suite", "severity": "high", "summary": "Test failure", "detail": "1 failed"}
+    investigation = {"summary": "Root cause: missing mock", "story_id": "support-abc123"}
+    url = synlynk._file_gh_issue(finding, investigation, dry_run=False)
+    assert url == "https://github.com/org/repo/issues/99"
+    assert "issue" in captured["cmd"]
+    assert "create" in captured["cmd"]
+
+
+def test_file_gh_issue_dry_run_no_subprocess(project_dir, monkeypatch):
+    called = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: called.append(a))
+    finding = {"type": "test_suite", "severity": "high", "summary": "Test failure", "detail": "x"}
+    investigation = {"summary": "y", "story_id": "support-abc"}
+    url = synlynk._file_gh_issue(finding, investigation, dry_run=True)
+    assert url == ""
+    assert called == [], "subprocess.run must not be called in dry-run"
+
+
+def test_extract_diff_from_fenced_block():
+    text = (
+        "Here is the fix:\n\n```diff\n"
+        "--- a/bin/synlynk.py\n"
+        "+++ b/bin/synlynk.py\n"
+        "@@ -1,3 +1,3 @@\n"
+        "-old\n+new\n"
+        "```\n"
+    )
+    diff = synlynk._extract_diff(text)
+    assert diff is not None
+    assert "--- a/bin/synlynk.py" in diff
+
+
+def test_extract_diff_returns_none_when_absent():
+    assert synlynk._extract_diff("No diff here, just prose.") is None
+
+
+def test_attempt_fix_returns_no_diff_when_no_diff_in_log(project_dir, monkeypatch):
+    calls = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a) or type("R", (), {"returncode": 0, "stdout": ""})())
+    finding = {"type": "test_suite", "summary": "Test broke", "signal_hash": "deadbeef12345678"}
+    investigation = {
+        "log_text": "Root cause found but no fix provided.",
+        "summary": "Root cause summary",
+        "story_id": "support-abc",
+        "log_file": str(project_dir / ".synlynk" / "job.log"),
+    }
+    status, pr_url = synlynk._attempt_fix(finding, investigation, fixer="claude", dry_run=False)
+    assert status == "no_diff"
+    assert pr_url == ""
+    assert calls == [], "No subprocess calls when no diff in log"
+
+
+def test_agent_run_files_issue_on_test_failure(project_dir, monkeypatch):
+    """End-to-end: test failure → issue filed → autopilot_runs row written."""
+    import json, re
+
+    (project_dir / ".agents").mkdir()
+    cfg = {
+        "name": "support-engineer", "investigator": "claude", "fixer": "claude",
+        "signals": [{"type": "test_suite", "command": "pytest tests/ -q --tb=short"}],
+        "hitl": {"auto_merge": False}
+    }
+    (project_dir / ".agents" / "support.json").write_text(json.dumps(cfg))
+
+    def fake_run(cmd, **kw):
+        if isinstance(cmd, list) and "pytest" in str(cmd):
+            return type("R", (), {"returncode": 1, "stdout": "FAILED tests/test_x.py\n1 failed"})()
+        if isinstance(cmd, list) and cmd[0] == "sh":
+            shell = cmd[2] if len(cmd) > 2 else ""
+            m = re.search(r"> (\S+\.log)\b", shell)
+            if m:
+                import os
+                os.makedirs(os.path.dirname(m.group(1)), exist_ok=True)
+                open(m.group(1), "w").write("Root cause found.\n")
+                open(m.group(1) + ".exit", "w").write("0\n")
+        if isinstance(cmd, list) and "issue" in cmd and "create" in cmd:
+            return type("R", (), {"returncode": 0, "stdout": "https://github.com/x/y/issues/5"})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    synlynk.cmd_agent_run("support")
+
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT status, gh_issue_url FROM autopilot_runs").fetchall()
+    conn.close()
+    assert len(rows) >= 1
+    assert any(r[0] in ("filed", "fix_failed", "fix_attempted") for r in rows)
+
+
+def test_agent_run_dry_run_no_side_effects(project_dir, monkeypatch):
+    import json
+
+    (project_dir / ".agents").mkdir()
+    cfg = {
+        "name": "support-engineer", "investigator": "claude", "fixer": "claude",
+        "signals": [{"type": "test_suite", "command": "pytest tests/ -q --tb=short"}],
+        "hitl": {"auto_merge": False}
+    }
+    (project_dir / ".agents" / "support.json").write_text(json.dumps(cfg))
+
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(list(cmd) if isinstance(cmd, list) else cmd)
+        if isinstance(cmd, list) and "pytest" in str(cmd):
+            return type("R", (), {"returncode": 1, "stdout": "1 failed"})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    synlynk.cmd_agent_run("support", dry_run=True)
+
+    gh_calls = [c for c in calls if isinstance(c, list) and "gh" in c]
+    assert gh_calls == [], "gh must not be called in dry-run"
+
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT id FROM autopilot_runs").fetchall()
+    conn.close()
+    assert rows == [], "autopilot_runs must be empty in dry-run"
+
+
+def test_install_cron_idempotent(project_dir, monkeypatch):
+    crontab_contents = [""]
+
+    def fake_run(cmd, **kw):
+        cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+        if "crontab" in cmd_str and "-l" in cmd_str:
+            return type("R", (), {"returncode": 0, "stdout": crontab_contents[0]})()
+        if "crontab" in cmd_str and kw.get("input"):
+            crontab_contents[0] = kw["input"]
+            return type("R", (), {"returncode": 0})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    synlynk._install_cron_entry("support")
+    first = crontab_contents[0]
+    assert "synlynk.py agent run support" in first
+
+    # Call again — must be idempotent
+    synlynk._install_cron_entry("support")
+    second = crontab_contents[0]
+    assert second.count("synlynk.py agent run support") == 1
