@@ -2031,3 +2031,70 @@ def test_attempt_fix_returns_no_diff_when_no_diff_in_log(project_dir, monkeypatc
     status = synlynk._attempt_fix(finding, investigation, fixer="claude", dry_run=False)
     assert status == "no_diff"
     assert calls == [], "No subprocess calls when no diff in log"
+
+
+def test_agent_run_files_issue_on_test_failure(project_dir, monkeypatch):
+    """End-to-end: test failure → issue filed → autopilot_runs row written."""
+    import json, re
+
+    (project_dir / ".agents").mkdir()
+    cfg = {
+        "name": "support-engineer", "investigator": "claude", "fixer": "claude",
+        "signals": [{"type": "test_suite", "command": "pytest tests/ -q --tb=short"}],
+        "hitl": {"auto_merge": False}
+    }
+    (project_dir / ".agents" / "support.json").write_text(json.dumps(cfg))
+
+    def fake_run(cmd, **kw):
+        if isinstance(cmd, list) and "pytest" in str(cmd):
+            return type("R", (), {"returncode": 1, "stdout": "FAILED tests/test_x.py\n1 failed"})()
+        if isinstance(cmd, list) and cmd[0] == "sh":
+            shell = cmd[2] if len(cmd) > 2 else ""
+            m = re.search(r"> (\S+\.log)\b", shell)
+            if m:
+                import os
+                os.makedirs(os.path.dirname(m.group(1)), exist_ok=True)
+                open(m.group(1), "w").write("Root cause found.\n")
+                open(m.group(1) + ".exit", "w").write("0\n")
+        if isinstance(cmd, list) and "issue" in cmd and "create" in cmd:
+            return type("R", (), {"returncode": 0, "stdout": "https://github.com/x/y/issues/5"})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    synlynk.cmd_agent_run("support")
+
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT status, gh_issue_url FROM autopilot_runs").fetchall()
+    conn.close()
+    assert len(rows) >= 1
+    assert any(r[0] in ("filed", "fix_failed", "fix_attempted") for r in rows)
+
+
+def test_agent_run_dry_run_no_side_effects(project_dir, monkeypatch):
+    import json
+
+    (project_dir / ".agents").mkdir()
+    cfg = {
+        "name": "support-engineer", "investigator": "claude", "fixer": "claude",
+        "signals": [{"type": "test_suite", "command": "pytest tests/ -q --tb=short"}],
+        "hitl": {"auto_merge": False}
+    }
+    (project_dir / ".agents" / "support.json").write_text(json.dumps(cfg))
+
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(list(cmd) if isinstance(cmd, list) else cmd)
+        if isinstance(cmd, list) and "pytest" in str(cmd):
+            return type("R", (), {"returncode": 1, "stdout": "1 failed"})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    synlynk.cmd_agent_run("support", dry_run=True)
+
+    gh_calls = [c for c in calls if isinstance(c, list) and "gh" in c]
+    assert gh_calls == [], "gh must not be called in dry-run"
+
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT id FROM autopilot_runs").fetchall()
+    conn.close()
+    assert rows == [], "autopilot_runs must be empty in dry-run"

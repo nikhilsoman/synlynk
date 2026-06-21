@@ -1278,13 +1278,108 @@ def cmd_jobs(all_jobs: bool = False) -> None:
 
 
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
-    """Run named agent once (collect signals → dedup → investigate → file → fix)."""
+    """Run named agent: collect signals → dedup → investigate → file → fix."""
+    import hashlib as _hashlib
+
     cfg = _load_agent_config(name)
     if install_cron:
         _install_cron_entry()
         return
-    # Full implementation added in Task 13
-    print(f"  [agent] {name} — stub, not yet implemented")
+
+    is_ci = os.environ.get("GITHUB_ACTIONS") == "true"
+    print(f"  [agent:{name}] {'DRY RUN — ' if dry_run else ''}collecting signals{' (CI mode)' if is_ci else ''}")
+
+    collector_map = {
+        "test_suite": _collect_test_suite,
+        "sentinel_alerts": _collect_sentinel_alerts,
+        "telemetry_anomaly": _collect_telemetry_anomaly,
+        "capability_drop": _collect_capability_drop,
+        "github_issues": _collect_github_issues,
+    }
+    ci_skip = {"sentinel_alerts", "telemetry_anomaly"}
+
+    all_findings: list = []
+    for signal_cfg in cfg.get("signals", []):
+        stype = signal_cfg.get("type")
+        if is_ci and stype in ci_skip:
+            continue
+        collector = collector_map.get(stype)
+        if collector is None:
+            print(f"  [agent:{name}] unknown signal type: {stype}")
+            continue
+        try:
+            found = collector(signal_cfg)
+            all_findings.extend(found)
+        except Exception as e:
+            print(f"  [agent:{name}] collector {stype} error: {e}")
+
+    new_findings = _dedup_findings(all_findings)
+    print(f"  [agent:{name}] {len(all_findings)} signals, {len(new_findings)} new after dedup")
+
+    if dry_run:
+        for f in new_findings:
+            print(f"  [{f['severity'].upper()}] {f['type']}: {f['summary']}")
+        return
+
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    new_findings.sort(key=lambda f: severity_order.get(f.get("severity", "low"), 2))
+    to_process = new_findings[:5]
+
+    run_summary_lines = []
+    conn = _get_db()
+
+    for finding in to_process:
+        print(f"  [agent:{name}] investigating: {finding['summary'][:80]}")
+        investigation = _run_investigation(finding, cfg)
+        gh_issue_url = _file_gh_issue(finding, investigation, dry_run=False)
+        status = "filed"
+
+        if investigation["fix_signal"]:
+            fix_status = _attempt_fix(
+                finding, investigation,
+                fixer=cfg.get("fixer", "claude"), dry_run=False
+            )
+            if fix_status == "fix_attempted":
+                status = "fix_attempted"
+            elif fix_status == "fix_failed":
+                status = "fix_failed"
+
+        run_id = "run-" + _hashlib.md5(
+            f"{finding['signal_hash']}{time.time()}".encode()
+        ).hexdigest()[:8]
+        conn.execute(
+            "INSERT INTO autopilot_runs "
+            "(id, agent_name, signal_type, signal_hash, severity, summary, status, gh_issue_url, story_id, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (run_id, name, finding["type"], finding["signal_hash"],
+             finding["severity"], finding["summary"][:200],
+             status, gh_issue_url, investigation.get("story_id", ""))
+        )
+        conn.commit()
+        run_summary_lines.append(
+            f"  [{finding['severity'].upper()}] {finding['type']}: {finding['summary'][:60]} → {status}"
+        )
+        print(f"  [agent:{name}] {finding['type']} → {status}")
+
+    conn.close()
+
+    devlog_dir = "project-docs/devlogs"
+    if os.path.exists(devlog_dir):
+        devlog_path = os.path.join(devlog_dir, f"{name}.md")
+        n_high = sum(1 for f in to_process if f.get("severity") == "high")
+        n_med = sum(1 for f in to_process if f.get("severity") == "medium")
+        n_fix = sum(1 for l in run_summary_lines if "fix_attempted" in l)
+        n_filed = sum(1 for l in run_summary_lines if " filed" in l)
+        run_id_short = _hashlib.md5(str(time.time()).encode()).hexdigest()[:6]
+        entry = (
+            f"\n{time.strftime('%Y-%m-%dT%H:%M:%S')} · "
+            f"{len(to_process)} findings ({n_high} high, {n_med} medium) · "
+            f"{n_filed} filed · {n_fix} fix_attempted · run-{run_id_short}\n"
+        )
+        with open(devlog_path, "a") as f:
+            f.write(entry)
+
+    print(f"  [agent:{name}] done — {len(to_process)} findings processed")
 
 
 def cmd_agent_list() -> None:
