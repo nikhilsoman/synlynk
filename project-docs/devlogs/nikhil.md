@@ -1,5 +1,25 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-21
+### Session: v0.9.0 Kernel Fixes + Package Split — PR #53, merged
+
+- **Merged:** PR #53 (`feat/v0.9.0-kernel-fixes`) — all 7 tasks + cross-review fixes shipped
+- **Method:** Hybrid dispatch — Claude subagents (Tasks 1–4, 6 fallback), AGY (Task 5 Ed25519), Codex (Task 7 package split). First PR built using synlynk's own `dispatch_agent` mechanism.
+- **What shipped:**
+  - **Task 1 — Scoped context:** `generate_context(scope="task:<id>")` + `_generate_task_context()` — story metadata, active tasks only, up to 20 domain-filtered source files. Eliminates 7-day devlog dump from every dispatch.
+  - **Task 2 — Relevant Files injection:** `_relevant_files_for_story()` queries story `engg_domain` against scan cache skeleton; up to 10 matching paths injected as `## Relevant Files`.
+  - **Task 3 — Verify contract:** `_verify_contract_for_story()` derives pytest invocation from story title; injected as `## How to Verify` when `tests/` exists.
+  - **Task 4 — Per-agent framing:** `_format_prompt_for_agent()` — Codex gets `## Task Criteria` bullets; AGY gets `Task: ` prefix + 2000-char context; Claude gets full narrative.
+  - **Task 5 — Ed25519 signing (AGY):** `_ensure_identity_key()`, `_sign_capability_rating()`, `synlynk identity init`. `capability_ratings.ed25519_sig` now populated on every write.
+  - **Task 6 — Anti-gaming cap (Claude fallback):** `_extract_auto_signals` returns `test_count`; `quality_auto` capped at 5.0 when `test_pass_rate==1.0 and test_count<3`. 4 new tests in `test_capability_scoring.py`.
+  - **Task 7 — Package split (Codex):** `bin/synlynk.py` → 5-line shim; all code in `synlynk/__init__.py`. Test sys.path updated across all 4 test files.
+  - **Cross-review fixes (d450e19):** `try/except` around ssh-keygen; `sig_file=None` init + finally cleanup; `entry.get("symbols") or []` (2 sites); `if not pattern: return ""`; `with open()` for pub + sig reads.
+  - **Python 3.8 compat (54102b4):** `str | None` → `Optional[str]` in `_extract_diff`.
+- **Tests:** 365 passing (219 test_synlynk + 47 test_capability_scoring + 99 other)
+- **Blog post:** `docs/blog/19-v0.9.0-kernel-fixes.md`
+- **Key learning:** AGY can internally `cd` away from worktree CWD during background dispatch — adds noise/incorrect results. CWD pinning needed in dispatch context (backlog).
+- **Roadmap:** v0.9.0 → ✅ Shipped
+
 ## 2026-06-17
 ### Session: v0.4.1 Instruction Reach — PR #45, merged
 

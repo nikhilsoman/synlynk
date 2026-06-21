@@ -18,7 +18,7 @@
 | **v0.8.2** | Marketing Intern | Communicator — blog posts, release notes, social copy | 🔜 Next | June 2026 |
 | **v0.8.3** | PM Agent | Orchestrator — growth signals, story routing, sprint pulse | 🔜 Next | July 2026 |
 | **v0.8.4** | Compliance Officer + Docs Keeper | Maintainer + Communicator — convention drift, docs staleness | 🔜 Next | July 2026 |
-| **v0.9.0** | Kernel Fixes + Package Split | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming · package split | 📋 Planned | July 2026 |
+| **v0.9.0** | Kernel Fixes + Package Split | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming · package split | ✅ Shipped | June 2026 |
 | **v0.9.1** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | 📋 Planned | July 2026 |
 | **v0.9.2** | Async Daemon | `synlynk daemon` · launchd/systemd · job queue · HTTP context server localhost:27471 | 📋 Planned | July 2026 |
 | **v0.9.3** | Workgroup Relay | WSS/443 relay · 3 deployment modes (LAN/Cloudflare Tunnel/VPS) · revolving host protocol | 📋 Planned | July 2026 |

@@ -61,15 +61,15 @@
 ---
 
 ## v0.9.0 — Kernel Fixes + Package Split
-- [ ] `generate_context(scope=task)` — scoped context slice; currently falls back to full (line ~2955) <!-- id:200 -->
-- [ ] Task → file-path mapping: inject `## Relevant Files` into dispatch prompt from source-map <!-- id:201 -->
-- [ ] Verify contract: inject `## How to verify: pytest tests/test_x.py` per dispatch <!-- id:202 -->
-- [ ] Per-agent dispatch framing: Codex (criteria+filelist) ≠ Claude (narrative) ≠ AGY (arg framing) <!-- id:203 -->
+- [x] `generate_context(scope=task)` — scoped context slice; currently falls back to full (line ~2955) <!-- id:200 -->
+- [x] Task → file-path mapping: inject `## Relevant Files` into dispatch prompt from source-map <!-- id:201 -->
+- [x] Verify contract: inject `## How to verify: pytest tests/test_x.py` per dispatch <!-- id:202 -->
+- [x] Per-agent dispatch framing: Codex (criteria+filelist) ≠ Claude (narrative) ≠ AGY (arg framing) <!-- id:203 -->
 - [x] Wire Ed25519 signing into `_write_capability_rating` (col exists, signing not called) <!-- id:204 -->
 - [x] Anti-gaming baseline: minimum complexity threshold in `quality_auto` scoring <!-- id:205 -->
-- [ ] **Package split:** `bin/synlynk.py` → `synlynk/` package (db · scan · context · instructions · dispatch · sentinel · daemon modules) <!-- id:206 -->
-- [ ] Update all imports, entry point, install.sh, tests after split <!-- id:207 -->
-- [ ] 342 existing tests must pass after split <!-- id:208 -->
+- [x] **Package split:** `bin/synlynk.py` → `synlynk/` package (db · scan · context · instructions · dispatch · sentinel · daemon modules) <!-- id:206 -->
+- [x] Update all imports, entry point, install.sh, tests after split <!-- id:207 -->
+- [x] 365 tests passing after split (was 342 target) <!-- id:208 -->
 
 ## v0.9.1 — Team Onboarding + Consensus Framework
 - [ ] `synlynk join` command: source scan → AI context files → devlog seed → team digest → task recommendation <!-- id:210 -->
