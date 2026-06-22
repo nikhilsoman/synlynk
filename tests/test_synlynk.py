@@ -2668,3 +2668,59 @@ def test_team_status_shows_in_progress(project_dir, capsys):
     out = capsys.readouterr().out
     assert "My feature" in out
     assert "25,000" in out
+
+
+def test_decide_dry_run_no_files(project_dir, monkeypatch):
+    """Without --record, no files written to decisions/."""
+    import synlynk
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"My recommendation on the topic from {agent}. Decision: go with option A.")
+    synlynk.cmd_decide("Test topic", panel=["claude"], record=False)
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    assert not decisions_dir.exists() or len(list(decisions_dir.iterdir())) == 0
+
+def test_decide_record_writes_md_and_json(project_dir, monkeypatch):
+    """With --record, both .md and .json files are written."""
+    import synlynk, json as _json
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"Analysis from {agent}. Decision: use option B.")
+    synlynk.cmd_decide("Relay ownership", panel=["claude", "agy"], record=True)
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    md_files = list(decisions_dir.glob("*.md"))
+    json_files = list(decisions_dir.glob("*.json"))
+    assert len(md_files) == 1
+    assert len(json_files) == 1
+    record = _json.loads(json_files[0].read_text())
+    assert record["topic"] == "Relay ownership"
+    assert "claude" in record["inputs"]
+    assert "agy" in record["inputs"]
+    assert record["status"] == "approved"
+
+def test_decide_json_has_decision_id(project_dir, monkeypatch):
+    import synlynk, json as _json
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: "Analysis. Decision: proceed.")
+    synlynk.cmd_decide("Architecture choice", panel=["claude"], record=True)
+    json_file = next((project_dir / "project-docs" / "decisions").glob("*.json"))
+    record = _json.loads(json_file.read_text())
+    assert record["decision_id"].startswith("dec-")
+
+def test_decide_md_contains_panel_inputs(project_dir, monkeypatch):
+    import synlynk
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"Input from {agent}. Decision: yes.")
+    synlynk.cmd_decide("DB choice", panel=["claude", "codex"], record=True)
+    md_file = next((project_dir / "project-docs" / "decisions").glob("*.md"))
+    content = md_file.read_text()
+    assert "### claude" in content
+    assert "### codex" in content
+    assert "## Synthesis" in content
+    assert "> Signatures:" in content
+
+def test_decide_all_agents_fail_exits(project_dir, monkeypatch):
+    import synlynk, pytest
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: "")
+    with pytest.raises(SystemExit) as exc:
+        synlynk.cmd_decide("Topic", panel=["claude"], record=False)
+    assert exc.value.code == 1
