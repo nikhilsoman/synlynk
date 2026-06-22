@@ -1,0 +1,89 @@
+<h2>Design: Board as Bidirectional Context Layer</h2>
+<p class="subtitle">v0.4 addition · two data flows · five new commands</p>
+
+<div class="section">
+  <span class="label">The Two Flows</span>
+  <div class="split" style="margin-top:12px">
+    <div class="mockup">
+      <div class="mockup-header">Write Path — Agent → Board</div>
+      <div class="mockup-body" style="font-size:13px;line-height:2">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #30304a">
+          <code style="background:#1a1a2e;padding:2px 8px;border-radius:4px;color:#7c6af7">synlynk board connect &lt;url&gt;</code>
+          <span style="color:#888">→ introspects board schema, writes .synlynk/config.json</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #30304a">
+          <code style="background:#1a1a2e;padding:2px 8px;border-radius:4px;color:#7c6af7">synlynk start --issue &lt;n&gt;</code>
+          <span style="color:#888">→ sets Agent + Status=In Progress, creates worktree, injects context</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #30304a">
+          <code style="background:#1a1a2e;padding:2px 8px;border-radius:4px;color:#7c6af7">synlynk pr</code>
+          <span style="color:#888">→ sets Status=In Review, suggests peer reviewer, opens PR</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+          <code style="background:#1a1a2e;padding:2px 8px;border-radius:4px;color:#7c6af7">synlynk done</code>
+          <span style="color:#888">→ sets Status=Done, deletes worktree, archives devlog entry</span>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Read Path — Board → Context</div>
+      <div class="mockup-body" style="font-size:13px;line-height:1.8">
+        <p style="color:#aaa;margin:0 0 10px">On every <code>synlynk start</code> or <code>synlynk exec</code>, Synlynk queries all registered boards for In Progress items and injects into <code>.synlynk/context.md</code>:</p>
+        <div style="background:#0d1117;border:1px solid #30304a;border-radius:6px;padding:12px;font-family:monospace;font-size:12px;color:#ccc">
+          <span style="color:#4caf50">## Live WIP — other agents</span><br>
+          <span style="color:#888"># auto-injected by synlynk, do not edit</span><br><br>
+          | Repo | Issue | Agent | Branch | Status |<br>
+          |------|-------|-------|--------|--------|<br>
+          | rxcc | #42 | Gemini | feat/gemini/ui-timeline | In Progress |<br>
+          | rxcc | #38 | Codex | test/codex/auth-suite | In Review |<br>
+          | rxcc | #45 | Claude | fix/claude/ocr-timeout | In Progress |<br><br>
+          <span style="color:#ff6b6b">⚠ Do not push to these branches.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <span class="label">Config Schema</span>
+  <div class="split" style="margin-top:12px">
+    <div class="mockup">
+      <div class="mockup-header">~/.synlynk/config.json (global)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;color:#ccc;background:#0d1117;padding:12px;border-radius:6px">
+        {<br>
+        &nbsp;&nbsp;<span style="color:#7c6af7">"github"</span>: {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"token"</span>: <span style="color:#4caf50">"ghp_..."</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"agent_identity"</span>: <span style="color:#4caf50">"claude"</span><br>
+        &nbsp;&nbsp;},<br>
+        &nbsp;&nbsp;<span style="color:#7c6af7">"registered_repos"</span>: [<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#4caf50">"Dialify/rxcc"</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#4caf50">"Dialify/synlynk"</span><br>
+        &nbsp;&nbsp;]<br>
+        }
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">.synlynk/config.json (per-repo)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;color:#ccc;background:#0d1117;padding:12px;border-radius:6px">
+        {<br>
+        &nbsp;&nbsp;<span style="color:#7c6af7">"board"</span>: {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"project_id"</span>: <span style="color:#4caf50">"PVT_kwDO..."</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"fields"</span>: {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"status_field_id"</span>: <span style="color:#4caf50">"PVTSSF_..."</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"agent_field_id"</span>: <span style="color:#4caf50">"PVTSSF_..."</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"status_options"</span>: { <span style="color:#888">/* dynamically resolved */</span> },<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"agent_options"</span>: { <span style="color:#888">/* dynamically resolved */</span> }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;},<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"review_rotation"</span>: {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"claude"</span>: <span style="color:#4caf50">"gemini"</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"gemini"</span>: <span style="color:#4caf50">"codex"</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7c6af7">"codex"</span>: <span style="color:#4caf50">"claude"</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+        &nbsp;&nbsp;}<br>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="color:#888;font-size:12px;margin-top:16px">Does this architecture look right? Respond in terminal.</p>

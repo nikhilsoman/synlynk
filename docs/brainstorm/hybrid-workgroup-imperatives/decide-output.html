@@ -1,0 +1,104 @@
+<h2>synlynk decide — Decision record format</h2>
+<p class="subtitle">When the panel reaches consensus, a Decision record is written to <code>project-docs/decisions/</code>. Which format?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Markdown with YAML frontmatter</h3>
+      <p>Human-readable, git-diffable, consistent with existing project-docs/ style. Ed25519 signatures stored as a <code>signatures:</code> block in frontmatter.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">project-docs/decisions/2026-06-22-relay-ownership.md</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.6">
+          <pre style="margin:0">---
+decision_id: dec-a1b2c3d4
+topic: "Relay ownership model"
+date: 2026-06-22
+panel: [claude, agy, codex, nikhil]
+status: approved
+signatures:
+  claude:  "ed25519:abc123..."
+  agy:     "ed25519:def456..."
+  codex:   "ed25519:ghi789..."
+---
+
+## Topic
+Relay ownership model for v0.9.3
+
+## Panel Inputs
+
+### claude
+Community relay as default; self-host gated behind
+enterprise flag. Fly.io for infrastructure...
+
+### agy
+Agree with community-first. Cloudflare Tunnel as
+the bridge mode for hybrid teams...
+
+### codex
+LAN mode must remain available offline...
+
+## Synthesis
+Community relay is the default experience...
+
+## Decision
+Option C (Hybrid): community relay default,
+self-host gated.</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>JSON record</h3>
+      <p>Machine-readable, easy to query from state.db or scripts. Signatures are first-class fields. Less readable in GitHub PR reviews.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">project-docs/decisions/2026-06-22-relay-ownership.json</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.6">
+          <pre style="margin:0">{
+  "decision_id": "dec-a1b2c3d4",
+  "topic": "Relay ownership model",
+  "date": "2026-06-22",
+  "panel": ["claude", "agy", "codex", "nikhil"],
+  "status": "approved",
+  "inputs": {
+    "claude": "Community relay as default...",
+    "agy": "Agree with community-first...",
+    "codex": "LAN mode must stay available..."
+  },
+  "synthesis": "Community relay is the default...",
+  "decision": "Option C (Hybrid)",
+  "signatures": {
+    "claude": "ed25519:abc123...",
+    "agy": "ed25519:def456...",
+    "codex": "ed25519:ghi789..."
+  }
+}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Markdown + sidecar JSON (Recommended)</h3>
+      <p>Human-readable <code>.md</code> for reading and git review, <code>.json</code> sidecar for machine querying. Same decision_id ties them together.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Two files, one decision</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.6">
+          <pre style="margin:0">project-docs/decisions/
+  2026-06-22-relay-ownership.md   ← human readable
+  2026-06-22-relay-ownership.json ← machine queryable
+
+Both share decision_id: dec-a1b2c3d4
+Signatures live in the JSON.
+MD links to JSON for verification:
+  > Signatures: see relay-ownership.json</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
