@@ -2473,3 +2473,34 @@ def test_install_cron_idempotent(project_dir, monkeypatch):
     synlynk._install_cron_entry("support")
     second = crontab_contents[0]
     assert second.count("synlynk.py agent run support") == 1
+
+
+def test_story_create_with_tokens(project_dir):
+    import synlynk
+    sid = synlynk.cmd_story_create("Test story", estimated_tokens=50000)
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT estimated_tokens FROM stories WHERE story_id=?", (sid,)
+    ).fetchone()
+    conn.close()
+    assert row[0] == 50000
+
+
+def test_story_create_without_tokens(project_dir):
+    import synlynk
+    sid = synlynk.cmd_story_create("No budget")
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT estimated_tokens FROM stories WHERE story_id=?", (sid,)
+    ).fetchone()
+    conn.close()
+    assert row[0] is None
+
+
+def test_story_list_shows_token_columns(project_dir, capsys):
+    import synlynk
+    synlynk.cmd_story_create("Token story", estimated_tokens=12345)
+    synlynk.cmd_story_list()
+    out = capsys.readouterr().out
+    assert "EST TOK" in out
+    assert "12,345" in out
