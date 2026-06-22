@@ -37,7 +37,6 @@
     margin: 0 auto;
   }
 
-  /* ── PAGE BREAKS ── */
   .page {
     width: 210mm;
     min-height: 297mm;
@@ -47,7 +46,6 @@
   }
   .page:last-child { page-break-after: auto; }
 
-  /* ── GLOBAL NOISE TEXTURE ── */
   .page::before {
     content: '';
     position: absolute;
@@ -59,9 +57,7 @@
 
   .page > * { position: relative; z-index: 1; }
 
-  /* ══════════════════════════════════════
-     PAGE 1 — COVER
-  ══════════════════════════════════════ */
+  /* COVER */
   .cover {
     background: linear-gradient(145deg, #060a14 0%, #0a1020 40%, #0d1530 100%);
     display: flex;
@@ -167,7 +163,7 @@
 
   .cover-pills {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
     justify-content: center;
     margin-bottom: 48px;
@@ -190,9 +186,7 @@
     text-transform: uppercase;
   }
 
-  /* ══════════════════════════════════════
-     CONTENT PAGES — SHARED
-  ══════════════════════════════════════ */
+  /* CONTENT PAGES */
   .content-page {
     background: var(--bg);
     padding: 14mm 14mm;
@@ -202,7 +196,6 @@
     gap: 0;
   }
 
-  /* Page header strip */
   .page-header {
     display: flex;
     align-items: center;
@@ -237,7 +230,6 @@
     color: var(--muted);
   }
 
-  /* Section headings */
   .section-label {
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px;
@@ -283,7 +275,7 @@
     margin-bottom: 8px;
   }
 
-  /* ── TERMINAL BLOCK ── */
+  /* TERMINAL */
   .terminal {
     background: #050810;
     border: 1px solid rgba(0,229,255,0.15);
@@ -329,7 +321,7 @@
   .t-warn { color: var(--orange); }
   .t-comment { color: #2a3a50; }
 
-  /* ── CALLOUT BOXES ── */
+  /* CALLOUT BOXES */
   .callout {
     border-radius: 10px;
     padding: 10px 14px;
@@ -365,7 +357,7 @@
   .callout-warn .callout-title { color: var(--orange); }
   .callout-warn .callout-text { color: var(--dim); }
 
-  /* ── ACHIEVEMENT UNLOCKED ── */
+  /* ACHIEVEMENT */
   .achievement {
     background: linear-gradient(135deg, rgba(255,214,10,0.08) 0%, rgba(255,107,53,0.05) 100%);
     border: 1px solid rgba(255,214,10,0.25);
@@ -395,7 +387,7 @@
   }
   .achievement-desc { font-size: 10px; color: var(--muted); }
 
-  /* ── BENEFIT CARDS ── */
+  /* BENEFIT CARDS */
   .benefit-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -430,7 +422,7 @@
   .benefit-title { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
   .benefit-desc { font-size: 10px; color: var(--muted); line-height: 1.5; }
 
-  /* ── STEP FLOW ── */
+  /* STEP FLOW */
   .step-flow {
     display: flex;
     flex-direction: column;
@@ -463,13 +455,6 @@
   .step-title { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
   .step-desc { font-size: 10.5px; color: var(--muted); line-height: 1.5; }
 
-  .step-connector {
-    width: 24px;
-    display: flex;
-    justify-content: center;
-    margin: 0 0 0 0;
-  }
-
   .step-line {
     width: 1px;
     height: 8px;
@@ -477,7 +462,7 @@
     margin-left: 11px;
   }
 
-  /* ── COMMAND REFERENCE TABLE ── */
+  /* COMMAND TABLE */
   .cmd-table {
     width: 100%;
     border-collapse: collapse;
@@ -515,7 +500,7 @@
 
   .cmd-table tr:hover td { background: rgba(255,255,255,0.015); }
 
-  /* ── STAT PILLS ── */
+  /* STAT PILLS */
   .stat-row {
     display: flex;
     gap: 8px;
@@ -541,7 +526,7 @@
 
   .stat-label { font-size: 9px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
 
-  /* ── CHAPTER INTRO HERO ── */
+  /* CHAPTER HERO */
   .chapter-hero {
     background: linear-gradient(135deg, rgba(0,229,255,0.04) 0%, rgba(168,85,247,0.04) 100%);
     border: 1px solid var(--border);
@@ -550,18 +535,18 @@
     margin-bottom: 12px;
   }
 
-  /* ── COLUMN LAYOUTS ── */
+  /* COLUMN LAYOUTS */
   .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 
-  /* ── DIVIDER ── */
+  /* DIVIDER */
   .divider {
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--border), transparent);
     margin: 10px 0;
   }
 
-  /* ── INLINE CODE ── */
+  /* INLINE CODE */
   code {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
@@ -572,7 +557,7 @@
     border: 1px solid rgba(0,229,255,0.1);
   }
 
-  /* ── TAG ── */
+  /* TAGS */
   .tag {
     display: inline-block;
     font-size: 9px;
@@ -585,9 +570,10 @@
 
   .tag-new { background: rgba(0,255,157,0.12); color: var(--green); border: 1px solid rgba(0,255,157,0.25); }
   .tag-v4  { background: rgba(0,229,255,0.1); color: var(--cyan); border: 1px solid rgba(0,229,255,0.2); }
+  .tag-v9  { background: rgba(168,85,247,0.12); color: var(--purple); border: 1px solid rgba(168,85,247,0.25); }
   .tag-wip { background: rgba(255,214,10,0.1); color: var(--yellow); border: 1px solid rgba(255,214,10,0.25); }
 
-  /* ── FLOWCHART ── */
+  /* FLOW */
   .flow {
     display: flex;
     align-items: center;
@@ -624,19 +610,56 @@
   }
   .flow-node.active .flow-node-label { color: var(--cyan); }
 
-  /* ── PRINT SETTINGS ── */
-  @page {
-    size: A4;
-    margin: 0;
+  /* FEATURE COMPARISON TABLE */
+  .feat-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    margin: 6px 0;
+  }
+  .feat-table th {
+    background: rgba(0,229,255,0.06);
+    color: var(--cyan);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0,229,255,0.15);
+  }
+  .feat-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+    color: var(--dim);
+    line-height: 1.45;
+  }
+  .feat-table tr:last-child td { border-bottom: none; }
+  .feat-table td:first-child { color: var(--text); font-weight: 600; font-size: 10px; }
+  .feat-table td:nth-child(2) { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); }
+  .feat-check { color: var(--green); font-weight: 700; }
+  .feat-cross { color: #3a4a60; }
+  .feat-group-header td {
+    background: rgba(168,85,247,0.06);
+    color: var(--purple);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(168,85,247,0.15);
   }
 
+  /* PRINT */
+  @page { size: A4; margin: 0; }
   @media print {
     body { width: 210mm; }
     .page { page-break-after: always; }
     .page:last-child { page-break-after: auto; }
   }
 
-  /* ── BACK COVER ── */
+  /* BACK COVER */
   .back-cover {
     background: linear-gradient(145deg, #060a14 0%, #0a1020 60%, #0d1530 100%);
     display: flex;
@@ -654,9 +677,7 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════════════
-     PAGE 1 — COVER
-══════════════════════════════════════ -->
+<!-- PAGE 1 — COVER -->
 <div class="page">
 <div class="cover">
   <div class="cover-grid"></div>
@@ -667,15 +688,15 @@
 
   <div class="cover-logo">SYNLYNK</div>
   <div class="cover-tagline">The OS for Multi-Agent Development</div>
-  <div class="cover-version">v0.4.0 · Hybrid Workgroup Bootstrap</div>
+  <div class="cover-version">v0.9.1 · Team Onboarding + Install Hardening</div>
 
   <div class="cover-hero-command">
     <div><span class="prompt">$</span> <span class="cmd">synlynk</span> <span class="arg">init</span></div>
     <div style="color:#2a3a50; margin: 4px 0;">───────────────────────────────</div>
-    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">Project context injected</span></div>
-    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">3 agents discovered  (claude · gemini · codex)</span></div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">roadmap.md  (migrated from existing roadmap.md)</span></div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">memory.md   (migrated from rxcc_memory.md)</span></div>
+    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">3 agents discovered  (claude · agy · codex)</span></div>
     <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">Budget guard active  $10.00 / session</span></div>
-    <div><span style="color:#00ff9d;">✓</span> <span style="color:#64748b;">Sentinel monitoring enabled</span></div>
     <div style="color:#2a3a50; margin: 4px 0;">───────────────────────────────</div>
     <div><span style="color:#ffd60a;">→</span> <span style="color:#94a3b8;">synlynk exec claude</span></div>
   </div>
@@ -683,10 +704,13 @@
   <div class="cover-pills">
     <div class="cover-pill">🔌 Zero Dependencies</div>
     <div class="cover-pill">🐍 Python 3 stdlib only</div>
-    <div class="cover-pill">🤖 Claude · Gemini · Codex</div>
+    <div class="cover-pill">🤖 Claude · AGY · Codex</div>
     <div class="cover-pill">💰 Cost Tracking</div>
     <div class="cover-pill">🛡️ Sentinel Guard</div>
     <div class="cover-pill">⚡ Background Dispatch</div>
+    <div class="cover-pill">👥 Team Mode</div>
+    <div class="cover-pill">🔑 Ed25519 Signing</div>
+    <div class="cover-pill">🔍 Source Scan</div>
   </div>
 
   <div class="cover-footer">synlynk.dev &nbsp;·&nbsp; github.com/nikhilsoman/synlynk &nbsp;·&nbsp; 2026</div>
@@ -694,9 +718,7 @@
 </div>
 
 
-<!-- ══════════════════════════════════════
-     PAGE 2 — WHAT IS SYNLYNK + WHY
-══════════════════════════════════════ -->
+<!-- PAGE 2 — WHAT IS SYNLYNK + WHY -->
 <div class="page">
 <div class="content-page">
 
@@ -711,36 +733,35 @@
 
   <div class="chapter-hero">
     <p style="margin:0; font-size:12px; color: var(--text); line-height:1.7;">
-      Synlynk is a single-file Python CLI that wraps AI agents — Claude, Gemini, Codex — and makes them <strong style="color:var(--cyan)">project-aware, cost-tracked, and safe to run in parallel</strong>. It injects your project's context before every invocation, guards your budget, detects hallucination loops, and lets you dispatch background tasks across multiple agents simultaneously.
+      Synlynk is a single-file Python CLI that wraps AI agents — Claude, AGY (AntiGravity), Codex — and makes them <strong style="color:var(--cyan)">project-aware, cost-tracked, and safe to run in parallel</strong>. It injects your project's context before every invocation, guards your budget, detects hallucination loops, lets you dispatch background tasks across multiple agents simultaneously, and migrates your existing docs on first run.
     </p>
   </div>
 
-  <!-- Flow diagram -->
   <h2 class="section">How it works</h2>
 
   <div class="flow">
     <div class="flow-node active">
       <span class="flow-node-icon">📁</span>
       <div class="flow-node-label">Your Repo</div>
-      <div class="flow-node-sub">project-docs/</div>
+      <div class="flow-node-sub">any git repo</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-node active">
       <span class="flow-node-icon">⬡</span>
       <div class="flow-node-label">Synlynk</div>
-      <div class="flow-node-sub">bin/synlynk.py</div>
+      <div class="flow-node-sub">synlynk/__init__.py</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-node">
       <span class="flow-node-icon">🧠</span>
       <div class="flow-node-label">Context</div>
-      <div class="flow-node-sub">memory · roadmap · todos</div>
+      <div class="flow-node-sub">memory · roadmap · scan</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-node active">
       <span class="flow-node-icon">🤖</span>
       <div class="flow-node-label">AI Agent</div>
-      <div class="flow-node-sub">claude · gemini · codex</div>
+      <div class="flow-node-sub">claude · agy · codex</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-node">
@@ -752,13 +773,12 @@
 
   <div class="divider"></div>
 
-  <!-- Benefits grid -->
   <h2 class="section">Why Synlynk?</h2>
   <div class="benefit-grid">
     <div class="benefit-card bc-cyan">
       <span class="benefit-icon">🧠</span>
       <div class="benefit-title">Context-Aware by Default</div>
-      <div class="benefit-desc">Every agent invocation automatically receives your roadmap, memory notes, and todos — no more copy-pasting context into every session.</div>
+      <div class="benefit-desc">Every agent invocation automatically receives your roadmap, memory notes, todos, and a source architecture snapshot — no more copy-pasting context into every session.</div>
     </div>
     <div class="benefit-card bc-green">
       <span class="benefit-icon">💰</span>
@@ -773,7 +793,7 @@
     <div class="benefit-card bc-yellow">
       <span class="benefit-icon">⚡</span>
       <div class="benefit-title">Parallel Dispatch</div>
-      <div class="benefit-desc">Launch Claude, Gemini, and Codex in parallel on different tasks. Monitor all jobs, tail logs, and compare results — all from one CLI.</div>
+      <div class="benefit-desc">Launch Claude, AGY, and Codex in parallel on different tasks. Monitor all jobs, tail logs, and compare results — all from one CLI.</div>
     </div>
     <div class="benefit-card bc-orange">
       <span class="benefit-icon">👥</span>
@@ -783,19 +803,18 @@
     <div class="benefit-card bc-pink">
       <span class="benefit-icon">🔌</span>
       <div class="benefit-title">Zero Dependencies</div>
-      <div class="benefit-desc">Pure Python 3 stdlib. No pip install, no Docker, no build step. One file. Works in any environment where Python 3 runs.</div>
+      <div class="benefit-desc">Pure Python 3 stdlib. No pip install, no Docker, no build step. One package. Works in any environment where Python 3 runs.</div>
     </div>
   </div>
 
-  <!-- Stat row -->
   <div class="stat-row" style="margin-top: 10px;">
     <div class="stat-pill">
-      <div class="stat-num" style="background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">1</div>
-      <div class="stat-label">File · No Build Step</div>
+      <div class="stat-num" style="background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">19</div>
+      <div class="stat-label">Features Shipped</div>
     </div>
     <div class="stat-pill">
-      <div class="stat-num" style="background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">3</div>
-      <div class="stat-label">AI Agents Supported</div>
+      <div class="stat-num" style="background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">365</div>
+      <div class="stat-label">Tests Passing</div>
     </div>
     <div class="stat-pill">
       <div class="stat-num" style="background: linear-gradient(135deg, var(--yellow), var(--orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">0</div>
@@ -811,9 +830,7 @@
 </div>
 
 
-<!-- ══════════════════════════════════════
-     PAGE 3 — INSTALL + INIT
-══════════════════════════════════════ -->
+<!-- PAGE 3 — INSTALL + INIT -->
 <div class="page">
 <div class="content-page">
 
@@ -831,7 +848,7 @@
       <div class="step-num">1</div>
       <div class="step-body">
         <div class="step-title">Clone &amp; install globally</div>
-        <div class="step-desc">Adds <code>synlynk</code> to your PATH via <code>~/.synlynk/bin/</code>. No sudo, no pip, no build.</div>
+        <div class="step-desc">Adds <code>synlynk</code> to your PATH via <code>~/.synlynk/bin/</code>. Installs the package to <code>~/.synlynk/lib/synlynk/</code>. No sudo, no pip, no build.</div>
       </div>
     </div>
   </div>
@@ -844,10 +861,11 @@
     <div class="terminal-body">
       <div><span class="t-prompt">$ </span><span class="t-cmd">git clone</span> <span class="t-arg">https://github.com/nikhilsoman/synlynk</span></div>
       <div><span class="t-prompt">$ </span><span class="t-cmd">cd</span> <span class="t-arg">synlynk</span> <span class="t-cmd">&amp;&amp; ./install.sh</span></div>
-      <div><span class="t-comment">#</span></div>
-      <div><span class="t-success">✓</span> <span class="t-out">Installed to ~/.synlynk/bin/synlynk</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-success">✓</span> <span class="t-out">Installed synlynk/ package to ~/.synlynk/lib/</span></div>
+      <div><span class="t-success">✓</span> <span class="t-out">Installed binary to ~/.synlynk/bin/synlynk</span></div>
       <div><span class="t-success">✓</span> <span class="t-out">PATH updated in ~/.zshrc</span></div>
-      <div><span class="t-success">✓</span> <span class="t-out">synlynk 0.4.0 ready</span></div>
+      <div><span class="t-success">✓</span> <span class="t-out">synlynk 0.9.1 ready</span></div>
     </div>
   </div>
 
@@ -856,8 +874,8 @@
     <div class="step-row">
       <div class="step-num">2</div>
       <div class="step-body">
-        <div class="step-title">Bootstrap your project</div>
-        <div class="step-desc">Run inside any repo. Creates <code>project-docs/</code>, writes <code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>AI_INSTRUCTIONS.md</code>, and <code>.synlynk/config.json</code>. Skips files that already exist.</div>
+        <div class="step-title">Bootstrap your project — with intelligent doc migration</div>
+        <div class="step-desc">Run inside any repo. If the repo already has docs (roadmap, memory, READMEs), synlynk finds them and migrates their content instead of writing blank skeletons. Skips files that already exist.</div>
       </div>
     </div>
   </div>
@@ -865,24 +883,21 @@
   <div class="terminal">
     <div class="terminal-bar">
       <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-      <div class="terminal-label">synlynk init</div>
+      <div class="terminal-label">synlynk init (mature repo)</div>
     </div>
     <div class="terminal-body">
       <div><span class="t-prompt">~/my-project $ </span><span class="t-cmd">synlynk init</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-out">  Mode: single | team? </span><span style="color:var(--yellow);">single</span></div>
-      <div><span class="t-out">  Scanning repository...</span></div>
+      <div><span class="t-out">  Scanning repository for existing docs...</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/roadmap.md</span></div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/memory.md</span></div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/todo.md</span></div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/costs.md</span></div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">CLAUDE.md  (context injected at every session)</span></div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">GEMINI.md  (context injected at every session)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/roadmap.md  </span><span style="color:#a855f7;">(migrated from roadmap.md)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/memory.md   </span><span style="color:#a855f7;">(migrated from rxcc_memory.md)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/todo.md     </span><span style="color:#2a3a50;">(generated from git history)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">CLAUDE.md  · GEMINI.md  · AGENTS.md</span></div>
       <div>&nbsp;</div>
       <div><span class="t-out">  Agents discovered:</span></div>
       <div><span class="t-success">  ✓</span> <span style="color:#a855f7;">claude</span><span class="t-out">  →  /usr/local/bin/claude</span></div>
-      <div><span class="t-success">  ✓</span> <span style="color:#00e5ff;">gemini</span><span class="t-out">  →  /usr/local/bin/gemini</span></div>
+      <div><span class="t-success">  ✓</span> <span style="color:#00e5ff;">agy   </span><span class="t-out">  →  /usr/local/bin/agy</span></div>
       <div>&nbsp;</div>
       <div><span style="color:#ffd60a;">  →</span> <span class="t-out">Ready. Try: </span><span class="t-cmd">synlynk exec claude</span></div>
     </div>
@@ -891,8 +906,8 @@
   <div class="callout callout-power" style="margin-top: 8px;">
     <div class="callout-icon">⚡</div>
     <div class="callout-body">
-      <div class="callout-title">Magic Moments</div>
-      <div class="callout-text">The init wizard scans your repo's README, git history, and existing docs to pre-fill your roadmap and memory with real context about what you're building — not generic placeholders.</div>
+      <div class="callout-title">Smart Doc Migration</div>
+      <div class="callout-text">Synlynk searches for existing docs at the repo root, in <code>project-docs/</code>, and project-prefixed variants (<code>rxcc_memory.md</code>, <code>rxcc-roadmap.md</code>). First match &gt;200 bytes is migrated verbatim — your work, not a blank template. Git history powers a seed roadmap as a last resort.</div>
     </div>
   </div>
 
@@ -902,7 +917,7 @@
       <div class="step-num">3</div>
       <div class="step-body">
         <div class="step-title">Run your first context-injected session</div>
-        <div class="step-desc">Synlynk prepends your project context before spawning the agent — the AI already knows your roadmap, decisions, and open tasks.</div>
+        <div class="step-desc">Synlynk prepends your project context before spawning the agent — the AI already knows your roadmap, decisions, source architecture, and open tasks.</div>
       </div>
     </div>
   </div>
@@ -915,12 +930,12 @@
     <div class="terminal-body">
       <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk exec</span> <span class="t-arg">claude</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-out">  📋 Context injected  (memory · roadmap · todos)</span></div>
+      <div><span class="t-out">  📋 Context injected  (memory · roadmap · todos · source scan)</span></div>
       <div><span class="t-out">  💰 Budget: $2.34 / $10.00 used this session</span></div>
       <div><span class="t-out">  🚀 Launching claude...</span></div>
       <div>&nbsp;</div>
-      <div><span style="color:#a855f7;">  claude ›</span> <span class="t-out">I can see you're building a billing API for the monetization</span></div>
-      <div><span class="t-out">            module. Based on your roadmap, the next step is...</span></div>
+      <div><span style="color:#a855f7;">  claude ›</span> <span class="t-out">Based on your roadmap and source scan, the auth module</span></div>
+      <div><span class="t-out">            needs the OAuth flow in src/auth/oauth.py. Let me...</span></div>
     </div>
   </div>
 
@@ -929,7 +944,7 @@
     <div class="achievement-body">
       <div class="achievement-eyebrow">Achievement Unlocked</div>
       <div class="achievement-title">Context Master</div>
-      <div class="achievement-desc">Your AI agent now knows your entire project history — zero onboarding time on every session.</div>
+      <div class="achievement-desc">Your AI agent now knows your entire project history, source architecture, and open tasks — zero onboarding time on every session.</div>
     </div>
   </div>
 
@@ -937,9 +952,7 @@
 </div>
 
 
-<!-- ══════════════════════════════════════
-     PAGE 4 — DISPATCH + PARALLEL AGENTS
-══════════════════════════════════════ -->
+<!-- PAGE 4 — DISPATCH + PARALLEL AGENTS -->
 <div class="page">
 <div class="content-page">
 
@@ -949,12 +962,11 @@
     <div class="page-header-num">04</div>
   </div>
 
-  <div class="section-label">v0.4.0 Feature · Hybrid Workgroup Bootstrap</div>
+  <div class="section-label">v0.4.0+ · Background Dispatch</div>
   <h1 class="chapter">Run agents in parallel.<br>In the background.</h1>
 
   <p>Dispatch fires an agent as a background job — non-interactive, captured to a log file, tracked by the job store. Multiple agents can run simultaneously on different tasks. You keep your terminal free.</p>
 
-  <!-- Dispatch example -->
   <div class="terminal">
     <div class="terminal-bar">
       <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
@@ -964,14 +976,13 @@
       <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk dispatch</span> <span class="t-arg">claude</span> <span class="t-flag">--task</span> <span style="color:var(--text);">"Write unit tests for the billing module"</span></div>
       <div><span class="t-success">  ✓</span> <span class="t-out">Dispatched job-a3f2  (claude)  running in background</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk dispatch</span> <span class="t-arg">gemini</span> <span class="t-flag">--task</span> <span style="color:var(--text);">"Review billing API for edge cases"</span></div>
-      <div><span class="t-success">  ✓</span> <span class="t-out">Dispatched job-b7e1  (gemini)  running in background</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk dispatch</span> <span class="t-arg">agy</span> <span class="t-flag">--task</span> <span style="color:var(--text);">"Review billing API for edge cases"</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Dispatched job-b7e1  (agy)  running in background</span></div>
       <div>&nbsp;</div>
       <div><span class="t-comment"># Both agents working simultaneously — terminal is yours</span></div>
     </div>
   </div>
 
-  <!-- Jobs + Logs side by side -->
   <div class="cols-2" style="margin-top: 8px;">
     <div>
       <h3 class="subsection">Monitor all jobs</h3>
@@ -984,7 +995,7 @@
           <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk jobs</span></div>
           <div>&nbsp;</div>
           <div><span style="color:#00ff9d;">● </span><span style="color:var(--text);">job-a3f2</span>  <span style="color:#a855f7;">claude</span>  <span class="t-out">running  2m14s</span></div>
-          <div><span style="color:#00ff9d;">● </span><span style="color:var(--text);">job-b7e1</span>  <span style="color:#00e5ff;">gemini</span>  <span class="t-out">running  1m58s</span></div>
+          <div><span style="color:#00ff9d;">● </span><span style="color:var(--text);">job-b7e1</span>  <span style="color:#00e5ff;">agy</span>  <span class="t-out">running  1m58s</span></div>
         </div>
       </div>
     </div>
@@ -1007,23 +1018,21 @@
     </div>
   </div>
 
-  <!-- Trio run -->
-  <h2 class="section" style="margin-top:12px;">The Trio Pipeline <span class="tag tag-new">v0.4.0</span></h2>
-  <p>Run a three-agent pipeline: Architect designs, Builder implements, Verifier reviews — all in sequence with full context hand-off between each.</p>
+  <h2 class="section" style="margin-top:12px;">Scoped Story Dispatch <span class="tag tag-v9">v0.9.0</span></h2>
+  <p>Link a dispatch to a tracked story to get a minimal context slice — story metadata, active tasks, and up to 20 domain-filtered source files only. 60–80% less token overhead per dispatch.</p>
 
   <div class="terminal">
     <div class="terminal-bar">
       <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-      <div class="terminal-label">synlynk run --trio</div>
+      <div class="terminal-label">scoped dispatch</div>
     </div>
     <div class="terminal-body">
-      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk run</span> <span class="t-flag">--trio</span> <span style="color:var(--text);">"Add Stripe webhook handler"</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk dispatch</span> <span class="t-arg">codex</span> <span class="t-flag">--story</span> <span class="t-arg">story-abc123</span> <span class="t-flag">--task</span> <span style="color:var(--text);">"Fix token extraction for Codex output format"</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-out">  Phase 1  </span><span style="color:#ffd60a;">Architect</span><span class="t-out"> (claude)  …  ✓ done  job-c1a0</span></div>
-      <div><span class="t-out">  Phase 2  </span><span style="color:#a855f7;">Builder </span><span class="t-out"> (gemini)  …  ✓ done  job-d4b2</span></div>
-      <div><span class="t-out">  Phase 3  </span><span style="color:#00e5ff;">Verifier</span><span class="t-out"> (claude)  …  ✓ done  job-e9f3</span></div>
-      <div>&nbsp;</div>
-      <div><span class="t-success">  ✓ Trio complete. </span><span class="t-out">See logs: synlynk logs job-e9f3</span></div>
+      <div><span class="t-out">  Context: story metadata + active tasks + 8 domain-matched files</span></div>
+      <div><span class="t-out">  Agent framing: ## Task Criteria bullets (Codex-optimised)</span></div>
+      <div><span class="t-out">  Verify: pytest tests/test_synlynk.py -k "token_extraction"</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Dispatched job-c9d4  (codex)  running in background</span></div>
     </div>
   </div>
 
@@ -1032,15 +1041,15 @@
     <div class="achievement-body">
       <div class="achievement-eyebrow">Achievement Unlocked</div>
       <div class="achievement-title">Workgroup Commander</div>
-      <div class="achievement-desc">You now run a multi-agent team. Claude architects, Gemini builds, Claude verifies — while you review the output over coffee.</div>
+      <div class="achievement-desc">You now run a multi-agent team. Claude, AGY, and Codex work in parallel — each receiving exactly the context it needs, no more.</div>
     </div>
   </div>
 
   <div class="callout callout-tip">
     <div class="callout-icon">💡</div>
     <div class="callout-body">
-      <div class="callout-title">Pro Tip — Story IDs</div>
-      <div class="callout-text">Pass <code>--story &lt;id&gt;</code> to any dispatch or run command to link jobs to a tracked work item. Coming in v0.5.0: Synlynk will automatically route to the best agent for that story based on historical performance scores.</div>
+      <div class="callout-title">Agent-Specific Framing</div>
+      <div class="callout-text">Synlynk formats prompts differently per agent: Codex gets scannable <code>## Task Criteria</code> bullets; AGY gets a concise <code>Task:</code> prefix with 2000-char context; Claude receives the full narrative. Same story — three optimised messages.</div>
     </div>
   </div>
 
@@ -1048,9 +1057,7 @@
 </div>
 
 
-<!-- ══════════════════════════════════════
-     PAGE 5 — SENTINEL + BUDGET
-══════════════════════════════════════ -->
+<!-- PAGE 5 — SENTINEL + BUDGET -->
 <div class="page">
 <div class="content-page">
 
@@ -1066,7 +1073,6 @@
   <p>Synlynk watches every agent invocation for danger signals — spiralling costs, hallucination loops, and quota exhaustion — and surfaces alerts before they become expensive mistakes.</p>
 
   <div class="cols-2">
-    <!-- Budget Guard -->
     <div>
       <h2 class="section">💰 Budget Guard</h2>
       <p>Set per-session and per-day limits in <code>.synlynk/config.json</code>. Synlynk blocks execution the moment you'd exceed your limit.</p>
@@ -1078,8 +1084,9 @@
         </div>
         <div class="terminal-body" style="font-size:10px; line-height: 1.9;">
           <div><span style="color:var(--border);">{</span></div>
-          <div>  <span style="color:var(--purple);">"limit_usd"</span><span class="t-out">:      </span><span style="color:var(--yellow);">10.00</span><span class="t-out">,</span></div>
-          <div>  <span style="color:var(--purple);">"limit_requests"</span><span class="t-out">: </span><span style="color:var(--yellow);">100</span></div>
+          <div>  <span style="color:var(--purple);">"limit_usd"</span><span class="t-out">:          </span><span style="color:var(--yellow);">10.00</span><span class="t-out">,</span></div>
+          <div>  <span style="color:var(--purple);">"limit_requests"</span><span class="t-out">:     </span><span style="color:var(--yellow);">100</span><span class="t-out">,</span></div>
+          <div>  <span style="color:var(--purple);">"project_docs_dir"</span><span class="t-out">:  </span><span style="color:var(--green);">"project-docs"</span></div>
           <div><span style="color:var(--border);">}</span></div>
         </div>
       </div>
@@ -1099,7 +1106,6 @@
       </div>
     </div>
 
-    <!-- Sentinel -->
     <div>
       <h2 class="section">🛡️ Sentinel Patterns</h2>
       <p>Sentinel watches your telemetry log and fires alerts for dangerous patterns automatically.</p>
@@ -1137,8 +1143,8 @@
     <div class="terminal-body">
       <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk sentinel list</span></div>
       <div>&nbsp;</div>
-      <div><span style="color:#f87171;">  [CRITICAL]</span>  <span class="t-out">FLATLINE      `synlynk exec claude` failed 3x  —  2026-06-14 09:41</span></div>
-      <div><span style="color:var(--yellow);">  [WARN]    </span>  <span class="t-out">SUCCESS_LOOP  Same command 5x in 4.2 min     —  2026-06-14 10:02</span></div>
+      <div><span style="color:#f87171;">  [CRITICAL]</span>  <span class="t-out">FLATLINE      `synlynk exec claude` failed 3x  —  2026-06-22 09:41</span></div>
+      <div><span style="color:var(--yellow);">  [WARN]    </span>  <span class="t-out">SUCCESS_LOOP  Same command 5x in 4.2 min     —  2026-06-22 10:02</span></div>
       <div>&nbsp;</div>
       <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk sentinel clear</span> <span class="t-flag">--code</span> <span class="t-arg">FLATLINE</span></div>
       <div><span class="t-success">  ✓</span> <span class="t-out">Cleared FLATLINE alerts</span></div>
@@ -1158,142 +1164,605 @@
 </div>
 
 
-<!-- ══════════════════════════════════════
-     PAGE 6 — COMMAND REFERENCE
-══════════════════════════════════════ -->
+<!-- PAGE 6 — TEAMS -->
 <div class="page">
 <div class="content-page">
 
   <div class="page-header">
-    <div class="page-header-title">Chapter 05 — Command Reference</div>
+    <div class="page-header-title">Chapter 05 — Teams</div>
     <div class="page-header-logo">SYNLYNK</div>
     <div class="page-header-num">06</div>
+  </div>
+
+  <div class="section-label">Team Mode</div>
+  <h1 class="chapter">Every teammate.<br>Every agent. In sync.</h1>
+
+  <p>Team mode adds per-user devlogs, a shared roadmap visible to all agents, and a pull-before-write guard that prevents doc conflicts in concurrent sessions. One command to activate it.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">enable team mode</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--mode</span> <span class="t-arg">team</span> <span class="t-flag">--org</span> <span class="t-arg">acme</span> <span class="t-flag">--repo</span> <span class="t-arg">api</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Team mode enabled — project-docs/.synlynk_config.json updated</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/devlogs/nikhil.md  created</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">CLAUDE.md updated with team session protocol</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Pull-before-write guard active</span></div>
+    </div>
+  </div>
+
+  <h2 class="section">How teams work with Synlynk</h2>
+
+  <div class="benefit-grid">
+    <div class="benefit-card bc-cyan">
+      <span class="benefit-icon">📒</span>
+      <div class="benefit-title">Per-User Devlogs</div>
+      <div class="benefit-desc">Each team member writes to their own <code>devlogs/username.md</code>. Agents read recent entries from all teammates so every AI session knows what the whole team has been doing.</div>
+    </div>
+    <div class="benefit-card bc-purple">
+      <span class="benefit-icon">🔒</span>
+      <div class="benefit-title">Pull-Before-Write</div>
+      <div class="benefit-desc">Before writing to any shared doc (roadmap, memory, todo), synlynk auto-pulls from origin. Prevents doc divergence in multi-developer repos. Works with git worktrees.</div>
+    </div>
+    <div class="benefit-card bc-green">
+      <span class="benefit-icon">🏷️</span>
+      <div class="benefit-title">Attribution in Memory</div>
+      <div class="benefit-desc">Decisions written to <code>memory.md</code> carry <code>[@username]</code> markers. Every agent in the team sees who made each decision and when — accountability without meetings.</div>
+    </div>
+    <div class="benefit-card bc-yellow">
+      <span class="benefit-icon">📊</span>
+      <div class="benefit-title">Team Status Dashboard</div>
+      <div class="benefit-desc"><code>synlynk status</code> in team mode shows each teammate's last active session, recent decisions from their devlog, and any open sentinel alerts — your daily standup in one command.</div>
+    </div>
+  </div>
+
+  <h2 class="section">Session protocol for teams</h2>
+
+  <div class="step-flow">
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">Start every session with a pull</div>
+        <div class="step-desc"><code>git pull</code> before <code>synlynk exec</code> — the synlynk guard will remind you if you forget.</div>
+      </div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">Write decisions to memory with attribution</div>
+        <div class="step-desc">Add <code>[@yourname 2026-06-22]</code> to any decision line in <code>memory.md</code> — agents surface these to teammates automatically.</div>
+      </div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">Update your devlog before committing</div>
+        <div class="step-desc">A one-line summary in <code>devlogs/yourname.md</code> is all synlynk needs to brief other agents on your work.</div>
+      </div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step-row">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Use synlynk status for async standups</div>
+        <div class="step-desc"><code>synlynk status</code> shows the whole team's last 3 sessions, open todos, and active sentinel alerts. Replace the morning standup with a glance at the terminal.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-tip" style="margin-top:8px;">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <div class="callout-title">Onboarding a new teammate</div>
+      <div class="callout-text">Have them clone the repo and run <code>synlynk init</code> — their devlog is created automatically, <code>memory.md</code> and <code>roadmap.md</code> are already there from git. They're context-loaded from the first exec.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 7 — MONOREPO ONBOARDING -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 06 — Monorepo Onboarding</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">07</div>
+  </div>
+
+  <div class="section-label">Monorepos</div>
+  <h1 class="chapter">One repo.<br>One state database.</h1>
+
+  <p>Synlynk is monorepo-native. All worktrees for the same git root share a single state database. The scanner excludes <code>node_modules</code>, <code>dist</code>, <code>build</code>, <code>vendor</code>, <code>.next</code>, <code>target</code>, and <code>__pycache__</code> automatically. All you need to decide is where to put the docs.</p>
+
+  <h2 class="section">Step 1 — Decide where your docs live</h2>
+
+  <div class="cols-2">
+    <div>
+      <h3 class="subsection">Option A: docs in project-docs/ (default)</h3>
+      <p style="font-size:10.5px;">Docs stay in a dedicated <code>project-docs/</code> directory at the monorepo root. Best for repos that didn't have docs before synlynk.</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">default</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height:1.8;">
+          <div><span class="t-prompt">~/monorepo $ </span><span class="t-cmd">synlynk init</span></div>
+          <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/roadmap.md</span></div>
+          <div><span class="t-success">  ✓</span> <span class="t-out">project-docs/memory.md</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 class="subsection">Option B: docs at repo root (--docs-dir .)</h3>
+      <p style="font-size:10.5px;">If the monorepo already has <code>roadmap.md</code>, <code>memory.md</code> etc. at the root, tell synlynk where to find them.</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">root docs</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height:1.8;">
+          <div><span class="t-prompt">~/monorepo $ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--docs-dir</span> <span class="t-arg">.</span></div>
+          <div><span class="t-success">  ✓</span> <span class="t-out">roadmap.md  (migrated from roadmap.md)</span></div>
+          <div><span class="t-success">  ✓</span> <span class="t-out">memory.md   (migrated from memory.md)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section">Step 2 — Verify the state DB path</h2>
+
+  <p>The state DB lives at <code>~/.synlynk/projects/&lt;8-char-hash-of-git-root&gt;/state.db</code>. All worktrees for the same monorepo share this DB — capability scores, jobs, and stories are unified across your entire team working on the same repo.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">verify state db</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk status</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-out">  State DB: ~/.synlynk/projects/</span><span style="color:var(--yellow);">a1b2c3d4</span><span class="t-out">/state.db</span></div>
+      <div><span class="t-out">  Git root: /Users/nikhil/monorepo</span></div>
+      <div><span class="t-out">  Docs dir: project-docs/</span></div>
+      <div><span class="t-out">  Worktrees sharing this DB: 3</span></div>
+    </div>
+  </div>
+
+  <h2 class="section">Step 3 — Run a source scan</h2>
+
+  <p>For large monorepos, run an explicit scan so synlynk indexes the architecture before any agent dispatch. The scanner respects all standard build-output exclusions.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">synlynk scan</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk scan</span> <span class="t-flag">--deep</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-out">  Scanning  3,420 files  (skipping node_modules, dist, build, .next, vendor...)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Found 847 symbols across 9 languages</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Wrote project-docs/source-map.md</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Cache stored at HEAD sha a1b2c3d — zero cost on next exec</span></div>
+    </div>
+  </div>
+
+  <div class="callout callout-tip" style="margin-top:8px;">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <div class="callout-title">Monorepo checklist</div>
+      <div class="callout-text">
+        1. One <code>synlynk init</code> at the git root — not per-package.<br>
+        2. Use <code>--docs-dir .</code> if docs already exist at root; default otherwise.<br>
+        3. Run <code>synlynk scan --deep</code> once after init to build the architecture cache.<br>
+        4. All worktrees share the same state DB — capability scores apply repo-wide.
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 8 — MULTI-REPO ONBOARDING -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 07 — Multi-Repo Onboarding</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">08</div>
+  </div>
+
+  <div class="section-label">Multi-Repo Teams</div>
+  <h1 class="chapter">Multiple repos.<br>One workflow.</h1>
+
+  <p>With multi-repo setups, each repository gets its own state database keyed to its git root. Synlynk agents stay scoped to the repo they're running in — no cross-contamination. The pattern is simple: run <code>synlynk init</code> once in each repo, independently.</p>
+
+  <h2 class="section">Each repo is fully independent</h2>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">init each repo independently</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-comment"># Repo 1 — API service</span></div>
+      <div><span class="t-prompt">~/dev/api $ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--mode</span> <span class="t-arg">team</span> <span class="t-flag">--org</span> <span class="t-arg">acme</span> <span class="t-flag">--repo</span> <span class="t-arg">api</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">State DB: ~/.synlynk/projects/</span><span style="color:var(--yellow);">f1a2b3c4</span><span class="t-out">/state.db</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Repo 2 — Frontend app</span></div>
+      <div><span class="t-prompt">~/dev/app $ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--mode</span> <span class="t-arg">team</span> <span class="t-flag">--org</span> <span class="t-arg">acme</span> <span class="t-flag">--repo</span> <span class="t-arg">app</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">State DB: ~/.synlynk/projects/</span><span style="color:var(--yellow);">9e8d7c6b</span><span class="t-out">/state.db</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Each repo has its own context, budget, and sentinel</span></div>
+    </div>
+  </div>
+
+  <h2 class="section">Linking repos to the same GitHub Project</h2>
+
+  <p>Use <code>--project-id</code> to fill the same GitHub Projects v2 node ID into agent instruction files across all repos. This lets you track stories and PRs from different repos in one unified board while each agent file is repo-specific.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">linked project boards</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">~/dev/api $ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--org</span> <span class="t-arg">acme</span> <span class="t-flag">--repo</span> <span class="t-arg">api</span> <span class="t-flag">--project-id</span> <span class="t-arg">PJ_kwDO1234</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">CLAUDE.md · GEMINI.md · AGENTS.md  — project ID baked in</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-prompt">~/dev/app $ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--org</span> <span class="t-arg">acme</span> <span class="t-flag">--repo</span> <span class="t-arg">app</span> <span class="t-flag">--project-id</span> <span class="t-arg">PJ_kwDO1234</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">CLAUDE.md · GEMINI.md · AGENTS.md  — same project board</span></div>
+    </div>
+  </div>
+
+  <h2 class="section">Multi-repo workflow tips</h2>
+
+  <div class="benefit-grid">
+    <div class="benefit-card bc-cyan">
+      <span class="benefit-icon">📁</span>
+      <div class="benefit-title">Separate Costs per Repo</div>
+      <div class="benefit-desc">Each repo has its own <code>project-docs/costs.md</code> and budget limits. You can set a tighter limit on the frontend repo and a generous limit on the core API.</div>
+    </div>
+    <div class="benefit-card bc-green">
+      <span class="benefit-icon">🔍</span>
+      <div class="benefit-title">Scoped Source Scans</div>
+      <div class="benefit-desc">Each <code>synlynk scan</code> is scoped to that repo's git root. Agents dispatched in the API repo only see API source files — no frontend noise.</div>
+    </div>
+    <div class="benefit-card bc-purple">
+      <span class="benefit-icon">🧠</span>
+      <div class="benefit-title">Shared Standards</div>
+      <div class="benefit-desc">Keep a shared <code>AI_INSTRUCTIONS.md</code> template in a central repo. Copy or reference it in each repo's <code>synlynk init</code> run so every agent gets the same standards.</div>
+    </div>
+    <div class="benefit-card bc-orange">
+      <span class="benefit-icon">🔀</span>
+      <div class="benefit-title">Cross-Repo at v0.10</div>
+      <div class="benefit-desc">Workspace federation — where a single synlynk session can dispatch across multiple repos — is planned for v0.10.0. Until then, dispatch per-repo from separate shells.</div>
+    </div>
+  </div>
+
+  <div class="callout callout-warn" style="margin-top:8px;">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <div class="callout-title">One init per git root</div>
+      <div class="callout-text">Never run <code>synlynk init</code> inside a git submodule — it will create a separate state DB keyed to the submodule root, which is not the same as the parent repo's DB. Always run from the repo's own root directory.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 9 — SCAN + DOCS_DIR CUSTOMIZATION -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 08 — Scan &amp; Docs Location</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">09</div>
+  </div>
+
+  <div class="section-label">Source Scan &amp; Docs_Dir</div>
+  <h1 class="chapter">Source-aware agents.<br>Docs wherever you need.</h1>
+
+  <h2 class="section">🔍 Synlynk Scan <span class="tag tag-v4">v0.7.0</span></h2>
+  <p>The static scanner indexes your codebase and injects a <code>## Source Architecture</code> section into every agent dispatch. The cache is keyed by git HEAD SHA — zero overhead on a cache hit. Supports Python, JS, TS, Go, Rust, Ruby, Java, Kotlin, and Shell.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">scan commands</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-comment"># Quick scan — injects ## Source Architecture into context</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk scan</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Scanned 284 files · 1,024 symbols · cache hot (HEAD: a1b2c3d)</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Deep scan — full symbol extraction, writes source-map.md</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk scan</span> <span class="t-flag">--deep</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Wrote 284 entries to source_symbols (state.db)</span></div>
+      <div><span class="t-success">  ✓</span> <span class="t-out">Wrote project-docs/source-map.md  (1,024 lines)</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Cache status</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk scan</span> <span class="t-flag">--status</span></div>
+      <div><span class="t-out">  Cache age: 4 min · HEAD sha: a1b2c3d · 284 files · 1,024 symbols</span></div>
+    </div>
+  </div>
+
+  <h2 class="section">📁 Docs_Dir Customization <span class="tag tag-new">v0.9.1</span></h2>
+  <p>By default synlynk creates and reads from <code>project-docs/</code>. Use <code>--docs-dir</code> at init time to point synlynk at any directory — the root (<code>.</code>), a custom path (<code>docs/</code>), or a deeply nested location. The setting is persisted to <code>.synlynk/config.json</code> and respected by all subsequent commands.</p>
+
+  <div class="cols-2">
+    <div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">set docs dir at init</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height:1.8;">
+          <div><span class="t-comment"># Docs at repo root</span></div>
+          <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--docs-dir</span> <span class="t-arg">.</span></div>
+          <div>&nbsp;</div>
+          <div><span class="t-comment"># Docs in a custom folder</span></div>
+          <div><span class="t-prompt">$ </span><span class="t-cmd">synlynk init</span> <span class="t-flag">--docs-dir</span> <span class="t-arg">docs/agent</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <div class="terminal-label">.synlynk/config.json</div>
+        </div>
+        <div class="terminal-body" style="font-size:10px; line-height:1.8;">
+          <div><span style="color:var(--border);">{</span></div>
+          <div>  <span style="color:var(--purple);">"project_docs_dir"</span><span class="t-out">: </span><span style="color:var(--green);">"docs/agent"</span><span class="t-out">,</span></div>
+          <div>  <span style="color:var(--purple);">"limit_usd"</span><span class="t-out">:          </span><span style="color:var(--yellow);">10.00</span><span class="t-out">,</span></div>
+          <div>  <span style="color:var(--purple);">"limit_requests"</span><span class="t-out">:     </span><span style="color:var(--yellow);">100</span></div>
+          <div><span style="color:var(--border);">}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-power" style="margin-top:8px;">
+    <div class="callout-icon">⚡</div>
+    <div class="callout-body">
+      <div class="callout-title">What synlynk auto-discovers during init</div>
+      <div class="callout-text">Before writing any file, synlynk searches for existing docs at: <strong style="color:var(--text);">1)</strong> the target dir itself, <strong style="color:var(--text);">2)</strong> repo root, <strong style="color:var(--text);">3)</strong> <code>project-docs/</code>, <strong style="color:var(--text);">4)</strong> project-prefixed names like <code>rxcc_memory.md</code> or <code>rxcc-roadmap.md</code>. The first file over 200 bytes wins and is migrated verbatim. This means synlynk respects your existing docs regardless of how they're named or where they live.</div>
+    </div>
+  </div>
+
+  <h2 class="section">Scan exclusions — what is always skipped</h2>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="terminal-label">always excluded from scan</div>
+    </div>
+    <div class="terminal-body" style="line-height:1.7;">
+      <div><span class="t-out">  node_modules/  ·  dist/  ·  build/  ·  .next/  ·  out/</span></div>
+      <div><span class="t-out">  vendor/  ·  target/  ·  __pycache__/  ·  .venv/  ·  venv/</span></div>
+      <div><span class="t-out">  .git/  ·  .synlynk/  ·  *.min.js  ·  *.bundle.js</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Result: your code; not build output</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 10 — COMMAND REFERENCE -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 09 — Command Reference</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">10</div>
   </div>
 
   <div class="section-label">All Commands</div>
   <h1 class="chapter">Everything at a glance.</h1>
 
-  <!-- Setup commands -->
   <h2 class="section">Setup &amp; Context</h2>
   <table class="cmd-table">
-    <thead>
-      <tr><th>Command</th><th>What it does</th></tr>
-    </thead>
+    <thead><tr><th>Command</th><th>What it does</th></tr></thead>
     <tbody>
-      <tr>
-        <td>synlynk init</td>
-        <td>Bootstrap <code>project-docs/</code>, agent instruction files, and <code>.synlynk/config.json</code> in any repo. Safe to re-run — skips existing files.</td>
-      </tr>
-      <tr>
-        <td>synlynk exec &lt;agent&gt;</td>
-        <td>Run an agent interactively with full context injection (memory + roadmap + todos prepended). Captures token counts and cost on exit.</td>
-      </tr>
-      <tr>
-        <td>synlynk checkpoint</td>
-        <td>Force a context snapshot — regenerates <code>.synlynk/context.md</code> from current project-docs state.</td>
-      </tr>
-      <tr>
-        <td>synlynk status</td>
-        <td>Dashboard showing current project state, recent costs, active sentinel alerts, and running jobs.</td>
-      </tr>
-      <tr>
-        <td>synlynk upgrade</td>
-        <td>Check for and apply updates from the remote repository.</td>
-      </tr>
+      <tr><td>synlynk init</td><td>Bootstrap docs, agent files, and <code>.synlynk/config.json</code>. Migrates existing docs automatically. Safe to re-run. Accepts <code>--mode</code>, <code>--docs-dir</code>, <code>--org</code>, <code>--repo</code>, <code>--project-id</code>.</td></tr>
+      <tr><td>synlynk exec &lt;agent&gt;</td><td>Run an agent interactively with full context injection (memory + roadmap + todos + source scan). Captures token counts and cost on exit.</td></tr>
+      <tr><td>synlynk scan [--deep] [--status]</td><td>Index source files. <code>--deep</code> writes full symbol DB + source-map.md. <code>--status</code> shows cache age and counts. Zero-cost on cache hit.</td></tr>
+      <tr><td>synlynk status</td><td>Dashboard: project state, recent costs, active sentinel alerts, running jobs, team devlog summaries.</td></tr>
+      <tr><td>synlynk upgrade</td><td>Check for and apply updates from the remote repository.</td></tr>
+      <tr><td>synlynk --version</td><td>Print the installed version string.</td></tr>
     </tbody>
   </table>
 
-  <!-- Dispatch commands -->
-  <h2 class="section">Dispatch &amp; Jobs <span class="tag tag-v4">v0.4.0</span></h2>
+  <h2 class="section">Dispatch &amp; Jobs</h2>
   <table class="cmd-table">
-    <thead>
-      <tr><th>Command</th><th>What it does</th></tr>
-    </thead>
+    <thead><tr><th>Command</th><th>What it does</th></tr></thead>
     <tbody>
-      <tr>
-        <td>synlynk dispatch &lt;agent&gt;</td>
-        <td>Fire an agent task in the background. Captures stdout to a log file. Returns a job ID immediately. Accepts <code>--task "..."</code> and <code>--story &lt;id&gt;</code>.</td>
-      </tr>
-      <tr>
-        <td>synlynk jobs</td>
-        <td>List all tracked jobs with status (running / completed / failed), agent, duration. Use <code>--all</code> to include completed jobs.</td>
-      </tr>
-      <tr>
-        <td>synlynk logs &lt;job-id&gt;</td>
-        <td>Tail the output log of a specific job. Use <code>--tail N</code> to control how many lines to show.</td>
-      </tr>
-      <tr>
-        <td>synlynk shell &lt;agent&gt;</td>
-        <td>Open an interactive shell pre-loaded with the agent's context. Useful for debugging or ad-hoc queries.</td>
-      </tr>
-      <tr>
-        <td>synlynk run --trio</td>
-        <td>Run a three-phase Architect → Builder → Verifier pipeline. Sequentially dispatches three jobs with context hand-off between each phase.</td>
-      </tr>
+      <tr><td>synlynk dispatch &lt;agent&gt;</td><td>Fire an agent task in the background. Returns a job ID immediately. Accepts <code>--task "..."</code> and <code>--story &lt;id&gt;</code> for scoped context injection.</td></tr>
+      <tr><td>synlynk jobs [--all]</td><td>List tracked jobs with status (running / completed / failed), agent, and duration.</td></tr>
+      <tr><td>synlynk logs &lt;job-id&gt;</td><td>Tail the output log of a specific job. Use <code>--tail N</code> to control lines shown.</td></tr>
+      <tr><td>synlynk run --trio</td><td>Dispatch the same task to all functional agents in parallel. Each gets an independent job ID.</td></tr>
     </tbody>
   </table>
 
-  <!-- Sentinel commands -->
-  <h2 class="section">Sentinel &amp; Safety</h2>
+  <h2 class="section">Stories &amp; Scores <span class="tag tag-v4">v0.5.0+</span></h2>
   <table class="cmd-table">
+    <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>synlynk story create "..."</td><td>Create a tracked work item with optional <code>--domain</code>. Returns a story_id for use with dispatch.</td></tr>
+      <tr><td>synlynk story list</td><td>List all stories with status, domain, and linked jobs.</td></tr>
+      <tr><td>synlynk score add</td><td>Record a quality rating (1–5) for a completed dispatch with <code>--story</code>, <code>--agent</code>, <code>--quality</code>. Ed25519-signed automatically.</td></tr>
+      <tr><td>synlynk score list</td><td>Show aggregated capability scores per agent per domain.</td></tr>
+      <tr><td>synlynk identity init</td><td>Create <code>~/.synlynk/identity.key</code> (Ed25519). Prints the public key for export to Tokq ledger.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="section">Sentinel &amp; Instructions</h2>
+  <table class="cmd-table">
+    <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>synlynk sentinel list</td><td>Show all active alerts with severity (CRITICAL / WARN), code, message, and timestamp.</td></tr>
+      <tr><td>synlynk sentinel clear</td><td>Clear alerts by <code>--severity</code> or <code>--code</code>.</td></tr>
+      <tr><td>synlynk instructions status</td><td>Show status (ok / missing / drifted) for each tracked instruction file.</td></tr>
+      <tr><td>synlynk instructions update &lt;file&gt;</td><td>Regenerate the synlynk section in a specific instruction file and reset its SHA.</td></tr>
+    </tbody>
+  </table>
+
+</div>
+</div>
+
+
+<!-- PAGE 11 — FEATURE COMPARISON -->
+<div class="page">
+<div class="content-page">
+
+  <div class="page-header">
+    <div class="page-header-title">Chapter 10 — Feature Comparison</div>
+    <div class="page-header-logo">SYNLYNK</div>
+    <div class="page-header-num">11</div>
+  </div>
+
+  <div class="section-label">Feature Matrix</div>
+  <h1 class="chapter">What synlynk adds<br>to raw AI CLIs.</h1>
+
+  <p>Every feature below requires explicit setup without Synlynk — copy-paste context, manual cost tracking, custom scripts. Synlynk delivers them in a single <code>synlynk init</code>.</p>
+
+  <table class="feat-table">
     <thead>
-      <tr><th>Command</th><th>What it does</th></tr>
+      <tr>
+        <th style="width:32%">Feature</th>
+        <th style="width:15%">Since</th>
+        <th style="width:27%">Without Synlynk</th>
+        <th style="width:26%">With Synlynk</th>
+      </tr>
     </thead>
     <tbody>
+      <tr class="feat-group-header"><td colspan="4">🧠 Context &amp; Memory</td></tr>
       <tr>
-        <td>synlynk sentinel list</td>
-        <td>Show all active alerts with severity (CRITICAL / WARN), code, message, and timestamp.</td>
+        <td>Project context injection</td>
+        <td>v0.1</td>
+        <td>Manual copy-paste each session</td>
+        <td><span class="feat-check">✓</span> Auto-injected every exec</td>
       </tr>
       <tr>
-        <td>synlynk sentinel clear</td>
-        <td>Clear alerts. Use <code>--severity CRITICAL</code> or <code>--code FLATLINE</code> to target specific alerts.</td>
+        <td>Source architecture snapshot</td>
+        <td>v0.7</td>
+        <td>Describe files manually to agent</td>
+        <td><span class="feat-check">✓</span> Git-cached, auto-injected</td>
+      </tr>
+      <tr>
+        <td>Instruction drift detection</td>
+        <td>v0.4.1</td>
+        <td><span class="feat-cross">✗</span> None</td>
+        <td><span class="feat-check">✓</span> INSTRUCTION_DRIFT sentinel</td>
+      </tr>
+      <tr>
+        <td>Smart doc migration on init</td>
+        <td>v0.9.1</td>
+        <td><span class="feat-cross">✗</span> Blank templates only</td>
+        <td><span class="feat-check">✓</span> Finds &amp; migrates existing docs</td>
+      </tr>
+
+      <tr class="feat-group-header"><td colspan="4">💰 Cost &amp; Safety</td></tr>
+      <tr>
+        <td>Per-session cost tracking</td>
+        <td>v0.1</td>
+        <td>Check billing dashboard manually</td>
+        <td><span class="feat-check">✓</span> Budget Pulse after every exec</td>
+      </tr>
+      <tr>
+        <td>Budget enforcement</td>
+        <td>v0.1</td>
+        <td>No guard — runaway spend possible</td>
+        <td><span class="feat-check">✓</span> Hard block at configured limit</td>
+      </tr>
+      <tr>
+        <td>Flatline / loop detection</td>
+        <td>v0.1</td>
+        <td>Discover after burning tokens</td>
+        <td><span class="feat-check">✓</span> FLATLINE alert at 3rd failure</td>
+      </tr>
+      <tr>
+        <td>Zombie &amp; stall detection</td>
+        <td>v0.3.1</td>
+        <td><span class="feat-cross">✗</span> None</td>
+        <td><span class="feat-check">✓</span> Background job health checks</td>
+      </tr>
+
+      <tr class="feat-group-header"><td colspan="4">⚡ Dispatch &amp; Autonomy</td></tr>
+      <tr>
+        <td>Background agent dispatch</td>
+        <td>v0.4</td>
+        <td>nohup hacks, manual PID tracking</td>
+        <td><span class="feat-check">✓</span> First-class job store + logs</td>
+      </tr>
+      <tr>
+        <td>Parallel multi-agent trio</td>
+        <td>v0.4</td>
+        <td>3 separate shell windows</td>
+        <td><span class="feat-check">✓</span> <code>synlynk run --trio</code></td>
+      </tr>
+      <tr>
+        <td>Scoped task context (60% less tokens)</td>
+        <td>v0.9</td>
+        <td>Full context for every dispatch</td>
+        <td><span class="feat-check">✓</span> Story-filtered domain slice</td>
+      </tr>
+      <tr>
+        <td>Per-agent prompt framing</td>
+        <td>v0.9</td>
+        <td>Same prompt for every agent</td>
+        <td><span class="feat-check">✓</span> Claude / AGY / Codex optimised</td>
+      </tr>
+
+      <tr class="feat-group-header"><td colspan="4">👥 Teams &amp; Identity</td></tr>
+      <tr>
+        <td>Per-user devlogs</td>
+        <td>v0.2</td>
+        <td>One shared log or nothing</td>
+        <td><span class="feat-check">✓</span> <code>devlogs/username.md</code></td>
+      </tr>
+      <tr>
+        <td>Multi-agent instruction files</td>
+        <td>v0.3</td>
+        <td>Maintain CLAUDE.md by hand</td>
+        <td><span class="feat-check">✓</span> 7 files from one <code>synlynk init</code></td>
+      </tr>
+      <tr>
+        <td>Capability routing by domain</td>
+        <td>v0.5</td>
+        <td>Route by gut feel</td>
+        <td><span class="feat-check">✓</span> SQLite ledger, quality scores</td>
+      </tr>
+      <tr>
+        <td>Ed25519-signed ratings</td>
+        <td>v0.9</td>
+        <td><span class="feat-cross">✗</span> None</td>
+        <td><span class="feat-check">✓</span> Tamper-evident from day one</td>
       </tr>
     </tbody>
   </table>
 
-  <div class="divider"></div>
-
-  <!-- Project docs layout -->
-  <h2 class="section">Project Docs Structure</h2>
-  <div class="cols-2" style="margin-top: 6px;">
-    <div>
-      <div class="terminal">
-        <div class="terminal-bar">
-          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-          <div class="terminal-label">directory layout</div>
-        </div>
-        <div class="terminal-body" style="font-size:10px; line-height:1.9;">
-          <div><span style="color:var(--cyan);">project-docs/</span></div>
-          <div><span class="t-out">  ├── roadmap.md      </span><span style="color:#2a3a50;">← version plan</span></div>
-          <div><span class="t-out">  ├── memory.md       </span><span style="color:#2a3a50;">← decisions</span></div>
-          <div><span class="t-out">  ├── todo.md         </span><span style="color:#2a3a50;">← open tasks</span></div>
-          <div><span class="t-out">  ├── costs.md        </span><span style="color:#2a3a50;">← cost ledger</span></div>
-          <div><span class="t-out">  └── devlogs/</span></div>
-          <div><span class="t-out">      └── nikhil.md   </span><span style="color:#2a3a50;">← per-user log</span></div>
-          <div>&nbsp;</div>
-          <div><span style="color:var(--cyan);">.synlynk/</span></div>
-          <div><span class="t-out">  ├── config.json     </span><span style="color:#2a3a50;">← budget limits</span></div>
-          <div><span class="t-out">  ├── context.md      </span><span style="color:#2a3a50;">← auto-generated</span></div>
-          <div><span class="t-out">  ├── telemetry.json  </span><span style="color:#2a3a50;">← rolling log</span></div>
-          <div><span class="t-out">  └── logs/           </span><span style="color:#2a3a50;">← job outputs</span></div>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="callout callout-tip" style="margin-top:0;">
-        <div class="callout-icon">💡</div>
-        <div class="callout-body">
-          <div class="callout-title">What agents read</div>
-          <div class="callout-text">Every <code>synlynk exec</code> prepends <code>memory.md</code> + <code>roadmap.md</code> + <code>todo.md</code> into a single <code>context.md</code> snapshot before handing off to the agent. Your agents always know where the project stands.</div>
-        </div>
-      </div>
-      <div class="callout callout-warn" style="margin-top:8px;">
-        <div class="callout-icon">⚠️</div>
-        <div class="callout-body">
-          <div class="callout-title">Keep project-docs current</div>
-          <div class="callout-text">Synlynk's context is only as good as your <code>memory.md</code> and <code>roadmap.md</code>. Update them after significant decisions — agents will pick up the changes on the next exec automatically.</div>
-        </div>
-      </div>
+  <div class="callout callout-tip" style="margin-top:8px;">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <div class="callout-title">19 features across 6 OS layers</div>
+      <div class="callout-text">Synlynk organises its features into: <strong style="color:var(--text);">kernel</strong> (init, flatline, budgets), <strong style="color:var(--text);">filesystem</strong> (costs, telemetry, scan), <strong style="color:var(--text);">IPC</strong> (dispatch, instruction reach, identity), <strong style="color:var(--text);">scheduler</strong> (capability engine, scoped context, Ed25519), and an upcoming <strong style="color:var(--text);">relay</strong> layer (v0.9.3 community relay). Full feature specs: <code>site/src/_data/features.json</code></div>
     </div>
   </div>
 
@@ -1301,9 +1770,7 @@
 </div>
 
 
-<!-- ══════════════════════════════════════
-     PAGE 7 — WHAT'S NEXT + BACK COVER
-══════════════════════════════════════ -->
+<!-- PAGE 12 — WHAT'S NEXT + BACK COVER -->
 <div class="page">
 <div class="back-cover">
   <div class="cover-grid"></div>
@@ -1314,45 +1781,47 @@
   <div style="font-family:'Orbitron',monospace; font-size:24px; font-weight:900; margin-bottom:6px; background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
     What's coming next
   </div>
-  <div style="font-size:12px; color:var(--muted); margin-bottom:32px; max-width: 140mm; text-align:center; line-height:1.6;">
+  <div style="font-size:12px; color:var(--muted); margin-bottom:24px; max-width: 140mm; text-align:center; line-height:1.6;">
     Synlynk evolves from an agent wrapper into a full OS for multi-agent development. Here's the arc.
   </div>
 
-  <div style="display:flex; flex-direction:column; gap:10px; width:160mm;">
-    <div style="background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.2); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
-      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--cyan); min-width:50px;">v0.5</div>
+  <div style="display:flex; flex-direction:column; gap:8px; width:160mm;">
+
+    <div style="background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.12); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:14px; opacity:0.6;">
+      <div style="font-family:'Orbitron',monospace; font-size:12px; font-weight:900; color:var(--muted); min-width:56px;">v0.1–0.9.1</div>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Capability Engine  <span style="font-size:9px; color:var(--muted); font-weight:400;">Aug 2026</span></div>
-        <div style="font-size:10px; color:var(--muted);">Model-aware routing · 3D domain taxonomy · quality signal hierarchy · SQLite state ledger</div>
+        <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:1px;">Kernel → Scan → Dispatch → Teams  <span style="font-size:9px; color:var(--green); font-weight:600;">✓ Shipped</span></div>
+        <div style="font-size:10px; color:var(--muted);">19 features · 365 tests · Ed25519 signing · source scan · smart doc migration</div>
       </div>
     </div>
 
-    <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.18); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
-      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--purple); min-width:50px;">v0.6</div>
+    <div style="background:rgba(0,255,157,0.05); border:1px solid rgba(0,255,157,0.2); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:12px; font-weight:900; color:var(--green); min-width:56px;">v0.9.3</div>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Job Control + Constraints  <span style="font-size:9px; color:var(--muted); font-weight:400;">Sep 2026</span></div>
-        <div style="font-size:10px; color:var(--muted);">Constraint propagation · job state machine · PR attestation · verifier pipeline capture</div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:1px;">Community Relay  <span style="font-size:9px; color:var(--muted); font-weight:400;">Q3 2026</span></div>
+        <div style="font-size:10px; color:var(--muted);">relay.synlynk.com on Fly.io · encrypted state sync · team broadcast channel · <code style="font-size:9px;">--enterprise</code> for self-hosted</div>
       </div>
     </div>
 
-    <div style="background:rgba(255,107,53,0.05); border:1px solid rgba(255,107,53,0.18); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
-      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--orange); min-width:50px;">v0.7</div>
+    <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.18); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:12px; font-weight:900; color:var(--purple); min-width:56px;">v0.10</div>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Async Pipeline + Daemon  <span style="font-size:9px; color:var(--muted); font-weight:400;">Oct 2026</span></div>
-        <div style="font-size:10px; color:var(--muted);">Background daemon · HTTP context server · synlynk review TUI</div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:1px;">Workspace Federation  <span style="font-size:9px; color:var(--muted); font-weight:400;">Q4 2026</span></div>
+        <div style="font-size:10px; color:var(--muted);">Cross-repo dispatch · invisible state (SQLite replaces project-docs/) · synlynk migrate</div>
       </div>
     </div>
 
-    <div style="background:rgba(0,255,157,0.04); border:1px solid rgba(0,255,157,0.15); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;">
-      <div style="font-family:'Orbitron',monospace; font-size:13px; font-weight:900; color:var(--green); min-width:50px;">v1.0</div>
+    <div style="background:rgba(255,107,53,0.05); border:1px solid rgba(255,107,53,0.18); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:14px;">
+      <div style="font-family:'Orbitron',monospace; font-size:12px; font-weight:900; color:var(--orange); min-width:56px;">v1.0</div>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:2px;">Stable OS + Tokq Bridge Ready  <span style="font-size:9px; color:var(--muted); font-weight:400;">Q1 2027</span></div>
-        <div style="font-size:10px; color:var(--muted);">Frozen CLI · pipx/Homebrew · NATS leaf node schema · Tokq marketplace ready</div>
+        <div style="font-size:11px; font-weight:700; color:var(--text); margin-bottom:1px;">Stable OS + Tokq Bridge  <span style="font-size:9px; color:var(--muted); font-weight:400;">Q1 2027</span></div>
+        <div style="font-size:10px; color:var(--muted);">Frozen CLI · pipx/Homebrew · NATS leaf node · Tokq capability marketplace ready</div>
       </div>
     </div>
+
   </div>
 
-  <div style="margin-top: 32px; display:flex; gap:28px; align-items:center;">
+  <div style="margin-top: 28px; display:flex; gap:28px; align-items:center;">
     <div style="text-align:center;">
       <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cyan); margin-bottom:3px;">github.com/nikhilsoman/synlynk</div>
       <div style="font-size:10px; color:var(--muted);">Source · Issues · PRs</div>
@@ -1364,11 +1833,11 @@
     </div>
   </div>
 
-  <div style="margin-top:40px; font-family:'Orbitron',monospace; font-size:28px; font-weight:900; background: linear-gradient(135deg, #00e5ff 0%, #a855f7 50%, #ff2d78 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
+  <div style="margin-top:32px; font-family:'Orbitron',monospace; font-size:28px; font-weight:900; background: linear-gradient(135deg, #00e5ff 0%, #a855f7 50%, #ff2d78 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
     SYNLYNK
   </div>
   <div style="font-size:10px; color:var(--muted); letter-spacing:0.15em; text-transform:uppercase; margin-top:4px;">
-    The OS for Multi-Agent Development · v0.4.0
+    The OS for Multi-Agent Development · v0.9.1
   </div>
 </div>
 </div>
