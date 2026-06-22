@@ -921,6 +921,79 @@ def _build_team_digest() -> dict:
     }
 
 
+def cmd_join() -> None:
+    """Onboards the current user to an existing synlynk project."""
+    docs_dir = _docs_dir()
+    if not os.path.exists(docs_dir):
+        print("Error: project not initialized — run 'synlynk init' first")
+        sys.exit(1)
+
+    username = get_username()
+    if not username:
+        print("Error: git config user.name not set — run: git config user.name 'Your Name'")
+        sys.exit(1)
+
+    print(f"  {_GREEN}▶{_RESET} Joining project as @{username}...")
+
+    arch_context = ""
+    try:
+        cmd_scan()
+        ctx_path = ".synlynk/context.md"
+        if os.path.exists(ctx_path):
+            arch_context = open(ctx_path).read()[:2000]
+    except Exception:
+        pass
+
+    git_summary = ""
+    try:
+        git_summary = subprocess.check_output(
+            ["git", "log", "--oneline", "-20"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except subprocess.CalledProcessError:
+        pass
+
+    _generate_ai_context_files(arch_context, git_summary)
+    print(f"  {_GREEN}✓{_RESET} Updated CLAUDE.md, GEMINI.md, AGENTS.md")
+
+    _seed_devlog(username)
+    print(f"  {_GREEN}✓{_RESET} Seeded devlog at {docs_dir}/devlogs/{username}.md")
+
+    config_path = os.path.join(docs_dir, ".synlynk_config.json")
+    try:
+        cfg = {}
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                cfg = json.load(f)
+        cfg["mode"] = "team"
+        with open(config_path, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
+
+    print(f"  {_GREEN}✓{_RESET} Joined project as @{username}\n")
+
+    digest = _build_team_digest()
+
+    n = len(digest["members"])
+    print(f"TEAM ({n} member{'s' if n != 1 else ''})")
+    for m in digest["members"]:
+        flag = ("· joined now"
+                if m["user"] == username and m["stories_shipped"] <= 1
+                else f"· {m['stories_shipped']} entries")
+        print(f"  @{m['user']:<12} · last active {m['last_active']}  {flag}")
+
+    if digest["in_progress"]:
+        print("\nIN PROGRESS")
+        for s in digest["in_progress"]:
+            est = (f"~{s['estimated_tokens']:,} tokens est"
+                   if s["estimated_tokens"] else "no budget set")
+            print(f"  {s['story_id']}  {(s['title'] or '')[:40]}   {est}")
+
+    if digest["top_todo"]:
+        print(f"\nRECOMMENDED FIRST TASK\n  → {digest['top_todo']}")
+    print()
+
+
 def cmd_identity_init() -> None:
     key_path = _ensure_identity_key()
     pub_path = key_path + ".pub"
@@ -4822,6 +4895,8 @@ def main() -> None:
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
+    subparsers.add_parser("join", help="Onboard as a new member to an existing project")
+
     scan_parser = subparsers.add_parser("scan", help="Scan source tree and update architecture context")
     scan_parser.add_argument("--deep", action="store_true",
                              help="Full tree walk: populate state.db and write project-docs/source-map.md")
@@ -5066,6 +5141,8 @@ def main() -> None:
             cmd_agent_list()
         else:
             agent_parser.print_help()
+    elif args.command == "join":
+        cmd_join()
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     elif args.command == "identity":
