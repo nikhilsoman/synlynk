@@ -2635,3 +2635,36 @@ def test_join_idempotent(project_dir, monkeypatch):
     synlynk.cmd_join()
     second = devlog.read_text()
     assert first == second
+
+
+def test_team_status_shows_members(project_dir, capsys, monkeypatch):
+    import synlynk
+    monkeypatch.setattr(synlynk, "get_username", lambda: "alice")
+    (project_dir / "project-docs" / "devlogs" / "alice.md").write_text(
+        "# Devlog — @alice\n\n## 2026-06-20\nDid work.\n"
+    )
+    (project_dir / "project-docs" / "devlogs" / "bob.md").write_text(
+        "# Devlog — @bob\n\n## 2026-06-19\nDid work.\n"
+    )
+    synlynk.cmd_team_status()
+    out = capsys.readouterr().out
+    assert "TEAM STATUS" in out
+    assert "@alice" in out
+    assert "@bob" in out
+
+
+def test_team_status_no_stories(project_dir, capsys):
+    import synlynk
+    synlynk.cmd_team_status()
+    out = capsys.readouterr().out
+    assert "TEAM STATUS" in out
+    assert "No in-progress stories" in out
+
+
+def test_team_status_shows_in_progress(project_dir, capsys):
+    import synlynk
+    synlynk.cmd_story_create("My feature", estimated_tokens=25000)
+    synlynk.cmd_team_status()
+    out = capsys.readouterr().out
+    assert "My feature" in out
+    assert "25,000" in out

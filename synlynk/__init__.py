@@ -994,6 +994,52 @@ def cmd_join() -> None:
     print()
 
 
+def cmd_team_status() -> None:
+    """Prints a full team digest: members, stories, budget, top todo."""
+    project_name = os.path.basename(os.path.abspath("."))
+    mode = get_mode()
+    print(f"\nTEAM STATUS · {project_name} · {mode} mode\n")
+
+    digest = _build_team_digest()
+
+    print(f"MEMBERS ({len(digest['members'])})")
+    for m in digest["members"]:
+        last = m["last_active"]
+        if last == time.strftime("%Y-%m-%d"):
+            last = "today"
+        print(f"  @{m['user']:<12} · last active {last:<14} · {m['stories_shipped']} entries")
+
+    if digest["in_progress"]:
+        print("\nIN-PROGRESS STORIES")
+        for s in digest["in_progress"]:
+            est = (f"~{s['estimated_tokens']:,} est"
+                   if s["estimated_tokens"] else "no budget set")
+            act = (f"· {s['actual_tokens']:,} actual so far"
+                   if s["actual_tokens"] else "")
+            print(f"  {s['story_id']:<14} {(s['title'] or '')[:38]:<40} {est} {act}")
+    else:
+        print("\nIN-PROGRESS STORIES\n  No in-progress stories")
+
+    if digest["recently_completed"]:
+        print("\nRECENTLY COMPLETED (last 7 days)")
+        for s in digest["recently_completed"]:
+            est = s["estimated_tokens"]
+            act = s["actual_tokens"]
+            if est and act:
+                delta_pct = round((act - est) / est * 100)
+                sign = "+" if delta_pct >= 0 else ""
+                delta_str = f"{est:,} est · {act:,} actual ({sign}{delta_pct}%)"
+            elif act:
+                delta_str = f"{act:,} actual"
+            else:
+                delta_str = "no data"
+            print(f"  {s['story_id']:<14} {(s['title'] or '')[:38]:<40} {delta_str}")
+
+    if digest["top_todo"]:
+        print(f"\nTOP TODO\n  → {digest['top_todo']}")
+    print()
+
+
 def cmd_identity_init() -> None:
     key_path = _ensure_identity_key()
     pub_path = key_path + ".pub"
@@ -4897,6 +4943,10 @@ def main() -> None:
 
     subparsers.add_parser("join", help="Onboard as a new member to an existing project")
 
+    team_parser = subparsers.add_parser("team", help="Team status and management")
+    team_sub = team_parser.add_subparsers(dest="team_action")
+    team_sub.add_parser("status", help="Show team digest: members, stories, budget")
+
     scan_parser = subparsers.add_parser("scan", help="Scan source tree and update architecture context")
     scan_parser.add_argument("--deep", action="store_true",
                              help="Full tree walk: populate state.db and write project-docs/source-map.md")
@@ -5143,6 +5193,12 @@ def main() -> None:
             agent_parser.print_help()
     elif args.command == "join":
         cmd_join()
+    elif args.command == "team":
+        action = getattr(args, "team_action", None)
+        if action == "status" or action is None:
+            cmd_team_status()
+        else:
+            team_parser.print_help()
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     elif args.command == "identity":
