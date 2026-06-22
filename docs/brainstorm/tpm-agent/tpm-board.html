@@ -1,0 +1,116 @@
+<h2>TPM View &mdash; Per-Story Lifecycle Board</h2>
+<p class="subtitle">Each story tracks its own lifecycle stage. TPM surveys the board and surfaces batching opportunities.</p>
+
+<!-- KANBAN BOARD -->
+<div style="overflow-x:auto;padding-bottom:8px">
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;min-width:820px">
+
+  <!-- Column headers -->
+  <div class="label" style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">Brainstorm</div>
+  <div class="label" style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">Spec</div>
+  <div class="label" style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">Plan</div>
+  <div class="label" style="padding:6px 8px;text-align:center;border-bottom:2px solid var(--accent);color:var(--accent)">Execution</div>
+  <div class="label" style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">Review</div>
+  <div class="label" style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)">Done</div>
+
+  <!-- BRAINSTORM -->
+  <div style="padding-top:8px">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-left:3px solid var(--text-tertiary);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S7</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">Docs Keeper agent</div>
+      <div style="font-size:9px;color:var(--accent);margin-top:4px">Architect</div>
+    </div>
+  </div>
+
+  <!-- SPEC -->
+  <div style="padding-top:8px;display:flex;flex-direction:column;gap:6px">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-left:3px solid var(--text-tertiary);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S5</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">Release Agent</div>
+      <div style="font-size:9px;color:var(--accent);margin-top:4px">Architect</div>
+    </div>
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-left:3px solid var(--text-tertiary);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S6</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">TPM Agent</div>
+      <div style="font-size:9px;color:var(--accent);margin-top:4px">Architect</div>
+    </div>
+  </div>
+
+  <!-- PLAN -->
+  <div style="padding-top:8px">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S4</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">Lifecycle engine</div>
+      <div style="font-size:9px;color:var(--accent);margin-top:4px">TPM reading plan</div>
+    </div>
+  </div>
+
+  <!-- EXECUTION (highlighted) -->
+  <div style="background:var(--selected-bg);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px">
+    <div style="background:var(--bg-secondary);border:1px solid var(--accent);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S1</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">Team onboarding v0.9.2</div>
+      <div style="font-size:9px;color:var(--accent);margin-top:4px">Wave 2 running</div>
+    </div>
+    <div style="background:var(--bg-secondary);border:1px solid var(--accent);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S3</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">Kernel fixes v0.9.1</div>
+      <div style="font-size:9px;color:var(--accent);margin-top:4px">Wave 1 running</div>
+    </div>
+    <div style="background:var(--accent);border-radius:5px;padding:5px 8px;text-align:center">
+      <div style="font-size:9px;font-weight:700;color:white">TPM: batch S1+S3?</div>
+    </div>
+  </div>
+
+  <!-- REVIEW -->
+  <div style="padding-top:8px">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-left:3px solid var(--success);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text-primary)">S2</div>
+      <div style="font-size:9px;color:var(--text-secondary);margin-top:2px">E2E test suite</div>
+      <div style="font-size:9px;color:var(--success);margin-top:4px">PR open</div>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div style="padding-top:8px">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 10px;opacity:.5">
+      <div style="font-size:10px;font-weight:700;color:var(--text-secondary)">S0</div>
+      <div style="font-size:9px;color:var(--text-tertiary);margin-top:2px">Core CLI v0.9.0</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- AGGREGATION SUGGESTION -->
+<div style="margin-top:16px;background:var(--selected-bg);border:1px solid var(--accent);border-radius:10px;padding:14px 16px">
+  <div class="label" style="color:var(--accent);margin-bottom:10px">TPM Aggregation Suggestion</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <div style="flex:2;min-width:240px">
+      <div style="font-size:11px;color:var(--text-primary);line-height:1.7">
+        "S1 (Team onboarding) and S3 (Kernel fixes) are both at <b>Execution</b>.<br>
+        Tasks have no cross-story dependencies.<br>
+        Suggest: dispatch as a combined wave &mdash; <b>6 agents, ~$0.42</b>."
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <div style="background:var(--accent);border-radius:5px;padding:5px 10px;font-size:10px;color:white;cursor:pointer">Approve combined wave</div>
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:5px;padding:5px 10px;font-size:10px;color:var(--warning);cursor:pointer">Run separately</div>
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:5px;padding:5px 10px;font-size:10px;color:var(--text-secondary);cursor:pointer">Skip</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:180px">
+      <div class="label" style="margin-bottom:6px">Aggregation rules</div>
+      <div style="font-size:10px;color:var(--text-secondary);line-height:1.8">
+        Same lifecycle stage<br>
+        Same lifecycle type<br>
+        No cross-story task dependencies<br>
+        Combined cost within budget<br>
+        Consent: <span style="color:var(--accent)">approve</span> (configurable)
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:14px;font-size:11px;color:var(--text-secondary)">
+  Note: aggregation applies at any stage &mdash; TPM could also suggest "S5 and S6 are both at Spec; Architect, handle both in one session."
+</p>

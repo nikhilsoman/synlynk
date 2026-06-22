@@ -1,0 +1,192 @@
+<h2>TPM Agent &mdash; Design</h2>
+<p class="subtitle">Lifecycle runner, dispatcher, and cross-story aggregator. Config-driven, same pattern as the Release Agent.</p>
+
+<!-- COMMAND SURFACE -->
+<div class="section">
+  <div class="label">Command Surface</div>
+  <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+    <pre style="font-size:10px;color:var(--text-primary);line-height:1.9;margin:0">synlynk tpm suggest                    # scan for new plans, surface dispatch proposal (also cron)
+synlynk tpm dispatch                   # execute current proposal
+synlynk tpm dispatch --story S4        # dispatch a single story
+synlynk tpm status                     # show board: all stories + lifecycle stages
+synlynk tpm advance --story S4         # manually advance story to next stage (approve-gated stages)
+synlynk tpm pause  --story S4          # halt in-flight dispatch for a story
+synlynk tpm --install-cron             # register cron job (same pattern as release agent)</pre>
+  </div>
+</div>
+
+<!-- CONFIG -->
+<div class="section">
+  <div class="label">Config &mdash; project-docs/tpm-agent.json</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div style="flex:1.3;min-width:260px">
+      <pre style="font-size:10px;color:var(--text-primary);line-height:1.7;margin:0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto">{
+  "tpm_agent": {
+    "cron": "0 9 * * 1-5",
+    "default_consent": "approve",
+    "aggregation_consent": "approve",
+    "lifecycle_types": ["software-development", "release"],
+    "dispatch_rules": [
+      { "if": "task.complexity == 'exploratory'", "assign": "claude" },
+      { "if": "task.complexity == 'targeted'",    "assign": "codex"  },
+      { "if": "task.complexity == 'scaffold'",    "assign": "agy"    }
+    ],
+    "capability_overrides": {
+      "claude": { "max_parallel": 2 },
+      "codex":  { "max_parallel": 4 },
+      "agy":    { "max_parallel": 3 }
+    },
+    "budget": {
+      "per_wave_usd": 2.00,
+      "per_story_usd": 8.00
+    }
+  }
+}</pre>
+    </div>
+    <div style="flex:1;min-width:180px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--accent);margin-bottom:5px">dispatch_rules</div>
+        <div style="font-size:10px;color:var(--text-secondary);line-height:1.7">Evaluated top-to-bottom per task. First match wins. Falls back to capability matrix + cost if no rule matches.</div>
+      </div>
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--accent);margin-bottom:5px">capability_overrides</div>
+        <div style="font-size:10px;color:var(--text-secondary);line-height:1.7">Max parallel slots per agent. TPM won't dispatch more than this many tasks to the same agent concurrently.</div>
+      </div>
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--accent);margin-bottom:5px">budget guards</div>
+        <div style="font-size:10px;color:var(--text-secondary);line-height:1.7">Estimated cost shown before dispatch. TPM blocks if wave exceeds <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">per_wave_usd</code> and requires explicit approval.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DB SCHEMA -->
+<div class="section">
+  <div class="label">State DB &mdash; New Tables</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div style="flex:1;min-width:220px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-size:10px;font-weight:600;color:var(--text-primary);margin-bottom:6px">lifecycle_instances</div>
+      <pre style="font-size:9px;color:var(--text-secondary);line-height:1.7;margin:0">story_id     TEXT  (FK stories)
+lifecycle_id TEXT  ("software-development")
+stage        TEXT  ("spec" | "plan" | "execution" …)
+advanced_at  TEXT  (ISO timestamp)
+artifact_ref TEXT  (file path or git SHA)</pre>
+    </div>
+    <div style="flex:1;min-width:220px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-size:10px;font-weight:600;color:var(--text-primary);margin-bottom:6px">tasks</div>
+      <pre style="font-size:9px;color:var(--text-secondary);line-height:1.7;margin:0">task_id      TEXT  (e.g. "S4-T2")
+story_id     TEXT  (FK stories)
+plan_file    TEXT  (path to plan doc)
+title        TEXT
+agent        TEXT  ("codex" | "claude" | "agy")
+wave         INTEGER
+depends_on   TEXT  (JSON array of task_ids)
+status       TEXT  (pending|running|done|blocked)
+branch       TEXT  (worktree branch name)
+started_at   TEXT
+completed_at TEXT</pre>
+    </div>
+  </div>
+</div>
+
+<!-- FLOW -->
+<div class="section">
+  <div class="label">TPM Flow &mdash; suggest &rarr; dispatch &rarr; advance</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">1</div>
+      <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-primary)">Detect</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">Scan <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">docs/superpowers/plans/*.md</code> for files newer than last-seen timestamp. Also re-check stories with <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">status=pending</code> in lifecycle_instances (manual seeds).</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">2</div>
+      <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-primary)">Parse + Wave Assembly</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">Extract <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">### Task N</code> blocks. Build dependency graph from <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">depends_on:</code> fields (or infer from ordering). Topological sort &rarr; wave groups. Insert rows into <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">tasks</code> table.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">3</div>
+      <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-primary)">Agent Assignment</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">For each task: evaluate <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">dispatch_rules</code> &rarr; if no match, score agents via <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">capability_ratings</code> (learned) + <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">AGENT_CAPABILITY_BASELINES</code> (fallback). Pick highest score within budget.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">4</div>
+      <div style="flex:1;background:var(--selected-bg);border:1px solid var(--accent);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--accent)">Aggregation Check (cross-story)</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">Scan all stories at same stage. If 2+ have pending Wave 1 tasks with no cross-story deps &rarr; surface batch suggestion. Consent: <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">aggregation_consent</code> from config.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">5</div>
+      <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-primary)">Human Approves &rarr; Dispatch</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">Print wave plan + estimated cost. Block on <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">[y/N]</code>. On approval: create worktrees, call <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">_run_agent_sync()</code> per task (parallel within wave). Update task status in DB as agents complete.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">6</div>
+      <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-primary)">Wave Done &rarr; Advance or Block</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">All tasks in wave done &rarr; auto-unlock next wave. Any task BLOCKED &rarr; write to <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">sentinel.md</code>, pause story, surface in <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">tpm status</code>. Human resolves &rarr; <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">tpm dispatch --story S4</code> resumes.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="background:var(--success);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">7</div>
+      <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-primary)">Lifecycle Stage Advance</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px">All tasks done &rarr; check stage's <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">advance</code> trigger. If <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">auto</code>: update <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">lifecycle_instances.stage</code> and notify. If <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">approve</code>: write pending notice to sentinel, wait for <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">tpm advance</code>.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CAPABILITY MATRIX -->
+<div class="section">
+  <div class="label">Capability Matrix &mdash; how agent assignment works</div>
+  <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:10px">
+      <tr style="background:var(--bg-tertiary)">
+        <th style="padding:7px 10px;text-align:left;color:var(--text-secondary);font-weight:600">Agent</th>
+        <th style="padding:7px 10px;text-align:left;color:var(--text-secondary);font-weight:600">Strength (baseline)</th>
+        <th style="padding:7px 10px;text-align:left;color:var(--text-secondary);font-weight:600">Cost tier</th>
+        <th style="padding:7px 10px;text-align:left;color:var(--text-secondary);font-weight:600">Score source</th>
+      </tr>
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:7px 10px;color:var(--text-primary);font-weight:600">claude</td>
+        <td style="padding:7px 10px;color:var(--text-secondary)">Exploratory, multi-file, design judgment</td>
+        <td style="padding:7px 10px;color:var(--error)">high</td>
+        <td style="padding:7px 10px;color:var(--text-secondary)">capability_ratings &rarr; AGENT_CAPABILITY_BASELINES</td>
+      </tr>
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:7px 10px;color:var(--text-primary);font-weight:600">codex</td>
+        <td style="padding:7px 10px;color:var(--text-secondary)">Targeted, single-file, mechanical implementation</td>
+        <td style="padding:7px 10px;color:var(--warning)">medium</td>
+        <td style="padding:7px 10px;color:var(--text-secondary)">capability_ratings &rarr; AGENT_CAPABILITY_BASELINES</td>
+      </tr>
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:7px 10px;color:var(--text-primary);font-weight:600">agy</td>
+        <td style="padding:7px 10px;color:var(--text-secondary)">Scaffolding, batch, non-interactive setup</td>
+        <td style="padding:7px 10px;color:var(--success)">low</td>
+        <td style="padding:7px 10px;color:var(--text-secondary)">capability_ratings &rarr; AGENT_CAPABILITY_BASELINES</td>
+      </tr>
+    </table>
+  </div>
+  <div style="margin-top:8px;font-size:10px;color:var(--text-secondary)">
+    After each task completes, TPM writes a row to <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px">capability_ratings</code> (exit_code, duration, tokens). Over time, the matrix self-improves &mdash; if codex keeps failing exploratory tasks, its score for that complexity type drops.
+  </div>
+</div>
+
+<p style="font-size:11px;color:var(--text-secondary)">Does this design look right? Any sections to adjust before I write the spec?</p>

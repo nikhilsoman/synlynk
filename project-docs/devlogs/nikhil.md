@@ -1,5 +1,49 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-23 — Session: v0.9.2 Wave Merges + Agent Ecosystem Brainstorm
+
+### Shipped
+
+**v0.9.2 — Team Onboarding + Consensus (PR #30, merged)**
+Wave 1 (T2→T1→T3) and Wave 2 (T4→T5→T6) all merged into main:
+- T1: `estimated_tokens` + `actual_tokens` columns on stories table; `synlynk story create --tokens`
+- T2: `_check_upstream_divergence()` — warns on unpulled remote commits; injected into `update_costs()` + `checkpoint()`
+- T3: `_seed_devlog()`, `_generate_ai_context_files()`, `_build_team_digest()` helpers
+- T4: `synlynk join` — onboards new user, seeds devlog, sets team mode
+- T5: `synlynk team status` — prints team digest
+- T6: `synlynk decide` — multi-agent consensus panel with signed Decision records
+- 394 tests passing
+
+### Brainstormed + Specced
+
+**Release Agent** (`docs/superpowers/specs/2026-06-22-release-agent-design.md`)
+Config-driven release pipeline. Steps: run_tests → bump_version → git_tag → github_release → update_binary → blog_post. Per-step consent (auto/notify/approve). Readiness detection: version gap + commits since last tag. Runtime state in `.synlynk/release-state.json`.
+
+**TPM Agent + Lifecycle-as-first-class-entity** (`docs/superpowers/specs/2026-06-23-tpm-agent-design.md`)
+Key insight: lifecycle is a typed, configurable artifact chain — not just "Architect → TPM → Agents". Each stage has an agent attachment point and produces an actionable artifact. Per-story lifecycle state in state.db (`lifecycle_instances` + `tasks` tables). TPM assembles waves from dependency graph, assigns agents via capability matrix, surfaces cross-story batching opportunities. Self-improving: writes to `capability_ratings` after every task; ROI summary printed after every wave.
+
+**Three agent design principles** (applies to all future agents):
+1. Opt-in at `synlynk init` / toggleable via `synlynk config --agents`
+2. Nothing breaks without agents — core workflow always functional
+3. Agents must earn their place — ROI summary after every wave
+
+### Roadmap update
+
+Regrouped v0.8.1–v0.8.4 into Agent Ecosystem Epic (parked for contiguous effort):
+- v0.8.1: Foundation (lifecycle engine, opt-in gate, Support Engineer unified)
+- v0.8.2: TPM Agent + Release Agent
+- v0.8.3: Marketing Intern + PM Agent
+- v0.8.4: Docs Keeper + Security Guard + Compliance Officer
+
+### Brainstorm visuals saved
+`docs/brainstorm/tpm-agent/` — 4 files: tpm-lifecycle, lifecycle-schema, tpm-board, tpm-design
+
+### Next
+- Pick up Agent Ecosystem Epic when ready — start with v0.8.1 Foundation spec
+- Older brainstorm sessions in `.superpowers/brainstorm/` not yet copied to `docs/brainstorm/` — ~18 sessions with HTML content
+
+---
+
 ## 2026-06-22 — Session: Post-v0.9.0 Install + Init Hardening
 
 ### Context
