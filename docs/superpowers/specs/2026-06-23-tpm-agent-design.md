@@ -6,6 +6,18 @@
 
 ---
 
+## Agent Design Principles
+
+These principles apply to the TPM agent and every agent built in this ecosystem:
+
+**1. Opt-in at init / re-configurable.** `synlynk init` asks once whether to enable agents. `synlynk config --agents` toggles the setting at any time. A single `agents_enabled` flag in `.synlynk/config.json` gates all agent commands. No silent activation.
+
+**2. Nothing breaks without agents.** The core synlynk workflow — `exec`, `checkpoint`, `story`, `team status`, `decide` — is fully functional with agents disabled. Agent commands (`tpm`, `release`) return a clear "agents not enabled — run `synlynk config --agents` to enable" message and exit 0. Agents are an accelerator layer, not a dependency of the base tool.
+
+**3. Agents must earn their place.** After every wave, the TPM prints an ROI summary: tokens used, wall-clock time, and estimated manual equivalent. If an agent repeatedly underperforms (high block rate, high cost per task), `tpm status` surfaces this. The capability matrix self-corrects agent assignments over time. Autonomy is only beneficial if it demonstrably saves time and cost.
+
+---
+
 ## Problem
 
 Dispatching agents across a multi-task plan requires manual coordination: choosing which agent per task, grouping tasks into parallel waves, creating worktrees, monitoring completion, and managing merge order. This is repetitive, error-prone, and blocks the human from doing higher-value work. Additionally, when multiple stories are in flight simultaneously, there is no cross-story view and no ability to batch tasks from different stories into a shared wave.
@@ -232,7 +244,20 @@ For each wave:
 2. Wait for all tasks in wave to complete
 3. If any task has `exit_code != 0`: set `tasks.status = 'blocked'`, write to `sentinel.md`, pause story
 
-### 7. Lifecycle Stage Advance
+### 7. ROI Summary
+
+After every wave completes, print:
+
+```
+Wave 1 done — 3 tasks (T1 codex, T2 codex, T3 claude)
+  Time:    8 min 22 sec
+  Tokens:  ~43K (estimated $0.38)
+  Manual equivalent: ~90 min (based on avg task duration in capability_ratings)
+```
+
+Manual equivalent is estimated as: `sum(avg_manual_duration_per_complexity_type * task_count)`. Defaults: exploratory=45min, targeted=20min, scaffold=10min. These defaults are configurable in `tpm-agent.json` under `manual_time_estimates`.
+
+### 8. Lifecycle Stage Advance
 
 When all tasks across all waves complete with exit code 0:
 - Check `lifecycle_instances.stage` advance trigger
@@ -309,7 +334,8 @@ Human resolves blockers via:
 |---|---|
 | `synlynk/__init__.py` | `_migrate_db()` additions; `_tpm_parse_plan()`, `_tpm_assign_agent()`, `_tpm_assemble_waves()`, `_tpm_check_aggregation()`, `_tpm_dispatch_wave()`, `_tpm_advance_lifecycle()`, `cmd_tpm_suggest()`, `cmd_tpm_dispatch()`, `cmd_tpm_status()`, `cmd_tpm_advance()`, `cmd_tpm_pause()`; argparse `tpm` subcommand with sub-actions |
 | `tests/test_synlynk.py` | Tests for all TPM functions |
-| `project-docs/tpm-agent.json` | Default TPM config (created by `synlynk init`) |
+| `project-docs/tpm-agent.json` | Default TPM config (created by `synlynk init` when agents enabled) |
+| `.synlynk/config.json` | Add `agents_enabled` boolean field; `synlynk init` sets it; `synlynk config --agents` toggles |
 
 ---
 
