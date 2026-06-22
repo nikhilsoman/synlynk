@@ -1258,8 +1258,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_070(project_dir):
-    assert synlynk.VERSION == "0.7.0"
+def test_version_is_090(project_dir):
+    assert synlynk.VERSION == "0.9.0"
 
 
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):
@@ -1488,9 +1488,10 @@ def test_write_informed_skeleton_creates_docs(project_dir):
         "readme_summary": "# testproject\nA test tool.",
     }
     written = synlynk._write_informed_skeleton(scan, skip_existing=False)
-    assert "project-docs/roadmap.md" in written
-    assert "project-docs/memory.md" in written
-    assert "project-docs/todo.md" in written
+    written_paths = [p for p, _ in written]
+    assert "project-docs/roadmap.md" in written_paths
+    assert "project-docs/memory.md" in written_paths
+    assert "project-docs/todo.md" in written_paths
 
 
 def test_write_informed_skeleton_injects_project_name(project_dir):
