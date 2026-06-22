@@ -776,6 +776,179 @@ def _sign_capability_rating(data: dict) -> str:
     return ""
 
 
+def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
+    """Run an agent synchronously and return its stdout. Returns '' on any failure."""
+    import tempfile as _tmp
+
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        print(f"  ⚠ Unknown agent '{agent}' — skipping")
+        return ""
+
+    baselines = AGENT_CAPABILITY_BASELINES[agent]
+    cli = baselines["cli"]
+    flags = baselines["non_interactive_flags"]
+    prompt_via_arg = baselines.get("prompt_via_arg", False)
+
+    prompt_file = None
+    try:
+        with _tmp.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as pf:
+            pf.write(prompt)
+            prompt_file = pf.name
+
+        if prompt_via_arg:
+            result = subprocess.run(
+                [cli] + flags + [prompt],
+                capture_output=True, text=True, timeout=timeout
+            )
+        else:
+            with open(prompt_file) as stdin_file:
+                result = subprocess.run(
+                    [cli] + flags,
+                    stdin=stdin_file, capture_output=True,
+                    text=True, timeout=timeout
+                )
+        return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        print(f"  ⚠ Agent '{agent}' failed: {e}")
+        return ""
+    finally:
+        if prompt_file:
+            try:
+                os.unlink(prompt_file)
+            except Exception:
+                pass
+
+
+def _write_decision_record(
+    decision_id: str, topic: str, date: str, panel: list,
+    inputs: dict, synthesis: str, decision_text: str,
+    decisions_dir: str, slug: str
+) -> None:
+    """Write MD + JSON sidecar for a Decision record. Signs JSON with local identity key."""
+    base = os.path.join(decisions_dir, f"{date}-{slug}")
+
+    record = {
+        "decision_id": decision_id,
+        "topic": topic,
+        "date": date,
+        "panel": panel,
+        "status": "approved",
+        "inputs": inputs,
+        "synthesis": synthesis,
+        "decision": decision_text,
+    }
+
+    sig = _sign_capability_rating(record)
+    if sig:
+        record["signature"] = sig
+    else:
+        print("  ⚠ No identity key — decision written unsigned. "
+              "Run `synlynk identity init` first.")
+
+    with open(f"{base}.json", "w") as f:
+        json.dump(record, f, indent=2)
+
+    panel_inputs_md = ""
+    for member, text in inputs.items():
+        panel_inputs_md += f"\n### {member}\n{text}\n"
+
+    md_content = (
+        f"---\n"
+        f"decision_id: {decision_id}\n"
+        f"topic: \"{topic}\"\n"
+        f"date: {date}\n"
+        f"panel: [{', '.join(panel)}]\n"
+        f"status: approved\n"
+        f"---\n\n"
+        f"## Topic\n{topic}\n\n"
+        f"## Panel Inputs\n{panel_inputs_md}\n"
+        f"## Synthesis\n{synthesis}\n\n"
+        f"## Decision\n{decision_text}\n\n"
+        f"> Signatures: see {date}-{slug}.json\n"
+    )
+    with open(f"{base}.md", "w") as f:
+        f.write(md_content)
+
+
+def cmd_decide(topic: str, panel: list, record: bool = False) -> None:
+    """Convene a multi-agent panel on topic and optionally record the Decision."""
+    import hashlib as _hashlib
+
+    print(f"\n  {_CYAN}▶{_RESET} Convening panel on: {topic}")
+    print(f"  Panel: {', '.join(panel)}\n")
+
+    panel_prompt = (
+        f"You are part of a decision panel. Topic: \"{topic}\"\n\n"
+        f"Provide your analysis and recommendation in 200-400 words. "
+        f"State your position clearly in the final paragraph."
+    )
+
+    inputs = {}
+    for member in panel:
+        print(f"  {_CYAN}▶{_RESET} Querying {member}...")
+        output = _run_agent_sync(member, panel_prompt)
+        if output:
+            inputs[member] = output
+            print(f"  {_GREEN}✓{_RESET} {member} responded ({len(output.split())} words)")
+        else:
+            print(f"  ⚠ {member} returned no output — skipping")
+
+    if not inputs:
+        print("Error: all panel members failed — cannot produce a decision")
+        sys.exit(1)
+
+    synthesis_parts = [
+        f"The following are inputs from a decision panel on: \"{topic}\"\n"
+    ]
+    for member, text in inputs.items():
+        synthesis_parts.append(f"### {member}\n{text}\n")
+    synthesis_parts.append(
+        "Synthesize these into a single decision. In the final paragraph, "
+        "state the decision clearly starting with \"Decision:\"."
+    )
+    synthesis_prompt = "\n".join(synthesis_parts)
+
+    print(f"\n  {_CYAN}▶{_RESET} Synthesizing...")
+    synthesis = _run_agent_sync(panel[0], synthesis_prompt)
+    if not synthesis:
+        synthesis = "Synthesis unavailable — see individual panel inputs above."
+
+    decision_text = ""
+    for line in synthesis.split("\n"):
+        if line.strip().lower().startswith("decision:"):
+            decision_text = line.strip()
+            break
+    if not decision_text:
+        lines = [l.strip() for l in synthesis.split("\n") if l.strip()]
+        decision_text = lines[-1] if lines else synthesis
+
+    sep = "─" * 50
+    print(f"\n{sep}\nSYNTHESIS\n\n{synthesis}\n{sep}\n")
+
+    if not record:
+        print("  (Use --record to save this as a Decision record)")
+        return
+
+    _check_upstream_divergence()
+
+    decision_id = "dec-" + _hashlib.md5(
+        f"{topic}{time.time()}".encode()
+    ).hexdigest()[:8]
+
+    today = time.strftime("%Y-%m-%d")
+    slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
+
+    decisions_dir = os.path.join(_docs_dir(), "decisions")
+    os.makedirs(decisions_dir, exist_ok=True)
+
+    _write_decision_record(
+        decision_id, topic, today, panel,
+        inputs, synthesis, decision_text, decisions_dir, slug
+    )
+
+    print(f"  {_GREEN}✓{_RESET} Decision recorded: {decisions_dir}/{today}-{slug}.md")
+
+
 def _check_upstream_divergence() -> None:
     """Warn if remote has commits the local branch hasn't pulled. Silent no-op otherwise."""
     try:
@@ -4947,6 +5120,19 @@ def main() -> None:
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
 
+    decide_parser = subparsers.add_parser(
+        "decide", help="Convene a multi-agent panel and optionally record a Decision"
+    )
+    decide_parser.add_argument("topic", help="Decision topic (quoted string)")
+    decide_parser.add_argument(
+        "--panel", required=True,
+        help="Comma-separated agent names, e.g. claude,agy,codex"
+    )
+    decide_parser.add_argument(
+        "--record", action="store_true",
+        help="Write the Decision record to project-docs/decisions/"
+    )
+
     scan_parser = subparsers.add_parser("scan", help="Scan source tree and update architecture context")
     scan_parser.add_argument("--deep", action="store_true",
                              help="Full tree walk: populate state.db and write project-docs/source-map.md")
@@ -5199,6 +5385,9 @@ def main() -> None:
             cmd_team_status()
         else:
             team_parser.print_help()
+    elif args.command == "decide":
+        panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
+        cmd_decide(args.topic, panel=panel_members, record=args.record)
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     elif args.command == "identity":
