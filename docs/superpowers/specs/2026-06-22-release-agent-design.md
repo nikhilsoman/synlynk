@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22  
 **Status:** Approved for implementation  
-**Target release:** v0.9.3  
+**Target release:** v0.8.2 (part of Agent Ecosystem Epic v0.8.1–v0.8.4)  
 
 ---
 

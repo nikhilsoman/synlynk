@@ -14,10 +14,10 @@
 | v0.5.0–v0.6.1 | Capability Engine + Job Control | Model-aware routing · 3D domain taxonomy · quality signals · SQLite WAL · constraint propagation · `synlynk story/score` | ✅ Shipped | June 2026 |
 | v0.7.0 | Static Scan Quality | Language-agnostic source scanner · `## Source Architecture` injection · `synlynk scan` · 369 tests | ✅ Shipped | June 2026 |
 | v0.8.0 | Support Engineer Agent | Maintainer archetype #1 · 5 signal collectors · 7/30-day dedup · foreground investigation · GH issue filing · draft fix PRs · `.agents/` config system | ✅ Shipped | June 2026 |
-| **v0.8.1** | Security Guard | Maintainer — dep vulns, secret leaks, CVEs | 🔜 Next | June 2026 |
-| **v0.8.2** | Marketing Intern | Communicator — blog posts, release notes, social copy | 🔜 Next | June 2026 |
-| **v0.8.3** | PM Agent | Orchestrator — growth signals, story routing, sprint pulse | 🔜 Next | July 2026 |
-| **v0.8.4** | Compliance Officer + Docs Keeper | Maintainer + Communicator — convention drift, docs staleness | 🔜 Next | July 2026 |
+| **v0.8.1** | Agent Ecosystem Foundation | `agents_enabled` opt-in gate · lifecycle engine (per-story lifecycle_instances + tasks tables) · capability matrix · ROI tracking · unified `.agents/` config · Support Engineer refactored onto foundation | 📋 Planned | Aug 2026 |
+| **v0.8.2** | TPM Agent + Release Agent | Lifecycle runner · wave dispatch · cross-story aggregation · `synlynk tpm` · release pipeline · `synlynk release` | 📋 Planned | Aug 2026 |
+| **v0.8.3** | Marketing Intern + PM Agent | Communicator archetype — blog/release notes/social · Orchestrator archetype — growth signals, story routing, sprint pulse | 📋 Planned | Sep 2026 |
+| **v0.8.4** | Docs Keeper + Security Guard + Compliance Officer | Maintainer + Communicator — convention drift, docs staleness, dep vulns, secret leaks, CVEs | 📋 Planned | Sep 2026 |
 | **v0.9.0** | Kernel Fixes | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming baseline (sample-count cap) | ✅ Shipped | June 2026 |
 | **v0.9.1** | Install Hardening + Docs Migration | Install broken after package split fixed · `_docs_dir()` configurable · `--docs-dir` flag on init · smart doc migration from existing content | ✅ Shipped | June 2026 |
 | **v0.9.2** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | 📋 Planned | July 2026 |
