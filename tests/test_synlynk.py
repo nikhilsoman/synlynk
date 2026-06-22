@@ -2517,3 +2517,75 @@ def test_story_list_shows_token_columns(project_dir, capsys):
     out = capsys.readouterr().out
     assert "EST TOK" in out
     assert "12,345" in out
+
+
+def test_seed_devlog_creates_file(project_dir):
+    import synlynk
+    synlynk._seed_devlog("alice")
+    devlog = project_dir / "project-docs" / "devlogs" / "alice.md"
+    assert devlog.exists()
+    content = devlog.read_text()
+    assert "# Devlog — @alice" in content
+    assert "Joined via `synlynk join`" in content
+
+
+def test_seed_devlog_idempotent(project_dir):
+    import synlynk
+    synlynk._seed_devlog("alice")
+    first_content = (project_dir / "project-docs" / "devlogs" / "alice.md").read_text()
+    synlynk._seed_devlog("alice")
+    second_content = (project_dir / "project-docs" / "devlogs" / "alice.md").read_text()
+    assert first_content == second_content
+
+
+def test_generate_ai_context_files_creates(project_dir):
+    import synlynk
+    synlynk._generate_ai_context_files("arch: src/main.py", "abc1234 feat: init")
+    assert (project_dir / "CLAUDE.md").exists()
+    assert (project_dir / "GEMINI.md").exists()
+    assert (project_dir / "AGENTS.md").exists()
+    content = (project_dir / "CLAUDE.md").read_text()
+    assert "Context Snapshot" in content
+    assert "arch: src/main.py" in content
+
+
+def test_generate_ai_context_files_appends(project_dir):
+    import synlynk
+    (project_dir / "CLAUDE.md").write_text("# My Custom CLAUDE.md\nExisting content.\n")
+    synlynk._generate_ai_context_files("arch: src/lib.py", "def456 fix: bug")
+    content = (project_dir / "CLAUDE.md").read_text()
+    assert "My Custom CLAUDE.md" in content
+    assert "Existing content." in content
+    assert "Context Snapshot" in content
+    assert "arch: src/lib.py" in content
+
+
+def test_build_team_digest_reads_devlogs(project_dir):
+    import synlynk
+    (project_dir / "project-docs" / "devlogs" / "alice.md").write_text(
+        "# Devlog — @alice\n\n## 2026-06-20\nDid stuff.\n"
+    )
+    digest = synlynk._build_team_digest()
+    users = [m["user"] for m in digest["members"]]
+    assert "alice" in users
+
+
+def test_build_team_digest_no_db(project_dir):
+    import synlynk
+    digest = synlynk._build_team_digest()
+    assert "in_progress" in digest
+    assert "members" in digest
+
+
+def test_build_team_digest_includes_stories(project_dir):
+    import synlynk
+    synlynk.cmd_story_create("Active story", estimated_tokens=10000)
+    digest = synlynk._build_team_digest()
+    titles = [s["title"] for s in digest["in_progress"]]
+    assert "Active story" in titles
+
+
+def test_build_team_digest_top_todo(project_dir):
+    import synlynk
+    digest = synlynk._build_team_digest()
+    assert digest["top_todo"] == "Task one"

@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS stories (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     story_id      TEXT NOT NULL UNIQUE,
     title         TEXT,
+    estimated_tokens INTEGER,
+    actual_tokens INTEGER,
     engg_domain   TEXT DEFAULT 'unknown',
     org_domain    TEXT DEFAULT 'unknown',
     org_domain_tags TEXT DEFAULT '[]',
@@ -148,6 +150,11 @@ def _get_db() -> _sqlite3.Connection:
 def _migrate_db(conn: _sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     conn.executescript(_DB_SCHEMA)
+    story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    if "estimated_tokens" not in story_cols:
+        conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
+    if "actual_tokens" not in story_cols:
+        conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
     try:
         conn.executescript(_DB_SCORES_VIEW)
     except _sqlite3.OperationalError:
@@ -790,6 +797,128 @@ def _check_upstream_divergence() -> None:
             behind = "?"
         print(f"⚠  Remote has {behind} commit(s) you haven't pulled. "
               f"Consider `git pull` before writing.\n   Continuing anyway...")
+
+
+def _seed_devlog(username: str) -> None:
+    """Creates project-docs/devlogs/<username>.md if absent. Idempotent."""
+    devlog_dir = os.path.join(_docs_dir(), "devlogs")
+    os.makedirs(devlog_dir, exist_ok=True)
+    devlog_path = os.path.join(devlog_dir, f"{username}.md")
+    if os.path.exists(devlog_path):
+        return
+    today = time.strftime("%Y-%m-%d")
+    with open(devlog_path, "w") as f:
+        f.write(f"# Devlog — @{username}\n\n")
+        f.write(f"## {today} — Joined project\n")
+        f.write("Joined via `synlynk join`.\n")
+
+
+def _generate_ai_context_files(arch_context: str, git_summary: str) -> None:
+    """Appends a context snapshot section to CLAUDE.md, GEMINI.md, AGENTS.md.
+    Creates files if absent. Never overwrites existing content."""
+    today = time.strftime("%Y-%m-%d")
+    snapshot = (
+        f"\n## Context Snapshot (joined {today})\n\n"
+        f"### Recent Git Activity\n```\n{git_summary}\n```\n\n"
+        f"### Source Architecture\n{arch_context}\n"
+    )
+    for fname in ("CLAUDE.md", "GEMINI.md", "AGENTS.md"):
+        if os.path.exists(fname):
+            with open(fname, "a") as f:
+                f.write(snapshot)
+        else:
+            with open(fname, "w") as f:
+                f.write(f"# {fname.replace('.md', '')} — Project Context\n")
+                f.write(snapshot)
+
+
+def _build_team_digest() -> dict:
+    """Reads devlogs + SQLite to build a team status digest.
+    SQLite section silently skipped if state.db absent."""
+    members = []
+    devlogs_dir = os.path.join(_docs_dir(), "devlogs")
+    if os.path.exists(devlogs_dir):
+        for fname in sorted(os.listdir(devlogs_dir)):
+            if fname.endswith(".md") and fname != "README.md":
+                fpath = os.path.join(devlogs_dir, fname)
+                user = fname[:-3]
+                last_active = _get_last_devlog_date(fpath) or "unknown"
+                shipped = 0
+                try:
+                    with open(fpath) as fh:
+                        for line in fh:
+                            if re.match(r'^## \d{4}-\d{2}-\d{2}', line):
+                                shipped += 1
+                except IOError:
+                    pass
+                members.append({
+                    "user": user,
+                    "last_active": last_active,
+                    "stories_shipped": shipped,
+                })
+
+    in_progress = []
+    recently_completed = []
+
+    try:
+        conn = _get_db()
+        stories = conn.execute(
+            "SELECT story_id, title, estimated_tokens FROM stories ORDER BY created_at DESC LIMIT 20"
+        ).fetchall()
+
+        telemetry = []
+        tel_path = ".synlynk/telemetry.json"
+        if os.path.exists(tel_path):
+            try:
+                with open(tel_path) as f:
+                    telemetry = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        def _actual_tokens_for_story(sid):
+            total = sum(
+                e.get("in_tokens", 0) + e.get("out_tokens", 0)
+                for e in telemetry
+                if e.get("story_id") == sid
+            )
+            return total if total > 0 else None
+
+        for story_id, title, est_tokens in stories:
+            actual = _actual_tokens_for_story(story_id)
+            has_rating = conn.execute(
+                "SELECT id FROM capability_ratings WHERE story_id=? AND correct=1 LIMIT 1",
+                (story_id,)
+            ).fetchone()
+            entry = {
+                "story_id": story_id,
+                "title": title,
+                "estimated_tokens": est_tokens,
+                "actual_tokens": actual,
+            }
+            if has_rating:
+                recently_completed.append(entry)
+            else:
+                in_progress.append(entry)
+        conn.close()
+    except Exception:
+        pass  # state.db absent or unreadable — skip SQLite section
+
+    top_todo = None
+    todo_path = os.path.join(_docs_dir(), "todo.md")
+    if os.path.exists(todo_path):
+        with open(todo_path) as f:
+            for line in f:
+                if re.match(r'\s*-\s*\[\s*\]', line):
+                    top_todo = re.sub(r'\s*-\s*\[\s*\]\s*', '', line).strip()
+                    top_todo = re.sub(r'<!--.*?-->', '', top_todo).strip()
+                    break
+
+    return {
+        "members": members,
+        "in_progress": in_progress[:5],
+        "recently_completed": recently_completed[:3],
+        "top_todo": top_todo,
+    }
 
 
 def cmd_identity_init() -> None:
