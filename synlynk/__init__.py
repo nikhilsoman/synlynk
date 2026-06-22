@@ -153,11 +153,19 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
     except _sqlite3.OperationalError:
         pass  # view already exists with same definition
     conn.commit()
+    # v0.9.2: token budget columns on stories
+    for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
+        try:
+            conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
+        except Exception:
+            pass  # column already exists
+    conn.commit()
 
 
 def cmd_story_create(title: str, engg_domain: str = "unknown",
                      org_domain: str = "unknown", phase: str = "build",
-                     org_domain_tags: list = None) -> str:
+                     org_domain_tags: list = None,
+                     estimated_tokens: int = None) -> str:
     """Creates a story record in state.db. Returns the generated story_id."""
     import hashlib as _hashlib
     import json as _json
@@ -170,8 +178,8 @@ def cmd_story_create(title: str, engg_domain: str = "unknown",
     conn = _get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, engg_domain, org_domain, "
-        "org_domain_tags, industry, phase) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (story_id, title, engg_domain, org_domain, tags_json, industry, phase)
+        "org_domain_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (story_id, title, engg_domain, org_domain, tags_json, industry, phase, estimated_tokens)
     )
     conn.commit()
     conn.close()
@@ -182,17 +190,20 @@ def cmd_story_list() -> None:
     """Prints all stories in state.db."""
     conn = _get_db()
     rows = conn.execute(
-        "SELECT story_id, title, engg_domain, org_domain, industry, phase, created_at "
+        "SELECT story_id, title, engg_domain, org_domain, industry, phase, "
+        "estimated_tokens, actual_tokens, created_at "
         "FROM stories ORDER BY created_at DESC"
     ).fetchall()
     conn.close()
     if not rows:
         print("  No stories yet. Use: synlynk story create --title '...'")
         return
-    print(f"\n  {'ID':<14} {'Title':<30} {'Engg':<12} {'Org':<14} {'Industry':<12} Phase")
-    print("  " + "-" * 90)
+    print(f"\n  {'ID':<14} {'Title':<28} {'Engg':<12} {'EST TOK':>9} {'ACTUAL':>9}")
+    print("  " + "-" * 80)
     for r in rows:
-        print(f"  {r[0]:<14} {(r[1] or '')[:29]:<30} {r[2]:<12} {r[3]:<14} {r[4]:<12} {r[5]}")
+        est = f"{r[6]:,}" if r[6] is not None else "—"
+        actual = f"{r[7]:,}" if r[7] is not None else "—"
+        print(f"  {r[0]:<14} {(r[1] or '')[:27]:<28} {r[2]:<12} {est:>9} {actual:>9}")
 
 
 def _load_agent_config(name: str) -> dict:
@@ -4781,6 +4792,10 @@ def main() -> None:
     story_create_parser.add_argument("--org-tags", nargs="*", default=[],
                                       dest="org_domain_tags",
                                       help="Secondary org domain tags (Tokq discoverability only)")
+    story_create_parser.add_argument(
+        "--tokens", type=int, default=None, dest="estimated_tokens",
+        help="Estimated token budget (set by AI planner)"
+    )
     story_sub.add_parser("list", help="List all stories")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
@@ -4884,7 +4899,8 @@ def main() -> None:
     elif args.command == "story":
         if args.story_action == "create":
             cmd_story_create(args.title, args.engg_domain, args.org_domain, args.phase,
-                             org_domain_tags=getattr(args, "org_domain_tags", []))
+                             org_domain_tags=getattr(args, "org_domain_tags", []),
+                             estimated_tokens=getattr(args, "estimated_tokens", None))
         elif args.story_action == "list":
             cmd_story_list()
     elif args.command == "score":
