@@ -2473,3 +2473,16 @@ def test_install_cron_idempotent(project_dir, monkeypatch):
     synlynk._install_cron_entry("support")
     second = crontab_contents[0]
     assert second.count("synlynk.py agent run support") == 1
+
+
+def test_upstream_divergence_no_upstream(project_dir):
+    """Silent no-op when no upstream is configured (solo repo)."""
+    import synlynk
+    synlynk._check_upstream_divergence()  # must complete without error or output
+
+
+def test_upstream_divergence_not_git(tmp_path, monkeypatch):
+    """Silent no-op outside a git repo."""
+    import synlynk
+    monkeypatch.chdir(tmp_path)
+    synlynk._check_upstream_divergence()  # must complete without error

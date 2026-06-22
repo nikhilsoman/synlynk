@@ -758,6 +758,29 @@ def _sign_capability_rating(data: dict) -> str:
     return ""
 
 
+def _check_upstream_divergence() -> None:
+    """Warn if remote has commits the local branch hasn't pulled. Silent no-op otherwise."""
+    try:
+        local = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+        upstream = subprocess.check_output(
+            ["git", "rev-parse", "@{u}"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except (subprocess.CalledProcessError, AttributeError):
+        return  # no upstream configured, detached HEAD, or not in git repo
+    if local != upstream:
+        try:
+            behind = subprocess.check_output(
+                ["git", "rev-list", "--count", "HEAD..@{u}"],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except (subprocess.CalledProcessError, AttributeError):
+            behind = "?"
+        print(f"⚠  Remote has {behind} commit(s) you haven't pulled. "
+              f"Consider `git pull` before writing.\n   Continuing anyway...")
+
+
 def cmd_identity_init() -> None:
     key_path = _ensure_identity_key()
     pub_path = key_path + ".pub"
@@ -3452,6 +3475,7 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
     """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
+    _check_upstream_divergence()
     costs_file = os.path.join(_docs_dir(), "costs.md")
     if not os.path.exists(costs_file):
         return
@@ -3994,6 +4018,7 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
 def checkpoint() -> None:
     """Archives done tasks, refreshes context, and emits a telemetry event."""
     set_state("active")
+    _check_upstream_divergence()
     username = get_username()
     todo_path = "project-docs/todo.md"
     devlog_path = f"project-docs/devlogs/{username}.md"
