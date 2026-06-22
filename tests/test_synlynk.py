@@ -2589,3 +2589,49 @@ def test_build_team_digest_top_todo(project_dir):
     import synlynk
     digest = synlynk._build_team_digest()
     assert digest["top_todo"] == "Task one"
+
+
+def test_join_seeds_devlog(project_dir, monkeypatch):
+    import synlynk
+    monkeypatch.setattr(synlynk, "get_username", lambda: "testuser")
+    monkeypatch.setattr(synlynk, "cmd_scan", lambda **kw: None)
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "check_output",
+        lambda cmd, **kw: b"abc1234 feat: init\n" if "log" in cmd else b"")
+    synlynk.cmd_join()
+    devlog = project_dir / "project-docs" / "devlogs" / "testuser.md"
+    assert devlog.exists()
+
+def test_join_no_project_docs(tmp_path, monkeypatch):
+    import synlynk, pytest
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "testuser")
+    with pytest.raises(SystemExit) as exc:
+        synlynk.cmd_join()
+    assert exc.value.code == 1
+
+def test_join_sets_team_mode(project_dir, monkeypatch):
+    import synlynk, json
+    monkeypatch.setattr(synlynk, "get_username", lambda: "testuser")
+    monkeypatch.setattr(synlynk, "cmd_scan", lambda **kw: None)
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "check_output",
+        lambda cmd, **kw: b"abc1234 feat: init\n" if "log" in cmd else b"")
+    synlynk.cmd_join()
+    cfg_path = project_dir / "project-docs" / ".synlynk_config.json"
+    cfg = json.loads(cfg_path.read_text())
+    assert cfg["mode"] == "team"
+
+def test_join_idempotent(project_dir, monkeypatch):
+    import synlynk
+    monkeypatch.setattr(synlynk, "get_username", lambda: "testuser")
+    monkeypatch.setattr(synlynk, "cmd_scan", lambda **kw: None)
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "check_output",
+        lambda cmd, **kw: b"abc1234 feat: init\n" if "log" in cmd else b"")
+    synlynk.cmd_join()
+    devlog = project_dir / "project-docs" / "devlogs" / "testuser.md"
+    first = devlog.read_text()
+    synlynk.cmd_join()
+    second = devlog.read_text()
+    assert first == second
