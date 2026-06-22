@@ -98,12 +98,20 @@ Agents trigger via GitHub Actions + crontab (v0.8.1–0.8.4) and via daemon once
 - Verify contract (`pytest tests/test_x.py`) injected per dispatch so agents know "done"
 - Per-agent dispatch framing: Codex prompt ≠ Claude stdin ≠ AGY `--print` arg. Currently identical plaintext for all agents causing silent context loss. [AGY: different truncation/escaping per CLI]
 - Wire Ed25519 signing into `_write_capability_rating` — sig column exists but signing not wired. [AGY]
-- Anti-gaming baseline in quality scoring — `quality_auto` formula (35% test-pass + 30% build + 35% inverse-rework) is gameable by trivial passing tests. Add minimum complexity threshold. [AGY]
-- **Package split:** `bin/synlynk.py` → `synlynk/` package with clean module boundaries (db/story/score · scan/context · instruction-files · dispatch/jobs · sentinel · daemon). Do this before the agent series lands — every new agent PR is a merge conflict in a single 4000-line file. [Codex]
+- Anti-gaming baseline in quality scoring — shipped in v0.9.0 as a **sample-count cap**: `quality_auto` is capped at 5.0 when `test_count < 3` with a perfect pass rate. This prevents zero-test or trivial-test gaming. Full complexity-threshold analysis (the originally-specced formula) deferred to v1.0.0. [AGY]
+- **Package split** (`bin/synlynk.py` → `synlynk/` package with clean module boundaries) — partially completed: package directory and shim exist, but single-file `__init__.py` (4,900+ lines) remains. Full 6-module split (`db/story/score · scan/context · instruction-files · dispatch/jobs · sentinel · daemon`) not yet done. Deferred — will be done incrementally as new agent PRs land. [Codex]
 
 ---
 
-### v0.9.1 — Team Onboarding + Consensus Framework (Week 2)
+### v0.9.1 — Install Hardening + Docs Migration ✅ Shipped (June 2026)
+
+- **Install broken after package split fixed:** `install.sh` now copies `synlynk/` package to `~/.synlynk/lib/synlynk/`; shim `sys.path` patched at install time.
+- **Configurable `project_docs_dir`:** `_docs_dir()` reads from `.synlynk/config.json` (default `"project-docs"`). `synlynk init --docs-dir <path>` writes it before any file creation.
+- **Smart doc migration on init:** `_find_existing_doc()` searches repo root, `project-docs/`, and project-prefixed variants (`rxcc_memory.md`). First match >200 bytes is migrated verbatim — not a blank skeleton.
+
+---
+
+### v0.9.2 — Team Onboarding + Consensus Framework
 
 **Immediate use case: Superagents monorepo, 4-5 people, varying AI toolkits (Gemini + Codex baseline, Claude for some).**
 
@@ -201,7 +209,7 @@ Any active member can be host. Relay bootstraps from any online member's state (
 
 - **Workgroup protocol:** shared, signed capability ledger across humans + agents + autopilots
 - **SME archetype** + event bus (domain-tag subscriptions, file-path triggers, non-mutating review role)
-- **Game-resistance hardened** in capability scoring (anti-trivial-test gaming, minimum complexity threshold, review-weighted scoring)
+- **Game-resistance hardened** in capability scoring (full complexity-threshold formula — builds on the sample-count guard shipped in v0.9.0; adds review-weighted scoring)
 - All three autopilot classes at workgroup level (Maintainers + Communicators + Orchestrators)
 - Stable CLI contract, `synlynk migrate` for pre-1.0 projects
 - pipx + Homebrew distribution
@@ -230,7 +238,7 @@ Any active member can be host. Relay bootstraps from any online member's state (
 
 But it only becomes a moat if:
 1. It is **signed** (Ed25519 per rating — wired in v0.9.0)
-2. It is **game-resistant** (anti-trivial-test formula — hardened in v0.9.0 + v1.0.0)
+2. It is **game-resistant** (sample-count guard shipped in v0.9.0; full complexity-threshold formula hardens in v1.0.0)
 3. It is **large** (data network effect — grows with every workgroup)
 
 **[Codex]** The per-agent output quality — scoped context + verify contract — is what determines whether any dispatched agent produces one-shot results or flails. This is the kernel fix that makes everything on top of it worth building.

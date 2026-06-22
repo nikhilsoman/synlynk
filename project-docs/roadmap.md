@@ -12,16 +12,17 @@
 | v0.3.1 | Sentinel + Observability | Token scraping · zombie/stall/quota/loop detection · burn rate · context bloat · sentinel severity + ack | ✅ Shipped | June 2026 |
 | v0.4.0–v0.4.2 | Hybrid Workgroup + Instruction Reach + Task Status | IPC · dispatch · job store · init wizard · IDE reach · SHA manifest · drift detection · 5-state task model | ✅ Shipped | June 2026 |
 | v0.5.0–v0.6.1 | Capability Engine + Job Control | Model-aware routing · 3D domain taxonomy · quality signals · SQLite WAL · constraint propagation · `synlynk story/score` | ✅ Shipped | June 2026 |
-| v0.7.0 | Static Scan Quality | Language-agnostic source scanner · `## Source Architecture` injection · `synlynk scan` · 316 tests | ✅ Shipped | June 2026 |
+| v0.7.0 | Static Scan Quality | Language-agnostic source scanner · `## Source Architecture` injection · `synlynk scan` · 369 tests | ✅ Shipped | June 2026 |
 | v0.8.0 | Support Engineer Agent | Maintainer archetype #1 · 5 signal collectors · 7/30-day dedup · foreground investigation · GH issue filing · draft fix PRs · `.agents/` config system | ✅ Shipped | June 2026 |
 | **v0.8.1** | Security Guard | Maintainer — dep vulns, secret leaks, CVEs | 🔜 Next | June 2026 |
 | **v0.8.2** | Marketing Intern | Communicator — blog posts, release notes, social copy | 🔜 Next | June 2026 |
 | **v0.8.3** | PM Agent | Orchestrator — growth signals, story routing, sprint pulse | 🔜 Next | July 2026 |
 | **v0.8.4** | Compliance Officer + Docs Keeper | Maintainer + Communicator — convention drift, docs staleness | 🔜 Next | July 2026 |
-| **v0.9.0** | Kernel Fixes + Package Split | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming · package split | ✅ Shipped | June 2026 |
-| **v0.9.1** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | 📋 Planned | July 2026 |
-| **v0.9.2** | Async Daemon | `synlynk daemon` · launchd/systemd · job queue · HTTP context server localhost:27471 | 📋 Planned | July 2026 |
-| **v0.9.3** | Workgroup Relay | WSS/443 relay · 3 deployment modes (LAN/Cloudflare Tunnel/VPS) · revolving host protocol | 📋 Planned | July 2026 |
+| **v0.9.0** | Kernel Fixes | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming baseline (sample-count cap) | ✅ Shipped | June 2026 |
+| **v0.9.1** | Install Hardening + Docs Migration | Install broken after package split fixed · `_docs_dir()` configurable · `--docs-dir` flag on init · smart doc migration from existing content | ✅ Shipped | June 2026 |
+| **v0.9.2** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | 📋 Planned | July 2026 |
+| **v0.9.3** | Async Daemon | `synlynk daemon` · launchd/systemd · job queue · HTTP context server localhost:27471 | 📋 Planned | Aug 2026 |
+| **v0.9.4** | Workgroup Relay | WSS/443 relay · 3 deployment modes (LAN/Cloudflare Tunnel/VPS) · revolving host protocol | 📋 Planned | Aug 2026 |
 | **v0.10.0** | Multi-Repo Workspace | `synlynk workspace init/join` · cross-repo epics · workspace relay scope | 📋 Planned | Aug 2026 |
 | **v1.0.0** | Community Layer: Local Workgroup + Public Launch | Workgroup protocol · signed capability ledger · SME archetype · game-resistant scoring · pipx/Homebrew · synlynk.com · public blog | 📋 Planned | Sep 2026 |
 | **v1.1.0** | Cross-Workgroup (Team Level) | Relay → community server · cross-workgroup epics · agent entitlements | 📋 Planned | Q4 2026 |
