@@ -7,7 +7,7 @@
 
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects scoped project context into every agent dispatch, routes tasks to the best available agent using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.9.0:** Dispatch quality — scoped context, `## Relevant Files` + `## How to Verify` injected per dispatch, per-agent prompt framing, Ed25519 capability signing, anti-gaming quality cap. Package split: all logic now in `synlynk/` package.
+**v0.9.2:** Team onboarding — `synlynk join` seeds a new member's devlog from git history and regenerates their AI context files. `synlynk team status` shows all active members, story assignments, and token budget consumption. `synlynk decide` dispatches a multi-agent consensus panel and writes a signed Decision record.
 
 ## Install
 
@@ -178,8 +178,10 @@ synlynk's goal is to become the OS for multi-agent development — the substrate
 | v0.7.0 | Static Scan Quality — `## Source Architecture` in every exec session, `synlynk scan`, 9-language symbol extraction | ✅ Shipped | Jun 2026 |
 | v0.8.0 | Support Engineer Agent — 5 signal collectors, GH issue filing, draft fix PRs, `.agents/` config | ✅ Shipped | Jun 2026 |
 | **v0.9.0** | Kernel Fixes + Package Split — scoped dispatch context, relevant files, verify contract, per-agent framing, Ed25519 signing, anti-gaming cap | ✅ Shipped | Jun 2026 |
-| v0.9.1 | Team Onboarding + Consensus — `synlynk join`, team digest, write-arbitration, token budgets | 🔜 Next | Jul 2026 |
-| v0.9.3 | Workgroup Relay — community relay (`relay.synlynk.com`), `--enterprise` self-host | Planned | Jul 2026 |
+| v0.9.1 | Install Hardening + Docs Migration — installed binary fix, `--docs-dir` flag, smart init migration | ✅ Shipped | Jun 2026 |
+| **v0.9.2** | Team Onboarding + Consensus — `synlynk join`, `synlynk team status`, `synlynk decide`, pull-before-write arbitration, token budgets on stories | ✅ Shipped | Jun 2026 |
+| v0.9.3 | Async Daemon — `synlynk daemon`, launchd/systemd, job queue, HTTP context server localhost:27471 | 🔜 Next | Aug 2026 |
+| v0.9.4 | Workgroup Relay — WSS/443 relay, 3 deployment modes (LAN/Cloudflare Tunnel/VPS), revolving host protocol | Planned | Aug 2026 |
 | v1.0.0 | Community Layer — signed capability ledger, pipx/Homebrew, synlynk.com public launch | Planned | Sep 2026 |
 
 **We're looking for community input on what to build next.** See the [Discussions](../../discussions) tab to vote on feature direction and share use cases.

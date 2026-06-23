@@ -743,7 +743,7 @@
       <text x="84" y="44" font-family="'Courier New', monospace" font-weight="500" font-size="34" fill="#1a1a1a" letter-spacing="-1">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
       <text x="86" y="62" font-family="Arial, sans-serif" font-size="10" fill="#aaa" letter-spacing="2">synaptic link for ai dev</text>
     </svg>
-    <div style="font-size:11px; color:var(--t4);">Quick Start Guide &nbsp;·&nbsp; v0.4.1</div>
+    <div style="font-size:11px; color:var(--t4);">Quick Start Guide &nbsp;·&nbsp; v0.9.2</div>
   </div>
 
   <div style="height:0.5px; background:var(--rule); margin: 5mm 14mm 0;"></div>
@@ -760,7 +760,7 @@
     </div>
 
     <div class="cover-sub">From zero to a context-aware, cost-tracked,<br>multi-agent workgroup in under two minutes.</div>
-    <div class="cover-version">v0.4.1 Instruction Reach</div>
+    <div class="cover-version">v0.9.2 Team Onboarding + Consensus</div>
 
     <div class="cover-term-wrap">
       <div class="term">
@@ -769,15 +769,14 @@
           <div class="term-title">Terminal</div>
         </div>
         <div class="term-body">
-          <div><span class="tp">$ </span><span class="tc">synlynk</span> <span class="ta">init</span></div>
+          <div><span class="tp">$ </span><span class="tc">synlynk</span> <span class="ta">join</span></div>
           <div>&nbsp;</div>
-          <div><span class="ts">✓</span> <span class="to">Project context injected</span></div>
+          <div><span class="ts">✓</span> <span class="to">Seeded devlog for nikhil &nbsp;(10 recent commits)</span></div>
+          <div><span class="ts">✓</span> <span class="to">Regenerated CLAUDE.md · GEMINI.md · AGENTS.md</span></div>
           <div><span class="ts">✓</span> <span class="to">3 agents discovered &nbsp;· &nbsp;claude · agy · codex</span></div>
-          <div><span class="ts">✓</span> <span class="to">7 instruction files tracked in .synlynk/instructions.json</span></div>
-          <div><span class="ts">✓</span> <span class="to">Budget guard active &nbsp;&nbsp;· &nbsp;$10.00 / session</span></div>
-          <div><span class="ts">✓</span> <span class="to">Sentinel monitoring &amp; drift detection enabled</span></div>
+          <div><span class="ts">✓</span> <span class="to">Team &nbsp;alice · bob (2 active members)</span></div>
           <div>&nbsp;</div>
-          <div><span style="color:var(--teal);">→</span> <span class="to">synlynk instructions status</span></div>
+          <div><span style="color:var(--teal);">→</span> <span class="to">synlynk team status</span></div>
         </div>
       </div>
     </div>
@@ -785,10 +784,10 @@
     <div class="cover-pills">
       <div class="cover-pill">Zero dependencies</div>
       <div class="cover-pill">Python 3 stdlib only</div>
-      <div class="cover-pill">Claude · Gemini · Codex</div>
-      <div class="cover-pill">Cost tracking</div>
+      <div class="cover-pill">Claude · AGY · Codex</div>
+      <div class="cover-pill">Team onboarding</div>
       <div class="cover-pill">Sentinel guard</div>
-      <div class="cover-pill">Background dispatch</div>
+      <div class="cover-pill">Multi-agent consensus</div>
     </div>
 
   </div>
@@ -980,7 +979,7 @@
         <div>&nbsp;</div>
         <div><span class="ts">✓</span> <span class="to">Installed to ~/.synlynk/bin/synlynk</span></div>
         <div><span class="ts">✓</span> <span class="to">PATH updated in ~/.zshrc</span></div>
-        <div><span class="ts">✓</span> <span class="to">synlynk 0.4.1 ready</span></div>
+        <div><span class="ts">✓</span> <span class="to">synlynk 0.9.2 ready</span></div>
       </div>
     </div>
 
@@ -1065,10 +1064,10 @@
 
   <div class="content">
 
-    <div class="eyebrow">v0.4.1 · Instruction Reach</div>
-    <h1>Run agents in parallel.<br><span class="accent-purple">In the background.</span></h1>
+    <div class="eyebrow">v0.9.2 · Team + Consensus</div>
+    <h1>Run agents in parallel.<br><span class="accent-purple">Reach consensus.</span></h1>
 
-    <p class="lead" style="max-width:135mm;">Dispatch fires an agent as a background job — captured to a log file, tracked by the job store. Multiple agents run simultaneously while your terminal stays free.</p>
+    <p class="lead" style="max-width:135mm;">Dispatch fires an agent as a background job — captured to a log file, tracked by the job store. Multiple agents run simultaneously while your terminal stays free. New in v0.9.2: panel decisions with <code>synlynk decide</code>.</p>
 
     <div class="term">
       <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="term-title">synlynk dispatch</div></div>
@@ -1101,7 +1100,7 @@
         <div class="term">
           <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="term-title">synlynk logs</div></div>
           <div class="term-body" style="font-size:10.5px;">
-            <div><span class="tp">$ </span><span class="tc">synlynk logs</span> <span class="ta">job-a3f2</span></div>
+            <div><span class="tp">$ </span><span class="tc">synlynk logs</span> <span class="tf">--job</span> <span class="ta">job-a3f2</span></div>
             <div>&nbsp;</div>
             <div><span class="to">Writing test_billing.py...</span></div>
             <div><span class="ts">  ✓</span> <span class="to">test_charge_success</span></div>
@@ -1114,27 +1113,29 @@
 
     <div class="rule"></div>
 
-    <h2>The Trio Pipeline <span class="tag tag-blue">v0.4.1</span></h2>
-    <p>Three agents in sequence — Architect designs, Builder implements, Verifier reviews — with full context hand-off between each phase.</p>
+    <h2>Multi-Agent Consensus <span class="tag tag-blue">v0.9.2</span></h2>
+    <p>Ask multiple agents the same question and get a structured consensus. Panel results are collected, compared, and optionally written as signed Decision records.</p>
 
     <div class="term">
-      <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="term-title">synlynk run --trio</div></div>
+      <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="term-title">synlynk decide</div></div>
       <div class="term-body">
-        <div><span class="tp">$ </span><span class="tc">synlynk run</span> <span class="tf">--trio</span> <span style="color:#ccc;">"Add Stripe webhook handler"</span></div>
+        <div><span class="tp">$ </span><span class="tc">synlynk decide</span> <span style="color:#ccc;">"SQLite or Markdown for decisions?"</span> <span class="tf">--panel</span> <span class="ta">claude,codex,agy</span> <span class="tf">--record</span></div>
         <div>&nbsp;</div>
-        <div><span class="to">  Phase 1 &nbsp;</span><span style="color:#FFD060;">Architect</span><span class="to"> (claude) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-c1a0</span></div>
-        <div><span class="to">  Phase 2 &nbsp;</span><span style="color:#A259F7;">Builder &nbsp;</span><span class="to"> (agy) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-d4b2</span></div>
-        <div><span class="to">  Phase 3 &nbsp;</span><span style="color:#5B8DEF;">Verifier</span><span class="to"> (claude) &nbsp;…&nbsp; </span><span class="ts">✓ done</span><span class="to"> &nbsp;job-e9f3</span></div>
+        <div><span class="to">  Dispatching panel: claude, codex, agy…</span></div>
         <div>&nbsp;</div>
-        <div><span class="ts">  ✓ Trio complete.</span><span class="to"> &nbsp;synlynk logs job-e9f3</span></div>
+        <div><span style="color:#5B8DEF;">  claude</span><span class="to">  →  SQLite — queryable, joins with stories</span></div>
+        <div><span style="color:#2EC4A0;">  codex</span><span class="to">&nbsp;&nbsp;&nbsp;→  Markdown — human-readable, diffable in PRs</span></div>
+        <div><span style="color:#A259F7;">  agy</span><span class="to">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→  SQLite — aligns with existing state.db pattern</span></div>
+        <div>&nbsp;</div>
+        <div><span class="ts">  ✓</span><span class="to"> Consensus: SQLite (2/3) — Decision record written</span></div>
       </div>
     </div>
 
     <div class="callout">
-      <div class="callout-dot" style="background:var(--blue);"></div>
+      <div class="callout-dot" style="background:var(--teal);"></div>
       <div class="callout-body">
-        <div class="callout-title">Coming in v0.5.0 — Smart Routing</div>
-        <div class="callout-text">Dispatch will automatically route to the best-performing agent for each task domain, based on historical capability scores. Pass <code>--story &lt;id&gt;</code> now to start tracking work items.</div>
+        <div class="callout-title">Smart Routing — Live since v0.5.0</div>
+        <div class="callout-text">Dispatch automatically routes to the best-performing agent for each task domain, based on historical capability scores in <code>state.db</code>. Pass <code>--story &lt;id&gt;</code> to track work items and build the capability ledger.</div>
       </div>
     </div>
 
@@ -1283,17 +1284,28 @@
 
     <div class="cmd-cols">
 
-      <!-- LEFT: Setup & Sentinel -->
+      <!-- LEFT: Setup, Sentinel, Team -->
       <div class="cmd-col">
         <h2>Setup &amp; Context</h2>
         <table class="cmd-table">
           <thead><tr><th>Command</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td>synlynk init</td><td>Bootstrap project-docs/, all agent files, and budget config. Safe to re-run.</td></tr>
-            <tr><td>synlynk exec &lt;agent&gt;</td><td>Run agent with context injection. Captures token counts and cost.</td></tr>
+            <tr><td>synlynk init</td><td>Bootstrap project-docs/, all agent files, and budget config. Accepts <code>--docs-dir</code>.</td></tr>
+            <tr><td>synlynk exec &lt;agent&gt;</td><td>Run agent with scoped context, ## Relevant Files, and ## How to Verify injected.</td></tr>
             <tr><td>synlynk checkpoint</td><td>Regenerate <code>.synlynk/context.md</code> from current project-docs.</td></tr>
+            <tr><td>synlynk scan</td><td>Build source-map.md from codebase symbols. <code>--deep</code> for full re-scan.</td></tr>
             <tr><td>synlynk status</td><td>Dashboard: costs, active alerts, running jobs.</td></tr>
             <tr><td>synlynk upgrade</td><td>Check for and apply CLI updates.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Team <span class="tag tag-blue">v0.9.2</span></h2>
+        <table class="cmd-table">
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>synlynk join</td><td>Onboard as a new team member: seed devlog from git history, regenerate AI context files, print team digest.</td></tr>
+            <tr><td>synlynk team status</td><td>Show all members, story assignments, last-active, and token budget consumption.</td></tr>
+            <tr><td>synlynk decide &lt;topic&gt;</td><td>Multi-agent consensus panel. <code>--panel</code> selects agents. <code>--record</code> writes signed Decision.</td></tr>
           </tbody>
         </table>
 
@@ -1307,27 +1319,38 @@
         </table>
       </div>
 
-      <!-- RIGHT: Dispatch & Instructions -->
+      <!-- RIGHT: Stories, Dispatch, Instructions, Agent -->
       <div class="cmd-col">
+        <h2>Stories &amp; Capability <span class="tag tag-teal">v0.5.0</span></h2>
+        <table class="cmd-table">
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>synlynk story create</td><td>Create story in state.db. <code>--domain</code>, <code>--tokens</code>, <code>--priority</code>.</td></tr>
+            <tr><td>synlynk story list</td><td>List stories with status, domain, assignee, and capability score.</td></tr>
+            <tr><td>synlynk score</td><td>Capability score breakdown per agent × domain.</td></tr>
+            <tr><td>synlynk score attest</td><td>Manually attest a quality score with a signed reason.</td></tr>
+          </tbody>
+        </table>
+
         <h2>Dispatch &amp; Jobs <span class="tag tag-blue">v0.4.0</span></h2>
         <table class="cmd-table">
           <thead><tr><th>Command</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td>synlynk dispatch &lt;agent&gt;</td><td>Fire background job. Accepts <code>--task</code> and <code>--story</code>.</td></tr>
+            <tr><td>synlynk dispatch &lt;agent&gt;</td><td>Fire background job with smart routing. Accepts <code>--task</code> and <code>--story</code>.</td></tr>
             <tr><td>synlynk jobs</td><td>List jobs (running / completed / failed). <code>--all</code> includes history.</td></tr>
-            <tr><td>synlynk logs &lt;job-id&gt;</td><td>Tail job output. Use <code>--tail N</code> to limit lines.</td></tr>
-            <tr><td>synlynk run --trio</td><td>Architect → Builder → Verifier pipeline with context hand-off.</td></tr>
+            <tr><td>synlynk logs --job &lt;id&gt;</td><td>Tail job output. Use <code>--tail N</code> to limit lines.</td></tr>
+            <tr><td>synlynk run --trio</td><td>Dispatch same task to all discovered agents in parallel. Logs per agent.</td></tr>
           </tbody>
         </table>
 
-        <h2>Instructions <span class="tag tag-teal">v0.4.1</span></h2>
+        <h2>Instructions &amp; Agent <span class="tag tag-teal">v0.8.0</span></h2>
         <table class="cmd-table">
           <thead><tr><th>Command</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td>instructions status</td><td>Show status of all tracked files (ok / missing / drifted).</td></tr>
-            <tr><td>instructions diff [file]</td><td>Show user edits outside the synlynk section.</td></tr>
-            <tr><td>instructions update [file]</td><td>Regenerate synlynk section and reset SHA in manifest.</td></tr>
-            <tr><td>instructions ack &lt;file&gt;</td><td>Dismiss DRIFT alert without regenerating.</td></tr>
+            <tr><td>synlynk instructions status</td><td>Show status of all tracked files (ok / missing / drifted).</td></tr>
+            <tr><td>synlynk instructions update</td><td>Regenerate synlynk section and reset SHA in manifest.</td></tr>
+            <tr><td>synlynk agent run</td><td>Run support engineer agent: collect signals, file GH issues, draft fix PRs.</td></tr>
+            <tr><td>synlynk agent --install-cron</td><td>Register launchd/systemd timer for scheduled agent runs.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1339,15 +1362,15 @@
     <div class="cmd-footer">
       <div class="cmd-footer-row">
         <span class="cmd-footer-label">project-docs/</span>
-        <span class="cmd-footer-val">roadmap.md &nbsp;·&nbsp; memory.md &nbsp;·&nbsp; todo.md &nbsp;·&nbsp; costs.md &nbsp;·&nbsp; devlogs/&lt;user&gt;.md</span>
+        <span class="cmd-footer-val">roadmap.md &nbsp;·&nbsp; memory.md &nbsp;·&nbsp; todo.md &nbsp;·&nbsp; costs.md &nbsp;·&nbsp; devlogs/&lt;user&gt;.md &nbsp;·&nbsp; decisions/</span>
       </div>
       <div class="cmd-footer-row">
         <span class="cmd-footer-label">.synlynk/</span>
-        <span class="cmd-footer-val">config.json &nbsp;·&nbsp; context.md &nbsp;·&nbsp; instructions.json &nbsp;·&nbsp; telemetry.json &nbsp;·&nbsp; logs/</span>
+        <span class="cmd-footer-val">config.json &nbsp;·&nbsp; context.md &nbsp;·&nbsp; instructions.json &nbsp;·&nbsp; telemetry.json &nbsp;·&nbsp; source-map.md &nbsp;·&nbsp; logs/</span>
       </div>
       <div class="cmd-footer-row">
         <span class="cmd-footer-label">state.db</span>
-        <span class="cmd-footer-val">~/.synlynk/projects/&lt;git-root-hash&gt;/state.db &nbsp;(shared across worktrees)</span>
+        <span class="cmd-footer-val">~/.synlynk/projects/&lt;git-root-hash&gt;/state.db &nbsp;(stories · capability_ratings · source_symbols · jobs)</span>
       </div>
     </div>
 
@@ -1363,7 +1386,7 @@
 
   <div class="back-chrome">
     <span class="back-chrome-logo">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</span>
-    <span style="font-size:10px; color:rgba(255,255,255,0.25);">Quick Start Guide · v0.4.1</span>
+    <span style="font-size:10px; color:rgba(255,255,255,0.25);">Quick Start Guide · v0.9.2</span>
   </div>
 
   <div class="back-content">
@@ -1375,38 +1398,38 @@
 
       <div class="back-roadmap">
         <div class="back-row">
-          <div class="back-ver" style="color:#5B8DEF;">v0.5</div>
+          <div class="back-ver" style="color:#5B8DEF;">v0.7</div>
           <div>
-            <div class="back-rtitle">Capability Engine <span class="back-rdate" style="color:#2EC4A0; font-weight:600;">✓ Live · June 2026</span></div>
-            <div class="back-rdesc">Model-aware routing · SQLite WAL state ledger · capability rating &amp; story management</div>
+            <div class="back-rtitle">Static Scan Quality <span class="back-rdate" style="color:#2EC4A0; font-weight:600;">✓ Live · June 2026</span></div>
+            <div class="back-rdesc">Language-agnostic source scanner · ## Source Architecture in every exec session · synlynk scan</div>
           </div>
         </div>
         <div class="back-row">
-          <div class="back-ver" style="color:#A259F7;">v0.6</div>
+          <div class="back-ver" style="color:#A259F7;">v0.8</div>
           <div>
-            <div class="back-rtitle">Job Control + Constraints <span class="back-rdate" style="color:#2EC4A0; font-weight:600;">✓ Live · June 2026</span></div>
-            <div class="back-rdesc">Constraint propagation · job state machine · PR validation check · model attestation</div>
+            <div class="back-rtitle">Support Engineer Agent <span class="back-rdate" style="color:#2EC4A0; font-weight:600;">✓ Live · June 2026</span></div>
+            <div class="back-rdesc">5 signal collectors · GH issue filing · draft fix PRs · .agents/ config · cron install</div>
           </div>
         </div>
         <div class="back-row">
-          <div class="back-ver" style="color:#2EC4A0;">v0.7</div>
+          <div class="back-ver" style="color:#2EC4A0;">v0.9</div>
           <div>
-            <div class="back-rtitle">Async Pipeline + Daemon <span class="back-rdate">Planned · Oct 2026</span></div>
-            <div class="back-rdesc">Background daemon · HTTP context server · synlynk review TUI</div>
+            <div class="back-rtitle">Kernel Fixes + Team <span class="back-rdate" style="color:#2EC4A0; font-weight:600;">✓ You are here · June 2026</span></div>
+            <div class="back-rdesc">Scoped context · Ed25519 signing · synlynk join · team status · decide consensus</div>
           </div>
         </div>
         <div class="back-row">
-          <div class="back-ver" style="color:#FFD060;">v0.8</div>
+          <div class="back-ver" style="color:#FFD060;">v0.9.3</div>
           <div>
-            <div class="back-rtitle">Open Context Protocol <span class="back-rdate">Planned · Nov 2026</span></div>
-            <div class="back-rdesc">context --for · checkpoint --from · MCP server · ecosystem interface</div>
+            <div class="back-rtitle">Async Daemon <span class="back-rdate">Planned · Aug 2026</span></div>
+            <div class="back-rdesc">synlynk daemon · launchd/systemd · job queue · HTTP context server localhost:27471</div>
           </div>
         </div>
         <div class="back-row">
           <div class="back-ver" style="color:rgba(255,255,255,0.5);">v1.0</div>
           <div>
-            <div class="back-rtitle">Stable OS + Tokq Ready <span class="back-rdate">Planned · Q1 2027</span></div>
-            <div class="back-rdesc">Frozen CLI · pipx/Homebrew distribution · NATS leaf node schema defined</div>
+            <div class="back-rtitle">Community Layer + Public Launch <span class="back-rdate">Planned · Sep 2026</span></div>
+            <div class="back-rdesc">Workgroup relay · signed capability ledger · pipx/Homebrew · synlynk.com</div>
           </div>
         </div>
       </div>
@@ -1424,7 +1447,7 @@
         </div>
         <div class="back-link-item">
           <div class="back-link-label">Version</div>
-          <div class="back-link-val">v0.4.1 · June 2026</div>
+          <div class="back-link-val">v0.9.2 · June 2026</div>
         </div>
       </div>
 

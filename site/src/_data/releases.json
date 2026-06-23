@@ -2,13 +2,15 @@
   {
     "minor": "0.9",
     "label": "v0.9.x",
-    "theme": "Kernel Fixes + Package Split",
-    "date": "2026-06-21",
+    "theme": "Team Onboarding + Consensus",
+    "date": "2026-06-22",
     "current": true,
     "in_window": true,
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash",
-    "blog_post": "/blog/19-v0-9-0-kernel-fixes/",
+    "blog_post": "/blog/21-pr-v092-team-onboarding-consensus/",
     "patches": [
+      { "version": "0.9.2", "date": "2026-06-22", "summary": "synlynk join (new member onboarding: devlog seed from git history, AI context file regeneration, team digest), synlynk team status (active members, story assignments, token budgets), synlynk decide (multi-agent consensus panel with signed Decision records), pull-before-write arbitration, --tokens flag on story create; 390 tests" },
+      { "version": "0.9.1", "date": "2026-06-22", "summary": "Install hardening: installed binary now embeds synlynk/ package so it works outside the source repo. --docs-dir flag on init for repos with non-standard doc locations. Smart init migration: detects existing docs and migrates rather than overwriting with blank templates" },
       { "version": "0.9.0", "date": "2026-06-21", "summary": "Scoped dispatch context (task-level instead of full devlog), ## Relevant Files injection from source-map, ## How to Verify contract per dispatch, per-agent framing (Codex/AGY/Claude), Ed25519 capability rating signing, anti-gaming quality cap (test_count<3 capped at 5.0), synlynk/ package split; 365 tests" }
     ]
   },

@@ -1,5 +1,23 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-23b — Session: v0.9.2 Release SOP
+
+### Shipped
+
+**v0.9.2 Release SOP — PR #54**
+All 6 SOP items completed:
+1. VERSION bumped to `0.9.2` in `synlynk/__init__.py`, `install.sh`, and version test (394 tests pass)
+2. `CHANGELOG.md` backfilled with all 10 missing releases: v0.4.1, v0.4.2, v0.5.0, v0.6.0, v0.6.1, v0.7.0, v0.8.0, v0.9.0, v0.9.1, v0.9.2
+3. `README.md` updated: v0.9.1 marked shipped, v0.9.2 marked shipped, v0.9.3/v0.9.4 as next, lede updated to v0.9.2 features
+4. `site/src/_data/releases.json` updated: v0.9.1 + v0.9.2 patches added to v0.9 entry, theme updated
+5. Blog post #21 written: v0.9.2 Team Onboarding + Consensus (join, team status, decide, arbitration, decisions as first-class artifacts)
+6. Quick Start Guide updated v0.4.1 → v0.9.2: cover, command reference (all v0.5–v0.9.2 commands added), dispatch/consensus page, roadmap back page; PDF regenerated at 1.3MB
+
+### Next
+Agent Ecosystem Epic (v0.8.1–v0.8.4) — Foundation spec first when ready
+
+---
+
 ## 2026-06-23 — Session: v0.9.2 Wave Merges + Agent Ecosystem Brainstorm
 
 ### Shipped

@@ -11,6 +11,212 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.2] - 2026-06-22
+
+### Added
+- `synlynk join` — new member onboarding: seeds a devlog stub for the joining user, regenerates
+  AI context files (CLAUDE.md, GEMINI.md, AGENTS.md) with the joining member's identity, and
+  prints a team digest showing all active members and their recent focus areas
+- `synlynk team status` — team digest view: lists all members with devlog presence, current
+  story assignments, token budget consumption, and last-active timestamp; reads
+  `project-docs/devlogs/<user>.md` across all contributors
+- `synlynk decide <topic> --panel <agents>` — multi-agent consensus panel: dispatches the
+  panel agents non-interactively with the same decision prompt, collects structured
+  `DECISION:` blocks from each response, computes a consensus position, and optionally
+  writes a signed `Decision` record to `project-docs/decisions/YYYY-MM-DD-<topic>.md`
+  with `--record` flag
+- `--tokens <N>` flag on `synlynk story create` — set an estimated token budget for a story;
+  stored in new `estimated_tokens` column on the `stories` table
+- `_seed_devlog(username, root)` helper — writes a devlog stub for the joining user with an
+  initial entry so the devlog file exists and is attributable in team digests from day one
+- `_generate_ai_context_files(username, root, config)` helper — regenerates CLAUDE.md,
+  GEMINI.md, and AGENTS.md with the joining member's name in the `git config user.name` slot
+- `_build_team_digest(root)` helper — reads all devlogs from `project-docs/devlogs/`, extracts
+  last-active date and focus summary per member; used by both `join` and `team status`
+- `_check_upstream_divergence(root)` helper — checks whether the local branch is behind the
+  remote before any write to `project-docs/`; prints a warning with advice to `git pull` if
+  divergence is detected; continues without blocking so offline workflows still function
+  (pull-before-write arbitration)
+
+### Fixed
+- None in this release
+
+---
+
+## [0.9.1] - 2026-06-22
+
+### Added
+- `--docs-dir <path>` flag on `synlynk init` — override the default `project-docs/` location
+  for repos that store docs elsewhere (e.g. `--docs-dir docs/project`)
+- `_docs_dir(root, config)` helper — reads `docs_dir` from `.synlynk/config.json`, falls back
+  to `project-docs/`; used by `exec`, `checkpoint`, `status`, and `init` so every command
+  respects the configured docs location
+
+### Fixed
+- Installed binary (`~/.synlynk/bin/synlynk`) crashed with `ModuleNotFoundError: No module
+  named 'synlynk'` when invoked outside the source repo after the v0.9.0 package split.
+  Fixed by embedding the package `synlynk/` directory in `~/.synlynk/lib/synlynk/` at install
+  time and prepending `$HOME/.synlynk/lib` to `sys.path` in the installed shim.
+- `synlynk init` in a repo with existing `project-docs/` overwrote the existing docs with
+  blank templates. Fixed by detecting existing files via `_find_existing_doc()` and migrating
+  their content to the new location (or skipping write if no relocation is needed).
+
+---
+
+## [0.9.0] - 2026-06-21
+
+### Added
+- Scoped dispatch context: `exec` now injects a per-task section (`## Current Task`) with
+  only the relevant plan block instead of the full devlog, reducing context window usage
+- `## Relevant Files` injected per dispatch from the source map — derived from the task
+  description matched against `source-map.md` symbols
+- `## How to Verify` contract injected per dispatch — specifies acceptance criteria the agent
+  should validate before declaring the task done
+- Per-agent prompt framing: Claude, AGY, and Codex each receive a tailored preamble that
+  matches their CLI interaction model (conversational vs. task-oriented vs. non-interactive)
+- Ed25519 capability rating signing: every `capability_ratings` row is signed with the project
+  key so ratings cannot be forged across project boundaries
+- Anti-gaming quality cap: `test_count < 3` stories are capped at quality score 5.0 regardless
+  of other signals, preventing artificially inflated ratings for untested work
+- `synlynk/` package split: all ~5000 lines of application logic moved from `bin/synlynk.py`
+  into `synlynk/__init__.py`; `bin/synlynk.py` becomes a 5-line import shim
+
+### Fixed
+- `capability_ratings` entries were not being attributed to the correct project when multiple
+  synlynk-managed repos shared the same `~/.synlynk/` directory — Ed25519 project key now
+  scopes all ratings correctly
+
+---
+
+## [0.8.0] - 2026-06-21
+
+### Added
+- `synlynk agent run` — foreground support engineer investigation: collects signals, formats a
+  structured report, and offers to file a GitHub issue or draft a fix PR
+- Five signal collectors for the support engineer archetype: failing tests, flaky tests,
+  coverage gaps, stale dependencies, open GitHub issues exceeding age threshold
+- 7-day and 30-day deduplication: signals already filed within the window are suppressed so
+  the agent doesn't file duplicate issues on repeated runs
+- `synlynk agent --install-cron` — registers a launchd plist (macOS) or systemd timer
+  (Linux) that runs the support engineer agent on a configurable schedule
+- `.agents/` config directory: `support-engineer.json` defines signal weights, age thresholds,
+  and notification channels per project; read by `synlynk agent run` at startup
+- GitHub issue filing via `gh issue create` with structured body including signal summary,
+  affected files, and suggested fix skeleton
+- Draft fix PR creation via `gh pr create` for issues with high-confidence fix candidates
+
+---
+
+## [0.7.0] - 2026-06-20
+
+### Added
+- `synlynk scan` / `synlynk scan --deep` — language-agnostic source scanner: reads file tree,
+  extracts top-level symbols from Python/JS/TS/Go/Rust/Ruby/Java/C/C++ source, writes
+  `source-map.md` and populates `source_symbols` table in `state.db`
+- `## Source Architecture` section injected into every `exec` context from the cached scan
+  result, giving agents a structural overview without reading individual files
+- Passive git-HEAD cache: scan results are keyed to the current git HEAD SHA; a re-scan is
+  only triggered when HEAD changes, not on every `exec` call
+- `synlynk scan --status` — shows last scan timestamp, HEAD SHA, and symbol count without
+  re-scanning
+- Dual storage: symbols written to both SQLite `source_symbols` table (queryable) and
+  `source-map.md` (human-readable, injected into agent context)
+- Language detection by file extension with fallback to content heuristics
+
+### Fixed
+- `synlynk scan` no longer traverses `.git/`, `node_modules/`, or `.synlynk/` directories
+
+---
+
+## [0.6.1] - 2026-06-17
+
+### Added
+- Instruction reach to seven additional IDE/editor targets: Cursor (`.cursor/rules/`),
+  GitHub Copilot (`.github/copilot-instructions.md`), Windsurf (`.windsurfrules`),
+  Cline (`.clinerules`), Aider (`.aider.conf.yml`), Continue (`.continue/config.json`),
+  and Sourcegraph (`.sourcegraph/memory.md`)
+- SHA manifest (`instructions.json`) tracking the synlynk-managed section hash for each
+  generated file; used for drift detection
+- Runtime drift detection: `exec` warns if any tracked instruction file's section has been
+  externally modified since last generation
+- `synlynk instructions status / diff / update / ack` — manage instruction file state
+- Task status model: 5 states (`active`, `done`, `deferred`, `superseded`, `absorbed`);
+  deferred tasks are included in context with reduced weight; `checkpoint` archives resolved
+  states to a separate section
+- AGY CLI replaces Gemini CLI throughout: all references to `gemini` updated to `agy`
+- VERSION synced to GitHub releases (was incorrectly stuck at 0.4.x)
+- `DB_PATH` centralised to `~/.synlynk/projects/<git-root-hash>/state.db` so the database
+  is shared across worktrees of the same project
+
+---
+
+## [0.6.0] - 2026-06-14
+
+### Added
+- Model version tier-2 probe: `discover_agents()` now probes for Opus/Sonnet/Pro variants in
+  addition to the base model, annotates capability entries with `model_tier`
+- `synlynk pr check` — validates that the current branch's diff satisfies the story's
+  acceptance criteria before opening a PR; exits non-zero if criteria unmet
+- `synlynk score attest` — manually attest a story's quality score with a signed reason;
+  appended to `capability_ratings` with `attestation=true` flag
+- Verifier pipeline output capture: `run --trio` now captures and surfaces the Verifier
+  agent's structured review comment
+- Tokq `org_domain_tags` capability dimension: stories can be tagged with domain taxonomy
+  labels (`backend/api`, `frontend/ui`, etc.) for cross-project capability aggregation
+- Constraint propagation: blocking story constraints propagate to child tasks; dispatching a
+  child task for a blocked story emits a warning and requires `--force`
+
+---
+
+## [0.5.0] - 2026-06-14
+
+### Added
+- SQLite WAL state database (`~/.synlynk/projects/<hash>/state.db`) replacing the flat JSON
+  job store; WAL mode enables concurrent reads from multiple agent processes
+- Model-aware routing: `dispatch` selects agent by matching story domain tags against
+  `capability_ratings`; no domain match falls back to round-robin
+- 3D domain taxonomy for capability rating: `(agent, domain, model_tier)` composite key
+  replaces flat per-agent scores
+- Quality signal hierarchy: test coverage, PR review comments, story completion rate, and
+  task duration all feed the capability score; weights configurable in `.synlynk/config.json`
+- `synlynk story create <title>` — create a new story in `state.db` with optional domain,
+  priority, and acceptance criteria
+- `synlynk story list` — list stories with status, domain, assignee, and capability score
+- `synlynk score` — print capability score breakdown for all agents across all domains
+
+---
+
+## [0.4.2] - 2026-06-17
+
+### Added
+- Task status model (`active` / `done` / `deferred` / `superseded` / `absorbed`) added to
+  the context schema; deferred tasks included in `context.md` with a `[deferred]` prefix
+- `checkpoint` archives all resolved-state tasks to a `## Resolved Tasks` section rather than
+  deleting them — preserves decision history while keeping the active list clean
+- Agent instruction templates updated to explain the 5-state model and checkpoint archival
+
+---
+
+## [0.4.1] - 2026-06-17
+
+### Added
+- Section marker system: synlynk-managed blocks in instruction files delimited by
+  `<!-- synlynk:start -->` / `<!-- synlynk:end -->` markers so user customisations outside
+  those markers are preserved on regeneration
+- SHA manifest (`instructions.json`): tracks content hash of the synlynk section in each
+  generated file; used for drift detection
+- `synlynk instructions status / diff / update / ack` — full CLI for managing instruction
+  file drift
+- `DB_PATH` centralised: all state now written to `~/.synlynk/projects/<git-root-hash>/`
+  rather than `.synlynk/` within the project, so the database is shared across all worktrees
+  of the same project
+
+### Fixed
+- `init` no longer regenerates files that already contain a synlynk section — protects user
+  customisations from accidental overwrite
+
+---
+
 ## [0.4.0] - 2026-06-14
 
 ### Added
