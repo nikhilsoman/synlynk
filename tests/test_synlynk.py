@@ -2832,6 +2832,7 @@ def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
     conn2.close()
     assert row[0] == "done"
     assert row[1] == 0
+    assert not os.path.exists(exit_path), ".exit file should have been deleted by reconcile"
 
 
 def test_dispatch_ready_jobs_respects_max_parallel(project_dir, monkeypatch):

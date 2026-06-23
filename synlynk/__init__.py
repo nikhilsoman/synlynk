@@ -1336,122 +1336,126 @@ def _reconcile_jobs() -> None:
 
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
-    import json as _json
     conn = _get_db()
     rows = conn.execute(
         "SELECT job_id, pid, log_path FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    for job_id, pid, log_path in rows:
-        if pid is None:
-            continue
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            exit_code = -1
-            if log_path:
-                exit_file = log_path + ".exit"
-                if os.path.exists(exit_file):
-                    try:
-                        exit_code = int(open(exit_file).read().strip())
-                        os.remove(exit_file)
-                    except Exception:
-                        pass
-            status = "done" if exit_code == 0 else "failed"
-            conn.execute(
-                "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                "WHERE job_id=?",
-                (status, exit_code, now, job_id)
-            )
-        except PermissionError:
-            pass
-    conn.commit()
-    conn.close()
+    try:
+        for job_id, pid, log_path in rows:
+            if pid is None:
+                continue
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                exit_code = -1
+                if log_path:
+                    exit_file = log_path + ".exit"
+                    if os.path.exists(exit_file):
+                        try:
+                            with open(exit_file) as f:
+                                exit_code = int(f.read().strip())
+                            os.remove(exit_file)
+                        except Exception:
+                            pass
+                status = "done" if exit_code == 0 else "failed"
+                conn.execute(
+                    "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+                    "WHERE job_id=?",
+                    (status, exit_code, now, job_id)
+                )
+            except PermissionError:
+                pass
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
     """Launches queued daemon_jobs up to max_parallel concurrently. Returns count launched."""
     import json as _json
+    import shlex as _shlex
     conn = _get_db()
-    running_count = conn.execute(
-        "SELECT COUNT(*) FROM daemon_jobs WHERE status='running'"
-    ).fetchone()[0]
-    if running_count >= max_parallel:
+    try:
+        running_count = conn.execute(
+            "SELECT COUNT(*) FROM daemon_jobs WHERE status='running'"
+        ).fetchone()[0]
+        if running_count >= max_parallel:
+            return 0
+
+        slots = max_parallel - running_count
+        candidates = conn.execute(
+            "SELECT job_id, agent, task, story_id, depends_on, log_path "
+            "FROM daemon_jobs WHERE status='queued' "
+            "ORDER BY priority ASC, enqueued_at ASC"
+        ).fetchall()
+
+        launched = 0
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        for job_id, agent, task, story_id, depends_on_json, log_path in candidates:
+            if launched >= slots:
+                break
+            deps = _json.loads(depends_on_json or "[]")
+            if deps:
+                done_ids = {r[0] for r in conn.execute(
+                    "SELECT job_id FROM daemon_jobs WHERE status='done' AND job_id IN ({})".format(
+                        ",".join("?" * len(deps))
+                    ), deps
+                ).fetchall()}
+                if done_ids != set(deps):
+                    continue
+
+            if not log_path:
+                os.makedirs(LOGS_DIR, exist_ok=True)
+                log_path = os.path.join(LOGS_DIR, f"{job_id}.log")
+
+            baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
+            cli = baselines.get("cli", agent)
+            flags = baselines.get("non_interactive_flags", [])
+            prompt_via_arg = baselines.get("prompt_via_arg", False)
+            prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+            os.makedirs(PROMPTS_DIR, exist_ok=True)
+            context_text = ""
+            context_path = ".synlynk/context.md"
+            if os.path.exists(context_path):
+                with open(context_path) as f:
+                    context_text = f.read()
+            prompt = _format_prompt_for_agent(
+                agent, context_text, story_id or "", task, "", ""
+            )
+            with open(prompt_file, "w") as pf:
+                pf.write(prompt)
+
+            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+            if prompt_via_arg:
+                shell_cmd = (
+                    f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
+                    f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_path)} 2>&1; "
+                    f"echo $? > {_shlex.quote(log_path)}.exit"
+                )
+            else:
+                shell_cmd = (
+                    f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_path)} 2>&1; "
+                    f"echo $? > {_shlex.quote(log_path)}.exit"
+                )
+
+            proc = subprocess.Popen(
+                ["sh", "-c", shell_cmd],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            conn.execute(
+                "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, log_path=? "
+                "WHERE job_id=?",
+                (proc.pid, now, log_path, job_id)
+            )
+            launched += 1
+
+        conn.commit()
+        return launched
+    finally:
         conn.close()
-        return 0
-
-    slots = max_parallel - running_count
-    candidates = conn.execute(
-        "SELECT job_id, agent, task, story_id, depends_on, log_path "
-        "FROM daemon_jobs WHERE status='queued' "
-        "ORDER BY priority ASC, enqueued_at ASC"
-    ).fetchall()
-
-    launched = 0
-    now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    for job_id, agent, task, story_id, depends_on_json, log_path in candidates:
-        if launched >= slots:
-            break
-        deps = _json.loads(depends_on_json or "[]")
-        if deps:
-            done_ids = {r[0] for r in conn.execute(
-                "SELECT job_id FROM daemon_jobs WHERE status='done' AND job_id IN ({})".format(
-                    ",".join("?" * len(deps))
-                ), deps
-            ).fetchall()}
-            if done_ids != set(deps):
-                continue
-
-        if not log_path:
-            os.makedirs(LOGS_DIR, exist_ok=True)
-            log_path = os.path.join(LOGS_DIR, f"{job_id}.log")
-
-        import shlex as _shlex
-        baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
-        cli = baselines.get("cli", agent)
-        flags = baselines.get("non_interactive_flags", [])
-        prompt_via_arg = baselines.get("prompt_via_arg", False)
-        prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
-        os.makedirs(PROMPTS_DIR, exist_ok=True)
-        context_text = ""
-        context_path = ".synlynk/context.md"
-        if os.path.exists(context_path):
-            context_text = open(context_path).read()
-        prompt = _format_prompt_for_agent(
-            agent, context_text, story_id or "", task, "", ""
-        )
-        with open(prompt_file, "w") as pf:
-            pf.write(prompt)
-
-        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
-        if prompt_via_arg:
-            shell_cmd = (
-                f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
-                f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_path)} 2>&1; "
-                f"echo $? > {_shlex.quote(log_path)}.exit"
-            )
-        else:
-            shell_cmd = (
-                f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_path)} 2>&1; "
-                f"echo $? > {_shlex.quote(log_path)}.exit"
-            )
-
-        proc = subprocess.Popen(
-            ["sh", "-c", shell_cmd],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        conn.execute(
-            "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, log_path=? "
-            "WHERE job_id=?",
-            (proc.pid, now, log_path, job_id)
-        )
-        launched += 1
-
-    conn.commit()
-    conn.close()
-    return launched
 
 
 def _check_agent_functional(cli: str) -> Optional[str]:
