@@ -11,6 +11,40 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.3] - 2026-06-23
+
+### Added
+- `SynlynkDaemon` class — subclasses `WatchDaemon` to add an embedded HTTP server thread on
+  `localhost:27471` and persistent job dispatch on every poll tick; double-fork daemonization
+  inherited from `WatchDaemon`; separate pidfile `.synlynk/daemon.pid` and log `.synlynk/daemon.log`
+- `daemon_jobs` table in `state.db` — persistent job queue with `priority` (1–10), `depends_on`
+  (JSON array of job IDs), and full status lifecycle `queued → running → done | failed`
+- `_reconcile_daemon_jobs()` — reaps finished child processes using `os.waitpid(WNOHANG)` (zombie-safe),
+  reads `.exit` files for exit codes, updates `status`/`exit_code`/`completed_at` in state.db
+- `_dispatch_ready_jobs(max_parallel)` — launches queued jobs respecting concurrency cap and dependency
+  chains; propagates `failed` status to downstream dependents immediately; commits per-job for
+  crash-safe restart semantics
+- HTTP API on `localhost:27471` — 10 endpoints: `GET /context`, `GET /status`, `GET /jobs`,
+  `GET /jobs/<id>`, `POST /dispatch`, `GET /stories`, `GET /stories/<id>`, `GET /capability`,
+  `GET /sentinel`, `POST /checkpoint`; `_ReuseAddrHTTPServer` subclass prevents `Address already
+  in use` on rapid restart; `threading.Lock` guards concurrent `generate_context()` calls
+- `synlynk daemon start|stop|status|restart` CLI command
+- `synlynk daemon --install-service` — writes and activates platform service unit:
+  macOS: `~/Library/LaunchAgents/com.synlynk.daemon.plist` via `launchctl load -w`;
+  Linux: `~/.config/systemd/user/synlynk-daemon.service` via `systemctl --user enable --now`;
+  Fallback: `@reboot` crontab entry
+- `synlynk daemon --uninstall-service` — reverses each platform path; handles `FileNotFoundError` gracefully
+
+### Fixed
+- Daemon zombie process detection: replaced `os.kill(pid, 0)` with `os.waitpid(WNOHANG)` so
+  exited child processes are properly reaped rather than staying `running` indefinitely
+- Dependency deadlock: queued jobs whose dependency fails are immediately marked `failed` rather
+  than staying queued forever
+- Transaction isolation in dispatch: each launched job is committed individually so a crash
+  mid-loop cannot produce duplicate spawns on restart
+
+---
+
 ## [0.9.2] - 2026-06-22
 
 ### Added

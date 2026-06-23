@@ -21,7 +21,7 @@
 | **v0.9.0** | Kernel Fixes | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming baseline (sample-count cap) | ✅ Shipped | June 2026 |
 | **v0.9.1** | Install Hardening + Docs Migration | Install broken after package split fixed · `_docs_dir()` configurable · `--docs-dir` flag on init · smart doc migration from existing content | ✅ Shipped | June 2026 |
 | **v0.9.2** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | 📋 Planned | July 2026 |
-| **v0.9.3** | Async Daemon | `synlynk daemon` · launchd/systemd · job queue · HTTP context server localhost:27471 | 📋 Planned | Aug 2026 |
+| **v0.9.3** | Async Daemon | `synlynk daemon` · launchd/systemd · job queue · HTTP context server localhost:27471 | ✅ Shipped | June 2026 |
 | **v0.9.4** | Workgroup Relay | WSS/443 relay · 3 deployment modes (LAN/Cloudflare Tunnel/VPS) · revolving host protocol | 📋 Planned | Aug 2026 |
 | **v0.10.0** | Multi-Repo Workspace | `synlynk workspace init/join` · cross-repo epics · workspace relay scope | 📋 Planned | Aug 2026 |
 | **v1.0.0** | Community Layer: Local Workgroup + Public Launch | Workgroup protocol · signed capability ledger · SME archetype · game-resistant scoring · pipx/Homebrew · synlynk.com · public blog | 📋 Planned | Sep 2026 |
