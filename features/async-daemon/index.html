@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parallel trio dispatch — Feature | synlynk</title>
+    <title>Async daemon — Feature | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="">
@@ -33,27 +33,27 @@
 
   <header class="feature-detail-header">
     <a href="/features/" class="back-link">← All features</a>
-    <h1>Parallel trio dispatch</h1>
-    <p class="feature-lead">synlynk run --trio dispatches one task to all functional agents simultaneously</p>
+    <h1>Async daemon</h1>
+    <p class="feature-lead">Always-on process — agents pull context over HTTP without invoking the CLI</p>
   </header>
 
   <div class="feature-section">
     <h2>What it does</h2>
-    <p>`synlynk run --trio &lt;task&gt;` dispatches the same task description to every functional agent (claude, agy, codex — whichever are installed) in parallel background jobs. Each agent runs independently; `synlynk jobs` shows all three. This is the first form of horizontal parallelism in synlynk: same task, multiple perspectives, results streamed to separate log files for human review.</p>
+    <p>`synlynk daemon start` double-forks a background process that keeps `context.md` current via mtime polling and exposes it over a local HTTP API on `localhost:27471`. A persistent `daemon_jobs` queue in `state.db` tracks jobs with priority ordering, dependency chains, and crash-safe per-job commits. `--install-service` registers the daemon with launchd (macOS), systemd user units (Linux), or a `@reboot` crontab entry as a fallback — so it survives reboots without manual intervention.</p>
   </div>
 
   <div class="feature-section">
     <h2>OS Layer</h2>
     <div class="os-layer-badge">
-      <span class="layer-label">IPC — Agent Files &amp; Coordination</span>
+      <span class="layer-label">Scheduler — Dispatch</span>
     </div>
   </div>
 
   <div class="feature-section">
     <h2>Introduced in</h2>
     <div class="introduced-badge">
-      <a href="/releases/v0.4/">v0.4.x</a>
-      — Hybrid Workgroup Bootstrap
+      <a href="/releases/v0.9/">v0.9.x</a>
+      — Async Daemon
     </div>
   </div>
 
@@ -62,8 +62,28 @@
     <h2>Usage</h2>
     
     <div class="usage-block">
-      <code>$ synlynk run --trio &quot;write unit tests for src/auth.py&quot;</code>
-      <span class="usage-note">Dispatches to all functional agents in parallel; each gets its own job ID</span>
+      <code>$ synlynk daemon start</code>
+      <span class="usage-note">Fork-daemonize; writes .synlynk/daemon.pid; HTTP server starts on localhost:27471</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk daemon status</code>
+      <span class="usage-note">Shows pid, uptime, queue depth (queued/running/done/failed), and HTTP URL</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ synlynk daemon --install-service</code>
+      <span class="usage-note">Registers with launchd (macOS) / systemd (Linux) / crontab (fallback) for auto-start on login</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ curl http://localhost:27471/context</code>
+      <span class="usage-note">Agents fetch current context.md without invoking synlynk exec</span>
+    </div>
+    
+    <div class="usage-block">
+      <code>$ curl -X POST http://localhost:27471/dispatch -d &#39;{&quot;agent&quot;:&quot;claude&quot;,&quot;task&quot;:&quot;...&quot;,&quot;priority&quot;:3}&#39;</code>
+      <span class="usage-note">Enqueue a job; daemon picks it up on the next poll tick</span>
     </div>
     
   </div>
@@ -76,7 +96,7 @@
       
         
           
-        
+            <a href="/features/context-injection/">Context injection</a>
           
         
           
@@ -94,7 +114,7 @@
           
         
           
-            <a href="/features/agent-dispatch/">Background dispatch</a>
+        
           
         
           
@@ -136,7 +156,49 @@
           
         
           
-            <a href="/features/agent-discovery/">Agent discovery</a>
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      
+        
+          
+        
+          
+            <a href="/features/flatline-detection/">Flatline detection</a>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
           
         
           
