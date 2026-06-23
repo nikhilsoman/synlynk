@@ -3326,10 +3326,12 @@ def test_daemon_cli_default_no_action(project_dir, capsys):
 
 
 def test_daemon_cli_restart_not_running(project_dir, monkeypatch, capsys):
-    monkeypatch.setattr(synlynk.SynlynkDaemon, "start", lambda self: None)
+    calls = []
+    monkeypatch.setattr(synlynk.SynlynkDaemon, 'stop', lambda self: calls.append('stop') or print('  ✦ daemon not running'))
+    monkeypatch.setattr(synlynk.SynlynkDaemon, 'start', lambda self: calls.append('start'))
     import sys
     old_argv = sys.argv
-    sys.argv = ["synlynk", "daemon", "restart"]
+    sys.argv = ['synlynk', 'daemon', 'restart']
     try:
         try:
             synlynk.main()
@@ -3338,7 +3340,8 @@ def test_daemon_cli_restart_not_running(project_dir, monkeypatch, capsys):
     finally:
         sys.argv = old_argv
     captured = capsys.readouterr()
-    assert "not running" in captured.out
+    assert 'not running' in captured.out
+    assert calls == ['stop', 'start'], f'restart must call stop then start; got {calls}'
 
 
 
