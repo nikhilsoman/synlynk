@@ -3278,3 +3278,34 @@ def test_http_capability_endpoint(project_dir):
         assert isinstance(data, list)  # empty list is fine when no ratings exist
     finally:
         server.shutdown()
+
+
+def test_daemon_cli_status_not_running(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "status"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+def test_daemon_cli_stop_idempotent(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "stop"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
