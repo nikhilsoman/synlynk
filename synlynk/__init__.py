@@ -5217,7 +5217,7 @@ def _daemon_install_service(daemon_instance) -> None:
         if sys.platform == "darwin":
             launchagents_dir = os.path.join(home, "Library", "LaunchAgents")
             os.makedirs(launchagents_dir, exist_ok=True)
-            log_dir = os.path.join(home, "synlynk")
+            log_dir = os.path.join(home, ".synlynk")
             os.makedirs(log_dir, exist_ok=True)
             plist_path = os.path.join(launchagents_dir, "com.synlynk.daemon.plist")
             log_path = os.path.join(log_dir, "launchd.log")

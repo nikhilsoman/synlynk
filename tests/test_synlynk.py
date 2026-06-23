@@ -3352,7 +3352,7 @@ def test_install_service_macos(project_dir, monkeypatch):
     plist = plist_path.read_text()
     assert "<string>/usr/local/bin/synlynk</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
-    assert "synlynk/launchd.log" in plist
+    assert ".synlynk/launchd.log" in plist
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
