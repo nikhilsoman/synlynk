@@ -2780,3 +2780,147 @@ def test_daemon_jobs_insert_and_query(project_dir):
     assert row[2] == "queued"
     assert row[3] == 5
     assert json.loads(row[4]) == []
+
+
+def test_reconcile_daemon_jobs_marks_dead_pid_failed(project_dir):
+    """A running job whose PID no longer exists gets marked failed."""
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        ("djob-dead", "claude", "task", "running", 5, "[]", 99999999,
+         "2026-06-23T10:00:00", "2026-06-23T10:00:01")
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-dead",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "failed"
+    assert row[1] == -1
+
+
+def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
+    """A dead job with an .exit file (exit code 0) is marked done."""
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ok.log")
+    exit_path = log_path + ".exit"
+    import os; os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    open(log_path, "w").close()
+    open(exit_path, "w").write("0")
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ok", "claude", "task", "running", 5, "[]", 99999999,
+         "2026-06-23T10:00:00", "2026-06-23T10:00:01", log_path)
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-ok",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "done"
+    assert row[1] == 0
+
+
+def test_dispatch_ready_jobs_respects_max_parallel(project_dir, monkeypatch):
+    """Does not launch more jobs than max_parallel."""
+    import json
+    # Two already running
+    conn = synlynk._get_db()
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, pid, enqueued_at) VALUES (?,?,?,?,?,?,?,?)",
+            (f"running-{i}", "claude", "task", "running", 5, "[]", 99990 + i,
+             "2026-06-23T10:00:00")
+        )
+    # Two queued
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+            (f"queued-{i}", "claude", "task", "queued", 5, "[]", "2026-06-23T10:00:01")
+        )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    def fake_popen(cmd, **kwargs):
+        class FakeProc:
+            pid = 12345
+        launched.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(synlynk.subprocess, "Popen", fake_popen)
+    # max_parallel=2 from config; 2 already running → 0 should launch
+    synlynk._dispatch_ready_jobs(max_parallel=2)
+    assert len(launched) == 0
+
+
+def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
+    """Launches a queued job when under max_parallel."""
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-q1", "claude", "do the thing", "queued", 5, "[]", "2026-06-23T10:00:00")
+    )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    class FakeProc:
+        pid = 55555
+    def fake_popen(cmd, **kwargs):
+        launched.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(synlynk.subprocess, "Popen", fake_popen)
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+    assert len(launched) == 1
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, pid FROM daemon_jobs WHERE job_id=?", ("djob-q1",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "running"
+    assert row[1] == 55555
+
+
+def test_dispatch_ready_jobs_skips_unmet_deps(project_dir, monkeypatch):
+    """A job with unfinished depends_on is not launched."""
+    import json
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-dep", "claude", "task", "queued", 5,
+         json.dumps(["djob-blocker"]), "2026-06-23T10:00:00")
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-blocker", "claude", "task", "running", 5, "[]", "2026-06-23T09:59:00")
+    )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    class FakeProc:
+        pid = 11111
+    monkeypatch.setattr(synlynk.subprocess, "Popen", lambda *a, **kw: [launched.append(a), FakeProc()][1])
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+    assert len(launched) == 0
