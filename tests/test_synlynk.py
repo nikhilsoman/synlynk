@@ -589,19 +589,45 @@ def test_upgrade_reports_up_to_date(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "latest version" in captured.out
 
-def test_upgrade_reports_new_version(monkeypatch, capsys):
+def test_upgrade_auto_installs_new_version(monkeypatch, capsys):
     import json as _json
-    fake_response = type('R', (), {
+    call_log = []
+
+    def fake_run(*args, **kwargs):
+        call_log.append(args[0])
+        # gh API call fails so we fall through to urllib path
+        raise Exception("no gh")
+
+    api_response = type('R', (), {
         'read': lambda self: _json.dumps({"tag_name": "v99.0.0"}).encode(),
         '__enter__': lambda self: self,
         '__exit__': lambda self, *a: None,
     })()
-    monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
-    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', lambda *a, **kw: fake_response)
+    script_response = type('R', (), {
+        'read': lambda self: b'echo "install ok"',
+        '__enter__': lambda self: self,
+        '__exit__': lambda self, *a: None,
+    })()
+
+    url_calls = [api_response, script_response]
+
+    def fake_urlopen(req, **kw):
+        return url_calls.pop(0)
+
+    fake_bash_result = type('R', (), {'returncode': 0})()
+
+    def fake_run2(*args, **kwargs):
+        if args[0][0] == "bash":
+            return fake_bash_result
+        raise Exception("no gh")
+
+    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run2)
+    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', fake_urlopen)
     synlynk.upgrade()
     captured = capsys.readouterr()
     assert "99.0.0" in captured.out
-    assert "available" in captured.out
+    assert "upgrading" in captured.out
+    assert "Upgraded" in captured.out
 
 def test_upgrade_handles_network_error(monkeypatch, capsys):
     monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
