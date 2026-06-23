@@ -117,6 +117,23 @@ CREATE TABLE IF NOT EXISTS autopilot_runs (
     ts            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_autopilot_runs_hash ON autopilot_runs(signal_hash, ts);
+
+CREATE TABLE IF NOT EXISTS daemon_jobs (
+    job_id       TEXT PRIMARY KEY,
+    agent        TEXT NOT NULL,
+    task         TEXT NOT NULL,
+    story_id     TEXT,
+    status       TEXT NOT NULL DEFAULT 'queued',
+    priority     INTEGER NOT NULL DEFAULT 5,
+    depends_on   TEXT NOT NULL DEFAULT '[]',
+    pid          INTEGER,
+    enqueued_at  TEXT NOT NULL,
+    started_at   TEXT,
+    completed_at TEXT,
+    exit_code    INTEGER,
+    log_path     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 """
 
 _DB_SCORES_VIEW = """

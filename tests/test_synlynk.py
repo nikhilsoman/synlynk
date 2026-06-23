@@ -2750,3 +2750,33 @@ def test_decide_all_agents_fail_exits(project_dir, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         synlynk.cmd_decide("Topic", panel=["claude"], record=False)
     assert exc.value.code == 1
+
+
+def test_daemon_jobs_table_exists(project_dir):
+    conn = synlynk._get_db()
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    conn.close()
+    assert "daemon_jobs" in tables
+
+
+def test_daemon_jobs_insert_and_query(project_dir):
+    import json
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("djob-001", "claude", "do something", "queued", 5, "[]", "2026-06-23T10:00:00")
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT job_id, agent, status, priority, depends_on "
+        "FROM daemon_jobs WHERE job_id=?", ("djob-001",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "djob-001"
+    assert row[1] == "claude"
+    assert row[2] == "queued"
+    assert row[3] == 5
+    assert json.loads(row[4]) == []
