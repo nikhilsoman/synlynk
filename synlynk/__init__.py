@@ -5208,10 +5208,9 @@ def _make_daemon_handler(daemon_instance):
 
 
 def _daemon_install_service(daemon_instance) -> None:
-    import shutil as _shutil
     import textwrap as _textwrap
 
-    synlynk_path = _shutil.which("synlynk") or sys.argv[0]
+    synlynk_path = shutil.which("synlynk") or sys.argv[0]
     home = os.path.expanduser("~")
 
     try:
@@ -5252,7 +5251,7 @@ def _daemon_install_service(daemon_instance) -> None:
             print(f"  ✓ installed launchd service: {plist_path}")
             return
 
-        if _shutil.which("systemctl"):
+        if shutil.which("systemctl"):
             unit_dir = os.path.join(home, ".config", "systemd", "user")
             os.makedirs(unit_dir, exist_ok=True)
             synlynk_dir = os.path.join(home, ".synlynk")
@@ -5261,7 +5260,7 @@ def _daemon_install_service(daemon_instance) -> None:
             unit = _textwrap.dedent(f"""\
                 [Unit]
                 Description=Synlynk daemon
-                After=network.target
+                After=default.target
 
                 [Service]
                 Type=forking
@@ -5295,8 +5294,6 @@ def _daemon_install_service(daemon_instance) -> None:
 
 
 def _daemon_uninstall_service() -> None:
-    import shutil as _shutil
-
     home = os.path.expanduser("~")
 
     try:
@@ -5307,7 +5304,7 @@ def _daemon_uninstall_service() -> None:
             print(f"  ✓ uninstalled launchd service: {plist_path}")
             return
 
-        if _shutil.which("systemctl"):
+        if shutil.which("systemctl"):
             unit_path = os.path.join(home, ".config", "systemd", "user", "synlynk-daemon.service")
             subprocess.run(["systemctl", "--user", "disable", "--now", "synlynk-daemon"], check=False)
             os.remove(unit_path)

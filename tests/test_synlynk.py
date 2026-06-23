@@ -3352,6 +3352,7 @@ def test_install_service_macos(project_dir, monkeypatch):
     plist = plist_path.read_text()
     assert "<string>/usr/local/bin/synlynk</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
+    assert "synlynk/launchd.log" in plist
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
@@ -3384,6 +3385,7 @@ def test_install_service_linux(project_dir, monkeypatch):
     assert unit_path.exists()
     unit = unit_path.read_text()
     assert "Type=forking" in unit
+    assert "After=default.target" in unit
     assert "ExecStart=/usr/bin/synlynk daemon start" in unit
     assert "PIDFile=%h/.synlynk/daemon.pid" in unit
     assert "Restart=on-failure" in unit
