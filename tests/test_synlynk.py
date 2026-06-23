@@ -3309,3 +3309,66 @@ def test_daemon_cli_stop_idempotent(project_dir, capsys):
     captured = capsys.readouterr()
     assert "not running" in captured.out
 
+
+def test_daemon_cli_default_no_action(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+def test_daemon_cli_restart_not_running(project_dir, monkeypatch, capsys):
+    monkeypatch.setattr(synlynk.SynlynkDaemon, "start", lambda self: None)
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "restart"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+
+def test_daemon_cli_install_service_stub(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "--install-service"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "--install-service not yet implemented" in captured.out
+
+
+def test_daemon_cli_uninstall_service_stub(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "--uninstall-service"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "--uninstall-service not yet implemented" in captured.out
+
+
