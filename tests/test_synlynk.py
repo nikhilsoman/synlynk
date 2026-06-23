@@ -3111,3 +3111,46 @@ def test_http_checkpoint_endpoint(project_dir, monkeypatch):
         assert len(called) == 1
     finally:
         server.shutdown()
+
+
+def test_http_stories_endpoint(project_dir):
+    import json
+    # Create a story first
+    synlynk.cmd_story_create("Test story", "backend", "engineering")
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/stories")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert data[0]["engg_domain"] == "backend"
+    finally:
+        server.shutdown()
+
+
+def test_http_stories_id_404(project_dir):
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/stories/no-such-story")
+        resp = conn.getresponse()
+        assert resp.status == 404
+    finally:
+        server.shutdown()
+
+
+def test_http_capability_endpoint(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/capability")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)  # empty list is fine when no ratings exist
+    finally:
+        server.shutdown()

@@ -5224,7 +5224,11 @@ class SynlynkDaemon(WatchDaemon):
             os.dup2(log.fileno(), sys.stderr.fileno())
         with open(self.pidfile, "w") as f:
             f.write(str(os.getpid()))
-        self._start_time = time.time()
+        start_time = time.time()
+        self._start_time = start_time
+        start_file = self.pidfile.replace(".pid", ".start")
+        with open(start_file, "w") as f:
+            f.write(str(start_time))
         self._run_loop()
 
     def stop(self) -> None:
@@ -5236,10 +5240,16 @@ class SynlynkDaemon(WatchDaemon):
                 pid = int(f.read().strip())
             os.kill(pid, 15)
             os.remove(self.pidfile)
+            start_file = self.pidfile.replace(".pid", ".start")
+            if os.path.exists(start_file):
+                os.remove(start_file)
             print("  ✓ synlynk daemon stopped.")
         except (ProcessLookupError, ValueError):
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
+            start_file = self.pidfile.replace(".pid", ".start")
+            if os.path.exists(start_file):
+                os.remove(start_file)
             print("  ✦ daemon not running (cleaned stale pidfile).")
         except OSError as e:
             print(f"  Error stopping daemon: {e}")
@@ -5252,7 +5262,13 @@ class SynlynkDaemon(WatchDaemon):
             return
         with open(self.pidfile) as f:
             pid = int(f.read().strip())
-        uptime_s = int(time.time() - self._start_time)
+        start_file = self.pidfile.replace(".pid", ".start")
+        try:
+            with open(start_file) as f:
+                start_time = float(f.read().strip())
+        except (OSError, ValueError):
+            start_time = time.time()
+        uptime_s = int(time.time() - start_time)
         h, rem = divmod(uptime_s, 3600)
         m = rem // 60
         uptime_str = f"{h}h {m}m" if h else f"{m}m"
@@ -5287,7 +5303,10 @@ class SynlynkDaemon(WatchDaemon):
                        if current_mtimes[f] != last_mtimes.get(f)]
             if changed:
                 time.sleep(self.settle_seconds)
-                self.on_change(changed[0])
+                try:
+                    self.on_change(changed[0])
+                except Exception:
+                    pass
                 last_mtimes = self._get_mtimes("project-docs")
             _reconcile_daemon_jobs()
             _dispatch_ready_jobs(max_parallel=max_parallel)
