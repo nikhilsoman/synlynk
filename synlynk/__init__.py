@@ -4973,8 +4973,33 @@ def init(force: bool = False, agents: list = None,
                   f"← runs {agent_names} in parallel")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
+_INSTALL_SCRIPT_URL = (
+    "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh"
+)
+
+
+def _run_upgrade(latest: str) -> None:
+    """Download install.sh and run it. Falls back to printing the curl command."""
+    print(f"  ✦ New version available: v{latest} — upgrading from v{VERSION}...")
+    try:
+        req = urllib.request.Request(
+            _INSTALL_SCRIPT_URL, headers={"User-Agent": f"synlynk/{VERSION}"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            script = resp.read().decode()
+        result = subprocess.run(["bash", "-c", script], text=True)
+        if result.returncode == 0:
+            print(f"  ✓ Upgraded to v{latest}. Restart your shell or run: source ~/.zshrc")
+        else:
+            print(f"  ⚠ Install script exited {result.returncode} — run manually:")
+            print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
+    except Exception as e:
+        print(f"  ⚠ Auto-install failed ({e}) — run manually:")
+        print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
+
+
 def upgrade() -> None:
-    """Checks GitHub releases for a newer version and prints upgrade instructions."""
+    """Checks GitHub releases for a newer version and auto-installs if one is found."""
     print(f"Checking for updates... (current: v{VERSION})")
     # Try gh CLI first — works for private repos and avoids unauthenticated rate limits.
     try:
@@ -4985,9 +5010,7 @@ def upgrade() -> None:
         if result.returncode == 0:
             latest = result.stdout.strip().lstrip("v")
             if latest and latest != VERSION:
-                print(f"  ✦ New version available: v{latest}")
-                print("  Upgrade: curl -sSL https://raw.githubusercontent.com/"
-                      "nikhilsoman/synlynk/main/install.sh | bash")
+                _run_upgrade(latest)
             else:
                 print(f"  ✓ You are on the latest version (v{VERSION}).")
             return
@@ -5001,9 +5024,7 @@ def upgrade() -> None:
             data = json.loads(resp.read().decode())
         latest = data.get("tag_name", "").lstrip("v")
         if latest and latest != VERSION:
-            print(f"  ✦ New version available: v{latest}")
-            print("  Upgrade: curl -sSL https://raw.githubusercontent.com/"
-                  "nikhilsoman/synlynk/main/install.sh | bash")
+            _run_upgrade(latest)
         else:
             print(f"  ✓ You are on the latest version (v{VERSION}).")
     except Exception as e:
