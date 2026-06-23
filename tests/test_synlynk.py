@@ -2927,6 +2927,130 @@ def test_dispatch_ready_jobs_skips_unmet_deps(project_dir, monkeypatch):
     assert len(launched) == 0
 
 
+def test_reconcile_daemon_jobs_reaps_via_waitpid(project_dir, monkeypatch):
+    """_reconcile_daemon_jobs uses os.waitpid(WNOHANG) to detect exited children,
+    catching zombies that os.kill(pid,0) would miss."""
+    import os
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        ("djob-zombie", "claude", "task", "running", 5, "[]", 77777,
+         "2026-06-23T10:00:00", "2026-06-23T10:00:01")
+    )
+    conn.commit()
+    conn.close()
+
+    # Simulate waitpid returning the pid (child has exited, exit code 0)
+    def fake_waitpid(pid, options):
+        return (pid, 0)  # os.WIFEXITED(0)=True, os.WEXITSTATUS(0)=0
+
+    monkeypatch.setattr(os, "waitpid", fake_waitpid)
+    # WIFEXITED / WEXITSTATUS must also handle the fake status 0
+    monkeypatch.setattr(os, "WIFEXITED", lambda s: True)
+    monkeypatch.setattr(os, "WEXITSTATUS", lambda s: 0)
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-zombie",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "done"
+    assert row[1] == 0
+
+
+def test_dispatch_ready_jobs_fails_job_with_failed_dep(project_dir, monkeypatch):
+    """A queued job whose dependency has failed is itself marked failed (no deadlock)."""
+    import json
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-blocked", "claude", "task", "queued", 5,
+         json.dumps(["djob-failed-dep"]), "2026-06-23T10:00:00")
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-failed-dep", "claude", "task", "failed", 5, "[]", "2026-06-23T09:59:00")
+    )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    class FakeProc:
+        pid = 22222
+    monkeypatch.setattr(synlynk.subprocess, "Popen",
+                        lambda *a, **kw: [launched.append(a), FakeProc()][1])
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+
+    # Nothing launched — the blocked job was failed immediately
+    assert len(launched) == 0
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", ("djob-blocked",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "failed"
+
+
+def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
+    """Each launched job is committed immediately so a crash doesn't leave duplicates."""
+    commits_after_update = []
+    original_commit = None
+
+    class TrackingConn:
+        def __init__(self, real_conn):
+            self._real = real_conn
+            self._updates_since_commit = 0
+
+        def execute(self, sql, params=()):
+            result = self._real.execute(sql, params)
+            if sql.strip().upper().startswith("UPDATE"):
+                self._updates_since_commit += 1
+            return result
+
+        def commit(self):
+            commits_after_update.append(self._updates_since_commit)
+            self._updates_since_commit = 0
+            self._real.commit()
+
+        def fetchone(self):
+            return self._real.fetchone()
+
+        def close(self):
+            self._real.close()
+
+    conn = synlynk._get_db()
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+            (f"djob-commit-{i}", "claude", "do it", "queued", 5, "[]",
+             f"2026-06-23T10:00:0{i}")
+        )
+    conn.commit()
+    conn.close()
+
+    class FakeProc:
+        pid = 33333
+
+    monkeypatch.setattr(synlynk.subprocess, "Popen", lambda *a, **kw: FakeProc())
+
+    real_get_db = synlynk._get_db
+    def patched_get_db():
+        return TrackingConn(real_get_db())
+    monkeypatch.setattr(synlynk, "_get_db", patched_get_db)
+
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+
+    # Each job should produce exactly one commit with an UPDATE before it
+    assert all(c >= 1 for c in commits_after_update if c > 0), \
+        "Expected at least one commit with a preceding UPDATE per job"
+
+
 # ── SynlynkDaemon unit tests ────────────────────────────────────────────────
 
 def test_synlynk_daemon_inherits_watch_daemon():

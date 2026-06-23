@@ -1345,11 +1345,28 @@ def _reconcile_daemon_jobs() -> None:
         for job_id, pid, log_path in rows:
             if pid is None:
                 continue
+            exited = False
+            raw_exit_status = None
             try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
+                wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                if wpid != 0:
+                    exited = True
+                    raw_exit_status = wstatus
+            except ChildProcessError:
+                # Process was adopted by init (daemon restart) — fall back to kill(0)
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    exited = True
+
+            if exited:
                 exit_code = -1
-                if log_path:
+                if raw_exit_status is not None:
+                    if os.WIFEXITED(raw_exit_status):
+                        exit_code = os.WEXITSTATUS(raw_exit_status)
+                    elif os.WIFSIGNALED(raw_exit_status):
+                        exit_code = -os.WTERMSIG(raw_exit_status)
+                elif log_path:
                     exit_file = log_path + ".exit"
                     if os.path.exists(exit_file):
                         try:
@@ -1364,8 +1381,6 @@ def _reconcile_daemon_jobs() -> None:
                     "WHERE job_id=?",
                     (status, exit_code, now, job_id)
                 )
-            except PermissionError:
-                pass
         conn.commit()
     finally:
         conn.close()
@@ -1397,11 +1412,20 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 break
             deps = _json.loads(depends_on_json or "[]")
             if deps:
-                done_ids = {r[0] for r in conn.execute(
-                    "SELECT job_id FROM daemon_jobs WHERE status='done' AND job_id IN ({})".format(
-                        ",".join("?" * len(deps))
-                    ), deps
-                ).fetchall()}
+                placeholders = ",".join("?" * len(deps))
+                dep_rows = conn.execute(
+                    f"SELECT job_id, status FROM daemon_jobs WHERE job_id IN ({placeholders})",
+                    deps
+                ).fetchall()
+                dep_statuses = {r[0]: r[1] for r in dep_rows}
+                if any(dep_statuses.get(d) == "failed" for d in deps):
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
+                        (now, job_id)
+                    )
+                    conn.commit()
+                    continue
+                done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
                 if done_ids != set(deps):
                     continue
 
@@ -1450,9 +1474,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 "WHERE job_id=?",
                 (proc.pid, now, log_path, job_id)
             )
+            conn.commit()
             launched += 1
 
-        conn.commit()
         return launched
     finally:
         conn.close()
@@ -5175,7 +5199,8 @@ def _make_daemon_handler(daemon_instance):
             self._send_json(200, alerts)
 
         def _handle_checkpoint(self):
-            generate_context()
+            with daemon_instance._context_lock:
+                generate_context()
             self._send_json(200, {"regenerated": True})
 
     return DaemonHTTPHandler
@@ -5192,10 +5217,12 @@ class SynlynkDaemon(WatchDaemon):
     HTTP_PORT = 27471
 
     def __init__(self):
+        import threading as _threading
         super().__init__()
         self.pidfile = ".synlynk/daemon.pid"
         self.logfile = ".synlynk/daemon.log"
         self._start_time = time.time()
+        self._context_lock = _threading.Lock()
 
     def start(self) -> None:
         if self._is_running():
@@ -5287,8 +5314,13 @@ class SynlynkDaemon(WatchDaemon):
     def _run_loop(self) -> None:
         import threading as _threading
         import http.server as _http_server
+        import traceback as _traceback
+
+        class _ReuseAddrHTTPServer(_http_server.HTTPServer):
+            allow_reuse_address = True
+
         handler_class = _make_daemon_handler(self)
-        http_server = _http_server.HTTPServer(("127.0.0.1", self.HTTP_PORT), handler_class)
+        http_server = _ReuseAddrHTTPServer(("127.0.0.1", self.HTTP_PORT), handler_class)
         t = _threading.Thread(target=http_server.serve_forever, daemon=True)
         t.start()
 
@@ -5304,9 +5336,10 @@ class SynlynkDaemon(WatchDaemon):
             if changed:
                 time.sleep(self.settle_seconds)
                 try:
-                    self.on_change(changed[0])
+                    with self._context_lock:
+                        self.on_change(changed[0])
                 except Exception:
-                    pass
+                    _traceback.print_exc()
                 last_mtimes = self._get_mtimes("project-docs")
             _reconcile_daemon_jobs()
             _dispatch_ready_jobs(max_parallel=max_parallel)
