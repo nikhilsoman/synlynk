@@ -3,6 +3,7 @@ import argparse
 import sys
 import os
 import subprocess
+import shutil
 import time
 import json
 import re
@@ -11,7 +12,7 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 
 TASK_STATUSES = {
     "[ ]": "active",
@@ -5207,11 +5208,121 @@ def _make_daemon_handler(daemon_instance):
 
 
 def _daemon_install_service(daemon_instance) -> None:
-    print("  [daemon] --install-service not yet implemented (Task 5)")
+    import textwrap as _textwrap
+
+    synlynk_path = shutil.which("synlynk") or sys.argv[0]
+    home = os.path.expanduser("~")
+
+    try:
+        if sys.platform == "darwin":
+            launchagents_dir = os.path.join(home, "Library", "LaunchAgents")
+            os.makedirs(launchagents_dir, exist_ok=True)
+            log_dir = os.path.join(home, ".synlynk")
+            os.makedirs(log_dir, exist_ok=True)
+            plist_path = os.path.join(launchagents_dir, "com.synlynk.daemon.plist")
+            log_path = os.path.join(log_dir, "launchd.log")
+            plist = _textwrap.dedent(f"""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                <plist version="1.0">
+                  <dict>
+                    <key>Label</key>
+                    <string>com.synlynk.daemon</string>
+                    <key>ProgramArguments</key>
+                    <array>
+                      <string>{synlynk_path}</string>
+                      <string>daemon</string>
+                      <string>start</string>
+                    </array>
+                    <key>RunAtLoad</key>
+                    <true/>
+                    <key>KeepAlive</key>
+                    <false/>
+                    <key>StandardOutPath</key>
+                    <string>{log_path}</string>
+                    <key>StandardErrorPath</key>
+                    <string>{log_path}</string>
+                  </dict>
+                </plist>
+            """)
+            with open(plist_path, "w", encoding="utf-8") as f:
+                f.write(plist)
+            subprocess.run(["launchctl", "load", "-w", plist_path], check=False)
+            print(f"  ✓ installed launchd service: {plist_path}")
+            return
+
+        if shutil.which("systemctl"):
+            unit_dir = os.path.join(home, ".config", "systemd", "user")
+            os.makedirs(unit_dir, exist_ok=True)
+            synlynk_dir = os.path.join(home, ".synlynk")
+            os.makedirs(synlynk_dir, exist_ok=True)
+            unit_path = os.path.join(unit_dir, "synlynk-daemon.service")
+            unit = _textwrap.dedent(f"""\
+                [Unit]
+                Description=Synlynk daemon
+                After=default.target
+
+                [Service]
+                Type=forking
+                ExecStart={synlynk_path} daemon start
+                PIDFile=%h/.synlynk/daemon.pid
+                Restart=on-failure
+
+                [Install]
+                WantedBy=default.target
+            """)
+            with open(unit_path, "w", encoding="utf-8") as f:
+                f.write(unit)
+            subprocess.run(["systemctl", "--user", "enable", "--now", "synlynk-daemon"], check=False)
+            print(f"  ✓ installed systemd user service: {unit_path}")
+            return
+
+        synlynk_dir = os.path.join(home, ".synlynk")
+        os.makedirs(synlynk_dir, exist_ok=True)
+        entry = f"@reboot {synlynk_path} daemon start"
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        current = result.stdout if result.returncode == 0 else ""
+        if entry not in current:
+            new_crontab = current.rstrip("\n")
+            if new_crontab:
+                new_crontab += "\n"
+            new_crontab += entry + "\n"
+            subprocess.run(["crontab", "-"], input=new_crontab, text=True, check=False)
+        print("  ✓ installed @reboot crontab entry")
+    except FileNotFoundError:
+        print("  not installed")
 
 
 def _daemon_uninstall_service() -> None:
-    print("  [daemon] --uninstall-service not yet implemented (Task 5)")
+    home = os.path.expanduser("~")
+
+    try:
+        if sys.platform == "darwin":
+            plist_path = os.path.join(home, "Library", "LaunchAgents", "com.synlynk.daemon.plist")
+            subprocess.run(["launchctl", "unload", plist_path], check=False)
+            os.remove(plist_path)
+            print(f"  ✓ uninstalled launchd service: {plist_path}")
+            return
+
+        if shutil.which("systemctl"):
+            unit_path = os.path.join(home, ".config", "systemd", "user", "synlynk-daemon.service")
+            subprocess.run(["systemctl", "--user", "disable", "--now", "synlynk-daemon"], check=False)
+            os.remove(unit_path)
+            print(f"  ✓ uninstalled systemd user service: {unit_path}")
+            return
+
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        current = result.stdout if result.returncode == 0 else ""
+        filtered = "\n".join(
+            line for line in current.splitlines()
+            if not (line.strip().startswith("@reboot ") and line.strip().endswith(" daemon start"))
+        )
+        if filtered:
+            filtered += "\n"
+        subprocess.run(["crontab", "-"], input=filtered, text=True, check=False)
+        print("  ✓ uninstalled @reboot crontab entry")
+    except FileNotFoundError:
+        print("  not installed")
 
 
 class SynlynkDaemon(WatchDaemon):

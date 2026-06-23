@@ -1284,8 +1284,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_092(project_dir):
-    assert synlynk.VERSION == "0.9.2"
+def test_version_is_093(project_dir):
+    assert synlynk.VERSION == "0.9.3"
 
 
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):
@@ -3077,128 +3077,105 @@ def test_synlynk_daemon_stop_idempotent(project_dir, capsys):
 
 # ── HTTP handler tests ───────────────────────────────────────────────────────
 
-import http.client
-import threading
+def _invoke_daemon_handler(project_dir, method, path, body=b"", headers=None):
+    """Run the daemon HTTP handler in-process without binding a socket."""
+    import io
+    import time as _time
 
-def _start_test_http_server(project_dir):
-    """Helper: starts DaemonHTTPHandler on an ephemeral port, returns (server, port, daemon)."""
-    import http.server as _http
     daemon = synlynk.SynlynkDaemon()
-    daemon._start_time = __import__('time').time()
+    daemon._start_time = _time.time()
     handler_class = synlynk._make_daemon_handler(daemon)
-    server = _http.HTTPServer(("127.0.0.1", 0), handler_class)
-    port = server.server_address[1]
-    t = threading.Thread(target=server.serve_forever)
-    t.daemon = True
-    t.start()
-    return server, port, daemon
+    handler = handler_class.__new__(handler_class)
+    handler._daemon = daemon
+    handler.path = path
+    handler.headers = headers or {}
+    handler.rfile = io.BytesIO(body)
+    handler.wfile = io.BytesIO()
+    response = {"status": None, "headers": []}
+
+    handler.send_response = lambda code: response.__setitem__("status", code)
+    handler.send_header = lambda key, value: response["headers"].append((key, value))
+    handler.end_headers = lambda: None
+
+    getattr(handler, f"do_{method.upper()}")()
+    return response["status"], response["headers"], handler.wfile.getvalue(), daemon
 
 
 def test_http_status_endpoint(project_dir):
     import json
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/status")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert "uptime_s" in data
-        assert "pid" in data
-        assert "jobs" in data
-        assert set(data["jobs"].keys()) == {"queued", "running", "done", "failed"}
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/status")
+    data = json.loads(body)
+    assert status == 200
+    assert "uptime_s" in data
+    assert "pid" in data
+    assert "jobs" in data
+    assert set(data["jobs"].keys()) == {"queued", "running", "done", "failed"}
 
 
 def test_http_context_endpoint_json(project_dir):
     import json
     (project_dir / ".synlynk" / "context.md").write_text("# Context\nHello world")
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/context")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert "Hello world" in data["content"]
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/context")
+    data = json.loads(body)
+    assert status == 200
+    assert "Hello world" in data["content"]
 
 
 def test_http_context_endpoint_plain_text(project_dir):
     (project_dir / ".synlynk" / "context.md").write_text("# Context\nHello plain")
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/context", headers={"Accept": "text/plain"})
-        resp = conn.getresponse()
-        assert resp.status == 200
-        assert b"Hello plain" in resp.read()
-    finally:
-        server.shutdown()
+    status, headers, body, _ = _invoke_daemon_handler(
+        project_dir, "GET", "/context", headers={"Accept": "text/plain"}
+    )
+    assert status == 200
+    assert ("Content-Type", "text/plain; charset=utf-8") in headers
+    assert b"Hello plain" in body
 
 
 def test_http_jobs_endpoint_empty(project_dir):
     import json
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/jobs")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert isinstance(data, list)
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/jobs")
+    data = json.loads(body)
+    assert status == 200
+    assert isinstance(data, list)
 
 
 def test_http_dispatch_endpoint_enqueues_job(project_dir):
     import json
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        body = json.dumps({"agent": "claude", "task": "do something"}).encode()
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("POST", "/dispatch", body=body,
-                     headers={"Content-Type": "application/json"})
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert "job_id" in data
-        # Verify it's in the DB
-        conn2 = synlynk._get_db()
-        row = conn2.execute(
-            "SELECT status FROM daemon_jobs WHERE job_id=?", (data["job_id"],)
-        ).fetchone()
-        conn2.close()
-        assert row[0] == "queued"
-    finally:
-        server.shutdown()
+    body = json.dumps({"agent": "claude", "task": "do something"}).encode()
+    status, _, response_body, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+    )
+    data = json.loads(response_body)
+    assert status == 200
+    assert "job_id" in data
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", (data["job_id"],)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "queued"
 
 
 def test_http_dispatch_missing_agent_returns_400(project_dir):
     import json
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        body = json.dumps({"task": "do something"}).encode()
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("POST", "/dispatch", body=body,
-                     headers={"Content-Type": "application/json"})
-        resp = conn.getresponse()
-        assert resp.status == 400
-    finally:
-        server.shutdown()
+    body = json.dumps({"task": "do something"}).encode()
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+    )
+    assert status == 400
 
 
 def test_http_jobs_id_404_for_unknown(project_dir):
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/jobs/no-such-job")
-        resp = conn.getresponse()
-        assert resp.status == 404
-    finally:
-        server.shutdown()
+    status, _, _, _ = _invoke_daemon_handler(project_dir, "GET", "/jobs/no-such-job")
+    assert status == 404
 
 
 def test_http_sentinel_endpoint(project_dir):
@@ -3207,77 +3184,47 @@ def test_http_sentinel_endpoint(project_dir):
         "- [WARN] FLATLINE: 3 consecutive failures\n"
         "- [INFO] something minor\n"
     )
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/sentinel")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert isinstance(data, list)
-        assert len(data) == 2
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/sentinel")
+    data = json.loads(body)
+    assert status == 200
+    assert isinstance(data, list)
+    assert len(data) == 2
 
 
 def test_http_checkpoint_endpoint(project_dir, monkeypatch):
     import json
     called = []
     monkeypatch.setattr(synlynk, "generate_context", lambda **kw: called.append(1))
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("POST", "/checkpoint")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert data.get("regenerated") is True
-        assert len(called) == 1
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "POST", "/checkpoint")
+    data = json.loads(body)
+    assert status == 200
+    assert data.get("regenerated") is True
+    assert len(called) == 1
 
 
 def test_http_stories_endpoint(project_dir):
     import json
     # Create a story first
     synlynk.cmd_story_create("Test story", "backend", "engineering")
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/stories")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert isinstance(data, list)
-        assert len(data) >= 1
-        assert data[0]["engg_domain"] == "backend"
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/stories")
+    data = json.loads(body)
+    assert status == 200
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    assert data[0]["engg_domain"] == "backend"
 
 
 def test_http_stories_id_404(project_dir):
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/stories/no-such-story")
-        resp = conn.getresponse()
-        assert resp.status == 404
-    finally:
-        server.shutdown()
+    status, _, _, _ = _invoke_daemon_handler(project_dir, "GET", "/stories/no-such-story")
+    assert status == 404
 
 
 def test_http_capability_endpoint(project_dir):
     import json
-    server, port, _ = _start_test_http_server(project_dir)
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port)
-        conn.request("GET", "/capability")
-        resp = conn.getresponse()
-        assert resp.status == 200
-        data = json.loads(resp.read())
-        assert isinstance(data, list)  # empty list is fine when no ratings exist
-    finally:
-        server.shutdown()
+    status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/capability")
+    data = json.loads(body)
+    assert status == 200
+    assert isinstance(data, list)  # empty list is fine when no ratings exist
 
 
 def test_daemon_cli_status_not_running(project_dir, capsys):
@@ -3345,7 +3292,10 @@ def test_daemon_cli_restart_not_running(project_dir, monkeypatch, capsys):
 
 
 
-def test_daemon_cli_install_service_stub(project_dir, capsys):
+def test_daemon_cli_install_service_dispatch(project_dir, monkeypatch):
+    calls = []
+    monkeypatch.setattr(synlynk, "SynlynkDaemon", lambda: object())
+    monkeypatch.setattr(synlynk, "_daemon_install_service", lambda d: calls.append(d))
     import sys
     old_argv = sys.argv
     sys.argv = ["synlynk", "daemon", "--install-service"]
@@ -3356,11 +3306,13 @@ def test_daemon_cli_install_service_stub(project_dir, capsys):
             pass
     finally:
         sys.argv = old_argv
-    captured = capsys.readouterr()
-    assert "--install-service not yet implemented" in captured.out
+    assert len(calls) == 1
 
 
-def test_daemon_cli_uninstall_service_stub(project_dir, capsys):
+def test_daemon_cli_uninstall_service_dispatch(project_dir, monkeypatch):
+    calls = []
+    monkeypatch.setattr(synlynk, "SynlynkDaemon", lambda: object())
+    monkeypatch.setattr(synlynk, "_daemon_uninstall_service", lambda: calls.append("uninstall"))
     import sys
     old_argv = sys.argv
     sys.argv = ["synlynk", "daemon", "--uninstall-service"]
@@ -3371,7 +3323,160 @@ def test_daemon_cli_uninstall_service_stub(project_dir, capsys):
             pass
     finally:
         sys.argv = old_argv
+    assert calls == ["uninstall"]
+
+
+def test_install_service_macos(project_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "darwin")
+    monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None)
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((list(cmd), kw))
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+
+    launchagents_dir = project_dir / "Library" / "LaunchAgents"
+    synlynk_dir = project_dir / "synlynk"
+    launchagents_dir.mkdir(parents=True, exist_ok=True)
+    synlynk_dir.mkdir(parents=True, exist_ok=True)
+
+    synlynk._daemon_install_service(object())
+
+    plist_path = launchagents_dir / "com.synlynk.daemon.plist"
+    assert plist_path.exists()
+    plist = plist_path.read_text()
+    assert "<string>/usr/local/bin/synlynk</string>" in plist
+    assert "<string>com.synlynk.daemon</string>" in plist
+    assert ".synlynk/launchd.log" in plist
+    assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
+
+
+def test_install_service_linux(project_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "linux")
+    monkeypatch.setattr(
+        synlynk.shutil,
+        "which",
+        lambda name: "/usr/bin/systemctl" if name == "systemctl" else "/usr/bin/synlynk",
+    )
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((list(cmd), kw))
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+
+    unit_dir = project_dir / ".config" / "systemd" / "user"
+    synlynk_dir = project_dir / ".synlynk"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    synlynk_dir.mkdir(parents=True, exist_ok=True)
+
+    synlynk._daemon_install_service(object())
+
+    unit_path = unit_dir / "synlynk-daemon.service"
+    assert unit_path.exists()
+    unit = unit_path.read_text()
+    assert "Type=forking" in unit
+    assert "After=default.target" in unit
+    assert "ExecStart=/usr/bin/synlynk daemon start" in unit
+    assert "PIDFile=%h/.synlynk/daemon.pid" in unit
+    assert "Restart=on-failure" in unit
+    assert calls[0][0] == ["systemctl", "--user", "enable", "--now", "synlynk-daemon"]
+
+
+def test_install_service_crontab(project_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "linux")
+    monkeypatch.setattr(synlynk.shutil, "which", lambda name: None)
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
+
+    crontab_contents = [""]
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((list(cmd), kw))
+        if cmd == ["crontab", "-l"]:
+            return type("R", (), {"returncode": 0, "stdout": crontab_contents[0]})()
+        if cmd == ["crontab", "-"]:
+            crontab_contents[0] = kw["input"]
+            return type("R", (), {"returncode": 0, "stdout": ""})()
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+
+    synlynk._daemon_install_service(object())
+    synlynk._daemon_install_service(object())
+
+    assert "@reboot" in crontab_contents[0]
+    assert crontab_contents[0].count("daemon start") == 1
+    assert calls[0][0] == ["crontab", "-l"]
+    assert calls[1][0] == ["crontab", "-"]
+
+
+def test_uninstall_service_macos(project_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "darwin")
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((list(cmd), kw))
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+
+    plist_path = project_dir / "Library" / "LaunchAgents" / "com.synlynk.daemon.plist"
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_text("plist")
+
+    synlynk._daemon_uninstall_service()
+
+    assert calls[0][0] == ["launchctl", "unload", str(plist_path)]
+    assert not plist_path.exists()
+
+
+def test_uninstall_service_linux(project_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "linux")
+    monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/bin/systemctl" if name == "systemctl" else None)
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((list(cmd), kw))
+        return type("R", (), {"returncode": 0, "stdout": ""})()
+
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+
+    unit_path = project_dir / ".config" / "systemd" / "user" / "synlynk-daemon.service"
+    unit_path.parent.mkdir(parents=True, exist_ok=True)
+    unit_path.write_text("unit")
+
+    synlynk._daemon_uninstall_service()
+
+    assert calls[0][0] == ["systemctl", "--user", "disable", "--now", "synlynk-daemon"]
+    assert not unit_path.exists()
+
+
+def test_uninstall_service_not_installed(project_dir, monkeypatch, capsys):
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "darwin")
+
+    def fake_run(cmd, **kw):
+        raise FileNotFoundError("missing")
+
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
+
+    synlynk._daemon_uninstall_service()
     captured = capsys.readouterr()
-    assert "--uninstall-service not yet implemented" in captured.out
-
-
+    assert "not installed" in captured.out
