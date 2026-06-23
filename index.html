@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Keep your AI tools in sync | synlynk</title>
+    <title>Multi-agent development OS | synlynk</title>
     <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body class="home">
@@ -30,25 +30,16 @@
         <div class="wordmark-hero">
             <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
         </div>
-        <p class="tagline">Keep your AI tools in sync with your project.</p>
+        <p class="tagline">The harness that turns AI tools into a team.</p>
         <p class="description">
-            A single-file Python CLI that injects project context into every AI session — no lost state, no repeated setup, no invisible costs.
+            A single-file Python CLI that injects project context, dispatches agents, tracks capability, and runs an always-on HTTP context server — so your agents share state instead of starting from scratch.
         </p>
-        
+
         <div class="code-block-wrapper">
             <div class="code-block">
                 curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
             </div>
             <button class="copy-btn" data-copy="curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-            </button>
-        </div>
-
-        <div class="code-block-wrapper secondary">
-            <div class="code-block">
-                python3 bin/synlynk.py <command>
-            </div>
-            <button class="copy-btn" data-copy="python3 bin/synlynk.py" title="Copy to clipboard">
                 <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
             </button>
         </div>
@@ -59,6 +50,7 @@
         </div>
 
         <div class="requirement-badges">
+            <span class="badge">v0.9.3</span>
             <span class="badge">Python 3.8+</span>
             <span class="badge">stdlib only</span>
             <span class="badge">MIT</span>
@@ -70,7 +62,7 @@
     <div class="container">
         <div class="section-label">The Problem</div>
         <blockquote>
-            Every AI session starts from scratch. Switch from Claude to Gemini and it has no idea what you were building. Switch accounts and your task list evaporates. Costs accumulate invisibly.
+            Every AI session starts from scratch. Agents don't know what the last agent decided, can't see what's running, and have no shared memory. The more agents you add, the worse the coordination gets.
         </blockquote>
     </div>
 </section>
@@ -82,22 +74,22 @@
             <div class="step">
                 <div class="step-num">1</div>
                 <h3>init</h3>
-                <p>Bootstrap project-docs/ and AI instruction files</p>
+                <p>Bootstrap <code>project-docs/</code> and AI instruction files — one setup, every agent reads the same state</p>
             </div>
             <div class="step">
                 <div class="step-num">2</div>
                 <h3>exec</h3>
-                <p>Run any AI CLI with context injected automatically</p>
+                <p>Wrap any AI CLI — synlynk injects context, captures tokens, enforces budgets, detects failure loops</p>
             </div>
             <div class="step">
                 <div class="step-num">3</div>
-                <h3>checkpoint</h3>
-                <p>Archive completed tasks, refresh state, log telemetry</p>
+                <h3>dispatch</h3>
+                <p>Queue work for Claude, Codex, or Agy — synlynk routes to the best-fit agent based on capability scores</p>
             </div>
             <div class="step">
                 <div class="step-num">4</div>
-                <h3>status</h3>
-                <p>Dashboard: tasks, budget, alerts, watcher state</p>
+                <h3>daemon</h3>
+                <p>Always-on process keeps <code>context.md</code> fresh and exposes it over HTTP so agents pull without invoking the CLI</p>
             </div>
         </div>
     </div>
@@ -110,30 +102,41 @@
             <div class="feature-card">
                 <span class="glyph">⟡</span>
                 <h3>Context injection</h3>
-                <p>Shared project-docs/ directory every AI tool reads at session start</p>
+                <p>Reads <code>project-docs/</code> into <code>context.md</code> before every exec — every AI session starts with current project state, no setup required</p>
+            </div>
+            <div class="feature-card">
+                <span class="glyph">◉</span>
+                <h3>Always-on daemon</h3>
+                <p>New in v0.9.3 — <code>synlynk daemon start</code> runs a background process with an HTTP API on <code>localhost:27471</code>; agents pull context over HTTP and dispatch jobs without invoking the CLI</p>
+            </div>
+            <div class="feature-card">
+                <span class="glyph">◳</span>
+                <h3>Persistent job queue</h3>
+                <p>Priority-ordered <code>daemon_jobs</code> in SQLite with dependency chains — jobs survive daemon restarts; crashed dispatches never produce duplicate runs</p>
             </div>
             <div class="feature-card">
                 <span class="glyph">◈</span>
-                <h3>Cost tracking</h3>
-                <p>Budget limits with 80% warnings. Spend read from costs.md</p>
+                <h3>Capability engine</h3>
+                <p>Every dispatch scores the agent's performance across 40+ domains — quality, speed, cost, test results. Routing improves as data accumulates. Ratings are Ed25519-signed.</p>
             </div>
             <div class="feature-card">
-                <span class="glyph">◎</span>
-                <h3>Watch daemon</h3>
-                <p>Background process regenerates context.md as project-docs/ changes</p>
+                <span class="glyph">⬡</span>
+                <h3>Team coordination</h3>
+                <p><code>synlynk join</code>, <code>synlynk team status</code>, <code>synlynk decide</code> — multi-agent consensus panels, pull-before-write arbitration, and team digests across all contributors</p>
             </div>
             <div class="feature-card">
                 <span class="glyph">◬</span>
-                <h3>Sentinel alerts</h3>
-                <p>Detects flatline failure loops — 3 consecutive failures of the same command</p>
+                <h3>Sentinel &amp; cost controls</h3>
+                <p>Flatline detection halts after 3 consecutive identical failures. Budget limits with 80% warnings. Per-session token tracking across every agent.</p>
             </div>
         </div>
     </div>
 </section>
 
-<section id="install" class="install-band">
+<section class="install-band" id="install">
     <div class="container">
         <div class="section-label">Install</div>
+        <p style="color: var(--text-muted); margin-bottom: 1.2rem; font-size: 14px;">Installs to <code>~/.synlynk/bin/synlynk</code> — no dependencies beyond Python 3.8+</p>
         <div class="code-block-wrapper">
             <div class="code-block">
                 curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
@@ -141,6 +144,14 @@
             <button class="copy-btn" data-copy="curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash">
                 <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
             </button>
+        </div>
+        <div style="margin-top: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div class="code-block-wrapper secondary" style="flex: 1; min-width: 240px;">
+                <div class="code-block">synlynk init</div>
+            </div>
+            <div class="code-block-wrapper secondary" style="flex: 1; min-width: 240px;">
+                <div class="code-block">synlynk daemon start</div>
+            </div>
         </div>
     </div>
 </section>
@@ -151,23 +162,23 @@
         <div class="roadmap-grid">
             <div class="roadmap-item shipped">
                 <div class="status-dot"></div>
-                <h3>v0.3.x — shipped</h3>
-                <p>Enriched agent templates, AGENTS.md (Codex), sentinel observability, E2E test suite.</p>
+                <h3>v0.9.3 — shipped</h3>
+                <p>Async Daemon: <code>synlynk daemon</code>, persistent job queue, 10-endpoint HTTP API on <code>localhost:27471</code>, launchd/systemd/crontab service install. 432 tests.</p>
+            </div>
+            <div class="roadmap-item shipped">
+                <div class="status-dot"></div>
+                <h3>v0.9.x — shipped</h3>
+                <p>Kernel fixes, install hardening, team onboarding (<code>synlynk join</code>), multi-agent consensus (<code>synlynk decide</code>), Ed25519 capability signing, source architecture scanning.</p>
             </div>
             <div class="roadmap-item active">
                 <div class="status-dot"></div>
-                <h3>v0.4.0 — shipped</h3>
-                <p>Hybrid Workgroup Bootstrap: agent discovery, <code>synlynk dispatch</code>, job store, <code>run --trio</code>, and a new init wizard with Magic Moments.</p>
-            </div>
-            <div class="roadmap-item">
-                <div class="status-dot"></div>
-                <h3>v0.5.0 — next</h3>
-                <p>Capability Engine: data-driven agent routing, SQLite state, <code>synlynk migrate</code>, and Ed25519 agent identity.</p>
+                <h3>v0.9.4 — next</h3>
+                <p>Workgroup Relay: WSS/443 relay, 3 deployment modes (LAN / Cloudflare Tunnel / VPS), revolving host protocol — so agents on different machines share context without a shared filesystem.</p>
             </div>
             <div class="roadmap-item">
                 <div class="status-dot"></div>
                 <h3>v1.0 — the OS</h3>
-                <p>Stable API, pipx/Homebrew packaging, open context protocol, and a Tokq cloud bridge.</p>
+                <p>Stable API, pipx/Homebrew packaging, open context protocol, signed capability ledger, Tokq cloud bridge, synlynk.com community server.</p>
             </div>
         </div>
         <div class="roadmap-cta">
