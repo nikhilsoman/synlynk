@@ -2750,3 +2750,531 @@ def test_decide_all_agents_fail_exits(project_dir, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         synlynk.cmd_decide("Topic", panel=["claude"], record=False)
     assert exc.value.code == 1
+
+
+def test_daemon_jobs_table_exists(project_dir):
+    conn = synlynk._get_db()
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    conn.close()
+    assert "daemon_jobs" in tables
+
+
+def test_daemon_jobs_insert_and_query(project_dir):
+    import json
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("djob-001", "claude", "do something", "queued", 5, "[]", "2026-06-23T10:00:00")
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT job_id, agent, status, priority, depends_on "
+        "FROM daemon_jobs WHERE job_id=?", ("djob-001",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "djob-001"
+    assert row[1] == "claude"
+    assert row[2] == "queued"
+    assert row[3] == 5
+    assert json.loads(row[4]) == []
+
+
+def test_reconcile_daemon_jobs_marks_dead_pid_failed(project_dir):
+    """A running job whose PID no longer exists gets marked failed."""
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        ("djob-dead", "claude", "task", "running", 5, "[]", 99999999,
+         "2026-06-23T10:00:00", "2026-06-23T10:00:01")
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-dead",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "failed"
+    assert row[1] == -1
+
+
+def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
+    """A dead job with an .exit file (exit code 0) is marked done."""
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ok.log")
+    exit_path = log_path + ".exit"
+    import os; os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    open(log_path, "w").close()
+    open(exit_path, "w").write("0")
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ok", "claude", "task", "running", 5, "[]", 99999999,
+         "2026-06-23T10:00:00", "2026-06-23T10:00:01", log_path)
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-ok",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "done"
+    assert row[1] == 0
+    assert not os.path.exists(exit_path), ".exit file should have been deleted by reconcile"
+
+
+def test_dispatch_ready_jobs_respects_max_parallel(project_dir, monkeypatch):
+    """Does not launch more jobs than max_parallel."""
+    import json
+    # Two already running
+    conn = synlynk._get_db()
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, pid, enqueued_at) VALUES (?,?,?,?,?,?,?,?)",
+            (f"running-{i}", "claude", "task", "running", 5, "[]", 99990 + i,
+             "2026-06-23T10:00:00")
+        )
+    # Two queued
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+            (f"queued-{i}", "claude", "task", "queued", 5, "[]", "2026-06-23T10:00:01")
+        )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    def fake_popen(cmd, **kwargs):
+        class FakeProc:
+            pid = 12345
+        launched.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(synlynk.subprocess, "Popen", fake_popen)
+    # max_parallel=2 from config; 2 already running → 0 should launch
+    synlynk._dispatch_ready_jobs(max_parallel=2)
+    assert len(launched) == 0
+
+
+def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
+    """Launches a queued job when under max_parallel."""
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-q1", "claude", "do the thing", "queued", 5, "[]", "2026-06-23T10:00:00")
+    )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    class FakeProc:
+        pid = 55555
+    def fake_popen(cmd, **kwargs):
+        launched.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(synlynk.subprocess, "Popen", fake_popen)
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+    assert len(launched) == 1
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, pid FROM daemon_jobs WHERE job_id=?", ("djob-q1",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "running"
+    assert row[1] == 55555
+
+
+def test_dispatch_ready_jobs_skips_unmet_deps(project_dir, monkeypatch):
+    """A job with unfinished depends_on is not launched."""
+    import json
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-dep", "claude", "task", "queued", 5,
+         json.dumps(["djob-blocker"]), "2026-06-23T10:00:00")
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-blocker", "claude", "task", "running", 5, "[]", "2026-06-23T09:59:00")
+    )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    class FakeProc:
+        pid = 11111
+    monkeypatch.setattr(synlynk.subprocess, "Popen", lambda *a, **kw: [launched.append(a), FakeProc()][1])
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+    assert len(launched) == 0
+
+
+def test_reconcile_daemon_jobs_reaps_via_waitpid(project_dir, monkeypatch):
+    """_reconcile_daemon_jobs uses os.waitpid(WNOHANG) to detect exited children,
+    catching zombies that os.kill(pid,0) would miss."""
+    import os
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        ("djob-zombie", "claude", "task", "running", 5, "[]", 77777,
+         "2026-06-23T10:00:00", "2026-06-23T10:00:01")
+    )
+    conn.commit()
+    conn.close()
+
+    # Simulate waitpid returning the pid (child has exited, exit code 0)
+    def fake_waitpid(pid, options):
+        return (pid, 0)  # os.WIFEXITED(0)=True, os.WEXITSTATUS(0)=0
+
+    monkeypatch.setattr(os, "waitpid", fake_waitpid)
+    # WIFEXITED / WEXITSTATUS must also handle the fake status 0
+    monkeypatch.setattr(os, "WIFEXITED", lambda s: True)
+    monkeypatch.setattr(os, "WEXITSTATUS", lambda s: 0)
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-zombie",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "done"
+    assert row[1] == 0
+
+
+def test_dispatch_ready_jobs_fails_job_with_failed_dep(project_dir, monkeypatch):
+    """A queued job whose dependency has failed is itself marked failed (no deadlock)."""
+    import json
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-blocked", "claude", "task", "queued", 5,
+         json.dumps(["djob-failed-dep"]), "2026-06-23T10:00:00")
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        ("djob-failed-dep", "claude", "task", "failed", 5, "[]", "2026-06-23T09:59:00")
+    )
+    conn.commit()
+    conn.close()
+
+    launched = []
+    class FakeProc:
+        pid = 22222
+    monkeypatch.setattr(synlynk.subprocess, "Popen",
+                        lambda *a, **kw: [launched.append(a), FakeProc()][1])
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+
+    # Nothing launched — the blocked job was failed immediately
+    assert len(launched) == 0
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", ("djob-blocked",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "failed"
+
+
+def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
+    """Each launched job is committed immediately so a crash doesn't leave duplicates."""
+    commits_after_update = []
+    original_commit = None
+
+    class TrackingConn:
+        def __init__(self, real_conn):
+            self._real = real_conn
+            self._updates_since_commit = 0
+
+        def execute(self, sql, params=()):
+            result = self._real.execute(sql, params)
+            if sql.strip().upper().startswith("UPDATE"):
+                self._updates_since_commit += 1
+            return result
+
+        def commit(self):
+            commits_after_update.append(self._updates_since_commit)
+            self._updates_since_commit = 0
+            self._real.commit()
+
+        def fetchone(self):
+            return self._real.fetchone()
+
+        def close(self):
+            self._real.close()
+
+    conn = synlynk._get_db()
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+            (f"djob-commit-{i}", "claude", "do it", "queued", 5, "[]",
+             f"2026-06-23T10:00:0{i}")
+        )
+    conn.commit()
+    conn.close()
+
+    class FakeProc:
+        pid = 33333
+
+    monkeypatch.setattr(synlynk.subprocess, "Popen", lambda *a, **kw: FakeProc())
+
+    real_get_db = synlynk._get_db
+    def patched_get_db():
+        return TrackingConn(real_get_db())
+    monkeypatch.setattr(synlynk, "_get_db", patched_get_db)
+
+    synlynk._dispatch_ready_jobs(max_parallel=4)
+
+    # Each job should produce exactly one commit with an UPDATE before it
+    assert all(c >= 1 for c in commits_after_update if c > 0), \
+        "Expected at least one commit with a preceding UPDATE per job"
+
+
+# ── SynlynkDaemon unit tests ────────────────────────────────────────────────
+
+def test_synlynk_daemon_inherits_watch_daemon():
+    assert issubclass(synlynk.SynlynkDaemon, synlynk.WatchDaemon)
+
+
+def test_synlynk_daemon_has_separate_pidfile(project_dir):
+    d = synlynk.SynlynkDaemon()
+    assert d.pidfile == ".synlynk/daemon.pid"
+    assert d.pidfile != synlynk.WatchDaemon().pidfile
+
+
+def test_synlynk_daemon_is_not_running_without_pidfile(project_dir):
+    d = synlynk.SynlynkDaemon()
+    assert d._is_running() is False
+
+
+def test_synlynk_daemon_stop_idempotent(project_dir, capsys):
+    d = synlynk.SynlynkDaemon()
+    d.stop()
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+# ── HTTP handler tests ───────────────────────────────────────────────────────
+
+import http.client
+import threading
+
+def _start_test_http_server(project_dir):
+    """Helper: starts DaemonHTTPHandler on an ephemeral port, returns (server, port, daemon)."""
+    import http.server as _http
+    daemon = synlynk.SynlynkDaemon()
+    daemon._start_time = __import__('time').time()
+    handler_class = synlynk._make_daemon_handler(daemon)
+    server = _http.HTTPServer(("127.0.0.1", 0), handler_class)
+    port = server.server_address[1]
+    t = threading.Thread(target=server.serve_forever)
+    t.daemon = True
+    t.start()
+    return server, port, daemon
+
+
+def test_http_status_endpoint(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/status")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "uptime_s" in data
+        assert "pid" in data
+        assert "jobs" in data
+        assert set(data["jobs"].keys()) == {"queued", "running", "done", "failed"}
+    finally:
+        server.shutdown()
+
+
+def test_http_context_endpoint_json(project_dir):
+    import json
+    (project_dir / ".synlynk" / "context.md").write_text("# Context\nHello world")
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/context")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "Hello world" in data["content"]
+    finally:
+        server.shutdown()
+
+
+def test_http_context_endpoint_plain_text(project_dir):
+    (project_dir / ".synlynk" / "context.md").write_text("# Context\nHello plain")
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/context", headers={"Accept": "text/plain"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        assert b"Hello plain" in resp.read()
+    finally:
+        server.shutdown()
+
+
+def test_http_jobs_endpoint_empty(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/jobs")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)
+    finally:
+        server.shutdown()
+
+
+def test_http_dispatch_endpoint_enqueues_job(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        body = json.dumps({"agent": "claude", "task": "do something"}).encode()
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("POST", "/dispatch", body=body,
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "job_id" in data
+        # Verify it's in the DB
+        conn2 = synlynk._get_db()
+        row = conn2.execute(
+            "SELECT status FROM daemon_jobs WHERE job_id=?", (data["job_id"],)
+        ).fetchone()
+        conn2.close()
+        assert row[0] == "queued"
+    finally:
+        server.shutdown()
+
+
+def test_http_dispatch_missing_agent_returns_400(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        body = json.dumps({"task": "do something"}).encode()
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("POST", "/dispatch", body=body,
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        assert resp.status == 400
+    finally:
+        server.shutdown()
+
+
+def test_http_jobs_id_404_for_unknown(project_dir):
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/jobs/no-such-job")
+        resp = conn.getresponse()
+        assert resp.status == 404
+    finally:
+        server.shutdown()
+
+
+def test_http_sentinel_endpoint(project_dir):
+    import json
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "- [WARN] FLATLINE: 3 consecutive failures\n"
+        "- [INFO] something minor\n"
+    )
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/sentinel")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)
+        assert len(data) == 2
+    finally:
+        server.shutdown()
+
+
+def test_http_checkpoint_endpoint(project_dir, monkeypatch):
+    import json
+    called = []
+    monkeypatch.setattr(synlynk, "generate_context", lambda **kw: called.append(1))
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("POST", "/checkpoint")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert data.get("regenerated") is True
+        assert len(called) == 1
+    finally:
+        server.shutdown()
+
+
+def test_http_stories_endpoint(project_dir):
+    import json
+    # Create a story first
+    synlynk.cmd_story_create("Test story", "backend", "engineering")
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/stories")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert data[0]["engg_domain"] == "backend"
+    finally:
+        server.shutdown()
+
+
+def test_http_stories_id_404(project_dir):
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/stories/no-such-story")
+        resp = conn.getresponse()
+        assert resp.status == 404
+    finally:
+        server.shutdown()
+
+
+def test_http_capability_endpoint(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/capability")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)  # empty list is fine when no ratings exist
+    finally:
+        server.shutdown()

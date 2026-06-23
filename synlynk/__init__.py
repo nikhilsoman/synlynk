@@ -117,6 +117,23 @@ CREATE TABLE IF NOT EXISTS autopilot_runs (
     ts            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_autopilot_runs_hash ON autopilot_runs(signal_hash, ts);
+
+CREATE TABLE IF NOT EXISTS daemon_jobs (
+    job_id       TEXT PRIMARY KEY,
+    agent        TEXT NOT NULL,
+    task         TEXT NOT NULL,
+    story_id     TEXT,
+    status       TEXT NOT NULL DEFAULT 'queued',
+    priority     INTEGER NOT NULL DEFAULT 5,
+    depends_on   TEXT NOT NULL DEFAULT '[]',
+    pid          INTEGER,
+    enqueued_at  TEXT NOT NULL,
+    started_at   TEXT,
+    completed_at TEXT,
+    exit_code    INTEGER,
+    log_path     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 """
 
 _DB_SCORES_VIEW = """
@@ -1315,6 +1332,154 @@ def _reconcile_jobs() -> None:
             pass
     if changed:
         _save_jobs(jobs)
+
+
+def _reconcile_daemon_jobs() -> None:
+    """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT job_id, pid, log_path FROM daemon_jobs WHERE status='running'"
+    ).fetchall()
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        for job_id, pid, log_path in rows:
+            if pid is None:
+                continue
+            exited = False
+            raw_exit_status = None
+            try:
+                wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                if wpid != 0:
+                    exited = True
+                    raw_exit_status = wstatus
+            except ChildProcessError:
+                # Process was adopted by init (daemon restart) — fall back to kill(0)
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    exited = True
+
+            if exited:
+                exit_code = -1
+                if raw_exit_status is not None:
+                    if os.WIFEXITED(raw_exit_status):
+                        exit_code = os.WEXITSTATUS(raw_exit_status)
+                    elif os.WIFSIGNALED(raw_exit_status):
+                        exit_code = -os.WTERMSIG(raw_exit_status)
+                elif log_path:
+                    exit_file = log_path + ".exit"
+                    if os.path.exists(exit_file):
+                        try:
+                            with open(exit_file) as f:
+                                exit_code = int(f.read().strip())
+                            os.remove(exit_file)
+                        except Exception:
+                            pass
+                status = "done" if exit_code == 0 else "failed"
+                conn.execute(
+                    "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+                    "WHERE job_id=?",
+                    (status, exit_code, now, job_id)
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
+    """Launches queued daemon_jobs up to max_parallel concurrently. Returns count launched."""
+    import json as _json
+    import shlex as _shlex
+    conn = _get_db()
+    try:
+        running_count = conn.execute(
+            "SELECT COUNT(*) FROM daemon_jobs WHERE status='running'"
+        ).fetchone()[0]
+        if running_count >= max_parallel:
+            return 0
+
+        slots = max_parallel - running_count
+        candidates = conn.execute(
+            "SELECT job_id, agent, task, story_id, depends_on, log_path "
+            "FROM daemon_jobs WHERE status='queued' "
+            "ORDER BY priority ASC, enqueued_at ASC"
+        ).fetchall()
+
+        launched = 0
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        for job_id, agent, task, story_id, depends_on_json, log_path in candidates:
+            if launched >= slots:
+                break
+            deps = _json.loads(depends_on_json or "[]")
+            if deps:
+                placeholders = ",".join("?" * len(deps))
+                dep_rows = conn.execute(
+                    f"SELECT job_id, status FROM daemon_jobs WHERE job_id IN ({placeholders})",
+                    deps
+                ).fetchall()
+                dep_statuses = {r[0]: r[1] for r in dep_rows}
+                if any(dep_statuses.get(d) == "failed" for d in deps):
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
+                        (now, job_id)
+                    )
+                    conn.commit()
+                    continue
+                done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
+                if done_ids != set(deps):
+                    continue
+
+            if not log_path:
+                os.makedirs(LOGS_DIR, exist_ok=True)
+                log_path = os.path.join(LOGS_DIR, f"{job_id}.log")
+
+            baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
+            cli = baselines.get("cli", agent)
+            flags = baselines.get("non_interactive_flags", [])
+            prompt_via_arg = baselines.get("prompt_via_arg", False)
+            prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+            os.makedirs(PROMPTS_DIR, exist_ok=True)
+            context_text = ""
+            context_path = ".synlynk/context.md"
+            if os.path.exists(context_path):
+                with open(context_path) as f:
+                    context_text = f.read()
+            prompt = _format_prompt_for_agent(
+                agent, context_text, story_id or "", task, "", ""
+            )
+            with open(prompt_file, "w") as pf:
+                pf.write(prompt)
+
+            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+            if prompt_via_arg:
+                shell_cmd = (
+                    f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
+                    f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_path)} 2>&1; "
+                    f"echo $? > {_shlex.quote(log_path)}.exit"
+                )
+            else:
+                shell_cmd = (
+                    f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_path)} 2>&1; "
+                    f"echo $? > {_shlex.quote(log_path)}.exit"
+                )
+
+            proc = subprocess.Popen(
+                ["sh", "-c", shell_cmd],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            conn.execute(
+                "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, log_path=? "
+                "WHERE job_id=?",
+                (proc.pid, now, log_path, job_id)
+            )
+            conn.commit()
+            launched += 1
+
+        return launched
+    finally:
+        conn.close()
 
 
 def _check_agent_functional(cli: str) -> Optional[str]:
@@ -4796,6 +4961,389 @@ class WatchDaemon:
                 self.on_change(changed[0])
                 set_state("watching")
                 last_mtimes = self._get_mtimes("project-docs")
+
+
+def _make_daemon_handler(daemon_instance):
+    """Returns a BaseHTTPRequestHandler class with daemon_instance bound via closure."""
+    import http.server as _http_server
+    import json as _json
+    import urllib.parse as _urlparse
+
+    class DaemonHTTPHandler(_http_server.BaseHTTPRequestHandler):
+        _daemon = daemon_instance
+
+        def log_message(self, fmt, *args):
+            pass  # silence access log
+
+        def _send_json(self, code: int, data) -> None:
+            body = _json.dumps(data).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_text(self, code: int, text: str) -> None:
+            body = text.encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _parse_path(self):
+            parsed = _urlparse.urlparse(self.path)
+            return parsed.path, dict(_urlparse.parse_qsl(parsed.query))
+
+        def do_GET(self):
+            path, params = self._parse_path()
+            try:
+                if path == "/context":
+                    self._handle_context()
+                elif path == "/status":
+                    self._handle_status()
+                elif path == "/jobs":
+                    self._handle_jobs(params)
+                elif path.startswith("/jobs/"):
+                    self._handle_job_detail(path[6:])
+                elif path == "/stories":
+                    self._handle_stories()
+                elif path.startswith("/stories/"):
+                    self._handle_story_detail(path[9:])
+                elif path == "/capability":
+                    self._handle_capability()
+                elif path == "/sentinel":
+                    self._handle_sentinel()
+                else:
+                    self._send_json(404, {"error": "not found"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
+        def do_POST(self):
+            path, _ = self._parse_path()
+            try:
+                if path == "/dispatch":
+                    self._handle_dispatch()
+                elif path == "/checkpoint":
+                    self._handle_checkpoint()
+                else:
+                    self._send_json(404, {"error": "not found"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
+        def _handle_context(self):
+            context_path = ".synlynk/context.md"
+            content = ""
+            if os.path.exists(context_path):
+                with open(context_path) as f:
+                    content = f.read()
+            accept = self.headers.get("Accept", "")
+            if "text/plain" in accept:
+                self._send_text(200, content)
+            else:
+                self._send_json(200, {"content": content})
+
+        def _handle_status(self):
+            uptime = int(time.time() - getattr(self._daemon, "_start_time", time.time()))
+            conn = _get_db()
+            try:
+                counts = {}
+                for status in ("queued", "running", "done", "failed"):
+                    counts[status] = conn.execute(
+                        "SELECT COUNT(*) FROM daemon_jobs WHERE status=?", (status,)
+                    ).fetchone()[0]
+            finally:
+                conn.close()
+            self._send_json(200, {
+                "running": True,
+                "uptime_s": uptime,
+                "pid": os.getpid(),
+                "jobs": counts,
+            })
+
+        def _handle_jobs(self, params):
+            conn = _get_db()
+            try:
+                status_filter = params.get("status")
+                if status_filter:
+                    rows = conn.execute(
+                        "SELECT job_id, agent, task, story_id, status, priority, "
+                        "depends_on, pid, enqueued_at, started_at, completed_at, exit_code "
+                        "FROM daemon_jobs WHERE status=? ORDER BY enqueued_at DESC",
+                        (status_filter,)
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT job_id, agent, task, story_id, status, priority, "
+                        "depends_on, pid, enqueued_at, started_at, completed_at, exit_code "
+                        "FROM daemon_jobs ORDER BY enqueued_at DESC"
+                    ).fetchall()
+            finally:
+                conn.close()
+            cols = ["job_id", "agent", "task", "story_id", "status", "priority",
+                    "depends_on", "pid", "enqueued_at", "started_at", "completed_at", "exit_code"]
+            self._send_json(200, [dict(zip(cols, r)) for r in rows])
+
+        def _handle_job_detail(self, job_id):
+            conn = _get_db()
+            try:
+                row = conn.execute(
+                    "SELECT job_id, agent, task, story_id, status, priority, depends_on, "
+                    "pid, enqueued_at, started_at, completed_at, exit_code, log_path "
+                    "FROM daemon_jobs WHERE job_id=?", (job_id,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                self._send_json(404, {"error": f"job {job_id!r} not found"})
+                return
+            cols = ["job_id", "agent", "task", "story_id", "status", "priority",
+                    "depends_on", "pid", "enqueued_at", "started_at", "completed_at",
+                    "exit_code", "log_path"]
+            data = dict(zip(cols, row))
+            log_tail = []
+            if data.get("log_path") and os.path.exists(data["log_path"]):
+                with open(data["log_path"]) as f:
+                    log_tail = f.readlines()[-100:]
+            data["log_tail"] = "".join(log_tail)
+            self._send_json(200, data)
+
+        def _handle_dispatch(self):
+            import hashlib as _hashlib
+            import json as _json
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length else b""
+            try:
+                payload = _json.loads(body)
+            except Exception:
+                self._send_json(400, {"error": "invalid JSON body"})
+                return
+            agent = payload.get("agent")
+            task = payload.get("task")
+            if not agent or not task:
+                self._send_json(400, {"error": "agent and task are required"})
+                return
+            job_id = "djob-" + _hashlib.md5(
+                f"{agent}{task}{time.time()}".encode()
+            ).hexdigest()[:8]
+            conn = _get_db()
+            try:
+                conn.execute(
+                    "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
+                    "priority, depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (job_id, agent, task, payload.get("story_id"),
+                     "queued", payload.get("priority", 5),
+                     _json.dumps(payload.get("depends_on", [])),
+                     time.strftime("%Y-%m-%dT%H:%M:%S"))
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            self._send_json(200, {"job_id": job_id})
+
+        def _handle_stories(self):
+            conn = _get_db()
+            try:
+                rows = conn.execute(
+                    "SELECT story_id, title, engg_domain, org_domain, industry, phase, "
+                    "estimated_tokens, actual_tokens, created_at "
+                    "FROM stories ORDER BY created_at DESC"
+                ).fetchall()
+            finally:
+                conn.close()
+            cols = ["story_id", "title", "engg_domain", "org_domain", "industry",
+                    "phase", "estimated_tokens", "actual_tokens", "created_at"]
+            self._send_json(200, [dict(zip(cols, r)) for r in rows])
+
+        def _handle_story_detail(self, story_id):
+            conn = _get_db()
+            try:
+                row = conn.execute(
+                    "SELECT story_id, title, engg_domain, org_domain, industry, phase, "
+                    "estimated_tokens, actual_tokens, created_at "
+                    "FROM stories WHERE story_id=?", (story_id,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                self._send_json(404, {"error": f"story {story_id!r} not found"})
+                return
+            cols = ["story_id", "title", "engg_domain", "org_domain", "industry",
+                    "phase", "estimated_tokens", "actual_tokens", "created_at"]
+            self._send_json(200, dict(zip(cols, row)))
+
+        def _handle_capability(self):
+            conn = _get_db()
+            try:
+                rows = conn.execute(
+                    "SELECT agent, engg_domain, AVG(quality), COUNT(*) "
+                    "FROM capability_ratings GROUP BY agent, engg_domain"
+                ).fetchall()
+            finally:
+                conn.close()
+            result = [
+                {"agent": r[0], "domain": r[1], "avg_quality": r[2], "count": r[3]}
+                for r in rows
+            ]
+            self._send_json(200, result)
+
+        def _handle_sentinel(self):
+            sentinel_file = ".synlynk/sentinel.md"
+            alerts = []
+            if os.path.exists(sentinel_file):
+                with open(sentinel_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("- ["):
+                            alerts.append(line)
+            self._send_json(200, alerts)
+
+        def _handle_checkpoint(self):
+            with daemon_instance._context_lock:
+                generate_context()
+            self._send_json(200, {"regenerated": True})
+
+    return DaemonHTTPHandler
+
+
+class SynlynkDaemon(WatchDaemon):
+    """Always-running daemon: mtime polling + HTTP API + persistent job queue.
+
+    Subclasses WatchDaemon (double-fork, pidfile, mtime loop) and adds:
+    - HTTP server thread on localhost:27471
+    - _reconcile_daemon_jobs() + _dispatch_ready_jobs() on each poll tick
+    """
+
+    HTTP_PORT = 27471
+
+    def __init__(self):
+        import threading as _threading
+        super().__init__()
+        self.pidfile = ".synlynk/daemon.pid"
+        self.logfile = ".synlynk/daemon.log"
+        self._start_time = time.time()
+        self._context_lock = _threading.Lock()
+
+    def start(self) -> None:
+        if self._is_running():
+            print("  synlynk daemon is already running.")
+            return
+        watch_pid = ".synlynk/watch.pid"
+        if os.path.exists(watch_pid):
+            print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
+        if os.path.exists(self.pidfile):
+            os.remove(self.pidfile)
+        if not hasattr(os, "fork"):
+            print("  ⚠ daemon requires Unix (macOS/Linux). Not supported on Windows.")
+            return
+        pid = os.fork()
+        if pid > 0:
+            print("  ● synlynk daemon started.")
+            return
+        os.setsid()
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        with open(self.logfile, "a") as log:
+            os.dup2(log.fileno(), sys.stdout.fileno())
+            os.dup2(log.fileno(), sys.stderr.fileno())
+        with open(self.pidfile, "w") as f:
+            f.write(str(os.getpid()))
+        start_time = time.time()
+        self._start_time = start_time
+        start_file = self.pidfile.replace(".pid", ".start")
+        with open(start_file, "w") as f:
+            f.write(str(start_time))
+        self._run_loop()
+
+    def stop(self) -> None:
+        if not os.path.exists(self.pidfile):
+            print("  ✦ daemon not running")
+            return
+        try:
+            with open(self.pidfile) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 15)
+            os.remove(self.pidfile)
+            start_file = self.pidfile.replace(".pid", ".start")
+            if os.path.exists(start_file):
+                os.remove(start_file)
+            print("  ✓ synlynk daemon stopped.")
+        except (ProcessLookupError, ValueError):
+            if os.path.exists(self.pidfile):
+                os.remove(self.pidfile)
+            start_file = self.pidfile.replace(".pid", ".start")
+            if os.path.exists(start_file):
+                os.remove(start_file)
+            print("  ✦ daemon not running (cleaned stale pidfile).")
+        except OSError as e:
+            print(f"  Error stopping daemon: {e}")
+
+    def status(self) -> None:
+        if not self._is_running():
+            if os.path.exists(self.pidfile):
+                os.remove(self.pidfile)
+            print("  ✦ synlynk daemon not running")
+            return
+        with open(self.pidfile) as f:
+            pid = int(f.read().strip())
+        start_file = self.pidfile.replace(".pid", ".start")
+        try:
+            with open(start_file) as f:
+                start_time = float(f.read().strip())
+        except (OSError, ValueError):
+            start_time = time.time()
+        uptime_s = int(time.time() - start_time)
+        h, rem = divmod(uptime_s, 3600)
+        m = rem // 60
+        uptime_str = f"{h}h {m}m" if h else f"{m}m"
+        conn = _get_db()
+        try:
+            counts = {s: conn.execute(
+                "SELECT COUNT(*) FROM daemon_jobs WHERE status=?", (s,)
+            ).fetchone()[0] for s in ("queued", "running", "done", "failed")}
+        finally:
+            conn.close()
+        print(f"  ✦ synlynk daemon running  (pid {pid}, up {uptime_str})")
+        print(f"    jobs: {counts['queued']} queued · {counts['running']} running "
+              f"· {counts['done']} done · {counts['failed']} failed")
+        print(f"    http: http://localhost:{self.HTTP_PORT}")
+
+    def _run_loop(self) -> None:
+        import threading as _threading
+        import http.server as _http_server
+        import traceback as _traceback
+
+        class _ReuseAddrHTTPServer(_http_server.HTTPServer):
+            allow_reuse_address = True
+
+        handler_class = _make_daemon_handler(self)
+        http_server = _ReuseAddrHTTPServer(("127.0.0.1", self.HTTP_PORT), handler_class)
+        t = _threading.Thread(target=http_server.serve_forever, daemon=True)
+        t.start()
+
+        config = load_config()
+        max_parallel = config.get("max_parallel", 4)
+        interval = config.get("watch_interval_seconds", 30)
+        last_mtimes = self._get_mtimes("project-docs")
+        while True:
+            time.sleep(interval)
+            current_mtimes = self._get_mtimes("project-docs")
+            changed = [f for f in current_mtimes
+                       if current_mtimes[f] != last_mtimes.get(f)]
+            if changed:
+                time.sleep(self.settle_seconds)
+                try:
+                    with self._context_lock:
+                        self.on_change(changed[0])
+                except Exception:
+                    _traceback.print_exc()
+                last_mtimes = self._get_mtimes("project-docs")
+            _reconcile_daemon_jobs()
+            _dispatch_ready_jobs(max_parallel=max_parallel)
+
 
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
