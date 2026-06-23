@@ -2925,3 +2925,189 @@ def test_dispatch_ready_jobs_skips_unmet_deps(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk.subprocess, "Popen", lambda *a, **kw: [launched.append(a), FakeProc()][1])
     synlynk._dispatch_ready_jobs(max_parallel=4)
     assert len(launched) == 0
+
+
+# ── SynlynkDaemon unit tests ────────────────────────────────────────────────
+
+def test_synlynk_daemon_inherits_watch_daemon():
+    assert issubclass(synlynk.SynlynkDaemon, synlynk.WatchDaemon)
+
+
+def test_synlynk_daemon_has_separate_pidfile(project_dir):
+    d = synlynk.SynlynkDaemon()
+    assert d.pidfile == ".synlynk/daemon.pid"
+    assert d.pidfile != synlynk.WatchDaemon().pidfile
+
+
+def test_synlynk_daemon_is_not_running_without_pidfile(project_dir):
+    d = synlynk.SynlynkDaemon()
+    assert d._is_running() is False
+
+
+def test_synlynk_daemon_stop_idempotent(project_dir, capsys):
+    d = synlynk.SynlynkDaemon()
+    d.stop()
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+# ── HTTP handler tests ───────────────────────────────────────────────────────
+
+import http.client
+import threading
+
+def _start_test_http_server(project_dir):
+    """Helper: starts DaemonHTTPHandler on an ephemeral port, returns (server, port, daemon)."""
+    import http.server as _http
+    daemon = synlynk.SynlynkDaemon()
+    daemon._start_time = __import__('time').time()
+    handler_class = synlynk._make_daemon_handler(daemon)
+    server = _http.HTTPServer(("127.0.0.1", 0), handler_class)
+    port = server.server_address[1]
+    t = threading.Thread(target=server.serve_forever)
+    t.daemon = True
+    t.start()
+    return server, port, daemon
+
+
+def test_http_status_endpoint(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/status")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "uptime_s" in data
+        assert "pid" in data
+        assert "jobs" in data
+        assert set(data["jobs"].keys()) == {"queued", "running", "done", "failed"}
+    finally:
+        server.shutdown()
+
+
+def test_http_context_endpoint_json(project_dir):
+    import json
+    (project_dir / ".synlynk" / "context.md").write_text("# Context\nHello world")
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/context")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "Hello world" in data["content"]
+    finally:
+        server.shutdown()
+
+
+def test_http_context_endpoint_plain_text(project_dir):
+    (project_dir / ".synlynk" / "context.md").write_text("# Context\nHello plain")
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/context", headers={"Accept": "text/plain"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        assert b"Hello plain" in resp.read()
+    finally:
+        server.shutdown()
+
+
+def test_http_jobs_endpoint_empty(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/jobs")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)
+    finally:
+        server.shutdown()
+
+
+def test_http_dispatch_endpoint_enqueues_job(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        body = json.dumps({"agent": "claude", "task": "do something"}).encode()
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("POST", "/dispatch", body=body,
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert "job_id" in data
+        # Verify it's in the DB
+        conn2 = synlynk._get_db()
+        row = conn2.execute(
+            "SELECT status FROM daemon_jobs WHERE job_id=?", (data["job_id"],)
+        ).fetchone()
+        conn2.close()
+        assert row[0] == "queued"
+    finally:
+        server.shutdown()
+
+
+def test_http_dispatch_missing_agent_returns_400(project_dir):
+    import json
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        body = json.dumps({"task": "do something"}).encode()
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("POST", "/dispatch", body=body,
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        assert resp.status == 400
+    finally:
+        server.shutdown()
+
+
+def test_http_jobs_id_404_for_unknown(project_dir):
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/jobs/no-such-job")
+        resp = conn.getresponse()
+        assert resp.status == 404
+    finally:
+        server.shutdown()
+
+
+def test_http_sentinel_endpoint(project_dir):
+    import json
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "- [WARN] FLATLINE: 3 consecutive failures\n"
+        "- [INFO] something minor\n"
+    )
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/sentinel")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert isinstance(data, list)
+        assert len(data) == 2
+    finally:
+        server.shutdown()
+
+
+def test_http_checkpoint_endpoint(project_dir, monkeypatch):
+    import json
+    called = []
+    monkeypatch.setattr(synlynk, "generate_context", lambda **kw: called.append(1))
+    server, port, _ = _start_test_http_server(project_dir)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("POST", "/checkpoint")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        data = json.loads(resp.read())
+        assert data.get("regenerated") is True
+        assert len(called) == 1
+    finally:
+        server.shutdown()
