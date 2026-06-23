@@ -27,10 +27,9 @@ No strategic shifts. The feature set was well-defined from the v0.9.2 design spe
 
 The entry point for a new team member. Running `synlynk join` in a synlynk-managed repo:
 
-1. Reads git history to find the last 10 non-merge commits by the current user
-2. Seeds `project-docs/devlogs/<username>.md` with a stub pre-populated from those commits — so the devlog has real context from day one rather than a blank template
-3. Regenerates CLAUDE.md, GEMINI.md, and AGENTS.md with the joining member's `git config user.name` in the agent identity header
-4. Prints a team digest: who else is in the project, what they've been working on, how to read their devlogs
+1. Seeds `project-docs/devlogs/<username>.md` with a stub entry attributed to the joining user — so the devlog exists and shows up in team digests from day one
+2. Regenerates CLAUDE.md, GEMINI.md, and AGENTS.md with the joining member's `git config user.name` in the agent identity header
+3. Prints a team digest: who else is in the project, what they've been working on, how to read their devlogs
 
 ```bash
 $ synlynk join
@@ -84,14 +83,15 @@ With `--record`, writes `project-docs/decisions/YYYY-MM-DD-<slug>.md` containing
 
 ### Pull-before-write arbitration
 
-Every command that writes to `project-docs/` now calls `_check_upstream_divergence()` first. If the local branch is behind the remote, the command exits with:
+Every command that writes to `project-docs/` now calls `_check_upstream_divergence()` first. If the local branch is behind the remote, the command warns:
 
 ```
-⚠ project-docs/ may be out of date — run git pull before writing
+⚠ project-docs/ may be out of date — consider git pull before writing
   (remote has 2 commits ahead of local)
+  Continuing anyway...
 ```
 
-This prevents a common team-mode problem where two developers' agents write to the same devlog concurrently and produce a merge conflict.
+The warning does not block — offline and disconnected workflows still function. The goal is visibility: if two developers' agents are writing to devlogs concurrently and one of them sees this warning, they know to pull before pushing to avoid a merge conflict.
 
 ### Token budgets on stories
 
@@ -111,7 +111,7 @@ The `estimated_tokens` column is visible in `synlynk team status` and in the dis
 
 **`decide` panel dispatch:** Each panel agent is dispatched non-interactively with `_run_agent_sync()` — the same mechanism used by the support engineer agent. The structured `DECISION:` block is extracted by regex from each agent's stdout. If an agent returns without the marker, its response is shown as "no structured decision" but the other panel members' votes still count.
 
-**Consensus algorithm:** Simple majority vote on the first word of the `DECISION:` block. For 2-way ties (even-numbered panels), the last responding agent's vote is used as tiebreaker (recency heuristic). Future versions may allow configuring the algorithm per decision category.
+**Consensus algorithm:** All panel responses are collected, then sent back to `panel[0]` (the first named agent) as a synthesis prompt. The synthesizer produces a final unified decision, and `cmd_decide` extracts the sentence starting with `"Decision:"` from the synthesis output as the canonical result. This means the first panel member is also the synthesizer — a deliberate simplicity tradeoff. Future versions may allow configuring a separate synthesizer agent or a voting-based alternative.
 
 **Pull-before-write arbitration:** Implemented as a `git fetch --dry-run` + `git rev-list HEAD..origin/HEAD --count` check. Runs before every write to `project-docs/`. The check is skipped if the repo has no configured remote (`git remote -v` returns empty) so it doesn't break offline use.
 

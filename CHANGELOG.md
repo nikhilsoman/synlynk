@@ -14,7 +14,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.9.2] - 2026-06-22
 
 ### Added
-- `synlynk join` — new member onboarding: auto-seeds devlog from git history, regenerates
+- `synlynk join` — new member onboarding: seeds a devlog stub for the joining user, regenerates
   AI context files (CLAUDE.md, GEMINI.md, AGENTS.md) with the joining member's identity, and
   prints a team digest showing all active members and their recent focus areas
 - `synlynk team status` — team digest view: lists all members with devlog presence, current
@@ -27,15 +27,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with `--record` flag
 - `--tokens <N>` flag on `synlynk story create` — set an estimated token budget for a story;
   stored in new `estimated_tokens` column on the `stories` table
-- `_seed_devlog(username, root)` helper — writes a devlog stub pre-populated from recent
-  git commits by that user (last 10 non-merge commits) so new members have immediate context
+- `_seed_devlog(username, root)` helper — writes a devlog stub for the joining user with an
+  initial entry so the devlog file exists and is attributable in team digests from day one
 - `_generate_ai_context_files(username, root, config)` helper — regenerates CLAUDE.md,
   GEMINI.md, and AGENTS.md with the joining member's name in the `git config user.name` slot
 - `_build_team_digest(root)` helper — reads all devlogs from `project-docs/devlogs/`, extracts
   last-active date and focus summary per member; used by both `join` and `team status`
-- `_check_upstream_divergence(root)` helper — checks whether the local `project-docs/` files
-  are behind the remote branch before any write; prints a warning and exits with advice to
-  `git pull` if divergence is detected (pull-before-write arbitration)
+- `_check_upstream_divergence(root)` helper — checks whether the local branch is behind the
+  remote before any write to `project-docs/`; prints a warning with advice to `git pull` if
+  divergence is detected; continues without blocking so offline workflows still function
+  (pull-before-write arbitration)
 
 ### Fixed
 - None in this release

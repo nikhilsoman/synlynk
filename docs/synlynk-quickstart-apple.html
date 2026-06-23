@@ -979,7 +979,7 @@
         <div>&nbsp;</div>
         <div><span class="ts">✓</span> <span class="to">Installed to ~/.synlynk/bin/synlynk</span></div>
         <div><span class="ts">✓</span> <span class="to">PATH updated in ~/.zshrc</span></div>
-        <div><span class="ts">✓</span> <span class="to">synlynk 0.4.1 ready</span></div>
+        <div><span class="ts">✓</span> <span class="to">synlynk 0.9.2 ready</span></div>
       </div>
     </div>
 
@@ -1100,7 +1100,7 @@
         <div class="term">
           <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="term-title">synlynk logs</div></div>
           <div class="term-body" style="font-size:10.5px;">
-            <div><span class="tp">$ </span><span class="tc">synlynk logs</span> <span class="ta">job-a3f2</span></div>
+            <div><span class="tp">$ </span><span class="tc">synlynk logs</span> <span class="tf">--job</span> <span class="ta">job-a3f2</span></div>
             <div>&nbsp;</div>
             <div><span class="to">Writing test_billing.py...</span></div>
             <div><span class="ts">  ✓</span> <span class="to">test_charge_success</span></div>
@@ -1338,12 +1338,12 @@
           <tbody>
             <tr><td>synlynk dispatch &lt;agent&gt;</td><td>Fire background job with smart routing. Accepts <code>--task</code> and <code>--story</code>.</td></tr>
             <tr><td>synlynk jobs</td><td>List jobs (running / completed / failed). <code>--all</code> includes history.</td></tr>
-            <tr><td>synlynk logs &lt;job-id&gt;</td><td>Tail job output. Use <code>--tail N</code> to limit lines.</td></tr>
-            <tr><td>synlynk run --trio</td><td>Architect → Builder → Verifier pipeline with context hand-off.</td></tr>
+            <tr><td>synlynk logs --job &lt;id&gt;</td><td>Tail job output. Use <code>--tail N</code> to limit lines.</td></tr>
+            <tr><td>synlynk run --trio</td><td>Dispatch same task to all discovered agents in parallel. Logs per agent.</td></tr>
           </tbody>
         </table>
 
-        <h2>Instructions &amp; Agent <span class="tag tag-teal">v0.4.1</span></h2>
+        <h2>Instructions &amp; Agent <span class="tag tag-teal">v0.8.0</span></h2>
         <table class="cmd-table">
           <thead><tr><th>Command</th><th>What it does</th></tr></thead>
           <tbody>
