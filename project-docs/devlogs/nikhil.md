@@ -499,3 +499,12 @@ implementation plan.
 - Parsed test count from logs in `_extract_auto_signals` for both the standard multi-pattern matches and the all-passed shortcut case.
 - Applied anti-gaming baseline cap of 5.0 in `_write_capability_rating` if `test_count` is less than 3 and the pass rate is 1.0.
 
+## 2026-06-23 — Session: Strengthen Daemon CLI Restart Test
+
+### Shipped
+- **Feature:** Strengthened `test_daemon_cli_restart_not_running` to assert that both `stop()` and `start()` are called by the daemon restart CLI action.
+- Ran tests successfully and pushed the change to `feat/v0.9.3-t4-cli`.
+
+### Key decisions & implementation notes
+- Replaced the monkeypatch of `start()` with dummy lists tracking `stop` and `start` calls to explicitly assert call sequences.
+

@@ -3278,3 +3278,100 @@ def test_http_capability_endpoint(project_dir):
         assert isinstance(data, list)  # empty list is fine when no ratings exist
     finally:
         server.shutdown()
+
+
+def test_daemon_cli_status_not_running(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "status"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+def test_daemon_cli_stop_idempotent(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "stop"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+def test_daemon_cli_default_no_action(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "not running" in captured.out
+
+
+def test_daemon_cli_restart_not_running(project_dir, monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(synlynk.SynlynkDaemon, 'stop', lambda self: calls.append('stop') or print('  ✦ daemon not running'))
+    monkeypatch.setattr(synlynk.SynlynkDaemon, 'start', lambda self: calls.append('start'))
+    import sys
+    old_argv = sys.argv
+    sys.argv = ['synlynk', 'daemon', 'restart']
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert 'not running' in captured.out
+    assert calls == ['stop', 'start'], f'restart must call stop then start; got {calls}'
+
+
+
+def test_daemon_cli_install_service_stub(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "--install-service"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "--install-service not yet implemented" in captured.out
+
+
+def test_daemon_cli_uninstall_service_stub(project_dir, capsys):
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "daemon", "--uninstall-service"]
+    try:
+        try:
+            synlynk.main()
+        except SystemExit:
+            pass
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert "--uninstall-service not yet implemented" in captured.out
+
+

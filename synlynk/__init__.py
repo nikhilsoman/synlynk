@@ -5206,6 +5206,14 @@ def _make_daemon_handler(daemon_instance):
     return DaemonHTTPHandler
 
 
+def _daemon_install_service(daemon_instance) -> None:
+    print("  [daemon] --install-service not yet implemented (Task 5)")
+
+
+def _daemon_uninstall_service() -> None:
+    print("  [daemon] --uninstall-service not yet implemented (Task 5)")
+
+
 class SynlynkDaemon(WatchDaemon):
     """Always-running daemon: mtime polling + HTTP API + persistent job queue.
 
@@ -5731,6 +5739,20 @@ def main() -> None:
     watch_parser.add_argument("action", choices=["start", "stop", "status"],
                               help="Daemon action")
 
+    daemon_parser = subparsers.add_parser("daemon", help="Manage the always-on context daemon")
+    daemon_parser.add_argument(
+        "action", nargs="?", choices=["start", "stop", "status", "restart"],
+        help="Daemon action"
+    )
+    daemon_parser.add_argument(
+        "--install-service", action="store_true", dest="install_service",
+        help="Register daemon with launchd (macOS) / systemd (Linux) / crontab (fallback)"
+    )
+    daemon_parser.add_argument(
+        "--uninstall-service", action="store_true", dest="uninstall_service",
+        help="Deregister daemon service"
+    )
+
     subparsers.add_parser("checkpoint",
                           help="Archive done tasks, refresh context, emit telemetry")
 
@@ -5869,6 +5891,25 @@ def main() -> None:
             daemon.stop()
         elif args.action == "status":
             daemon.status()
+    elif args.command == "daemon":
+        d = SynlynkDaemon()
+        if getattr(args, "install_service", False):
+            _daemon_install_service(d)
+        elif getattr(args, "uninstall_service", False):
+            _daemon_uninstall_service()
+        else:
+            action = getattr(args, "action", None) or "status"
+            if action == "start":
+                d.start()
+            elif action == "stop":
+                d.stop()
+            elif action == "status":
+                d.status()
+            elif action == "restart":
+                d.stop()
+                d.start()
+            else:
+                daemon_parser.print_help()
     elif args.command == "checkpoint":
         checkpoint()
     elif args.command == "status":
