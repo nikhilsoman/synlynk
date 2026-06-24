@@ -9,6 +9,14 @@ synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one
 
 **v0.9.4:** Context / Dispatch / Relay — SQLite-primary task state with generated `todo.md`, per-agent context profiles (`.agents/<agent>.json`), `synlynk jobs` reads live SQLite with `--watch`, pre-flight dispatch gate, HTTP SSE relay broker (`synlynk relay start/broadcast`), and VERIFY_SKIP sentinel pattern. 472 tests.
 
+## Documentation
+
+| | | |
+|:---:|:---:|:---:|
+| [![Official Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-official-reference-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-official-reference.pdf) | [![Command Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-command-reference-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-command-reference.pdf) | [![Quick Start Guide](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-quickstart-guide-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-quickstart-guide.pdf) |
+| **[Official Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-official-reference.pdf)** | **[Command Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-command-reference.pdf)** | **[Quick Start Guide](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-quickstart-guide.pdf)** |
+| 14-page full reference: architecture, all commands, agent profiles, relay, SQLite schema, changelog | 9-page command catalog: flags, options, usage scenarios | 5-page getting started: install, init, dispatch, invite |
+
 ## Install
 
 ```bash
