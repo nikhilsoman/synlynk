@@ -38,6 +38,23 @@ def test_extract_synlynk_section_none_marker_returns_whole():
     assert _extract_synlynk_section(content, "none") == content
 
 
+def test_extract_synlynk_section_ignores_inline_end_marker():
+    # Regression: <!-- synlynk:end --> appearing in prose (not at line start) must not
+    # truncate the block. Agy discovered this in the rxcc session (2026-06-24).
+    from synlynk import _extract_synlynk_section
+    content = (
+        'Before\n'
+        '<!-- synlynk:start version="0.9.4" tool="agy" -->\n'
+        'Do not use `<!-- synlynk:end -->` inline — it must be on its own line.\n'
+        'This line should also be captured.\n'
+        '<!-- synlynk:end -->\n'
+        'After\n'
+    )
+    section = _extract_synlynk_section(content, "html")
+    assert section is not None
+    assert "This line should also be captured." in section
+
+
 def test_extract_synlynk_section_returns_none_when_absent():
     from synlynk import _extract_synlynk_section
     assert _extract_synlynk_section("no markers here", "html") is None

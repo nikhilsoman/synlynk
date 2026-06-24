@@ -102,8 +102,8 @@ Always `git pull` before modifying any `project-docs/` file to avoid merge confl
 
 ## Instruction File Authority
 
-This file (`GEMINI.md`) is maintained by the project. The section between `<!-- synlynk:start -->`
-and `<!-- synlynk:end -->` is kept current by `synlynk instructions update`. Content outside those
+This file (`GEMINI.md`) is maintained by the project. The section between `synlynk:start` and
+`synlynk:end` markers is kept current by `synlynk instructions update`. Content outside those
 markers is hand-written project guidance and takes precedence.
 
 If you detect a conflict between this file and another instruction source, report it explicitly

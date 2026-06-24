@@ -1710,13 +1710,13 @@ def _extract_synlynk_section(content: str, marker_style: str = "html") -> Option
         return content
     if marker_style == "html":
         m = re.search(
-            r'<!-- synlynk:start[^>]* -->(.*?)<!-- synlynk:end -->',
-            content, re.DOTALL
+            r'^[ \t]*<!-- synlynk:start[^>]* -->[ \t]*$(.*?)^[ \t]*<!-- synlynk:end -->[ \t]*$',
+            content, re.DOTALL | re.MULTILINE
         )
     else:  # hash
         m = re.search(
-            r'# synlynk:start[^\n]*\n(.*?)\n# synlynk:end',
-            content, re.DOTALL
+            r'^[ \t]*# synlynk:start[^\n]*\n(.*?)\n[ \t]*# synlynk:end[ \t]*$',
+            content, re.DOTALL | re.MULTILINE
         )
     return m.group(1) if m else None
 
@@ -1765,13 +1765,14 @@ def _write_instruction_file(path: str, tool: str, content: str,
         existing = f.read()
 
     if start_pattern in existing:
-        # Replace section between markers
+        # Replace section between markers — anchored to line boundaries so inline
+        # mentions of the marker strings (e.g. in prose or code blocks) are ignored.
         if marker_style == "html":
-            pattern = r'<!-- synlynk:start[^>]* -->.*?<!-- synlynk:end -->'
+            pattern = r'^[ \t]*<!-- synlynk:start[^>]* -->[ \t]*$.*?^[ \t]*<!-- synlynk:end -->[ \t]*$'
         else:
-            pattern = r'# synlynk:start[^\n]*\n.*?\n# synlynk:end'
+            pattern = r'^[ \t]*# synlynk:start[^\n]*$.*?^[ \t]*# synlynk:end[ \t]*$'
         replacement = f"{start}\n{content}\n{end}"
-        new_content = re.sub(pattern, replacement, existing, flags=re.DOTALL)
+        new_content = re.sub(pattern, replacement, existing, flags=re.DOTALL | re.MULTILINE)
         with open(path, "w") as f:
             f.write(new_content)
         return True
@@ -4039,9 +4040,11 @@ def cmd_instructions_status() -> None:
                 status = f"{_YELLOW}⚠ drifted{_RESET}"
             else:
                 has_user = bool(re.sub(
-                    r'<!-- synlynk:start.*?<!-- synlynk:end -->', '', file_content, flags=re.DOTALL
+                    r'^[ \t]*<!-- synlynk:start[^>]* -->[ \t]*$.*?^[ \t]*<!-- synlynk:end -->[ \t]*$',
+                    '', file_content, flags=re.DOTALL | re.MULTILINE
                 ).strip() if marker_style == "html" else re.sub(
-                    r'# synlynk:start.*?# synlynk:end', '', file_content, flags=re.DOTALL
+                    r'^[ \t]*# synlynk:start[^\n]*$.*?^[ \t]*# synlynk:end[ \t]*$',
+                    '', file_content, flags=re.DOTALL | re.MULTILINE
                 ).strip())
                 status = (f"{_DIM}+ user-content{_RESET}" if has_user
                           else f"{_GREEN}✓ clean{_RESET}")
@@ -4075,11 +4078,13 @@ def cmd_instructions_diff(file_path: Optional[str] = None) -> None:
 
         if marker_style == "html":
             user_content = re.sub(
-                r'<!-- synlynk:start.*?<!-- synlynk:end -->', '', file_content, flags=re.DOTALL
+                r'^[ \t]*<!-- synlynk:start[^>]* -->[ \t]*$.*?^[ \t]*<!-- synlynk:end -->[ \t]*$',
+                '', file_content, flags=re.DOTALL | re.MULTILINE
             ).strip()
         elif marker_style == "hash":
             user_content = re.sub(
-                r'# synlynk:start.*?# synlynk:end', '', file_content, flags=re.DOTALL
+                r'^[ \t]*# synlynk:start[^\n]*$.*?^[ \t]*# synlynk:end[ \t]*$',
+                '', file_content, flags=re.DOTALL | re.MULTILINE
             ).strip()
         else:
             user_content = ""
