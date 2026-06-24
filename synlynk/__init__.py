@@ -2030,8 +2030,20 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     )
 
 
+_CONTEXT_WARN_BYTES = 81920  # 80KB soft limit — warn but continue
+
+
+def _warn_context_size(context_text: str) -> None:
+    size = len(context_text.encode("utf-8"))
+    if size > _CONTEXT_WARN_BYTES:
+        print(f"  ⚠ context: full ({size // 1024}KB) — exceeds soft limit "
+              f"({_CONTEXT_WARN_BYTES // 1024}KB)")
+        print("    Use --context-mode task to reduce size")
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
-                   force_agent: bool = False) -> dict:
+                   force_agent: bool = False,
+                   context_mode: str = "task") -> dict:
     """Dispatches an agent to run a task in the background.
 
     Uses non-interactive agent mode (no PTY). Stdout captured to
@@ -2067,14 +2079,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
     prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
 
-    try:
-        generate_context(scope=f"task:{story_id}" if story_id else "full")
-    except Exception:
-        pass
-    context_path = ".synlynk/context.md"
     context_text = ""
-    if os.path.exists(context_path):
-        context_text = open(context_path).read()
+    if context_mode != "none":
+        if context_mode == "task":
+            scope = f"task:{story_id}" if story_id else "full"
+        else:
+            scope = "full"
+        try:
+            context_text = generate_context(scope=scope) or ""
+        except Exception:
+            pass
+    _warn_context_size(context_text)
 
     # Inject relevant file list
     file_list = _relevant_files_for_story(story_id) if story_id else []
@@ -4388,11 +4403,10 @@ def _write_last_devlog_section(out, filepath: str) -> None:
         out.writelines(sections[-1])
 
 
-def _generate_task_context(story_id: str) -> None:
-    """Writes minimal scoped context for a single story dispatch."""
-    context_file = ".synlynk/context.md"
-    if not os.path.exists(".synlynk"):
-        os.makedirs(".synlynk")
+def _generate_task_context(story_id: str) -> str:
+    """Writes minimal scoped context for a single story dispatch. Returns context string."""
+    import io as _io
+    buf = _io.StringIO()
 
     conn = _get_db()
     row = conn.execute(
@@ -4401,65 +4415,77 @@ def _generate_task_context(story_id: str) -> None:
     ).fetchone()
     conn.close()
 
-    with open(context_file, "w") as out:
-        out.write("# synlynk Context Snapshot (task-scoped)\n\n")
-        out.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    buf.write("# synlynk Context Snapshot (task-scoped)\n\n")
+    buf.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-        if row:
-            out.write("## Story\n")
-            out.write(f"**ID:** {story_id}  \n")
-            out.write(f"**Title:** {row[0] or ''}  \n")
-            out.write(
-                f"**Domain:** {row[1] or 'unknown'} · "
-                f"{row[2] or 'unknown'} · {row[3] or 'build'}  \n\n---\n\n"
-            )
+    if row:
+        buf.write("## Story\n")
+        buf.write(f"**ID:** {story_id}  \n")
+        buf.write(f"**Title:** {row[0] or ''}  \n")
+        buf.write(
+            f"**Domain:** {row[1] or 'unknown'} · "
+            f"{row[2] or 'unknown'} · {row[3] or 'build'}  \n\n---\n\n"
+        )
 
-        # Active tasks only (not deferred, not done)
-        todo_path = os.path.join("project-docs", "todo.md")
-        if os.path.exists(todo_path):
-            active = [l for l in open(todo_path) if "- [ ]" in l]
-            if active:
-                out.write("## Active Tasks\n")
-                out.writelines(active)
-                out.write("\n---\n\n")
+    # Active tasks only (not deferred, not done)
+    todo_path = os.path.join("project-docs", "todo.md")
+    if os.path.exists(todo_path):
+        active = [l for l in open(todo_path) if "- [ ]" in l]
+        if active:
+            buf.write("## Active Tasks\n")
+            buf.writelines(active)
+            buf.write("\n---\n\n")
 
-        # Source architecture (relevant files only, up to 20 entries)
-        source_skeleton = _check_scan_cache()
-        if source_skeleton:
-            engg = row[1] if row and row[1] != "unknown" else None
-            if engg:
-                relevant = [
-                    f for f in source_skeleton
-                    if engg in f.get("file", "")
-                    or engg in " ".join(f.get("symbols", []))
-                ]
-                if not relevant:
-                    relevant = source_skeleton
-            else:
+    # Source architecture (relevant files only, up to 20 entries)
+    source_skeleton = _check_scan_cache()
+    if source_skeleton:
+        engg = row[1] if row and row[1] != "unknown" else None
+        if engg:
+            relevant = [
+                f for f in source_skeleton
+                if engg in f.get("file", "")
+                or engg in " ".join(f.get("symbols", []))
+            ]
+            if not relevant:
                 relevant = source_skeleton
-            meta = _load_scan_meta()
-            current_sha = _git_head_sha() or ""
-            cache_hit = bool(meta and meta.get("head_sha") == current_sha)
-            arch = _format_source_architecture(relevant[:20], current_sha, cache_hit, len(relevant))
-            if arch:
-                out.write(arch)
+        else:
+            relevant = source_skeleton
+        meta = _load_scan_meta()
+        current_sha = _git_head_sha() or ""
+        cache_hit = bool(meta and meta.get("head_sha") == current_sha)
+        arch = _format_source_architecture(relevant[:20], current_sha, cache_hit, len(relevant))
+        if arch:
+            buf.write(arch)
+
+    context_text = buf.getvalue()
+
+    # Write to file for daemon HTTP endpoint compatibility
+    context_file = ".synlynk/context.md"
+    if not os.path.exists(".synlynk"):
+        os.makedirs(".synlynk")
+    with open(context_file, "w") as out:
+        out.write(context_text)
 
     print(f"  ✓ Task-scoped context saved to {context_file}")
+    return context_text
 
 
-def generate_context(scope: str = "full") -> None:
-    """Aggregates project-docs into .synlynk/context.md (active items only)."""
+def generate_context(scope: str = "full") -> str:
+    """Aggregates project-docs into .synlynk/context.md (active items only).
+
+    Returns the context string. The file is still written for daemon HTTP
+    endpoint and external tooling compatibility.
+    """
     docs_dir = _docs_dir()
     context_file = ".synlynk/context.md"
     sentinel_file = ".synlynk/sentinel.md"
 
     if not os.path.exists(docs_dir):
-        return
+        return ""
 
     if scope != "full":
         if scope.startswith("task:"):
-            _generate_task_context(scope[5:])
-            return
+            return _generate_task_context(scope[5:])
         print(f"  ⚠ scope='{scope}' not yet implemented, falling back to full context")
         scope = "full"
 
@@ -4562,6 +4588,10 @@ def generate_context(scope: str = "full") -> None:
                   "completed todos and old devlog entries.")
     except OSError:
         pass
+    try:
+        return open(context_file).read()
+    except OSError:
+        return ""
 
 def _archive_old_devlog_entries(devlog_path: str) -> None:
     """Moves devlog entries older than 30 days to devlogs/archive/YYYY-MM.md."""
