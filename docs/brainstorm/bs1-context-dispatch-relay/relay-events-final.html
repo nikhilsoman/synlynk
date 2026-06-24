@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BS-1: Relay Event Schema — Final</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; min-height: 100vh; }
+  h2 { color: #fff; font-size: 18px; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 28px; }
+  code { background: #1e1e1e; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #b0c4ff; }
+
+  .schema-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+  .event-card {
+    border: 1px solid #2a2a2a; border-radius: 9px; padding: 16px;
+    background: #0f0f0f; position: relative;
+  }
+  .event-card.core { border-color: #2a4a2a; background: #0c160c; }
+  .event-card.generic { border-color: #2a2a3a; background: #0d0d18; }
+  .event-card.social { border-color: #4a3a1a; background: #1a1408; }
+
+  .event-type {
+    font-size: 13px; font-weight: 700; margin-bottom: 3px;
+  }
+  .core .event-type { color: #7dd47d; }
+  .generic .event-type { color: #8888cc; }
+  .social .event-type { color: #e8b84a; }
+
+  .event-tag {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    padding: 1px 6px; border-radius: 8px; margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .tag-core { background: #1a3a1a; color: #6fcf6f; border: 1px solid #2a4a2a; }
+  .tag-generic { background: #1a1a2a; color: #8888cc; border: 1px solid #2a2a4a; }
+  .tag-social { background: #2a1e08; color: #e8b84a; border: 1px solid #4a3a1a; }
+
+  .event-desc { font-size: 11px; color: #777; margin-bottom: 10px; line-height: 1.5; }
+
+  .fields { display: flex; flex-direction: column; gap: 3px; }
+  .field { font-size: 10px; line-height: 1.6; }
+  .field-name { color: #b0c4ff; }
+  .field-type { color: #666; }
+  .field-note { color: #555; font-style: italic; }
+
+  hr { border: none; border-top: 1px solid #1e1e1e; margin: 24px 0; }
+
+  .broadcast-detail {
+    background: #1a1408; border: 1px solid #4a3a1a;
+    border-radius: 10px; padding: 20px; margin-top: 4px;
+  }
+  .broadcast-detail h3 { font-size: 13px; color: #e8b84a; margin-bottom: 12px; }
+
+  .kinds { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kind-card {
+    border: 1px solid #3a2a10; border-radius: 7px; padding: 10px 8px;
+    background: #141008; text-align: center;
+  }
+  .kind-emoji { font-size: 20px; margin-bottom: 5px; }
+  .kind-label { font-size: 10px; font-weight: 700; color: #c4a050; margin-bottom: 3px; }
+  .kind-example { font-size: 9px; color: #666; line-height: 1.4; }
+
+  .publishers { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.7; }
+  .publishers strong { color: #c4a050; }
+
+  .example-payload {
+    background: #0d0a04; border: 1px solid #2a2010;
+    border-radius: 6px; padding: 12px 14px; margin-top: 12px;
+    font-size: 11px; color: #999; line-height: 1.8;
+  }
+  .example-payload .key { color: #b0c4ff; }
+  .example-payload .val { color: #c4a050; }
+  .example-payload .str { color: #98c090; }
+
+  .staircase {
+    background: #0d0d18; border: 1px solid #1e1e3a;
+    border-radius: 10px; padding: 20px; margin-top: 0;
+  }
+  .staircase h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 14px; }
+  .stairs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .stair {
+    border: 1px solid #2a2a3a; border-radius: 7px; padding: 10px 14px;
+    background: #111118; text-align: center; min-width: 110px;
+  }
+  .stair.current { border-color: #5b8fff; background: #0d1228; }
+  .stair-icon { font-size: 18px; margin-bottom: 4px; }
+  .stair-name { font-size: 12px; font-weight: 700; color: #ccc; margin-bottom: 2px; }
+  .stair.current .stair-name { color: #5b8fff; }
+  .stair-note { font-size: 9px; color: #666; }
+  .stair-arrow { font-size: 16px; color: #333; }
+
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<h2>Relay Event Schema — Final</h2>
+<p class="subtitle">5 typed core events · <code>table_changed</code> generic · <code>broadcast</code> social layer</p>
+
+<div class="schema-grid">
+
+  <div class="event-card core">
+    <div class="event-type">story_updated</div>
+    <div class="event-tag tag-core">Core</div>
+    <div class="event-desc">Story status transitions — the primary work signal</div>
+    <div class="fields">
+      <div class="field"><span class="field-name">story_id</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">status</span> <span class="field-type">str</span> <span class="field-note">queued→running→done|failed</span></div>
+      <div class="field"><span class="field-name">agent</span> <span class="field-type">str?</span></div>
+      <div class="field"><span class="field-name">title</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">engg_domain</span> <span class="field-type">str?</span></div>
+      <div class="field"><span class="field-name">ts · origin_node</span></div>
+    </div>
+  </div>
+
+  <div class="event-card core">
+    <div class="event-type">job_dispatched</div>
+    <div class="event-tag tag-core">Core</div>
+    <div class="event-desc">Agent kicked off — lets remote nodes track active work</div>
+    <div class="fields">
+      <div class="field"><span class="field-name">job_id</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">agent</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">story_id</span> <span class="field-type">str?</span></div>
+      <div class="field"><span class="field-name">priority</span> <span class="field-type">int</span></div>
+      <div class="field"><span class="field-name">depends_on</span> <span class="field-type">str[]</span></div>
+      <div class="field"><span class="field-name">ts · origin_node</span></div>
+    </div>
+  </div>
+
+  <div class="event-card core">
+    <div class="event-type">job_completed</div>
+    <div class="event-tag tag-core">Core</div>
+    <div class="event-desc">Job exit — feeds capability scoring + DevX-3 observability</div>
+    <div class="fields">
+      <div class="field"><span class="field-name">job_id</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">exit_code</span> <span class="field-type">int</span></div>
+      <div class="field"><span class="field-name">duration_s</span> <span class="field-type">float</span></div>
+      <div class="field"><span class="field-name">tokens_in · tokens_out</span> <span class="field-type">int?</span></div>
+      <div class="field"><span class="field-name">compliance_tags</span> <span class="field-type">obj?</span> <span class="field-note">AB-3</span></div>
+      <div class="field"><span class="field-name">ts · origin_node</span></div>
+    </div>
+  </div>
+
+  <div class="event-card core">
+    <div class="event-type">alert_raised</div>
+    <div class="event-tag tag-core">Core</div>
+    <div class="event-desc">Sentinel fires — propagate to all workgroup nodes immediately</div>
+    <div class="fields">
+      <div class="field"><span class="field-name">pattern</span> <span class="field-type">str</span> <span class="field-note">FLATLINE, VERIFY_SKIP…</span></div>
+      <div class="field"><span class="field-name">severity</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">job_id</span> <span class="field-type">str?</span></div>
+      <div class="field"><span class="field-name">message</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">ts · origin_node</span></div>
+    </div>
+  </div>
+
+  <div class="event-card core">
+    <div class="event-type">context_checkpoint</div>
+    <div class="event-tag tag-core">Core</div>
+    <div class="event-desc">Context regenerated — remote nodes can pull fresh snapshot</div>
+    <div class="fields">
+      <div class="field"><span class="field-name">context_hash</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">size_bytes</span> <span class="field-type">int</span></div>
+      <div class="field"><span class="field-name">changed_sections</span> <span class="field-type">str[]?</span></div>
+      <div class="field"><span class="field-name">ts · origin_node</span></div>
+    </div>
+  </div>
+
+  <div class="event-card generic">
+    <div class="event-type">table_changed</div>
+    <div class="event-tag tag-generic">Generic</div>
+    <div class="event-desc">All other SQLite mutations. Promote to typed when patterns emerge.</div>
+    <div class="fields">
+      <div class="field"><span class="field-name">table</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">op</span> <span class="field-type">INSERT|UPDATE|DELETE</span></div>
+      <div class="field"><span class="field-name">pk</span> <span class="field-type">str</span></div>
+      <div class="field"><span class="field-name">changes</span> <span class="field-type">obj</span></div>
+      <div class="field"><span class="field-name">ts · origin_node</span></div>
+    </div>
+  </div>
+
+</div>
+
+<hr>
+
+<div class="broadcast-detail">
+  <h3>broadcast — the presence layer 🌊</h3>
+
+  <div class="kinds">
+    <div class="kind-card">
+      <div class="kind-emoji">📋</div>
+      <div class="kind-label">motd</div>
+      <div class="kind-example">session start message · sprint goal · "shipping today"</div>
+    </div>
+    <div class="kind-card">
+      <div class="kind-emoji">💧</div>
+      <div class="kind-label">wellness</div>
+      <div class="kind-example">drink water · stand up · 25-min focus block done</div>
+    </div>
+    <div class="kind-card">
+      <div class="kind-emoji">🎉</div>
+      <div class="kind-label">message</div>
+      <div class="kind-example">team chat · "story-123 just shipped!" · callout</div>
+    </div>
+    <div class="kind-card">
+      <div class="kind-emoji">😄</div>
+      <div class="kind-label">joke</div>
+      <div class="kind-example">Marketing Intern sends a dev joke · Friday deploy humour</div>
+    </div>
+    <div class="kind-card">
+      <div class="kind-emoji">✨</div>
+      <div class="kind-label">custom</div>
+      <div class="kind-example">anything · agent-defined · free body field</div>
+    </div>
+  </div>
+
+  <div class="example-payload">
+    <div>&#123;</div>
+    <div>&nbsp;&nbsp;<span class="key">"type"</span>: <span class="str">"broadcast"</span>,</div>
+    <div>&nbsp;&nbsp;<span class="key">"kind"</span>: <span class="str">"wellness"</span>,</div>
+    <div>&nbsp;&nbsp;<span class="key">"body"</span>: <span class="str">"🚶 You've been heads-down for 90 minutes. Stand up."</span>,</div>
+    <div>&nbsp;&nbsp;<span class="key">"from"</span>: <span class="str">"pm-agent@machine-a"</span>,</div>
+    <div>&nbsp;&nbsp;<span class="key">"ts"</span>: <span class="val">1719187200</span>,</div>
+    <div>&nbsp;&nbsp;<span class="key">"origin_node"</span>: <span class="str">"machine-a"</span></div>
+    <div>&#125;</div>
+  </div>
+
+  <div class="publishers">
+    <strong>Who can publish:</strong> any node, any agent, any autopilot.
+    PM Agent → sprint pulse as <code>motd</code>.
+    Marketing Intern → ship celebration as <code>message</code>.
+    Daemon → Pomodoro timer as <code>wellness</code>.
+    You → team message from CLI: <code>synlynk relay broadcast "lunch break, back in 45"</code>.
+  </div>
+</div>
+
+<hr>
+
+<div class="bottom-grid">
+  <div class="staircase">
+    <h3>Deployment staircase</h3>
+    <div class="stairs">
+      <div class="stair">
+        <div class="stair-icon">🏠</div>
+        <div class="stair-name">LAN</div>
+        <div class="stair-note">mDNS · zero config</div>
+      </div>
+      <div class="stair-arrow">→</div>
+      <div class="stair current">
+        <div class="stair-icon">☁️</div>
+        <div class="stair-name">CF Tunnel</div>
+        <div class="stair-note">default · any network</div>
+      </div>
+      <div class="stair-arrow">→</div>
+      <div class="stair">
+        <div class="stair-icon">🚀</div>
+        <div class="stair-name">Fly.io</div>
+        <div class="stair-note">$3–5/mo · always-on</div>
+      </div>
+      <div class="stair-arrow">→</div>
+      <div class="stair">
+        <div class="stair-icon">🌐</div>
+        <div class="stair-name">Community</div>
+        <div class="stair-note">v1.1 · namespaced</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:#555;">Migration = change one URL. All modes same WSS protocol.</div>
+  </div>
+
+  <div style="background:#0d1520;border:1px solid #1e3050;border-radius:10px;padding:20px;">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:12px;">Decisions locked ✓</div>
+    <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;color:#8aafdf;line-height:1.6;">
+      <div>✅ <strong style="color:#b0d0ff;">Context mode:</strong> --context-mode none|task|full · default task</div>
+      <div>✅ <strong style="color:#b0d0ff;">Context delivery:</strong> in-memory, no file write in dispatch path</div>
+      <div>✅ <strong style="color:#b0d0ff;">SQLite canon:</strong> primary from v0.9.4 · todo.md → generated view</div>
+      <div>✅ <strong style="color:#b0d0ff;">Relay topology:</strong> fan-out broker · no state · each node owns state.db</div>
+      <div>✅ <strong style="color:#b0d0ff;">Deployment default:</strong> CF Tunnel · Fly.io as named VPS</div>
+      <div>✅ <strong style="color:#b0d0ff;">Event schema:</strong> 5 typed core + table_changed + broadcast</div>
+    </div>
+  </div>
+</div>
+
+<script src="http://localhost:56987/_helper.js"></script>
+</body>
+</html>

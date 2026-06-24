@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BS-1: Context Flow Today</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; min-height: 100vh; }
+  h2 { color: #fff; font-size: 18px; margin-bottom: 4px; letter-spacing: -0.3px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+  .flow { display: flex; flex-direction: column; gap: 0; max-width: 780px; margin: 0 auto; }
+
+  .step { display: flex; align-items: stretch; gap: 0; }
+  .step-box {
+    flex: 1;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 14px 18px;
+    position: relative;
+  }
+  .step-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #555; margin-bottom: 4px; }
+  .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-detail { font-size: 12px; color: #888; line-height: 1.5; }
+  code { background: #1e1e1e; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #b0c4ff; }
+
+  .arrow { display: flex; align-items: center; justify-content: center; padding: 6px 0; color: #444; font-size: 20px; }
+
+  .ok { border-color: #2a4a2a; background: #111811; }
+  .ok .step-title { color: #6fcf6f; }
+  .warn { border-color: #4a3a1a; background: #181411; }
+  .warn .step-title { color: #e8a040; }
+  .err { border-color: #4a1a1a; background: #180f0f; }
+  .err .step-title { color: #e05555; }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .badge-red { background: #3d1010; color: #e05555; border: 1px solid #5a1f1f; }
+  .badge-yellow { background: #3d2c0d; color: #e8a040; border: 1px solid #5a400d; }
+  .badge-green { background: #0d2e0d; color: #6fcf6f; border: 1px solid #1a4a1a; }
+
+  .problem-row {
+    background: #160d0d;
+    border: 1px solid #3d1010;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #e05555;
+    line-height: 1.6;
+  }
+  .problem-row strong { color: #ff7070; }
+
+  .divider { border: none; border-top: 1px solid #1e1e1e; margin: 28px 0 24px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 4px; }
+  .info-block { background: #111; border: 1px solid #2a2a2a; border-radius: 6px; padding: 12px 14px; }
+  .info-block h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 8px; }
+  .info-block li { font-size: 12px; color: #aaa; line-height: 1.7; list-style: none; padding-left: 12px; position: relative; }
+  .info-block li::before { content: '→'; position: absolute; left: 0; color: #555; }
+  .info-block li.good::before { content: '✓'; color: #6fcf6f; }
+  .info-block li.bad::before { content: '✗'; color: #e05555; }
+
+  .size-bar-wrap { margin-top: 10px; }
+  .size-bar-label { font-size: 11px; color: #666; margin-bottom: 4px; }
+  .size-bar { height: 8px; border-radius: 4px; background: #1a1a1a; overflow: hidden; margin-bottom: 6px; }
+  .size-bar-fill { height: 100%; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h2>Context Flow — Today (v0.9.3)</h2>
+<p class="subtitle">What happens when you run <code>synlynk dispatch agy --task "R1 review of PR #636 (rxcc)..."</code></p>
+
+<div class="flow">
+
+  <div class="step">
+    <div class="step-box ok">
+      <div class="step-label">Step 1 — dispatch_agent()</div>
+      <div class="step-title">Agent + task received</div>
+      <div class="step-detail">
+        <code>agent="agy"</code>, <code>story_id=None</code> (no story linked)<br>
+        job_id generated: <code>job-10cc3751</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="step">
+    <div class="step-box warn">
+      <div class="step-label">Step 2 — generate_context()</div>
+      <div class="step-title">
+        Scope selection
+        <span class="badge badge-red">Problem #1</span>
+      </div>
+      <div class="step-detail">
+        <code>scope = "full"</code> because <code>story_id is None</code><br>
+        If story_id were set: <code>scope = "task:&lt;story_id&gt;"</code> → slim context<br>
+        Without it: full project-docs blob every time
+      </div>
+      <div class="problem-row">
+        <strong>Root cause:</strong> cross-repo dispatch has no story_id. No mechanism to say
+        "suppress project-docs — task is self-contained." Falls through to full context unconditionally.
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="step">
+    <div class="step-box err">
+      <div class="step-label">Step 3 — context.md written</div>
+      <div class="step-title">
+        <code>.synlynk/context.md</code> — global shared file
+        <span class="badge badge-red">Problem #2</span>
+      </div>
+      <div class="step-detail">
+        Includes: sentinel alerts + all active tasks (todo.md) + full source architecture
+        + roadmap + memory.md + 7 days of devlogs<br>
+        All from <strong>synlynk's</strong> project-docs — irrelevant to the rxcc PR review
+      </div>
+      <div class="size-bar-wrap">
+        <div class="size-bar-label">Context size</div>
+        <div class="size-bar"><div class="size-bar-fill" style="width:93%;background:linear-gradient(90deg,#e05555,#ff7070)"></div></div>
+        <div style="font-size:11px;color:#e05555;">119 KB — 300× what the task needs</div>
+        <div class="size-bar" style="margin-top:4px"><div class="size-bar-fill" style="width:0.3%;background:#6fcf6f"></div></div>
+        <div style="font-size:11px;color:#6fcf6f;">~400 bytes — task + agent framing + capability</div>
+      </div>
+      <div class="problem-row" style="margin-top:8px">
+        <strong>Race condition:</strong> two concurrent dispatches both overwrite this file.
+        Second write can corrupt the first job's context mid-read.
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="step">
+    <div class="step-box warn">
+      <div class="step-label">Step 4 — _format_prompt_for_agent()</div>
+      <div class="step-title">
+        Agent-specific prompt assembly
+        <span class="badge badge-yellow">Partial mitigation</span>
+      </div>
+      <div class="step-detail">
+        For <code>agy</code>: <code>context_text[:2000]</code> — truncated to first 2000 chars<br>
+        For <code>claude</code>: full context_text passed<br>
+        For <code>codex</code>: full context_text passed
+      </div>
+      <div class="problem-row" style="border-color:#5a400d;background:#181411;color:#e8a040">
+        <strong>Mitigation with gaps:</strong> Agy's truncation means 119 KB was generated but only
+        ~2 KB used. Wasted work + warning fired. Claude/Codex get the full 119 KB with no truncation.
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="step">
+    <div class="step-box ok">
+      <div class="step-label">Step 5 — prompt file written</div>
+      <div class="step-title">
+        <code>.synlynk/prompts/job-10cc3751.md</code>
+        <span class="badge badge-green">Per-job ✓</span>
+      </div>
+      <div class="step-detail">
+        Already per-job. Agent receives this file. This part works correctly.
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="step">
+    <div class="step-box ok">
+      <div class="step-label">Step 6 — subprocess</div>
+      <div class="step-title">Agent spawned</div>
+      <div class="step-detail">
+        <code>agy -p "$PROMPT" &gt; .synlynk/logs/job-10cc3751.log 2&gt;&amp;1</code>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<hr class="divider">
+
+<div class="two-col">
+  <div class="info-block">
+    <h4>What already works</h4>
+    <ul>
+      <li class="good">Per-job prompt files at <code>.synlynk/prompts/</code></li>
+      <li class="good">Per-job log files at <code>.synlynk/logs/</code></li>
+      <li class="good"><code>_generate_task_context()</code> exists for story-scoped dispatch</li>
+      <li class="good">Agy truncation partially limits token waste</li>
+      <li class="good">64 KB warning fires (not a silent failure)</li>
+    </ul>
+  </div>
+  <div class="info-block">
+    <h4>Three problems to fix</h4>
+    <ul>
+      <li class="bad"><strong>#1 Scope:</strong> no-story dispatch always generates full context</li>
+      <li class="bad"><strong>#2 Race:</strong> global <code>context.md</code> shared across concurrent jobs</li>
+      <li class="bad"><strong>#3 Cross-repo:</strong> no way to say "this task doesn't need project-docs"</li>
+    </ul>
+  </div>
+</div>
+
+<script src="http://localhost:56987/_helper.js"></script>
+</body>
+</html>
