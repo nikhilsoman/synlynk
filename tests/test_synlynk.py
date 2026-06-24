@@ -1920,6 +1920,57 @@ def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
     assert "## How to Verify" not in prompt
 
 
+def test_load_agent_profile_returns_empty_when_missing(project_dir):
+    """_load_agent_profile returns {} when .agents/<agent>.json does not exist."""
+    import synlynk as sl
+    result = sl._load_agent_profile("claude")
+    assert result == {}
+
+
+def test_load_agent_profile_returns_dict_when_present(project_dir):
+    """_load_agent_profile returns parsed JSON when file exists."""
+    import synlynk as sl, json
+    os.makedirs(".agents", exist_ok=True)
+    (project_dir / ".agents" / "claude.json").write_text(
+        json.dumps({"agent": "claude", "context_mode": "none", "context_max_bytes": 500})
+    )
+    result = sl._load_agent_profile("claude")
+    assert result["context_mode"] == "none"
+    assert result["context_max_bytes"] == 500
+
+
+def test_dispatch_agent_profile_overrides_context_mode(project_dir, monkeypatch):
+    """Profile context_mode='none' overrides default 'task'."""
+    import synlynk as sl, json
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "PROFILE_CONTEXT_MARKER")
+    os.makedirs(".agents", exist_ok=True)
+    (project_dir / ".agents" / "claude.json").write_text(
+        json.dumps({"agent": "claude", "context_mode": "none"})
+    )
+    job = sl.dispatch_agent("claude", "do thing")
+    prompt = open(job["prompt_file"]).read()
+    assert "PROFILE_CONTEXT_MARKER" not in prompt
+
+
+def test_dispatch_agent_profile_context_max_bytes_truncates(project_dir, monkeypatch):
+    """Profile context_max_bytes truncates context_text before prompt assembly."""
+    import synlynk as sl, json
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    os.makedirs(".agents", exist_ok=True)
+    (project_dir / ".agents" / "claude.json").write_text(
+        json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 50})
+    )
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "x" * 5000)
+    job = sl.dispatch_agent("claude", "do thing")
+    prompt = open(job["prompt_file"]).read()
+    assert "x" * 51 not in prompt
+
+
 def test_verify_contract_derives_pattern_from_story_title(project_dir):
     """_verify_contract_for_story derives a lowercase underscore pattern."""
     import synlynk as sl
@@ -1955,16 +2006,16 @@ def test_format_prompt_for_codex_leads_with_criteria(project_dir):
     assert "auth.py" in result
 
 
-def test_format_prompt_for_agy_is_concise(project_dir):
-    """AGY prompt has working directory header, Task: directive, and truncates context."""
+def test_format_prompt_agy_no_hardcoded_truncation(project_dir):
+    """_format_prompt_for_agent with agy does NOT truncate context anymore."""
     import synlynk as sl
-    long_context = "x" * 5000
+    long_context = "A" * 3000
     result = sl._format_prompt_for_agent(
         "agy", long_context, "story-1", "fix auth", "", ""
     )
     assert "## Working Directory" in result
     assert "Task: fix auth" in result
-    assert len(result) < len(long_context) + 300  # context was truncated
+    assert "A" * 2001 in result
 
 
 def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):

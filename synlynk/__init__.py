@@ -244,6 +244,22 @@ def _load_agent_config(name: str) -> dict:
         return _json.load(f)
 
 
+def _load_agent_profile(agent: str) -> dict:
+    """Load .agents/<agent>.json as a soft context-profile dict.
+
+    Returns {} when the file is absent or invalid.
+    """
+    import json as _json
+    path = os.path.join(".agents", f"{agent}.json")
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            return _json.load(f)
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
 def cmd_score_add(story_id: str, rating: float, note: str = None,
                   rework: bool = False) -> None:
     """Add a human quality rating for a story. Inserts a new 'human' row."""
@@ -2023,7 +2039,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"{story_ref}\n"
             f"{file_section}\n"
             f"{verify_section}\n"
-            f"Context summary:\n{context_text[:2000]}"
+            f"Context summary:\n{context_text}"
         )
 
     # Default (claude): full context narrative
@@ -2073,6 +2089,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
     model_at_dispatch = _probe_model_version(agent, cli)
+    profile = _load_agent_profile(agent)
+    if "context_mode" in profile:
+        context_mode = profile["context_mode"]
 
     import hashlib as _hashlib
     job_id = "job-" + _hashlib.md5(
@@ -2096,6 +2115,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except Exception:
             pass
     _warn_context_size(context_text)
+    context_max_bytes = profile.get("context_max_bytes")
+    if context_max_bytes is not None:
+        try:
+            context_max_bytes = int(context_max_bytes)
+        except (TypeError, ValueError):
+            context_max_bytes = None
+    if context_max_bytes is not None:
+        encoded_context = context_text.encode("utf-8")
+        if len(encoded_context) > context_max_bytes:
+            context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
 
     # Inject relevant file list
     file_list = _relevant_files_for_story(story_id) if story_id else []
@@ -2180,6 +2209,53 @@ def cmd_jobs(all_jobs: bool = False) -> None:
         status = j["status"]
         color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
         print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+
+def cmd_agent_configure(agent_name: str) -> None:
+    """Interactively write .agents/<agent_name>.json context-profile settings."""
+    import json as _json
+
+    if agent_name not in AGENT_CAPABILITY_BASELINES:
+        print(f"  Unknown agent '{agent_name}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+        return
+
+    os.makedirs(".agents", exist_ok=True)
+    path = os.path.join(".agents", f"{agent_name}.json")
+
+    existing = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                existing = _json.load(f)
+            print(f"  Existing profile at {path}:")
+            for key, value in existing.items():
+                print(f"    {key}: {value}")
+        except Exception:
+            existing = {}
+
+    print(f"\n  Configuring context profile for '{agent_name}' (press Enter to keep current)\n")
+
+    def _ask(default, desc):
+        shown = "" if default is None else str(default)
+        value = input(f"  {desc} [{shown}]: ").strip()
+        return value if value else default
+
+    context_mode = _ask(existing.get("context_mode", "task"),
+                        "context_mode (none / task / full)")
+    max_bytes_raw = _ask(existing.get("context_max_bytes", None),
+                         "context_max_bytes (int, leave blank for no limit)")
+
+    profile = {"agent": agent_name, "context_mode": context_mode}
+    if max_bytes_raw not in ("", None):
+        try:
+            profile["context_max_bytes"] = int(max_bytes_raw)
+        except (TypeError, ValueError):
+            pass
+
+    with open(path, "w") as f:
+        _json.dump(profile, f, indent=2)
+        f.write("\n")
+    print(f"\n  {_GREEN}✓{_RESET} Written {path}")
 
 
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
@@ -5946,6 +6022,10 @@ def main() -> None:
 
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
+    agent_configure_parser = agent_sub.add_parser(
+        "configure", help="Interactively write .agents/<name>.json context profile"
+    )
+    agent_configure_parser.add_argument("name", help="Agent name: claude, agy, codex")
     agent_run_parser = agent_sub.add_parser("run", help="Run a named agent once")
     agent_run_parser.add_argument("name", help="Agent name (matches .agents/<name>.json)")
     agent_run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
@@ -6201,7 +6281,9 @@ def main() -> None:
             instructions_parser.print_help()
     elif args.command == "agent":
         action = getattr(args, "agent_action", None)
-        if action == "run":
+        if action == "configure":
+            cmd_agent_configure(args.name)
+        elif action == "run":
             cmd_agent_run(
                 args.name,
                 dry_run=getattr(args, "dry_run", False),
