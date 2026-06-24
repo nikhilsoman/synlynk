@@ -48,3 +48,14 @@ Four archetypes, deployed at any community level:
 | Community Layer | Local workgroup → team → enterprise → domain communities | 📋 v1.0.0 | Same |
 | Public Presence | synlynk.com · public blog (Marketing Intern) · contributor blog in GitHub | 📋 v1.0.0 | Same |
 | Server-Side Strategy | Relay prototype v0.9.3 → community server v1.1 → Tokq v1.3 | 📋 Articulated, implement v1.1+ | Same |
+
+## Cross-Cutting Epics
+
+Design and engineering work that spans multiple version milestones. These epics run in parallel with the version arc above — they are not tied to a single release.
+
+| Epic | Theme | ID Range | Status | Drives |
+| :--- | :--- | :--- | :--- | :--- |
+| **DevX** | Context-layer migration · task tracking canon · dispatch observability · usage model clarity | DevX-1–4 | 🚀 Active — pre-v0.9.4 | v0.9.4 relay design, `generate_context()` hybrid read |
+| **Command Audit** | 9-dimension command health review · stdlib OTel tracer · `synlynk telemetry` · hook wiring · autopilot trigger map | CA-0–9 | 📋 Planned — v0.9.4 scope | OTel infrastructure, CA-4/CA-5 ship with relay |
+| **Agent Behaviour** | Instruction attach + compliance measurement · sentinel non-adherence patterns · per-agent variance · cross-mode adherence dataset (Synlynk IDE justification) | AB-0–10 | 📋 Planned — starts with AB-3 (compliance tags) | v1.0 IDE integration argument, capability ratings |
+| **Onboarding** | `synlynk doctor` · agent availability state machine · mode taxonomy rewrite · progressive init · join vs resume split · multi-repo stopgap | OB-0–12 | 📋 Planned — OB-7/OB-9 patch in v0.9.4, full rewrite post-v0.9.4 | First-run success metrics, `synlynk agents` subcommand |
