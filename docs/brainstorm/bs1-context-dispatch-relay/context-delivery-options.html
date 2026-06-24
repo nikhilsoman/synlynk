@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BS-1: Context Delivery Options</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; min-height: 100vh; }
+  h2 { color: #fff; font-size: 18px; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+  code { background: #1e1e1e; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #b0c4ff; }
+
+  .options { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .option {
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .option:hover { border-color: #555; background: #111; }
+  .option.selected { border-color: #5b8fff; background: #0d1a2e; }
+  .letter {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: #1e1e1e; border: 1px solid #333;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #888;
+    margin-bottom: 14px;
+  }
+  .option.selected .letter { background: #1a3060; border-color: #5b8fff; color: #5b8fff; }
+  .option h3 { font-size: 13px; font-weight: 700; color: #ddd; margin-bottom: 6px; }
+  .option .tagline { font-size: 11px; color: #888; margin-bottom: 14px; line-height: 1.4; }
+
+  .flow-mini { display: flex; flex-direction: column; gap: 3px; margin-bottom: 14px; }
+  .flow-node {
+    font-size: 11px; padding: 5px 8px; border-radius: 4px;
+    background: #161616; border: 1px solid #2a2a2a; color: #aaa;
+    line-height: 1.4;
+  }
+  .flow-node.highlight { background: #0d1e0d; border-color: #2a4a2a; color: #8fd48f; }
+  .flow-node.warn { background: #1e1400; border-color: #4a3a00; color: #c89c3c; }
+  .flow-node.bad { background: #1e0d0d; border-color: #4a1a1a; color: #cc5555; }
+  .flow-arrow { font-size: 10px; color: #333; padding-left: 8px; }
+
+  .divider { border: none; border-top: 1px solid #1e1e1e; margin: 6px 0 10px; }
+
+  .pros { display: flex; flex-direction: column; gap: 3px; }
+  .pro, .con {
+    font-size: 11px; line-height: 1.4; padding: 0 0 0 14px; position: relative; color: #999;
+  }
+  .pro::before { content: '✓'; position: absolute; left: 0; color: #6fcf6f; font-size: 10px; }
+  .con::before { content: '✗'; position: absolute; left: 0; color: #e05555; font-size: 10px; }
+
+  .rec-badge {
+    position: absolute; top: 12px; right: 12px;
+    background: #1a3060; border: 1px solid #5b8fff;
+    color: #5b8fff; font-size: 9px; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px; letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+
+  .insight {
+    margin-top: 24px;
+    background: #0d1520;
+    border: 1px solid #1e3050;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-size: 12px;
+    color: #8aafdf;
+    line-height: 1.7;
+  }
+  .insight strong { color: #b0d0ff; }
+</style>
+</head>
+<body>
+<h2>Q8 — How does context reach the agent prompt?</h2>
+<p class="subtitle">Fixing the global <code>context.md</code> race condition. Three options for the dispatch path.</p>
+
+<div class="options">
+
+  <!-- Option A: Current (broken) -->
+  <div class="option bad-opt" onclick="toggleSelect(this)" data-choice="a">
+    <div class="letter">A</div>
+    <h3>Current — File roundtrip</h3>
+    <p class="tagline">Write to global file, then read it back</p>
+    <div class="flow-mini">
+      <div class="flow-node">generate_context() called</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node bad">writes → <code>.synlynk/context.md</code><br>(shared, overwritten each dispatch)</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node warn">reads ← <code>context.md</code><br>(may have been overwritten by concurrent job)</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node">embeds into <code>prompts/job-X.md</code></div>
+    </div>
+    <div class="divider"></div>
+    <div class="pros">
+      <div class="con">Race: concurrent dispatch overwrites mid-read</div>
+      <div class="con">Wasted write + read for every dispatch</div>
+      <div class="con">Daemon HTTP endpoint shares same file</div>
+    </div>
+  </div>
+
+  <!-- Option B: In-memory -->
+  <div class="option" onclick="toggleSelect(this)" data-choice="b">
+    <div class="letter">B</div>
+    <div class="rec-badge">Recommended</div>
+    <h3>In-memory — No dispatch file</h3>
+    <p class="tagline">generate_context() returns a string; dispatch embeds directly</p>
+    <div class="flow-mini">
+      <div class="flow-node highlight">generate_context() returns string</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node highlight">context_text passed directly<br>to _format_prompt_for_agent()</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node highlight">embeds into <code>prompts/job-X.md</code></div>
+      <div class="flow-arrow">↓ (separately)</div>
+      <div class="flow-node">daemon still writes <code>context.md</code><br>for HTTP endpoint — no change there</div>
+    </div>
+    <div class="divider"></div>
+    <div class="pros">
+      <div class="pro">No file write in dispatch path — race eliminated</div>
+      <div class="pro">Minimal code change: add return value to generate_context()</div>
+      <div class="pro">Daemon context.md path unchanged (already lock-guarded)</div>
+      <div class="con">Can't inspect "what context did job-X get?" after the fact</div>
+    </div>
+  </div>
+
+  <!-- Option C: Per-dispatch file -->
+  <div class="option" onclick="toggleSelect(this)" data-choice="c">
+    <div class="letter">C</div>
+    <h3>Per-dispatch file</h3>
+    <p class="tagline">Write context to <code>.synlynk/jobs/&lt;job_id&gt;/context.md</code></p>
+    <div class="flow-mini">
+      <div class="flow-node highlight">generate_context(output_path=job_context_path)</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node highlight">writes → <code>jobs/job-X/context.md</code><br>(isolated per job)</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node highlight">reads ← <code>jobs/job-X/context.md</code></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-node highlight">embeds into <code>prompts/job-X.md</code></div>
+      <div class="flow-arrow">↓ (separately)</div>
+      <div class="flow-node">daemon still writes <code>context.md</code><br>for HTTP endpoint — no change there</div>
+    </div>
+    <div class="divider"></div>
+    <div class="pros">
+      <div class="pro">Race eliminated — files are per-job</div>
+      <div class="pro">Debuggable: <code>synlynk logs --job X --context</code> can show it</div>
+      <div class="pro">Auditable: injection history per job</div>
+      <div class="con">More disk writes (one extra file per dispatch)</div>
+      <div class="con">Larger code change (output_path threading)</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="insight">
+  <strong>Key insight:</strong> <code>context.md</code> serves two separate purposes today.
+  The <strong>daemon snapshot</strong> (HTTP endpoint, watch daemon) should stay at <code>.synlynk/context.md</code> — it's already lock-guarded and works correctly.
+  The <strong>dispatch injection</strong> doesn't need to be a file at all — it just needs to reach the prompt string.
+  Separating these two paths eliminates the race without changing anything about the daemon.
+</div>
+
+<script>
+function toggleSelect(el) {
+  document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  if (window.recordChoice) recordChoice(el.dataset.choice, el.querySelector('h3').textContent);
+}
+</script>
+<script src="http://localhost:56987/_helper.js"></script>
+</body>
+</html>
