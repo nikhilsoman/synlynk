@@ -1726,6 +1726,89 @@ def test_dispatch_agent_no_relevant_files_without_scan(project_dir, monkeypatch)
     assert "## Relevant Files" not in prompt
 
 
+def test_generate_context_returns_string(project_dir):
+    """generate_context() returns a non-empty string (not None)."""
+    import synlynk as sl
+    result = sl.generate_context()
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_generate_context_task_scope_returns_string(project_dir):
+    """generate_context(scope='task:X') returns a string."""
+    import synlynk as sl
+    story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
+    result = sl.generate_context(scope=f"task:{story_id}")
+    assert isinstance(result, str)
+    assert "Fix auth timeout" in result
+
+
+def test_dispatch_agent_context_mode_none(project_dir, monkeypatch):
+    """context_mode='none' produces a prompt with no context section."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    job = sl.dispatch_agent("claude", "do the thing", context_mode="none")
+    prompt = open(job["prompt_file"]).read()
+    assert "synlynk Context Snapshot" not in prompt
+    assert "do the thing" in prompt
+
+
+def test_dispatch_agent_context_mode_task_default(project_dir, monkeypatch):
+    """Default context_mode is 'task' — prompt uses task-scoped context when story_id given."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
+    story_id = sl.cmd_story_create("Implement OAuth", engg_domain="backend")
+    job = sl.dispatch_agent("claude", "implement oauth", story_id=story_id)
+    prompt = open(job["prompt_file"]).read()
+    assert "task-scoped" in prompt.lower()
+
+
+def test_dispatch_agent_context_mode_full(project_dir, monkeypatch):
+    """context_mode='full' injects full context into prompt."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
+    job = sl.dispatch_agent("claude", "do big thing", context_mode="full")
+    prompt = open(job["prompt_file"]).read()
+    assert "synlynk Context Snapshot" in prompt
+
+
+def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
+    """dispatch_agent warns when context exceeds soft limit."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
+    # Patch generate_context to return an oversized string
+    big_context = "x" * (82 * 1024)  # 82KB — over 80KB soft limit
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": big_context)
+    sl.dispatch_agent("claude", "do thing", context_mode="full")
+    captured = capsys.readouterr()
+    assert "exceeds soft limit" in captured.out
+
+
+def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, monkeypatch):
+    """context_mode='none' does not require context.md to exist."""
+    import synlynk as sl
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    # Ensure context.md does not exist
+    ctx = project_dir / ".synlynk" / "context.md"
+    if ctx.exists():
+        ctx.unlink()
+    job = sl.dispatch_agent("claude", "do thing", context_mode="none")
+    assert job["status"] == "running"
+
+
 def test_relevant_files_for_story_returns_matching_files(project_dir):
     """_relevant_files_for_story matches engg_domain to file paths."""
     import synlynk as sl, json
