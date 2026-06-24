@@ -4339,6 +4339,27 @@ QUOTA_PATTERNS = [
 ]
 
 
+def _extract_compliance_tags(output_text: str) -> dict:
+    """Scans agent output for compliance evidence. Returns a dict of bool flags.
+
+    These tags are informational for v0.9.4 — they build the adherence dataset
+    for the Agent Behaviour epic (AB) without blocking job completion.
+    """
+    lower = output_text.lower()
+    ran_tests = any(phrase in lower for phrase in [
+        "test passed", "tests passed", "pytest", "npm test", "all tests",
+        "test suite", "test run", "✓ test", "passing",
+    ])
+    verify_before_commit = any(phrase in lower for phrase in [
+        "verified", "checked", "confirmed", "lgtm",
+        "reviewed", "validated",
+    ])
+    return {
+        "ran_tests": ran_tests,
+        "verify_before_commit": verify_before_commit,
+    }
+
+
 def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                              cmd: str = "") -> None:
     """Detects flatline, success loop, and quota-exhausted; writes sentinel alerts."""
@@ -4394,6 +4415,18 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                 )
                 print(f"\n  \U0001f6a8 [QUOTA_EXHAUSTED] Matched \"{phrase}\" in output.")
                 break
+
+    # Pattern 4: VERIFY_SKIP — job succeeded but no test/verify evidence in output
+    # Informational only (v0.9.4). Builds AB-epic compliance dataset.
+    if output_text and exit_code == 0:
+        tags = _extract_compliance_tags(output_text)
+        if not tags["ran_tests"] and not tags["verify_before_commit"]:
+            _write_sentinel_alert(
+                "INFO", "VERIFY_SKIP",
+                "Job exited 0 but no test or verify evidence found in output. "
+                "Review before commit and capture verification signals next time."
+            )
+            print("  ℹ [VERIFY_SKIP] No test/verify evidence (informational — see sentinel.md)")
 
 
 def check_daemon_health() -> None:

@@ -1193,6 +1193,70 @@ def test_check_sentinel_no_false_positive(project_dir):
     assert synlynk._read_sentinel_alerts() == []
 
 
+def test_extract_compliance_tags_finds_test_evidence(project_dir):
+    """_extract_compliance_tags detects test pass phrases."""
+    import synlynk as sl
+    tags = sl._extract_compliance_tags("All tests passed. pytest ran 42 tests.")
+    assert tags["ran_tests"] is True
+    assert tags["verify_before_commit"] is False
+
+
+def test_extract_compliance_tags_finds_verify_evidence(project_dir):
+    """_extract_compliance_tags detects verify phrases."""
+    import synlynk as sl
+    tags = sl._extract_compliance_tags("Verified the output. LGTM.")
+    assert tags["verify_before_commit"] is True
+
+
+def test_extract_compliance_tags_empty_output(project_dir):
+    """_extract_compliance_tags returns False flags for empty output."""
+    import synlynk as sl
+    tags = sl._extract_compliance_tags("")
+    assert tags["ran_tests"] is False
+    assert tags["verify_before_commit"] is False
+
+
+def test_sentinel_verify_skip_fires_on_successful_job_without_tests(project_dir):
+    """check_sentinel_patterns writes VERIFY_SKIP when exit 0 but no test evidence."""
+    import synlynk as sl
+    (project_dir / ".synlynk").mkdir(exist_ok=True)
+    sl.check_sentinel_patterns(
+        output_text="I updated the file and it looks good.",
+        exit_code=0,
+        cmd="claude --print"
+    )
+    sentinel = (project_dir / ".synlynk" / "sentinel.md").read_text()
+    assert "VERIFY_SKIP" in sentinel
+
+
+def test_sentinel_verify_skip_does_not_fire_when_tests_ran(project_dir):
+    """check_sentinel_patterns does NOT write VERIFY_SKIP when tests are mentioned."""
+    import synlynk as sl
+    (project_dir / ".synlynk").mkdir(exist_ok=True)
+    sl.check_sentinel_patterns(
+        output_text="All 10 tests passed. Everything is green.",
+        exit_code=0,
+        cmd="claude --print"
+    )
+    sentinel_path = project_dir / ".synlynk" / "sentinel.md"
+    if sentinel_path.exists():
+        assert "VERIFY_SKIP" not in sentinel_path.read_text()
+
+
+def test_sentinel_verify_skip_does_not_fire_on_failure(project_dir):
+    """check_sentinel_patterns does NOT write VERIFY_SKIP for non-zero exit codes."""
+    import synlynk as sl
+    (project_dir / ".synlynk").mkdir(exist_ok=True)
+    sl.check_sentinel_patterns(
+        output_text="Something went wrong.",
+        exit_code=1,
+        cmd="claude --print"
+    )
+    sentinel_path = project_dir / ".synlynk" / "sentinel.md"
+    if sentinel_path.exists():
+        assert "VERIFY_SKIP" not in sentinel_path.read_text()
+
+
 def test_pre_exec_gate_no_alerts(project_dir):
     assert synlynk._check_pre_exec_gate(force=False) is True
 
