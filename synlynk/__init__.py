@@ -158,8 +158,13 @@ GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
 
 def _get_db() -> _sqlite3.Connection:
     """Returns a WAL-mode SQLite connection to state.db, running migrations."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = _sqlite3.connect(DB_PATH)
+    db_path = DB_PATH
+    try:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    except PermissionError:
+        db_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = _sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     _migrate_db(conn)
@@ -173,6 +178,8 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
     if "actual_tokens" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+    if "status" not in story_cols:
+        conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
     try:
         conn.executescript(_DB_SCORES_VIEW)
     except _sqlite3.OperationalError:
@@ -208,6 +215,7 @@ def cmd_story_create(title: str, engg_domain: str = "unknown",
     )
     conn.commit()
     conn.close()
+    _generate_todo_md()
     print(f"  {_GREEN}✓{_RESET} Story created: {story_id}  [{engg_domain} · {org_domain} · {industry}]")
     return story_id
 
@@ -239,6 +247,22 @@ def _load_agent_config(name: str) -> dict:
         raise FileNotFoundError(f"No agent config found at {path}")
     with open(path) as f:
         return _json.load(f)
+
+
+def _load_agent_profile(agent: str) -> dict:
+    """Load .agents/<agent>.json as a soft context-profile dict.
+
+    Returns {} when the file is absent or invalid.
+    """
+    import json as _json
+    path = os.path.join(".agents", f"{agent}.json")
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            return _json.load(f)
+    except (OSError, ValueError, TypeError):
+        return {}
 
 
 def cmd_score_add(story_id: str, rating: float, note: str = None,
@@ -432,6 +456,7 @@ AGENT_CAPABILITY_BASELINES = {
     "claude": {
         "cli": "claude",
         "non_interactive_flags": ["--print"],
+        "dispatch_flags": ["--dangerously-skip-permissions"],
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
@@ -457,6 +482,33 @@ AGENT_CAPABILITY_BASELINES = {
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
 }
+
+RELAY_EVENT_TYPES = frozenset({
+    "story_updated",
+    "job_dispatched",
+    "job_completed",
+    "alert_raised",
+    "context_checkpoint",
+    "table_changed",
+    "broadcast",
+})
+
+
+def _build_relay_event(event_type: str, payload: dict) -> dict:
+    """Constructs a relay event dict with required base fields."""
+    if event_type not in RELAY_EVENT_TYPES:
+        raise ValueError(
+            f"unknown event type '{event_type}'. Valid: {sorted(RELAY_EVENT_TYPES)}"
+        )
+    import socket as _socket
+
+    event = {
+        "type": event_type,
+        "ts": int(time.time()),
+        "origin_node": _socket.gethostname(),
+    }
+    event.update(payload)
+    return event
 
 # Default paths scanned for agent CLI config directories.
 # Overridable in .synlynk/config.json under "agent_discovery_paths".
@@ -2011,13 +2063,16 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         )
 
     if agent == "agy":
-        # AGY receives the prompt as a CLI arg — keep short, lead with directive
+        # AGY receives the prompt as a CLI arg — keep short, lead with directive.
+        # Working directory is explicit because agy resets CWD to its own scratch on startup.
         return (
+            f"## Working Directory\n{os.getcwd()}\n"
+            f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
             f"{story_ref}\n"
             f"{file_section}\n"
             f"{verify_section}\n"
-            f"Context summary:\n{context_text[:2000]}"
+            f"Context summary:\n{context_text}"
         )
 
     # Default (claude): full context narrative
@@ -2041,9 +2096,23 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
+def _preflight_dispatch(agent: str) -> Optional[str]:
+    """Pre-flight check before dispatch; returns an error string, or None."""
+    import shutil as _shutil
+
+    cli = AGENT_CAPABILITY_BASELINES.get(agent, {}).get("cli", agent)
+    if not _shutil.which(cli):
+        known = list(AGENT_CAPABILITY_BASELINES)
+        return (
+            f"agent '{agent}' not found on PATH (expected CLI: '{cli}')\n"
+            f"  Install the agent or choose from: {known}"
+        )
+    return None
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
-                   context_mode: str = "task") -> dict:
+                   context_mode: str = None) -> dict:
     """Dispatches an agent to run a task in the background.
 
     Uses non-interactive agent mode (no PTY). Stdout captured to
@@ -2063,10 +2132,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in AGENT_CAPABILITY_BASELINES:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
 
+    preflight_err = _preflight_dispatch(agent)
+    if preflight_err:
+        raise ValueError(f"Pre-flight failed: {preflight_err}")
+
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
+    dispatch_flags = baselines.get("dispatch_flags", [])
+    flags = flags + dispatch_flags
     model_at_dispatch = _probe_model_version(agent, cli)
+    profile = _load_agent_profile(agent)
+    if context_mode is None:
+        context_mode = profile.get("context_mode", "task")
+    # else: explicit caller value wins; profile is default-only
 
     import hashlib as _hashlib
     job_id = "job-" + _hashlib.md5(
@@ -2090,6 +2169,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except Exception:
             pass
     _warn_context_size(context_text)
+    context_max_bytes = profile.get("context_max_bytes")
+    if context_max_bytes is not None:
+        try:
+            context_max_bytes = int(context_max_bytes)
+        except (TypeError, ValueError):
+            context_max_bytes = None
+    if context_max_bytes is not None:
+        encoded_context = context_text.encode("utf-8")
+        if len(encoded_context) > context_max_bytes:
+            context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
+            print(f"  context truncated to {context_max_bytes}B (agent profile limit)")
 
     # Inject relevant file list
     file_list = _relevant_files_for_story(story_id) if story_id else []
@@ -2124,6 +2214,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
+        cwd=os.getcwd(),
     )
 
     job = {
@@ -2147,32 +2238,203 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     jobs.append(job)
     _save_jobs(jobs)
 
+    dconn = None
+    try:
+        dconn = _get_db()
+        dconn.execute(
+            "INSERT OR REPLACE INTO daemon_jobs "
+            "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
+            "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                job_id,
+                agent,
+                task,
+                story_id,
+                "running",
+                5,
+                "[]",
+                proc.pid,
+                job["started_at"],
+                job["started_at"],
+                log_file,
+            ),
+        )
+        dconn.commit()
+    finally:
+        if dconn is not None:
+            try:
+                dconn.close()
+            except Exception:
+                pass
+
     log_telemetry_event({"type": "dispatch", "agent": agent,
                          "story_id": story_id, "job_id": job_id})
     return job
 
 
-def cmd_jobs(all_jobs: bool = False) -> None:
-    """Prints active (and optionally completed) jobs."""
-    _reconcile_jobs()
-    jobs = _load_jobs()
-    if not jobs:
-        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+def cmd_jobs(all_jobs: bool = False, watch: bool = False) -> None:
+    """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
+    import time as _time
+
+    def _parse_age(enqueued_at: str) -> str:
+        try:
+            enq = _time.mktime(_time.strptime(enqueued_at, "%Y-%m-%dT%H:%M:%S"))
+            age_s = int(_time.time() - enq)
+            if age_s < 60:
+                return f"{age_s}s"
+            if age_s < 3600:
+                return f"{age_s // 60}m{age_s % 60:02d}s"
+            return f"{age_s // 3600}h{(age_s % 3600) // 60}m"
+        except Exception:
+            return "?"
+
+    def _render_legacy_jobs() -> None:
+        _reconcile_jobs()
+        jobs = _load_jobs()
+        if not jobs:
+            print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+            return
+        visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
+        if not visible:
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
+            print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
+            return
+        header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
+        print(f"{_BOLD}{header}{_RESET}")
+        print("─" * 70)
+        for j in visible:
+            sid = (j.get("story_id") or "—")[:6]
+            task = (j.get("task") or "")[:40]
+            status = j["status"]
+            color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
+            print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+    def _render() -> None:
+        _reconcile_daemon_jobs()
+        conn = _get_db()
+        rows = conn.execute(
+            "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
+            "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            _render_legacy_jobs()
+            return
+
+        if all_jobs:
+            visible = rows
+        else:
+            visible = [r for r in rows if r[3] in ("queued", "running")]
+            if not visible:
+                done = sum(1 for r in rows if r[3] in ("done", "failed"))
+                print(f"  No active jobs. ({done} completed — use synlynk jobs --all)")
+                return
+
+        header = f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'AGE':8}  {'EXIT':4}"
+        print(f"{_BOLD}{header}{_RESET}")
+        print("  " + "─" * 64)
+        for job_id, agent, story_id, status, enqueued_at, exit_code in visible:
+            sid = (story_id or "—")[:12]
+            age = _parse_age(enqueued_at)
+            color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
+            exit_str = str(exit_code) if exit_code is not None else "—"
+            print(
+                f"  {job_id:14}  {agent:8}  {sid:12}  "
+                f"{color}{status:10}{_RESET}  {age:8}  {exit_str:4}"
+            )
+
+    if watch:
+        try:
+            while True:
+                print("\033[H\033[J", end="")
+                try:
+                    _render()
+                except Exception as e:
+                    print(f"  render error: {e}")
+                print(f"\n  {_DIM}Refreshing every 2s... Ctrl-C to exit{_RESET}")
+                _time.sleep(2)
+        except KeyboardInterrupt:
+            pass
+    else:
+        _render()
+
+
+def cmd_agent_configure(agent_name: str) -> None:
+    """Interactively write .agents/<agent_name>.json context-profile settings."""
+    import json as _json
+
+    if agent_name not in AGENT_CAPABILITY_BASELINES:
+        print(f"  Unknown agent '{agent_name}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
         return
-    visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
-    if not visible:
-        completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
-        print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
-        return
-    header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
-    print(f"{_BOLD}{header}{_RESET}")
-    print("─" * 70)
-    for j in visible:
-        sid = (j.get("story_id") or "—")[:6]
-        task = (j.get("task") or "")[:40]
-        status = j["status"]
-        color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
-        print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+    os.makedirs(".agents", exist_ok=True)
+    path = os.path.join(".agents", f"{agent_name}.json")
+
+    existing = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                existing = _json.load(f)
+            print(f"  Existing profile at {path}:")
+            for key, value in existing.items():
+                print(f"    {key}: {value}")
+        except Exception:
+            existing = {}
+
+    print(f"\n  Configuring context profile for '{agent_name}' (press Enter to keep current)\n")
+
+    def _ask(default, desc):
+        shown = "" if default is None else str(default)
+        value = input(f"  {desc} [{shown}]: ").strip()
+        return value if value else default
+
+    context_mode = _ask(existing.get("context_mode", "task"),
+                        "context_mode (none / task / full)")
+    max_bytes_raw = _ask(existing.get("context_max_bytes", None),
+                         "context_max_bytes (int, leave blank for no limit)")
+
+    profile = {"agent": agent_name, "context_mode": context_mode}
+    if max_bytes_raw not in ("", None):
+        try:
+            profile["context_max_bytes"] = int(max_bytes_raw)
+        except (TypeError, ValueError):
+            pass
+
+    with open(path, "w") as f:
+        _json.dump(profile, f, indent=2)
+        f.write("\n")
+    print(f"\n  {_GREEN}✓{_RESET} Written {path}")
+
+
+def cmd_relay_start(port: int = None) -> None:
+    """Starts the relay broker in the foreground (Ctrl-C to stop)."""
+    relay = SynlynkRelay(port=port)
+    relay.start()
+
+
+def cmd_relay_broadcast(kind: str, body: str, relay_url: str = None) -> None:
+    """Publishes a broadcast event to the relay."""
+    import json as _json
+    import socket as _socket
+    import urllib.request as _req
+
+    url = relay_url or f"http://localhost:{SynlynkRelay.RELAY_PORT}/publish"
+    event = _build_relay_event("broadcast", {
+        "kind": kind,
+        "body": body,
+        "from": f"cli@{_socket.gethostname()}",
+    })
+    data = _json.dumps(event).encode()
+    req = _req.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with _req.urlopen(req, timeout=5) as resp:
+            result = _json.loads(resp.read())
+        fans = result.get("fans", 0)
+        print(f"  {_GREEN}✓{_RESET} broadcast sent ({kind}) → {fans} subscriber(s)")
+    except Exception as e:
+        print(f"  {_YELLOW}⚠{_RESET} relay not reachable: {e}")
+        print(f"  Start relay: synlynk relay start")
 
 
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
@@ -4142,6 +4404,36 @@ QUOTA_PATTERNS = [
 ]
 
 
+def _extract_compliance_tags(output_text: str) -> dict:
+    """Scans agent output for compliance evidence. Returns a dict of bool flags.
+
+    These tags are informational for v0.9.4 — they build the adherence dataset
+    for the Agent Behaviour epic (AB) without blocking job completion.
+    """
+    lower = output_text.lower()
+    import re as _re
+
+    ran_tests_patterns = [
+        r"\btests\s+pass",
+        r"\bpassed\b",
+        r"\bpytest\b",
+        r"\btest\s+suite\b",
+        r"\brunning\s+tests\b",
+    ]
+    verify_patterns = [
+        r"\bverif",
+        r"\blgtm\b",
+        r"\breviewed\b",
+        r"\bchecked\b",
+    ]
+    ran_tests = any(_re.search(pat, lower) for pat in ran_tests_patterns)
+    verify_before_commit = any(_re.search(pat, lower) for pat in verify_patterns)
+    return {
+        "ran_tests": ran_tests,
+        "verify_before_commit": verify_before_commit,
+    }
+
+
 def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                              cmd: str = "") -> None:
     """Detects flatline, success loop, and quota-exhausted; writes sentinel alerts."""
@@ -4197,6 +4489,18 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                 )
                 print(f"\n  \U0001f6a8 [QUOTA_EXHAUSTED] Matched \"{phrase}\" in output.")
                 break
+
+    # Pattern 4: VERIFY_SKIP — job succeeded but no test/verify evidence in output
+    # Informational only (v0.9.4). Builds AB-epic compliance dataset.
+    if output_text and exit_code == 0:
+        tags = _extract_compliance_tags(output_text)
+        if not tags["ran_tests"] and not tags["verify_before_commit"]:
+            _write_sentinel_alert(
+                "INFO", "VERIFY_SKIP",
+                "Job exited 0 but no test or verify evidence found in output. "
+                "Review before commit and capture verification signals next time."
+            )
+            print("  ℹ [VERIFY_SKIP] No test/verify evidence (informational — see sentinel.md)")
 
 
 def check_daemon_health() -> None:
@@ -4401,6 +4705,85 @@ def _write_last_devlog_section(out, filepath: str) -> None:
         sections.append(current)
     if sections:
         out.writelines(sections[-1])
+
+
+def _generate_todo_md() -> None:
+    """Writes project-docs/todo.md as a generated view of the stories table."""
+    docs_dir = _docs_dir()
+    if not os.path.exists(docs_dir):
+        return
+
+    todo_path = os.path.join(docs_dir, "todo.md")
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT story_id, title, engg_domain, status FROM stories ORDER BY created_at ASC"
+    ).fetchall()
+    conn.close()
+
+    lines = [
+        "# Tasks (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk story create/update | Do NOT hand-edit this file\n\n",
+    ]
+    for story_id, title, engg_domain, status in rows:
+        if status == "done":
+            check = "x"
+        elif status == "deferred":
+            check = "-"
+        else:
+            check = " "
+        domain = f" [{engg_domain}]" if engg_domain and engg_domain != "unknown" else ""
+        lines.append(f"- [{check}] {title or story_id}{domain} <!-- id:{story_id} -->\n")
+
+    with open(todo_path, "w") as f:
+        f.writelines(lines)
+
+
+def _import_todo_to_stories() -> int:
+    """Reads '- [ ]' lines from todo.md and inserts missing story rows."""
+    import hashlib as _hashlib
+
+    docs_dir = _docs_dir()
+    todo_path = os.path.join(docs_dir, "todo.md")
+    if not os.path.exists(todo_path):
+        return 0
+
+    conn = _get_db()
+    existing_ids = {row[0] for row in conn.execute("SELECT story_id FROM stories")}
+
+    imported = 0
+    with open(todo_path) as f:
+        for line in f:
+            if "- [ ]" not in line:
+                continue
+            id_match = re.search(r'<!--\s*id:(story-[a-f0-9]+)\s*-->', line)
+            if id_match and id_match.group(1) in existing_ids:
+                continue
+
+            title_match = re.match(
+                r'\s*-\s*\[\s*\]\s*(.+?)(?:\s*\[.*?\])?(?:\s*<!--.*-->)?\s*$',
+                line,
+            )
+            if not title_match:
+                continue
+            title = title_match.group(1).strip()
+            story_id = "story-" + _hashlib.md5(title.encode()).hexdigest()[:8]
+            if story_id in existing_ids:
+                continue
+            if conn.execute("SELECT 1 FROM stories WHERE title=?", (title,)).fetchone():
+                continue
+            try:
+                conn.execute(
+                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, 'open')",
+                    (story_id, title),
+                )
+                imported += 1
+                existing_ids.add(story_id)
+            except _sqlite3.IntegrityError:
+                pass
+
+    conn.commit()
+    conn.close()
+    return imported
 
 
 def _generate_task_context(story_id: str) -> str:
@@ -5355,6 +5738,132 @@ def _daemon_uninstall_service() -> None:
         print("  not installed")
 
 
+def _make_relay_handler(subscribers: list, sub_lock) -> type:
+    """Returns an HTTP handler class for the stateless relay broker."""
+    import http.server as _http
+    import json as _json
+    import queue as _queue_mod
+
+    class RelayHandler(_http.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass  # suppress access logs
+
+        def do_GET(self):
+            if self.path == "/health":
+                self._send_json({"ok": True})
+            elif self.path == "/events":
+                self._stream_sse()
+            else:
+                self.send_error(404)
+
+        def do_POST(self):
+            if self.path == "/publish":
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                try:
+                    event = _json.loads(body)
+                except ValueError:
+                    self.send_error(400, "invalid JSON")
+                    return
+                data = f"data: {_json.dumps(event)}\n\n"
+                with sub_lock:
+                    dead = []
+                    for q in subscribers:
+                        try:
+                            q.put_nowait(data)
+                        except _queue_mod.Full:
+                            pass  # slow subscriber — skip event, keep alive
+                        except Exception:
+                            dead.append(q)
+                    for d in dead:
+                        subscribers.remove(d)
+                    fans = len(subscribers)
+                self._send_json({"ok": True, "fans": fans})
+            else:
+                self.send_error(404)
+
+        def _send_json(self, obj):
+            body = _json.dumps(obj).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _stream_sse(self):
+            import queue as _q
+            q = _q.Queue(maxsize=256)
+            with sub_lock:
+                subscribers.append(q)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            try:
+                while True:
+                    try:
+                        data = q.get(timeout=30)
+                        self.wfile.write(data.encode())
+                        self.wfile.flush()
+                    except _q.Empty:
+                        self.wfile.write(b": keepalive\n\n")
+                        self.wfile.flush()
+            except Exception:
+                pass
+            finally:
+                with sub_lock:
+                    try:
+                        subscribers.remove(q)
+                    except ValueError:
+                        pass
+
+    return RelayHandler
+
+
+class SynlynkRelay:
+    """Stateless HTTP relay broker for synlynk node events."""
+
+    RELAY_PORT = 27472
+
+    def __init__(self, port: int = None):
+        import threading as _threading
+        self.port = port or self.RELAY_PORT
+        self._subscribers: list = []
+        self._sub_lock = _threading.Lock()
+        self._server = None
+
+    def start(self) -> None:
+        """Starts the relay HTTP server in a background thread."""
+        import http.server as _http
+        import threading as _threading
+
+        handler = _make_relay_handler(self._subscribers, self._sub_lock)
+        self._server = _http.HTTPServer(("", self.port), handler)
+        t = _threading.Thread(target=self._server.serve_forever, daemon=True)
+        t.start()
+        print(f"  {_GREEN}✓{_RESET} Relay started on port {self.port}")
+        print(f"  {_DIM}Subscribe: GET http://localhost:{self.port}/events{_RESET}")
+        print(f"  {_DIM}Publish:   POST http://localhost:{self.port}/publish{_RESET}")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            self._server.shutdown()
+            print("\n  Relay stopped.")
+
+    def is_alive(self, relay_url: str = None) -> bool:
+        """Checks if the relay at relay_url (or localhost) is responding."""
+        import urllib.request as _req
+
+        url = relay_url or f"http://localhost:{self.port}/health"
+        try:
+            _req.urlopen(url, timeout=1)
+            return True
+        except Exception:
+            return False
+
+
 class SynlynkDaemon(WatchDaemon):
     """Always-running daemon: mtime polling + HTTP API + persistent job queue.
 
@@ -5863,6 +6372,10 @@ def main() -> None:
 
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
+    agent_configure_parser = agent_sub.add_parser(
+        "configure", help="Interactively write .agents/<name>.json context profile"
+    )
+    agent_configure_parser.add_argument("name", help="Agent name: claude, agy, codex")
     agent_run_parser = agent_sub.add_parser("run", help="Run a named agent once")
     agent_run_parser.add_argument("name", help="Agent name (matches .agents/<name>.json)")
     agent_run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
@@ -5922,10 +6435,31 @@ def main() -> None:
         help="Story/task ID for context labelling")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
+    dispatch_parser.add_argument(
+        "--context-mode", choices=["none", "task", "full"], default="task",
+        dest="context_mode", help="Context injection mode"
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
         help="Include completed and failed jobs")
+    jobs_parser.add_argument("--watch", action="store_true",
+        help="Refresh table every 2 seconds until Ctrl-C")
+
+    relay_parser = subparsers.add_parser("relay", help="Relay event broker commands")
+    relay_sub = relay_parser.add_subparsers(dest="relay_action")
+
+    relay_start_p = relay_sub.add_parser("start", help="Start relay broker (foreground)")
+    relay_start_p.add_argument("--port", type=int, default=None,
+        help=f"Port to listen on (default: {SynlynkRelay.RELAY_PORT})")
+
+    relay_broadcast_p = relay_sub.add_parser("broadcast", help="Send a broadcast event to the relay")
+    relay_broadcast_p.add_argument("body", help="Message body")
+    relay_broadcast_p.add_argument("--kind", default="message",
+        choices=["motd", "wellness", "message", "joke", "custom"],
+        help="Broadcast kind (default: message)")
+    relay_broadcast_p.add_argument("--relay-url", default=None, dest="relay_url",
+        help="Relay URL (default: http://localhost:27472)")
 
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
@@ -6067,14 +6601,28 @@ def main() -> None:
     elif args.command == "dispatch":
         try:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
-                                 force_agent=getattr(args, "force_agent", False))
+                                 force_agent=getattr(args, "force_agent", False),
+                                 context_mode=getattr(args, "context_mode", "task"))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
     elif args.command == "jobs":
-        cmd_jobs(all_jobs=getattr(args, "all_jobs", False))
+        cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
+                 watch=getattr(args, "watch", False))
+    elif args.command == "relay":
+        action = getattr(args, "relay_action", None)
+        if action == "start":
+            cmd_relay_start(port=getattr(args, "port", None))
+        elif action == "broadcast":
+            cmd_relay_broadcast(
+                kind=getattr(args, "kind", "message"),
+                body=args.body,
+                relay_url=getattr(args, "relay_url", None),
+            )
+        else:
+            relay_parser.print_help()
     elif args.command == "logs":
         cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
     elif args.command == "shell":
@@ -6118,7 +6666,9 @@ def main() -> None:
             instructions_parser.print_help()
     elif args.command == "agent":
         action = getattr(args, "agent_action", None)
-        if action == "run":
+        if action == "configure":
+            cmd_agent_configure(args.name)
+        elif action == "run":
             cmd_agent_run(
                 args.name,
                 dry_run=getattr(args, "dry_run", False),
