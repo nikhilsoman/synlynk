@@ -108,6 +108,23 @@
 
 ---
 
+## Command Audit Epic — Command Health + OTel Instrumentation
+<!-- Every synlynk command reviewed against a 9-dimension rubric; cross-cutting OTel tracer shipped as foundational infrastructure -->
+
+- [ ] **[CA-0] Command inventory** — enumerate all commands + subcommands from `main()` argparse tree; produce a canonical table: command, short description, added in version, current status (stable/experimental/deprecated) <!-- id:310 -->
+- [ ] **[CA-1] 9-dimension audit per command** — for every command, document: (1) when it makes sense to use, (2) hook/trigger conditions (git hooks, file-watch, CI, daemon schedule, manual), (3) pre-requisites (.synlynk/ present, AI CLI on PATH, daemon running, etc.), (4) input context consumed (context.md sections, SQLite tables, env vars), (5) skills/agents it can invoke, (6) output contract (stdout format, files written, DB rows changed, exit codes), (7) whether it can trigger an agent/autopilot downstream, (8) discoverability surface (--help text, context.md injection, site docs), (9) error UX when pre-reqs unmet. Outcome: `docs/superpowers/specs/command-audit-matrix.md` <!-- id:311 -->
+- [ ] **[CA-2] Error UX sweep** — for every command with missing pre-reqs, replace cryptic tracebacks with structured error messages: `synlynk: not in a synlynk project. Run 'synlynk init' first.` / `synlynk: daemon not running. Start it with 'synlynk daemon start'.` Actionable message per failure mode. <!-- id:312 -->
+- [ ] **[CA-3] Discoverability pass** — audit which commands appear in `synlynk --help` (all should), which are injected into `context.md` (agents need to know commands exist), which are on the site. Add missing entries. <!-- id:313 -->
+- [ ] **[CA-4] OTel tracer — local-first** — implement a stdlib-only `SynlynkTracer` class: generates `trace_id` (UUID4) and `span_id` per invocation, records start/end times (time.perf_counter_ns), writes OTLP-compatible spans to `.synlynk/traces/YYYY-MM-DD.jsonl`. Span schema: `{trace_id, span_id, parent_span_id, name, start_ns, end_ns, attributes, status, error}`. <!-- id:314 -->
+- [ ] **[CA-5] OTel instrumentation — all commands** — wrap every command's entry point in a root span; add child spans for sub-operations: `generate_context`, `agent_subprocess`, `sentinel_check`, `update_costs`, `dispatch_routing`, `daemon_poll_tick`. Attributes per span type (e.g. `agent`, `tokens_in`, `tokens_out`, `exit_code`, `story_id`, `files_changed`). <!-- id:315 -->
+- [ ] **[CA-6] `synlynk telemetry` subcommand** — `synlynk telemetry tail` (live span stream from today's trace file), `synlynk telemetry stats` (command frequency, p50/p95 duration, error rate per command), `synlynk telemetry export --to <jaeger|otlp-http|stdout>` (push `.jsonl` to collector via HTTP, no SDK needed). Falls back to `opentelemetry-sdk` exporter if installed. <!-- id:316 -->
+- [ ] **[CA-7] Hook wiring** — document and implement the standard hooks: `post-init` (daemon start prompt), `pre-exec` (budget check warning), `post-dispatch` (job-start banner), `post-merge-pr` (Marketing Intern trigger), `daemon-on-tick` (Support Engineer schedule). Wire into `.synlynk/hooks.json` config. <!-- id:317 -->
+- [ ] **[CA-8] Autopilot trigger map** — for each command that can trigger an agent/autopilot, document the trigger contract: which story status transition, which signal, which agent archetype responds. Feeds into TPM Agent (v0.8.2) and PM Agent (v0.8.3) designs. <!-- id:318 -->
+- [ ] **[CA-9] Command lifecycle labels** — add `@stable` / `@experimental` / `@deprecated` markers to each command's argparse `help=` string. Experimental commands print a one-line notice on use. Deprecated commands print a migration hint. <!-- id:319 -->
+- [ ] **Tests** — tracer unit tests (span schema, parent linking, file rotation), telemetry CLI tests (stats output, export dry-run), hook wiring tests, error UX tests (each failure mode asserts correct message) <!-- id:320 -->
+
+---
+
 ## DevX Epic — Synlynk Developer Experience (pre-v0.9.4)
 <!-- These are design/strategy questions to resolve before v0.9.4 implementation begins -->
 
