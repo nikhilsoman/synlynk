@@ -1216,6 +1216,53 @@ def test_extract_compliance_tags_empty_output(project_dir):
     assert tags["verify_before_commit"] is False
 
 
+def test_relay_event_schema_has_required_fields(project_dir):
+    """_build_relay_event returns dict with type, ts, origin_node."""
+    import synlynk as sl
+    event = sl._build_relay_event("story_updated", {"story_id": "s1", "status": "done"})
+    assert event["type"] == "story_updated"
+    assert "ts" in event
+    assert "origin_node" in event
+    assert event["story_id"] == "s1"
+
+
+def test_relay_broadcast_event_has_kind(project_dir):
+    """broadcast events include kind and body fields."""
+    import synlynk as sl
+    event = sl._build_relay_event("broadcast", {"kind": "wellness", "body": "stand up"})
+    assert event["kind"] == "wellness"
+    assert event["body"] == "stand up"
+
+
+def test_relay_event_valid_types(project_dir):
+    """_build_relay_event rejects unknown event types."""
+    import synlynk as sl
+    import pytest as _pytest
+    with _pytest.raises(ValueError, match="unknown event type"):
+        sl._build_relay_event("bad_type", {})
+
+
+def test_cmd_relay_broadcast_prints_confirmation(project_dir, monkeypatch, capsys):
+    """cmd_relay_broadcast prints confirmation when relay is reachable (mocked)."""
+    import synlynk as sl
+    import urllib.request as _req
+
+    class FakeResp:
+        def read(self):
+            return b'{"ok": true}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+    monkeypatch.setattr(_req, "urlopen", lambda req, timeout=5: FakeResp())
+    sl.cmd_relay_broadcast("wellness", "stand up and walk")
+    out = capsys.readouterr().out
+    assert "broadcast" in out.lower() or "sent" in out.lower() or "✓" in out
+
+
 def test_sentinel_verify_skip_fires_on_successful_job_without_tests(project_dir):
     """check_sentinel_patterns writes VERIFY_SKIP when exit 0 but no test evidence."""
     import synlynk as sl

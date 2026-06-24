@@ -482,6 +482,33 @@ AGENT_CAPABILITY_BASELINES = {
     },
 }
 
+RELAY_EVENT_TYPES = frozenset({
+    "story_updated",
+    "job_dispatched",
+    "job_completed",
+    "alert_raised",
+    "context_checkpoint",
+    "table_changed",
+    "broadcast",
+})
+
+
+def _build_relay_event(event_type: str, payload: dict) -> dict:
+    """Constructs a relay event dict with required base fields."""
+    if event_type not in RELAY_EVENT_TYPES:
+        raise ValueError(
+            f"unknown event type '{event_type}'. Valid: {sorted(RELAY_EVENT_TYPES)}"
+        )
+    import socket as _socket
+
+    event = {
+        "type": event_type,
+        "ts": int(time.time()),
+        "origin_node": _socket.gethostname(),
+    }
+    event.update(payload)
+    return event
+
 # Default paths scanned for agent CLI config directories.
 # Overridable in .synlynk/config.json under "agent_discovery_paths".
 AGENT_DISCOVERY_DEFAULTS = {
@@ -2370,6 +2397,36 @@ def cmd_agent_configure(agent_name: str) -> None:
         _json.dump(profile, f, indent=2)
         f.write("\n")
     print(f"\n  {_GREEN}✓{_RESET} Written {path}")
+
+
+def cmd_relay_start(port: int = None) -> None:
+    """Starts the relay broker in the foreground (Ctrl-C to stop)."""
+    relay = SynlynkRelay(port=port)
+    relay.start()
+
+
+def cmd_relay_broadcast(kind: str, body: str, relay_url: str = None) -> None:
+    """Publishes a broadcast event to the relay."""
+    import json as _json
+    import socket as _socket
+    import urllib.request as _req
+
+    url = relay_url or f"http://localhost:{SynlynkRelay.RELAY_PORT}/publish"
+    event = _build_relay_event("broadcast", {
+        "kind": kind,
+        "body": body,
+        "from": f"cli@{_socket.gethostname()}",
+    })
+    data = _json.dumps(event).encode()
+    req = _req.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with _req.urlopen(req, timeout=5) as resp:
+            result = _json.loads(resp.read())
+        fans = result.get("fans", 0)
+        print(f"  {_GREEN}✓{_RESET} broadcast sent ({kind}) → {fans} subscriber(s)")
+    except Exception as e:
+        print(f"  {_YELLOW}⚠{_RESET} relay not reachable: {e}")
+        print(f"  Start relay: synlynk relay start")
 
 
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
@@ -5661,6 +5718,128 @@ def _daemon_uninstall_service() -> None:
         print("  not installed")
 
 
+def _make_relay_handler(subscribers: list, sub_lock) -> type:
+    """Returns an HTTP handler class for the stateless relay broker."""
+    import http.server as _http
+    import json as _json
+
+    class RelayHandler(_http.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass  # suppress access logs
+
+        def do_GET(self):
+            if self.path == "/health":
+                self._send_json({"ok": True})
+            elif self.path == "/events":
+                self._stream_sse()
+            else:
+                self.send_error(404)
+
+        def do_POST(self):
+            if self.path == "/publish":
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                try:
+                    event = _json.loads(body)
+                except ValueError:
+                    self.send_error(400, "invalid JSON")
+                    return
+                data = f"data: {_json.dumps(event)}\n\n"
+                with sub_lock:
+                    dead = []
+                    for q in subscribers:
+                        try:
+                            q.put_nowait(data)
+                        except Exception:
+                            dead.append(q)
+                    for d in dead:
+                        subscribers.remove(d)
+                self._send_json({"ok": True, "fans": len(subscribers)})
+            else:
+                self.send_error(404)
+
+        def _send_json(self, obj):
+            body = _json.dumps(obj).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _stream_sse(self):
+            import queue as _q
+            q = _q.Queue(maxsize=256)
+            with sub_lock:
+                subscribers.append(q)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            try:
+                while True:
+                    try:
+                        data = q.get(timeout=30)
+                        self.wfile.write(data.encode())
+                        self.wfile.flush()
+                    except _q.Empty:
+                        self.wfile.write(b": keepalive\n\n")
+                        self.wfile.flush()
+            except Exception:
+                pass
+            finally:
+                with sub_lock:
+                    try:
+                        subscribers.remove(q)
+                    except ValueError:
+                        pass
+
+    return RelayHandler
+
+
+class SynlynkRelay:
+    """Stateless HTTP relay broker for synlynk node events."""
+
+    RELAY_PORT = 27472
+
+    def __init__(self, port: int = None):
+        import threading as _threading
+        self.port = port or self.RELAY_PORT
+        self._subscribers: list = []
+        self._sub_lock = _threading.Lock()
+        self._server = None
+
+    def start(self) -> None:
+        """Starts the relay HTTP server in a background thread."""
+        import http.server as _http
+        import threading as _threading
+
+        handler = _make_relay_handler(self._subscribers, self._sub_lock)
+        self._server = _http.HTTPServer(("", self.port), handler)
+        t = _threading.Thread(target=self._server.serve_forever, daemon=True)
+        t.start()
+        print(f"  {_GREEN}✓{_RESET} Relay started on port {self.port}")
+        print(f"  {_DIM}Subscribe: GET http://localhost:{self.port}/events{_RESET}")
+        print(f"  {_DIM}Publish:   POST http://localhost:{self.port}/publish{_RESET}")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            self._server.shutdown()
+            print("\n  Relay stopped.")
+
+    def is_alive(self, relay_url: str = None) -> bool:
+        """Checks if the relay at relay_url (or localhost) is responding."""
+        import urllib.request as _req
+
+        url = relay_url or f"http://localhost:{self.port}/health"
+        try:
+            _req.urlopen(url, timeout=1)
+            return True
+        except Exception:
+            return False
+
+
 class SynlynkDaemon(WatchDaemon):
     """Always-running daemon: mtime polling + HTTP API + persistent job queue.
 
@@ -6243,6 +6422,21 @@ def main() -> None:
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
 
+    relay_parser = subparsers.add_parser("relay", help="Relay event broker commands")
+    relay_sub = relay_parser.add_subparsers(dest="relay_action")
+
+    relay_start_p = relay_sub.add_parser("start", help="Start relay broker (foreground)")
+    relay_start_p.add_argument("--port", type=int, default=None,
+        help=f"Port to listen on (default: {SynlynkRelay.RELAY_PORT})")
+
+    relay_broadcast_p = relay_sub.add_parser("broadcast", help="Send a broadcast event to the relay")
+    relay_broadcast_p.add_argument("body", help="Message body")
+    relay_broadcast_p.add_argument("--kind", default="message",
+        choices=["motd", "wellness", "message", "joke", "custom"],
+        help="Broadcast kind (default: message)")
+    relay_broadcast_p.add_argument("--relay-url", default=None, dest="relay_url",
+        help="Relay URL (default: http://localhost:27472)")
+
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
         help="Job ID (from `synlynk jobs`)")
@@ -6393,6 +6587,18 @@ def main() -> None:
     elif args.command == "jobs":
         cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                  watch=getattr(args, "watch", False))
+    elif args.command == "relay":
+        action = getattr(args, "relay_action", None)
+        if action == "start":
+            cmd_relay_start(port=getattr(args, "port", None))
+        elif action == "broadcast":
+            cmd_relay_broadcast(
+                kind=getattr(args, "kind", "message"),
+                body=args.body,
+                relay_url=getattr(args, "relay_url", None),
+            )
+        else:
+            relay_parser.print_help()
     elif args.command == "logs":
         cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
     elif args.command == "shell":
