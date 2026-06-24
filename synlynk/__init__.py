@@ -158,8 +158,13 @@ GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
 
 def _get_db() -> _sqlite3.Connection:
     """Returns a WAL-mode SQLite connection to state.db, running migrations."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = _sqlite3.connect(DB_PATH)
+    db_path = DB_PATH
+    try:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    except PermissionError:
+        db_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = _sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     _migrate_db(conn)
@@ -2063,6 +2068,20 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
+def _preflight_dispatch(agent: str) -> Optional[str]:
+    """Pre-flight check before dispatch; returns an error string, or None."""
+    import shutil as _shutil
+
+    cli = AGENT_CAPABILITY_BASELINES.get(agent, {}).get("cli", agent)
+    if not _shutil.which(cli):
+        known = list(AGENT_CAPABILITY_BASELINES)
+        return (
+            f"agent '{agent}' not found on PATH (expected CLI: '{cli}')\n"
+            f"  Install the agent or choose from: {known}"
+        )
+    return None
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
                    context_mode: str = "task") -> dict:
@@ -2084,6 +2103,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in AGENT_CAPABILITY_BASELINES:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+
+    preflight_err = _preflight_dispatch(agent)
+    if preflight_err:
+        raise ValueError(f"Pre-flight failed: {preflight_err}")
 
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
@@ -2183,32 +2206,123 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     jobs.append(job)
     _save_jobs(jobs)
 
+    dconn = None
+    try:
+        dconn = _get_db()
+        dconn.execute(
+            "INSERT OR REPLACE INTO daemon_jobs "
+            "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
+            "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                job_id,
+                agent,
+                task,
+                story_id,
+                "running",
+                5,
+                "[]",
+                proc.pid,
+                job["started_at"],
+                job["started_at"],
+                log_file,
+            ),
+        )
+        dconn.commit()
+    finally:
+        if dconn is not None:
+            try:
+                dconn.close()
+            except Exception:
+                pass
+
     log_telemetry_event({"type": "dispatch", "agent": agent,
                          "story_id": story_id, "job_id": job_id})
     return job
 
 
-def cmd_jobs(all_jobs: bool = False) -> None:
-    """Prints active (and optionally completed) jobs."""
-    _reconcile_jobs()
-    jobs = _load_jobs()
-    if not jobs:
-        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
-        return
-    visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
-    if not visible:
-        completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
-        print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
-        return
-    header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
-    print(f"{_BOLD}{header}{_RESET}")
-    print("─" * 70)
-    for j in visible:
-        sid = (j.get("story_id") or "—")[:6]
-        task = (j.get("task") or "")[:40]
-        status = j["status"]
-        color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
-        print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+def cmd_jobs(all_jobs: bool = False, watch: bool = False) -> None:
+    """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
+    import time as _time
+
+    def _parse_age(enqueued_at: str) -> str:
+        try:
+            enq = _time.mktime(_time.strptime(enqueued_at, "%Y-%m-%dT%H:%M:%S"))
+            age_s = int(_time.time() - enq)
+            if age_s < 60:
+                return f"{age_s}s"
+            if age_s < 3600:
+                return f"{age_s // 60}m{age_s % 60:02d}s"
+            return f"{age_s // 3600}h{(age_s % 3600) // 60}m"
+        except Exception:
+            return "?"
+
+    def _render_legacy_jobs() -> None:
+        _reconcile_jobs()
+        jobs = _load_jobs()
+        if not jobs:
+            print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+            return
+        visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
+        if not visible:
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
+            print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
+            return
+        header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
+        print(f"{_BOLD}{header}{_RESET}")
+        print("─" * 70)
+        for j in visible:
+            sid = (j.get("story_id") or "—")[:6]
+            task = (j.get("task") or "")[:40]
+            status = j["status"]
+            color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
+            print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+    def _render() -> None:
+        _reconcile_daemon_jobs()
+        conn = _get_db()
+        rows = conn.execute(
+            "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
+            "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            _render_legacy_jobs()
+            return
+
+        if all_jobs:
+            visible = rows
+        else:
+            visible = [r for r in rows if r[3] in ("queued", "running")]
+            if not visible:
+                done = sum(1 for r in rows if r[3] in ("done", "failed"))
+                print(f"  No active jobs. ({done} completed — use synlynk jobs --all)")
+                return
+
+        header = f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'AGE':8}  {'EXIT':4}"
+        print(f"{_BOLD}{header}{_RESET}")
+        print("  " + "─" * 64)
+        for job_id, agent, story_id, status, enqueued_at, exit_code in visible:
+            sid = (story_id or "—")[:12]
+            age = _parse_age(enqueued_at)
+            color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
+            exit_str = str(exit_code) if exit_code is not None else "—"
+            print(
+                f"  {job_id:14}  {agent:8}  {sid:12}  "
+                f"{color}{status:10}{_RESET}  {age:8}  {exit_str:4}"
+            )
+
+    if watch:
+        try:
+            while True:
+                print("\033[H\033[J", end="")
+                _render()
+                print(f"\n  {_DIM}Refreshing every 2s... Ctrl-C to exit{_RESET}")
+                _time.sleep(2)
+        except KeyboardInterrupt:
+            pass
+    else:
+        _render()
 
 
 def cmd_agent_configure(agent_name: str) -> None:
@@ -6085,10 +6199,16 @@ def main() -> None:
         help="Story/task ID for context labelling")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
+    dispatch_parser.add_argument(
+        "--context-mode", choices=["none", "task", "full"], default="task",
+        dest="context_mode", help="Context injection mode"
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
         help="Include completed and failed jobs")
+    jobs_parser.add_argument("--watch", action="store_true",
+        help="Refresh table every 2 seconds until Ctrl-C")
 
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
@@ -6230,14 +6350,16 @@ def main() -> None:
     elif args.command == "dispatch":
         try:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
-                                 force_agent=getattr(args, "force_agent", False))
+                                 force_agent=getattr(args, "force_agent", False),
+                                 context_mode=getattr(args, "context_mode", "task"))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
     elif args.command == "jobs":
-        cmd_jobs(all_jobs=getattr(args, "all_jobs", False))
+        cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
+                 watch=getattr(args, "watch", False))
     elif args.command == "logs":
         cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
     elif args.command == "shell":

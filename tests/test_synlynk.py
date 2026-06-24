@@ -2088,6 +2088,92 @@ def test_cmd_jobs_empty_output_when_no_jobs(project_dir, capsys):
     assert "No jobs" in out or out.strip() == "" or "no jobs" in out.lower()
 
 
+def test_cmd_jobs_reads_from_daemon_jobs_table(project_dir, capsys):
+    """cmd_jobs shows rows from daemon_jobs SQLite table."""
+    import synlynk as sl
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-abc123", "claude", "fix auth", "story-001", "running", 5, "[]",
+         "2026-06-24T08:00:00")
+    )
+    conn.commit(); conn.close()
+    sl.cmd_jobs()
+    out = capsys.readouterr().out
+    assert "job-abc123" in out
+    assert "claude" in out
+    assert "running" in out
+
+
+def test_cmd_jobs_all_shows_completed(project_dir, capsys):
+    """cmd_jobs(all_jobs=True) includes done and failed rows."""
+    import synlynk as sl
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-done1", "agy", "task", "done", 5, "[]", "2026-06-24T07:00:00")
+    )
+    conn.commit(); conn.close()
+    sl.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+    assert "job-done1" in out
+
+
+def test_cmd_jobs_default_hides_completed(project_dir, capsys):
+    """cmd_jobs() without --all hides done jobs."""
+    import synlynk as sl
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-done2", "agy", "task", "done", 5, "[]", "2026-06-24T07:00:00")
+    )
+    conn.commit(); conn.close()
+    sl.cmd_jobs(all_jobs=False)
+    out = capsys.readouterr().out
+    assert "No active jobs" in out
+
+
+def test_preflight_dispatch_fails_for_missing_agent(project_dir, monkeypatch):
+    """_preflight_dispatch returns error string when agent CLI is not on PATH."""
+    import synlynk as sl
+    monkeypatch.setattr("shutil.which", lambda x: None)
+    err = sl._preflight_dispatch("claude")
+    assert err is not None
+    assert "not found" in err.lower() or "claude" in err
+
+
+def test_preflight_dispatch_passes_for_known_agent(project_dir, monkeypatch):
+    """_preflight_dispatch returns None when agent CLI is found."""
+    import synlynk as sl
+    monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/claude")
+    err = sl._preflight_dispatch("claude")
+    assert err is None
+
+
+def test_dispatch_agent_records_in_daemon_jobs_table(project_dir, monkeypatch):
+    """dispatch_agent writes a row to daemon_jobs in addition to jobs.json."""
+    import synlynk as sl
+
+    class FakeProc:
+        pid = 42
+
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None, raising=False)
+    job = sl.dispatch_agent("claude", "test task")
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT job_id, agent, status FROM daemon_jobs WHERE job_id=?",
+        (job["id"],)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[1] == "claude"
+    assert row[2] == "running"
+
+
 def test_cmd_logs_prints_log_content(project_dir, capsys):
     import synlynk as sl
     os.makedirs(".synlynk/logs", exist_ok=True)
