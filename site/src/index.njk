@@ -11,7 +11,7 @@ bodyClass: home
         </div>
         <p class="tagline">The harness that turns AI tools into a team.</p>
         <p class="description">
-            A single-file Python CLI that injects project context, dispatches agents, tracks capability, and runs an always-on HTTP context server — so your agents share state instead of starting from scratch.
+            A single-file Python CLI that injects project context, dispatches agents, tracks capability, and keeps every agent in sync via a shared SQLite state, agent profiles, and an HTTP relay — so your workgroup moves as a unit.
         </p>
 
         <div class="code-block-wrapper">
@@ -86,17 +86,22 @@ bodyClass: home
             <div class="feature-card">
                 <span class="glyph">◉</span>
                 <h3>Always-on daemon</h3>
-                <p>New in v0.9.3 — <code>synlynk daemon start</code> runs a background process with an HTTP API on <code>localhost:27471</code>; agents pull context over HTTP and dispatch jobs without invoking the CLI</p>
+                <p><code>synlynk daemon start</code> runs a background process with an HTTP API on <code>localhost:27471</code>; agents pull context over HTTP and dispatch jobs without invoking the CLI</p>
             </div>
             <div class="feature-card">
                 <span class="glyph">◳</span>
                 <h3>Persistent job queue</h3>
-                <p>Priority-ordered <code>daemon_jobs</code> in SQLite with dependency chains — jobs survive daemon restarts; crashed dispatches never produce duplicate runs</p>
+                <p>Priority-ordered <code>daemon_jobs</code> in SQLite with dependency chains — jobs survive daemon restarts; <code>synlynk jobs --watch</code> shows live status across every dispatched agent</p>
+            </div>
+            <div class="feature-card">
+                <span class="glyph">⌁</span>
+                <h3>Workgroup relay</h3>
+                <p><code>synlynk relay start</code> runs an HTTP SSE broker; <code>synlynk relay broadcast</code> publishes events to every connected agent — wellness checks, MOTDs, and coordination signals across the workgroup</p>
             </div>
             <div class="feature-card">
                 <span class="glyph">◈</span>
                 <h3>Capability engine</h3>
-                <p>Every dispatch scores the agent's performance across 40+ domains — quality, speed, cost, test results. Routing improves as data accumulates. Ratings are Ed25519-signed.</p>
+                <p>Every dispatch scores the agent across 40+ domains — quality, speed, cost, test results. Per-agent profiles (<code>.agents/</code>) set context scope and model preferences. Ratings are Ed25519-signed.</p>
             </div>
             <div class="feature-card">
                 <span class="glyph">⬡</span>
