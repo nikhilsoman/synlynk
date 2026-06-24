@@ -71,28 +71,28 @@
 - [x] Update all imports, entry point, install.sh, tests after split <!-- id:207 -->
 - [x] 365 tests passing after split (was 342 target) <!-- id:208 -->
 
-## v0.9.1 — Team Onboarding + Consensus Framework
-- [ ] `synlynk join` command: source scan → AI context files → devlog seed → team digest → task recommendation <!-- id:210 -->
-- [ ] Mature-project onboarding: read existing README/conventions/architecture before generating context files <!-- id:211 -->
-- [ ] `synlynk team status` — who's active (last devlog entry), in-progress stories, just-shipped <!-- id:212 -->
-- [ ] Pull-before-write arbitration: warn on concurrent edit conflict, don't hard-block <!-- id:213 -->
-- [ ] Token budgets at story creation: `synlynk story add` prompts `estimated_tokens` <!-- id:214 -->
-- [ ] PR merge audit: Support Engineer posts estimated vs actual token delta to PR description <!-- id:215 -->
-- [ ] `synlynk decide "<topic>" --panel <agents> [--record]` — consensus decision command <!-- id:216 -->
-- [ ] Decision record schema: `project-docs/decisions/YYYY-MM-DD-<slug>.md` + `decisions` table in state.db <!-- id:217 -->
-- [ ] Retroactively create Decision record for this roadmap realignment <!-- id:218 -->
-- [ ] Tests: join flow, team status, write-arbitration, decide command, decision record <!-- id:219 -->
+## v0.9.1 — Team Onboarding + Consensus Framework ✅ Shipped as v0.9.2
+- [x] `synlynk join` command: source scan → AI context files → devlog seed → team digest → task recommendation <!-- id:210 -->
+- [x] Mature-project onboarding: read existing README/conventions/architecture before generating context files <!-- id:211 -->
+- [x] `synlynk team status` — who's active (last devlog entry), in-progress stories, just-shipped <!-- id:212 -->
+- [x] Pull-before-write arbitration: warn on concurrent edit conflict, don't hard-block <!-- id:213 -->
+- [x] Token budgets at story creation: `synlynk story add` prompts `estimated_tokens` <!-- id:214 -->
+- [x] PR merge audit: Support Engineer posts estimated vs actual token delta to PR description <!-- id:215 -->
+- [x] `synlynk decide "<topic>" --panel <agents> [--record]` — consensus decision command <!-- id:216 -->
+- [x] Decision record schema: `project-docs/decisions/YYYY-MM-DD-<slug>.md` + `decisions` table in state.db <!-- id:217 -->
+- [x] Retroactively create Decision record for this roadmap realignment <!-- id:218 -->
+- [x] Tests: join flow, team status, write-arbitration, decide command, decision record <!-- id:219 -->
 
-## v0.9.2 — Async Daemon
-- [ ] `synlynk daemon start/stop/status/restart` <!-- id:220 -->
-- [ ] launchd plist generation (macOS) + systemd unit generation (Linux) <!-- id:221 -->
-- [ ] Job queue persisted in `state.db` — survive daemon restarts <!-- id:222 -->
-- [ ] Crash recovery: resume from last completed phase artifact <!-- id:223 -->
-- [ ] HTTP context server on `localhost:27471` — serves `context.md` to local tools <!-- id:224 -->
-- [ ] Scheduled agent dispatch via daemon (replaces crontab entries from `--install-cron`) <!-- id:225 -->
-- [ ] Tests: daemon lifecycle, job queue persistence, crash recovery, context server <!-- id:226 -->
+## v0.9.2 — Async Daemon ✅ Shipped as v0.9.3 (PRs #56/#57/#58)
+- [x] `synlynk daemon start/stop/status/restart` <!-- id:220 -->
+- [x] launchd plist generation (macOS) + systemd unit generation (Linux) <!-- id:221 -->
+- [x] Job queue persisted in `state.db` — survive daemon restarts <!-- id:222 -->
+- [x] Crash recovery: resume from last completed phase artifact <!-- id:223 -->
+- [x] HTTP context server on `localhost:27471` — serves `context.md` to local tools <!-- id:224 -->
+- [x] Scheduled agent dispatch via daemon (replaces crontab entries from `--install-cron`) <!-- id:225 -->
+- [x] Tests: daemon lifecycle, job queue persistence, crash recovery, context server <!-- id:226 -->
 
-## v0.9.3 — Workgroup Relay
+## v0.9.3 → **v0.9.4 in roadmap** — Workgroup Relay <!-- version drift: v0.9.1 install-hardening slip shifted numbering -->
 - [ ] `synlynk relay join` — default path: connects to `relay.synlynk.com/<workspace-id>` (community relay); shows graceful "launching v1.0" if server not yet live, falls back to LAN <!-- id:230 -->
 - [ ] mDNS announcement (Bonjour/Avahi) for LAN auto-discovery (fallback mode) <!-- id:231 -->
 - [ ] Self-signed TLS cert auto-generated on first start (LAN mode) <!-- id:232 -->
@@ -105,6 +105,16 @@
 - [ ] All events signed with member's Ed25519 identity <!-- id:238 -->
 - [ ] Feature gate: `--enterprise` flag + exception token system for self-host path <!-- id:238b -->
 - [ ] Tests: LAN discovery, offline queue, handover protocol, degraded-mode warning, community relay join, enterprise gate <!-- id:239 -->
+
+---
+
+## DevX Epic — Synlynk Developer Experience (pre-v0.9.4)
+<!-- These are design/strategy questions to resolve before v0.9.4 implementation begins -->
+
+- [ ] **[DevX-1] Context-layer brainstorm for v0.9.4** — Run the brainstorm session from spec `docs/superpowers/specs/2026-06-24-v0.9.4-context-layer-design-question.md`. Key decisions: hybrid read in `generate_context()` (SQLite tasks + file memory), relay wire protocol (structured events, not markdown blob), `context.md` as backwards-compat view. <!-- id:300 -->
+- [ ] **[DevX-2] Task tracking canon** — Decide and document the canonical source for open/allocated/in-progress tasks: `todo.md` (human-editable, git-tracked) vs `stories` table in `state.db` (machine-queryable) vs GitHub Projects V2 (PM view). Currently three sources exist with no declared winner. Outcome: written decision record in `project-docs/decisions/`. <!-- id:301 -->
+- [ ] **[DevX-3] Dispatch lifecycle observability** — Design structured feedback for `synlynk dispatch` so users don't need to run status checks manually. Current gap: no proactive completion notification, no progress phases, no structured summary on finish. Proposed: job-start banner with ID, agent-emitted phase markers in log, daemon `/jobs/<id>` polling, terminal bell / OS notification on completion. Outcome: spec or implementation in v0.9.4. <!-- id:302 -->
+- [ ] **[DevX-4] Usage model clarity** — Decide the canonical synlynk launch pattern and document it. Current reality: most users open a Claude/Codex/Agy session first and then ask for synlynk commands inside it (inverted from the design intent of `synlynk exec claude`). Questions: does CWD matter (project root vs parent)? Should we promote the daemon-first model? Should `synlynk exec` be framed differently? Outcome: updated CLAUDE.md / site copy / onboarding flow. <!-- id:303 -->
 
 ---
 
