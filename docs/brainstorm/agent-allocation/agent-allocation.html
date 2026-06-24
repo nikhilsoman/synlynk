@@ -1,0 +1,100 @@
+<h2>v0.9.2 — AGY + Codex Allocation Plan</h2>
+<p class="subtitle">You act as PR reviewer. Two waves of parallel dispatch.</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px">
+
+  <!-- Codex column -->
+  <div>
+    <div style="background:#1c1c1e;border-radius:10px;padding:16px 20px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:6px">Codex</div>
+      <div style="color:#f5f5f7;font-size:13px">Builder · inline edits · fast iteration<br>Best for: mechanical, well-scoped changes in known locations</div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:10px;padding:16px 20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:4px">Wave 1 · Task 1</div>
+      <div style="font-size:14px;font-weight:600;color:#1d1d1f;margin-bottom:6px">Schema migration + <code style="font-size:12px;background:#e8e8ed;padding:1px 5px;border-radius:4px">--tokens</code> flag</div>
+      <div style="font-size:12px;color:#6e6e73">4 targeted edits in known lines:<br>
+        <span style="color:#0071e3">_migrate_db</span> · <span style="color:#0071e3">cmd_story_create</span> · <span style="color:#0071e3">cmd_story_list</span> · argparse<br>
+        No new functions — pure inline edits
+      </div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:10px;padding:16px 20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:4px">Wave 1 · Task 2</div>
+      <div style="font-size:14px;font-weight:600;color:#1d1d1f;margin-bottom:6px"><code style="font-size:12px;background:#e8e8ed;padding:1px 5px;border-radius:4px">_check_upstream_divergence</code></div>
+      <div style="font-size:12px;color:#6e6e73">1 new function (pure subprocess) + inject at 2 call sites.<br>Self-contained, no cross-function dependencies.</div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px dashed #d2d2d7;border-radius:10px;padding:14px 20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#a1a1a6;text-transform:uppercase;margin-bottom:4px">Waits for Wave 1</div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:10px;padding:16px 20px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:4px">Wave 2 · Task 5</div>
+      <div style="font-size:14px;font-weight:600;color:#1d1d1f;margin-bottom:6px"><code style="font-size:12px;background:#e8e8ed;padding:1px 5px;border-radius:4px">synlynk team status</code></div>
+      <div style="font-size:12px;color:#6e6e73">1 new function that calls <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">_build_team_digest()</code> (built by AGY in Wave 1).<br>Formatting only — no new logic.</div>
+    </div>
+  </div>
+
+  <!-- AGY column -->
+  <div>
+    <div style="background:#1c1c1e;border-radius:10px;padding:16px 20px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:6px">AGY</div>
+      <div style="color:#f5f5f7;font-size:13px">Builder + Verifier · large context · search-augmented<br>Best for: integration, new functions spanning the full file</div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:10px;padding:16px 20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:4px">Wave 1 · Task 3</div>
+      <div style="font-size:14px;font-weight:600;color:#1d1d1f;margin-bottom:6px">Shared helpers</div>
+      <div style="font-size:12px;color:#6e6e73">3 new functions requiring full-file context:<br>
+        <span style="color:#0071e3">_seed_devlog</span> · <span style="color:#0071e3">_generate_ai_context_files</span> · <span style="color:#0071e3">_build_team_digest</span><br>
+        <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">_build_team_digest</code> reads SQLite + telemetry + devlogs — needs to understand <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">_get_db</code>, <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">_get_last_devlog_date</code>, json telemetry format
+      </div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px dashed #d2d2d7;border-radius:10px;padding:14px 20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#a1a1a6;text-transform:uppercase;margin-bottom:4px">Waits for Wave 1</div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:10px;padding:16px 20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:4px">Wave 2 · Task 4</div>
+      <div style="font-size:14px;font-weight:600;color:#1d1d1f;margin-bottom:6px"><code style="font-size:12px;background:#e8e8ed;padding:1px 5px;border-radius:4px">synlynk join</code></div>
+      <div style="font-size:12px;color:#6e6e73">Integration command calling scan, subprocess, config read/write, all three shared helpers + team digest print. Depends on Task 3.</div>
+    </div>
+
+    <div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:10px;padding:16px 20px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#6e6e73;text-transform:uppercase;margin-bottom:4px">Wave 2 · Task 6</div>
+      <div style="font-size:14px;font-weight:600;color:#1d1d1f;margin-bottom:6px"><code style="font-size:12px;background:#e8e8ed;padding:1px 5px;border-radius:4px">synlynk decide</code></div>
+      <div style="font-size:12px;color:#6e6e73">3 new functions: <span style="color:#0071e3">_run_agent_sync</span> · <span style="color:#0071e3">_write_decision_record</span> · <span style="color:#0071e3">cmd_decide</span><br>
+        Most complex task — reuses <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">_sign_capability_rating</code>, <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">AGENT_CAPABILITY_BASELINES</code>, <code style="background:#e8e8ed;padding:1px 4px;border-radius:3px">_check_upstream_divergence</code>. Depends on Task 2.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Wave timeline -->
+<div style="background:#f5f5f7;border:1.5px solid #d2d2d7;border-radius:12px;padding:20px 24px">
+  <h3 style="margin:0 0 16px;font-size:14px;font-weight:600;color:#1d1d1f">Execution timeline</h3>
+  <div style="display:grid;grid-template-columns:80px 1fr;gap:8px;align-items:center;font-size:13px">
+    <div style="font-weight:700;color:#0071e3">Wave 1</div>
+    <div style="background:#e8f4ff;border-radius:6px;padding:8px 12px;color:#1d1d1f">
+      <strong>Codex T1</strong> (schema + --tokens) &nbsp;║&nbsp; <strong>Codex T2</strong> (_check_upstream) &nbsp;║&nbsp; <strong>AGY T3</strong> (shared helpers) — all parallel
+    </div>
+    <div style="font-weight:700;color:#6e6e73;text-align:center;font-size:18px">↓</div>
+    <div style="color:#6e6e73;font-size:12px;padding:4px 12px">You review Wave 1 PRs — 3 independent PRs, merge order: T1 → T2 → T3</div>
+    <div style="font-weight:700;color:#0071e3">Wave 2</div>
+    <div style="background:#e8f4ff;border-radius:6px;padding:8px 12px;color:#1d1d1f">
+      <strong>Codex T5</strong> (team status) &nbsp;║&nbsp; <strong>AGY T4</strong> (join) &nbsp;║&nbsp; <strong>AGY T6</strong> (decide) — all parallel, after Wave 1 merged
+    </div>
+    <div style="font-weight:700;color:#6e6e73;text-align:center;font-size:18px">↓</div>
+    <div style="color:#6e6e73;font-size:12px;padding:4px 12px">You review Wave 2 PRs — merge order: T5 → T4 → T6</div>
+    <div style="font-weight:700;color:#34c759">Done</div>
+    <div style="background:#e8ffe8;border-radius:6px;padding:8px 12px;color:#1d1d1f">
+      v0.9.2 feature-complete · bump VERSION to 0.9.2 · open release PR
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;padding:14px 18px;background:#fff9e6;border:1px solid #f0c040;border-radius:8px;font-size:12px;color:#6e6e73">
+  <strong style="color:#1d1d1f">Merge order matters within each wave.</strong> T1 and T2 touch different lines so order is flexible. T3 must merge before T4/T5/T6 start. T2 must merge before T6 starts. All 6 branches off <code>main</code>.
+</div>

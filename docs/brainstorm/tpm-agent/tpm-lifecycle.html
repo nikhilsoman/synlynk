@@ -1,83 +1,91 @@
-<h2>TPM Handoff &mdash; Where Does Ownership Transfer?</h2>
+<h2>TPM Handoff — Where Does Ownership Transfer?</h2>
 <p class="subtitle">The plan document is the boundary. Everything left of it is design. Everything right is execution.</p>
 
-<div style="display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:4px 0">
+<div style="overflow-x:auto;padding:8px 0">
+<div style="display:flex;align-items:stretch;gap:0;min-width:860px">
 
   <!-- ARCHITECT ZONE -->
-  <div style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px 0 0 10px;padding:16px 14px;min-width:200px">
-    <div class="label" style="margin-bottom:12px">Architect</div>
+  <div style="flex:1;background:#1e293b;border:1px solid #334155;border-radius:10px 0 0 10px;padding:16px 14px">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#94a3b8;text-transform:uppercase;margin-bottom:12px">🏛 Architect</div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--accent)">Brainstorm</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">Clarifying questions, approaches, design sections</div>
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#60a5fa">Brainstorm</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">Clarifying questions, approaches, design sections</div>
       </div>
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--accent)">Spec doc</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">docs/superpowers/specs/YYYY-MM-DD-*.md</div>
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#60a5fa">Spec doc</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">docs/superpowers/specs/YYYY-MM-DD-*.md</div>
       </div>
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--accent)">Implementation plan</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">docs/superpowers/plans/YYYY-MM-DD-*.md<br>Tasks, code, test steps, commit messages</div>
+      <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#60a5fa">Implementation plan</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">docs/superpowers/plans/YYYY-MM-DD-*.md<br>Tasks, code, test steps, commit messages</div>
       </div>
     </div>
   </div>
 
-  <!-- HANDOFF COLUMN -->
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:90px;position:relative;flex-shrink:0">
-    <div style="width:2px;height:100%;background:var(--border);position:absolute"></div>
-    <div style="background:var(--accent);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:13px;position:relative;z-index:1;box-shadow:0 0 0 4px var(--selected-bg)">
-      <span style="color:white;font-weight:700;font-size:10px">PLAN</span>
-    </div>
-    <div style="font-size:8px;color:var(--accent);font-weight:700;margin-top:6px;text-align:center;position:relative;z-index:1;letter-spacing:.05em">CREATED</div>
+  <!-- HANDOFF ARROW -->
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:90px;background:#111827;position:relative">
+    <div style="width:2px;height:100%;background:linear-gradient(to bottom,#1e293b,#0ea5e9,#1e293b);position:absolute"></div>
+    <div style="background:#0ea5e9;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:16px;position:relative;z-index:1;box-shadow:0 0 16px #0ea5e988">🤝</div>
+    <div style="font-size:9px;color:#0ea5e9;font-weight:700;margin-top:6px;text-align:center;position:relative;z-index:1">PLAN<br>CREATED</div>
   </div>
 
   <!-- TPM ZONE -->
-  <div style="flex:1.4;background:var(--bg-secondary);border:1px solid var(--border);border-radius:0 10px 10px 0;padding:16px 14px;min-width:280px">
-    <div class="label" style="margin-bottom:12px">TPM</div>
+  <div style="flex:1.4;background:#1e293b;border:1px solid #334155;border-radius:0 10px 10px 0;padding:16px 14px">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#94a3b8;text-transform:uppercase;margin-bottom:12px">📋 TPM</div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-primary)">Parse plan &rarr; Tasks</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">Each <code style="background:var(--bg-primary);padding:1px 4px;border-radius:3px">### Task N</code> block &rarr; atomic dispatch unit<br>Dependency graph &rarr; wave grouping</div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#a78bfa">Parse plan → Tasks</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">Each <code style="background:#1e293b;padding:1px 4px;border-radius:3px">### Task N</code> block → atomic dispatch unit<br>Dependency graph → wave grouping</div>
       </div>
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-primary)">Agent assignment</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">Capability matrix &times; cost matrix &rarr; agent per task<br>"T3 is exploratory &rarr; Claude; T1 is targeted &rarr; Codex"</div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#a78bfa">Agent assignment</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">Capability matrix × cost matrix → agent per task<br>"T3 is exploratory → Claude; T1 is targeted → Codex"</div>
       </div>
-      <div style="background:var(--selected-bg);border:1px solid var(--accent);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--accent)">Present wave plan &rarr; Human approves</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">Wave 1 [T1&rarr;Codex, T2&rarr;Codex, T3&rarr;Claude] &middot; estimated cost<br>Per-task consent from story config</div>
+
+      <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px 12px;border-left:2px solid #0ea5e9">
+        <div style="font-size:11px;font-weight:600;color:#0ea5e9">Present wave plan → Human approves</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">Shows: Wave 1 [T1→Codex, T2→Codex, T3→Claude] · estimated cost<br>Per-task consent level from story config</div>
       </div>
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-primary)">Dispatch + monitor</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">Creates worktrees, dispatches agents, watches completion<br>Flags blockers, manages merge order</div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#a78bfa">Dispatch + monitor</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">Creates worktrees, dispatches agents, watches for completion<br>Flags blockers, manages merge order</div>
       </div>
-      <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-primary)">Next wave / done</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:3px">After Wave N merges &rarr; unblock Wave N+1, repeat<br>All tasks done &rarr; notify, update story status in state.db</div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:600;color:#a78bfa">Next wave / done</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">After Wave N merges → unblock Wave N+1, repeat<br>All tasks done → notify, update story status in state.db</div>
       </div>
+
     </div>
   </div>
 
 </div>
+</div>
 
-<div style="margin-top:20px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-  <div class="label" style="margin-bottom:8px">The Task &mdash; atomic TPM unit</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
-    <div>
-      <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">SOURCE</div>
-      <div style="font-size:11px;color:var(--text-primary)">One <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px">### Task N</code> block in the plan doc</div>
+<div style="margin-top:20px;padding:14px 16px;background:#0f172a;border:1px solid #1e3a5f;border-radius:8px">
+  <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:8px">THE TASK — atomic TPM unit</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:180px">
+      <div style="font-size:10px;color:#64748b;margin-bottom:4px">SOURCE</div>
+      <div style="font-size:11px;color:#e2e8f0">One <code style="background:#1e293b;padding:1px 5px;border-radius:3px">### Task N</code> block in the plan doc</div>
     </div>
-    <div>
-      <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">EXECUTION UNIT</div>
-      <div style="font-size:11px;color:var(--text-primary)">One agent &middot; one worktree branch &middot; one commit</div>
+    <div style="flex:1;min-width:180px">
+      <div style="font-size:10px;color:#64748b;margin-bottom:4px">EXECUTION UNIT</div>
+      <div style="font-size:11px;color:#e2e8f0">One agent · one worktree branch · one commit</div>
     </div>
-    <div>
-      <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">GRANULARITY</div>
-      <div style="font-size:11px;color:var(--text-primary)">Finer than a story (epic)<br>Coarser than a step (TDD step)</div>
+    <div style="flex:1;min-width:180px">
+      <div style="font-size:10px;color:#64748b;margin-bottom:4px">GRANULARITY</div>
+      <div style="font-size:11px;color:#e2e8f0">Finer than a story (epic)<br>Coarser than a step (TDD step)</div>
     </div>
-    <div>
-      <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">TRACKED IN</div>
-      <div style="font-size:11px;color:var(--text-primary)">state.db tasks table + plan doc checkboxes</div>
+    <div style="flex:1;min-width:180px">
+      <div style="font-size:10px;color:#64748b;margin-bottom:4px">TRACKED IN</div>
+      <div style="font-size:11px;color:#e2e8f0">state.db tasks table (new)<br>+ plan doc checkbox state</div>
     </div>
   </div>
 </div>
+
+<p style="margin-top:16px;font-size:12px;color:#64748b">Does this handoff point feel right — plan created = Architect done, TPM takes over? And does the task granularity (one plan task = one agent dispatch) match your mental model?</p>

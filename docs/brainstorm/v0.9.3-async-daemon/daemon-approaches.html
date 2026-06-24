@@ -1,0 +1,63 @@
+<h2>How should the v0.9.3 daemon work?</h2>
+<p class="subtitle">Three approaches — pick the one that fits how agents should consume context</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Extend WatchDaemon + HTTP server</h3>
+      <p>The existing <code>WatchDaemon</code> (double-fork, mtime polling, pidfile) gains an embedded <code>http.server</code> thread on <code>localhost:27471</code>. <code>synlynk daemon</code> becomes an alias for the extended watch. One process, two jobs: file watching + HTTP.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Minimal new code — builds on existing double-fork + pidfile pattern</li>
+          <li>Single process to manage, single pidfile</li>
+          <li>No new concepts for users already using <code>synlynk watch</code></li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li><code>watch</code> and <code>daemon</code> become entangled — harder to evolve independently</li>
+          <li>Threading in a daemon process adds subtle failure modes</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>New SynlynkDaemon class (recommended)</h3>
+      <p>A separate <code>SynlynkDaemon</code> subclasses <code>WatchDaemon</code> and adds the HTTP server as a second thread. <code>synlynk daemon start/stop/status</code> is its own command. <code>synlynk watch</code> stays as-is (lightweight, no HTTP). launchd/systemd registration as <code>synlynk daemon --install-service</code>.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Clean separation — daemon is a superset of watch, not a replacement</li>
+          <li>Reuses all double-fork + pidfile + mtime polling logic from WatchDaemon</li>
+          <li>Follows existing patterns exactly (same structure as agent --install-cron)</li>
+          <li>Easy to test HTTP server independently</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Two running processes if user has both watch and daemon active (edge case)</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Standalone HTTP process (no file watcher)</h3>
+      <p>Skip the file-watching loop entirely. The daemon is just an HTTP server that reads <code>context.md</code> on each request. No polling, no mtime tracking. Agents call <code>GET localhost:27471/context</code> and get the current file contents. Context freshness is the caller's problem.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Simplest possible implementation — no threads, no polling loop</li>
+          <li>Stateless — no risk of stale cache or missed changes</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>No auto-regeneration — agents get stale context unless human runs checkpoint</li>
+          <li>Loses the "always-current" guarantee that makes the daemon valuable</li>
+          <li>Not what the roadmap describes</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
