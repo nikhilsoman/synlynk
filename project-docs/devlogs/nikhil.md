@@ -1,5 +1,45 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-24 — Session: v0.9.4 Context/Dispatch/Relay + Three-Tier Docs Suite
+
+### Shipped
+
+**v0.9.4 — Context / Dispatch / Relay (PR #60, merged 2026-06-24, 472 tests)**
+
+All 5 tasks completed by Codex via `synlynk dispatch`:
+- T1: SQLite-primary task state — `stories.status` column; `_generate_todo_md()` writes `todo.md` as generated view; `_import_todo_to_stories()` syncs hand-written tasks (now idempotent, title-dedup via MD5)
+- T2: Agent profiles — `.agents/<agent>.json` → `_load_agent_profile()`; `synlynk agent configure <name>`; `context_mode=None` default (profile fills None, explicit CLI flag wins)
+- T3: Jobs + preflight — `cmd_jobs()` reads `daemon_jobs` SQLite with `--watch`; `_preflight_dispatch()`; mirrors jobs to `daemon_jobs` on dispatch
+- T4: HTTP SSE relay — `RELAY_EVENT_TYPES` (7 types); `SynlynkRelay` broker (`GET /events`, `POST /publish`, port 27472); `synlynk relay start/broadcast`
+- T5: VERIFY_SKIP sentinel — `_extract_compliance_tags()` word-boundary regex; Pattern 4 fires informational alert when exit 0 but no test/verify evidence
+
+**Dispatch fixes shipped in PR #60 (from R1 Claude review of the branch):**
+- `cwd=os.getcwd()` in `Popen` — Agy was resetting its CWD to scratch space
+- `dispatch_flags` key in `AGENT_CAPABILITY_BASELINES` — `--dangerously-skip-permissions` scoped to dispatch only, not all exec
+- `_import_todo_to_stories()` deterministic MD5 ID + title-dedup guard (no duplicate rows on re-run)
+- `queue.Full` properly classified in relay (slow subscriber, keep alive vs. dead)
+- `--watch` loop now catches render exceptions gracefully
+
+**Three-tier documentation suite (v0.9.4):**
+- `docs/synlynk-official-reference.html` + PDF — 14-page full reference (architecture, all commands, agent profiles, relay, SQLite schema, changelog)
+- `docs/synlynk-command-reference.html` + PDF — 9-page command catalog by category with flags, options, usage scenarios
+- `docs/synlynk-quickstart-guide.html` + PDF — 5-page getting-started guide
+
+**GitHub release v0.9.4 cut.**
+
+**Website updated:** docs download section with thumbnail cards, v0.9.4 roadmap, new Workgroup Relay feature card, agent profiles in capability card, hero description updated, version badge 0.9.4, Releases nav link added.
+
+### Dispatch Dogfooding Learnings
+- Codex: reliable for TDD loops — completed all 5 tasks cleanly
+- Agy: auth expired mid-session (re-auth via `! agy`); CWD fix worked; stalls on multi-step tasks that require blocking shell commands (good for read-only only)
+- Claude headless: needs `--dangerously-skip-permissions` scoped to dispatch_flags (now correct post-R1)
+- `dispatch_flags` pattern: good general pattern for any future dispatch-only flags
+
+### Next
+BS-2 (Onboarding + Mode Taxonomy), BS-3 (Agent Behaviour), BS-4 (Command Audit) brainstorm series — unblock Agent Ecosystem Epic (v0.8.1–v0.8.4)
+
+---
+
 ## 2026-06-23b — Session: v0.9.2 Release SOP
 
 ### Shipped

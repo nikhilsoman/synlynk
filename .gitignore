@@ -8,3 +8,5 @@ test_context_output/
 .venv/
 *.egg-info/
 .worktrees/
+.antigravitycli/
+.claude/
