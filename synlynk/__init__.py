@@ -455,7 +455,8 @@ PROMPTS_DIR = ".synlynk/prompts"
 AGENT_CAPABILITY_BASELINES = {
     "claude": {
         "cli": "claude",
-        "non_interactive_flags": ["--print", "--dangerously-skip-permissions"],
+        "non_interactive_flags": ["--print"],
+        "dispatch_flags": ["--dangerously-skip-permissions"],
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
@@ -2111,7 +2112,7 @@ def _preflight_dispatch(agent: str) -> Optional[str]:
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
-                   context_mode: str = "task") -> dict:
+                   context_mode: str = None) -> dict:
     """Dispatches an agent to run a task in the background.
 
     Uses non-interactive agent mode (no PTY). Stdout captured to
@@ -2138,10 +2139,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
+    dispatch_flags = baselines.get("dispatch_flags", [])
+    flags = flags + dispatch_flags
     model_at_dispatch = _probe_model_version(agent, cli)
     profile = _load_agent_profile(agent)
-    if "context_mode" in profile:
-        context_mode = profile["context_mode"]
+    if context_mode is None:
+        context_mode = profile.get("context_mode", "task")
+    # else: explicit caller value wins; profile is default-only
 
     import hashlib as _hashlib
     job_id = "job-" + _hashlib.md5(
@@ -2175,6 +2179,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         encoded_context = context_text.encode("utf-8")
         if len(encoded_context) > context_max_bytes:
             context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
+            print(f"  context truncated to {context_max_bytes}B (agent profile limit)")
 
     # Inject relevant file list
     file_list = _relevant_files_for_story(story_id) if story_id else []
@@ -2343,7 +2348,10 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False) -> None:
         try:
             while True:
                 print("\033[H\033[J", end="")
-                _render()
+                try:
+                    _render()
+                except Exception as e:
+                    print(f"  render error: {e}")
                 print(f"\n  {_DIM}Refreshing every 2s... Ctrl-C to exit{_RESET}")
                 _time.sleep(2)
         except KeyboardInterrupt:
@@ -4403,14 +4411,23 @@ def _extract_compliance_tags(output_text: str) -> dict:
     for the Agent Behaviour epic (AB) without blocking job completion.
     """
     lower = output_text.lower()
-    ran_tests = any(phrase in lower for phrase in [
-        "test passed", "tests passed", "pytest", "npm test", "all tests",
-        "test suite", "test run", "✓ test", "passing",
-    ])
-    verify_before_commit = any(phrase in lower for phrase in [
-        "verified", "checked", "confirmed", "lgtm",
-        "reviewed", "validated",
-    ])
+    import re as _re
+
+    ran_tests_patterns = [
+        r"\btests\s+pass",
+        r"\bpassed\b",
+        r"\bpytest\b",
+        r"\btest\s+suite\b",
+        r"\brunning\s+tests\b",
+    ]
+    verify_patterns = [
+        r"\bverif",
+        r"\blgtm\b",
+        r"\breviewed\b",
+        r"\bchecked\b",
+    ]
+    ran_tests = any(_re.search(pat, lower) for pat in ran_tests_patterns)
+    verify_before_commit = any(_re.search(pat, lower) for pat in verify_patterns)
     return {
         "ran_tests": ran_tests,
         "verify_before_commit": verify_before_commit,
@@ -4749,15 +4766,18 @@ def _import_todo_to_stories() -> int:
             if not title_match:
                 continue
             title = title_match.group(1).strip()
-            story_id = "story-" + _hashlib.md5(
-                f"{title}{time.time()}".encode()
-            ).hexdigest()[:8]
+            story_id = "story-" + _hashlib.md5(title.encode()).hexdigest()[:8]
+            if story_id in existing_ids:
+                continue
+            if conn.execute("SELECT 1 FROM stories WHERE title=?", (title,)).fetchone():
+                continue
             try:
                 conn.execute(
                     "INSERT INTO stories (story_id, title, status) VALUES (?, ?, 'open')",
                     (story_id, title),
                 )
                 imported += 1
+                existing_ids.add(story_id)
             except _sqlite3.IntegrityError:
                 pass
 
@@ -5722,6 +5742,7 @@ def _make_relay_handler(subscribers: list, sub_lock) -> type:
     """Returns an HTTP handler class for the stateless relay broker."""
     import http.server as _http
     import json as _json
+    import queue as _queue_mod
 
     class RelayHandler(_http.BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -5750,11 +5771,14 @@ def _make_relay_handler(subscribers: list, sub_lock) -> type:
                     for q in subscribers:
                         try:
                             q.put_nowait(data)
+                        except _queue_mod.Full:
+                            pass  # slow subscriber — skip event, keep alive
                         except Exception:
                             dead.append(q)
                     for d in dead:
                         subscribers.remove(d)
-                self._send_json({"ok": True, "fans": len(subscribers)})
+                    fans = len(subscribers)
+                self._send_json({"ok": True, "fans": fans})
             else:
                 self.send_error(404)
 

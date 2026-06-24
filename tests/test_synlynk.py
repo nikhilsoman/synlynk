@@ -17,6 +17,8 @@ def test_agent_capability_baselines_exist():
         assert "roles" in caps
         assert "cli" in caps
         assert "non_interactive_flags" in caps
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
 
 
 def test_jobs_file_constant():
@@ -1208,6 +1210,14 @@ def test_extract_compliance_tags_finds_verify_evidence(project_dir):
     assert tags["verify_before_commit"] is True
 
 
+def test_extract_compliance_tags_uses_word_boundaries(project_dir):
+    """_extract_compliance_tags should not fire on embedded substrings."""
+    import synlynk as sl
+    tags = sl._extract_compliance_tags("The contest suite was unverifiedly executed.")
+    assert tags["ran_tests"] is False
+    assert tags["verify_before_commit"] is False
+
+
 def test_extract_compliance_tags_empty_output(project_dir):
     """_extract_compliance_tags returns False flags for empty output."""
     import synlynk as sl
@@ -1775,6 +1785,53 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
     assert any(j["id"] == job["id"] for j in jobs)
 
 
+def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+
+    sl.dispatch_agent("claude", "implement auth fix", story_id="14")
+    shell_cmd = captured["cmd"][2]
+    assert "--dangerously-skip-permissions" in shell_cmd
+
+
+def test_exec_agent_task_claude_does_not_include_dangerously_skip_permissions(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured["args"] = args
+        return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {})
+
+    story_id = sl.cmd_story_create("Investigate issue", engg_domain="backend")
+    sl._run_investigation(
+        {
+            "type": "support",
+            "severity": "medium",
+            "summary": "Investigate",
+            "detail": "Investigate",
+            "signal_hash": "abc123",
+        },
+        {"investigator": "claude"},
+    )
+    assert "--dangerously-skip-permissions" not in str(captured["args"])
+
+
 def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
     import synlynk as sl
     class FakeProc:
@@ -1891,6 +1948,25 @@ def test_dispatch_agent_context_mode_full(project_dir, monkeypatch):
     assert "synlynk Context Snapshot" in prompt
 
 
+def test_dispatch_agent_explicit_context_mode_beats_profile(project_dir, monkeypatch):
+    """An explicit context_mode argument must override the agent profile."""
+    import synlynk as sl, json
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(sl.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "synlynk Context Snapshot\nshould not appear")
+    os.makedirs(".agents", exist_ok=True)
+    (project_dir / ".agents" / "claude.json").write_text(
+        json.dumps({"agent": "claude", "context_mode": "full"})
+    )
+    job = sl.dispatch_agent("claude", "do the thing", context_mode="none")
+    prompt = open(job["prompt_file"]).read()
+    assert "synlynk Context Snapshot" not in prompt
+
+
 def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
     """dispatch_agent warns when context exceeds soft limit."""
     import synlynk as sl
@@ -1904,6 +1980,25 @@ def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
     sl.dispatch_agent("claude", "do thing", context_mode="full")
     captured = capsys.readouterr()
     assert "exceeds soft limit" in captured.out
+
+
+def test_dispatch_agent_context_max_bytes_logs_utf8_truncation(project_dir, monkeypatch, capsys):
+    """dispatch_agent truncates oversized UTF-8 context cleanly and logs it."""
+    import synlynk as sl, json
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(sl.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "€" * 100)
+    os.makedirs(".agents", exist_ok=True)
+    (project_dir / ".agents" / "claude.json").write_text(
+        json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 10})
+    )
+    sl.dispatch_agent("claude", "do thing")
+    captured = capsys.readouterr()
+    assert "context truncated to 10B" in captured.out
 
 
 def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, monkeypatch):
@@ -2004,6 +2099,31 @@ def test_import_todo_to_stories_skips_existing_stories(project_dir):
     assert count == 1
 
 
+def test_import_todo_to_stories_is_idempotent(project_dir):
+    """_import_todo_to_stories dedups by title and deterministic story_id."""
+    import synlynk as sl
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] First unchecked item\n"
+        "- [ ] Second unchecked item\n"
+    )
+    first = sl._import_todo_to_stories()
+    second = sl._import_todo_to_stories()
+    conn = sl._get_db()
+    rows = conn.execute(
+        "SELECT story_id, title FROM stories WHERE title IN (?, ?) ORDER BY title",
+        ("First unchecked item", "Second unchecked item"),
+    ).fetchall()
+    total = conn.execute(
+        "SELECT COUNT(*) FROM stories WHERE title IN (?, ?)",
+        ("First unchecked item", "Second unchecked item"),
+    ).fetchone()[0]
+    conn.close()
+    assert first == 2
+    assert second == 0
+    assert total == 2
+    assert len(rows) == 2
+
+
 def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
     """dispatch_agent appends ## How to Verify when tests/ directory exists."""
     import synlynk as sl
@@ -2029,6 +2149,29 @@ def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
     job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
     assert "## How to Verify" not in prompt
+
+
+def test_cmd_jobs_watch_handles_render_errors(project_dir, monkeypatch, capsys):
+    """cmd_jobs(--watch) prints render errors instead of crashing."""
+    import synlynk as sl
+
+    class FakeConn:
+        def execute(self, *a, **kw):
+            raise RuntimeError("boom")
+
+        def close(self):
+            pass
+
+    def fake_sleep(_seconds):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(sl, "_reconcile_daemon_jobs", lambda: None)
+    monkeypatch.setattr(sl, "_get_db", lambda: FakeConn())
+    monkeypatch.setattr(sl.time, "sleep", fake_sleep)
+
+    sl.cmd_jobs(watch=True)
+    out = capsys.readouterr().out
+    assert "render error: boom" in out.lower()
 
 
 def test_load_agent_profile_returns_empty_when_missing(project_dir):
