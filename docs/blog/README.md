@@ -29,6 +29,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [20](./20-post-v0.9.0-install-init-hardening.md) | Post v0.9.0 — The Gap Between Shipping and Working | hotfix | 2026-06-22 |
 | [21](./21-pr-v092-team-onboarding-consensus.md) | PRs — v0.9.2: Team Onboarding + Consensus | TBD | 2026-06-22 |
 | [22](./22-pr56-57-58-v0.9.3-async-daemon.md) | PRs #56/#57/#58 — v0.9.3: synlynk Goes Always-On | [#56](https://github.com/nikhilsoman/synlynk/pull/56), [#57](https://github.com/nikhilsoman/synlynk/pull/57), [#58](https://github.com/nikhilsoman/synlynk/pull/58) | 2026-06-23 |
+| [23](./23-fix-dispatch-context-scoping.md) | P0 Fix: Dispatch Context Scoping | [#59](https://github.com/nikhilsoman/synlynk/pull/59) | 2026-06-24 |
+| [24](./24-pr31-v0.9.4-context-dispatch-relay.md) | PR #60 — v0.9.4: Context, Dispatch, and Relay | [#60](https://github.com/nikhilsoman/synlynk/pull/60) | 2026-06-24 |
 
 ## Per-PR Post Template
 

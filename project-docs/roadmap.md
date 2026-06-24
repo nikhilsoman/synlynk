@@ -55,7 +55,7 @@ Design and engineering work that spans multiple version milestones. These epics 
 
 | Epic | Theme | ID Range | Status | Drives |
 | :--- | :--- | :--- | :--- | :--- |
-| **DevX** | Context-layer migration · task tracking canon · dispatch observability · usage model clarity | DevX-1–4 | 🚀 Active — pre-v0.9.4 | v0.9.4 relay design, `generate_context()` hybrid read |
+| **DevX** | Context-layer migration · task tracking canon · dispatch observability · usage model clarity | DevX-1–4 | ✅ Complete — shipped in v0.9.4 | v0.9.4 relay design, `generate_context()` hybrid read |
 | **Command Audit** | 9-dimension command health review · stdlib OTel tracer · `synlynk telemetry` · hook wiring · autopilot trigger map | CA-0–9 | 📋 Planned — v0.9.4 scope | OTel infrastructure, CA-4/CA-5 ship with relay |
 | **Agent Behaviour** | Instruction attach + compliance measurement · sentinel non-adherence patterns · per-agent variance · cross-mode adherence dataset (Synlynk IDE justification) | AB-0–10 | 📋 Planned — starts with AB-3 (compliance tags) | v1.0 IDE integration argument, capability ratings |
 | **Onboarding** | `synlynk doctor` · agent availability state machine · mode taxonomy rewrite · progressive init · join vs resume split · multi-repo stopgap | OB-0–12 | 📋 Planned — OB-7/OB-9 patch in v0.9.4, full rewrite post-v0.9.4 | First-run success metrics, `synlynk agents` subcommand |

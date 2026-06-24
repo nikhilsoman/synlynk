@@ -7,7 +7,7 @@
 
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects scoped project context into every agent dispatch, routes tasks to the best available agent using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.9.2:** Team onboarding — `synlynk join` seeds a new member's devlog from git history and regenerates their AI context files. `synlynk team status` shows all active members, story assignments, and token budget consumption. `synlynk decide` dispatches a multi-agent consensus panel and writes a signed Decision record.
+**v0.9.4:** Context / Dispatch / Relay — SQLite-primary task state with generated `todo.md`, per-agent context profiles (`.agents/<agent>.json`), `synlynk jobs` reads live SQLite with `--watch`, pre-flight dispatch gate, HTTP SSE relay broker (`synlynk relay start/broadcast`), and VERIFY_SKIP sentinel pattern. 472 tests.
 
 ## Install
 
@@ -66,8 +66,11 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 | --- | --- |
 | `synlynk init [--force]` | 6-step wizard: scans repo, discovers agents (Magic Moment 1), bootstraps `project-docs/`, offers LLM enrichment |
 | `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
-| `synlynk dispatch <agent> --task <text> [--story <id>]` | Dispatch an agent job to run in the background (Magic Moment 2) |
-| `synlynk jobs [--all]` | List running/recent background jobs |
+| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch an agent job to run in the background (Magic Moment 2) |
+| `synlynk agent configure <name>` | Write `.agents/<name>.json` context profile interactively |
+| `synlynk relay start [--port N]` | Start HTTP SSE relay broker in foreground (port 27472) |
+| `synlynk relay broadcast <body> [--kind motd\|wellness\|message\|joke\|custom]` | Publish a broadcast event to the relay |
+| `synlynk jobs [--all] [--watch]` | List jobs from SQLite (`--watch` refreshes every 2s) |
 | `synlynk logs --job <id> [--tail N]` | Tail a job's stdout log |
 | `synlynk shell [--story <id>]` | Open an interactive agent shell with story context |
 | `synlynk launch <agent> [--story <id>]` | Prompt for task, then dispatch interactively |
@@ -180,8 +183,9 @@ synlynk's goal is to become the OS for multi-agent development — the substrate
 | **v0.9.0** | Kernel Fixes + Package Split — scoped dispatch context, relevant files, verify contract, per-agent framing, Ed25519 signing, anti-gaming cap | ✅ Shipped | Jun 2026 |
 | v0.9.1 | Install Hardening + Docs Migration — installed binary fix, `--docs-dir` flag, smart init migration | ✅ Shipped | Jun 2026 |
 | **v0.9.2** | Team Onboarding + Consensus — `synlynk join`, `synlynk team status`, `synlynk decide`, pull-before-write arbitration, token budgets on stories | ✅ Shipped | Jun 2026 |
-| v0.9.3 | Async Daemon — `synlynk daemon`, launchd/systemd, job queue, HTTP context server localhost:27471 | 🔜 Next | Aug 2026 |
-| v0.9.4 | Workgroup Relay — WSS/443 relay, 3 deployment modes (LAN/Cloudflare Tunnel/VPS), revolving host protocol | Planned | Aug 2026 |
+| v0.9.3 | Async Daemon — `synlynk daemon`, launchd/systemd, job queue, HTTP context server localhost:27471 | ✅ Shipped | Jun 2026 |
+| **v0.9.4** | Context / Dispatch / Relay — SQLite task canon, agent profiles, `synlynk jobs` SQLite, HTTP SSE relay, VERIFY_SKIP sentinel | ✅ Shipped | Jun 2026 |
+| v0.10.0 | Multi-Repo Workspace — `synlynk workspace init/join`, cross-repo epics | Planned | Aug 2026 |
 | v1.0.0 | Community Layer — signed capability ledger, pipx/Homebrew, synlynk.com public launch | Planned | Sep 2026 |
 
 **We're looking for community input on what to build next.** See the [Discussions](../../discussions) tab to vote on feature direction and share use cases.
