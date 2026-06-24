@@ -22,7 +22,7 @@
 | **v0.9.1** | Install Hardening + Docs Migration | Install broken after package split fixed · `_docs_dir()` configurable · `--docs-dir` flag on init · smart doc migration from existing content | ✅ Shipped | June 2026 |
 | **v0.9.2** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | ✅ Shipped | June 2026 |
 | **v0.9.3** | Async Daemon | `synlynk daemon` · launchd/systemd · job queue · HTTP context server localhost:27471 | ✅ Shipped | June 2026 |
-| **v0.9.4** | Workgroup Relay | WSS/443 relay · 3 deployment modes (LAN/Cloudflare Tunnel/VPS) · revolving host protocol | 📋 Planned | Aug 2026 |
+| **v0.9.4** | Context / Dispatch / Relay | SQLite-primary task state · per-agent context profiles (`.agents/<agent>.json`) · `synlynk jobs` SQLite read + `--watch` · pre-flight gate · HTTP SSE relay broker (`synlynk relay start/broadcast`) · VERIFY_SKIP sentinel · dispatch CWD + `--dangerously-skip-permissions` scoped to dispatch_flags | ✅ Shipped | June 2026 |
 | **v0.10.0** | Multi-Repo Workspace | `synlynk workspace init/join` · cross-repo epics · workspace relay scope | 📋 Planned | Aug 2026 |
 | **v1.0.0** | Community Layer: Local Workgroup + Public Launch | Workgroup protocol · signed capability ledger · SME archetype · game-resistant scoring · pipx/Homebrew · synlynk.com · public blog | 📋 Planned | Sep 2026 |
 | **v1.1.0** | Cross-Workgroup (Team Level) | Relay → community server · cross-workgroup epics · agent entitlements | 📋 Planned | Q4 2026 |
