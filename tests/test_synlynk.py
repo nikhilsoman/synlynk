@@ -1956,14 +1956,15 @@ def test_format_prompt_for_codex_leads_with_criteria(project_dir):
 
 
 def test_format_prompt_for_agy_is_concise(project_dir):
-    """AGY prompt leads with Task: directive and truncates context to 2000 chars."""
+    """AGY prompt has working directory header, Task: directive, and truncates context."""
     import synlynk as sl
     long_context = "x" * 5000
     result = sl._format_prompt_for_agent(
         "agy", long_context, "story-1", "fix auth", "", ""
     )
-    assert result.startswith("Task: fix auth")
-    assert len(result) < len(long_context) + 200  # context was truncated
+    assert "## Working Directory" in result
+    assert "Task: fix auth" in result
+    assert len(result) < len(long_context) + 300  # context was truncated
 
 
 def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):

@@ -434,7 +434,7 @@ PROMPTS_DIR = ".synlynk/prompts"
 AGENT_CAPABILITY_BASELINES = {
     "claude": {
         "cli": "claude",
-        "non_interactive_flags": ["--print"],
+        "non_interactive_flags": ["--print", "--dangerously-skip-permissions"],
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
@@ -2014,8 +2014,11 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         )
 
     if agent == "agy":
-        # AGY receives the prompt as a CLI arg — keep short, lead with directive
+        # AGY receives the prompt as a CLI arg — keep short, lead with directive.
+        # Working directory is explicit because agy resets CWD to its own scratch on startup.
         return (
+            f"## Working Directory\n{os.getcwd()}\n"
+            f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
             f"{story_ref}\n"
             f"{file_section}\n"
@@ -2127,6 +2130,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
+        cwd=os.getcwd(),
     )
 
     job = {
