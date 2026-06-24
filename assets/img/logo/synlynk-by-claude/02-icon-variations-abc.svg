@@ -1,0 +1,70 @@
+<svg width="680" height="420" viewBox="0 0 680 420" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>synlynk — icon mark variations A B C</title>
+  <style>
+    .label { font-family: Arial, sans-serif; font-size: 11px; fill: #888; letter-spacing: 1.5px; }
+    .var-title { font-family: 'Courier New', monospace; font-size: 13px; fill: #1a1a1a; font-weight: 500; }
+  </style>
+  <rect width="680" height="420" fill="#ffffff"/>
+
+  <!-- A: Solid Constellation -->
+  <g transform="translate(113, 220)">
+    <line x1="-62" y1="-72" x2="0" y2="0" stroke="#5B8DEF" stroke-width="5" stroke-linecap="round"/>
+    <line x1="62" y1="-72" x2="0" y2="0" stroke="#A259F7" stroke-width="5" stroke-linecap="round"/>
+    <line x1="0" y1="88" x2="0" y2="0" stroke="#2EC4A0" stroke-width="5" stroke-linecap="round"/>
+    <line x1="-62" y1="-72" x2="62" y2="-72" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="-62" y1="-72" x2="0" y2="88" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="62" y1="-72" x2="0" y2="88" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="-62" cy="-72" r="18" fill="#5B8DEF"/>
+    <circle cx="62" cy="-72" r="18" fill="#A259F7"/>
+    <circle cx="0" cy="88" r="18" fill="#2EC4A0"/>
+    <circle cx="0" cy="0" r="28" fill="#1a1a1a"/>
+    <circle cx="0" cy="0" r="14" fill="#ffffff"/>
+    <circle cx="0" cy="0" r="6" fill="#1a1a1a"/>
+  </g>
+  <text x="113" y="345" text-anchor="middle" class="var-title">A</text>
+  <text x="113" y="362" text-anchor="middle" class="label">solid constellation</text>
+
+  <!-- B: Synaptic S glyph -->
+  <g transform="translate(340, 190)">
+    <rect x="-68" y="-68" width="136" height="136" rx="28" fill="#0E0E0F"/>
+    <path d="M -10 -42 C -10 -42 -36 -42 -36 -18 C -36 6 10 6 10 30" fill="none" stroke="#5B8DEF" stroke-width="9" stroke-linecap="round"/>
+    <path d="M 10 30 C 10 30 36 30 36 6 C 36 -18 -10 -18 -10 -42" fill="none" stroke="#A259F7" stroke-width="9" stroke-linecap="round"/>
+    <path d="M 10 30 C 10 42 10 50 10 50" fill="none" stroke="#2EC4A0" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="-10" cy="-42" r="7" fill="#5B8DEF"/>
+    <circle cx="10" cy="50" r="7" fill="#2EC4A0"/>
+  </g>
+  <text x="340" y="298" text-anchor="middle" class="var-title">B</text>
+  <text x="340" y="315" text-anchor="middle" class="label">synaptic S glyph</text>
+
+  <!-- C: Dense Mesh -->
+  <g transform="translate(567, 220)">
+    <circle cx="-62" cy="-72" r="20" fill="#5B8DEF"/>
+    <circle cx="62" cy="-72" r="20" fill="#A259F7"/>
+    <circle cx="0" cy="88" r="20" fill="#2EC4A0"/>
+    <polygon points="-62,-72 0,0 -62,88" fill="#5B8DEF" opacity="0.12"/>
+    <polygon points="62,-72 0,0 62,88" fill="#A259F7" opacity="0.12"/>
+    <polygon points="-62,-72 62,-72 0,0" fill="#1a1a1a" opacity="0.07"/>
+    <line x1="-62" y1="-72" x2="62" y2="-72" stroke="#1a1a1a" stroke-width="4" stroke-linecap="round"/>
+    <line x1="-62" y1="-72" x2="0" y2="88" stroke="#5B8DEF" stroke-width="4" stroke-linecap="round"/>
+    <line x1="62" y1="-72" x2="0" y2="88" stroke="#A259F7" stroke-width="4" stroke-linecap="round"/>
+    <line x1="-62" y1="-72" x2="0" y2="0" stroke="#5B8DEF" stroke-width="3" stroke-linecap="round"/>
+    <line x1="62" y1="-72" x2="0" y2="0" stroke="#A259F7" stroke-width="3" stroke-linecap="round"/>
+    <line x1="0" y1="88" x2="0" y2="0" stroke="#2EC4A0" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="22" fill="#1a1a1a"/>
+    <circle cx="0" cy="0" r="9" fill="#ffffff"/>
+  </g>
+  <text x="567" y="345" text-anchor="middle" class="var-title">C</text>
+  <text x="567" y="362" text-anchor="middle" class="label">dense mesh</text>
+
+  <!-- B lockup preview -->
+  <g transform="translate(226, 390)">
+    <rect x="-30" y="-30" width="60" height="60" rx="13" fill="#0E0E0F"/>
+    <path d="M -4 -18 C -4 -18 -16 -18 -16 -8 C -16 2 4 2 4 12" fill="none" stroke="#5B8DEF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 4 12 C 4 12 16 12 16 2 C 16 -8 -4 -8 -4 -18" fill="none" stroke="#A259F7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 4 12 C 4 18 4 21 4 21" fill="none" stroke="#2EC4A0" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="-4" cy="-18" r="3" fill="#5B8DEF"/>
+    <circle cx="4" cy="21" r="3" fill="#2EC4A0"/>
+  </g>
+  <text x="272" y="374" font-family="'Courier New', monospace" font-size="28" font-weight="500" fill="#1a1a1a" letter-spacing="-0.5">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
+  <text x="272" y="392" font-family="Arial, sans-serif" font-size="9" fill="#aaa" letter-spacing="1.5">synaptic link for ai dev</text>
+</svg>

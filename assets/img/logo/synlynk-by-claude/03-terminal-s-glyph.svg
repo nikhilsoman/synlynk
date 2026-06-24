@@ -1,0 +1,83 @@
+<svg width="680" height="480" viewBox="0 0 680 480" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>synlynk — terminal S glyph icon</title>
+  <style>
+    .wm { font-family: 'Courier New', monospace; font-weight: 500; font-size: 48px; fill: #1a1a1a; letter-spacing: -1px; }
+    .tag { font-family: Arial, sans-serif; font-size: 12px; fill: #aaa; letter-spacing: 2.5px; }
+    .vt { font-family: 'Courier New', monospace; font-size: 11px; fill: #888; letter-spacing: 1px; }
+  </style>
+  <rect width="680" height="480" fill="#ffffff"/>
+
+  <!-- Large icon -->
+  <g transform="translate(200, 200)">
+    <rect x="-90" y="-90" width="180" height="180" rx="36" fill="#0E0E0F"/>
+    <rect x="-90" y="-90" width="180" height="32" rx="36" fill="#1A1A1C"/>
+    <rect x="-90" y="-72" width="180" height="14" fill="#1A1A1C"/>
+    <circle cx="-62" cy="-74" r="5" fill="#FF5F57"/>
+    <circle cx="-46" cy="-74" r="5" fill="#FEBC2E"/>
+    <circle cx="-30" cy="-74" r="5" fill="#28C840"/>
+    <text x="-72" y="62" font-family="'Courier New', monospace" font-size="11" fill="#2EC4A0" opacity="0.7">&#9654;</text>
+    <rect x="-57" y="51" width="2" height="14" rx="1" fill="#A259F7" opacity="0.8"/>
+    <path d="M 6 -46 C 6 -46 -28 -46 -28 -22 C -28 2 14 2 14 26" fill="none" stroke="#5B8DEF" stroke-width="11" stroke-linecap="round"/>
+    <path d="M 14 26 C 14 26 46 26 46 2 C 46 -22 6 -22 6 -46" fill="none" stroke="#A259F7" stroke-width="11" stroke-linecap="round"/>
+    <path d="M 14 26 L 14 50" fill="none" stroke="#2EC4A0" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="6" cy="-46" r="8" fill="#5B8DEF"/>
+    <circle cx="14" cy="50" r="8" fill="#2EC4A0"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="318" y="190" class="wm">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
+  <text x="321" y="216" class="tag">synaptic link for ai dev</text>
+  <line x1="318" y1="228" x2="610" y2="228" stroke="#eee" stroke-width="0.5"/>
+
+  <!-- Scale previews -->
+  <text x="40" y="298" class="vt">at scale &#8594;</text>
+
+  <!-- 64px -->
+  <g transform="translate(130, 340)">
+    <rect x="-32" y="-32" width="64" height="64" rx="13" fill="#0E0E0F"/>
+    <rect x="-32" y="-32" width="64" height="12" rx="13" fill="#1C1C1E"/>
+    <rect x="-32" y="-26" width="64" height="6" fill="#1C1C1E"/>
+    <circle cx="-22" cy="-26" r="2" fill="#FF5F57"/>
+    <circle cx="-15" cy="-26" r="2" fill="#FEBC2E"/>
+    <circle cx="-8" cy="-26" r="2" fill="#28C840"/>
+    <path d="M 2 -16 C 2 -16 -10 -16 -10 -8 C -10 0 5 0 5 8" fill="none" stroke="#5B8DEF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 5 8 C 5 8 17 8 17 0 C 17 -8 2 -8 2 -16" fill="none" stroke="#A259F7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 5 8 L 5 18" fill="none" stroke="#2EC4A0" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="2" cy="-16" r="3" fill="#5B8DEF"/>
+    <circle cx="5" cy="18" r="3" fill="#2EC4A0"/>
+  </g>
+  <text x="130" y="392" text-anchor="middle" class="vt">64px</text>
+
+  <!-- 40px -->
+  <g transform="translate(230, 340)">
+    <rect x="-20" y="-20" width="40" height="40" rx="8" fill="#0E0E0F"/>
+    <rect x="-20" y="-20" width="40" height="8" rx="8" fill="#1C1C1E"/>
+    <rect x="-20" y="-16" width="40" height="4" fill="#1C1C1E"/>
+    <circle cx="-13" cy="-16" r="1.5" fill="#FF5F57"/>
+    <circle cx="-8" cy="-16" r="1.5" fill="#FEBC2E"/>
+    <circle cx="-3" cy="-16" r="1.5" fill="#28C840"/>
+    <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 3 6 L 3 11" fill="none" stroke="#2EC4A0" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="1" cy="-9" r="2" fill="#5B8DEF"/>
+    <circle cx="3" cy="11" r="2" fill="#2EC4A0"/>
+  </g>
+  <text x="230" y="392" text-anchor="middle" class="vt">40px</text>
+
+  <!-- lockup -->
+  <g transform="translate(340, 340)">
+    <rect x="-20" y="-20" width="40" height="40" rx="8" fill="#0E0E0F"/>
+    <rect x="-20" y="-20" width="40" height="8" rx="8" fill="#1C1C1E"/>
+    <rect x="-20" y="-16" width="40" height="4" fill="#1C1C1E"/>
+    <circle cx="-13" cy="-16" r="1.5" fill="#FF5F57"/>
+    <circle cx="-8" cy="-16" r="1.5" fill="#FEBC2E"/>
+    <circle cx="-3" cy="-16" r="1.5" fill="#28C840"/>
+    <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 3 6 L 3 11" fill="none" stroke="#2EC4A0" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="1" cy="-9" r="2" fill="#5B8DEF"/>
+    <circle cx="3" cy="11" r="2" fill="#2EC4A0"/>
+  </g>
+  <text x="378" y="333" font-family="'Courier New', monospace" font-size="20" font-weight="500" fill="#1a1a1a" letter-spacing="-0.5">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
+  <text x="378" y="352" font-family="Arial, sans-serif" font-size="9" fill="#aaa" letter-spacing="1.5">synaptic link for ai dev</text>
+</svg>
