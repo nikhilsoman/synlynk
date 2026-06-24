@@ -92,6 +92,25 @@
 - [x] Scheduled agent dispatch via daemon (replaces crontab entries from `--install-cron`) <!-- id:225 -->
 - [x] Tests: daemon lifecycle, job queue persistence, crash recovery, context server <!-- id:226 -->
 
+## v0.9.5 — Health Pulse (Silent Auto-Upgrade & Onboarding Auditor)
+<!-- Spec: docs/superpowers/specs/2026-06-24-health-pulse-design.md -->
+- [ ] `HealthCheck` dataclass + `HEALTH_CHECKS` registry <!-- id:250 -->
+- [ ] `_load_health_state()` / `_save_health_state()` — `.synlynk/health_state.json` <!-- id:251 -->
+- [ ] `_should_run_check()` — time-gate throttle for expensive checks (network/git) <!-- id:252 -->
+- [ ] `_should_show_nudge()` — time-gate + condition-gate suppression logic <!-- id:253 -->
+- [ ] `_check_onboarding()` — CRITICAL, condition-gated: config.json + project-docs/ + AI instruction file <!-- id:254 -->
+- [ ] `_check_version()` — HIGH, time-gated 24h: urllib fetch vs VERSION constant, silent on network failure <!-- id:255 -->
+- [ ] `_check_agent_profiles()` — MEDIUM, condition-gated: .agents/ has ≥1 .json profile <!-- id:256 -->
+- [ ] `_check_identity()` — LOW, condition-gated: ~/.synlynk/identity.key exists <!-- id:257 -->
+- [ ] `_check_team_pulse()` — LOW, time-gated 24h: team mode only, git contributors vs devlogs/ <!-- id:258 -->
+- [ ] `health_pulse(command)` — runner: collect pending nudges, sort by priority, print top + "+N more" to stderr, update state <!-- id:259 -->
+- [ ] Wire `health_pulse()` into `main()`: after each command dispatch; for exec, after `exec_command()` returns before `sys.exit()` <!-- id:260 -->
+- [ ] `cmd_doctor()` — run all checks unconditionally, print full status table, exit 1 if any fail <!-- id:261 -->
+- [ ] `doctor` subparser in `main()` <!-- id:262 -->
+- [ ] Tests: 20 cases — skip list, no-output when clean, priority resolution, +N overflow, time gate, condition gate, condition rearm, all 5 check functions, doctor pass/fail <!-- id:263 -->
+
+---
+
 ## v0.9.3 → **v0.9.4 in roadmap** — Workgroup Relay <!-- version drift: v0.9.1 install-hardening slip shifted numbering -->
 - [ ] `synlynk relay join` — default path: connects to `relay.synlynk.com/<workspace-id>` (community relay); shows graceful "launching v1.0" if server not yet live, falls back to LAN <!-- id:230 -->
 - [ ] mDNS announcement (Bonjour/Avahi) for LAN auto-discovery (fallback mode) <!-- id:231 -->
