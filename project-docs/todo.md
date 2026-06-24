@@ -162,6 +162,10 @@
 
 - [ ] **[OB-15] Exit + repair tests** — `synlynk exit --dry-run` lists correct file set, no files removed; `synlynk exit --confirm` removes all synlynk files and generates handoff doc with correct fields; exit on a never-inited repo fails gracefully with clear message; `synlynk repair` from handoff rebuilds correct file set matching original mode + agents; repair with missing `project-docs/` prints warning but completes; repair is idempotent (run twice = same result). <!-- id:515 -->
 
+- [ ] **[OB-16] `synlynk sync` — propagate new init artifacts to existing repos** — when a repo was `synlynk init`'d on an older version, new features (daemon launchd plist, relay config, `.agents/` profiles, updated instruction file sections) are never applied unless the user re-inits manually. `synlynk sync` closes this gap: compare the current version's init manifest against what is present in `.synlynk/` and the repo root, then apply only the missing or stale artifacts — no destructive changes to existing files. Behaviour: (1) check `.synlynk/config.json` for `init_version`; (2) for each artifact introduced since that version, check presence and freshness; (3) print a diff of what will be added/updated (dry-run by default); (4) apply with `--confirm`; (5) update `init_version` in config. Does NOT re-run the interactive init wizard — uses stored mode + agent list from `.synlynk/config.json`. Use case: repo init'd at v0.9.2 (no daemon, no relay, no `.agents/`) — run `synlynk sync` to get the v0.9.4 artifacts without touching `project-docs/` or existing instruction file content. <!-- id:516 -->
+
+- [ ] **[OB-17] `synlynk sync` tests** — sync on a v0.9.2-era repo adds missing daemon plist, relay config, and `.agents/` directory without modifying existing CLAUDE.md or project-docs; sync is idempotent (run twice = no changes second time); sync with `--dry-run` prints artifact list but writes nothing; sync updates `init_version` in `.synlynk/config.json` after apply; sync on an already-current repo reports "already up to date". <!-- id:517 -->
+
 ---
 
 ## Agent Behaviour Epic — Instructions & Adherence
