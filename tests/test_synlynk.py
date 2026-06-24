@@ -1823,6 +1823,76 @@ def test_relevant_files_for_story_returns_matching_files(project_dir):
     assert not any("frontend" in f for f in files)
 
 
+def test_stories_table_has_status_column(project_dir):
+    """stories table must have a status column after migration."""
+    import synlynk as sl
+    conn = sl._get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    conn.close()
+    assert "status" in cols
+
+
+def test_generate_todo_md_creates_file(project_dir):
+    """_generate_todo_md writes project-docs/todo.md from stories."""
+    import synlynk as sl
+    sl.cmd_story_create("Fix login bug", engg_domain="backend")
+    sl._generate_todo_md()
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Fix login bug" in todo
+    assert "- [ ]" in todo
+
+
+def test_generate_todo_md_marks_done_stories(project_dir):
+    """_generate_todo_md uses [x] for done stories."""
+    import synlynk as sl
+    story_id = sl.cmd_story_create("Finish report")
+    conn = sl._get_db()
+    conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (story_id,))
+    conn.commit()
+    conn.close()
+    sl._generate_todo_md()
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "- [x]" in todo
+
+
+def test_cmd_story_create_generates_todo_md(project_dir):
+    """cmd_story_create automatically regenerates todo.md."""
+    import synlynk as sl
+    sl.cmd_story_create("Auto-sync check")
+    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Auto-sync check" in todo
+
+
+def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
+    """_import_todo_to_stories creates story rows for - [ ] lines."""
+    import synlynk as sl
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [ ] Migrate auth module\n"
+        "- [x] Old done task\n"
+        "- [ ] Write API docs\n"
+    )
+    count = sl._import_todo_to_stories()
+    assert count == 2
+    conn = sl._get_db()
+    titles = {row[0] for row in conn.execute("SELECT title FROM stories")}
+    conn.close()
+    assert "Migrate auth module" in titles
+    assert "Write API docs" in titles
+    assert "Old done task" not in titles
+
+
+def test_import_todo_to_stories_skips_existing_stories(project_dir):
+    """_import_todo_to_stories does not duplicate stories already in DB."""
+    import synlynk as sl
+    story_id = sl.cmd_story_create("Already exists")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        f"- [ ] Already exists <!-- id:{story_id} -->\n"
+        "- [ ] Brand new task\n"
+    )
+    count = sl._import_todo_to_stories()
+    assert count == 1
+
+
 def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
     """dispatch_agent appends ## How to Verify when tests/ directory exists."""
     import synlynk as sl

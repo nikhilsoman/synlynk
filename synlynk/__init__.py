@@ -173,6 +173,8 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
     if "actual_tokens" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+    if "status" not in story_cols:
+        conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
     try:
         conn.executescript(_DB_SCORES_VIEW)
     except _sqlite3.OperationalError:
@@ -208,6 +210,7 @@ def cmd_story_create(title: str, engg_domain: str = "unknown",
     )
     conn.commit()
     conn.close()
+    _generate_todo_md()
     print(f"  {_GREEN}✓{_RESET} Story created: {story_id}  [{engg_domain} · {org_domain} · {industry}]")
     return story_id
 
@@ -4401,6 +4404,82 @@ def _write_last_devlog_section(out, filepath: str) -> None:
         sections.append(current)
     if sections:
         out.writelines(sections[-1])
+
+
+def _generate_todo_md() -> None:
+    """Writes project-docs/todo.md as a generated view of the stories table."""
+    docs_dir = _docs_dir()
+    if not os.path.exists(docs_dir):
+        return
+
+    todo_path = os.path.join(docs_dir, "todo.md")
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT story_id, title, engg_domain, status FROM stories ORDER BY created_at ASC"
+    ).fetchall()
+    conn.close()
+
+    lines = [
+        "# Tasks (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk story create/update | Do NOT hand-edit this file\n\n",
+    ]
+    for story_id, title, engg_domain, status in rows:
+        if status == "done":
+            check = "x"
+        elif status == "deferred":
+            check = "-"
+        else:
+            check = " "
+        domain = f" [{engg_domain}]" if engg_domain and engg_domain != "unknown" else ""
+        lines.append(f"- [{check}] {title or story_id}{domain} <!-- id:{story_id} -->\n")
+
+    with open(todo_path, "w") as f:
+        f.writelines(lines)
+
+
+def _import_todo_to_stories() -> int:
+    """Reads '- [ ]' lines from todo.md and inserts missing story rows."""
+    import hashlib as _hashlib
+
+    docs_dir = _docs_dir()
+    todo_path = os.path.join(docs_dir, "todo.md")
+    if not os.path.exists(todo_path):
+        return 0
+
+    conn = _get_db()
+    existing_ids = {row[0] for row in conn.execute("SELECT story_id FROM stories")}
+
+    imported = 0
+    with open(todo_path) as f:
+        for line in f:
+            if "- [ ]" not in line:
+                continue
+            id_match = re.search(r'<!--\s*id:(story-[a-f0-9]+)\s*-->', line)
+            if id_match and id_match.group(1) in existing_ids:
+                continue
+
+            title_match = re.match(
+                r'\s*-\s*\[\s*\]\s*(.+?)(?:\s*\[.*?\])?(?:\s*<!--.*-->)?\s*$',
+                line,
+            )
+            if not title_match:
+                continue
+            title = title_match.group(1).strip()
+            story_id = "story-" + _hashlib.md5(
+                f"{title}{time.time()}".encode()
+            ).hexdigest()[:8]
+            try:
+                conn.execute(
+                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, 'open')",
+                    (story_id, title),
+                )
+                imported += 1
+            except _sqlite3.IntegrityError:
+                pass
+
+    conn.commit()
+    conn.close()
+    return imported
 
 
 def _generate_task_context(story_id: str) -> str:
