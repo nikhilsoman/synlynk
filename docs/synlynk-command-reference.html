@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synlynk Command Reference — v0.9.4</title>
+<!--
+  MAINTENANCE: Update this document after each release.
+  Official Reference: update version tag, add features page, update changelog + commands + comparison matrix.
+  Command Reference: update commands section for any new/changed commands.
+  Quick Start Guide: update version tag only unless UX flow changed.
+  Last updated: v0.9.4 (2026-06-24)
+-->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --white:    #ffffff;
+    --bg:       #f5f5f7;
+    --bg2:      #e8e8ed;
+    --card:     #f5f5f7;
+    --border:   #d2d2d7;
+    --border-xs:#e8e8ed;
+    --text:     #1d1d1f;
+    --secondary:#3a3a3c;
+    --dim:      #6e6e73;
+    --muted:    #86868b;
+    --blue:     #0071e3;
+    --blue-bg:  #e8f2ff;
+    --purple:   #8944ab;
+    --purple-bg:#f5eeff;
+    --green:    #1a7f3c;
+    --green-bg: #e8f8ee;
+    --orange:   #bf5000;
+    --orange-bg:#fff3e6;
+    --red:      #cc2200;
+    --yellow:   #a05a00;
+    --term-bg:  #1c1c1e;
+    --term-b2:  #2c2c2e;
+    --term-bd:  #3a3a3c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #e0e0e0;
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+    width: 210mm;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── STRICT A4 PAGE ── */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    position: relative;
+    background: var(--white);
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  @page { size: A4 portrait; margin: 0; }
+  @media print {
+    body { background: none; }
+    .page { page-break-after: always; height: 297mm; overflow: hidden; }
+    .page:last-child { page-break-after: auto; }
+  }
+
+  /* ══ COVER ══ */
+  .cover {
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 297mm;
+    text-align: center;
+    padding: 0 18mm;
+    position: relative;
+  }
+
+  .cover-accent {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0071e3 0%, #8944ab 50%, #0071e3 100%);
+  }
+
+  .cover-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--blue-bg);
+    border: 1px solid rgba(0,113,227,0.2);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 28px;
+  }
+
+  .cover-logo {
+    font-family: 'Inter', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .cover-logo span { color: var(--blue); }
+
+  .cover-tagline {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--dim);
+    letter-spacing: -0.2px;
+    margin-bottom: 6px;
+  }
+
+  .cover-version {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 40px;
+  }
+
+  .cover-command {
+    background: var(--term-bg);
+    border-radius: 12px;
+    padding: 18px 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: left;
+    min-width: 360px;
+    margin-bottom: 36px;
+    line-height: 1.9;
+  }
+
+  .cover-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 40px;
+  }
+
+  .cover-pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--secondary);
+  }
+
+  .cover-footer {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* ══ CONTENT PAGES ══ */
+  .cp {
+    background: var(--white);
+    padding: 11mm 13mm 9mm;
+    height: 297mm;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .ph-title {
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .ph-logo {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .ph-logo span { color: var(--blue); }
+
+  .ph-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5px;
+    color: var(--muted);
+  }
+
+  .sec-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 3px;
+  }
+
+  h1.ch {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.8px;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  h2.sec {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 5px;
+    margin-top: 11px;
+    letter-spacing: -0.2px;
+  }
+
+  h3.sub {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 4px;
+    margin-top: 8px;
+  }
+
+  p {
+    color: var(--dim);
+    font-size: 11px;
+    line-height: 1.6;
+    margin-bottom: 7px;
+  }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    background: var(--bg);
+    color: var(--blue);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── TERMINAL ── */
+  .term {
+    background: var(--term-bg);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 6px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .term-bar {
+    background: var(--term-b2);
+    padding: 6px 11px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-bottom: 1px solid var(--term-bd);
+  }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dr { background: #ff5f57; }
+  .dy { background: #febc2e; }
+  .dg { background: #28c840; }
+
+  .t-lbl {
+    font-size: 8.5px;
+    color: #5a5a5e;
+    margin-left: auto;
+    letter-spacing: 0.08em;
+  }
+
+  .tb {
+    padding: 8px 12px;
+    line-height: 1.75;
+    color: #c8c8ca;
+  }
+
+  .t-p  { color: #636366; }
+  .t-c  { color: #64d2ff; font-weight: 500; }
+  .t-a  { color: #ffd60a; }
+  .t-f  { color: #bf5af2; }
+  .t-o  { color: #636366; }
+  .t-s  { color: #30d158; }
+  .t-w  { color: #ff9f0a; }
+  .t-cm { color: #3a3a3c; }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    border-radius: 10px;
+    padding: 9px 13px;
+    margin: 7px 0;
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    flex-shrink: 0;
+  }
+
+  .ci { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .cb { flex: 1; }
+  .ct { font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px; }
+  .cx { font-size: 10.5px; line-height: 1.5; }
+
+  .c-tip  { background: var(--blue-bg); border: 1px solid rgba(0,113,227,0.18); }
+  .c-tip  .ct { color: var(--blue); }
+  .c-tip  .cx { color: var(--secondary); }
+
+  .c-pow  { background: var(--green-bg); border: 1px solid rgba(26,127,60,0.2); }
+  .c-pow  .ct { color: var(--green); }
+  .c-pow  .cx { color: var(--secondary); }
+
+  .c-warn { background: var(--orange-bg); border: 1px solid rgba(191,80,0,0.18); }
+  .c-warn .ct { color: var(--orange); }
+  .c-warn .cx { color: var(--secondary); }
+
+  .c-new  { background: var(--purple-bg); border: 1px solid rgba(137,68,171,0.2); }
+  .c-new  .ct { color: var(--purple); }
+  .c-new  .cx { color: var(--secondary); }
+
+  .c-info { background: var(--bg); border: 1px solid var(--border); }
+  .c-info .ct { color: var(--secondary); }
+  .c-info .cx { color: var(--dim); }
+
+  /* ── ACHIEVEMENT ── */
+  .ach {
+    background: linear-gradient(135deg, #fffbeb 0%, #fff8f0 100%);
+    border: 1px solid rgba(160,90,0,0.18);
+    border-radius: 10px;
+    padding: 9px 13px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin: 6px 0;
+    flex-shrink: 0;
+  }
+  .ach-ico { font-size: 22px; }
+  .ach-eye { font-size: 7.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--yellow); margin-bottom: 1px; }
+  .ach-ttl { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 1px; }
+  .ach-dsc { font-size: 9.5px; color: var(--muted); }
+
+  /* ── BENEFIT CARDS ── */
+  .bg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 7px 0; }
+
+  .bc {
+    background: var(--card);
+    border: 1px solid var(--border-xs);
+    border-radius: 10px;
+    padding: 10px 12px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bc::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .bc-blue::before   { background: linear-gradient(90deg, var(--blue), transparent); }
+  .bc-green::before  { background: linear-gradient(90deg, var(--green), transparent); }
+  .bc-purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+  .bc-orange::before { background: linear-gradient(90deg, var(--orange), transparent); }
+  .bc-red::before    { background: linear-gradient(90deg, var(--red), transparent); }
+  .bc-yellow::before { background: linear-gradient(90deg, var(--yellow), transparent); }
+
+  .b-ico { font-size: 18px; margin-bottom: 5px; display: block; }
+  .b-ttl { font-size: 10.5px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .b-dsc { font-size: 9.5px; color: var(--dim); line-height: 1.45; }
+
+  /* ── STEP FLOW ── */
+  .steps { display: flex; flex-direction: column; gap: 5px; margin: 7px 0; }
+  .step-row { display: flex; align-items: flex-start; gap: 10px; }
+  .step-n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 700; color: white;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .step-b { flex: 1; }
+  .step-t { font-size: 10.5px; font-weight: 700; color: var(--text); margin-bottom: 1px; }
+  .step-d { font-size: 10px; color: var(--dim); line-height: 1.45; }
+  .step-ln { width: 1px; height: 7px; background: var(--border); margin-left: 10px; }
+
+  /* ── CMD TABLE ── */
+  .ctbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 5px 0;
+    font-size: 10px;
+  }
+
+  .ctbl th {
+    background: var(--bg);
+    color: var(--blue);
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 9px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ctbl td {
+    padding: 5px 9px;
+    border-bottom: 1px solid var(--border-xs);
+    vertical-align: top;
+    color: var(--dim);
+    line-height: 1.4;
+  }
+
+  .ctbl tr:last-child td { border-bottom: none; }
+
+  .ctbl td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--blue);
+    white-space: nowrap;
+    width: 36%;
+  }
+
+  /* ── FEATURE TABLE ── */
+  .ftbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5px;
+    margin: 5px 0;
+  }
+  .ftbl th {
+    background: var(--bg);
+    color: var(--blue);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 7px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .ftbl td {
+    padding: 4px 7px;
+    border-bottom: 1px solid var(--border-xs);
+    color: var(--dim);
+    line-height: 1.4;
+    vertical-align: top;
+  }
+  .ftbl tr:last-child td { border-bottom: none; }
+  .ftbl td:first-child { color: var(--secondary); font-weight: 500; font-size: 9.5px; }
+  .ftbl td:nth-child(2) { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--muted); white-space: nowrap; }
+  .fgh td { background: var(--purple-bg) !important; color: var(--purple) !important; font-size: 7.5px !important; font-weight: 700 !important; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 7px !important; border-bottom: 1px solid rgba(137,68,171,0.12) !important; }
+  .fc { color: var(--green) !important; font-weight: 600; }
+  .fx { color: var(--border) !important; }
+
+  /* ── STAT ROW ── */
+  .stat-row { display: flex; gap: 7px; margin: 7px 0; }
+  .stat { flex: 1; background: var(--card); border: 1px solid var(--border-xs); border-radius: 9px; padding: 9px 10px; text-align: center; }
+  .stat-n { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1; margin-bottom: 3px; }
+  .stat-l { font-size: 8.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* ── FLOW ── */
+  .flow { display: flex; align-items: center; margin: 8px 0; justify-content: center; flex-wrap: wrap; gap: 0; }
+  .fn { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; text-align: center; min-width: 72px; }
+  .fn.act { border-color: rgba(0,113,227,0.4); background: var(--blue-bg); }
+  .fn-ico { font-size: 15px; display: block; margin-bottom: 2px; }
+  .fn-lbl { font-size: 8.5px; font-weight: 600; color: var(--dim); }
+  .fn.act .fn-lbl { color: var(--blue); }
+  .fn-sub { font-family: 'JetBrains Mono', monospace; font-size: 7.5px; color: var(--muted); }
+  .fa { font-size: 13px; color: var(--border); padding: 0 3px; }
+
+  /* ── COLS ── */
+  .c2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .c3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 1px; background: var(--border-xs); margin: 9px 0; }
+
+  /* ── TAG ── */
+  .tag { display: inline-block; font-size: 8.5px; font-weight: 600; padding: 2px 6px; border-radius: 8px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .tg-new { background: var(--green-bg); color: var(--green); border: 1px solid rgba(26,127,60,0.2); }
+  .tg-v4  { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(0,113,227,0.2); }
+  .tg-v9  { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(137,68,171,0.2); }
+
+  /* ── HERO CARD ── */
+  .hero-card {
+    background: var(--card);
+    border: 1px solid var(--border-xs);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+  }
+
+  /* ── SENTINEL ALERT ── */
+  .alert { border-radius: 8px; padding: 8px 10px; margin-bottom: 5px; }
+  .alert-r { background: #fff2f0; border: 1px solid rgba(204,34,0,0.18); }
+  .alert-y { background: #fffbeb; border: 1px solid rgba(160,90,0,0.18); }
+  .alert-o { background: var(--orange-bg); border: 1px solid rgba(191,80,0,0.18); }
+  .alert-ttl { font-size: 9.5px; font-weight: 700; margin-bottom: 2px; }
+  .alert-txt { font-size: 9.5px; color: var(--dim); }
+
+  /* ── COMMAND BLOCK (reference-specific) ── */
+  .cmd-block { margin: 8px 0 4px; }
+  .cmd-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .cmd-name { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+  .cmd-one { font-size: 10px; color: var(--dim); }
+
+  /* ── FLAG TABLE ── */
+  .fltbl { width: 100%; border-collapse: collapse; margin: 4px 0 2px; font-size: 9.5px; }
+  .fltbl th { background: var(--bg); color: var(--blue); font-size: 8px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .fltbl td { padding: 4px 8px; border-bottom: 1px solid var(--border-xs); color: var(--dim); line-height: 1.4; vertical-align: top; }
+  .fltbl tr:last-child td { border-bottom: none; }
+  .fltbl td:first-child { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--purple); white-space: nowrap; width: 30%; }
+
+  /* ══ BACK COVER ══ */
+  .back-cover {
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 297mm;
+    text-align: center;
+    padding: 16mm 18mm;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .back-cover .cover-accent {
+    position: absolute;
+    bottom: 0; top: auto; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0071e3 0%, #8944ab 50%, #0071e3 100%);
+  }
+
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 — COVER -->
+<div class="page">
+<div class="cover">
+  <div class="cover-accent"></div>
+
+  <div class="cover-badge">⬡ &nbsp;Command Reference</div>
+
+  <div class="cover-logo">SYNL<span>Y</span>NK</div>
+  <div class="cover-tagline">Every command. Every flag. Every scenario.</div>
+  <div class="cover-version">v0.9.4 · Complete CLI Reference</div>
+
+  <div class="cover-command">
+    <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">synlynk</span> <span style="color:#8e8e93;">--help</span></div>
+    <div style="color:#3a3a3c; margin: 3px 0;">───────────────────────────────</div>
+    <div><span style="color:#bf5af2;">  setup</span> <span style="color:#636366;">  init · exec · checkpoint · status · scan</span></div>
+    <div><span style="color:#bf5af2;">  dispatch</span> <span style="color:#636366;">jobs · logs · shell · launch · run</span></div>
+    <div><span style="color:#bf5af2;">  relay</span> <span style="color:#636366;">  start · broadcast</span></div>
+    <div><span style="color:#bf5af2;">  team</span> <span style="color:#636366;">   join · team status · decide</span></div>
+    <div><span style="color:#bf5af2;">  daemon</span> <span style="color:#636366;"> start · stop · status · install-service</span></div>
+  </div>
+
+  <div class="cover-pills">
+    <div class="cover-pill">🐍 Python 3.8+</div>
+    <div class="cover-pill">🔌 stdlib only</div>
+    <div class="cover-pill">✅ 472 tests</div>
+    <div class="cover-pill">⚖️ MIT</div>
+  </div>
+
+  <div class="cover-footer">synlynk.dev &nbsp;·&nbsp; github.com/nikhilsoman/synlynk &nbsp;·&nbsp; 2026</div>
+</div>
+</div>
+
+
+<!-- PAGE 2 — SETUP & CONTEXT -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 01 — Setup &amp; Context</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">02</div>
+  </div>
+
+  <div class="sec-label">Setup &amp; Context</div>
+  <h1 class="ch">Bootstrap, run, and<br>inspect your project.</h1>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk init</span><span class="cmd-one">Bootstrap docs, agent files, and the state DB. Migrates existing docs.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--mode single|team</td><td>Single user or team mode (per-user devlogs + pull guard).</td></tr>
+        <tr><td>--docs-dir &lt;path&gt;</td><td>Where docs live. Use <code>.</code> for repo root. Default <code>project-docs</code>.</td></tr>
+        <tr><td>--force</td><td>Overwrite existing synlynk-managed files instead of skipping.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk exec &lt;agent&gt;</span><span class="cmd-one">Run an agent interactively with full context injection.</span></div>
+    <p style="font-size:9.5px; margin:2px 0 0;">Prepends memory + roadmap + todos + source scan, spawns the agent, then records cost and runs sentinel checks on exit. No flags — the agent name is positional (claude / agy / codex).</p>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk scan</span><span class="cmd-one">Index source files into a Source Architecture snapshot.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--deep</td><td>Full symbol extraction; writes source-map.md + populates state.db.</td></tr>
+        <tr><td>--status</td><td>Show cache age, HEAD sha, file and symbol counts.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="c2" style="margin-top:2px;">
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">checkpoint</span></div>
+      <p style="font-size:9.5px; margin:0;">Snapshot current docs + telemetry state for a safe rollback point.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">status [--json]</span></div>
+      <p style="font-size:9.5px; margin:0;">Dashboard: costs, alerts, running jobs, team digest. <code>--json</code> for tooling.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">upgrade</span></div>
+      <p style="font-size:9.5px; margin:0;">Pull and apply the latest synlynk release from the remote repo.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">--version</span></div>
+      <p style="font-size:9.5px; margin:0;">Print the installed synlynk version and exit.</p>
+    </div>
+  </div>
+
+  <h3 class="sub">Scenario — bootstrap a repo and run a first session</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">setup flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk init</span> <span class="t-f">--mode</span> <span class="t-a">team</span> <span class="t-f">--docs-dir</span> <span class="t-a">.</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Migrated roadmap.md · memory.md · 3 agents discovered</span></div>
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk scan</span> <span class="t-f">--deep</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">284 files · 1,024 symbols · source-map.md written</span></div>
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk status</span></div>
+      <div><span class="t-o">  💰 $0.00 / $10.00 · 0 alerts · 0 jobs · 3 members</span></div>
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk exec</span> <span class="t-a">claude</span></div>
+      <div><span style="color:#bf5af2;">  claude ›</span> <span class="t-o">Context loaded. Next roadmap item is...</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 3 — DISPATCH & JOBS -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 02 — Dispatch &amp; Jobs</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">03</div>
+  </div>
+
+  <div class="sec-label">Dispatch &amp; Jobs</div>
+  <h1 class="ch">Fire agents.<br>Track every job.</h1>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk dispatch &lt;agent&gt;</span><span class="cmd-one">Run an agent as a background job; returns a job ID.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--task "..."</td><td>The prompt / work item to hand the agent.</td></tr>
+        <tr><td>--story &lt;id&gt;</td><td>Link to a tracked story; injects only the story-scoped context slice.</td></tr>
+        <tr><td>--context-mode none|task|full</td><td>How much context to inject: nothing, story-scoped, or the full snapshot.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="c2" style="margin-top:2px;">
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">jobs</span></div>
+      <table class="fltbl">
+        <tbody>
+          <tr><td>--all</td><td>Include completed and failed jobs.</td></tr>
+          <tr><td>--watch</td><td>Live-follow status (SQLite-backed).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">logs</span></div>
+      <table class="fltbl">
+        <tbody>
+          <tr><td>--job &lt;id&gt;</td><td>Which job's log to show.</td></tr>
+          <tr><td>--tail N</td><td>Limit to the last N lines.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="c3" style="margin-top:2px;">
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">shell</span></div>
+      <p style="font-size:9px; margin:0;">Open an interactive synlynk REPL with context preloaded.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">launch</span></div>
+      <p style="font-size:9px; margin:0;">Open the agent launcher to pick an agent and task interactively.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">run --trio</span></div>
+      <p style="font-size:9px; margin:0;">Dispatch one task to all three agents in parallel; one job ID each.</p>
+    </div>
+  </div>
+
+  <h3 class="sub">Scenario — dispatch two agents, then watch and tail</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">dispatch flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk dispatch</span> <span class="t-a">claude</span> <span class="t-f">--story</span> <span class="t-a">story-abc123</span> <span class="t-f">--context-mode</span> <span class="t-a">task</span> <span class="t-f">--task</span> <span style="color:#c8c8ca;">"Add tests"</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Pre-flight gate passed · ~420 bytes context · job-a3f2</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk dispatch</span> <span class="t-a">codex</span> <span class="t-f">--context-mode</span> <span class="t-a">none</span> <span class="t-f">--task</span> <span style="color:#c8c8ca;">"Rename util fn"</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Dispatched job-b7e1  (codex)  self-contained, no context</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk jobs</span> <span class="t-f">--watch</span></div>
+      <div><span style="color:#30d158;">  ● </span><span style="color:#c8c8ca;">job-a3f2</span> <span style="color:#bf5af2;">claude</span> <span class="t-o">running  ● </span><span style="color:#c8c8ca;">job-b7e1</span> <span class="t-o">codex done</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk logs</span> <span class="t-f">--job</span> <span class="t-a">job-a3f2</span> <span class="t-f">--tail</span> <span class="t-a">3</span></div>
+      <div><span class="t-o">  → 12/12 tests passing</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-warn">
+    <div class="ci">⚠️</div>
+    <div class="cb">
+      <div class="ct">Pre-flight dispatch gate <span class="tag tg-new" style="vertical-align:middle;">v0.9.4</span></div>
+      <div class="cx">Every dispatch is checked before launch — agent installed, budget available, context within the profile's <code>context_max_bytes</code>. Failing the gate blocks the job before any tokens are spent.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 4 — RELAY -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 03 — Relay</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">04</div>
+  </div>
+
+  <div class="sec-label">Relay <span class="tag tg-new" style="vertical-align:middle;">v0.9.4</span></div>
+  <h1 class="ch">A real-time channel<br>for your workgroup.</h1>
+
+  <p>The relay is a lightweight HTTP Server-Sent-Events broker. One member starts it; everyone else subscribes over HTTP. Broadcasts fan out to every connected agent and human in the workgroup — a publish/subscribe bus with no external service.</p>
+
+  <div class="flow">
+    <div class="fn act"><span class="fn-ico">📢</span><div class="fn-lbl">broadcast</div><div class="fn-sub">any member</div></div>
+    <div class="fa">→</div>
+    <div class="fn act"><span class="fn-ico">📡</span><div class="fn-lbl">Relay broker</div><div class="fn-sub">:27472 SSE</div></div>
+    <div class="fa">→</div>
+    <div class="fn"><span class="fn-ico">👤</span><div class="fn-lbl">subscriber</div><div class="fn-sub">nikhil</div></div>
+    <div class="fn"><span class="fn-ico">🤖</span><div class="fn-lbl">subscriber</div><div class="fn-sub">claude</div></div>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk relay start</span><span class="cmd-one">Start the SSE broker. Subscribers connect over HTTP.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--port N</td><td>Port to bind. Default <code>27472</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk relay broadcast &lt;body&gt;</span><span class="cmd-one">Publish a message to every subscriber.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>&lt;body&gt;</td><td>Positional — the message text to broadcast.</td></tr>
+        <tr><td>--kind motd|wellness|message|joke|custom</td><td>Message classification subscribers can filter on.</td></tr>
+        <tr><td>--relay-url URL</td><td>Target a remote relay instead of localhost.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub">Scenario — start the relay, broadcast a wellness check</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">relay flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk relay start</span> <span class="t-f">--port</span> <span class="t-a">27472</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Relay broker listening on http://localhost:27472/events</span></div>
+      <div><span class="t-o">  Subscribers: 2 (nikhil · claude-daemon)</span></div>
+      <div><span class="t-cm"># from another shell or teammate</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk relay broadcast</span> <span style="color:#c8c8ca;">"Take a 5-min break — long run ahead"</span> <span class="t-f">--kind</span> <span class="t-a">wellness</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Delivered to 2 subscribers  ·  kind=wellness</span></div>
+      <div><span class="t-cm"># target a remote relay</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk relay broadcast</span> <span style="color:#c8c8ca;">"Deploy at 4pm"</span> <span class="t-f">--kind</span> <span class="t-a">motd</span> <span class="t-f">--relay-url</span> <span class="t-a">https://relay.acme.dev</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Delivered to remote relay</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-tip">
+    <div class="ci">💡</div>
+    <div class="cb">
+      <div class="ct">Pair it with the daemon</div>
+      <div class="cx">Run the relay alongside <code>synlynk daemon</code> so an always-on subscriber can react to broadcasts — enqueue jobs on an MOTD, pause on a wellness signal.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 5 — STORIES & CAPABILITY -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 04 — Stories &amp; Capability</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">05</div>
+  </div>
+
+  <div class="sec-label">Stories &amp; Capability</div>
+  <h1 class="ch">Track work.<br>Route to the best agent.</h1>
+
+  <p>Stories are the unit of work — stored in the SQLite stories table and rendered into <code>todo.md</code>. Scores rate how well each agent handles a domain; the capability engine uses them to pick agents automatically.</p>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk story create</span><span class="cmd-one">Create a tracked work item with a deterministic ID.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--title "..."</td><td>Story title.</td></tr>
+        <tr><td>--tokens N</td><td>Estimated token budget for the story.</td></tr>
+        <tr><td>--engg / --org / --industry</td><td>3D domain scores used by capability routing.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="c2" style="margin-top:2px;">
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">story list</span></div>
+      <p style="font-size:9px; margin:0;">List all stories with status and IDs.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">story show &lt;id&gt;</span></div>
+      <p style="font-size:9px; margin:0;">Full detail for one story: tasks, domain scores, dispatch history.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">score list</span></div>
+      <p style="font-size:9px; margin:0;">Aggregated capability scores per agent per domain.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">score attest</span></div>
+      <p style="font-size:9px; margin:0;">Ed25519-sign a score so it is tamper-evident.</p>
+    </div>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk identity init</span><span class="cmd-one">Create the Ed25519 signing key at ~/.synlynk/identity.key.</span></div>
+    <p style="font-size:9.5px; margin:2px 0 0;">Prints the public key for Tokq export. Required before <code>score attest</code> can sign.</p>
+  </div>
+
+  <h3 class="sub">Scenario — create a story, dispatch to the best agent</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">story flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk story create</span> <span class="t-f">--title</span> <span style="color:#c8c8ca;">"Refactor auth middleware"</span> <span class="t-f">--engg</span> <span class="t-a">9</span> <span class="t-f">--tokens</span> <span class="t-a">8000</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Created story-7f3a · written to stories table · todo.md regenerated</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk score list</span></div>
+      <div><span class="t-o">  claude  engg 4.7  ·  codex engg 4.9  ·  agy engg 4.2</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk dispatch</span> <span class="t-a">codex</span> <span class="t-f">--story</span> <span class="t-a">story-7f3a</span> <span class="t-f">--task</span> <span style="color:#c8c8ca;">"Refactor"</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Best engg score → codex selected · job-c9d4 running</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk score attest</span> <span class="t-f">--story</span> <span class="t-a">story-7f3a</span> <span class="t-f">--agent</span> <span class="t-a">codex</span> <span class="t-f">--quality</span> <span class="t-a">5</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Score signed (Ed25519) · attestation recorded</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-pow">
+    <div class="ci">🎯</div>
+    <div class="cb">
+      <div class="ct">Anti-gaming quality caps</div>
+      <div class="cx">The capability engine caps how fast a score can rise from repeated self-attestation, so an agent can't inflate its own routing weight. Signed attestations from real outcomes carry the most.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 6 — AGENT & PROFILE -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 05 — Agent &amp; Profile</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">06</div>
+  </div>
+
+  <div class="sec-label">Agent &amp; Profile <span class="tag tg-new" style="vertical-align:middle;">v0.9.4</span></div>
+  <h1 class="ch">Per-agent context<br>budgets.</h1>
+
+  <p>Each agent can carry a profile at <code>.agents/&lt;agent&gt;.json</code> that controls how much context it receives. A code-completion agent rarely needs the full roadmap — give it a tight budget and skip context entirely for self-contained tasks.</p>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk agent configure &lt;name&gt;</span><span class="cmd-one">Create or edit an agent profile interactively.</span></div>
+  </div>
+
+  <h3 class="sub">Profile schema — .agents/&lt;name&gt;.json</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">.agents/codex.json</div></div>
+    <div class="tb" style="line-height:1.85;">
+      <div><span style="color:#5a5a5e;">{</span></div>
+      <div>  <span style="color:#bf5af2;">"context_mode"</span><span class="t-o">:      </span><span class="t-s">"none"</span><span class="t-o">,</span>   <span class="t-cm"># none | task | full</span></div>
+      <div>  <span style="color:#bf5af2;">"context_max_bytes"</span><span class="t-o">: </span><span class="t-a">2000</span>      <span class="t-cm"># hard ceiling on injected context</span></div>
+      <div><span style="color:#5a5a5e;">}</span></div>
+    </div>
+  </div>
+
+  <table class="fltbl" style="margin-top:6px;">
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>context_mode</td><td><code>none</code> = inject nothing; <code>task</code> = story-scoped slice; <code>full</code> = entire snapshot. A <code>--context-mode</code> flag on dispatch overrides the profile for one run.</td></tr>
+      <tr><td>context_max_bytes</td><td>Upper bound on injected context. The pre-flight gate truncates or blocks if exceeded.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">Scenario — make codex self-contained, claude full</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">profile flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk agent configure</span> <span class="t-a">codex</span></div>
+      <div><span class="t-o">  context_mode? [none/task/full] › </span><span class="t-a">none</span></div>
+      <div><span class="t-o">  context_max_bytes? › </span><span class="t-a">0</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Wrote .agents/codex.json — codex now gets zero context</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk agent configure</span> <span class="t-a">claude</span></div>
+      <div><span class="t-o">  context_mode? › </span><span class="t-a">full</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Wrote .agents/claude.json — claude gets the full snapshot</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk dispatch</span> <span class="t-a">codex</span> <span class="t-f">--task</span> <span style="color:#c8c8ca;">"Rename helper()"</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">No context injected (profile: none) · job-d1e2</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-info">
+    <div class="ci">🧩</div>
+    <div class="cb">
+      <div class="ct">Why per-agent profiles</div>
+      <div class="cx">Self-contained refactors don't need a 100KB project snapshot. Profiles let each agent pay only for the context it actually uses — measurable token savings across a workgroup.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 7 — DAEMON -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 06 — Daemon</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">07</div>
+  </div>
+
+  <div class="sec-label">Daemon <span class="tag tg-new" style="vertical-align:middle;">v0.9.3</span></div>
+  <h1 class="ch">Always-on synlynk.<br>A job queue that survives.</h1>
+
+  <p>The daemon runs synlynk as a background service with a persistent job queue, priority chains, and crash-safe restarts. It also serves an HTTP context endpoint on <code>localhost:27471</code> so other tools can fetch the live project snapshot.</p>
+
+  <div class="c2">
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">daemon start</span></div>
+      <p style="font-size:9px; margin:0;">Start the daemon in the foreground (or detached if installed as a service).</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">daemon stop</span></div>
+      <p style="font-size:9px; margin:0;">Stop the running daemon and flush the queue to disk.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">daemon status</span></div>
+      <p style="font-size:9px; margin:0;">Show PID, queue depth, context server port, and uptime.</p>
+    </div>
+    <div class="cmd-block">
+      <div class="cmd-head"><span class="cmd-name">daemon install-service</span></div>
+      <p style="font-size:9px; margin:0;">Install as a launchd (macOS) or systemd (Linux) service — auto-start on login/boot.</p>
+    </div>
+  </div>
+
+  <h3 class="sub">Scenario — install as a launchd service</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">daemon flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk daemon install-service</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Wrote ~/Library/LaunchAgents/dev.synlynk.daemon.plist</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">launchctl loaded · starts on login · KeepAlive=true</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk daemon status</span></div>
+      <div><span class="t-o">  PID 48213 · up 12s · queue: 0 jobs · context server :27471</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">curl</span> <span class="t-a">localhost:27471/context</span></div>
+      <div><span class="t-o">  { "memory": "...", "roadmap": "...", "stories": 12 }</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk dispatch</span> <span class="t-a">claude</span> <span class="t-f">--task</span> <span style="color:#c8c8ca;">"..."</span>  <span class="t-cm"># enqueued, not blocking</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Queued behind 0 jobs · daemon will run it</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-tip">
+    <div class="ci">⏱️</div>
+    <div class="cb">
+      <div class="ct">Priority chains</div>
+      <div class="cx">Jobs enqueued through the daemon run in priority order, and a chain can fan a story out to dependent follow-up jobs. A crash mid-queue restarts cleanly — state persists in <code>state.db</code>.</div>
+    </div>
+  </div>
+
+  <div class="callout c-warn">
+    <div class="ci">⚠️</div>
+    <div class="cb">
+      <div class="ct">One daemon per machine</div>
+      <div class="cx">The context server binds a fixed port. Run a single daemon per host; it serves all repos by reading each one's <code>state.db</code> on request.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 8 — TEAM -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 07 — Team</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">08</div>
+  </div>
+
+  <div class="sec-label">Team <span class="tag tg-new" style="vertical-align:middle;">v0.9.2</span></div>
+  <h1 class="ch">Onboard, sync,<br>and decide together.</h1>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk join</span><span class="cmd-one">Onboard the current user into a team repo.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--user &lt;name&gt;</td><td>Override the identity (defaults to git config user.name).</td></tr>
+        <tr><td>--mode single|team</td><td>Confirm the repo mode when joining.</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:9.5px; margin:2px 0 0;">Seeds <code>devlogs/&lt;user&gt;.md</code> from git history, regenerates the agent instruction files, and prints a team digest.</p>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk team status</span><span class="cmd-one">Show members, last-active times, open stories, and active jobs.</span></div>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk decide</span><span class="cmd-one">Run a multi-agent consensus panel on a question.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--topic "..."</td><td>The decision question put to the panel.</td></tr>
+        <tr><td>--agents a,b,c</td><td>Which agents sit on the panel (defaults to all functional agents).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub">Scenario — onboard a teammate, run a consensus decision</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">team flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk join</span> <span class="t-f">--user</span> <span class="t-a">priya</span> <span class="t-f">--mode</span> <span class="t-a">team</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Seeded devlogs/priya.md from 38 commits · agent files regenerated</span></div>
+      <div><span class="t-o">  Digest: nikhil (relay broker) · arjun (capability routing)</span></div>
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk team status</span></div>
+      <div><span class="t-o">  3 members · 12 open stories · 2 active jobs</span></div>
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk decide</span> <span class="t-f">--topic</span> <span style="color:#c8c8ca;">"Postgres or SQLite for the ledger?"</span> <span class="t-f">--agents</span> <span class="t-a">claude,agy,codex</span></div>
+      <div><span style="color:#bf5af2;">  claude ›</span> <span class="t-o">SQLite — zero ops</span></div>
+      <div><span style="color:#64d2ff;">  agy ›</span> <span class="t-o">SQLite</span></div>
+      <div><span class="t-o">  codex › SQLite</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Consensus: SQLite (3/3) · logged to memory.md [@priya]</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-info">
+    <div class="ci">👥</div>
+    <div class="cb">
+      <div class="ct">Pull-before-write guard</div>
+      <div class="cx">In team mode synlynk auto-pulls from origin before writing any shared doc, preventing divergence across concurrent sessions and worktrees. Decisions carry <code>[@username]</code> attribution.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 9 — SENTINEL & INIT FLAGS -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 08 — Sentinel &amp; Init Flags</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">09</div>
+  </div>
+
+  <div class="sec-label">Sentinel &amp; Init Flags</div>
+  <h1 class="ch">Manage alerts.<br>Master init.</h1>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk sentinel list</span><span class="cmd-one">Show active alerts with severity, code, message, timestamp.</span></div>
+  </div>
+
+  <div class="cmd-block">
+    <div class="cmd-head"><span class="cmd-name">synlynk sentinel clear</span><span class="cmd-one">Clear alerts in bulk.</span></div>
+    <table class="fltbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--severity CRITICAL|WARN</td><td>Clear all alerts at this severity.</td></tr>
+        <tr><td>--code &lt;CODE&gt;</td><td>Clear alerts of one code (e.g. <code>VERIFY_SKIP</code>, <code>FLATLINE</code>).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub">Sentinel codes you'll see</h3>
+  <div class="c2">
+    <div class="alert alert-r"><div class="alert-ttl" style="color:var(--red);">🚨 FLATLINE</div><div class="alert-txt">Same command failed 3× in a row.</div></div>
+    <div class="alert alert-y"><div class="alert-ttl" style="color:var(--yellow);">⚠ SUCCESS_LOOP</div><div class="alert-txt">Same command succeeded 5× in &lt;10 min.</div></div>
+    <div class="alert alert-o"><div class="alert-ttl" style="color:var(--orange);">🚨 QUOTA_EXHAUSTED</div><div class="alert-txt">Output matched a quota-exhaustion phrase.</div></div>
+    <div class="alert alert-y"><div class="alert-ttl" style="color:var(--yellow);">⚠ VERIFY_SKIP <span class="tag tg-new" style="vertical-align:middle;">v0.9.4</span></div><div class="alert-txt">Job exited 0 but no test evidence in output.</div></div>
+  </div>
+
+  <h2 class="sec">Full init flags</h2>
+  <table class="fltbl">
+    <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>--force</td><td>Overwrite synlynk-managed files instead of skipping existing ones.</td></tr>
+      <tr><td>--agents a,b,c</td><td>Restrict discovery to a specific set of agents.</td></tr>
+      <tr><td>--mode single|team</td><td>Single user, or team mode (per-user devlogs + pull guard).</td></tr>
+      <tr><td>--org &lt;name&gt;</td><td>Org slug baked into agent instruction files.</td></tr>
+      <tr><td>--repo &lt;name&gt;</td><td>Repo slug baked into agent instruction files.</td></tr>
+      <tr><td>--project-id &lt;id&gt;</td><td>GitHub Projects v2 node ID for a shared board across repos.</td></tr>
+      <tr><td>--docs-dir &lt;path&gt;</td><td>Where docs live. <code>.</code> for repo root; default <code>project-docs</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">Scenario — clear a false-positive VERIFY_SKIP alert</h3>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">sentinel flow</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk sentinel list</span></div>
+      <div><span style="color:#ffd60a;">  [WARN]</span> <span class="t-o">VERIFY_SKIP  job-c9d4 exited 0, no test output  — 2026-06-24 11:14</span></div>
+      <div><span class="t-cm"># the job ran a docs-only change — no tests expected</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">synlynk sentinel clear</span> <span class="t-f">--code</span> <span class="t-a">VERIFY_SKIP</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Cleared 1 VERIFY_SKIP alert</span></div>
+    </div>
+  </div>
+
+  <div style="margin-top:auto; padding-top:8px; text-align:center; font-size:9px; color:var(--muted); letter-spacing:0.08em;">
+    SYNL<span style="color:var(--blue); font-weight:800;">Y</span>NK · Command Reference · v0.9.4 · synlynk.dev
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>
