@@ -3631,7 +3631,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
                      owner: str = None, agent_slots: dict = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
-    _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex"}  # AGY CLI binary is named 'agy' — update when binary is renamed
+    _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
 
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
@@ -6108,7 +6108,7 @@ def init(force: bool = False, agents: list = None,
         print(f"  {_DIM}All docs already exist — skipped (use --force to overwrite){_RESET}")
 
     # Write agent instruction files using _write_instruction_file().
-    agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex"}
+    agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex", "grok"}
     templates = _build_templates(org=org, repo=repo, project_id=project_id)
 
     # Core trio: only write if agent was discovered as functional.
@@ -6116,8 +6116,9 @@ def init(force: bool = False, agents: list = None,
         "CLAUDE.md":   (templates.get("CLAUDE.md", ""), "html"),
         "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
         "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
+        "GROK.md":     (templates.get("GROK.md", ""), "html"),
     }
-    _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
+    _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex", "GROK.md": "grok"}
     for fname, (content, mstyle) in trio_content.items():
         required = _agent_guards[fname]
         if required not in agent_set:
@@ -6367,8 +6368,8 @@ def main() -> None:
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
-    init_parser.add_argument("--agents", default="claude,agy,codex",
-                             help="Comma-separated agent set to generate files for (claude,agy,codex)")
+    init_parser.add_argument("--agents", default="claude,agy,codex,grok",
+                             help="Comma-separated agent set to generate files for (claude,agy,codex,grok)")
     init_parser.add_argument("--mode", choices=["solo", "team"], default="solo",
                              help="Project mode written to project-docs/.synlynk_config.json")
     init_parser.add_argument("--org", default=None,
@@ -6417,7 +6418,7 @@ def main() -> None:
     agent_configure_parser = agent_sub.add_parser(
         "configure", help="Interactively write .agents/<name>.json context profile"
     )
-    agent_configure_parser.add_argument("name", help="Agent name: claude, agy, codex")
+    agent_configure_parser.add_argument("name", help="Agent name: claude, agy, codex, grok")
     agent_run_parser = agent_sub.add_parser("run", help="Run a named agent once")
     agent_run_parser.add_argument("name", help="Agent name (matches .agents/<name>.json)")
     agent_run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
@@ -6516,7 +6517,7 @@ def main() -> None:
 
     launch_parser = subparsers.add_parser(
         "launch", help="Launch an agent CLI interactively with pre-loaded context")
-    launch_parser.add_argument("agent", help="Agent name: claude, agy, codex")
+    launch_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
     launch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 

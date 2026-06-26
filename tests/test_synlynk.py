@@ -4078,3 +4078,15 @@ def test_grok_md_template_content():
     assert "grok" in content.lower()
 
 
+def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
+    import synlynk, json, os
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    synlynk.init(agents=["claude", "agy", "codex", "grok"], mode="solo",
+                 org=None, repo=None, project_id=None, force=False)
+    config = json.load(open(".synlynk/config.json"))
+    assert config["agent_slots"].get("grok") == "grok"
+    assert os.path.exists("GROK.md")
+
+
+
