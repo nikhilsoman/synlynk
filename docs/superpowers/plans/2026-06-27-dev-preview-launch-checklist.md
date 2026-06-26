@@ -72,6 +72,24 @@
 
 ---
 
+### Sunday morning (optional slot) — BS-7 Brainstorm: Skill Pack Interoperability (2h)
+
+*Can trade with BS-6 if BS-6 runs long. BS-7 is the stronger pre-launch asset.*
+
+- [ ] Open BS-7 brainstorm: "Skill Pack Interoperability + Benchmarks"
+- [ ] Agenda: `docs/superpowers/specs/bs7-skill-pack-interop-agenda.md` (to be written at session start)
+- [ ] Key design questions for session:
+  - Which skill packs to benchmark? (Superpowers, GStack/GBrain, GSD, Everything-ClaudeCode — top 5 by adoption)
+  - Define the test task precisely: "build a To-do app with CRUD, tests, and deploy config" — exact spec
+  - Define metrics: token cost per session, session count to completion, test coverage achieved, retry/loop incidents, hallucination count
+  - How does synlynk's `--context-mode task` reduce skill pack token bloat? (hypothesis: scoped context injection means only relevant `project-docs/` slice is injected, not 55KB full context dump that amplifies every skill pack prompt)
+  - Technical coexistence: how do synlynk's `synlynk:start/end` blocks coexist with Superpowers hooks and GStack additions? (connect to AB-11 conflict taxonomy)
+  - What is the narrative? "synlynk is the coordination OS; skill packs are domain expertise modules — different layers, better together"
+- [ ] Output: BS-7 spec doc + benchmark methodology
+- [ ] **Do NOT run benchmarks this session** — design only; benchmark execution is next week's dispatch job
+
+---
+
 ### Sunday afternoon — Launch artifacts (2h)
 
 #### 4. GitHub README overhaul
@@ -118,6 +136,8 @@ Before calling it a dev preview:
 
 Website (BS-5) and `synlynk viz` (BS-6) can trail dev preview — they're nice-to-have for launch, not blockers.
 
+**BS-7 benchmark results are a strong-to-have** — having data in the HN post ("R4 beats R1 by X tokens at Y% better test coverage") is materially better than a claim. If BS-7 design is done this weekend and benchmarks run Monday/Tuesday, results can land in the launch post.
+
 ---
 
 ## What ships at dev preview vs. GA
@@ -137,9 +157,22 @@ Website (BS-5) and `synlynk viz` (BS-6) can trail dev preview — they're nice-t
 
 ---
 
+## Brainstorm Session Status
+
+| Session | Topic | Status | Drives |
+|---|---|---|---|
+| BS-1 | Context Layer + Dispatch Architecture | ✅ Done | v0.9.4 |
+| BS-2 | Onboarding Model + Mode Taxonomy | ✅ Done | v0.9.4 |
+| BS-3 | Agent Behaviour + Instruction Adherence | 📋 Queued — pre-GA (not this weekend) | AB-11 conflict taxonomy; v1.0 |
+| BS-4 | Command Audit + Autopilot Trigger Map | 📋 Queued — pre-GA (not this weekend) | v1.0 agent fleet triggers; moved post-fleet-deferral |
+| BS-5 | Website Redesign | 📋 This weekend — Saturday PM | Dev preview + GA |
+| BS-6 | Project Intelligence: OKF + Visualization | 📋 This weekend — Sunday AM | Dev preview hook; v0.10.0 |
+| BS-7 | Skill Pack Interoperability + Benchmarks | 📋 This weekend — Sunday AM/PM | Pre-launch narrative + benchmark data |
+| BYOA | Ollama / OpenCode / OpenRouter / DeepSeek | ⏸ Parked — post dev preview | Own dedicated session |
+
 ## Related
 - BS-5 brainstorm: story-048f5fe5 (website redesign)
 - BS-6 brainstorm + agenda: `docs/superpowers/specs/bs6-project-intelligence-okf-viz-agenda.md`
+- BS-7 brainstorm agenda: `docs/superpowers/specs/bs7-skill-pack-interop-agenda.md` (written at session start)
 - Named Release Policy: `~/.claude/CLAUDE.md` — "Named Release Policy" section
-- v0.9.5 Health Pulse spec: needs writing
-- v0.9.6 Exit + Repair + Sync spec: OB-13–17 filed
+- v0.9.8 Health Pulse + Lifecycle spec: needs writing
