@@ -1306,6 +1306,196 @@ def cmd_identity_init() -> None:
         print("  (public key file not found)")
 
 
+# ---------------------------------------------------------------------------
+# synlynk doctor — health checks
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass as _dataclass
+from typing import List as _List
+
+@_dataclass
+class HealthCheck:
+    name: str
+    status: str        # "ok" | "warn" | "fail"
+    message: str
+    fix: str = ""      # suggested remediation
+
+
+def _hc_python_version() -> HealthCheck:
+    import sys
+    vi = sys.version_info
+    ver_str = f"Python {vi[0]}.{vi[1]}.{vi[2]}"
+    if vi[:2] >= (3, 9):
+        return HealthCheck("python_version", "ok", ver_str)
+    return HealthCheck(
+        "python_version", "fail",
+        f"{ver_str} is below minimum (3.9)",
+        fix="Upgrade to Python 3.9 or later",
+    )
+
+
+def _hc_project_init() -> HealthCheck:
+    if os.path.exists(".synlynk/config.json"):
+        return HealthCheck("project_init", "ok", ".synlynk/config.json present")
+    return HealthCheck(
+        "project_init", "fail",
+        "Project not initialized — .synlynk/config.json missing",
+        fix="Run: synlynk init",
+    )
+
+
+def _hc_docs_dir() -> HealthCheck:
+    try:
+        docs = _docs_dir()
+    except Exception:
+        return HealthCheck(
+            "docs_dir", "warn",
+            "Could not resolve docs directory (project may not be initialized)",
+            fix="Run: synlynk init",
+        )
+    required = ["roadmap.md", "todo.md", "memory.md"]
+    missing = [f for f in required if not os.path.exists(os.path.join(docs, f))]
+    if not missing:
+        return HealthCheck("docs_dir", "ok", f"project-docs complete ({docs})")
+    return HealthCheck(
+        "docs_dir", "warn",
+        f"project-docs missing: {', '.join(missing)}",
+        fix="Run: synlynk init",
+    )
+
+
+def _hc_identity_key() -> HealthCheck:
+    key_path = os.path.join(os.path.expanduser("~/.synlynk"), "identity.key")
+    if os.path.exists(key_path):
+        pub_path = key_path + ".pub"
+        if os.path.exists(pub_path):
+            return HealthCheck("identity_key", "ok", f"Ed25519 identity key present")
+        return HealthCheck(
+            "identity_key", "warn",
+            "identity.key exists but identity.key.pub is missing",
+            fix="Run: synlynk identity init",
+        )
+    return HealthCheck(
+        "identity_key", "warn",
+        "No identity key — capability ratings will be unsigned",
+        fix="Run: synlynk identity init",
+    )
+
+
+def _hc_agent_profiles() -> HealthCheck:
+    """Checks that each agent in config's agent_slots has a .agents/<name>.json profile."""
+    try:
+        cfg = load_config()
+    except Exception:
+        return HealthCheck(
+            "agent_profiles", "warn",
+            "Could not load config — skipping agent profile check",
+            fix="Run: synlynk init",
+        )
+    slots = cfg.get("agent_slots", {})
+    if not slots:
+        return HealthCheck("agent_profiles", "warn", "No agent slots configured", fix="Run: synlynk init")
+    missing = [name for name in slots if not os.path.exists(os.path.join(".agents", f"{name}.json"))]
+    if not missing:
+        return HealthCheck("agent_profiles", "ok", f"Agent profiles present: {', '.join(sorted(slots))}")
+    return HealthCheck(
+        "agent_profiles", "warn",
+        f"Missing .agents/ profiles: {', '.join(missing)}",
+        fix=f"Run: synlynk agent configure <name> — for: {', '.join(missing)}",
+    )
+
+
+def _hc_instruction_files() -> HealthCheck:
+    """Checks that per-agent instruction files exist at the repo root."""
+    expected = {"claude": "CLAUDE.md", "agy": "GEMINI.md", "codex": "AGENTS.md", "grok": "GROK.md"}
+    missing = [fname for fname in expected.values() if not os.path.exists(fname)]
+    if not missing:
+        return HealthCheck("instruction_files", "ok", "Agent instruction files present")
+    return HealthCheck(
+        "instruction_files", "warn",
+        f"Missing instruction files: {', '.join(missing)}",
+        fix="Run: synlynk init",
+    )
+
+
+def _hc_version_current() -> HealthCheck:
+    """Compares installed VERSION against latest GitHub release tag (best-effort, timeout 5s)."""
+    import urllib.request
+    import urllib.error
+    import json as _json
+    url = "https://api.github.com/repos/nikhilsoman/synlynk/releases/latest"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": f"synlynk/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = _json.loads(resp.read())
+        latest_tag = data.get("tag_name", "").lstrip("v")
+        if not latest_tag:
+            return HealthCheck("version_current", "warn", "Could not parse latest release tag")
+        if latest_tag == VERSION:
+            return HealthCheck("version_current", "ok", f"synlynk {VERSION} is up to date")
+        # Simple semver comparison via tuple
+        def _ver(s):
+            try:
+                return tuple(int(x) for x in s.split("."))
+            except ValueError:
+                return (0,)
+        if _ver(latest_tag) > _ver(VERSION):
+            return HealthCheck(
+                "version_current", "warn",
+                f"Update available: {VERSION} → {latest_tag}",
+                fix="Run: synlynk upgrade",
+            )
+        return HealthCheck("version_current", "ok", f"synlynk {VERSION} (latest: {latest_tag})")
+    except (urllib.error.URLError, OSError):
+        return HealthCheck("version_current", "warn", f"Version check skipped (offline or timeout)")
+    except Exception:
+        return HealthCheck("version_current", "warn", "Version check failed (unexpected error)")
+
+
+# Registry — ordered from most fundamental to least
+HEALTH_CHECKS = [
+    _hc_python_version,
+    _hc_project_init,
+    _hc_docs_dir,
+    _hc_identity_key,
+    _hc_agent_profiles,
+    _hc_instruction_files,
+    _hc_version_current,
+]
+
+
+def cmd_doctor(checks: _List = None) -> int:
+    """Runs all registered health checks and prints a formatted report.
+
+    Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
+    """
+    if checks is None:
+        checks = HEALTH_CHECKS
+
+    _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+
+    results = [fn() for fn in checks]
+    failed = [r for r in results if r.status == "fail"]
+    warned = [r for r in results if r.status == "warn"]
+
+    print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
+    for r in results:
+        icon = _STATUS_ICON.get(r.status, "?")
+        print(f"  {icon}  {r.name}: {r.message}")
+        if r.fix and r.status != "ok":
+            print(f"     {_DIM}→ {r.fix}{_RESET}")
+
+    print()
+    if failed:
+        print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
+    elif warned:
+        print(f"  {len(warned)} advisory warning(s). Everything should still work.")
+    else:
+        print(f"  {_GREEN}All checks passed.{_RESET}")
+    print()
+    return 1 if failed else 0
+
+
 def _best_agent_for_story(story_id: str) -> Optional[str]:
     """Returns the agent with the highest capability score for the story's coordinate.
 
@@ -6446,6 +6636,8 @@ def main() -> None:
     scan_parser.add_argument("--status", action="store_true",
                              help="Show cache age, HEAD SHA, file and symbol counts")
 
+    subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
     identity_sub.add_parser("init", help="Create local Ed25519 identity key")
@@ -6771,6 +6963,8 @@ def main() -> None:
         cmd_decide(args.topic, panel=panel_members, record=args.record)
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
+    elif args.command == "doctor":
+        sys.exit(cmd_doctor())
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:
