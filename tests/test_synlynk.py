@@ -1414,7 +1414,7 @@ def test_sentinel_clear_by_severity(project_dir):
 
 
 def test_version_is_094(project_dir):
-    assert synlynk.VERSION == "0.9.4"
+    assert synlynk.VERSION == "0.9.7"
 
 
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):

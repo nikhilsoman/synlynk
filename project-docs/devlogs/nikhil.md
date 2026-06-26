@@ -1,5 +1,37 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-26 — Session: v0.9.7 Grok Agent Support
+
+### Shipped
+**v0.9.7 — Grok as first-class fourth agent peer (PRs #62/#63/#64, merged 2026-06-26, 488 tests)**
+
+Multi-agent delivery: Agy owned Tasks 1–3 (PR #62), Codex owned Tasks 4–6 (PR #63), Claude owned Task 7 + spec + plan + PR review (PR #64). Claude sole reviewer.
+
+- T1: AGENT_CAPABILITY_BASELINES["grok"] + AGENT_DISCOVERY_DEFAULTS + version probe (`grok -v` + pattern)
+- T2: `_grok_md` template + `_INSTRUCTION_TARGETS` + `_MARKER_STYLE_FOR_TOOL` entries
+- T3: Init wizard — GROK.md in trio_content/_agent_guards, agent_slots/agent_set defaults expanded, argparse updated
+- T4: `_inject_grok_rules()` — `--rules GROK.md` (all grok exec) + `--rules .synlynk/context.md` (headless only)
+- T5: `dispatch_agent()` — `--always-approve` fallback to `--permission-mode bypassPermissions`; `--output-format json`
+- T6: `extract_tokens()` nested usage JSON pattern; `extract_model_version()` tier-2 agent profile path
+- T7: GROK.md written for synlynk repo itself (100 lines, markers bookending)
+
+### Dispatch issues surfaced
+- **story-5b86c353** — both concurrent dispatch jobs wrote to global `.synlynk/context.md` (RCA below); deferred fix post-v0.9.7
+- **Same-worktree collision** — Codex hit `index.lock` while Agy held it; filed for worktree-per-job isolation
+
+### Key decisions
+- Separate GROK.md (not injecting into CLAUDE.md): Grok auto-reads CLAUDE.md natively; GROK.md is synlynk's managed section via `--rules`
+- `--always-approve` as default dispatch flag; `.agents/grok.json` `always_approve_unsupported: true` → `--permission-mode bypassPermissions`
+- `grok-composer-2.5-fast` = Cursor Composer 2.5 Fast (not xAI-native) — stored verbatim
+- `Co-Authored-By: Grok <noreply@x.ai>`
+
+### Next
+- v0.9.5 Health Pulse (`synlynk doctor`, per-command silent auditor)
+- v0.9.6 Exit + Repair + Sync
+- story-5b86c353 fix: per-job context file (`.synlynk/contexts/<job_id>.md`)
+
+---
+
 ## 2026-06-26 — Bug RCA: story-5b86c353 — dispatch job context overwrites global context.md
 
 ### RCA — `dispatch_agent` writes job context to global `.synlynk/context.md`
