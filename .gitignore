@@ -10,3 +10,5 @@ test_context_output/
 .worktrees/
 .antigravitycli/
 .claude/
+bin/statusline.py
+project-docs/handoff-note.md
