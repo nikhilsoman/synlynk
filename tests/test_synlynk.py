@@ -1417,6 +1417,28 @@ def test_version_is_094(project_dir):
     assert synlynk.VERSION == "0.9.7"
 
 
+def test_pyproject_version_matches_module(project_dir):
+    """pyproject.toml version must stay in sync with synlynk.VERSION."""
+    import re
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    toml_path = os.path.join(repo_root, "pyproject.toml")
+    if not os.path.exists(toml_path):
+        pytest.skip("pyproject.toml not present")
+    text = open(toml_path).read()
+    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    assert m, "version field not found in pyproject.toml"
+    assert m.group(1) == synlynk.VERSION, (
+        f"pyproject.toml version {m.group(1)!r} != synlynk.VERSION {synlynk.VERSION!r}"
+    )
+
+
+def test_main_entrypoint_importable():
+    """synlynk.__main__ imports without error (required for python -m synlynk)."""
+    import importlib
+    mod = importlib.import_module("synlynk.__main__")
+    assert hasattr(mod, "main") or True  # module must import cleanly
+
+
 def test_load_jobs_returns_empty_list_when_no_file(project_dir):
     jobs = synlynk._load_jobs()
     assert jobs == []

@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # synlynk Global Installer
-# Usage: curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
+#
+# Recommended (pipx — isolated, auto-updates):
+#   pipx install git+https://github.com/nikhilsoman/synlynk
+#
+# Script install (no pipx required):
+#   curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
 
 set -e
 
