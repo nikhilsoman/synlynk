@@ -54,6 +54,7 @@
 - **Token budget replaces story points:** `estimated_tokens` on stories. Routing: capability → quota headroom → cost. `agent_quotas` table tracks per-agent limits.
 - **Costs fully attributed:** `costs` table gains `story_id / epic_id / phase_id` FKs — can now answer "what did Phase v0.5.0 cost?"
 - **Platform sync:** `external_refs` table maps Arc/Phase/Epic/Story → GitHub/Jira/Linear. state.db is canonical; platforms are views.
+- **GitHub Projects V2 — agentic-first decision (2026-06-27):** [@nikhilsoman] The board is a human-readable projection of state.db, not the source of truth. Agents never write to the board directly. synlynk owns the push via `synlynk sync --board github` (post-v0.10.0). The current `--project-id` flag on `synlynk init` stamps a placeholder into agent instruction files for agents to manually invoke GraphQL if needed — that is the *only* live artifact; no bidirectional sync exists yet. Do not expand GitHub Projects V2 surface area before `external_refs` is implemented.
 - **Migration:** `synlynk migrate` (ships v0.5.0) — parses project-docs/, populates state.db, untracks with `git rm --cached`.
 - **Next:** Agent identity, addressability, scheduling, entitlements — separate brainstorm.
 - **Spec:** `docs/superpowers/specs/2026-06-07-synlynk-state-db-agentic-pm-design.md`

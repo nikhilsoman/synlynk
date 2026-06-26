@@ -49,6 +49,7 @@ Four archetypes, deployed at any community level:
 | Community Layer | Local workgroup → team → enterprise → domain communities | 📋 v1.0.0 | Same |
 | Public Presence | synlynk.com · public blog (Marketing Intern) · contributor blog in GitHub | 📋 v1.0.0 | Same |
 | Server-Side Strategy | Relay prototype v0.9.3 → community server v1.1 → Tokq v1.3 | 📋 Articulated, implement v1.1+ | Same |
+| GitHub Projects V2 Board Sync | state.db is canonical; board is a human-readable projection. `synlynk sync --board github` pushes story status via `external_refs` table. Agents never write to the board directly. Current `--project-id` flag is a placeholder only — no bidirectional sync exists yet. Implement post-v0.10.0. | 📋 Post-v0.10.0 | memory.md: "GitHub Projects V2 — agentic-first decision" |
 
 ## Cross-Cutting Epics
 
