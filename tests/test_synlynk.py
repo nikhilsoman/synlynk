@@ -1807,7 +1807,7 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
 
     sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     shell_cmd = captured["cmd"][2]
@@ -1840,7 +1840,7 @@ def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
 
     # requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges
     if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
@@ -1878,7 +1878,7 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"always_approve_unsupported": True})
 
     if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
@@ -1899,7 +1899,7 @@ def test_exec_agent_task_claude_does_not_include_dangerously_skip_permissions(pr
         return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
     monkeypatch.setattr(sl.subprocess, "run", fake_run)
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {})
 
     story_id = sl.cmd_story_create("Investigate issue", engg_domain="backend")
@@ -2041,7 +2041,7 @@ def test_dispatch_agent_explicit_context_mode_beats_profile(project_dir, monkeyp
     monkeypatch.setattr(sl.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "synlynk Context Snapshot\nshould not appear")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "synlynk Context Snapshot\nshould not appear")
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "full"})
@@ -2060,7 +2060,7 @@ def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     # Patch generate_context to return an oversized string
     big_context = "x" * (82 * 1024)  # 82KB — over 80KB soft limit
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": big_context)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: big_context)
     sl.dispatch_agent("claude", "do thing", context_mode="full")
     captured = capsys.readouterr()
     assert "exceeds soft limit" in captured.out
@@ -2075,7 +2075,7 @@ def test_dispatch_agent_context_max_bytes_logs_utf8_truncation(project_dir, monk
     monkeypatch.setattr(sl.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "€" * 100)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "€" * 100)
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 10})
@@ -2113,6 +2113,67 @@ def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, mo
     assert job["status"] == "running"
 
 
+def test_dispatch_agent_writes_per_job_context_file(project_dir, monkeypatch):
+    """dispatch_agent writes context to .synlynk/contexts/<job_id>.md, not global context.md."""
+    import synlynk as sl
+
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
+
+    story_id = sl.cmd_story_create("Fix login timeout", engg_domain="backend")
+    job = sl.dispatch_agent("claude", "fix the bug", story_id=story_id)
+
+    job_ctx = project_dir / ".synlynk" / "contexts" / f"{job['id']}.md"
+    assert job_ctx.exists(), f"per-job context file not found: {job_ctx}"
+    assert "Fix login timeout" in job_ctx.read_text()
+    assert job["context_file"] == os.path.join(".synlynk", "contexts", f"{job['id']}.md")
+
+
+def test_dispatch_agent_concurrent_jobs_use_separate_context_files(project_dir, monkeypatch):
+    """Two concurrent dispatches write to different context files, not the same one."""
+    import synlynk as sl
+
+    class FakeProc:
+        pid = 1
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
+
+    story_a = sl.cmd_story_create("Story A", engg_domain="backend")
+    story_b = sl.cmd_story_create("Story B", engg_domain="frontend")
+
+    job_a = sl.dispatch_agent("claude", "task A", story_id=story_a)
+    job_b = sl.dispatch_agent("codex", "task B", story_id=story_b)
+
+    ctx_a = project_dir / ".synlynk" / "contexts" / f"{job_a['id']}.md"
+    ctx_b = project_dir / ".synlynk" / "contexts" / f"{job_b['id']}.md"
+
+    assert ctx_a != ctx_b
+    assert ctx_a.exists()
+    assert ctx_b.exists()
+    assert "Story A" in ctx_a.read_text()
+    assert "Story B" in ctx_b.read_text()
+
+
+def test_generate_task_context_out_path_writes_to_custom_location(project_dir):
+    """_generate_task_context respects an explicit out_path instead of global context.md."""
+    import synlynk as sl
+
+    story_id = sl.cmd_story_create("Custom path test", engg_domain="cli")
+    custom_path = str(project_dir / ".synlynk" / "contexts" / "custom.md")
+    os.makedirs(str(project_dir / ".synlynk" / "contexts"), exist_ok=True)
+
+    sl._generate_task_context(story_id, out_path=custom_path)
+
+    assert os.path.exists(custom_path)
+    assert "Custom path test" in open(custom_path).read()
+    # Global context.md should NOT have been written
+    global_ctx = project_dir / ".synlynk" / "context.md"
+    if global_ctx.exists():
+        assert "Custom path test" not in global_ctx.read_text()
+
+
 def test_exec_grok_headless_appends_rules_flags(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
@@ -2137,7 +2198,7 @@ def test_exec_grok_headless_appends_rules_flags(project_dir, monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
@@ -2164,7 +2225,7 @@ def test_exec_grok_interactive_omits_context_md(project_dir, monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
@@ -2201,7 +2262,7 @@ def test_exec_grok_skips_missing_rules_files(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
@@ -2393,7 +2454,7 @@ def test_dispatch_agent_profile_overrides_context_mode(project_dir, monkeypatch)
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "PROFILE_CONTEXT_MARKER")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "PROFILE_CONTEXT_MARKER")
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "none"})
@@ -2413,7 +2474,7 @@ def test_dispatch_agent_profile_context_max_bytes_truncates(project_dir, monkeyp
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 50})
     )
-    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "x" * 5000)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "x" * 5000)
     job = sl.dispatch_agent("claude", "do thing")
     prompt = open(job["prompt_file"]).read()
     assert "x" * 51 not in prompt

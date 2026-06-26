@@ -2171,9 +2171,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     os.makedirs(LOGS_DIR, exist_ok=True)
     os.makedirs(PROMPTS_DIR, exist_ok=True)
+    contexts_dir = os.path.join(".synlynk", "contexts")
+    os.makedirs(contexts_dir, exist_ok=True)
 
     log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
     prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
+    context_file = os.path.join(contexts_dir, f"{job_id}.md")
 
     context_text = ""
     if context_mode != "none":
@@ -2182,7 +2185,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         else:
             scope = "full"
         try:
-            context_text = generate_context(scope=scope) or ""
+            context_text = generate_context(scope=scope, out_path=context_file) or ""
         except Exception:
             pass
     _warn_context_size(context_text)
@@ -2242,6 +2245,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "pid": proc.pid,
         "log_file": log_file,
         "prompt_file": prompt_file,
+        "context_file": context_file if context_mode != "none" else "",
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "ended_at": None,
         "status": "running",
@@ -4856,8 +4860,12 @@ def _import_todo_to_stories() -> int:
     return imported
 
 
-def _generate_task_context(story_id: str) -> str:
-    """Writes minimal scoped context for a single story dispatch. Returns context string."""
+def _generate_task_context(story_id: str, out_path: str = None) -> str:
+    """Writes minimal scoped context for a single story dispatch. Returns context string.
+
+    out_path: write to this path instead of the global .synlynk/context.md.
+    Used by dispatch_agent to isolate per-job context and avoid concurrent overwrites.
+    """
     import io as _io
     buf = _io.StringIO()
 
@@ -4912,10 +4920,8 @@ def _generate_task_context(story_id: str) -> str:
 
     context_text = buf.getvalue()
 
-    # Write to file for daemon HTTP endpoint compatibility
-    context_file = ".synlynk/context.md"
-    if not os.path.exists(".synlynk"):
-        os.makedirs(".synlynk")
+    context_file = out_path if out_path else ".synlynk/context.md"
+    os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
     with open(context_file, "w") as out:
         out.write(context_text)
 
@@ -4923,14 +4929,17 @@ def _generate_task_context(story_id: str) -> str:
     return context_text
 
 
-def generate_context(scope: str = "full") -> str:
+def generate_context(scope: str = "full", out_path: str = None) -> str:
     """Aggregates project-docs into .synlynk/context.md (active items only).
 
     Returns the context string. The file is still written for daemon HTTP
     endpoint and external tooling compatibility.
+
+    out_path: when set, write to this path instead of .synlynk/context.md.
+    Passed through to _generate_task_context for per-job isolation in dispatch.
     """
     docs_dir = _docs_dir()
-    context_file = ".synlynk/context.md"
+    context_file = out_path if out_path else ".synlynk/context.md"
     sentinel_file = ".synlynk/sentinel.md"
 
     if not os.path.exists(docs_dir):
@@ -4938,12 +4947,11 @@ def generate_context(scope: str = "full") -> str:
 
     if scope != "full":
         if scope.startswith("task:"):
-            return _generate_task_context(scope[5:])
+            return _generate_task_context(scope[5:], out_path=out_path)
         print(f"  ⚠ scope='{scope}' not yet implemented, falling back to full context")
         scope = "full"
 
-    if not os.path.exists(".synlynk"):
-        os.makedirs(".synlynk")
+    os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
 
     username = get_username()
     mode = get_mode()
