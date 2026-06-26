@@ -1,5 +1,45 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-26 — Bug RCA: story-5b86c353 — dispatch job context overwrites global context.md
+
+### RCA — `dispatch_agent` writes job context to global `.synlynk/context.md`
+
+**Story:** `story-5b86c353`
+**Severity:** Sev2 — concurrent dispatches race on a shared file; no data loss but context is stale for all but the last dispatch
+**Found:** 2026-06-26 during v0.9.7 Grok dispatch (two agents dispatched in parallel)
+
+#### Root cause
+
+`dispatch_agent` calls `generate_context(scope=scope)` (line 2169) or `_generate_task_context(story_id)` (line 4851). Both functions write their output to the single shared file `.synlynk/context.md`. There is no per-job context file.
+
+The per-job directory structure exists for logs (`.synlynk/logs/<job_id>.log`) and prompts (`.synlynk/prompts/<job_id>.md`) but was never extended to context.
+
+Additionally: when `dispatch_agent` is called without a `story_id` (the common case for ad-hoc dispatch), line 2165 falls back `scope = "full"` even when `context_mode == "task"`, generating a full 55KB global snapshot.
+
+The context text IS embedded in the prompt file at format time (line 2193), so dispatched agents receive correct context regardless. The race condition is real but silent — agents are not harmed in practice unless they re-read `.synlynk/context.md` mid-job via `--rules` injection.
+
+#### Impact
+
+- Concurrent dispatches overwrite each other's context.md — last writer wins
+- The grok `--rules .synlynk/context.md` injection (added in v0.9.7) would expose agents to a stale file if they re-read it during execution
+- `synlynk relay broadcast context` serves the clobbered file to all subscribers
+
+#### Fix (deferred — implement after Grok v0.9.7 PRs merge)
+
+Three-part change to `synlynk/__init__.py`:
+
+1. **`dispatch_agent`**: After `job_id` is generated (line 2154), write context to `.synlynk/contexts/<job_id>.md` instead of calling `generate_context` directly. Pass the job-specific path into the prompt.
+
+2. **`_generate_task_context`**: Accept an optional `out_path` parameter. Default to `.synlynk/context.md` only when called from non-dispatch paths (exec, daemon). Dispatch callers pass the job path.
+
+3. **`_inject_grok_rules` (v0.9.7 addition)**: Inject `.synlynk/contexts/<job_id>.md` (passed via env or arg) in headless dispatch mode instead of the global `context.md`. Interactive exec mode keeps injecting the global path (refreshed by `exec_command` → `generate_context()` at line 6250).
+
+#### Not broken today because
+- Prompt files embed the context at dispatch time (static snapshot)
+- The two v0.9.7 grok dispatch jobs (job-aad2f7f1, job-4eb3a76b) each got their context embedded in their prompt files before the race could affect them
+
+---
+
 ## 2026-06-24 — Session: v0.9.4 Context/Dispatch/Relay + Three-Tier Docs Suite
 
 ### Shipped
