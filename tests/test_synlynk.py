@@ -4345,4 +4345,214 @@ def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
     assert os.path.exists("GROK.md")
 
 
+# ---------------------------------------------------------------------------
+# synlynk doctor tests
+# ---------------------------------------------------------------------------
+
+def test_hc_python_version_ok(monkeypatch):
+    import synlynk, sys
+    monkeypatch.setattr(sys, "version_info", (3, 11, 0, "final", 0))
+    result = synlynk._hc_python_version()
+    assert result.status == "ok"
+
+
+def test_hc_python_version_fail(monkeypatch):
+    import synlynk, sys
+    monkeypatch.setattr(sys, "version_info", (3, 8, 10, "final", 0))
+    result = synlynk._hc_python_version()
+    assert result.status == "fail"
+    assert "3.9" in result.fix
+
+
+def test_hc_project_init_ok(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    (tmp_path / ".synlynk" / "config.json").write_text("{}")
+    result = synlynk._hc_project_init()
+    assert result.status == "ok"
+
+
+def test_hc_project_init_fail(tmp_path, monkeypatch):
+    import synlynk
+    monkeypatch.chdir(tmp_path)
+    result = synlynk._hc_project_init()
+    assert result.status == "fail"
+    assert "synlynk init" in result.fix
+
+
+def test_hc_docs_dir_ok(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    for fname in ["roadmap.md", "todo.md", "memory.md"]:
+        (docs / fname).write_text("")
+    os.makedirs(tmp_path / ".synlynk")
+    (tmp_path / ".synlynk" / "config.json").write_text('{"project_docs_dir": "project-docs"}')
+    result = synlynk._hc_docs_dir()
+    assert result.status == "ok"
+
+
+def test_hc_docs_dir_warn_missing_files(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "roadmap.md").write_text("")  # only roadmap, missing todo + memory
+    os.makedirs(tmp_path / ".synlynk")
+    (tmp_path / ".synlynk" / "config.json").write_text('{"project_docs_dir": "project-docs"}')
+    result = synlynk._hc_docs_dir()
+    assert result.status == "warn"
+    assert "todo.md" in result.message or "memory.md" in result.message
+
+
+def test_hc_identity_key_ok(tmp_path, monkeypatch):
+    import synlynk
+    synlynk_home = tmp_path / ".synlynk_test_home"
+    synlynk_home.mkdir()
+    key = synlynk_home / "identity.key"
+    key.write_text("fakeprivkey")
+    (synlynk_home / "identity.key.pub").write_text("fakepubkey")
+    monkeypatch.setattr(synlynk.os.path, "expanduser",
+                        lambda p: str(synlynk_home) if p == "~/.synlynk" else synlynk.os.path.expanduser.__wrapped__(p)
+                        if hasattr(synlynk.os.path.expanduser, "__wrapped__") else p.replace("~", str(tmp_path)))
+    # Patch directly: simulate key existence without touching real home
+    import unittest.mock as _mock
+    with _mock.patch("synlynk.os.path.exists") as mock_exists:
+        mock_exists.side_effect = lambda p: p.endswith("identity.key") or p.endswith("identity.key.pub")
+        result = synlynk._hc_identity_key()
+    assert result.status == "ok"
+
+
+def test_hc_identity_key_warn_missing(monkeypatch):
+    import synlynk
+    import unittest.mock as _mock
+    with _mock.patch("synlynk.os.path.exists", return_value=False):
+        result = synlynk._hc_identity_key()
+    assert result.status == "warn"
+    assert "synlynk identity init" in result.fix
+
+
+def test_hc_agent_profiles_ok(tmp_path, monkeypatch):
+    import synlynk, os, json
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    os.makedirs(tmp_path / ".agents")
+    config = {"agent_slots": {"claude": "claude", "agy": "agy"}}
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
+    for name in ["claude", "agy"]:
+        (tmp_path / ".agents" / f"{name}.json").write_text("{}")
+    result = synlynk._hc_agent_profiles()
+    assert result.status == "ok"
+
+
+def test_hc_agent_profiles_warn_missing(tmp_path, monkeypatch):
+    import synlynk, os, json
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    os.makedirs(tmp_path / ".agents")
+    config = {"agent_slots": {"claude": "claude", "agy": "agy"}}
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
+    # only claude profile exists — agy is missing
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    result = synlynk._hc_agent_profiles()
+    assert result.status == "warn"
+    assert "agy" in result.message
+
+
+def test_hc_instruction_files_ok(tmp_path, monkeypatch):
+    import synlynk
+    monkeypatch.chdir(tmp_path)
+    for fname in ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]:
+        (tmp_path / fname).write_text("")
+    result = synlynk._hc_instruction_files()
+    assert result.status == "ok"
+
+
+def test_hc_instruction_files_warn(tmp_path, monkeypatch):
+    import synlynk
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("")  # others missing
+    result = synlynk._hc_instruction_files()
+    assert result.status == "warn"
+    assert "GEMINI.md" in result.message or "AGENTS.md" in result.message
+
+
+def test_hc_version_current_up_to_date(monkeypatch):
+    import synlynk, json as _json
+    import urllib.request as _req
+
+    class FakeResp:
+        def __init__(self): self._data = _json.dumps({"tag_name": f"v{synlynk.VERSION}"}).encode()
+        def read(self): return self._data
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(_req, "urlopen", lambda *a, **kw: FakeResp())
+    result = synlynk._hc_version_current()
+    assert result.status == "ok"
+    assert "up to date" in result.message
+
+
+def test_hc_version_current_update_available(monkeypatch):
+    import synlynk, json as _json
+    import urllib.request as _req
+
+    class FakeResp:
+        def __init__(self): self._data = _json.dumps({"tag_name": "v99.0.0"}).encode()
+        def read(self): return self._data
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(_req, "urlopen", lambda *a, **kw: FakeResp())
+    result = synlynk._hc_version_current()
+    assert result.status == "warn"
+    assert "99.0.0" in result.message
+    assert "synlynk upgrade" in result.fix
+
+
+def test_hc_version_current_offline(monkeypatch):
+    import synlynk, urllib.error, urllib.request as _req
+    monkeypatch.setattr(_req, "urlopen", lambda *a, **kw: (_ for _ in ()).throw(urllib.error.URLError("offline")))
+    result = synlynk._hc_version_current()
+    assert result.status == "warn"
+    assert "offline" in result.message.lower() or "timeout" in result.message.lower()
+
+
+def test_cmd_doctor_all_ok(tmp_path, monkeypatch, capsys):
+    import synlynk
+    ok_check = lambda: synlynk.HealthCheck("fake", "ok", "all good")
+    exit_code = synlynk.cmd_doctor(checks=[ok_check, ok_check])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "All checks passed" in out
+
+
+def test_cmd_doctor_with_failure(tmp_path, monkeypatch, capsys):
+    import synlynk
+    fail_check = lambda: synlynk.HealthCheck("fake", "fail", "broken", fix="fix it")
+    exit_code = synlynk.cmd_doctor(checks=[fail_check])
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "fix it" in out
+
+
+def test_cmd_doctor_with_warn_only(tmp_path, monkeypatch, capsys):
+    import synlynk
+    warn_check = lambda: synlynk.HealthCheck("fake", "warn", "advisory", fix="maybe fix")
+    exit_code = synlynk.cmd_doctor(checks=[warn_check])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "advisory warning" in out
+
+
+def test_health_check_dataclass():
+    import synlynk
+    hc = synlynk.HealthCheck("test", "ok", "msg")
+    assert hc.name == "test"
+    assert hc.status == "ok"
+    assert hc.fix == ""  # default
+
+
 
