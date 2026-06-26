@@ -4025,3 +4025,68 @@ def test_uninstall_service_not_installed(project_dir, monkeypatch, capsys):
     synlynk._daemon_uninstall_service()
     captured = capsys.readouterr()
     assert "not installed" in captured.out
+
+
+def test_agent_capability_baselines_includes_grok():
+    import synlynk
+    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
+    grok = synlynk.AGENT_CAPABILITY_BASELINES["grok"]
+    assert grok["cli"] == "grok"
+    assert "-p" in grok["non_interactive_flags"]
+    assert "--always-approve" in grok["dispatch_flags"]
+    assert "builder" in grok["roles"]
+    assert "architect" in grok["roles"]
+
+
+def test_agent_discovery_defaults_includes_grok():
+    import synlynk, os
+    assert "grok" in synlynk.AGENT_DISCOVERY_DEFAULTS
+    assert synlynk.AGENT_DISCOVERY_DEFAULTS["grok"] == os.path.expanduser("~/.grok")
+
+
+def test_probe_grok_version(monkeypatch):
+    import synlynk, subprocess
+    fake = subprocess.CompletedProcess(
+        args=["grok", "-v"], returncode=0,
+        stdout="grok 0.2.67 (grok-composer-2.5-fast)", stderr=""
+    )
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: fake)
+    result = synlynk._probe_model_version("grok", "grok")
+    assert "grok" in result.lower()
+
+
+def test_grok_md_in_instruction_targets():
+    import synlynk
+    paths = [t[0] for t in synlynk._INSTRUCTION_TARGETS]
+    assert "GROK.md" in paths
+    entry = next(t for t in synlynk._INSTRUCTION_TARGETS if t[0] == "GROK.md")
+    assert entry[1] == "grok"
+    assert entry[2] == "html"
+
+
+def test_marker_style_for_grok():
+    import synlynk
+    assert synlynk._MARKER_STYLE_FOR_TOOL.get("grok") == "html"
+
+
+def test_grok_md_template_content():
+    import synlynk
+    templates = synlynk._build_templates()
+    assert "GROK.md" in templates
+    content = templates["GROK.md"]
+    assert "Co-Authored-By: Grok <noreply@x.ai>" in content
+    assert "grok" in content.lower()
+
+
+def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
+    import synlynk, json, os
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    synlynk.init(agents=["claude", "agy", "codex", "grok"], mode="solo",
+                 org=None, repo=None, project_id=None, force=False)
+    config = json.load(open(".synlynk/config.json"))
+    assert config["agent_slots"].get("grok") == "grok"
+    assert os.path.exists("GROK.md")
+
+
+
