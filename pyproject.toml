@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synlynk"
+version = "0.9.7"
+description = "The coordination OS for multi-agent development — context injection, dispatch, telemetry, and sentinel for Claude, Agy, Codex, and Grok."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = ["ai", "agents", "claude", "codex", "gemini", "grok", "multi-agent", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://synlynk.com"
+Repository = "https://github.com/nikhilsoman/synlynk"
+"Bug Tracker" = "https://github.com/nikhilsoman/synlynk/issues"
+Changelog = "https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md"
+
+[project.scripts]
+synlynk = "synlynk:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["synlynk*"]
+
+[tool.setuptools.package-data]
+synlynk = ["py.typed"]
