@@ -481,6 +481,14 @@ AGENT_CAPABILITY_BASELINES = {
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
+    "grok": {
+        "cli": "grok",
+        "non_interactive_flags": ["-p"],
+        "prompt_via_arg": True,
+        "dispatch_flags": ["--always-approve"],
+        "roles": ["builder", "architect"],
+        "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
+    },
 }
 
 RELAY_EVENT_TYPES = frozenset({
@@ -516,6 +524,7 @@ AGENT_DISCOVERY_DEFAULTS = {
     "claude": os.path.expanduser("~/.claude"),
     "codex": os.path.expanduser("~/.codex"),
     "agy": os.path.expanduser("~/.agy"),
+    "grok": os.path.expanduser("~/.grok"),
 }
 
 # ANSI helpers used by the wizard.
@@ -639,6 +648,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
         "claude": [cli, "/status"],
         "agy":    [cli, "--version"],
         "codex":  [cli, "--version"],
+        "grok":   [cli, "-v"],
     }
     cmd = probe_cmds.get(agent_name, [cli, "--version"])
     try:
@@ -650,6 +660,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
             r"(gemini-[\w.-]+)",
             r"(gpt-[\d.]+-[\w.-]+)",
             r"(codex-[\w-]+)",
+            r"(grok-[\w.-]+)",
         ]
         for pat in patterns:
             m = re.search(pat, text, re.IGNORECASE)

@@ -4025,3 +4025,32 @@ def test_uninstall_service_not_installed(project_dir, monkeypatch, capsys):
     synlynk._daemon_uninstall_service()
     captured = capsys.readouterr()
     assert "not installed" in captured.out
+
+
+def test_agent_capability_baselines_includes_grok():
+    import synlynk
+    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
+    grok = synlynk.AGENT_CAPABILITY_BASELINES["grok"]
+    assert grok["cli"] == "grok"
+    assert "-p" in grok["non_interactive_flags"]
+    assert "--always-approve" in grok["dispatch_flags"]
+    assert "builder" in grok["roles"]
+    assert "architect" in grok["roles"]
+
+
+def test_agent_discovery_defaults_includes_grok():
+    import synlynk, os
+    assert "grok" in synlynk.AGENT_DISCOVERY_DEFAULTS
+    assert synlynk.AGENT_DISCOVERY_DEFAULTS["grok"] == os.path.expanduser("~/.grok")
+
+
+def test_probe_grok_version(monkeypatch):
+    import synlynk, subprocess
+    fake = subprocess.CompletedProcess(
+        args=["grok", "-v"], returncode=0,
+        stdout="grok 0.2.67 (grok-composer-2.5-fast)", stderr=""
+    )
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: fake)
+    result = synlynk._probe_model_version("grok", "grok")
+    assert "grok" in result.lower()
+
