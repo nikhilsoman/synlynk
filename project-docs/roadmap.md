@@ -14,10 +14,7 @@
 | v0.5.0–v0.6.1 | Capability Engine + Job Control | Model-aware routing · 3D domain taxonomy · quality signals · SQLite WAL · constraint propagation · `synlynk story/score` | ✅ Shipped | June 2026 |
 | v0.7.0 | Static Scan Quality | Language-agnostic source scanner · `## Source Architecture` injection · `synlynk scan` · 369 tests | ✅ Shipped | June 2026 |
 | v0.8.0 | Support Engineer Agent | Maintainer archetype #1 · 5 signal collectors · 7/30-day dedup · foreground investigation · GH issue filing · draft fix PRs · `.agents/` config system | ✅ Shipped | June 2026 |
-| **v0.8.1** | Agent Ecosystem Foundation | `agents_enabled` opt-in gate · lifecycle engine (per-story lifecycle_instances + tasks tables) · capability matrix · ROI tracking · unified `.agents/` config · Support Engineer refactored onto foundation | 📋 Planned | Aug 2026 |
-| **v0.8.2** | TPM Agent + Release Agent | Lifecycle runner · wave dispatch · cross-story aggregation · `synlynk tpm` · release pipeline · `synlynk release` | 📋 Planned | Aug 2026 |
-| **v0.8.3** | Marketing Intern + PM Agent | Communicator archetype — blog/release notes/social · Orchestrator archetype — growth signals, story routing, sprint pulse | 📋 Planned | Sep 2026 |
-| **v0.8.4** | Docs Keeper + Security Guard + Compliance Officer | Maintainer + Communicator — convention drift, docs staleness, dep vulns, secret leaks, CVEs | 📋 Planned | Sep 2026 |
+| **v0.8.1–v0.8.4** | Agent Fleet (deferred) | TPM · Release · Marketing Intern · PM · Docs Keeper · Security Guard — full Autopilot fleet. Requires v1.0.0 community layer (workgroup protocol, signed ledger) to be meaningful. Renumbered → v1.1.x–v1.2.x. | 📦 Deferred → v1.1–1.2 | Post-GA |
 | **v0.9.0** | Kernel Fixes | Scoped context · task→file mapping · verify contract · per-agent framing · Ed25519 wired · anti-gaming baseline (sample-count cap) | ✅ Shipped | June 2026 |
 | **v0.9.1** | Install Hardening + Docs Migration | Install broken after package split fixed · `_docs_dir()` configurable · `--docs-dir` flag on init · smart doc migration from existing content | ✅ Shipped | June 2026 |
 | **v0.9.2** | Team Onboarding + Consensus | `synlynk join` · team digest · write-arbitration · token budgets · `synlynk decide` | ✅ Shipped | June 2026 |
@@ -26,9 +23,9 @@
 | **v0.9.5** | Health Pulse | Silent per-command auditor: version nudge · onboarding completeness · agent profiles · identity key · team pulse · `synlynk doctor` command · registry-based `HealthCheck` dataclass · condition-gated + time-gated suppression | 📋 Planned | Jul 2026 |
 | **v0.9.6** | Exit + Repair + Sync | `synlynk exit` — reverse all onboarding actions, generate handoff doc, leave repo synlynk-free · `synlynk repair` — exit + rebuild from handoff doc · `synlynk sync` — propagate new init artifacts to existing repos without re-init (daemon plist, relay config, `.agents/` profiles, updated instruction sections) · dry-run by default, --confirm to execute | 📋 Planned | Jul 2026 |
 | **v0.9.7** | Grok Agent Support | Grok as first-class fourth agent peer · `AGENT_CAPABILITY_BASELINES["grok"]` · GROK.md template + `_INSTRUCTION_TARGETS` · init wizard expansion · `_inject_grok_rules()` exec context injection via `--rules` · dispatch `--always-approve` fallback · `extract_tokens` nested JSON pattern · 15 new tests · 488 total | ✅ Shipped | June 2026 |
-| **v0.9.6** | Exit + Repair + Sync | `synlynk exit` — reverse all onboarding actions, generate handoff doc, leave repo synlynk-free · `synlynk repair` — exit + rebuild from handoff doc · `synlynk sync` — propagate new init artifacts to existing repos without re-init (daemon plist, relay config, `.agents/` profiles, updated instruction sections) · dry-run by default, --confirm to execute | 📋 Planned | Jul 2026 |
-| **v0.10.0** | Multi-Repo Workspace | `synlynk workspace init/join` · cross-repo epics · workspace relay scope | 📋 Planned | Aug 2026 |
-| **v1.0.0** | Community Layer: Local Workgroup + Public Launch | Workgroup protocol · signed capability ledger · SME archetype · game-resistant scoring · pipx/Homebrew · synlynk.com · public blog | 📋 Planned | Sep 2026 |
+| **v0.9.8** | Health Pulse + Lifecycle | `synlynk doctor` · registry-based `HealthCheck` · version nudge · onboarding completeness · agent profile gaps · identity key status · `synlynk exit` / `repair` / `sync` (OB-13–17) | 📋 Planned | Jul 2026 |
+| **v0.10.0** | **Developer Preview** | Named Release milestone · `pipx install git+<url>` support · `pyproject.toml` packaging · first-run polish · README overhaul · `synlynk viz` product view (BS-6) · HN + dev.to launch post | 📋 Planned | Jun/Jul 2026 |
+| **v1.0.0** | **GA: Community Layer + Public Launch** | Workgroup protocol · signed capability ledger · SME archetype · game-resistant scoring · pipx/Homebrew PyPI · synlynk.com (BS-5) · Multi-repo workspace | 📋 Planned | Sep 2026 |
 | **v1.1.0** | Cross-Workgroup (Team Level) | Relay → community server · cross-workgroup epics · agent entitlements | 📋 Planned | Q4 2026 |
 | **v1.2.0** | Enterprise Workspace | Cross-team · org-level governance agents · enterprise entitlements | 📋 Planned | Q1 2027 |
 | **v1.3.0** | Domain/Discipline Communities | Broader communities · Tokq convergence · MCP / Open Context Protocol | 📋 Planned | Q2 2027 |
@@ -48,7 +45,7 @@ Four archetypes, deployed at any community level:
 
 | Initiative | Theme | Status | Spec |
 | :--- | :--- | :--- | :--- |
-| Synlynk Autopilot | Agent army as eyes & ears at every community level | 🚀 In Progress (v0.8.x) | `docs/superpowers/specs/2026-06-21-synlynk-roadmap-realignment-design.md` |
+| Synlynk Autopilot | Agent fleet (TPM, Marketing, PM, Docs, Security) as autonomous eyes & ears | 📋 Post-GA (v1.1+) — requires community layer workgroup protocol | `docs/superpowers/specs/2026-06-21-synlynk-roadmap-realignment-design.md` |
 | Community Layer | Local workgroup → team → enterprise → domain communities | 📋 v1.0.0 | Same |
 | Public Presence | synlynk.com · public blog (Marketing Intern) · contributor blog in GitHub | 📋 v1.0.0 | Same |
 | Server-Side Strategy | Relay prototype v0.9.3 → community server v1.1 → Tokq v1.3 | 📋 Articulated, implement v1.1+ | Same |
