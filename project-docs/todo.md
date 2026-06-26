@@ -33,7 +33,7 @@
 - [x] T3: synlynk jobs SQLite read + --watch + _preflight_dispatch + --context-mode CLI flag [backend] <!-- id:story-683da947 -->
 - [x] T4: Relay wire protocol — SynlynkRelay SSE broker + relay start/broadcast CLI [infra] <!-- id:story-e5cc49f0 -->
 - [x] T5: Sentinel VERIFY_SKIP pattern + _extract_compliance_tags [backend] <!-- id:story-7264a1d0 -->
-- [ ] dispatch: write job context to .synlynk/contexts/<job_id>.md not global context.md [dispatch] <!-- id:story-5b86c353 -->
+- [x] dispatch: write job context to .synlynk/contexts/<job_id>.md not global context.md [dispatch] <!-- id:story-5b86c353 -->
 - [ ] BS-5: brainstorm — standalone synlynk website (design-first, beyond functional) [web] <!-- id:story-048f5fe5 -->
 - [ ] BS-6: brainstorm — repo/workspace visualization: product view · logical view · infra view [visualization] <!-- id:story-f5513a93 -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
