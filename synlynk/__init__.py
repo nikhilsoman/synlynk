@@ -12,7 +12,7 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.9.4"
+VERSION = "0.9.7"
 
 TASK_STATUSES = {
     "[ ]": "active",

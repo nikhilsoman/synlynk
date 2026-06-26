@@ -11,6 +11,35 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.7] - 2026-06-26
+
+### Added
+- **Grok as a first-class fourth agent peer** alongside claude/agy/codex across all synlynk subsystems
+- `AGENT_CAPABILITY_BASELINES["grok"]` — cli, non_interactive_flags (`-p`), prompt_via_arg, dispatch_flags
+  (`--always-approve`), roles (builder/architect), strengths
+- `AGENT_DISCOVERY_DEFAULTS["grok"]` — discovery path `~/.grok`
+- `_probe_model_version` — `grok -v` probe + `grok-[\w.-]+` version pattern
+- `GROK.md` template — identity (`Co-Authored-By: Grok <noreply@x.ai>`), branch prefixes
+  (`feat/grok/`, `fix/grok/`), standard session/worktree/live-issues sections, `synlynk:start/end` markers
+- `_INSTRUCTION_TARGETS` + `_MARKER_STYLE_FOR_TOOL` entries for GROK.md
+- Init wizard: GROK.md in `trio_content` + `_agent_guards`; `agent_slots` default expanded to four agents;
+  `--agents` default updated to `claude,agy,codex,grok`
+- `_inject_grok_rules()` — prepends `--rules GROK.md` for all grok exec calls; adds
+  `--rules .synlynk/context.md` in headless (`-p`) mode; silently skips missing files
+- `dispatch_agent()` — `--always-approve` → `--permission-mode bypassPermissions` fallback via
+  agent profile `always_approve_unsupported`; `--output-format json` for grok headless dispatch
+- `extract_tokens()` — nested `usage.input_tokens/output_tokens` pattern for Grok JSON output
+- `extract_model_version()` — tier-2 path via `.agents/grok.json` `"model"` field
+- `GROK.md` written to the synlynk repo itself (100 lines, markers bookending)
+- 15 new tests covering all registration, instruction file, init wizard, exec injection, dispatch,
+  and token/model extraction paths
+
+### Fixed
+- Stale time-sensitive fixture in `test_collect_capability_drop_returns_finding` — hardcoded
+  2026-06-21 timestamps replaced with `datetime.now(timezone.utc)`-relative values
+
+---
+
 ## [0.9.3] - 2026-06-23
 
 ### Added
