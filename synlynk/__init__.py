@@ -3797,6 +3797,29 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _session_protocol
     )
 
+    _grok_md = (
+        "# synlynk Grok Instructions\n\n"
+        "## Identity & Attribution\n"
+        "- **Engine:** grok-composer-2.5-fast\n"
+        "- **Commit trailer:** `Co-Authored-By: Grok <noreply@x.ai>`\n"
+        "- **Branch prefix:** `feat/grok/` or `fix/grok/`\n\n"
+        "## Domain Ownership\n"
+        "| Domain | Owned by this agent | Notes |\n"
+        "|:---|:---|:---|\n"
+        "| TODO: fill domains for this agent | | |\n\n"
+        + _worktree_policy + "\n"
+        "## Branch Naming\n"
+        "- `feat/grok/<description>` — new functionality\n"
+        "- `fix/grok/<description>` — bug fixes\n"
+        "- `chore/<description>` — deps, docs, config\n\n"
+        + _live_issues_sop + "\n"
+        + _anti_amnesia + "\n"
+        + _four_doc + "\n"
+        + _ghp_block + "\n"
+        + _synlynk_start + "\n"
+        + _session_protocol
+    )
+
     _ai_instructions_md = (
         "# synlynk Universal AI Instructions\n\n"
         "Apply the following as your system prompt or custom instructions "
@@ -3833,6 +3856,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "CLAUDE.md": _claude_md,
         "GEMINI.md": _gemini_md,
         "AGENTS.md": _agents_md,
+        "GROK.md": _grok_md,
         "AI_INSTRUCTIONS.md": _ai_instructions_md,
         "config.json": json.dumps({
             "schema_version": 1,
@@ -3924,6 +3948,7 @@ _INSTRUCTION_TARGETS = [
     ("CLAUDE.md",                          "claude",    "html", lambda: True),
     ("GEMINI.md",                          "agy",       "html", lambda: True),
     ("AGENTS.md",                          "codex",     "html", lambda: True),
+    ("GROK.md",                            "grok",      "html", lambda: True),
     (".cursor/rules/synlynk.mdc",          "cursor",    "none", lambda: os.path.isdir(".cursor")),
     (".github/copilot-instructions.md",    "copilot",   "html", lambda: os.path.isdir(".github")),
     (".windsurfrules",                     "windsurf",  "hash", lambda: True),
@@ -3967,6 +3992,7 @@ _MARKER_STYLE_FOR_TOOL = {
     "claude":    "html",
     "agy":       "html",
     "codex":     "html",
+    "grok":      "html",
     "cursor":    "none",
     "copilot":   "html",
     "windsurf":  "hash",

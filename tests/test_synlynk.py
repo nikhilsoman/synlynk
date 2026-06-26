@@ -4054,3 +4054,27 @@ def test_probe_grok_version(monkeypatch):
     result = synlynk._probe_model_version("grok", "grok")
     assert "grok" in result.lower()
 
+
+def test_grok_md_in_instruction_targets():
+    import synlynk
+    paths = [t[0] for t in synlynk._INSTRUCTION_TARGETS]
+    assert "GROK.md" in paths
+    entry = next(t for t in synlynk._INSTRUCTION_TARGETS if t[0] == "GROK.md")
+    assert entry[1] == "grok"
+    assert entry[2] == "html"
+
+
+def test_marker_style_for_grok():
+    import synlynk
+    assert synlynk._MARKER_STYLE_FOR_TOOL.get("grok") == "html"
+
+
+def test_grok_md_template_content():
+    import synlynk
+    templates = synlynk._build_templates()
+    assert "GROK.md" in templates
+    content = templates["GROK.md"]
+    assert "Co-Authored-By: Grok <noreply@x.ai>" in content
+    assert "grok" in content.lower()
+
+
