@@ -2142,8 +2142,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     flags = baselines["non_interactive_flags"]
     dispatch_flags = baselines.get("dispatch_flags", [])
     flags = flags + dispatch_flags
-    model_at_dispatch = _probe_model_version(agent, cli)
     profile = _load_agent_profile(agent)
+    if agent == "grok" and profile.get("always_approve_unsupported"):
+        flags = [flag for flag in flags if flag != "--always-approve"]
+        flags = flags + ["--permission-mode", "bypassPermissions"]
+    if agent == "grok":
+        flags = flags + ["--output-format", "json"]
+    model_at_dispatch = _probe_model_version(agent, cli)
     if context_mode is None:
         context_mode = profile.get("context_mode", "task")
     # else: explicit caller value wins; profile is default-only
@@ -4232,6 +4237,7 @@ def extract_tokens(output_text: str) -> tuple:
     """Regex-scrapes token counts from AI CLI stdout. Returns (in_tokens, out_tokens)."""
     patterns = [
         (r'Input tokens:\s*(\d+).*?Output tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
+        (r'"usage"\s*:\s*\{[^}]*"input_tokens"\s*:\s*(\d+)[^}]*"output_tokens"\s*:\s*(\d+)', re.DOTALL | re.IGNORECASE),
         (r'"input_tokens":\s*(\d+).*?"output_tokens":\s*(\d+)', re.DOTALL | re.IGNORECASE),
         (r'Tokens used:\s*(\d+)\s+input,\s*(\d+)\s+output', re.IGNORECASE),
         (r'prompt_tokens:\s*(\d+).*?completion_tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
@@ -4250,6 +4256,7 @@ def extract_tokens(output_text: str) -> tuple:
 def extract_model_version(output_text: str, agent: str = None) -> str:
     """
     Tier 1: Parse model_version from # synlynk-meta block in agent output.
+    Tier 2: read model from the agent profile.
     Tier 3 fallback: read default_model from .synlynk/config.json for the agent.
     Returns 'unknown' if neither source provides a value.
     """
@@ -4258,6 +4265,13 @@ def extract_model_version(output_text: str, agent: str = None) -> str:
                   re.DOTALL | re.IGNORECASE)
     if m:
         return m.group(1).strip()
+
+    # Tier 2: agent profile override
+    if agent:
+        profile = _load_agent_profile(agent)
+        model = profile.get("model")
+        if model:
+            return model
 
     # Tier 3: config default
     if agent:
@@ -4375,6 +4389,20 @@ def _is_interactive(cmd_args: list) -> bool:
                        "--non-interactive", "-p "]
     cmd_str = " ".join(cmd_args)
     return not any(flag in cmd_str for flag in NON_INTERACTIVE)
+
+
+def _inject_grok_rules(cmd_args: list) -> list:
+    """Adds Grok rules flags when invoking grok and the rule files exist."""
+    if not cmd_args or cmd_args[0] != "grok":
+        return list(cmd_args)
+
+    injected = [cmd_args[0]]
+    if os.path.exists("GROK.md"):
+        injected.extend(["--rules", "GROK.md"])
+    if "-p" in cmd_args and os.path.exists(os.path.join(".synlynk", "context.md")):
+        injected.extend(["--rules", os.path.join(".synlynk", "context.md")])
+    injected.extend(cmd_args[1:])
+    return injected
 
 
 def _tee_process(process, buffer: list) -> None:
@@ -6248,6 +6276,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         return 1
 
     generate_context()
+    cmd_args = _inject_grok_rules(cmd_args)
     check_budgets()
 
     if not _check_pre_exec_gate(force=force):

@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import json
+from datetime import datetime, timedelta, timezone
 import pytest
 import subprocess
 
@@ -1041,6 +1042,13 @@ def test_extract_tokens_claude_json_format(project_dir):
     assert out_t == 250
 
 
+def test_extract_tokens_grok_json(project_dir):
+    text = '{"usage": {"input_tokens": 9001, "output_tokens": 42, "cached_tokens": 3}}'
+    in_t, out_t = synlynk.extract_tokens(text)
+    assert in_t == 9001
+    assert out_t == 42
+
+
 def test_extract_tokens_gemini_format(project_dir):
     text = "Tokens used: 800 input, 150 output"
     in_t, out_t = synlynk.extract_tokens(text)
@@ -1806,6 +1814,82 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
     assert "--dangerously-skip-permissions" in shell_cmd
 
 
+def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class FakeProc:
+        pid = 12345
+        returncode = 0
+        stdout = FakeStdout()
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "sh":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+
+    # requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges
+    if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
+        pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
+    sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
+    shell_cmd = captured["cmd"][2]
+    assert "--always-approve" in shell_cmd
+    assert "--permission-mode bypassPermissions" not in shell_cmd
+    assert "--output-format json" in shell_cmd
+
+
+def test_grok_fallback_permission_mode(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class FakeProc:
+        pid = 12345
+        returncode = 0
+        stdout = FakeStdout()
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "sh":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"always_approve_unsupported": True})
+
+    if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
+        pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
+    sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
+    shell_cmd = captured["cmd"][2]
+    assert "--permission-mode bypassPermissions" in shell_cmd
+    assert "--always-approve" not in shell_cmd
+    assert "--output-format json" in shell_cmd
+
+
 def test_exec_agent_task_claude_does_not_include_dangerously_skip_permissions(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
@@ -2001,6 +2085,20 @@ def test_dispatch_agent_context_max_bytes_logs_utf8_truncation(project_dir, monk
     assert "context truncated to 10B" in captured.out
 
 
+def test_model_version_tier1_grok(project_dir, monkeypatch):
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"model": "grok-profile"})
+    result = sl.extract_model_version("# synlynk-meta\nmodel_version = grok-header", agent="grok")
+    assert result == "grok-header"
+
+
+def test_model_version_tier2_grok(project_dir, monkeypatch):
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"model": "grok-profile"})
+    result = sl.extract_model_version("no header here", agent="grok")
+    assert result == "grok-profile"
+
+
 def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, monkeypatch):
     """context_mode='none' does not require context.md to exist."""
     import synlynk as sl
@@ -2013,6 +2111,102 @@ def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, mo
         ctx.unlink()
     job = sl.dispatch_agent("claude", "do thing", context_mode="none")
     assert job["status"] == "running"
+
+
+def test_exec_grok_headless_appends_rules_flags(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class FakeProc:
+        returncode = 0
+        stdout = FakeStdout()
+
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "grok":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+
+    (project_dir / "GROK.md").write_text("grok rules")
+    (project_dir / ".synlynk" / "context.md").write_text("synlynk context")
+
+    sl.exec_command(["grok", "-p", "do the thing"])
+    assert captured["cmd"][0] == "grok"
+    assert captured["cmd"][1:5] == ["--rules", "GROK.md", "--rules", ".synlynk/context.md"]
+
+
+def test_exec_grok_interactive_omits_context_md(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeProc:
+        returncode = 0
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "grok":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+
+    (project_dir / "GROK.md").write_text("grok rules")
+    (project_dir / ".synlynk" / "context.md").write_text("synlynk context")
+
+    sl.exec_command(["grok", "do the thing"])
+    assert captured["cmd"][0] == "grok"
+    assert captured["cmd"][1:3] == ["--rules", "GROK.md"]
+    assert ".synlynk/context.md" not in captured["cmd"]
+
+
+def test_exec_grok_skips_missing_rules_files(tmp_path, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class FakeProc:
+        returncode = 0
+        stdout = FakeStdout()
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "grok":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full": "")
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+
+    sl.exec_command(["grok", "-p", "do the thing"])
+    assert captured["cmd"] == ["grok", "-p", "do the thing"]
 
 
 def test_relevant_files_for_story_returns_matching_files(project_dir):
@@ -2726,9 +2920,10 @@ def test_collect_capability_drop_returns_finding(project_dir):
         "INSERT INTO stories (story_id, title) VALUES (?, ?)",
         ("s-drop-test", "drop test story")
     )
-    # Use timestamps that will fall into the correct windows relative to datetime('now')
-    recent_ts = "2026-06-21T12:00:00"  # Recent window (last 7 days)
-    prior_ts = "2026-06-10T12:00:00"   # Prior window (7-14 days ago)
+    # Use timestamps that stay in the expected windows relative to datetime('now').
+    now = datetime.now(timezone.utc)
+    recent_ts = (now - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%S")
+    prior_ts = (now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%S")
     # Recent window: quality 5.0
     for _ in range(2):
         conn.execute(
