@@ -42,6 +42,16 @@
 - **Cron design:** One `synlynk dispatch` cron, not per-agent. Per-role frequency via multiple `schedules` entries with different `filter` values.
 - **Spec:** `docs/superpowers/specs/2026-06-07-agent-identity-dispatch-design.md`
 
+## Brainstorm Session Map (updated 2026-06-27)
+- **BS-1** ✅ Done — Initial architecture / OS framing
+- **BS-2** ✅ Done — Onboarding + Mode Taxonomy
+- **BS-3** ~~queued~~ → **retired** (2026-06-27): AB-11/12/13 (conflict taxonomy + instruction coexistence) folded into BS-7. No standalone BS-3 session.
+- **BS-4** — Command Audit + Autopilot Trigger Map. Queued pre-GA, not this weekend.
+- **BS-5** — Website redesign (story-048f5fe5). Saturday PM this weekend.
+- **BS-6** — OKF alignment + `synlynk viz` three-view visualization (story-f5513a93). Sunday AM.
+- **BS-7** — Skill Pack Interop + Benchmarks + **AB-11 conflict taxonomy** (story-bs7-interop). Sunday AM/PM. Benchmark execution week of 2026-06-30.
+- **BYOA** — Parked post-dev-preview (Ollama, OpenCode/OpenRouter, DeepSeek).
+
 ## State DB & Agentic PM (decided 2026-06-07)
 - **Core invariant:** State never branches. All worktrees share one `~/.synlynk/projects/<key>/state.db` where `<key>` = 8-char MD5 of `git rev-parse --git-common-dir/..` (repo root). [@nikhilsoman] Implemented v0.4.1.
 - **project-docs/ retired:** Markdown files become gitignored. state.db is primary. Context bridge unchanged — agents still see `.synlynk/context.md`.
