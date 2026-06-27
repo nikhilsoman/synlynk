@@ -1,5 +1,31 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-27 — Session: v0.9.8 Health Pulse + Lifecycle
+
+### Shipped
+**v0.9.8 — exit, repair, sync lifecycle commands (PR #70, 524 tests)**
+
+Closes OB-13–17. Three commands completing the install/uninstall lifecycle:
+
+- `synlynk exit` — strips synlynk sections from tracked instruction files, removes `.agents/` + `.synlynk/`, writes `SYNLYNK_HANDOFF.md`. Dry-run default, `--confirm` to execute
+- `synlynk repair` — captures config, exits, re-inits with same parameters
+- `synlynk sync` — re-writes instruction sections + creates missing `.agents/` profiles without full reinit
+- `_strip_synlynk_section()` helper — removes html/hash/none marker blocks, preserves surrounding user content
+- 13 new tests; suite 513 → 524 passing
+
+### Key decisions
+- Strip synlynk sections (not delete files): CLAUDE.md has user custom instructions; destroying the file would lose user work
+- `_strip_synlynk_section("none")` deletes the file entirely — synlynk owns 100% of `.cursorrules`
+
+### Next
+- BS-7 brainstorm 2026-06-28/29 — skill pack interoperability + benchmarks
+- v0.10.0 Developer Preview — pipx packaging, `synlynk viz`, README overhaul
+
+## 2026-06-27 — Session: BS-5 Website Redesign Design Phase
+
+### Completed
+Full design phase for synlynk.com redesign. Narrative arc C→D→A approved. Isometric motherboard diagram selected as OS Vision visual (docs/brainstorm/bs5-website-redesign/, 13 HTML files). Design spec: docs/superpowers/specs/2026-06-27-bs5-website-redesign-design.md. Implementation session in ~1 week.
+
 ## 2026-06-26 — Session: v0.9.7 Grok Agent Support
 
 ### Shipped

@@ -12,7 +12,7 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.9.7"
+VERSION = "0.9.8"
 
 TASK_STATUSES = {
     "[ ]": "active",
@@ -1501,6 +1501,275 @@ def cmd_doctor(checks: _List = None) -> int:
         print(f"  {_GREEN}All checks passed.{_RESET}")
     print()
     return 1 if failed else 0
+
+
+def _strip_synlynk_section(path: str, marker_style: str) -> bool:
+    """Remove the synlynk-managed block from a file, leaving surrounding content.
+
+    Returns True if a section was found and removed, False otherwise.
+    """
+    if not os.path.exists(path):
+        return False
+    with open(path) as f:
+        content = f.read()
+    if marker_style == "none":
+        os.remove(path)
+        return True
+    if marker_style == "html":
+        pattern = r'\n?[ \t]*<!-- synlynk:start[^>]* -->[ \t]*\n.*?\n[ \t]*<!-- synlynk:end -->[ \t]*\n?'
+    else:
+        pattern = r'\n?[ \t]*# synlynk:start[^\n]*\n.*?\n[ \t]*# synlynk:end[ \t]*\n?'
+    new_content, n = re.subn(pattern, "", content, flags=re.DOTALL)
+    if n:
+        with open(path, "w") as f:
+            f.write(new_content.rstrip("\n") + "\n" if new_content.strip() else "")
+    return bool(n)
+
+
+def cmd_exit(dry_run: bool = True, remove_docs: bool = False) -> int:
+    """Reverse synlynk onboarding: strip instruction sections, remove .synlynk/ and .agents/.
+
+    Writes SYNLYNK_HANDOFF.md summarising what was configured before removal.
+    Dry-run by default — pass --confirm to execute.
+    """
+    manifest_data = _load_instruction_manifest()
+    docs = None
+    try:
+        docs = _docs_dir()
+    except Exception:
+        pass
+
+    cfg = {}
+    if os.path.exists(".synlynk/config.json"):
+        try:
+            cfg = json.load(open(".synlynk/config.json"))
+        except Exception:
+            pass
+
+    # Build action list
+    strip_targets = []
+    for fpath, info in manifest_data.items():
+        style = _MARKER_STYLE_FOR_TOOL.get(info.get("tool", ""), "html")
+        strip_targets.append((fpath, style, info.get("tool", "?")))
+
+    agent_profiles = []
+    if os.path.isdir(".agents"):
+        agent_profiles = [os.path.join(".agents", f) for f in os.listdir(".agents") if f.endswith(".json")]
+
+    synlynk_dir = ".synlynk"
+    docs_dir_path = docs if (remove_docs and docs and os.path.isdir(docs)) else None
+
+    print(f"\n{_BOLD}synlynk exit{_RESET} {'(dry run — pass --confirm to execute)' if dry_run else '(executing)'}\n")
+
+    # Instruction files
+    print("  Instruction files:")
+    if strip_targets:
+        for fpath, style, tool in strip_targets:
+            exists = os.path.exists(fpath)
+            tag = "remove" if style == "none" else "strip synlynk section"
+            label = f"{_DIM}(not found){_RESET}" if not exists else ""
+            print(f"    {'→' if dry_run else '✓'} {fpath} [{tool}] — {tag} {label}")
+            if not dry_run and exists:
+                _strip_synlynk_section(fpath, style)
+    else:
+        print(f"    {_DIM}no tracked instruction files{_RESET}")
+
+    # Agent profiles
+    print("  Agent profiles:")
+    if agent_profiles:
+        for p in agent_profiles:
+            print(f"    {'→' if dry_run else '✓'} remove {p}")
+            if not dry_run:
+                os.remove(p)
+        if not dry_run and os.path.isdir(".agents"):
+            try:
+                os.rmdir(".agents")
+            except OSError:
+                pass
+    else:
+        print(f"    {_DIM}no .agents/ profiles found{_RESET}")
+
+    # .synlynk/ directory
+    print(f"  Config & state:")
+    print(f"    {'→' if dry_run else '✓'} remove {synlynk_dir}/")
+    if not dry_run and os.path.isdir(synlynk_dir):
+        import shutil as _shutil
+        _shutil.rmtree(synlynk_dir)
+
+    # project-docs (optional)
+    if docs_dir_path:
+        print(f"  Project docs:")
+        print(f"    {'→' if dry_run else '✓'} remove {docs_dir_path}/")
+        if not dry_run:
+            import shutil as _shutil
+            _shutil.rmtree(docs_dir_path)
+    elif remove_docs:
+        print(f"  Project docs: {_DIM}not found or already absent{_RESET}")
+
+    # Handoff doc
+    handoff_path = "SYNLYNK_HANDOFF.md"
+    handoff_lines = [
+        f"# synlynk handoff — {time.strftime('%Y-%m-%d')}",
+        "",
+        "synlynk was removed from this repository. This file records what was configured.",
+        "",
+        "## Configuration",
+        f"- Version: {cfg.get('synlynk_version', VERSION)}",
+        f"- Mode: {cfg.get('mode', 'unknown')}",
+        f"- Agents: {', '.join(cfg.get('agent_slots', {}).keys()) or 'unknown'}",
+        f"- Org: {cfg.get('org', 'unknown')} / {cfg.get('repo', 'unknown')}",
+        f"- Docs dir: {docs or 'unknown'}",
+        "",
+        "## Removed",
+    ]
+    for fpath, style, tool in strip_targets:
+        handoff_lines.append(f"- `{fpath}` ({tool}) — synlynk section stripped")
+    for p in agent_profiles:
+        handoff_lines.append(f"- `{p}` — removed")
+    handoff_lines += [
+        f"- `.synlynk/` — removed",
+        "",
+        "## To re-initialize",
+        "```",
+        f"synlynk init --agents {','.join(cfg.get('agent_slots', {}).keys()) or 'claude,agy,codex,grok'}",
+        "```",
+        "",
+    ]
+    print(f"  Handoff doc:")
+    print(f"    {'→' if dry_run else '✓'} write {handoff_path}")
+    if not dry_run:
+        with open(handoff_path, "w") as f:
+            f.write("\n".join(handoff_lines))
+
+    print()
+    if dry_run:
+        print(f"  Dry run complete. Run with {_CYAN}--confirm{_RESET} to apply changes.")
+    else:
+        print(f"  {_GREEN}synlynk removed.{_RESET} See {handoff_path} for re-init instructions.")
+    print()
+    return 0
+
+
+def cmd_repair(dry_run: bool = True) -> int:
+    """Exit synlynk and immediately re-initialize from the current configuration.
+
+    Reads config before exit so re-init uses the same agents/mode/org/repo/docs-dir.
+    Dry-run by default — pass --confirm to execute.
+    """
+    cfg = {}
+    if os.path.exists(".synlynk/config.json"):
+        try:
+            cfg = json.load(open(".synlynk/config.json"))
+        except Exception:
+            pass
+
+    agents_str = ",".join(cfg.get("agent_slots", {}).keys()) or "claude,agy,codex,grok"
+    mode = cfg.get("mode", "solo")
+    org = cfg.get("org") or None
+    repo = cfg.get("repo") or None
+    project_id = cfg.get("project_id") or None
+    docs_dir_arg = cfg.get("docs_dir") or None
+
+    print(f"\n{_BOLD}synlynk repair{_RESET} {'(dry run — pass --confirm to execute)' if dry_run else '(executing)'}\n")
+    print(f"  Captured config: agents={agents_str}  mode={mode}  org={org or '—'}  docs-dir={docs_dir_arg or 'project-docs'}")
+    print()
+
+    print("  Step 1: exit")
+    cmd_exit(dry_run=dry_run)
+
+    print("  Step 2: re-init")
+    if dry_run:
+        print(f"    → synlynk init --agents {agents_str} --mode {mode}"
+              + (f" --org {org}" if org else "")
+              + (f" --repo {repo}" if repo else "")
+              + (f" --project-id {project_id}" if project_id else "")
+              + (f" --docs-dir {docs_dir_arg}" if docs_dir_arg else ""))
+        print()
+        print(f"  Dry run complete. Run with {_CYAN}--confirm{_RESET} to apply.")
+    else:
+        init(
+            agents=[a.strip() for a in agents_str.split(",") if a.strip()],
+            mode=mode,
+            org=org,
+            repo=repo,
+            project_id=project_id,
+            docs_dir=docs_dir_arg,
+        )
+        print(f"\n  {_GREEN}Repair complete.{_RESET}")
+    print()
+    return 0
+
+
+def cmd_sync(dry_run: bool = True) -> int:
+    """Propagate updated synlynk artifacts to an existing repo without full re-init.
+
+    Updates: instruction file sections (CLAUDE.md, GEMINI.md, etc.), .agents/ profile
+    defaults for any slots missing from .agents/. Does NOT touch project-docs/.
+    Dry-run by default — pass --confirm to execute.
+    """
+    print(f"\n{_BOLD}synlynk sync{_RESET} {'(dry run — pass --confirm to execute)' if dry_run else '(executing)'}\n")
+
+    # --- instruction files ---
+    manifest_data = _load_instruction_manifest()
+    print("  Instruction files:")
+    if not manifest_data:
+        print(f"    {_DIM}no tracked instruction files — run synlynk init first{_RESET}")
+    else:
+        _tool_content_builders = {
+            "cursor":    (_build_cursor_mdc,            "none"),
+            "copilot":   (_build_copilot_instructions,  "html"),
+            "windsurf":  (_build_windsurf_rules,        "hash"),
+            "universal": (lambda: _build_templates().get("AI_INSTRUCTIONS.md", ""), "html"),
+        }
+        updated_manifest = {}
+        for fpath, info in manifest_data.items():
+            tool = info.get("tool", "unknown")
+            marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
+            if dry_run:
+                print(f"    → {fpath} [{tool}]")
+                continue
+            if tool in _tool_content_builders:
+                builder, _ = _tool_content_builders[tool]
+                content = builder()
+            else:
+                templates = _build_templates()
+                content = templates.get(os.path.basename(fpath), "")
+            _write_instruction_file(fpath, tool, content, marker_style)
+            if os.path.exists(fpath):
+                section = _extract_synlynk_section(open(fpath).read(), marker_style)
+                if section:
+                    updated_manifest[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
+            print(f"    {_GREEN}✓{_RESET} {fpath} [{tool}]")
+        if not dry_run and updated_manifest:
+            _write_instruction_manifest(updated_manifest)
+
+    # --- agent profiles ---
+    print("  Agent profiles (.agents/):")
+    try:
+        cfg = load_config()
+    except Exception:
+        cfg = {}
+    slots = cfg.get("agent_slots", {})
+    if not slots:
+        print(f"    {_DIM}no agent slots in config{_RESET}")
+    else:
+        os.makedirs(".agents", exist_ok=True) if not dry_run else None
+        for name in slots:
+            profile_path = os.path.join(".agents", f"{name}.json")
+            if os.path.exists(profile_path):
+                print(f"    {_DIM}· {profile_path} already present — skipped{_RESET}")
+                continue
+            print(f"    {'→' if dry_run else _GREEN + '✓' + _RESET} {profile_path} — create default profile")
+            if not dry_run:
+                _load_agent_config(name)  # writes default profile if absent
+
+    print()
+    if dry_run:
+        print(f"  Dry run complete. Run with {_CYAN}--confirm{_RESET} to apply.")
+    else:
+        print(f"  {_GREEN}Sync complete.{_RESET}")
+    print()
+    return 0
 
 
 def _best_agent_for_story(story_id: str) -> Optional[str]:
@@ -6660,6 +6929,27 @@ def main() -> None:
 
     subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
 
+    exit_parser = subparsers.add_parser(
+        "exit", help="Remove synlynk from this repository (reversible via repair)")
+    exit_parser.add_argument(
+        "--confirm", action="store_true",
+        help="Execute removal (default is dry-run)")
+    exit_parser.add_argument(
+        "--remove-docs", action="store_true", dest="remove_docs",
+        help="Also remove project-docs/ directory (destructive)")
+
+    repair_parser = subparsers.add_parser(
+        "repair", help="Remove and re-initialize synlynk using current configuration")
+    repair_parser.add_argument(
+        "--confirm", action="store_true",
+        help="Execute repair (default is dry-run)")
+
+    sync_parser = subparsers.add_parser(
+        "sync", help="Propagate updated synlynk artifacts without full re-init")
+    sync_parser.add_argument(
+        "--confirm", action="store_true",
+        help="Execute sync (default is dry-run)")
+
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
     identity_sub.add_parser("init", help="Create local Ed25519 identity key")
@@ -6987,6 +7277,12 @@ def main() -> None:
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
     elif args.command == "doctor":
         sys.exit(cmd_doctor())
+    elif args.command == "exit":
+        sys.exit(cmd_exit(dry_run=not args.confirm, remove_docs=args.remove_docs))
+    elif args.command == "repair":
+        sys.exit(cmd_repair(dry_run=not args.confirm))
+    elif args.command == "sync":
+        sys.exit(cmd_sync(dry_run=not args.confirm))
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:

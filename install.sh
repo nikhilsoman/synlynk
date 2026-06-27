@@ -10,7 +10,7 @@
 
 set -e
 
-VERSION="0.9.7"
+VERSION="0.9.8"
 INSTALL_DIR="$HOME/.synlynk/bin"
 LIB_DIR="$HOME/.synlynk/lib"
 BINARY_PATH="$INSTALL_DIR/synlynk"

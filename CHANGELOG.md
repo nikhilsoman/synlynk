@@ -11,6 +11,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.8] - 2026-06-27
+
+### Added
+- **`synlynk exit`** — reverse all synlynk onboarding: strips managed sections from tracked
+  instruction files (CLAUDE.md, GEMINI.md, etc.), removes `.agents/` profiles and `.synlynk/`
+  directory, writes `SYNLYNK_HANDOFF.md` with re-init instructions. Dry-run by default;
+  `--confirm` to execute. `--remove-docs` optionally removes `project-docs/`.
+- **`synlynk repair`** — exit + immediate re-init from captured config (agents, mode, org, repo,
+  docs-dir). Dry-run by default; `--confirm` to execute.
+- **`synlynk sync`** — propagate updated synlynk artifacts (instruction file sections, missing
+  `.agents/` profiles) to an existing repo without full re-init. Dry-run by default;
+  `--confirm` to execute.
+- **`_strip_synlynk_section(path, marker_style)`** internal helper — removes synlynk-managed
+  block from any instruction file; handles html/hash/none marker styles; leaves surrounding
+  user content intact.
+
+### Changed
+- VERSION bumped `0.9.7 → 0.9.8`
+
+---
+
 ## [0.9.7] - 2026-06-26
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synlynk"
-version = "0.9.7"
+version = "0.9.8"
 description = "The coordination OS for multi-agent development — context injection, dispatch, telemetry, and sentinel for Claude, Agy, Codex, and Grok."
 readme = "README.md"
 license = { text = "MIT" }

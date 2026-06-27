@@ -1413,8 +1413,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_094(project_dir):
-    assert synlynk.VERSION == "0.9.7"
+def test_version_is_098(project_dir):
+    assert synlynk.VERSION == "0.9.8"
 
 
 def test_pyproject_version_matches_module(project_dir):
@@ -1805,6 +1805,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
         launched.append(cmd)
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     job = sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     assert job["agent"] == "claude"
     assert job["pid"] == 12345
@@ -2046,6 +2047,7 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     job = sl.dispatch_agent("agy", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
@@ -2063,6 +2065,7 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     sl.dispatch_agent("claude", "task one")
     sl.dispatch_agent("claude", "task two")
     assert len(sl._load_jobs()) == 2
@@ -2074,6 +2077,7 @@ def test_dispatch_agent_injects_relevant_files(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     # Write scan cache with a backend file
     meta = {"head_sha": "abc123", "skeleton": [
         {"file": "backend/auth.py", "symbols": ["login", "logout"], "language": "python"}
@@ -2095,6 +2099,7 @@ def test_dispatch_agent_no_relevant_files_without_scan(project_dir, monkeypatch)
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix thing", engg_domain="backend")
     # Mock _git_head_sha to avoid subprocess.run call
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
@@ -2126,6 +2131,7 @@ def test_dispatch_agent_context_mode_none(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     job = sl.dispatch_agent("claude", "do the thing", context_mode="none")
     prompt = open(job["prompt_file"]).read()
     assert "synlynk Context Snapshot" not in prompt
@@ -2138,6 +2144,7 @@ def test_dispatch_agent_context_mode_task_default(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     story_id = sl.cmd_story_create("Implement OAuth", engg_domain="backend")
     job = sl.dispatch_agent("claude", "implement oauth", story_id=story_id)
@@ -2151,6 +2158,7 @@ def test_dispatch_agent_context_mode_full(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     job = sl.dispatch_agent("claude", "do big thing", context_mode="full")
     prompt = open(job["prompt_file"]).read()
@@ -2182,6 +2190,7 @@ def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     # Patch generate_context to return an oversized string
     big_context = "x" * (82 * 1024)  # 82KB — over 80KB soft limit
@@ -2230,6 +2239,7 @@ def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, mo
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     # Ensure context.md does not exist
     ctx = project_dir / ".synlynk" / "context.md"
     if ctx.exists():
@@ -2245,6 +2255,7 @@ def test_dispatch_agent_writes_per_job_context_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
 
     story_id = sl.cmd_story_create("Fix login timeout", engg_domain="backend")
@@ -2263,6 +2274,7 @@ def test_dispatch_agent_concurrent_jobs_use_separate_context_files(project_dir, 
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
 
     story_a = sl.cmd_story_create("Story A", engg_domain="backend")
@@ -2512,6 +2524,7 @@ def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
     job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2525,6 +2538,7 @@ def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix thing")
     job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2579,6 +2593,7 @@ def test_dispatch_agent_profile_overrides_context_mode(project_dir, monkeypatch)
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "PROFILE_CONTEXT_MARKER")
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
@@ -2595,6 +2610,7 @@ def test_dispatch_agent_profile_context_max_bytes_truncates(project_dir, monkeyp
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 50})
@@ -2658,6 +2674,7 @@ def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix login")
     job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2671,6 +2688,7 @@ def test_dispatch_agent_codex_prompt_format(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Add tests")
     job = sl.dispatch_agent("codex", "add tests for auth module", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2692,6 +2710,7 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
         captured["cmd"] = cmd
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
@@ -4680,5 +4699,176 @@ def test_health_check_dataclass():
     assert hc.status == "ok"
     assert hc.fix == ""  # default
 
+
+# ---------------------------------------------------------------------------
+# synlynk exit / repair / sync tests
+# ---------------------------------------------------------------------------
+
+_CLAUDE_MD_WITH_MARKERS = (
+    "# User section\n\n"
+    '<!-- synlynk:start version="0.9.8" tool="claude" -->\n'
+    "## synlynk Context\nmanaged content here\n"
+    "<!-- synlynk:end -->\n"
+)
+
+_MANIFEST_CONTENT = {
+    "schema_version": 1,
+    "generated_at": "2026-06-27T00:00:00",
+    "synlynk_version": "0.9.8",
+    "files": {
+        "CLAUDE.md": {"tool": "claude", "sha": "abc123", "last_checked": "2026-06-27T00:00:00"},
+    },
+}
+
+
+def _setup_exit_project(tmp_path):
+    """Create minimal synlynk project state for exit/repair/sync tests."""
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / "project-docs").mkdir(exist_ok=True)
+    import json as _json
+    cfg = {
+        "schema_version": 1, "synlynk_version": "0.9.8",
+        "mode": "solo", "org": None, "repo": None,
+        "agent_slots": {"claude": {"cli": "claude", "roles": ["builder"]}},
+        "docs_dir": "project-docs",
+    }
+    (tmp_path / ".synlynk" / "config.json").write_text(_json.dumps(cfg))
+    (tmp_path / ".synlynk" / "instructions.json").write_text(_json.dumps(_MANIFEST_CONTENT))
+    (tmp_path / "CLAUDE.md").write_text(_CLAUDE_MD_WITH_MARKERS)
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / ".agents" / "claude.json").write_text(_json.dumps({"name": "claude"}))
+
+
+def test_cmd_exit_dry_run_prints_plan(tmp_path, monkeypatch, capsys):
+    """Dry-run prints what would happen without touching any files."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_exit(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dry run" in out.lower()
+    assert ".synlynk" in out
+    assert (tmp_path / ".synlynk").exists()
+
+
+def test_cmd_exit_confirm_removes_synlynk_dir(tmp_path, monkeypatch, capsys):
+    """--confirm removes .synlynk/ and writes SYNLYNK_HANDOFF.md."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_exit(dry_run=False)
+    assert rc == 0
+    assert not (tmp_path / ".synlynk").exists()
+    assert (tmp_path / "SYNLYNK_HANDOFF.md").exists()
+    handoff = (tmp_path / "SYNLYNK_HANDOFF.md").read_text()
+    assert "synlynk handoff" in handoff.lower()
+    assert "synlynk init" in handoff
+
+
+def test_cmd_exit_strips_instruction_sections(tmp_path, monkeypatch, capsys):
+    """Synlynk section is removed from CLAUDE.md on exit --confirm."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    claude_md = tmp_path / "CLAUDE.md"
+    assert "synlynk:start" in claude_md.read_text()
+    synlynk.cmd_exit(dry_run=False)
+    if claude_md.exists():
+        assert "synlynk:start" not in claude_md.read_text()
+
+
+def test_cmd_exit_remove_docs_flag(tmp_path, monkeypatch, capsys):
+    """--remove-docs deletes project-docs/."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    assert (tmp_path / "project-docs").exists()
+    synlynk.cmd_exit(dry_run=False, remove_docs=True)
+    assert not (tmp_path / "project-docs").exists()
+
+
+def test_strip_synlynk_section_html(tmp_path):
+    """Helper removes html-style synlynk block, leaving surrounding content."""
+    f = tmp_path / "CLAUDE.md"
+    f.write_text('# Before\n\n<!-- synlynk:start version="1" tool="claude" -->\nmanaged content\n<!-- synlynk:end -->\n\n# After\n')
+    removed = synlynk._strip_synlynk_section(str(f), "html")
+    assert removed
+    remaining = f.read_text()
+    assert "synlynk:start" not in remaining
+    assert "# Before" in remaining
+    assert "# After" in remaining
+
+
+def test_strip_synlynk_section_none_removes_file(tmp_path):
+    """marker_style='none' deletes the file entirely."""
+    f = tmp_path / ".cursorrules"
+    f.write_text("owned content\n")
+    synlynk._strip_synlynk_section(str(f), "none")
+    assert not f.exists()
+
+
+def test_strip_synlynk_section_no_markers(tmp_path):
+    """Returns False and leaves file unchanged if no markers present."""
+    f = tmp_path / "CUSTOM.md"
+    f.write_text("no markers here\n")
+    removed = synlynk._strip_synlynk_section(str(f), "html")
+    assert not removed
+    assert f.read_text() == "no markers here\n"
+
+
+def test_cmd_repair_dry_run(tmp_path, monkeypatch, capsys):
+    """Repair dry-run shows exit + re-init plan without executing."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_repair(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dry run" in out.lower()
+    assert (tmp_path / ".synlynk").exists()
+
+
+def test_cmd_repair_confirm_reinits(tmp_path, monkeypatch, capsys):
+    """Repair --confirm exits then re-inits (init mocked to avoid interactive wizard)."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    reinit_calls = []
+
+    def mock_init(**kwargs):
+        (tmp_path / ".synlynk").mkdir(exist_ok=True)
+        import json as _j
+        (tmp_path / ".synlynk" / "config.json").write_text(_j.dumps({"mode": "solo"}))
+        reinit_calls.append(kwargs)
+
+    monkeypatch.setattr(synlynk, "init", mock_init)
+    rc = synlynk.cmd_repair(dry_run=False)
+    assert rc == 0
+    assert len(reinit_calls) == 1
+    assert (tmp_path / ".synlynk").exists()
+
+
+def test_cmd_sync_dry_run(tmp_path, monkeypatch, capsys):
+    """Sync dry-run prints what would be updated without writing."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_sync(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dry run" in out.lower()
+
+
+def test_cmd_sync_confirm_updates_instruction_files(tmp_path, monkeypatch, capsys):
+    """Sync --confirm re-writes synlynk sections in tracked instruction files."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_sync(dry_run=False)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Sync complete" in out or "✓" in out
+
+
+def test_cmd_sync_no_manifest(tmp_path, monkeypatch, capsys):
+    """Sync with no tracked files prints advisory and returns 0."""
+    monkeypatch.chdir(tmp_path)
+    rc = synlynk.cmd_sync(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "no tracked" in out.lower() or "dry run" in out.lower()
 
 
