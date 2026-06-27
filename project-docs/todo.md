@@ -37,3 +37,6 @@
 - [ ] BS-5: brainstorm — standalone synlynk website (design-first, beyond functional) [web] <!-- id:story-048f5fe5 -->
 - [ ] BS-6: brainstorm — repo/workspace visualization: product view · logical view · infra view [visualization] <!-- id:story-f5513a93 -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
+- [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
+- [ ] BS-8: dispatch_loop() — composite termination + /goal objective injection + job chain tracking [dispatch] <!-- id:story-bs8-loop -->
+- [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->

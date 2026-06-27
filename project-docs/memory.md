@@ -50,6 +50,7 @@
 - **BS-5** — Website redesign (story-048f5fe5). Saturday PM this weekend.
 - **BS-6** — OKF alignment + `synlynk viz` three-view visualization (story-f5513a93). Sunday AM.
 - **BS-7** — Skill Pack Interop + Benchmarks + **AB-11 conflict taxonomy** (story-bs7-interop). Sunday AM/PM. Benchmark execution week of 2026-06-30.
+- **BS-8** ✅ Spec done (2026-06-27) — Harness Capability Awareness + Loop-Native Dispatch. `synlynk probe` + `dispatch_loop()` + stuck consult. Three stories: story-bs8-probe, story-bs8-loop, story-bs8-consult. Target v0.10.1. Spec: `docs/superpowers/specs/2026-06-27-bs8-harness-capability-awareness-loop-dispatch-design.md`
 - **BYOA** — Parked post-dev-preview (Ollama, OpenCode/OpenRouter, DeepSeek).
 
 ## State DB & Agentic PM (decided 2026-06-07)
