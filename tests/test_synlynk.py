@@ -1805,6 +1805,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
         launched.append(cmd)
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     job = sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     assert job["agent"] == "claude"
     assert job["pid"] == 12345
@@ -1943,6 +1944,7 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     job = sl.dispatch_agent("agy", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
@@ -1960,6 +1962,7 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     sl.dispatch_agent("claude", "task one")
     sl.dispatch_agent("claude", "task two")
     assert len(sl._load_jobs()) == 2
@@ -1971,6 +1974,7 @@ def test_dispatch_agent_injects_relevant_files(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     # Write scan cache with a backend file
     meta = {"head_sha": "abc123", "skeleton": [
         {"file": "backend/auth.py", "symbols": ["login", "logout"], "language": "python"}
@@ -1992,6 +1996,7 @@ def test_dispatch_agent_no_relevant_files_without_scan(project_dir, monkeypatch)
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix thing", engg_domain="backend")
     # Mock _git_head_sha to avoid subprocess.run call
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
@@ -2023,6 +2028,7 @@ def test_dispatch_agent_context_mode_none(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     job = sl.dispatch_agent("claude", "do the thing", context_mode="none")
     prompt = open(job["prompt_file"]).read()
     assert "synlynk Context Snapshot" not in prompt
@@ -2035,6 +2041,7 @@ def test_dispatch_agent_context_mode_task_default(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     story_id = sl.cmd_story_create("Implement OAuth", engg_domain="backend")
     job = sl.dispatch_agent("claude", "implement oauth", story_id=story_id)
@@ -2048,6 +2055,7 @@ def test_dispatch_agent_context_mode_full(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     job = sl.dispatch_agent("claude", "do big thing", context_mode="full")
     prompt = open(job["prompt_file"]).read()
@@ -2079,6 +2087,7 @@ def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     # Patch generate_context to return an oversized string
     big_context = "x" * (82 * 1024)  # 82KB — over 80KB soft limit
@@ -2127,6 +2136,7 @@ def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, mo
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     # Ensure context.md does not exist
     ctx = project_dir / ".synlynk" / "context.md"
     if ctx.exists():
@@ -2142,6 +2152,7 @@ def test_dispatch_agent_writes_per_job_context_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
 
     story_id = sl.cmd_story_create("Fix login timeout", engg_domain="backend")
@@ -2160,6 +2171,7 @@ def test_dispatch_agent_concurrent_jobs_use_separate_context_files(project_dir, 
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
 
     story_a = sl.cmd_story_create("Story A", engg_domain="backend")
@@ -2409,6 +2421,7 @@ def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
     job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2422,6 +2435,7 @@ def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix thing")
     job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2476,6 +2490,7 @@ def test_dispatch_agent_profile_overrides_context_mode(project_dir, monkeypatch)
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "PROFILE_CONTEXT_MARKER")
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
