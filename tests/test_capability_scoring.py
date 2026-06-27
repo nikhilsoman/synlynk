@@ -2,6 +2,7 @@ import os
 import sqlite3
 import tempfile
 import sys
+from pathlib import Path
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -757,6 +758,30 @@ def test_org_domain_tags_not_used_in_routing(tmp_path, monkeypatch):
     # verifies org_domain_tags don't substitute for org_domain in routing
     result = _best_agent_for_story("s-1")
     assert result is None
+
+
+_BS5_DIAGRAM = Path("docs/brainstorm/bs5-diagram-impl/bs5-diagram-impl.html")
+
+
+@pytest.mark.skipif(not _BS5_DIAGRAM.exists(), reason="brainstorm HTML not present on this branch")
+def test_bs5_diagram_implementation_taskwe_are_renders_network_graph():
+    html = _BS5_DIAGRAM.read_text()
+
+    assert "<svg viewBox=\"0 0 500 420\"" in html
+    assert "requestAnimationFrame" in html
+    assert "#0E0E0F" in html
+
+    for label in ["synlynk", "state", "dispatch", "relay", "profiles", "Claude", "Gemini", "Grok", "Codex"]:
+        assert label in html
+
+    for marker in [
+        "stroke=\"#5B8DEF\"",
+        "stroke=\"#A259F7\"",
+        "stroke=\"#2EC4A0\"",
+        'stroke-width="3.5"',
+        'path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6"',
+    ]:
+        assert marker in html
 
 
 

@@ -1413,8 +1413,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_094(project_dir):
-    assert synlynk.VERSION == "0.9.7"
+def test_version_is_098(project_dir):
+    assert synlynk.VERSION == "0.9.8"
 
 
 def test_pyproject_version_matches_module(project_dir):
@@ -4576,5 +4576,176 @@ def test_health_check_dataclass():
     assert hc.status == "ok"
     assert hc.fix == ""  # default
 
+
+# ---------------------------------------------------------------------------
+# synlynk exit / repair / sync tests
+# ---------------------------------------------------------------------------
+
+_CLAUDE_MD_WITH_MARKERS = (
+    "# User section\n\n"
+    '<!-- synlynk:start version="0.9.8" tool="claude" -->\n'
+    "## synlynk Context\nmanaged content here\n"
+    "<!-- synlynk:end -->\n"
+)
+
+_MANIFEST_CONTENT = {
+    "schema_version": 1,
+    "generated_at": "2026-06-27T00:00:00",
+    "synlynk_version": "0.9.8",
+    "files": {
+        "CLAUDE.md": {"tool": "claude", "sha": "abc123", "last_checked": "2026-06-27T00:00:00"},
+    },
+}
+
+
+def _setup_exit_project(tmp_path):
+    """Create minimal synlynk project state for exit/repair/sync tests."""
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / "project-docs").mkdir(exist_ok=True)
+    import json as _json
+    cfg = {
+        "schema_version": 1, "synlynk_version": "0.9.8",
+        "mode": "solo", "org": None, "repo": None,
+        "agent_slots": {"claude": {"cli": "claude", "roles": ["builder"]}},
+        "docs_dir": "project-docs",
+    }
+    (tmp_path / ".synlynk" / "config.json").write_text(_json.dumps(cfg))
+    (tmp_path / ".synlynk" / "instructions.json").write_text(_json.dumps(_MANIFEST_CONTENT))
+    (tmp_path / "CLAUDE.md").write_text(_CLAUDE_MD_WITH_MARKERS)
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / ".agents" / "claude.json").write_text(_json.dumps({"name": "claude"}))
+
+
+def test_cmd_exit_dry_run_prints_plan(tmp_path, monkeypatch, capsys):
+    """Dry-run prints what would happen without touching any files."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_exit(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dry run" in out.lower()
+    assert ".synlynk" in out
+    assert (tmp_path / ".synlynk").exists()
+
+
+def test_cmd_exit_confirm_removes_synlynk_dir(tmp_path, monkeypatch, capsys):
+    """--confirm removes .synlynk/ and writes SYNLYNK_HANDOFF.md."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_exit(dry_run=False)
+    assert rc == 0
+    assert not (tmp_path / ".synlynk").exists()
+    assert (tmp_path / "SYNLYNK_HANDOFF.md").exists()
+    handoff = (tmp_path / "SYNLYNK_HANDOFF.md").read_text()
+    assert "synlynk handoff" in handoff.lower()
+    assert "synlynk init" in handoff
+
+
+def test_cmd_exit_strips_instruction_sections(tmp_path, monkeypatch, capsys):
+    """Synlynk section is removed from CLAUDE.md on exit --confirm."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    claude_md = tmp_path / "CLAUDE.md"
+    assert "synlynk:start" in claude_md.read_text()
+    synlynk.cmd_exit(dry_run=False)
+    if claude_md.exists():
+        assert "synlynk:start" not in claude_md.read_text()
+
+
+def test_cmd_exit_remove_docs_flag(tmp_path, monkeypatch, capsys):
+    """--remove-docs deletes project-docs/."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    assert (tmp_path / "project-docs").exists()
+    synlynk.cmd_exit(dry_run=False, remove_docs=True)
+    assert not (tmp_path / "project-docs").exists()
+
+
+def test_strip_synlynk_section_html(tmp_path):
+    """Helper removes html-style synlynk block, leaving surrounding content."""
+    f = tmp_path / "CLAUDE.md"
+    f.write_text('# Before\n\n<!-- synlynk:start version="1" tool="claude" -->\nmanaged content\n<!-- synlynk:end -->\n\n# After\n')
+    removed = synlynk._strip_synlynk_section(str(f), "html")
+    assert removed
+    remaining = f.read_text()
+    assert "synlynk:start" not in remaining
+    assert "# Before" in remaining
+    assert "# After" in remaining
+
+
+def test_strip_synlynk_section_none_removes_file(tmp_path):
+    """marker_style='none' deletes the file entirely."""
+    f = tmp_path / ".cursorrules"
+    f.write_text("owned content\n")
+    synlynk._strip_synlynk_section(str(f), "none")
+    assert not f.exists()
+
+
+def test_strip_synlynk_section_no_markers(tmp_path):
+    """Returns False and leaves file unchanged if no markers present."""
+    f = tmp_path / "CUSTOM.md"
+    f.write_text("no markers here\n")
+    removed = synlynk._strip_synlynk_section(str(f), "html")
+    assert not removed
+    assert f.read_text() == "no markers here\n"
+
+
+def test_cmd_repair_dry_run(tmp_path, monkeypatch, capsys):
+    """Repair dry-run shows exit + re-init plan without executing."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_repair(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dry run" in out.lower()
+    assert (tmp_path / ".synlynk").exists()
+
+
+def test_cmd_repair_confirm_reinits(tmp_path, monkeypatch, capsys):
+    """Repair --confirm exits then re-inits (init mocked to avoid interactive wizard)."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    reinit_calls = []
+
+    def mock_init(**kwargs):
+        (tmp_path / ".synlynk").mkdir(exist_ok=True)
+        import json as _j
+        (tmp_path / ".synlynk" / "config.json").write_text(_j.dumps({"mode": "solo"}))
+        reinit_calls.append(kwargs)
+
+    monkeypatch.setattr(synlynk, "init", mock_init)
+    rc = synlynk.cmd_repair(dry_run=False)
+    assert rc == 0
+    assert len(reinit_calls) == 1
+    assert (tmp_path / ".synlynk").exists()
+
+
+def test_cmd_sync_dry_run(tmp_path, monkeypatch, capsys):
+    """Sync dry-run prints what would be updated without writing."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_sync(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dry run" in out.lower()
+
+
+def test_cmd_sync_confirm_updates_instruction_files(tmp_path, monkeypatch, capsys):
+    """Sync --confirm re-writes synlynk sections in tracked instruction files."""
+    monkeypatch.chdir(tmp_path)
+    _setup_exit_project(tmp_path)
+    rc = synlynk.cmd_sync(dry_run=False)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Sync complete" in out or "✓" in out
+
+
+def test_cmd_sync_no_manifest(tmp_path, monkeypatch, capsys):
+    """Sync with no tracked files prints advisory and returns 0."""
+    monkeypatch.chdir(tmp_path)
+    rc = synlynk.cmd_sync(dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "no tracked" in out.lower() or "dry run" in out.lower()
 
 
