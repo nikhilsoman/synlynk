@@ -476,14 +476,16 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "agy": {
         "cli": "agy",
-        "non_interactive_flags": ["-p"],
+        "non_interactive_flags": [],
+        "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
     "grok": {
         "cli": "grok",
-        "non_interactive_flags": ["-p"],
+        "non_interactive_flags": [],
+        "prompt_flag": "--single",  # placed last: grok --always-approve --output-format json --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": ["--always-approve"],
         "roles": ["builder", "architect"],
@@ -869,6 +871,7 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
     prompt_via_arg = baselines.get("prompt_via_arg", False)
+    prompt_flag = baselines.get("prompt_flag")
 
     prompt_file = None
     try:
@@ -877,8 +880,12 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
             prompt_file = pf.name
 
         if prompt_via_arg:
+            if prompt_flag:
+                cmd = [cli] + flags + [prompt_flag, prompt]
+            else:
+                cmd = [cli] + flags + [prompt]
             result = subprocess.run(
-                [cli] + flags + [prompt],
+                cmd,
                 capture_output=True, text=True, timeout=timeout
             )
         else:
@@ -1691,6 +1698,7 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             cli = baselines.get("cli", agent)
             flags = baselines.get("non_interactive_flags", [])
             prompt_via_arg = baselines.get("prompt_via_arg", False)
+            prompt_flag = baselines.get("prompt_flag")
             prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
             os.makedirs(PROMPTS_DIR, exist_ok=True)
             context_text = ""
@@ -1704,7 +1712,10 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             with open(prompt_file, "w") as pf:
                 pf.write(prompt)
 
-            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+            if prompt_via_arg and prompt_flag:
+                cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
+            else:
+                cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
             if prompt_via_arg:
                 shell_cmd = (
                     f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
@@ -2407,9 +2418,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     import shlex as _shlex
     prompt_via_arg = baselines.get("prompt_via_arg", False)
+    prompt_flag = baselines.get("prompt_flag")
     if prompt_via_arg:
-        # Agent expects prompt as a flag argument (e.g. agy -p "text"), not stdin
-        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+        # Agent takes prompt as a flag value, not stdin.
+        # prompt_flag ("--single", "-p") is placed last so it immediately precedes "$PROMPT",
+        # preventing other flags from being consumed as the prompt value.
+        # e.g. grok --always-approve --output-format json --single "$PROMPT"
+        if prompt_flag:
+            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
+        else:
+            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = (
             f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
             f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
@@ -3030,7 +3048,11 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
     prompt_via_arg = baselines.get("prompt_via_arg", False)
-    cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+    prompt_flag = baselines.get("prompt_flag")
+    if prompt_via_arg and prompt_flag:
+        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
+    else:
+        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
 
     if prompt_via_arg:
         shell_cmd = (

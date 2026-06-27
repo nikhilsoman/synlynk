@@ -1912,6 +1912,109 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
     assert "--output-format json" in shell_cmd
 
 
+def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch):
+    """--single must immediately precede $PROMPT; other flags must come before it."""
+    import synlynk as sl
+    captured = {}
+
+    class FakeStdout:
+        def readline(self):
+            return b""
+        def close(self):
+            return None
+
+    class FakeProc:
+        pid = 12345
+        returncode = 0
+        stdout = FakeStdout()
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "sh":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+
+    sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
+    shell_cmd = captured["cmd"][2]
+    # --single must appear after --always-approve and directly before "$PROMPT"
+    assert "--single" in shell_cmd
+    single_pos = shell_cmd.index("--single")
+    prompt_pos = shell_cmd.index('"$PROMPT"')
+    assert single_pos < prompt_pos, "--single must come before $PROMPT"
+    # --always-approve must be before --single (so it's not consumed as --single's value)
+    always_approve_pos = shell_cmd.index("--always-approve")
+    assert always_approve_pos < single_pos, "--always-approve must come before --single"
+
+
+def test_agy_prompt_flag_split_from_non_interactive_flags():
+    """Structural regression: -p must live in prompt_flag, not non_interactive_flags.
+
+    The old broken layout had non_interactive_flags=["-p"], which would cause -p to
+    land before any dispatch_flags added later, leaving -p without its value. This test
+    fails immediately if someone moves -p back into non_interactive_flags.
+    """
+    import synlynk as sl
+    agy = sl.AGENT_CAPABILITY_BASELINES["agy"]
+    assert agy.get("prompt_flag") == "-p", "agy prompt_flag must be '-p'"
+    assert "-p" not in agy.get("non_interactive_flags", []), (
+        "-p must not be in non_interactive_flags; use prompt_flag instead"
+    )
+
+
+def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
+    """-p must appear after any dispatch_flags, immediately before $PROMPT.
+
+    Injects a synthetic dispatch_flag into the agy baseline to prove the ordering
+    contract holds even when other flags are present — the scenario where the old
+    non_interactive_flags layout would have broken.
+    """
+    import synlynk as sl, copy
+    captured = {}
+
+    patched_baselines = copy.deepcopy(sl.AGENT_CAPABILITY_BASELINES)
+    patched_baselines["agy"]["dispatch_flags"] = ["--some-flag"]
+    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+
+    class FakeStdout:
+        def readline(self):
+            return b""
+        def close(self):
+            return None
+
+    class FakeProc:
+        pid = 12345
+        returncode = 0
+        stdout = FakeStdout()
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        if cmd and cmd[0] == "sh":
+            captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+
+    sl.dispatch_agent("agy", "summarise PRs", story_id="7", force_agent=True)
+    shell_cmd = captured["cmd"][2]
+    assert "--some-flag" in shell_cmd
+    assert "-p" in shell_cmd
+    some_flag_pos = shell_cmd.index("--some-flag")
+    p_pos = shell_cmd.index(" -p ")
+    prompt_pos = shell_cmd.index('"$PROMPT"')
+    assert some_flag_pos < p_pos, "--some-flag must come before -p"
+    assert p_pos < prompt_pos, "-p must come before $PROMPT"
+
+
 def test_exec_agent_task_claude_does_not_include_dangerously_skip_permissions(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
@@ -4310,7 +4413,8 @@ def test_agent_capability_baselines_includes_grok():
     assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
     grok = synlynk.AGENT_CAPABILITY_BASELINES["grok"]
     assert grok["cli"] == "grok"
-    assert "-p" in grok["non_interactive_flags"]
+    assert grok.get("prompt_flag") == "--single"
+    assert "-p" not in grok.get("non_interactive_flags", [])
     assert "--always-approve" in grok["dispatch_flags"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
