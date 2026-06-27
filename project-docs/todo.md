@@ -41,3 +41,4 @@
 - [ ] BS-8: dispatch_loop() — composite termination + /goal objective injection + job chain tracking [dispatch] <!-- id:story-bs8-loop -->
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: goal hierarchy (meta + milestone + story) + synlynk goals CLI + three-layer context injection [dispatch] <!-- id:story-bs8-meta-goals -->
+- [ ] BS-8: synlynk story split — observatory-driven auto-decomposition for context-window-crossing stories [dispatch] <!-- id:story-bs8-split -->

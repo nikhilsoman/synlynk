@@ -369,3 +369,41 @@ Stories to create in state.db:
 - `story-bs8-loop` — `dispatch_loop()` + guard (done_criteria required) + objective injection + job chain tracking
 - `story-bs8-consult` — stuck detection + `_run_consult()` + `## Expert Consult` injection
 - `story-bs8-meta-goals` — goal hierarchy (meta + milestone + story) + `synlynk goals` CLI + three-layer context injection into all dispatches
+- `story-bs8-split` — `synlynk story split`: observatory-driven auto-decomposition for stories that cross the context window (see below)
+
+---
+
+## Appendix: Story Split via Observatory Pattern
+
+### Problem
+
+A single story whose `estimated_tokens` exceeds ~70% of the dispatched agent's effective context window will overflow mid-turn in headless mode. The agent can't self-compact. The turn fails or truncates. The loop retries the whole story from scratch.
+
+### Design
+
+`synlynk story split <story_id>` (also triggered automatically pre-dispatch when threshold exceeded):
+
+1. **Size gate** — compare `estimated_tokens` against agent context window × 0.7 (headroom budget for context.md + objective injection + verify contract). If under threshold: no split needed.
+
+2. **Observatory signal** — also check historical rework for similar stories: if stories with the same `(engg_domain, org_domain, phase)` coordinate have `rework_count > 2` or `actual_log_bytes > estimated_tokens × 3`, lower the effective threshold to 0.5 for this story. The observatory learns that this class of task consistently overruns estimates.
+
+3. **Architect decomposition** — dispatch highest capability scorer for `engg_domain` as an architect (one-shot, read-only, no code writes). Prompt: "Decompose this story into N sub-stories each completable in one agent turn. Each sub-story must have: title, done_criteria, estimated_tokens, depends_on list."
+
+4. **Sub-story creation** — architect response parsed into N new stories in state.db, all linked to the parent via `depends_on`. Parent story status set to `"split"` (terminal, not done).
+
+5. **Capability-assessed dispatch** — each sub-story dispatched via normal `_best_agent_for_story()` routing. A mechanical sub-story (boilerplate, tests) may route to Codex while a design sub-story routes to Claude. Each gets its own loop with its own `done_criteria`.
+
+6. **Observatory feedback** — on completion of each sub-story, `actual_tokens` written back. If actual >> estimated across the chain, the parent story's estimate is flagged for recalibration. Future stories in the same coordinate inherit the adjusted baseline.
+
+### Data model additions
+
+| Field | Table | Description |
+|---|---|---|
+| `parent_story_id` | stories | set on sub-stories; null on root stories |
+| `split_reason` | stories | `"estimated_tokens"` \| `"observatory_signal"` |
+| `effective_context_pct` | stories | threshold used at split time (0.7 or 0.5) |
+
+### What this does NOT do
+
+- Split stories automatically without warning — first split is always surfaced to the user or via sentinel alert; subsequent splits in a loop run can be automatic if `--auto-split` flag is set
+- Replace task decomposition in planning — `writing-plans` skill still produces right-sized stories upfront; `story split` is a runtime safety net for stories that slipped through
