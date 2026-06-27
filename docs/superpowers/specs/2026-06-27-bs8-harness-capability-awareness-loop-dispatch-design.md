@@ -120,6 +120,22 @@ synlynk probe --dry-run        # show diff, no commit / issue / dispatch
 
 ## Subsystem 2: Loop-Native Dispatch
 
+### Guard: `done_criteria` Required
+
+`dispatch_loop()` fails fast if the story has no `done_criteria`. A loop without a goal is undefined behaviour — there is no valid termination condition.
+
+```python
+def dispatch_loop(agent, story_id, max_iterations=5, verify_cmd=None):
+    story = _get_story(story_id)
+    if not story or not story.get("done_criteria"):
+        raise ValueError(
+            f"dispatch_loop requires done_criteria on story '{story_id}'. "
+            "Set it with: synlynk story update <id> --done-criteria '...'"
+        )
+```
+
+This is the critical design difference from harness `/loop`: harness loops are open-ended. synlynk loops always have an explicit termination condition. Goal is a required property of a loop, not an optional session hint.
+
 ### Loop Controller
 
 New function `dispatch_loop(agent, story_id, max_iterations=5, verify_cmd=None)` wraps `dispatch_agent` in a controlled turn cycle:
@@ -164,12 +180,72 @@ All three must pass for the loop to exit as done:
 | Done criteria | `done_criteria` field on story matches patterns in job log (regex + keyword scan). LLM fallback: only if `verify_cmd` is provided AND fails — synlynk asks the working agent "did you complete `<done_criteria>`? answer yes/no" as a one-shot prompt. No LLM call if `verify_cmd` passes or no `verify_cmd` set. |
 | Verify command | Optional shell command exits 0 (e.g. `pytest tests/ -q`, `gh pr list --head ...`) |
 
-### Dispatch Objective Injection (`/goal` equivalent)
+### Goal Hierarchy
 
-Every turn's context includes a `## Dispatch Objective` block — explicit, persistent goal framing equivalent to what `/goal` provides in interactive sessions:
+synlynk models three levels of goal, all injected into every dispatch context. This is structurally different from harness `/goal`, which only models the bottom layer.
+
+```
+Meta Goals      permanent, cross-cutting quality constraints — never "done",
+                always active evaluators across every story, every loop
+                stored in .synlynk/config.json under "meta_goals"
+
+Milestone Goals epic-level intent — spans multiple stories
+                stored as done_criteria on the Epic in state.db
+                injected when the dispatched story belongs to an epic
+
+Story Goals     tactical done criteria — terminates one loop
+                stored as done_criteria on the Story
+                required for dispatch_loop() (see guard above)
+```
+
+**Why harnesses don't have this:** harnesses are session-scoped. They have no persistent cross-session state. `/goal` in Claude Code says "complete this session's task" — it has no concept of a quality constraint that outlives the conversation. synlynk has state.db and config.json that span every session, every worktree, every dispatch — making meta goals a natural and uniquely synlynk capability.
+
+**Meta goal data model** (`.synlynk/config.json`):
+```json
+{
+  "meta_goals": [
+    {
+      "id": "mg-availability",
+      "name": "availability",
+      "description": "No change degrades uptime below 99.9%",
+      "scope": "all"
+    },
+    {
+      "id": "mg-security",
+      "name": "security",
+      "description": "No secrets in logs, no plaintext credentials, no injection vulnerabilities",
+      "scope": "all"
+    },
+    {
+      "id": "mg-scalability",
+      "name": "scalability",
+      "description": "Linear performance with data volume up to 1M records",
+      "scope": "backend"
+    }
+  ]
+}
+```
+
+**CLI:**
+```bash
+synlynk goals add "no change degrades uptime below 99.9%" --name availability --scope all
+synlynk goals list
+synlynk goals remove mg-availability
+```
+
+### Dispatch Objective Injection (`/goal` equivalent, extended)
+
+Every turn's context includes the full three-layer goal stack:
 
 ```markdown
-## Dispatch Objective
+## Meta Goals  ← always present, every dispatch
+- availability: No change degrades uptime below 99.9%
+- security: No secrets in logs, no plaintext credentials, no injection vulnerabilities
+
+## Milestone Goal  ← only when story belongs to an epic with done_criteria
+- ship auth system: JWT + refresh tokens + session management complete
+
+## Dispatch Objective  ← story-level, this loop only
 **Goal:** <story title>
 **Done criteria:** <done_criteria from story>
 **Iteration:** 2 of 5
@@ -181,6 +257,8 @@ Every turn's context includes a `## Dispatch Objective` block — explicit, pers
 ## Expert Consult
 <consult agent response — only present if triggered this turn>
 ```
+
+Meta goals are also injected into single-shot `dispatch_agent()` calls (not just loops) — every dispatched agent sees the cross-cutting quality constraints, regardless of whether it is in a loop.
 
 ### Stuck Detection
 
@@ -274,6 +352,11 @@ synlynk jobs --loop              # shows root + all turns + consult jobs per cha
 | Max iterations cap | Loop exits with `"max_iterations"` reason after N turns |
 | Job chain fields consistent | `loop_root_job_id` same across all turns in a chain |
 | Verify cmd failure keeps loop going | verify_cmd exits 1; assert re-dispatch even if exit_code is 0 |
+| dispatch_loop guard — no done_criteria | Story with no done_criteria raises ValueError immediately |
+| Meta goals injected — all dispatches | Assert `## Meta Goals` present in prompt file for single-shot and loop dispatches |
+| Meta goals injected — scoped | Backend-scoped meta goal absent from frontend story dispatch |
+| Milestone goal injected | Story belonging to epic with done_criteria includes `## Milestone Goal` block |
+| Meta goal CLI add/list/remove | `synlynk goals add/list/remove` round-trip persists to config.json |
 
 ---
 
@@ -283,5 +366,6 @@ synlynk jobs --loop              # shows root + all turns + consult jobs per cha
 
 Stories to create in state.db:
 - `story-bs8-probe` — `synlynk probe` + probe data model + daemon integration + doctor check
-- `story-bs8-loop` — `dispatch_loop()` + objective injection + job chain tracking
+- `story-bs8-loop` — `dispatch_loop()` + guard (done_criteria required) + objective injection + job chain tracking
 - `story-bs8-consult` — stuck detection + `_run_consult()` + `## Expert Consult` injection
+- `story-bs8-meta-goals` — goal hierarchy (meta + milestone + story) + `synlynk goals` CLI + three-layer context injection into all dispatches
