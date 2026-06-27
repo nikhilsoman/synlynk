@@ -1952,10 +1952,34 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     assert always_approve_pos < single_pos, "--always-approve must come before --single"
 
 
-def test_agy_dispatch_prompt_flag_placed_before_prompt(project_dir, monkeypatch):
-    """-p must immediately precede $PROMPT for agy."""
+def test_agy_prompt_flag_split_from_non_interactive_flags():
+    """Structural regression: -p must live in prompt_flag, not non_interactive_flags.
+
+    The old broken layout had non_interactive_flags=["-p"], which would cause -p to
+    land before any dispatch_flags added later, leaving -p without its value. This test
+    fails immediately if someone moves -p back into non_interactive_flags.
+    """
     import synlynk as sl
+    agy = sl.AGENT_CAPABILITY_BASELINES["agy"]
+    assert agy.get("prompt_flag") == "-p", "agy prompt_flag must be '-p'"
+    assert "-p" not in agy.get("non_interactive_flags", []), (
+        "-p must not be in non_interactive_flags; use prompt_flag instead"
+    )
+
+
+def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
+    """-p must appear after any dispatch_flags, immediately before $PROMPT.
+
+    Injects a synthetic dispatch_flag into the agy baseline to prove the ordering
+    contract holds even when other flags are present — the scenario where the old
+    non_interactive_flags layout would have broken.
+    """
+    import synlynk as sl, copy
     captured = {}
+
+    patched_baselines = copy.deepcopy(sl.AGENT_CAPABILITY_BASELINES)
+    patched_baselines["agy"]["dispatch_flags"] = ["--some-flag"]
+    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
 
     class FakeStdout:
         def readline(self):
@@ -1982,9 +2006,12 @@ def test_agy_dispatch_prompt_flag_placed_before_prompt(project_dir, monkeypatch)
 
     sl.dispatch_agent("agy", "summarise PRs", story_id="7", force_agent=True)
     shell_cmd = captured["cmd"][2]
+    assert "--some-flag" in shell_cmd
     assert "-p" in shell_cmd
+    some_flag_pos = shell_cmd.index("--some-flag")
     p_pos = shell_cmd.index(" -p ")
     prompt_pos = shell_cmd.index('"$PROMPT"')
+    assert some_flag_pos < p_pos, "--some-flag must come before -p"
     assert p_pos < prompt_pos, "-p must come before $PROMPT"
 
 
