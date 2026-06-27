@@ -131,12 +131,26 @@ Replace the current documentation-dump homepage with a product-story-led experie
 
 ---
 
+## Additional Pages (design consistency + polish pass)
+
+These pages already exist. Implementation is a consistency and polish pass — same visual system as the homepage, not a rebuild. All pages share the same header/footer as the homepage.
+
+| Page | Scope |
+|------|-------|
+| `/blog` — index | Grid of post cards. Each card: title, date, excerpt, **hero image pulled from `docs/brainstorm/<topic>/`** (first HTML screenshot or diagram from the matching brainstorm session). Fallback: gradient placeholder with post number. |
+| `/blog/<slug>` — post view | Full post with same typography system. Hero image at top (from brainstorm visuals). Inline diagrams where posts reference them. |
+| `/docs` | Existing content, reskinned to match visual system. Section nav sidebar. Code blocks use JetBrains Mono + dark substrate. |
+| `/features` | Existing content or new page. Feature grid consistent with homepage Section 5 (2×2 → 3×2 if needed). |
+| `/changelog` | Existing CHANGELOG.md rendered. Version badges, date chips, Added/Fixed/Changed tags in brand colours. |
+| `/about` | Mission statement + OS layer framing. Team roster (human + agents). Links to blog series. |
+
+**Blog image strategy:** Each post in `docs/blog/` maps to a brainstorm session in `docs/brainstorm/`. The most visually representative HTML file from that session (hero mockup, architecture diagram, isometric visual) is screenshot/exported as the post's hero image. Where no brainstorm visual exists, use a gradient card with the post number and release version.
+
 ## Deferred / Phase 2
 
 - OSS Maintainer autopilot agent — separate epic (GitHub-native: README, Issues, Polls, Boards)
 - Account management / team workspaces UI — stub as waitlist for now
 - Grok image gen dispatch (CLI `--single` flag issue unresolved — separate fix needed)
-- Blog series page (index + full post view)
 - Mobile responsive pass
 
 ---
