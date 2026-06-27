@@ -1,0 +1,107 @@
+<h2>Section 4 — <code>git-drift</code></h2>
+<p class="subtitle">The enforcement artifact: makes the coexistence strategy machine-checkable at commit time</p>
+
+<div class="section">
+  <h3>What it does</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+    <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:16px">
+      <div class="label">Input</div>
+      <ul style="font-size:12px;color:#ccc;margin:8px 0 0;padding-left:16px;line-height:1.9">
+        <li>A <strong>team manifest</strong>: <code>.synlynk/instruction-manifest.json</code> — declares which sections are OS-owned (synlynk), which are skill-pack zones, and which are user-owned</li>
+        <li>The instruction files: <code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>settings.json</code></li>
+      </ul>
+    </div>
+    <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:16px">
+      <div class="label">Output</div>
+      <ul style="font-size:12px;color:#ccc;margin:8px 0 0;padding-left:16px;line-height:1.9">
+        <li>✅ <strong>Pass</strong> — all sections in declared zones, no duplicates, fence intact</li>
+        <li>⚠️ <strong>Warn</strong> — skill pack content above the synlynk fence</li>
+        <li>❌ <strong>Block</strong> — OS-zone content modified without manifest update; fence removed</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>The Manifest Schema</h3>
+  <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:16px;margin-top:8px">
+    <pre style="font-size:11px;color:#ccc;margin:0;overflow:auto">{
+  "version": "1.0",
+  "files": {
+    "CLAUDE.md": {
+      "fence": {
+        "start": "<!-- synlynk:start -->",
+        "end": "<!-- synlynk:end -->"
+      },
+      "zones": {
+        "os": "within_fence",        <span style="color:#3fb950">// synlynk owns — block on modification</span>
+        "skill_pack": "below_fence", <span style="color:#d29922">// advisory — warn if above fence</span>
+        "user": "below_fence"        <span style="color:#58a6ff">// free zone</span>
+      },
+      "checks": [
+        "no_duplicate_headings",
+        "fence_intact",
+        "skill_pack_below_fence"
+      ]
+    },
+    ".cursorrules": {
+      "zones": { "os": "synlynk_block", "skill_pack": "remainder" },
+      "checks": ["no_duplicate_rules"]
+    }
+  }
+}</pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>How it installs</h3>
+  <div style="display:flex;gap:10px;align-items:stretch;margin-top:10px">
+    <div style="flex:1;background:#0a1a0a;border:1px solid #2ea043;border-radius:8px;padding:14px">
+      <div class="label" style="color:#3fb950">Via synlynk init</div>
+      <p style="font-size:12px;color:#ccc;margin:8px 0 0"><code>synlynk init</code> writes the manifest and installs the pre-commit hook automatically. Zero config for new projects.</p>
+    </div>
+    <div style="flex:1;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+      <div class="label">Standalone (public utility)</div>
+      <p style="font-size:12px;color:#ccc;margin:8px 0 0"><code>pip install git-drift && git-drift install</code> — works in any repo, no synlynk required. The manifest defaults to synlynk conventions but is fully configurable.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Relationship to the benchmark</h3>
+  <div style="background:#0a1a0a;border:1px solid #2ea043;border-radius:8px;padding:16px;margin-top:8px">
+    <div style="display:flex;gap:12px">
+      <div style="font-size:20px">🔗</div>
+      <div>
+        <p style="margin:0;font-size:13px;color:#ccc;line-height:1.6"><strong>R4 is the only round with git-drift active.</strong> When R4 achieves lower token spend than R2 (Superpowers only), the diff is attributable to two things: (1) synlynk's context scoping, and (2) zero instruction conflict overhead — which git-drift enforces. This makes git-drift a measurable variable in the benchmark, not just a nice-to-have.</p>
+        <p style="margin:10px 0 0;font-size:12px;color:#888">Phase 0 validation confirms what Superpowers actually writes → git-drift manifest is calibrated to reality → R4 runs clean → benchmark result is defensible.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Scope for BS-7 vs future</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+    <div style="background:#0a1a0a;border:1px solid #2ea043;border-radius:8px;padding:12px">
+      <div class="label" style="color:#3fb950">In BS-7 spec</div>
+      <ul style="font-size:12px;color:#ccc;margin:8px 0 0;padding-left:16px;line-height:1.8">
+        <li>Manifest schema design</li>
+        <li>4 check types (fence, duplicate, zone, authority)</li>
+        <li>Install via <code>synlynk init</code></li>
+        <li>Standalone pip package design</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a0a;border:1px solid #555;border-radius:8px;padding:12px">
+      <div class="label" style="color:#888">Future sessions</div>
+      <ul style="font-size:12px;color:#888;margin:8px 0 0;padding-left:16px;line-height:1.8">
+        <li>CI/CD integration (GitHub Actions)</li>
+        <li>Auto-fix mode (<code>git-drift fix</code>)</li>
+        <li>VSCode extension</li>
+        <li>Registry of known skill pack manifests</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p style="color:#888;font-size:13px;margin-top:16px">Does this look right? Continuing in terminal ↓</p>

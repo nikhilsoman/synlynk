@@ -42,3 +42,9 @@
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: goal hierarchy (meta + milestone + story) + synlynk goals CLI + three-layer context injection [dispatch] <!-- id:story-bs8-meta-goals -->
 - [ ] BS-8: synlynk story split — observatory-driven auto-decomposition for context-window-crossing stories [dispatch] <!-- id:story-bs8-split -->
+- [ ] BS-9: brainstorm — Trio Orchestration Demo: State Continuity + Flatline + Parallel Dispatch showcase (scripted, narrative-first) [platform] <!-- id:story-bs9-trio-demo -->
+- [ ] BS-10: brainstorm — PulseScape: end-to-end glassmorphic agent dashboard (SSE relay + Ed25519 consensus panel, 6-session build) [product] <!-- id:story-bs10-pulsescape -->
+- [ ] BS-11: brainstorm — MCP Registry contribution: Project Context + Todo MCP Server for modelcontextprotocol/servers [ecosystem] <!-- id:story-bs11-mcp-registry -->
+- [ ] flatline: standalone Python CLI circuit-breaker — hash stdout, kill after 3 identical failures, pip-installable public utility [tooling] <!-- id:story-flatline-standalone -->
+- [ ] git-drift: standalone pip package — instruction drift auditor, pre-commit hook, manifest schema, git-drift install [tooling] <!-- id:story-gitdrift-standalone -->
+- [ ] git-connectome: standalone language-agnostic codebase mapper → self-contained interactive HTML (synlynk viz public face) [tooling] <!-- id:story-gitconnectome-standalone -->
