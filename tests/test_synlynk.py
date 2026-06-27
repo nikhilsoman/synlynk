@@ -2507,6 +2507,7 @@ def test_dispatch_agent_profile_context_max_bytes_truncates(project_dir, monkeyp
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 50})
@@ -2570,6 +2571,7 @@ def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Fix login")
     job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2583,6 +2585,7 @@ def test_dispatch_agent_codex_prompt_format(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     story_id = sl.cmd_story_create("Add tests")
     job = sl.dispatch_agent("codex", "add tests for auth module", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2604,6 +2607,7 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
         captured["cmd"] = cmd
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
