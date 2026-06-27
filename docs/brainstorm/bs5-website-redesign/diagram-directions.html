@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Diagram Directions — Agy Response</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',system-ui,sans-serif;background:#0a0a0f;color:#ccc;padding:32px 40px;}
+h1{font-size:18px;font-weight:600;color:#fff;margin-bottom:4px;}
+.meta{font-size:11px;color:#444;margin-bottom:28px;font-family:monospace;}
+.meta span{color:#5B8DEF;}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;}
+.card{background:#111;border:2px solid #1e1e1e;border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color 0.2s;}
+.card:hover{border-color:#333;}
+.card.selected{border-color:#5B8DEF;}
+.card-header{padding:16px 18px 0;}
+.card-tag{font-size:9px;letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px;}
+.card-title{font-size:15px;font-weight:700;color:#eee;margin-bottom:3px;}
+.card-subtitle{font-size:11px;color:#555;margin-bottom:14px;}
+.card-preview{margin:0 18px;border-radius:10px;overflow:hidden;border:1px solid #1e1e1e;}
+.card-body{padding:14px 18px 16px;}
+.field{margin-bottom:10px;}
+.field-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#444;font-weight:600;margin-bottom:3px;}
+.field-text{font-size:11px;color:#888;line-height:1.55;}
+.agy-badge{display:inline-flex;align-items:center;gap:5px;background:#0a1a10;border:1px solid #1a3a20;border-radius:20px;padding:3px 10px;font-size:10px;color:#2EC4A0;margin-bottom:16px;}
+.sel{font-size:10px;color:#5B8DEF;font-weight:600;opacity:0;transition:opacity 0.2s;float:right;}
+.card.selected .sel{opacity:1;}
+</style>
+</head>
+<body>
+
+<h1>Diagram Directions — Agy's Response</h1>
+<p class="meta"><span>job-c51be1fa</span> · agy (Gemini) · bs5-diagram-concept · completed</p>
+
+<div style="margin-bottom:20px;">
+  <div class="agy-badge">
+    <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 2 C10 2 12 8.5 16 10 C12 11.5 10 18 10 18 C10 18 8 11.5 4 10 C8 8.5 10 2 10 2Z" fill="#1a73e8" opacity="0.9"/></svg>
+    Agy (Gemini) proposed 3 directions
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Direction 1: Connectome Hub -->
+  <div class="card" onclick="this.classList.toggle('selected')">
+    <div class="card-header">
+      <div class="card-tag" style="color:#D97757;">Direction 1</div>
+      <span class="sel">✓ Selected</span>
+      <div class="card-title">Connectome Hub</div>
+      <div class="card-subtitle">Biological Synaptic Network</div>
+    </div>
+    <div class="card-preview">
+      <svg width="100%" viewBox="0 0 280 180" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="180" fill="#090910"/>
+        <!-- organic breathing glow -->
+        <circle cx="140" cy="90" r="70" fill="none" stroke="rgba(162,89,247,0.06)" stroke-width="20"/>
+        <circle cx="140" cy="90" r="50" fill="none" stroke="rgba(162,89,247,0.08)" stroke-width="15"/>
+        <!-- dendrite-like organic paths -->
+        <path d="M 50 35 C 70 50 100 65 120 78" stroke="#D97757" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <path d="M 230 35 C 210 50 180 65 160 78" stroke="#1a73e8" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <path d="M 50 145 C 70 130 100 115 120 102" stroke="#2EC4A0" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <path d="M 230 145 C 210 130 180 115 160 102" stroke="#888" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+        <!-- Ranvier node dots -->
+        <circle cx="78" cy="49" r="3" fill="#D97757" opacity="0.7"/>
+        <circle cx="103" cy="63" r="3" fill="#D97757" opacity="0.5"/>
+        <circle cx="202" cy="49" r="3" fill="#1a73e8" opacity="0.7"/>
+        <circle cx="177" cy="63" r="3" fill="#1a73e8" opacity="0.5"/>
+        <!-- bouton clusters -->
+        <circle cx="120" cy="78" r="6" fill="#1a0818" stroke="#D97757" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="115" cy="83" r="4" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.6"/>
+        <circle cx="160" cy="78" r="6" fill="#0a1020" stroke="#1a73e8" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="165" cy="83" r="4" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.6"/>
+        <circle cx="120" cy="102" r="6" fill="#0a1a18" stroke="#2EC4A0" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="160" cy="102" r="6" fill="#111" stroke="#888" stroke-width="1.2" opacity="0.7"/>
+        <!-- central soma (multipolar neuron body) -->
+        <ellipse cx="140" cy="90" rx="26" ry="24" fill="#1a0a2e" stroke="#A259F7" stroke-width="1.5" opacity="0.95"/>
+        <ellipse cx="138" cy="88" rx="14" ry="12" fill="#120820" stroke="#A259F7" stroke-width="0.8" opacity="0.8"/>
+        <circle cx="135" cy="85" r="5" fill="#0d0618" opacity="0.9"/>
+        <!-- S glyph -->
+        <g transform="translate(140,90) scale(0.45)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#A259F7" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#5B8DEF" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 14" fill="none" stroke="#2EC4A0" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3.5" fill="#5B8DEF"/>
+          <circle cx="3" cy="14" r="3.5" fill="#2EC4A0"/>
+        </g>
+        <!-- agent somas -->
+        <circle cx="48" cy="32" r="14" fill="#0d0808" stroke="#D97757" stroke-width="1.2" opacity="0.9"/>
+        <text x="48" y="36" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#D97757">Claude</text>
+        <circle cx="232" cy="32" r="14" fill="#080d18" stroke="#1a73e8" stroke-width="1.2" opacity="0.9"/>
+        <text x="232" y="36" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#1a73e8">Gemini</text>
+        <circle cx="48" cy="148" r="14" fill="#0d0d0d" stroke="#2EC4A0" stroke-width="1.2" opacity="0.9"/>
+        <text x="48" y="152" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#2EC4A0">Grok</text>
+        <circle cx="232" cy="148" r="14" fill="#0d0d0d" stroke="#666" stroke-width="1.2" opacity="0.8"/>
+        <text x="232" y="152" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#666">Codex</text>
+        <!-- traveling pulse dots -->
+        <circle cx="90" cy="57" r="3" fill="#D97757" opacity="0.9"><animate attributeName="cx" values="50;120" dur="2s" repeatCount="indefinite" begin="0s"/><animate attributeName="cy" values="33;78" dur="2s" repeatCount="indefinite" begin="0s"/><animate attributeName="opacity" values="0.9;0.2" dur="2s" repeatCount="indefinite" begin="0s"/></circle>
+        <circle cx="90" cy="57" r="3" fill="#1a73e8" opacity="0.9"><animate attributeName="cx" values="232;160" dur="2s" repeatCount="indefinite" begin="0.5s"/><animate attributeName="cy" values="33;78" dur="2s" repeatCount="indefinite" begin="0.5s"/><animate attributeName="opacity" values="0.9;0.2" dur="2s" repeatCount="indefinite" begin="0.5s"/></circle>
+        <text x="140" y="120" text-anchor="middle" font-family="monospace" font-size="8" fill="#A259F7">synlynk</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <div class="field"><div class="field-label">Metaphor</div><div class="field-text">Multipolar neuron. synlynk = central soma integrating chemical-like transmitter pulses from agent dendrites.</div></div>
+      <div class="field"><div class="field-label">Layout</div><div class="field-text">Semi-organic force-directed spring placement on concentric bounds. Nodes breathe dynamically.</div></div>
+      <div class="field"><div class="field-label">Animation</div><div class="field-text">High-velocity synaptic pulses with trailing gradient tails. Somatic membrane breathing via SVG turbulent displacement filters. Junction flashes.</div></div>
+      <div class="field"><div class="field-label">Biological basis</div><div class="field-text">Multipolar neuron — most common neuron type in CNS. Accurate axon → bouton → vesicle → cleft → soma pathway.</div></div>
+    </div>
+  </div>
+
+  <!-- Direction 2: Celestial Constellation -->
+  <div class="card" onclick="this.classList.toggle('selected')">
+    <div class="card-header">
+      <div class="card-tag" style="color:#5B8DEF;">Direction 2</div>
+      <span class="sel">✓ Selected</span>
+      <div class="card-title">Celestial Constellation</div>
+      <div class="card-subtitle">Orbital Gravitational System</div>
+    </div>
+    <div class="card-preview">
+      <svg width="100%" viewBox="0 0 280 180" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="180" fill="#090910"/>
+        <!-- orbital tracks -->
+        <circle cx="140" cy="90" r="72" fill="none" stroke="rgba(91,141,239,0.08)" stroke-width="1"/>
+        <circle cx="140" cy="90" r="45" fill="none" stroke="rgba(162,89,247,0.08)" stroke-width="1"/>
+        <circle cx="140" cy="90" r="22" fill="none" stroke="rgba(46,196,160,0.1)" stroke-width="1"/>
+        <!-- gravitational wave ripples -->
+        <circle cx="140" cy="90" r="80" fill="none" stroke="rgba(91,141,239,0.04)" stroke-width="0.5"/>
+        <circle cx="140" cy="90" r="95" fill="none" stroke="rgba(91,141,239,0.03)" stroke-width="0.5"/>
+        <!-- laser trace lines: outer to center -->
+        <line x1="140" y1="18" x2="140" y2="68" stroke="#D97757" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+        <line x1="212" y1="90" x2="162" y2="90" stroke="#1a73e8" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+        <line x1="140" y1="162" x2="140" y2="112" stroke="#2EC4A0" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+        <line x1="68" y1="90" x2="118" y2="90" stroke="#888" stroke-width="1" stroke-dasharray="3,3" opacity="0.35"/>
+        <!-- inner ring data nodes (at 45° offsets) -->
+        <circle cx="172" cy="58" r="9" fill="#111" stroke="#5B8DEF" stroke-width="1" opacity="0.8"/>
+        <text x="172" y="62" text-anchor="middle" font-family="monospace" font-size="6" fill="#5B8DEF">state</text>
+        <circle cx="172" cy="122" r="9" fill="#111" stroke="#A259F7" stroke-width="1" opacity="0.8"/>
+        <text x="172" y="126" text-anchor="middle" font-family="monospace" font-size="6" fill="#A259F7">relay</text>
+        <circle cx="108" cy="58" r="9" fill="#111" stroke="#2EC4A0" stroke-width="1" opacity="0.8"/>
+        <text x="108" y="62" text-anchor="middle" font-family="monospace" font-size="6" fill="#2EC4A0">disp</text>
+        <circle cx="108" cy="122" r="9" fill="#111" stroke="#FFD060" stroke-width="1" opacity="0.8"/>
+        <text x="108" y="126" text-anchor="middle" font-family="monospace" font-size="6" fill="#FFD060">prof</text>
+        <!-- outer agent planets (cardinal: 0°=top, 90°=right, 180°=bottom, 270°=left) -->
+        <circle cx="140" cy="18" r="12" fill="#0d0808" stroke="#D97757" stroke-width="1.2" opacity="0.9"/>
+        <text x="140" y="22" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#D97757">Claude</text>
+        <circle cx="212" cy="90" r="12" fill="#080d18" stroke="#1a73e8" stroke-width="1.2" opacity="0.9"/>
+        <text x="212" y="94" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#1a73e8">Gemini</text>
+        <circle cx="140" cy="162" r="12" fill="#0d0d0d" stroke="#2EC4A0" stroke-width="1.2" opacity="0.9"/>
+        <text x="140" y="166" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#2EC4A0">Grok</text>
+        <circle cx="68" cy="90" r="12" fill="#0d0d0d" stroke="#666" stroke-width="1.2" opacity="0.8"/>
+        <text x="68" y="94" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="600" fill="#666">Codex</text>
+        <!-- animated orbital dots on outer track -->
+        <circle r="3" fill="#D97757" opacity="0.7">
+          <animateMotion dur="8s" repeatCount="indefinite" begin="0s"><mpath href="#outer-orbit"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#1a73e8" opacity="0.7">
+          <animateMotion dur="8s" repeatCount="indefinite" begin="2s"><mpath href="#outer-orbit"/></animateMotion>
+        </circle>
+        <path id="outer-orbit" d="M 140,18 A 72,72 0 1,1 139.9,18" fill="none"/>
+        <!-- center: gravitational core -->
+        <circle cx="140" cy="90" r="20" fill="#0d0818" stroke="#A259F7" stroke-width="1.5" opacity="0.95"/>
+        <circle cx="140" cy="90" r="13" fill="none" stroke="#A259F7" stroke-width="0.4" opacity="0.4"/>
+        <g transform="translate(140,90) scale(0.42)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3" fill="#5B8DEF"/>
+          <circle cx="3" cy="13" r="3" fill="#2EC4A0"/>
+        </g>
+        <text x="140" y="115" text-anchor="middle" font-family="monospace" font-size="8" fill="#A259F7">synlynk</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <div class="field"><div class="field-label">Metaphor</div><div class="field-text">Gravitational well. synlynk = massive core keeping agent planets locked in stable shared-state orbits instead of drifting into chaos.</div></div>
+      <div class="field"><div class="field-label">Layout</div><div class="field-text">Pure mathematical concentric tracks. Agents at cardinal directions (0°/90°/180°/270°), data nodes offset diagonally (45° intervals) to prevent line overlap.</div></div>
+      <div class="field"><div class="field-label">Animation</div><div class="field-text">Slow concentric rotation — clockwise inner orbit, counter-clockwise outer orbit. Radiating gravitational wave ripples. Active laser trace lines on hover/pulse.</div></div>
+      <div class="field"><div class="field-label">Physical basis</div><div class="field-text">Orbital resonance mechanics. Mathematically precise — same geometry as Kepler's laws of planetary motion.</div></div>
+    </div>
+  </div>
+
+  <!-- Direction 3: Integrated Circuit -->
+  <div class="card" onclick="this.classList.toggle('selected')">
+    <div class="card-header">
+      <div class="card-tag" style="color:#2EC4A0;">Direction 3</div>
+      <span class="sel">✓ Selected</span>
+      <div class="card-title">Integrated Circuit</div>
+      <div class="card-subtitle">PCB / Subway Map / Cybernetic Conduit</div>
+    </div>
+    <div class="card-preview">
+      <svg width="100%" viewBox="0 0 280 180" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="180" fill="#090910"/>
+        <!-- PCB substrate grid (very subtle) -->
+        <defs>
+          <pattern id="pcb-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+            <path d="M 12 0 L 0 0 0 12" fill="none" stroke="rgba(46,196,160,0.04)" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="280" height="180" fill="url(#pcb-grid)"/>
+        <!-- orthogonal copper traces (45° and 90° only) -->
+        <!-- Claude (top) trace: down then diagonal -->
+        <polyline points="140,20 140,52 118,74" stroke="#D97757" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+        <!-- Gemini (right) trace: left then diagonal -->
+        <polyline points="220,90 188,90 162,74" stroke="#1a73e8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+        <!-- Grok (bottom) trace: up then diagonal -->
+        <polyline points="140,160 140,128 118,106" stroke="#888" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+        <!-- Codex (left) trace: right then diagonal -->
+        <polyline points="60,90 92,90 118,106" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+        <!-- inner bus termination points -->
+        <rect x="106" y="62" width="24" height="14" rx="3" fill="#111" stroke="#5B8DEF" stroke-width="1" opacity="0.85"/>
+        <text x="118" y="72" text-anchor="middle" font-family="monospace" font-size="6" fill="#5B8DEF">state</text>
+        <rect x="150" y="62" width="24" height="14" rx="3" fill="#111" stroke="#A259F7" stroke-width="1" opacity="0.85"/>
+        <text x="162" y="72" text-anchor="middle" font-family="monospace" font-size="6" fill="#A259F7">disp</text>
+        <rect x="106" y="104" width="24" height="14" rx="3" fill="#111" stroke="#2EC4A0" stroke-width="1" opacity="0.85"/>
+        <text x="118" y="114" text-anchor="middle" font-family="monospace" font-size="6" fill="#2EC4A0">relay</text>
+        <rect x="150" y="104" width="24" height="14" rx="3" fill="#111" stroke="#FFD060" stroke-width="1" opacity="0.85"/>
+        <text x="162" y="114" text-anchor="middle" font-family="monospace" font-size="6" fill="#FFD060">prof</text>
+        <!-- traces from bus to center chip -->
+        <line x1="118" y1="76" x2="118" y2="90" stroke="#5B8DEF" stroke-width="1.5" opacity="0.4"/>
+        <line x1="162" y1="76" x2="162" y2="90" stroke="#A259F7" stroke-width="1.5" opacity="0.4"/>
+        <line x1="118" y1="104" x2="118" y2="90" stroke="#2EC4A0" stroke-width="1.5" opacity="0.4"/>
+        <line x1="162" y1="104" x2="162" y2="90" stroke="#FFD060" stroke-width="1.5" opacity="0.4"/>
+        <!-- center chip (square microprocessor) -->
+        <rect x="114" y="76" width="52" height="48" rx="4" fill="#0d0818" stroke="#A259F7" stroke-width="1.5" opacity="0.95"/>
+        <rect x="120" y="82" width="40" height="36" rx="2" fill="#100a20" stroke="#A259F7" stroke-width="0.5" opacity="0.5"/>
+        <!-- chip pin marks -->
+        <rect x="106" y="84" width="8" height="3" rx="1" fill="#A259F7" opacity="0.4"/>
+        <rect x="106" y="92" width="8" height="3" rx="1" fill="#A259F7" opacity="0.4"/>
+        <rect x="106" y="100" width="8" height="3" rx="1" fill="#A259F7" opacity="0.4"/>
+        <rect x="166" y="84" width="8" height="3" rx="1" fill="#A259F7" opacity="0.4"/>
+        <rect x="166" y="92" width="8" height="3" rx="1" fill="#A259F7" opacity="0.4"/>
+        <rect x="166" y="100" width="8" height="3" rx="1" fill="#A259F7" opacity="0.4"/>
+        <!-- S glyph on chip -->
+        <g transform="translate(140,100) scale(0.38)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#A259F7" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#5B8DEF" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3" fill="#5B8DEF"/>
+          <circle cx="3" cy="13" r="3" fill="#2EC4A0"/>
+        </g>
+        <!-- solder pad agent nodes -->
+        <circle cx="140" cy="14" r="10" fill="#0d0808" stroke="#D97757" stroke-width="1.5" opacity="0.9"/>
+        <text x="140" y="18" text-anchor="middle" font-family="system-ui" font-size="6" font-weight="600" fill="#D97757">Claude</text>
+        <circle cx="226" cy="90" r="10" fill="#080d18" stroke="#1a73e8" stroke-width="1.5" opacity="0.9"/>
+        <text x="226" y="94" text-anchor="middle" font-family="system-ui" font-size="6" font-weight="600" fill="#1a73e8">Gemini</text>
+        <circle cx="140" cy="166" r="10" fill="#0d0d0d" stroke="#888" stroke-width="1.5" opacity="0.8"/>
+        <text x="140" y="170" text-anchor="middle" font-family="system-ui" font-size="6" font-weight="600" fill="#888">Grok</text>
+        <circle cx="54" cy="90" r="10" fill="#0d0d0d" stroke="#555" stroke-width="1.5" opacity="0.8"/>
+        <text x="54" y="94" text-anchor="middle" font-family="system-ui" font-size="6" font-weight="600" fill="#555">Codex</text>
+        <!-- data bus sweep animation -->
+        <rect x="140" y="14" width="0" height="38" rx="1" fill="#D97757" opacity="0.4"><animate attributeName="width" values="0;3;0" dur="2s" repeatCount="indefinite" begin="0s"/><animate attributeName="x" values="140;139;140" dur="2s" repeatCount="indefinite" begin="0s"/></rect>
+        <text x="140" y="130" text-anchor="middle" font-family="monospace" font-size="7" fill="#ccc">synlynk</text>
+        <text x="140" y="140" text-anchor="middle" font-family="monospace" font-size="6" fill="#444">COORD-OS-v1</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <div class="field"><div class="field-label">Metaphor</div><div class="field-text">Printed circuit board / subway map. synlynk = the microchip. Agents = solder pads. Orthogonal copper traces carry deterministic state signals.</div></div>
+      <div class="field"><div class="field-label">Layout</div><div class="field-text">Strict orthogonal grid. All traces at 45° and 90° only. Inner data layer = rectangular bus terminuses. Agent pads on outer ring.</div></div>
+      <div class="field"><div class="field-label">Animation</div><div class="field-text">Data bus sweeps — entire copper segments light up sequentially. High-frequency LED blinks on terminals. Slow substrate glow breathing.</div></div>
+      <div class="field"><div class="field-label">Technical basis</div><div class="field-text">VLSI Manhattan routing algorithms. Same geometric constraints as physical chip design — positions synlynk as OS kernel / hardware layer.</div></div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:20px;padding:14px 18px;background:#0d0d18;border-radius:10px;border:1px solid #1a1a2e;font-size:11px;color:#555;line-height:1.6;">
+  <strong style="color:#5B8DEF;">Agy's note:</strong> Direction 2 (Celestial) maps most directly to the "coordination OS" narrative — the gravitational metaphor (agents drift into chaos without synlynk's gravity) is stronger for marketing copy than the PCB metaphor. Direction 1 (Connectome) is most biologically accurate. Direction 3 (PCB) is most technically literal.
+  <br><br>
+  <strong style="color:#2EC4A0;">Codex:</strong> Still building the SVG implementation — will surface when complete.
+  &nbsp;·&nbsp;
+  <strong style="color:#888;">Grok/Aurora:</strong> Dispatch failed (CLI needs <code>--single</code> flag fix). Image gen requires separate invocation.
+</div>
+
+</body>
+</html>

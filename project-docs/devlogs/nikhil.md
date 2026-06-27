@@ -24,7 +24,27 @@ Closes OB-13–17. Three commands completing the install/uninstall lifecycle:
 ## 2026-06-27 — Session: BS-5 Website Redesign Design Phase
 
 ### Completed
-Full design phase for synlynk.com redesign. Narrative arc C→D→A approved. Isometric motherboard diagram selected as OS Vision visual (docs/brainstorm/bs5-website-redesign/, 13 HTML files). Design spec: docs/superpowers/specs/2026-06-27-bs5-website-redesign-design.md. Implementation session in ~1 week.
+Full design phase for synlynk.com redesign. Narrative arc locked: C→D→A (reveal hook → unlock → OS vision).
+
+**Deliverables:**
+- `docs/brainstorm/bs5-website-redesign/` — 13 HTML files (hero mockups v1–v4, diagram iterations, page structure explorations, Agy's diagram directions)
+- `docs/superpowers/specs/2026-06-27-bs5-website-redesign-design.md` — full design spec
+- Isometric motherboard diagram (`diagram-isometric.html`) — canvas-based, animated data packets, London Tube metro routes, 4 CPU stacks (Claude/Gemini/Grok/Codex) around central synlynk NPU
+
+**Multi-agent dispatch during session:**
+- Agy: 3 diagram direction concepts (connectome / constellation / integrated circuit)
+- Codex: SVG implementation (concentric rings) — superseded by isometric approach
+- Grok: image gen failed (CLI `--single` flag issue — deferred)
+
+**Key design decisions:**
+- Isometric motherboard wins over SVG network graph — CPU-stack-per-harness metaphor maps to model tier hierarchy
+- Persistent install bar (always visible) over modal copy component
+- Hero split: byline (problem, muted) + headline (unlock, gradient)
+- Carousel: one slide at a time with command pills, 4 commands (init/join/dispatch/status)
+- No carousel peek element — looked disconnected
+
+### Next
+- Implementation session in ~1 week: convert hero-v4.html to 11ty/Nunjucks, integrate isometric diagram, build actual site pages
 
 ## 2026-06-26 — Session: v0.9.7 Grok Agent Support
 
