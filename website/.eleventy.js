@@ -1,11 +1,8 @@
 module.exports = function(eleventyConfig) {
   // Filters
   eleventyConfig.addFilter("dateFilter", (date) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit"
-    });
+    const d = date instanceof Date ? date : new Date(date + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
   });
 
   // Passthrough copies

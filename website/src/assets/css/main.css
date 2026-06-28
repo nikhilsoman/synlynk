@@ -1,5 +1,4 @@
 /* BS-5 Phase 1: design tokens + reset + nav + section primitives (from hero-v4 + spec) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   --bg:#0E0E0F;
@@ -139,12 +138,12 @@ section {
   margin: 0 auto;
 }
 
-#top, #carousel, #how, #vision, #waitlist {
+.section-dark {
   background: var(--bg);
   color: var(--text);
 }
 
-#relief, #features, #docs {
+.section-light {
   background: var(--bg-light);
   color: #1d1d1f;
 }
@@ -155,8 +154,11 @@ section h2 {
 }
 
 section p {
-  color: var(--muted);
   max-width: 640px;
+}
+
+#top p, #carousel p, #how p, #vision p, #waitlist p {
+  color: var(--muted);
 }
 
 /* Footer stub */
