@@ -61,11 +61,127 @@ title: synlynk
   </div>
 </section>
 
-<!-- Section 2: Terminal Carousel (dark) - Grok territory -->
+<!-- Section 2: Terminal Carousel (dark) -->
 <section id="carousel" class="section-carousel section-dark">
-  <div class="section-shell">
-    <h2>Carousel shell</h2>
-    <p>Terminal carousel (init / join / dispatch / status) — Phase 2 content + JS.</p>
+  <div class="carousel-label">synlynk in action</div>
+  <h2 class="carousel-head">One command. Four agents. One project.</h2>
+  <p class="carousel-sub">Each slide shows a different dimension of the workgroup in your terminal.</p>
+
+  <div class="carousel-container">
+    <div class="carousel-track" id="carousel-track">
+
+      <!-- Slide 1: init -->
+      <div class="carousel-slide active" data-slide="0">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — init</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk init</span>
+<br>
+<span class="t-out">? Project name: </span><span class="t-val">my-ai-project</span>
+<span class="t-out">? Team or solo? </span><span class="t-val">team</span>
+<span class="t-out">? Primary agent CLI installed: </span><span class="t-val">claude</span>
+<span class="t-out">? Budget limit (USD/session): </span><span class="t-val">5.00</span>
+<br>
+<span class="t-ok">✓ Created  project-docs/roadmap.md</span>
+<span class="t-ok">✓ Created  project-docs/memory.md</span>
+<span class="t-ok">✓ Created  project-docs/todo.md</span>
+<span class="t-ok">✓ Wrote    CLAUDE.md · GEMINI.md · AGENTS.md</span>
+<span class="t-ok">✓ Config   .synlynk/config.json  →  limit: $5.00</span>
+<br>
+<span class="t-out">Ready. Run <span class="t-arg">synlynk exec claude</span> to start.</span>
+        </div>
+      </div>
+
+      <!-- Slide 2: join -->
+      <div class="carousel-slide" data-slide="1">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — join</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk join</span> <span class="t-flag">--scan</span>
+<br>
+<span class="t-out">Scanning repository…</span>
+<span class="t-out">  Found  63 source files · 4 test suites · 1 CI workflow</span>
+<span class="t-out">  Stack  TypeScript · React · Prisma · PostgreSQL</span>
+<br>
+<span class="t-ok">✓ Generating memory.md from codebase…</span>
+<span class="t-out">  Architecture  SPA + REST API + Postgres</span>
+<span class="t-out">  Entities      User · Project · Job · Agent</span>
+<span class="t-out">  Open items    14 TODOs across 8 files</span>
+<br>
+<span class="t-ok">✓ Created  project-docs/  (roadmap · todo · memory)</span>
+<span class="t-ok">✓ Wrote    CLAUDE.md with full stack context</span>
+<span class="t-out">  Team members  nikhil · alex · priya</span>
+<span class="t-ok">✓ Ready to coordinate across 3 teammates.</span>
+        </div>
+      </div>
+
+      <!-- Slide 3: dispatch -->
+      <div class="carousel-slide" data-slide="2">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — dispatch</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk dispatch</span> <span class="t-arg">claude agy codex</span> \
+<span style="color:#333;">    </span><span class="t-flag">--task</span> <span class="t-val">"implement auth flow"</span> \
+<span style="color:#333;">    </span><span class="t-flag">--story</span> <span class="t-val">SL-42</span> <span class="t-flag">--context-mode</span> <span class="t-val">team</span>
+<br>
+<span class="t-out">Injecting context snapshot → 2,341 tokens</span>
+<span class="t-out">  memory.md · roadmap.md · todo.md · devlog/nikhil</span>
+<br>
+<span class="t-ok">▶ [job-a3f9]</span> <span class="t-arg">claude</span>  <span class="t-out">dispatched  PID 48201</span>
+<span class="t-ok">▶ [job-b7c2]</span> <span class="t-arg">agy   </span>  <span class="t-out">dispatched  PID 48207</span>
+<span class="t-ok">▶ [job-d1e4]</span> <span class="t-arg">codex </span>  <span class="t-out">dispatched  PID 48213</span>
+<br>
+<span class="t-ok">✓ 3 agents running in parallel — background</span>
+<span class="t-out">  synlynk logs --job job-a3f9   to follow</span>
+        </div>
+      </div>
+
+      <!-- Slide 4: status -->
+      <div class="carousel-slide" data-slide="3">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — status</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk status</span>
+<br>
+<span class="t-out">  JOB        AGENT   STATUS   </span><span class="t-ok"> DONE</span><span class="t-out"> / RUNNING   TOKENS    COST</span>
+<span class="t-out">  ─────────────────────────────────────────────────────</span>
+<span class="t-out">  job-a3f9   </span><span class="t-arg">claude</span><span class="t-out">  RUNNING  12m 04s             —        —</span>
+<span class="t-ok">  job-b7c2   agy     DONE     08m 31s        52,500   $0.48</span>
+<span class="t-out">  job-d1e4   </span><span class="t-arg">codex</span><span class="t-out">   RUNNING  09m 17s             —        —</span>
+<br>
+<span class="t-out">  Budget Pulse  ──────────────────────────────────────</span>
+<span class="t-out">  session   $0.48 / $5.00   </span><span class="t-ok">████</span><span class="t-out">░░░░░░░░░░  10%</span>
+<span class="t-out">  today     $1.24 / $20.00  </span><span class="t-ok">██</span><span class="t-out">░░░░░░░░░░░░  6%</span>
+<br>
+<span class="t-ok">✓ All agents within quota  ·  state.db last write 3s ago</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Pills + dots -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:16px;">
+      <div style="display:flex;gap:8px;">
+        <button class="cmd-pill active" data-pill="0">init</button>
+        <button class="cmd-pill" data-pill="1">join</button>
+        <button class="cmd-pill" data-pill="2">dispatch</button>
+        <button class="cmd-pill" data-pill="3">status</button>
+      </div>
+      <div class="slide-nav" id="slide-nav">
+        <div class="slide-dot active" data-dot="0"></div>
+        <div class="slide-dot" data-dot="1"></div>
+        <div class="slide-dot" data-dot="2"></div>
+        <div class="slide-dot" data-dot="3"></div>
+      </div>
+    </div>
   </div>
 </section>
 

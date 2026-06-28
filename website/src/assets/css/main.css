@@ -707,6 +707,122 @@ footer a:hover {
 .t-err { color: #ff6b6b; }
 .t-prompt { color: var(--purple); }
 
+/* ─── SECTION 2: TERMINAL CAROUSEL (Section 2 — Grok) ─── */
+.section-carousel {
+  padding: 80px 48px;
+  background: linear-gradient(180deg, #0E0E0F 0%, #0a0a10 100%);
+  position: relative;
+  overflow: hidden;
+}
+.section-carousel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(to bottom, rgba(162,89,247,0.3), transparent);
+}
+.carousel-label {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--purple);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.carousel-head {
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+  letter-spacing: -0.5px;
+}
+.carousel-sub {
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 44px;
+}
+
+.carousel-container {
+  max-width: 740px;
+  margin: 0 auto;
+  position: relative;
+}
+.carousel-track {
+  position: relative;
+  min-height: 260px;
+}
+
+/* Use absolute + opacity for true fade between slides (no jump) */
+.carousel-slide,
+.terminal-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #0d0d12;
+  border: 1px solid rgba(162,89,247,0.25);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(162,89,247,0.08), 0 12px 40px rgba(0,0,0,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+.carousel-slide.active,
+.terminal-slide.active {
+  position: relative;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.slide-nav {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.slide-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #222;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.slide-dot.active {
+  background: var(--purple);
+  width: 20px;
+  border-radius: 3px;
+}
+
+.cmd-pill {
+  background: transparent;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.cmd-pill:hover {
+  border-color: #444;
+  color: #888;
+}
+.cmd-pill.active {
+  border-color: rgba(162,89,247,0.5);
+  color: var(--purple);
+  background: rgba(162,89,247,0.06);
+}
+
 /* Section 5: Features */
 .section-features {
   background: var(--bg-light);
