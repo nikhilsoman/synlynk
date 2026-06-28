@@ -5,3 +5,4 @@ _site/
 .DS_Store
 src/blog/posts/
 src/changelog.md
+src/assets/brainstorm/

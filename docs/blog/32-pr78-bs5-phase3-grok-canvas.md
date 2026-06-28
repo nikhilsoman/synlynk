@@ -14,6 +14,12 @@ Phase 2 (Agy + Grok) delivered the Tagline Hero, Relief, How-It-Works, Features 
 None. Pure implementation of the Section 6 spec handed off from the design doc. The isometric motherboard metaphor (NPU as synlynk core + four harness CPU stacks + London Tube L-shaped metro routing) was locked in the brainstorm and spec; this PR simply ported it faithfully into the live 11ty site.
 
 ## What This PR Shipped
+
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-diagram-impl/diagram-motherboard.html" title="Motherboard diagram design" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Motherboard diagram design</figcaption>
+</figure>
+
 - Replaced the `#vision` placeholder shell in `website/src/index.njk` with the exact two-column layout from the task:
   - Left: `.section-label.dark` ("The coordination layer"), `.section-title`, `.section-body`, and `.vision-stats` row (4 / agents, 0 / deps, MIT / license) using `.stat-item > .stat-value + .stat-label`.
   - Right: `.vision-canvas-wrap` containing `<canvas id="motherboard-canvas" width="520" height="460">`.

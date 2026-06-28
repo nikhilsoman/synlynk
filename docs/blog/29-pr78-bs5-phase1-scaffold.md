@@ -14,6 +14,17 @@ At the end of v0.9.8 (health pulse + lifecycle commands), the CLI was hardened f
 BS-5 is the first concrete step toward a real synlynk.com. This moves synlynk from "CLI tool with project-docs" to "product with a face". The website/ directory is a standalone 11ty v3 site (parallel to legacy site/) explicitly scoped as design-first. Phase 1 (Grok) delivers the scaffold, tokens, structure, and handoff surface so that Phase 2 (Agy) can focus on content fidelity, full visual system, and subpages without fighting structural or specificity problems.
 
 ## What This PR Shipped
+
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/visual-direction.html" title="Visual direction study" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Visual direction study</figcaption>
+</figure>
+
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/page-structure-bs5.html" title="Page structure plan" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Page structure plan</figcaption>
+</figure>
+
 - `website/` 11ty v3 project:
   - `package.json` (eleventy ^3, scripts for build/serve)
   - `.eleventy.js` with passthrough, dateFilter, stub collections

@@ -114,7 +114,10 @@ This means GitHub Projects V2, Jira, and Linear become **bring-your-own display 
 
 The interface positioning question was the most strategically important of the session. Three options considered:
 
-**[See: `docs/brainstorm/hybrid-workgroup-imperatives/interface-positioning.html`]**
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/hybrid-workgroup-imperatives/interface-positioning.html" title="Interface positioning" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Interface positioning</figcaption>
+</figure>
 
 - **A — Invisible OS:** Background daemon, zero interface gravity. Users never see synlynk during agent work. Forgettable.
 - **B — Launcher Hub:** synlynk TUI is your home base; you launch everything from it. Strong gravity but fights developer muscle memory.
@@ -144,7 +147,10 @@ synlynk launch claude --story 42 # starts Claude CLI with pre-loaded context
 
 ### The Full Architecture
 
-**[See: `docs/brainstorm/hybrid-workgroup-imperatives/architecture.html`]**
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/hybrid-workgroup-imperatives/architecture.html" title="Workgroup architecture" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Workgroup architecture</figcaption>
+</figure>
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -169,7 +175,10 @@ synlynk launch claude --story 42 # starts Claude CLI with pre-loaded context
 
 ### The Evolution Path
 
-**[See: `docs/brainstorm/hybrid-workgroup-imperatives/dispatch-evolution.html`]**
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/hybrid-workgroup-imperatives/dispatch-evolution.html" title="Dispatch evolution" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Dispatch evolution</figcaption>
+</figure>
 
 The same shell commands get more capable at each release:
 

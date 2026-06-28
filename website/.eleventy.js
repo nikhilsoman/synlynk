@@ -36,6 +36,34 @@ module.exports = function(eleventyConfig) {
     }, null, 2));
   }
 
+  // Dynamically copy docs/brainstorm/**/*.html files into src/assets/brainstorm/
+  const brainstormSourceDir = path.join(__dirname, '../docs/brainstorm');
+  const brainstormTargetDir = path.join(__dirname, 'src/assets/brainstorm');
+
+  if (fs.existsSync(brainstormSourceDir)) {
+    // Clear existing copied files in targetDir to avoid stale ones
+    if (fs.existsSync(brainstormTargetDir)) {
+      fs.rmSync(brainstormTargetDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(brainstormTargetDir, { recursive: true });
+
+    function copyRecursive(src, dest) {
+      const items = fs.readdirSync(src);
+      for (const item of items) {
+        const srcPath = path.join(src, item);
+        const destPath = path.join(dest, item);
+        const stat = fs.statSync(srcPath);
+        if (stat.isDirectory()) {
+          fs.mkdirSync(destPath, { recursive: true });
+          copyRecursive(srcPath, destPath);
+        } else if (stat.isFile() && item.endsWith('.html')) {
+          fs.copyFileSync(srcPath, destPath);
+        }
+      }
+    }
+    copyRecursive(brainstormSourceDir, brainstormTargetDir);
+  }
+
   // Dynamically copy and process CHANGELOG.md
   const changelogPath = path.join(__dirname, '../CHANGELOG.md');
   const targetChangelogPath = path.join(__dirname, 'src/changelog.md');
