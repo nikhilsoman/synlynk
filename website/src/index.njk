@@ -287,16 +287,62 @@ title: synlynk
 
 <!-- Section 7: Docs (light) -->
 <section id="docs" class="section-docs section-light">
-  <div class="section-shell">
-    <h2>Docs shell</h2>
-    <p>Quickstart, reference, manual cards. Phase 2/3.</p>
+  <div class="docs-inner">
+    <div class="section-label">Documentation</div>
+    <h2 class="section-title" style="margin-top: 10px; margin-bottom: 0;">Everything you need to get started.</h2>
+    
+    <div class="docs-grid">
+      <div class="doc-card">
+        <div class="doc-card-thumb">⏱️</div>
+        <h3 class="doc-card-title">Quick Start Guide</h3>
+        <p class="doc-card-body">Get synlynk up and running in under five minutes with our step-by-step setup guide and example project.</p>
+        <a href="/docs/#quick-start" class="doc-card-link">Read Guide →</a>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-thumb">💻</div>
+        <h3 class="doc-card-title">Command Reference</h3>
+        <p class="doc-card-body">Detailed syntax and examples for every command including exec, join, dispatch, status, and doctor.</p>
+        <a href="/docs/#exec" class="doc-card-link">View Reference →</a>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-thumb">📖</div>
+        <h3 class="doc-card-title">The Manual</h3>
+        <p class="doc-card-body">A deep dive into state.db schemas, agent role definitions, budget enforcement, and relay network architecture.</p>
+        <a href="/docs/" class="doc-card-link">Explore Manual →</a>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- Section 8: Waitlist (dark) -->
+<!-- Section 8: Waitlist + Blog teasers (dark) -->
 <section id="waitlist" class="section-waitlist section-dark">
-  <div class="section-shell">
-    <h2>Waitlist / Early access shell</h2>
-    <p>Form stub + trust line. Phase 2/3.</p>
+  <div class="waitlist-inner">
+    <div class="waitlist-content">
+      <div class="section-label dark">Early access</div>
+      <h2 class="section-title" style="margin-top: 10px; margin-bottom: 12px; color: #fff;">Get early access to synlynk.com</h2>
+      <p class="section-body" style="margin: 0 auto; color: var(--muted);">Account management, team workspaces, and hosted dispatch — coming soon.</p>
+      
+      <form class="waitlist-form">
+        <input type="email" class="waitlist-input" placeholder="Enter your email address" required>
+        <button type="submit" class="btn-teal">Request Access</button>
+      </form>
+      
+      <div class="waitlist-thanks" style="display: none;">
+        Thanks — you are on the list. (synlynk.com account portal coming soon)
+      </div>
+    </div>
+
+    <!-- Blog Teasers (3 most recent posts) -->
+    <div class="blog-teasers">
+      {% for post in collections.posts.slice(0, 3) %}
+        <article class="blog-teaser-card">
+          <div class="blog-teaser-date">{{ post.date | dateFilter }}</div>
+          <h3 class="blog-teaser-title">{{ post.data.title }}</h3>
+          <p class="blog-teaser-excerpt">{{ post.templateContent | striptags | truncate(120) }}</p>
+          <a href="{{ post.url }}" class="blog-teaser-link">Read Post →</a>
+        </article>
+      {% endfor %}
+    </div>
   </div>
 </section>
+

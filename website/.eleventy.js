@@ -1,4 +1,64 @@
+const fs = require('fs');
+const path = require('path');
+
 module.exports = function(eleventyConfig) {
+  eleventyConfig.setUseGitIgnore(false);
+
+  // Dynamically copy docs/blog/*.md files into src/blog/posts/
+  const sourceDir = path.join(__dirname, '../docs/blog');
+  const targetDir = path.join(__dirname, 'src/blog/posts');
+
+  if (fs.existsSync(sourceDir)) {
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    // Clear existing copied files in targetDir to avoid stale ones
+    const existingFiles = fs.readdirSync(targetDir);
+    for (const file of existingFiles) {
+      if (file.endsWith('.md')) {
+        fs.unlinkSync(path.join(targetDir, file));
+      }
+    }
+
+    const files = fs.readdirSync(sourceDir);
+    for (const file of files) {
+      if (file.endsWith('.md') && file !== 'README.md') {
+        fs.copyFileSync(path.join(sourceDir, file), path.join(targetDir, file));
+      }
+    }
+
+    // Write posts.json directory data file
+    const postsJsonPath = path.join(targetDir, 'posts.json');
+    fs.writeFileSync(postsJsonPath, JSON.stringify({
+      layout: "blog-post.njk",
+      permalink: "/blog/{{ page.fileSlug }}/"
+    }, null, 2));
+  }
+
+  // Dynamically copy and process CHANGELOG.md
+  const changelogPath = path.join(__dirname, '../CHANGELOG.md');
+  const targetChangelogPath = path.join(__dirname, 'src/changelog.md');
+  if (fs.existsSync(changelogPath)) {
+    let content = fs.readFileSync(changelogPath, 'utf-8');
+    content = content.replace(/^# Changelog\r?\n/, '');
+
+    // Replace version headers
+    // Example: ## [0.9.8] - 2026-06-27
+    content = content.replace(/##\s+\[([^\]]+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/g, (match, version, date) => {
+      return `<div class="changelog-version-header"><span class="changelog-version">v${version}</span><span class="changelog-date">${date}</span></div>`;
+    });
+
+    // Replace section headers
+    content = content.replace(/###\s+Added/gi, '<h3 class="tag-added">Added</h3>');
+    content = content.replace(/###\s+Fixed/gi, '<h3 class="tag-fixed">Fixed</h3>');
+    content = content.replace(/###\s+Changed/gi, '<h3 class="tag-changed">Changed</h3>');
+
+    // Prepend frontmatter
+    const frontmatter = `---\nlayout: changelog-layout.njk\ntitle: Changelog\n---\n\n`;
+    fs.writeFileSync(targetChangelogPath, frontmatter + content);
+  }
+
   // Filters
   eleventyConfig.addFilter("dateFilter", (date) => {
     if (!date) return '';
@@ -9,10 +69,13 @@ module.exports = function(eleventyConfig) {
   // Passthrough copies
   eleventyConfig.addPassthroughCopy("src/assets");
 
-  // Blog collection stub (wired to docs/blog in later phases)
+  // Blog collection
   eleventyConfig.addCollection("posts", (collectionApi) => {
-    // Placeholder: real posts pulled via glob or data in Phase 3+
-    return collectionApi.getFilteredByGlob("src/blog/*.md").reverse();
+    return collectionApi.getFilteredByGlob("src/blog/posts/*.md").sort((a, b) => {
+      const dateA = a.date || new Date(0);
+      const dateB = b.date || new Date(0);
+      return dateB - dateA;
+    });
   });
 
   return {
@@ -27,3 +90,4 @@ module.exports = function(eleventyConfig) {
     markdownTemplateEngine: "njk"
   };
 };
+

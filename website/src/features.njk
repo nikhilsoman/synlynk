@@ -1,0 +1,70 @@
+---
+layout: base.njk
+title: Features
+---
+
+{% import "macros.njk" as macros %}
+
+<section class="section-features-page section-dark">
+  <div class="features-page-inner">
+    <div class="hook-label">Capability Grid</div>
+    <h1 class="features-headline">Every feature you need to run a <span class="grad1">workgroup</span>.</h1>
+    <p class="features-sub">synlynk provides a robust coordination layer and runtime environment for multi-agent development.</p>
+
+    <div class="features-grid">
+      {{ macros.featCard(
+        "purple",
+        "🚀",
+        "Dispatch",
+        "Run a task across multiple agents in parallel. Each agent gets the same context snapshot. Results stream into a unified log with per-agent cost attribution.",
+        "synlynk dispatch claude agy codex \\\n  --task \"review PR #47\" \\\n  --story SL-12 --context-mode team",
+        ["parallel execution", "background jobs", "story routing"]
+      ) }}
+
+      {{ macros.featCard(
+        "blue",
+        "🧠",
+        "Context Injection",
+        "Before every exec or dispatch, synlynk builds a context snapshot from your project docs — memory, roadmap, todos, and teammate devlogs — and injects it into the agent's prompt.",
+        "synlynk context --mode team\n# → memory + roadmap + devlog/nikhil\n# → 2,341 tokens injected",
+        ["memory.md", "roadmap", "devlogs"]
+      ) }}
+
+      {{ macros.featCard(
+        "teal",
+        "🛡",
+        "Sentinel Monitoring",
+        "Real-time pattern detection on agent output. Flags FLATLINE (3 consecutive failures), SUCCESS_LOOP (identical outputs), QUOTA_EXHAUSTED, and other anomalies. Alerts go to sentinel.md.",
+        "synlynk sentinel --watch\n⚠ SUCCESS_LOOP: job-d1e4\n  3× identical output detected",
+        ["loop detection", "quota alerts", "flatline"]
+      ) }}
+
+      {{ macros.featCard(
+        "orange",
+        "👤",
+        "Agent Profiles",
+        "Each agent has a profile describing its strengths, rate limits, and image-gen capabilities. Profiles inform dispatch routing — Imagen tasks go to Agy, DALL-E to Codex, Aurora to Grok.",
+        "synlynk profile set agy \\\n  --role image-gen \\\n  --model imagen-3",
+        ["role assignment", "model routing", "image gen"]
+      ) }}
+
+      {{ macros.featCard(
+        "teal",
+        "💰",
+        "Budget Tracking",
+        "Enforce global and session budget limits in USD before dispatches. Monitors real-time usage and interrupts executing processes if cost threshold is breached.",
+        "synlynk budget set --session 5.00 --daily 20.00\n# → session limit: $5.00\n# → daily limit: $20.00",
+        ["cost control", "thresholds", "guardrails"]
+      ) }}
+
+      {{ macros.featCard(
+        "blue",
+        "👥",
+        "Team Mode",
+        "Synchronize event logs, task state, and decision ledgers across developers and machines using signed Git-based logs. Peer consensus without single points of failure.",
+        "synlynk join --workspace project-alpha\n# → Scanning repository...\n# → Ready to coordinate across 3 teammates",
+        ["multi-user", "decentralized", "git sync"]
+      ) }}
+    </div>
+  </div>
+</section>

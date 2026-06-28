@@ -59,8 +59,26 @@
     });
   }
 
+  function initWaitlistForm() {
+    const form = document.querySelector('.waitlist-form');
+    if (!form) return;
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = form.querySelector('.waitlist-input');
+      if (input && !input.value.trim()) return;
+
+      form.style.display = 'none';
+      const thanksDiv = document.querySelector('.waitlist-thanks');
+      if (thanksDiv) {
+        thanksDiv.style.display = 'block';
+      }
+    });
+  }
+
   function init() {
     initCopyButtons();
+    initWaitlistForm();
   }
 
   if (document.readyState === 'loading') {
@@ -69,3 +87,4 @@
     init();
   }
 })();
+

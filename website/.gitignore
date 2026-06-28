@@ -3,3 +3,5 @@ _site/
 .cache/
 *.log
 .DS_Store
+src/blog/posts/
+src/changelog.md
