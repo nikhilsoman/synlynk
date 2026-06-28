@@ -3,152 +3,328 @@ layout: base.njk
 title: Features
 ---
 
-{% set windowRels = releases | windowReleases %}
-
-{% set osSections = [
-  { key: "kernel",     label: "Kernel — Context Engine" },
-  { key: "filesystem", label: "Filesystem — State & Telemetry" },
-  { key: "ipc",        label: "IPC — Agent Files & Coordination" },
-  { key: "scheduler",  label: "Scheduler — Dispatch" }
-] %}
-
-{% set userSections = [
-  { key: "context-management",  label: "Context Management" },
-  { key: "cost-visibility",     label: "Cost & Visibility" },
-  { key: "agent-coordination",  label: "Agent Coordination" },
-  { key: "autonomy-dispatch",   label: "Autonomy & Dispatch" }
-] %}
-
-<div class="container features-page">
-
-  <header class="features-header">
-    <div class="section-label" style="color: var(--accent-teal)">Capabilities</div>
-    <h1>Features</h1>
-    <p>Everything synlynk provides across releases — from context injection to autonomous dispatch.</p>
-
-    <div class="view-toggle">
-      <button id="btn-os" class="active" onclick="setView('os')">OS Layer view</button>
-      <button id="btn-user" onclick="setView('user')">User-facing view</button>
+<section class='section-features-hero section-dark'>
+  <div class='features-hero-inner'>
+    <div class='hook-label'>CAPABILITIES</div>
+    <h1 class='features-headline'>Features</h1>
+    <p class='features-sub'>Everything synlynk provides across releases — from context injection to autonomous dispatch.</p>
+    <div class='features-toggle'>
+      <button class='toggle-btn active' data-view='layer'>OS Layer view</button>
+      <button class='toggle-btn' data-view='user'>User-facing view</button>
     </div>
-  </header>
+  </div>
+</section>
 
-  <div class="feature-matrix-wrapper">
-
-    {# OS LAYER VIEW #}
-    <table class="feature-matrix" id="view-os">
+<section class='section-matrix section-light'>
+  <div class='matrix-inner'>
+    <table class='feature-matrix'>
       <thead>
         <tr>
-          <th class="feature-col">Feature</th>
-          {% for rel in windowRels %}
-            <th class="{% if rel.current %}current-col{% endif %}">
-              <span class="release-label {% if not rel.current %}muted{% endif %}">{{ rel.label }}</span>
-              {% if rel.current %}
-                <div class="release-actions">
-                  <a href="/releases/v{{ rel.minor }}/" class="install-pill">↓ install</a>
-                  <a href="/releases/v{{ rel.minor }}/" class="changelog-link">changelog →</a>
-                </div>
-              {% else %}
-                <a href="/releases/v{{ rel.minor }}/" class="changelog-link" style="font-size:10px">changelog →</a>
-              {% endif %}
-            </th>
-          {% endfor %}
+          <th class='col-feature'>Feature</th>
+          <th class='col-version current'>
+            <div class='version-label'>v0.9.x</div>
+            <a href='https://install.synlynk.com' class='btn-install'>↓ install</a>
+            <a href='/changelog/#v0.9' class='changelog-link'>changelog →</a>
+          </th>
+          <th class='col-version'><div class='version-label'>v0.8.x</div><a href='/changelog/#v0.8' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.7.x</div><a href='/changelog/#v0.7' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.6.x</div><a href='/changelog/#v0.6' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.5.x</div><a href='/changelog/#v0.5' class='changelog-link'>changelog →</a></th>
         </tr>
       </thead>
       <tbody>
-        {% for section in osSections %}
-          <tr class="matrix-section-header">
-            <td colspan="{{ windowRels.length + 1 }}">{{ section.label }}</td>
-          </tr>
-          {% for feature in features %}
-            {% if feature.os_layer == section.key %}
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/{{ feature.slug }}/">
-                    {{ feature.name }}
-                    {% if feature.introduced == windowRels[0].minor %}<span class="badge-new">new</span>{% endif %}
-                  </a>
-                  <span class="feature-subtitle">{{ feature.subtitle }}</span>
-                </td>
-                {% for rel in windowRels %}
-                  <td class="{% if rel.current %}current-col{% endif %}">
-                    {% if feature.introduced | featureAvailable(rel.minor) %}
-                      <span class="check-yes">✓</span>
-                    {% else %}
-                      <span class="check-no">—</span>
-                    {% endif %}
-                  </td>
-                {% endfor %}
-              </tr>
-            {% endif %}
-          {% endfor %}
-        {% endfor %}
-      </tbody>
-    </table>
-
-    {# USER-FACING VIEW #}
-    <table class="feature-matrix" id="view-user" style="display:none">
-      <thead>
-        <tr>
-          <th class="feature-col">Feature</th>
-          {% for rel in windowRels %}
-            <th class="{% if rel.current %}current-col{% endif %}">
-              <span class="release-label {% if not rel.current %}muted{% endif %}">{{ rel.label }}</span>
-              {% if rel.current %}
-                <div class="release-actions">
-                  <a href="/releases/v{{ rel.minor }}/" class="install-pill">↓ install</a>
-                  <a href="/releases/v{{ rel.minor }}/" class="changelog-link">changelog →</a>
-                </div>
-              {% else %}
-                <a href="/releases/v{{ rel.minor }}/" class="changelog-link" style="font-size:10px">changelog →</a>
-              {% endif %}
-            </th>
-          {% endfor %}
+        <!-- LAYER VIEW (OS Layer) -->
+        <tr class='group-row layer-view'><td colspan='6'>KERNEL — CONTEXT ENGINE</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Context injection</div><div class='feature-desc'>Reads project-docs/ into .synlynk/context.md before each exec</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
-      </thead>
-      <tbody>
-        {% for section in userSections %}
-          <tr class="matrix-section-header">
-            <td colspan="{{ windowRels.length + 1 }}">{{ section.label }}</td>
-          </tr>
-          {% for feature in features %}
-            {% if feature.user_theme == section.key %}
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/{{ feature.slug }}/">
-                    {{ feature.name }}
-                    {% if feature.introduced == windowRels[0].minor %}<span class="badge-new">new</span>{% endif %}
-                  </a>
-                  <span class="feature-subtitle">{{ feature.subtitle }}</span>
-                </td>
-                {% for rel in windowRels %}
-                  <td class="{% if rel.current %}current-col{% endif %}">
-                    {% if feature.introduced | featureAvailable(rel.minor) %}
-                      <span class="check-yes">✓</span>
-                    {% else %}
-                      <span class="check-no">—</span>
-                    {% endif %}
-                  </td>
-                {% endfor %}
-              </tr>
-            {% endif %}
-          {% endfor %}
-        {% endfor %}
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Multi-doc context</div><div class='feature-desc'>Merges memory.md + roadmap.md + todo.md into snapshot</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Per-job context scoping</div><div class='feature-desc'>Writes job context to .synlynk/contexts/&lt;job_id&gt;.md, not global</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>KERNEL — DISPATCH ENGINE</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Background dispatch</div><div class='feature-desc'>Spawns agent CLIs as background jobs with PID tracking</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Parallel multi-agent dispatch</div><div class='feature-desc'>Multiple agents in parallel with story-level coordination</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Force-agent flag</div><div class='feature-desc'>--force-agent bypasses routing heuristics</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>context-mode flag</div><div class='feature-desc'>--context-mode solo|team|full controls context injection scope</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>KERNEL — SENTINEL</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Flatline detection</div><div class='feature-desc'>Alerts when 3 consecutive runs share identical output + non-zero exit</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Success loop detection</div><div class='feature-desc'>Detects identical successful output (hallucination indicator)</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Quota exhausted pattern</div><div class='feature-desc'>Detects QUOTA_EXHAUSTED in agent output</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>VERIFY_SKIP compliance tag</div><div class='feature-desc'>Detects agents skipping verifications</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>COORDINATION — RELAY</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>SSE relay broker</div><div class='feature-desc'>synlynk relay start — live job stream across processes</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Budget pulse</div><div class='feature-desc'>Per-exec token+cost summary printed after each run</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>WORKSPACE</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk init</div><div class='feature-desc'>Bootstrap state.db + project-docs/ + agent directive files</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk join</div><div class='feature-desc'>Scan existing repo + auto-detect teammates</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Team mode</div><div class='feature-desc'>Multi-user devlogs + @username attribution in memory.md</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <!-- USER-FACING VIEW (regrouped, same features) -->
+        <tr class='group-row user-view'><td colspan='6'>INSTALL &amp; SETUP</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk init</div><div class='feature-desc'>Bootstrap state.db + project-docs/ + agent directive files</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk join</div><div class='feature-desc'>Scan existing repo + auto-detect teammates</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row user-view'><td colspan='6'>EXEC &amp; DISPATCH</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Context injection</div><div class='feature-desc'>Reads project-docs/ into .synlynk/context.md before each exec</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Multi-doc context</div><div class='feature-desc'>Merges memory.md + roadmap.md + todo.md into snapshot</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Per-job context scoping</div><div class='feature-desc'>Writes job context to .synlynk/contexts/&lt;job_id&gt;.md, not global</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Background dispatch</div><div class='feature-desc'>Spawns agent CLIs as background jobs with PID tracking</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Parallel multi-agent dispatch</div><div class='feature-desc'>Multiple agents in parallel with story-level coordination</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Force-agent flag</div><div class='feature-desc'>--force-agent bypasses routing heuristics</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>context-mode flag</div><div class='feature-desc'>--context-mode solo|team|full controls context injection scope</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row user-view'><td colspan='6'>MONITORING</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Flatline detection</div><div class='feature-desc'>Alerts when 3 consecutive runs share identical output + non-zero exit</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Success loop detection</div><div class='feature-desc'>Detects identical successful output (hallucination indicator)</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Quota exhausted pattern</div><div class='feature-desc'>Detects QUOTA_EXHAUSTED in agent output</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>VERIFY_SKIP compliance tag</div><div class='feature-desc'>Detects agents skipping verifications</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row user-view'><td colspan='6'>COORDINATION</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>SSE relay broker</div><div class='feature-desc'>synlynk relay start — live job stream across processes</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Budget pulse</div><div class='feature-desc'>Per-exec token+cost summary printed after each run</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Team mode</div><div class='feature-desc'>Multi-user devlogs + @username attribution in memory.md</div></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
       </tbody>
     </table>
-
   </div>
-
-  <div class="matrix-footer">
-    Older releases: <a href="/releases/">View full release history →</a>
-  </div>
-
-</div>
-
-<script>
-function setView(v) {
-  document.getElementById('view-os').style.display = v === 'os' ? '' : 'none';
-  document.getElementById('view-user').style.display = v === 'user' ? '' : 'none';
-  document.getElementById('btn-os').className = v === 'os' ? 'active' : '';
-  document.getElementById('btn-user').className = v === 'user' ? 'active' : '';
-}
-</script>
+</section>
