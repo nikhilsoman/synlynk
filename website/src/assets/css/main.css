@@ -1595,6 +1595,12 @@ footer a:hover {
   background: rgba(255, 255, 255, 0.03);
   color: #fff;
 }
+.sidebar-link.active {
+  color: var(--blue);
+  font-weight: 600;
+  background: rgba(91,141,239,0.08);
+  border-radius: 6px;
+}
 .docs-content-area {
   flex: 1;
   background: var(--bg);

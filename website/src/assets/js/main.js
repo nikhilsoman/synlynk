@@ -76,9 +76,47 @@
     });
   }
 
+  function initDocsSidebar() {
+    const sidebar = document.querySelector('.docs-sidebar');
+    if (!sidebar) return; // only runs on /docs/ page
+
+    const links = Array.from(sidebar.querySelectorAll('.sidebar-link'));
+    const sections = links.map(link => {
+      const id = link.getAttribute('href').replace('#', '');
+      return document.getElementById(id);
+    }).filter(Boolean);
+
+    // Highlight on click immediately
+    links.forEach(link => {
+      link.addEventListener('click', () => {
+        links.forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+      });
+    });
+
+    // Scroll-spy via IntersectionObserver
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          links.forEach(l => {
+            const matches = l.getAttribute('href') === '#' + id;
+            l.classList.toggle('active', matches);
+          });
+        }
+      });
+    }, {
+      rootMargin: '-80px 0px -60% 0px',
+      threshold: 0
+    });
+
+    sections.forEach(sec => observer.observe(sec));
+  }
+
   function init() {
     initCopyButtons();
     initWaitlistForm();
+    initDocsSidebar();
   }
 
   if (document.readyState === 'loading') {

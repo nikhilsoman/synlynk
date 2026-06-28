@@ -47,3 +47,5 @@
 | 2026-06-22c | nikhil | ~60 | ~160K / ~75K | ~$3.38 | Wave 2 dispatch (T4–T6) + merges · Release Agent brainstorm + spec · v0.9.2 shipped |
 | 2026-06-23 | nikhil | ~65 | ~170K / ~80K | ~$3.60 | TPM Agent brainstorm + spec · lifecycle-as-first-class-entity model · agent design principles · v0.8.x epic regrouped · brainstorm visuals saved |
 | 2026-06-28 | agy | ~1 | ~50K / ~5K | ~$0.25 | BS-5 website redesign (Phase 2): tagline hero, relief, how it works, feature spotlight templates, macros, and CSS design system |
+| 2026-06-28 | agy | ~10 | ~15K / ~2K | ~$0.08 | BS-5 docs sidebar scroll-spy implementation with IntersectionObserver |
+
