@@ -1013,6 +1013,10 @@ footer a:hover {
   padding: 96px 48px;
   color: #1d1d1f;
 }
+.section-docs .section-title {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
 .docs-inner {
   max-width: 1080px;
   margin: 0 auto;
@@ -1083,6 +1087,15 @@ footer a:hover {
   padding: 96px 48px;
   text-align: center;
 }
+.section-waitlist .section-title {
+  margin-top: 10px;
+  margin-bottom: 12px;
+  color: #fff;
+}
+.section-waitlist .section-body {
+  margin: 0 auto;
+  color: var(--muted);
+}
 .waitlist-inner {
   max-width: 1080px;
   margin: 0 auto;
@@ -1134,6 +1147,10 @@ footer a:hover {
   font-size: 15px;
   color: var(--teal);
   font-weight: 500;
+  display: none;
+}
+.waitlist-thanks.visible {
+  display: block;
 }
 .blog-teasers {
   display: grid;

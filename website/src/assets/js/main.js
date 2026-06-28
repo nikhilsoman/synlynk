@@ -71,7 +71,7 @@
       form.style.display = 'none';
       const thanksDiv = document.querySelector('.waitlist-thanks');
       if (thanksDiv) {
-        thanksDiv.style.display = 'block';
+        thanksDiv.classList.add('visible');
       }
     });
   }
