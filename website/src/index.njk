@@ -3,20 +3,65 @@ layout: base.njk
 title: synlynk
 ---
 
-<!-- 8 section shells per Phase 1 spec: #top #carousel #relief #how #features #vision #docs #waitlist -->
+{% import "macros.njk" as macros %}
 
+<!-- Section 1: Tagline Hero (dark, 100vh) -->
 <section id="top" class="section-tagline section-dark">
-  <div class="section-shell">
-    <div>Multi-agent coordination</div>
-    <p class="hero-byline">Most developers use one agent at a time.</p>
-    <h1 class="hero-headline">
-      <span>synlynk</span> lets you run<br>a workgroup.
-    </h1>
-    <p>Spread the work, spread the cost. Different models, different strengths, <strong>one shared project state</strong>.</p>
-    <p>(Phase 1 shell — full hero in Phase 2)</p>
+  <div class="hook-label">Multi-agent coordination</div>
+
+  <p class="hero-byline">Most developers use one agent at a time.</p>
+
+  <h1 class="hero-headline">
+    <span class="grad1">synlynk</span> lets you run<br>a workgroup.
+  </h1>
+
+  <p class="hero-sub">
+    Spread the work, spread the cost.
+    Different models, different strengths,
+    <strong>one shared project state</strong>.
+  </p>
+
+  <div class="hero-cta-row">
+    <a href="/#waitlist" class="btn-primary">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M10 2v16M2 10l8 8 8-8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Install synlynk
+    </a>
+    <a href="/#docs" class="btn-ghost">Read the docs</a>
+  </div>
+
+  <div class="install-bar">
+    <div class="install-cmd">
+      <span class="install-prefix">$</span>
+      curl -fsSL install.synlynk.com | bash
+    </div>
+    <button class="copy-btn" data-copy="curl -fsSL install.synlynk.com | bash">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><rect x="7" y="3" width="10" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 6H3a1 1 0 00-1 1v10a1 1 0 001 1h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      copy
+    </button>
+  </div>
+
+  <div class="agent-logos">
+    <span>Works with</span>
+    <div class="agent-chip chip-claude">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" fill="currentColor"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M14.4 4.2l-1.4 1.4M4.2 14.4l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Claude
+    </div>
+    <div class="agent-chip chip-gemini">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 2 C10 2 12 8.5 16 10 C12 11.5 10 18 10 18 C10 18 8 11.5 4 10 C8 8.5 10 2 10 2Z" fill="currentColor"/></svg>
+      Gemini
+    </div>
+    <div class="agent-chip chip-grok">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Grok
+    </div>
+    <div class="agent-chip chip-codex">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M4 18c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Codex
+    </div>
   </div>
 </section>
 
+<!-- Section 2: Terminal Carousel (dark) - Grok territory -->
 <section id="carousel" class="section-carousel section-dark">
   <div class="section-shell">
     <h2>Carousel shell</h2>
@@ -24,28 +69,89 @@ title: synlynk
   </div>
 </section>
 
+<!-- Section 3: Relief (light bg) -->
 <section id="relief" class="section-relief section-light">
-  <div class="section-shell">
+  <div class="relief-inner">
     <div class="section-label">The multi-agent unlock</div>
     <h2 class="section-title">You're not limited to one agent.<br>You just needed a harness.</h2>
-    <p class="section-body">Relief section (light) — context, costs, sentinel cards. Phase 2.</p>
+    <p class="section-body">Every AI CLI is powerful in isolation. But they don't share context, don't know about each other, and don't report costs in one place. synlynk wires them up.</p>
+
+    <div class="relief-grid">
+      {{ macros.reliefCard("🔀", "Context injection", "Every agent gets your project memory, roadmap, and current todos — automatically, before each invocation.") }}
+      {{ macros.reliefCard("📊", "Unified cost tracking", "Token counts, per-agent spend, and budget limits in one dashboard. No more surprise bills.") }}
+      {{ macros.reliefCard("🛡", "Sentinel monitoring", "Detects hallucination loops, quota hits, and consecutive failures. Alerts before they compound.") }}
+    </div>
+
+    <div class="cost-callout">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5 5.5.8-4 3.9.9 5.5L10 14.5l-4.9 2.7.9-5.5L2 7.8l5.5-.8z" fill="#2EC4A0"/></svg>
+      <span><strong>Claude alone:</strong> ~$0.015/1K tokens &nbsp;·&nbsp; <strong>Distributed across 3 agents:</strong> ~$0.006/1K tokens effective rate &nbsp;·&nbsp; <strong>~60% cheaper effective rate when distributed across 3 agents</strong></span>
+    </div>
   </div>
 </section>
 
+<!-- Section 4: How It Works (dark) -->
 <section id="how" class="section-how section-dark">
-  <div class="section-shell">
-    <h2>How it works shell</h2>
-    <p>4-step: Install → Init → Exec → Dispatch. Phase 2.</p>
+  <div class="how-inner">
+    <div class="section-label dark">Getting started</div>
+    <h2 class="section-title">Up in four commands.</h2>
+    <p class="section-body">synlynk is a single-file Python CLI. No build step. No dependencies. Works with whatever AI CLIs you already have installed.</p>
+
+    <div class="steps-grid">
+      {{ macros.stepCard("STEP 01", "Install", "Single curl-pipe install. Puts the binary in ~/.synlynk/bin/ and updates your PATH.", "curl -fsSL install.synlynk.com | bash") }}
+      {{ macros.stepCard("STEP 02", "Init", "Bootstrap your project — creates project-docs/, config, and AI instruction files.", "synlynk init") }}
+      {{ macros.stepCard("STEP 03", "Exec", "Run any AI CLI through synlynk — context is injected, costs tracked, output monitored.", "synlynk exec claude") }}
+      {{ macros.stepCard("STEP 04", "Dispatch", "Parallelize tasks across multiple agents from one command. Results flow into shared project state.", "synlynk dispatch \\\n  claude agy codex \\\n  --task \"ship it\"") }}
+    </div>
   </div>
 </section>
 
+<!-- Section 5: Features (light) -->
 <section id="features" class="section-features section-light">
-  <div class="section-shell">
-    <h2>Features shell</h2>
-    <p>2x2 or grid of key features. Phase 2.</p>
+  <div class="features-inner">
+    <div class="section-label">Feature spotlight</div>
+    <h2 class="section-title">Four things that make the workgroup work.</h2>
+
+    <div class="features-grid">
+      {{ macros.featCard(
+        "purple",
+        "🚀",
+        "Dispatch",
+        "Run a task across multiple agents in parallel. Each agent gets the same context snapshot. Results stream into a unified log with per-agent cost attribution.",
+        "synlynk dispatch claude agy codex \\\n  --task \"review PR #47\" \\\n  --story SL-12 --context-mode team",
+        ["parallel execution", "background jobs", "story routing"]
+      ) }}
+
+      {{ macros.featCard(
+        "blue",
+        "🧠",
+        "Context Injection",
+        "Before every exec or dispatch, synlynk builds a context snapshot from your project docs — memory, roadmap, todos, and teammate devlogs — and injects it into the agent's prompt.",
+        "synlynk context --mode team\n# → memory + roadmap + devlog/nikhil\n# → 2,341 tokens injected",
+        ["memory.md", "roadmap", "devlogs"]
+      ) }}
+
+      {{ macros.featCard(
+        "teal",
+        "🛡",
+        "Sentinel Monitoring",
+        "Real-time pattern detection on agent output. Flags FLATLINE (3 consecutive failures), SUCCESS_LOOP (identical outputs), QUOTA_EXHAUSTED, and other anomalies. Alerts go to sentinel.md.",
+        "synlynk sentinel --watch\n⚠ SUCCESS_LOOP: job-d1e4\n  3× identical output detected",
+        ["loop detection", "quota alerts", "flatline"]
+      ) }}
+
+      {{ macros.featCard(
+        "orange",
+        "👤",
+        "Agent Profiles",
+        "Each agent has a profile describing its strengths, rate limits, and image-gen capabilities. Profiles inform dispatch routing — Imagen tasks go to Agy, DALL-E to Codex, Aurora to Grok.",
+        "synlynk profile set agy \\\n  --role image-gen \\\n  --model imagen-3",
+        ["role assignment", "model routing", "image gen"]
+      ) }}
+    </div>
   </div>
 </section>
 
+<!-- Section 6: OS Vision (dark) - Grok motherboard canvas -->
 <section id="vision" class="section-vision section-dark">
   <div class="section-shell">
     <h2>Vision / OS layer shell</h2>
@@ -53,6 +159,7 @@ title: synlynk
   </div>
 </section>
 
+<!-- Section 7: Docs (light) -->
 <section id="docs" class="section-docs section-light">
   <div class="section-shell">
     <h2>Docs shell</h2>
@@ -60,6 +167,7 @@ title: synlynk
   </div>
 </section>
 
+<!-- Section 8: Waitlist (dark) -->
 <section id="waitlist" class="section-waitlist section-dark">
   <div class="section-shell">
     <h2>Waitlist / Early access shell</h2>

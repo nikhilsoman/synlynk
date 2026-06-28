@@ -1,0 +1,35 @@
+{# Relief Card Macro #}
+{% macro reliefCard(icon, title, description) %}
+<div class="relief-card">
+  <div class="relief-card-icon" style="background: rgba(91,141,239,0.1);">{{ icon }}</div>
+  <h4>{{ title }}</h4>
+  <p>{{ description }}</p>
+</div>
+{% endmacro %}
+
+{# Step Card Macro #}
+{% macro stepCard(number, title, body, code) %}
+<div class="step-card">
+  <div class="step-number">{{ number }}</div>
+  <div class="step-title">{{ title }}</div>
+  <div class="step-body">{{ body }}</div>
+  <div class="step-code">{{ code }}</div>
+</div>
+{% endmacro %}
+
+{# Feature Card Macro #}
+{% macro featCard(accent, icon, title, body, code, tags) %}
+<div class="feat-card accent-{{ accent }}">
+  <div class="feat-icon">{{ icon }}</div>
+  <div class="feat-title">{{ title }}</div>
+  <div class="feat-body">{{ body }}</div>
+  <div class="feat-code">{{ code }}</div>
+  {% if tags and tags.length > 0 %}
+    <div class="feat-tags">
+      {% for tag in tags %}
+        <span class="feat-tag">{{ tag }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endmacro %}
