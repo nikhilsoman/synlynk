@@ -3,7 +3,7 @@ title: "PR — BS-5 Phase 2: Homepage Sections and CSS Design System"
 date: 2026-06-28
 series: "Building the OS for Multi-Agent Development"
 post: 30
-pr: "TBD"
+pr: "#78"
 merged: TBD
 ---
 

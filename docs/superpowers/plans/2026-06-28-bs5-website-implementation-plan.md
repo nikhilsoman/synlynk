@@ -77,6 +77,8 @@ Replace the current documentation-dump homepage (`site/`) with a product-story-l
 
 ### Phase 1: Scaffold & Foundations (Grok owns, ~1 session)
 
+**Status:** ✅ Complete (2026-06-28, committed on feat/bs5-website-redesign)
+
 **Goal:** Runnable 11ty project in `website/` that produces a shell matching nav + hero layout from hero-v4.html. No content fidelity required beyond structure.
 
 **Dependencies:** None.

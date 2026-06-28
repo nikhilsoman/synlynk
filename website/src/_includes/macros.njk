@@ -1,7 +1,7 @@
 {# Relief Card Macro #}
-{% macro reliefCard(icon, title, description) %}
+{% macro reliefCard(icon, title, description, accent='blue') %}
 <div class="relief-card">
-  <div class="relief-card-icon" style="background: rgba(91,141,239,0.1);">{{ icon }}</div>
+  <div class="relief-card-icon icon-{{ accent }}">{{ icon }}</div>
   <h4>{{ title }}</h4>
   <p>{{ description }}</p>
 </div>
@@ -13,9 +13,10 @@
   <div class="step-number">{{ number }}</div>
   <div class="step-title">{{ title }}</div>
   <div class="step-body">{{ body }}</div>
-  <div class="step-code">{{ code }}</div>
+  <div class="step-code">{{ code | safe }}</div>
 </div>
 {% endmacro %}
+
 
 {# Feature Card Macro #}
 {% macro featCard(accent, icon, title, body, code, tags) %}

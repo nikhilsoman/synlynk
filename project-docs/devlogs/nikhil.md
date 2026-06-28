@@ -1,5 +1,32 @@
 # Devlog - Nikhil Soman
 
+## 2026-06-28 — Session: BS-5 Phase 1 Website Scaffold (grok)
+
+### Shipped
+- **Phase 1 complete** for story-048f5fe5: standalone `website/` 11ty v3 site.
+  - Standard layout: package.json (synlynk-website), .eleventy.js (passthrough+filters+blog stub), base.njk (fonts + fixed nav + S-glyph 28px from extracted svg + Docs/Features/Blog/Changelog + Install CTA + footer), index.njk (8 section shells #top #carousel #relief #how #features #vision #docs #waitlist), main.css (exact tokens + nav + primitives + typography), .gitignore, README.md.
+  - Logo: `website/src/assets/img/logo/s-glyph.svg` (extracted icon-only 28px viewBox).
+  - `npm run build` → `_site/index.html` with nav + all 8 sections.
+  - `npm run serve` configured for port 8081.
+  - CSS tokens exactly: --bg:#0E0E0F etc matching hero-v4 + spec.
+  - Committed: `feat(bs5): Phase 1 scaffold — 11ty v3 shell, nav, section stubs, design tokens (grok)`
+  - Co-Authored-By: Grok <noreply@x.ai>
+  - Full `tests/test_capability_scoring.py` : 48/48 pass. Specific -k filter runs clean (0 or 1 matched, no failures).
+
+### Key decisions & implementation notes
+- Used 11ty layout frontmatter (not extends blocks) to match existing site/ conventions.
+- Logo via passthrough <img>, nav matches task spec (not full mock links).
+- _site/ and node_modules/ gitignored; package-lock committed for repro.
+- No files outside website/; old site/ untouched.
+- Build verified before commit. Phase 2/3 will add content, carousel, canvas by Agy/Grok.
+
+### Next
+- Agy: Phase 2 sections + CSS system + templates.
+- Review checkpoint 1 for Claude.
+- Update gh-pages workflow only in Phase 4.
+
+---
+
 ## 2026-06-27 — Session: v0.9.8 Health Pulse + Lifecycle
 
 ### Shipped

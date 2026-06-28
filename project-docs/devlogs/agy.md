@@ -11,4 +11,4 @@
 - Extended `website/src/assets/css/main.css` to add support for all new visual components (buttons, gradients, cards, and terminal window styling).
 - Fixed the footer docs link in `base.njk` to point to the absolute `/#docs` path.
 - Verified successful Eleventy build in the worktree.
-- Authored Phase 2 blog post at `docs/blog/30-pr-bs5-phase2-website-redesign.md`.
+- Authored Phase 2 blog post at `docs/blog/30-pr78-bs5-phase2-agy-templates.md`.

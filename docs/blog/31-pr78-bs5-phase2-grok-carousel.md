@@ -3,7 +3,7 @@ title: "PR — BS-5 Phase 2: Grok Terminal Carousel + JS Interactions"
 date: 2026-06-28
 series: "Building the OS for Multi-Agent Development"
 post: 31
-pr: "TBD (BS-5 Phase 2)"
+pr: "#78"
 merged: TBD
 ---
 
