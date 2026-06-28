@@ -1,0 +1,204 @@
+/* BS-5 Phase 1: design tokens + reset + nav + section primitives (from hero-v4 + spec) */
+
+:root {
+  --bg:#0E0E0F;
+  --bg-card:#111115;
+  --bg-light:#f5f5f7;
+  --blue:#5B8DEF;
+  --purple:#A259F7;
+  --teal:#2EC4A0;
+  --orange:#D97757;
+  --google-blue:#4285F4;
+  --text:#E9E9EE;
+  --muted:rgba(233,233,238,0.55);
+  --border:rgba(255,255,255,0.07);
+  --font:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Fira Code',monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* Typography */
+h1, h2, h3, h4 {
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+}
+
+h1 { font-size: clamp(32px, 4vw, 52px); }
+h2 { font-size: clamp(28px, 4vw, 48px); }
+
+p, li {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+code, pre, .mono {
+  font-family: var(--mono);
+}
+
+/* Fixed nav */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 48px;
+  background: rgba(14, 14, 15, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.nav-logo img,
+.nav-logo svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.nav-brand {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.nav-links a {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: #fff;
+}
+
+.nav-cta {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-family: var(--font);
+}
+
+.nav-cta:hover {
+  opacity: 0.85;
+}
+
+/* Section primitives (alternating dark/light) */
+section {
+  padding: 80px 48px;
+}
+
+.section-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.section-dark {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.section-light {
+  background: var(--bg-light);
+  color: #1d1d1f;
+}
+
+/* Minimal shell content for Phase 1 */
+section h2 {
+  margin-bottom: 12px;
+}
+
+section p {
+  max-width: 640px;
+}
+
+#top p, #carousel p, #how p, #vision p, #waitlist p {
+  color: var(--muted);
+}
+
+/* Footer stub */
+footer {
+  padding: 32px 48px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+footer a {
+  color: var(--muted);
+  text-decoration: none;
+  margin-left: 16px;
+}
+
+footer a:hover {
+  color: #fff;
+}
+
+/* Basic responsive */
+@media (max-width: 768px) {
+  nav {
+    padding: 12px 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .nav-links {
+    gap: 16px;
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  section {
+    padding: 60px 20px;
+  }
+}

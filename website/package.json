@@ -1,0 +1,13 @@
+{
+  "name": "synlynk-website",
+  "version": "0.1.0",
+  "description": "synlynk.com — The OS for multi-agent development (BS-5 redesign)",
+  "scripts": {
+    "build": "npx @11ty/eleventy",
+    "serve": "npx @11ty/eleventy --serve --port 8081",
+    "debug": "DEBUG=Eleventy* npx @11ty/eleventy"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.0.0"
+  }
+}
