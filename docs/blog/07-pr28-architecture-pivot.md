@@ -39,6 +39,11 @@ SQLite WAL (Write-Ahead Logging) mode allows concurrent readers and one writer a
 
 This shift also enables the second major architectural decision: `project-docs/` is retired at v0.5.0. The human-readable docs that were the primary state store become generated views over state.db, gitignored, and not committed. The ledger moves into the database. The context bridge (`.synlynk/context.md`) remains unchanged — it is still a generated artifact that agents read, but now computed from SQL queries rather than file concatenation.
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/architecture-pivot/architecture-pivot-state-db.html" title="The Architecture Pivot — Flat Files to SQLite" loading="lazy" frameborder="0"></iframe>
+  <figcaption>The Architecture Pivot — Flat Files to SQLite</figcaption>
+</figure>
+
 ---
 
 ## The Four Design Specs

@@ -123,6 +123,11 @@ Organizational constraints — embargoes, stability windows, scope restrictions 
 
 This is the most dangerous failure mode for a regulated product. An embargo that exists in Claude's memory but not in Gemini's GEMINI.md is an embargo that fails when the next Gemini session runs.
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/product-origin/failure-modes-mapping.html" title="The 4 Failure Modes That Built synlynk" loading="lazy" frameborder="0"></iframe>
+  <figcaption>The 4 Failure Modes That Built synlynk</figcaption>
+</figure>
+
 ---
 
 ## From Failure Modes to Product Requirements

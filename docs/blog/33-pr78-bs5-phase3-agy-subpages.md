@@ -19,6 +19,11 @@ For the `/changelog` subpage, rather than manual copy-pasting, we automated the 
 
 ## What This PR Shipped
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/website-architecture-pipeline.html" title="BS-5 Site Architecture + Content Pipeline" loading="lazy" frameborder="0"></iframe>
+  <figcaption>BS-5 Site Architecture + Content Pipeline</figcaption>
+</figure>
+
 - **Section 7 (Documentation Download)**: Replaced the docs section shell with a 3-column grid featuring Quick Start Guide, Command Reference, and The Manual, each with a distinctive dark-gradient header box and link.
 - **Section 8 (Waitlist + Blog teasers)**: Replaced the waitlist shell. Added a waitlist form with a JavaScript submission handler that validates inputs, hides the form, and displays a success message. Below the form, a dynamic teaser section renders cards for the 3 most recent blog posts.
 - **Subpage Suite**:

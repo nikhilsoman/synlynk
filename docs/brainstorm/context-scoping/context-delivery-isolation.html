@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Context Delivery Isolation</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:14px;}
+.title{font-size:13px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:10px;}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:860px;margin:0 auto;}
+.panel{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+.panel.bad{border-color:#f87171;}
+.panel.good{border-color:var(--teal);}
+.head{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+.bad .head{color:#f87171;}
+.good .head{color:var(--teal);}
+.job{background:#0a0a0b;border:1px solid var(--border);border-radius:6px;padding:6px;margin:4px 0;font-size:10px;}
+.ctx{font-size:9px;color:var(--muted);border:1px dashed var(--border);padding:3px 6px;border-radius:4px;margin-top:3px;}
+.race{font-size:18px;text-align:center;margin-top:6px;}
+.modes{display:flex;gap:6px;justify-content:center;margin-top:12px;}
+.mode{font-size:10px;background:#0a0a0b;border:1px solid var(--border);padding:4px 10px;border-radius:6px;}
+</style>
+</head>
+<body>
+<div class="title">P0 Fix — Per-Job Context Isolation</div>
+
+<div class="cols">
+  <div class="panel bad">
+    <div class="head">Before — shared file race</div>
+    <div class="job">Dispatch Job 1 → reads/writes <span class="ctx">.synlynk/context.md</span></div>
+    <div class="job">Dispatch Job 2 → reads/writes <span class="ctx">.synlynk/context.md</span></div>
+    <div class="job">Dispatch Job 3 → reads/writes <span class="ctx">.synlynk/context.md</span></div>
+    <div class="race">⚡</div>
+  </div>
+  <div class="panel good">
+    <div class="head">After — in-memory per job</div>
+    <div class="job">Job 1 → <span class="ctx">in-memory 412 bytes</span></div>
+    <div class="job">Job 2 → <span class="ctx">in-memory 0 bytes</span> (mode=none)</div>
+    <div class="job">Job 3 → <span class="ctx">in-memory 1.8KB</span> (task scope)</div>
+  </div>
+</div>
+
+<div class="modes">
+  <div class="mode"><strong>none</strong> — 0 bytes</div>
+  <div class="mode"><strong>task</strong> — ~400B slim</div>
+  <div class="mode"><strong>full</strong> — ~119KB</div>
+</div>
+</body>
+</html>

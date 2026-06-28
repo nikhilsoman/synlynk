@@ -44,6 +44,11 @@ class Cli:
 
 The `cli` fixture returns a `Cli` instance in a fresh initialized project. The `uninit_cli` fixture returns one in a bare directory. New tests drop into the right fixture and call `cli.run(...)`. Adding a new scenario is ~5 lines.
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/e2e-test-suite/e2e-test-pyramid.html" title="E2E Test Strategy — Black-box CLI Coverage" loading="lazy" frameborder="0"></iframe>
+  <figcaption>E2E Test Strategy — Black-box CLI Coverage</figcaption>
+</figure>
+
 **Scenarios by feature:**
 
 | Feature | Tests | What's verified |

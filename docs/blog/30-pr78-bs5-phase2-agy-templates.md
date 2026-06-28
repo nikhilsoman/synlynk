@@ -14,6 +14,12 @@ In Phase 1, the standalone 11ty v3 website scaffold, design tokens, typography, 
 We transitioned the inline-styled mockup from `hero-v4.html` into a clean, class-based CSS architecture. Repeating components (relief, step, and feature cards) were extracted into Nunjucks macros to keep the template files DRY and maintainable, paving the way for easier updates in subsequent website iterations.
 
 ## What This PR Shipped
+
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/homepage-design-system.html" title="BS-5 Phase 2 — Homepage Design System" loading="lazy" frameborder="0"></iframe>
+  <figcaption>BS-5 Phase 2 — Homepage Design System</figcaption>
+</figure>
+
 - **Section 1 (Tagline Hero)**: Completed tagline hero section porting layout from `hero-v4.html`. Added hook label, hero byline, gradient-styled brand tagline, two CTA links (`.btn-primary` and `.btn-ghost`), an install command bar, and brand-color agent chips (Claude, Gemini, Grok, Codex) using classes rather than inline styles.
 - **Section 3 (Relief Section)**: Implemented the relief section with 3 `.relief-card` components showcasing Context injection, Unified cost tracking, and Sentinel monitoring, alongside the token economics callout detailing the ~60% cheaper effective rate when distributed across 3 agents.
 - **Section 4 (How It Works)**: Rendered the 4-step terminal/command flow (Install, Init, Exec, Dispatch) with description and code blocks for each step.

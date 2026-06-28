@@ -14,6 +14,12 @@ At the end of Phase 1 (scaffold + tokens) and Agy's parallel Phase 2 work on Sec
 No major strategic shift; pure execution handoff. The split of responsibilities (Agy: content + layout + macros + CSS system; Grok: carousel markup fidelity + vanilla JS behaviors + copy button) mirrors the "design-first, beyond functional" mandate of BS-5. We kept the carousel purely presentational + behavioral (no framework, no build step for the site JS).
 
 ## What This PR Shipped
+
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/carousel-interaction-flow.html" title="BS-5 Carousel — Interaction State Machine" loading="lazy" frameborder="0"></iframe>
+  <figcaption>BS-5 Carousel — Interaction State Machine</figcaption>
+</figure>
+
 - Replaced the `#carousel` placeholder shell in `website/src/index.njk` with full markup ported from `hero-v4.html`:
   - Four `.terminal-slide` panes (init wizard, `join --scan`, parallel dispatch, `status` with Budget Pulse table).
   - Command pill row (`.cmd-pill`): init · join · dispatch · status with `.active` state.

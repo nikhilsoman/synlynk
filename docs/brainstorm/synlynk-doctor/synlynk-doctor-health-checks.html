@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — synlynk doctor Health Checks</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:14px;font-size:12px;}
+.title{font-size:13px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:10px;}
+.wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:820px;margin:0 auto;}
+.list{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:10px;}
+.row{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);}
+.row:last-child{border-bottom:none;}
+.badge{padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;}
+.ok{background:#052e16;color:#4ade80;}
+.warn{background:#3f2a12;color:#fbbf24;}
+.fail{background:#3f1f1f;color:#f87171;}
+.fix{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;}
+.term{background:#0a0a0b;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:var(--mono);font-size:10px;line-height:1.45;color:#a3a3a3;}
+.term .okc{color:#4ade80;}
+.term .wc{color:#fbbf24;}
+.term .fc{color:#f87171;}
+</style>
+</head>
+<body>
+<div class="title">synlynk doctor — 7-Check Installation Health</div>
+
+<div class="wrap">
+  <div class="list">
+    <div class="row"><span class="badge ok">✓ ok</span> <div><strong>python_version</strong><div class="fix">fix: brew upgrade python</div></div></div>
+    <div class="row"><span class="badge ok">✓ ok</span> <div><strong>project_init</strong></div></div>
+    <div class="row"><span class="badge ok">✓ ok</span> <div><strong>docs_dir</strong></div></div>
+    <div class="row"><span class="badge warn">⚠ warn</span> <div><strong>identity_key</strong><div class="fix">fix: synlynk identity init</div></div></div>
+    <div class="row"><span class="badge fail">✗ fail</span> <div><strong>agent_profiles</strong><div class="fix">fix: synlynk agent profile create</div></div></div>
+    <div class="row"><span class="badge ok">✓ ok</span> <div><strong>instruction_files</strong></div></div>
+    <div class="row"><span class="badge ok">✓ ok</span> <div><strong>version_current</strong></div></div>
+  </div>
+
+  <div class="term">
+    $ synlynk doctor<br>
+    <span class="okc">✓</span> python_version  3.11.8<br>
+    <span class="okc">✓</span> project_init<br>
+    <span class="okc">✓</span> docs_dir<br>
+    <span class="wc">⚠</span> identity_key — run: synlynk identity init<br>
+    <span class="fc">✗</span> agent_profiles — 0 profiles<br>
+    <span class="okc">✓</span> instruction_files<br>
+    <span class="okc">✓</span> version_current  0.9.8
+  </div>
+</div>
+</body>
+</html>

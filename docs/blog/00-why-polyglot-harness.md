@@ -68,6 +68,11 @@ What that means concretely:
 
 The single-file Python stdlib constraint is not an aesthetic choice. It is the implementation of the polyglot principle: a harness that requires pip dependencies, a specific runtime, or a cloud API is a harness that can fail or be unavailable when you switch tools. Zero dependencies means the harness is always there, regardless of what you are running underneath it.
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/polyglot-harness/polyglot-harness-architecture.html" title="From Polyglot Chaos to Coordinated OS" loading="lazy" frameborder="0"></iframe>
+  <figcaption>From Polyglot Chaos to Coordinated OS</figcaption>
+</figure>
+
 ---
 
 ## The OS Metaphor

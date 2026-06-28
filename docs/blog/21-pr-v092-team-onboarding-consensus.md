@@ -23,6 +23,11 @@ No strategic shifts. The feature set was well-defined from the v0.9.2 design spe
 
 ## What Shipped
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/team-onboarding/team-onboarding-consensus.html" title="v0.9.2 — Team Onboarding and Consensus Primitives" loading="lazy" frameborder="0"></iframe>
+  <figcaption>v0.9.2 — Team Onboarding and Consensus Primitives</figcaption>
+</figure>
+
 ### `synlynk join`
 
 The entry point for a new team member. Running `synlynk join` in a synlynk-managed repo:

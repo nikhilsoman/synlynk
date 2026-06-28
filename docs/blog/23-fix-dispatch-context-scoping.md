@@ -22,6 +22,11 @@ These were P0 because every v0.9.4 story that touches `dispatch_agent()` would o
 
 ## What this PR ships
 
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/context-scoping/context-delivery-isolation.html" title="P0 Fix — Per-Job Context Isolation" loading="lazy" frameborder="0"></iframe>
+  <figcaption>P0 Fix — Per-Job Context Isolation</figcaption>
+</figure>
+
 **`_generate_task_context()` refactored to return a string**
 
 Rewrote to accumulate into a `StringIO` buffer, build the string, write to `.synlynk/context.md` for daemon HTTP endpoint compatibility, then return the string. The file write is preserved — external tooling and the daemon's `/context` HTTP endpoint are unchanged.
