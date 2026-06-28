@@ -42,6 +42,7 @@
 - [ ] BS-8: stuck detection + one-shot consult from capability matrix + Expert Consult injection [dispatch] <!-- id:story-bs8-consult -->
 - [ ] BS-8: goal hierarchy (meta + milestone + story) + synlynk goals CLI + three-layer context injection [dispatch] <!-- id:story-bs8-meta-goals -->
 - [ ] BS-8: synlynk story split — observatory-driven auto-decomposition for context-window-crossing stories [dispatch] <!-- id:story-bs8-split -->
+- [ ] BS-14: brainstorm — Harness Compatibility: headless execution contracts, per-agent dispatch flag maps, compliance test suite, STALL_NO_OUTPUT sentinel spec [platform] <!-- id:story-bs14-harness-compat --> <!-- gh:#81 --> <!-- priority:next -->
 - [ ] BS-12: brainstorm — Agent Autonomy Bridge: permission grants, harness config, handoff protocol, + synlynk TUI/chatbot at init/doctor time [platform] <!-- id:story-6f97c5a0 -->
 <<<<<<< HEAD
 - [ ] BS-9: brainstorm — Trio Orchestration Demo: State Continuity + Flatline + Parallel Dispatch showcase (scripted, narrative-first) <!-- id:story-ab6a0586 -->
