@@ -3,155 +3,47 @@ layout: base.njk
 title: Documentation
 ---
 
-<div class="docs-layout">
-  <!-- Sidebar Navigation -->
-  <aside class="docs-sidebar">
-    <div class="docs-sidebar-inner">
-      <div class="sidebar-title">Command Reference</div>
-      <nav class="sidebar-nav">
-        <a href="#quick-start" class="sidebar-link">Quick Start</a>
-        <a href="#exec" class="sidebar-link">synlynk exec</a>
-        <a href="#dispatch" class="sidebar-link">synlynk dispatch</a>
-        <a href="#init" class="sidebar-link">synlynk init</a>
-        <a href="#join" class="sidebar-link">synlynk join</a>
-        <a href="#status" class="sidebar-link">synlynk status</a>
-        <a href="#doctor" class="sidebar-link">synlynk doctor</a>
-        <a href="#sentinel" class="sidebar-link">synlynk sentinel</a>
-        <a href="#profiles" class="sidebar-link">synlynk profile</a>
-      </nav>
+<header class="docs-page-hero">
+  <div class="section-label">Documentation</div>
+  <h1>Everything you need to ship with synlynk.</h1>
+</header>
+
+<div class="docs-pdf-grid">
+  <!-- Card 1 — Quick Start Guide -->
+  <div class="doc-card">
+    <div class="doc-card-thumb">⚡</div>
+    <h3 class="doc-card-title">Quick Start Guide</h3>
+    <p class="doc-card-body">Get synlynk running in under 5 minutes. Covers install, init, first exec, and joining an existing workspace.</p>
+    <div class="pdf-card-actions">
+      <a href="/assets/docs/synlynk-quickstart-guide.pdf" target="_blank" class="btn-primary">Open PDF</a>
+      <a href="/assets/docs/synlynk-quickstart-guide.pdf" download class="pdf-download-link">Download</a>
     </div>
-  </aside>
+  </div>
 
-  <!-- Docs Content -->
-  <main class="docs-content-area">
-    <div class="docs-container">
-      
-      <!-- Quick Start -->
-      <section id="quick-start" class="docs-section">
-        <div class="hook-label">Getting Started</div>
-        <h2 class="docs-sec-title">Quick Start Guide</h2>
-        <p class="docs-sec-body">Set up synlynk and run your first multi-agent coordination loop in under 5 minutes. synlynk is a zero-dependency, single-file Python script designed to sit underneath your existing agent CLI interfaces.</p>
-        
-        <div class="docs-step">
-          <h3>1. Install the CLI</h3>
-          <p>Run the install script, which puts the binary in <code>~/.synlynk/bin/</code> and updates your shell configuration.</p>
-          <pre><code>curl -fsSL install.synlynk.com | bash</code></pre>
-        </div>
-
-        <div class="docs-step">
-          <h3>2. Initialize your workspace</h3>
-          <p>Navigate to your repository and bootstrap the synlynk workspace. This creates <code>state.db</code> and the coordination documents.</p>
-          <pre><code>synlynk init</code></pre>
-        </div>
-
-        <div class="docs-step">
-          <h3>3. Execute a task</h3>
-          <p>Run your primary agent through the harness. Context is automatically injected from <code>project-docs/</code> and the CLI output is monitored.</p>
-          <pre><code>synlynk exec claude -- "implement login verification tests"</code></pre>
-        </div>
-      </section>
-
-      <!-- synlynk exec -->
-      <section id="exec" class="docs-section">
-        <h2 class="docs-sec-title">synlynk exec</h2>
-        <p class="docs-sec-body">Run any AI agent CLI (e.g. claude, agy, codex, grok) through the synlynk harness. This intercepts the execution to inject updated context snapshots and tracks token/cost metrics on output.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk exec &lt;agent&gt; [options] -- &lt;instructions&gt;</code></pre>
-        
-        <h3>Options</h3>
-        <ul>
-          <li><code>--context-mode &lt;mode&gt;</code>: Context generation style. Options: <code>solo</code>, <code>team</code> (default: <code>team</code>).</li>
-          <li><code>--no-context</code>: Skip building and prepending context rules.</li>
-          <li><code>--dry-run</code>: Output the injected prompt/rules and exit without calling the underlying agent.</li>
-        </ul>
-      </section>
-
-      <!-- synlynk dispatch -->
-      <section id="dispatch" class="docs-section">
-        <h2 class="docs-sec-title">synlynk dispatch</h2>
-        <p class="docs-sec-body">Orchestrate parallel background dispatches of stories/tasks across multiple agents. synlynk spawns individual worker processes, tracking their progress, costs, and writing status to <code>state.db</code>.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk dispatch &lt;agents...&gt; --task &lt;description&gt; --story &lt;story_id&gt;</code></pre>
-
-        <h3>Examples</h3>
-        <pre><code>synlynk dispatch claude agy codex \
-  --task "Review PR #51 for headless dispatch fixes" \
-  --story SL-45 --context-mode team</code></pre>
-      </section>
-
-      <!-- synlynk init -->
-      <section id="init" class="docs-section">
-        <h2 class="docs-sec-title">synlynk init</h2>
-        <p class="docs-sec-body">Bootstrap a new synlynk workspace. Creates the SQLite <code>state.db</code>, <code>.synlynk/config.json</code>, agent rules (e.g., <code>CLAUDE.md</code>, <code>GEMINI.md</code>, etc.), and the <code>project-docs/</code> folder structure containing:</p>
-        
-        <ul>
-          <li><code>roadmap.md</code>: Releases and high-level milestones.</li>
-          <li><code>todo.md</code>: The active task queue and dependency tree.</li>
-          <li><code>memory.md</code>: Shared context, constraints, and architecture decisions.</li>
-          <li><code>costs.md</code>: Flat-file cost ledger recording every API token spend.</li>
-        </ul>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk init [options]</code></pre>
-      </section>
-
-      <!-- synlynk join -->
-      <section id="join" class="docs-section">
-        <h2 class="docs-sec-title">synlynk join</h2>
-        <p class="docs-sec-body">Scan an existing repository to build or update the synlynk workspace. It auto-detects language stack, active frameworks, open <code>TODO</code> comments in files, and other teammates working on the project.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk join --scan [options]</code></pre>
-
-        <h3>Options</h3>
-        <ul>
-          <li><code>--scan</code>: Perform codebase analysis to initialize context documents.</li>
-          <li><code>--workspace &lt;name&gt;</code>: Link the repository to a shared team workspace.</li>
-        </ul>
-      </section>
-
-      <!-- synlynk status -->
-      <section id="status" class="docs-section">
-        <h2 class="docs-sec-title">synlynk status</h2>
-        <p class="docs-sec-body">View the active state of the workspace. Shows the current status of all background worker processes, session token usage, cumulative daily cost compared to your budget limits, and the capability matrix ledger.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk status [options]</code></pre>
-      </section>
-
-      <!-- synlynk doctor -->
-      <section id="doctor" class="docs-section">
-        <h2 class="docs-sec-title">synlynk doctor</h2>
-        <p class="docs-sec-body">Diagnose and troubleshoot your local synlynk installation. Validates the existence and execution paths of agent CLI binaries, runs schema checks on <code>state.db</code>, and verifies project configuration contracts.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk doctor</code></pre>
-      </section>
-
-      <!-- synlynk sentinel -->
-      <section id="sentinel" class="docs-section">
-        <h2 class="docs-sec-title">synlynk sentinel</h2>
-        <p class="docs-sec-body">Start the Sentinel monitoring daemon. The Sentinel polls background processes to detect execution failures, token limit overruns, and loop loops (consecutive runs generating identical content). Writes alerts directly to <code>sentinel.md</code>.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk sentinel --watch [options]</code></pre>
-      </section>
-
-      <!-- synlynk profile -->
-      <section id="profiles" class="docs-section">
-        <h2 class="docs-sec-title">synlynk profile</h2>
-        <p class="docs-sec-body">Manage specific agent configurations. Define roles, configure underlying LLM models, set rate limits, and record manual capabilities that inform dispatch routing algorithms.</p>
-        
-        <h3>Usage</h3>
-        <pre><code>synlynk profile set &lt;agent&gt; [options]</code></pre>
-        
-        <h3>Examples</h3>
-        <pre><code>synlynk profile set agy --role image-gen --model imagen-3
-synlynk profile set codex --role builder --model o3-mini</code></pre>
-      </section>
-
+  <!-- Card 2 — Command Reference -->
+  <div class="doc-card">
+    <div class="doc-card-thumb">💻</div>
+    <h3 class="doc-card-title">Command Reference</h3>
+    <p class="doc-card-body">Complete syntax for all synlynk commands: exec, dispatch, init, join, status, doctor, sentinel, and profile.</p>
+    <div class="pdf-card-actions">
+      <a href="/assets/docs/synlynk-command-reference.pdf" target="_blank" class="btn-primary">Open PDF</a>
+      <a href="/assets/docs/synlynk-command-reference.pdf" download class="pdf-download-link">Download</a>
     </div>
-  </main>
+  </div>
+
+  <!-- Card 3 — The Manual -->
+  <div class="doc-card">
+    <div class="doc-card-thumb">📖</div>
+    <h3 class="doc-card-title">The Manual</h3>
+    <p class="doc-card-body">Deep dive into state.db architecture, agent role config, budget enforcement, relay network, and the Sentinel daemon.</p>
+    <div class="pdf-card-actions">
+      <a href="/assets/docs/synlynk-official-reference.pdf" target="_blank" class="btn-primary">Open PDF</a>
+      <a href="/assets/docs/synlynk-official-reference.pdf" download class="pdf-download-link">Download</a>
+    </div>
+  </div>
+</div>
+
+<div class="docs-quick-ref">
+  <h3>Install</h3>
+  <pre><code>curl -fsSL install.synlynk.com | bash</code></pre>
 </div>
