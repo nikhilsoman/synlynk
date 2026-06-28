@@ -947,3 +947,62 @@ footer a:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Section 6: OS Vision — isometric motherboard canvas (Phase 3) */
+.section-vision {
+  background: var(--bg);
+  padding: 96px 48px;
+}
+.vision-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+.vision-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.vision-stats {
+  display: flex;
+  gap: 32px;
+  margin-top: 32px;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-value {
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -1px;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.vision-canvas-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vision-canvas-wrap canvas {
+  max-width: 100%;
+  border-radius: 12px;
+  display: block;
+}
+@media (max-width: 768px) {
+  .vision-inner {
+    grid-template-columns: 1fr;
+  }
+  .vision-canvas-wrap {
+    order: -1;
+  }
+}
