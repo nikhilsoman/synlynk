@@ -43,9 +43,13 @@
 - [ ] BS-8: goal hierarchy (meta + milestone + story) + synlynk goals CLI + three-layer context injection [dispatch] <!-- id:story-bs8-meta-goals -->
 - [ ] BS-8: synlynk story split — observatory-driven auto-decomposition for context-window-crossing stories [dispatch] <!-- id:story-bs8-split -->
 - [ ] BS-12: brainstorm — Agent Autonomy Bridge: permission grants, harness config, handoff protocol, + synlynk TUI/chatbot at init/doctor time [platform] <!-- id:story-6f97c5a0 -->
+<<<<<<< HEAD
 - [ ] BS-9: brainstorm — Trio Orchestration Demo: State Continuity + Flatline + Parallel Dispatch showcase (scripted, narrative-first) <!-- id:story-ab6a0586 -->
 - [ ] BS-10: brainstorm — PulseScape: end-to-end glassmorphic agent dashboard (SSE relay + Ed25519 consensus panel, 6-session build) <!-- id:story-e3a3170a -->
 - [ ] BS-11: brainstorm — MCP Registry contribution: Project Context + Todo MCP Server for modelcontextprotocol/servers <!-- id:story-fda756fd -->
 - [ ] flatline: standalone Python CLI circuit-breaker — hash stdout, kill after 3 identical failures, pip-installable public utility <!-- id:story-b4a90209 -->
 - [ ] git-drift: standalone pip package — instruction drift auditor, pre-commit hook, manifest schema, git-drift install <!-- id:story-cb2c1d93 -->
 - [ ] git-connectome: standalone language-agnostic codebase mapper → self-contained interactive HTML (synlynk viz public face) <!-- id:story-3652dafe -->
+=======
+- [ ] BS-12a (v0.10.0): Agent Role Formalization — roles block in .synlynk/config.json + synlynk init/doctor generates per-agent directive files (CLAUDE.md ##Your Role, GEMINI.md ##Your Role, AGENTS.md shared summary); synlynk roles subcommand prints current role table [platform] <!-- id:story-bs12a-roles --> <!-- gh:#79 -->
+>>>>>>> 7af617f (chore: BS-12a — agent role formalization across directive files + todo)
