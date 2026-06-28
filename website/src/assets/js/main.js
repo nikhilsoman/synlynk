@@ -3,6 +3,15 @@
 // Pure vanilla, no deps.
 
 (function () {
+  function showCopied(btn, html) {
+    btn.innerHTML = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.innerHTML = html;
+      btn.classList.remove('copied');
+    }, 1500);
+  }
+
   function initCopyButtons() {
     const btns = document.querySelectorAll('.copy-btn');
     if (!btns.length) return;
@@ -17,7 +26,6 @@
         const text = btn.dataset.copy || btn.getAttribute('data-copy') || '';
         if (!text) return;
 
-        const originalText = btn.textContent.trim();
         // preserve inner HTML if it contains svg etc.
         const originalHTML = btn.innerHTML;
 
@@ -25,13 +33,7 @@
           await navigator.clipboard.writeText(text);
 
           // Visual feedback
-          btn.innerHTML = 'Copied!';
-          btn.classList.add('copied');
-
-          setTimeout(() => {
-            btn.innerHTML = originalHTML;
-            btn.classList.remove('copied');
-          }, 1500);
+          showCopied(btn, originalHTML);
         } catch (err) {
           // Fallback for older browsers or no permission
           try {
@@ -44,18 +46,13 @@
             document.execCommand('copy');
             document.body.removeChild(ta);
 
-            btn.innerHTML = 'Copied!';
-            btn.classList.add('copied');
-            setTimeout(() => {
-              btn.innerHTML = originalHTML;
-              btn.classList.remove('copied');
-            }, 1500);
+            showCopied(btn, originalHTML);
           } catch (_) {
             // Last resort: select the text for manual copy
             btn.innerHTML = 'Select & copy';
             setTimeout(() => {
               btn.innerHTML = originalHTML;
-            }, 1600);
+            }, 1500);
           }
         }
       });

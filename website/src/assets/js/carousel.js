@@ -25,8 +25,6 @@
     if (idx >= slides.length) idx = 0;
     current = idx;
     updateActive(current);
-    // restart timer on manual interaction (pause auto)
-    restartTimer();
   }
 
   function next() {
@@ -63,7 +61,7 @@
       const idx = parseInt(pill.getAttribute('data-pill') || '-1', 10);
       pill.addEventListener('click', () => {
         const target = (idx >= 0) ? idx : pills.indexOf(pill);
-        if (target >= 0) goTo(target);
+        if (target >= 0) { pauseTimer(); goTo(target); }
       });
     });
 
@@ -72,7 +70,7 @@
       const idx = parseInt(dot.getAttribute('data-dot') || '-1', 10);
       dot.addEventListener('click', () => {
         const target = (idx >= 0) ? idx : dots.indexOf(dot);
-        if (target >= 0) goTo(target);
+        if (target >= 0) { pauseTimer(); goTo(target); }
       });
     });
   }

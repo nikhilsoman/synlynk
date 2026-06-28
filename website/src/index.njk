@@ -74,7 +74,7 @@ title: synlynk
       <div class="carousel-slide active" data-slide="0">
         <div class="t-dots">
           <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
-          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — init</span>
+          <span class="carousel-slide-title">synlynk — init</span>
         </div>
         <div class="t-body">
 <span class="t-prompt">$</span> <span class="t-cmd">synlynk init</span>
@@ -98,7 +98,7 @@ title: synlynk
       <div class="carousel-slide" data-slide="1">
         <div class="t-dots">
           <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
-          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — join</span>
+          <span class="carousel-slide-title">synlynk — join</span>
         </div>
         <div class="t-body">
 <span class="t-prompt">$</span> <span class="t-cmd">synlynk join</span> <span class="t-flag">--scan</span>
@@ -123,12 +123,12 @@ title: synlynk
       <div class="carousel-slide" data-slide="2">
         <div class="t-dots">
           <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
-          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — dispatch</span>
+          <span class="carousel-slide-title">synlynk — dispatch</span>
         </div>
         <div class="t-body">
 <span class="t-prompt">$</span> <span class="t-cmd">synlynk dispatch</span> <span class="t-arg">claude agy codex</span> \
-<span style="color:#333;">    </span><span class="t-flag">--task</span> <span class="t-val">"implement auth flow"</span> \
-<span style="color:#333;">    </span><span class="t-flag">--story</span> <span class="t-val">SL-42</span> <span class="t-flag">--context-mode</span> <span class="t-val">team</span>
+<span class="t-cont">    </span><span class="t-flag">--task</span> <span class="t-val">"implement auth flow"</span> \
+<span class="t-cont">    </span><span class="t-flag">--story</span> <span class="t-val">SL-42</span> <span class="t-flag">--context-mode</span> <span class="t-val">team</span>
 <br>
 <span class="t-out">Injecting context snapshot → 2,341 tokens</span>
 <span class="t-out">  memory.md · roadmap.md · todo.md · devlog/nikhil</span>
@@ -146,7 +146,7 @@ title: synlynk
       <div class="carousel-slide" data-slide="3">
         <div class="t-dots">
           <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
-          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — status</span>
+          <span class="carousel-slide-title">synlynk — status</span>
         </div>
         <div class="t-body">
 <span class="t-prompt">$</span> <span class="t-cmd">synlynk status</span>
@@ -168,8 +168,8 @@ title: synlynk
     </div>
 
     <!-- Pills + dots -->
-    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:16px;">
-      <div style="display:flex;gap:8px;">
+    <div class="carousel-controls-wrap">
+      <div class="carousel-pills-row">
         <button class="cmd-pill active" data-pill="0">init</button>
         <button class="cmd-pill" data-pill="1">join</button>
         <button class="cmd-pill" data-pill="2">dispatch</button>
@@ -193,9 +193,9 @@ title: synlynk
     <p class="section-body">Every AI CLI is powerful in isolation. But they don't share context, don't know about each other, and don't report costs in one place. synlynk wires them up.</p>
 
     <div class="relief-grid">
-      {{ macros.reliefCard("🔀", "Context injection", "Every agent gets your project memory, roadmap, and current todos — automatically, before each invocation.") }}
-      {{ macros.reliefCard("📊", "Unified cost tracking", "Token counts, per-agent spend, and budget limits in one dashboard. No more surprise bills.") }}
-      {{ macros.reliefCard("🛡", "Sentinel monitoring", "Detects hallucination loops, quota hits, and consecutive failures. Alerts before they compound.") }}
+      {{ macros.reliefCard("🔀", "Context injection", "Every agent gets your project memory, roadmap, and current todos — automatically, before each invocation.", accent='blue') }}
+      {{ macros.reliefCard("📊", "Unified cost tracking", "Token counts, per-agent spend, and budget limits in one dashboard. No more surprise bills.", accent='teal') }}
+      {{ macros.reliefCard("🛡", "Sentinel monitoring", "Detects hallucination loops, quota hits, and consecutive failures. Alerts before they compound.", accent='orange') }}
     </div>
 
     <div class="cost-callout">
@@ -216,7 +216,7 @@ title: synlynk
       {{ macros.stepCard("STEP 01", "Install", "Single curl-pipe install. Puts the binary in ~/.synlynk/bin/ and updates your PATH.", "curl -fsSL install.synlynk.com | bash") }}
       {{ macros.stepCard("STEP 02", "Init", "Bootstrap your project — creates project-docs/, config, and AI instruction files.", "synlynk init") }}
       {{ macros.stepCard("STEP 03", "Exec", "Run any AI CLI through synlynk — context is injected, costs tracked, output monitored.", "synlynk exec claude") }}
-      {{ macros.stepCard("STEP 04", "Dispatch", "Parallelize tasks across multiple agents from one command. Results flow into shared project state.", "synlynk dispatch \\\n  claude agy codex \\\n  --task \"ship it\"") }}
+      {{ macros.stepCard("STEP 04", "Dispatch", "Parallelize tasks across multiple agents from one command. Results flow into shared project state.", "synlynk dispatch <br>  claude agy codex <br>  --task \"ship it\"") }}
     </div>
   </div>
 </section>

@@ -550,6 +550,11 @@ footer a:hover {
   font-size: 16px;
 }
 
+.icon-blue { background: rgba(91,141,239,0.1); }
+.icon-teal { background: rgba(46,196,160,0.1); }
+.icon-orange { background: rgba(217,119,87,0.1); }
+
+
 .relief-card h4 {
   font-size: 15px;
   font-weight: 700;
@@ -822,6 +827,12 @@ footer a:hover {
   color: var(--purple);
   background: rgba(162,89,247,0.06);
 }
+
+/* Carousel inline-style replacements (P2-1) */
+.carousel-slide-title { font-family: var(--mono); font-size: 10px; color: #444; flex: 1; text-align: center; }
+.carousel-controls-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 16px; }
+.carousel-pills-row { display: flex; gap: 8px; }
+.t-cont { color: #333; }
 
 /* Section 5: Features */
 .section-features {
