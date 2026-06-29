@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR — BS-5 Phase 2: Grok Terminal Carousel + JS Interactions | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 28, 2026</span>
+        
+          <span class="blog-post-pr">PR #78</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR — BS-5 Phase 2: Grok Terminal Carousel + JS Interactions</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the end of Phase 1 (scaffold + tokens) and Agy's parallel Phase 2 work on Sections 1/3/4/5 + the CSS design system, the homepage had a complete visual language and most of the marketing surface in place. The remaining critical interactive piece was Section 2 — the live terminal carousel demonstrating the four primary commands (init, join, dispatch, status) — plus the install-bar copy affordance that makes &quot;getting started&quot; feel instant.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No major strategic shift; pure execution handoff. The split of responsibilities (Agy: content + layout + macros + CSS system; Grok: carousel markup fidelity + vanilla JS behaviors + copy button) mirrors the &quot;design-first, beyond functional&quot; mandate of BS-5. We kept the carousel purely presentational + behavioral (no framework, no build step for the site JS).</p>
+<h2>What This PR Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/carousel-interaction-flow.html" title="BS-5 Carousel — Interaction State Machine" loading="lazy" frameborder="0"></iframe>
+  <figcaption>BS-5 Carousel — Interaction State Machine</figcaption>
+</figure>
+<ul>
+<li>Replaced the <code>#carousel</code> placeholder shell in <code>website/src/index.njk</code> with full markup ported from <code>hero-v4.html</code>:
+<ul>
+<li>Four <code>.terminal-slide</code> panes (init wizard, <code>join --scan</code>, parallel dispatch, <code>status</code> with Budget Pulse table).</li>
+<li>Command pill row (<code>.cmd-pill</code>): init · join · dispatch · status with <code>.active</code> state.</li>
+<li>Dot navigation (<code>.slide-dot</code> ×4).</li>
+</ul>
+</li>
+<li>Added dedicated carousel CSS in <code>website/src/assets/css/main.css</code> (<code>.section-carousel</code>, <code>.carousel-*</code>, <code>.cmd-pill</code>, <code>.slide-nav</code>/<code>.slide-dot</code>, absolute-positioned fade slides using <code>.terminal-slide.active</code> + <code>opacity</code> transition + slide-in feel).</li>
+<li>Created <code>website/src/assets/js/carousel.js</code>:
+<ul>
+<li>Auto-advance every 4200ms.</li>
+<li>Clicking pill or dot pauses the timer and switches the slide.</li>
+<li>Hover on container pauses; mouseleave resumes.</li>
+<li>Keyboard arrows when focused; tiny debug API on <code>window.__synlynkCarousel</code>.</li>
+<li>Pure vanilla, data-* driven, no inline handlers.</li>
+</ul>
+</li>
+<li>Created <code>website/src/assets/js/main.js</code>:
+<ul>
+<li>On DOMContentLoaded finds every <code>.copy-btn[data-copy]</code>.</li>
+<li>Uses <code>navigator.clipboard.writeText</code>, graceful fallback to execCommand.</li>
+<li>1.5s &quot;Copied!&quot; label + <code>.copied</code> class, restores original innerHTML (svg friendly).</li>
+</ul>
+</li>
+<li>Wired both scripts in <code>website/src/_includes/base.njk</code> before <code>&lt;/body&gt;</code> using absolute <code>/assets/js/...</code> paths (passthrough copied by Eleventy).</li>
+<li>Build verified: <code>cd website &amp;&amp; npm run build</code> emits clean <code>_site/index.html</code> containing the four slides, controls, copy button, and both script tags.</li>
+</ul>
+<p>The carousel uses the same terminal chrome (<code>.t-dots</code>, <code>.t-body</code>, token classes <code>.t-cmd</code>/<code>.t-arg</code>/<code>.t-ok</code> etc.) that Agy's step cards already styled.</p>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/bs5-website-redesign/hero-v4.html</code> — exact source for markup structure, slide copy, terminal chrome, pill + dot nav, color accents, and the original inline JS reference implementation.</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The live carousel is the first &quot;show, don't tell&quot; surface that lets a visitor instantly grasp the four core user actions that turn isolated CLIs into a coordinated workgroup. The copy button lowers friction to the exact first command. Together they turn the website from a brochure into a working demonstration of the OS layer. This is table stakes for the later &quot;Agent Autonomy Bridge&quot; and public launch narrative.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With Sections 1–5 + vision shell + interactive carousel complete, the homepage is now feature-complete for the current phase of BS-5. Remaining work (per the implementation plan) is Phase 3 details: vision motherboard canvas, docs cards, waitlist form, blog integration, and any sub-pages. The next user-visible milestone is pointing a real domain + CloudFront/S3 (or equivalent) at the built site and driving traffic from the CLI <code>--doctor</code> / <code>synlynk.com</code> mentions.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<h2>Full state architecture — new model</h2>
+<p class="subtitle">What lives where, what generates what, what syncs where</p>
+
+<style>
+  .arch-box { border-radius:8px; padding:14px; margin-bottom:10px; }
+  .arch-label { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:10px; }
+  .file-row { display:flex; align-items:baseline; gap:8px; margin:4px 0; font-size:12px; }
+  .file-path { font-family:monospace; }
+  .arrow-label { font-size:11px; color:#666; font-style:italic; }
+  .gen-badge { font-size:9px; padding:1px 6px; border-radius:3px; font-weight:700; vertical-align:middle; }
+  .tag-gen { background:#1a2a1a; color:#5dbb7a; border:1px solid #27ae60; }
+  .tag-db { background:#1a1f2a; color:#7ab8e8; border:1px solid #3498db; }
+  .tag-authored { background:#2a1f0a; color:#f0a050; border:1px solid #b87330; }
+  .tag-relay { background:#1f1a2a; color:#c084e8; border:1px solid #9b59b6; }
+  .tag-git { background:#1a0a0a; color:#ff8080; border:1px solid #c0392b; }
+  .connector { display:flex; align-items:center; gap:8px; margin:6px 0 6px 20px; color:#444; font-size:12px; }
+</style>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+<!-- LEFT COLUMN: what's gone + what's new locally -->
+<div>
+
+  <div class="arch-box" style="background:#1a0a0a;border:1.5px dashed #c0392b">
+    <div class="arch-label" style="color:#ff6b6b">removed from git — gone forever</div>
+    <div class="file-row"><span class="file-path" style="color:#ff6b6b;text-decoration:line-through">project-docs/todo.md</span></div>
+    <div class="file-row"><span class="file-path" style="color:#ff6b6b;text-decoration:line-through">project-docs/roadmap.md</span></div>
+    <div class="file-row"><span class="file-path" style="color:#ff6b6b;text-decoration:line-through">project-docs/memory.md</span></div>
+    <div class="file-row"><span class="file-path" style="color:#ff6b6b;text-decoration:line-through">project-docs/costs.md</span></div>
+    <div class="file-row"><span class="file-path" style="color:#ff6b6b;text-decoration:line-through">project-docs/devlogs/nikhil.md</span></div>
+    <div class="file-row"><span class="file-path" style="color:#ff6b6b;text-decoration:line-through">project-docs/source-map.md</span></div>
+    <div style="margin-top:8px;font-size:11px;color:#888">project-docs/ directory removed from repo entirely</div>
+  </div>
+
+  <div style="text-align:center;color:#27ae60;font-size:18px;margin:4px 0">↓ migrated into</div>
+
+  <div class="arch-box" style="background:#0d1a0d;border:1.5px solid #27ae60">
+    <div class="arch-label" style="color:#5dbb7a">~/.synlynk/projects/&lt;hash&gt;/ — local machine only</div>
+
+    <div class="file-row">
+      <span class="file-path" style="color:#7ec8a0">state.db</span>
+      <span class="gen-badge tag-db">SQLite</span>
+      <span class="arrow-label">stories · ratings · symbols · runs · notes</span>
+    </div>
+
+    <div style="margin:8px 0 4px 12px;font-size:11px;color:#666">generated views — written by synlynk, human-readable, editable:</div>
+
+    <div class="file-row" style="margin-left:12px">
+      <span class="file-path" style="color:#a8d8a8">todo.md</span>
+      <span class="gen-badge tag-gen">generated</span>
+      <span class="arrow-label">← stories table (active only)</span>
+    </div>
+    <div class="file-row" style="margin-left:12px">
+      <span class="file-path" style="color:#a8d8a8">roadmap.md</span>
+      <span class="gen-badge tag-gen">generated</span>
+      <span class="arrow-label">← releases + story phases</span>
+    </div>
+    <div class="file-row" style="margin-left:12px">
+      <span class="file-path" style="color:#a8d8a8">source-map.md</span>
+      <span class="gen-badge tag-gen">generated</span>
+      <span class="arrow-label">← source_symbols table</span>
+    </div>
+    <div class="file-row" style="margin-left:12px">
+      <span class="file-path" style="color:#a8d8a8">costs.md</span>
+      <span class="gen-badge tag-gen">generated</span>
+      <span class="arrow-label">← telemetry.json</span>
+    </div>
+    <div class="file-row" style="margin-left:12px">
+      <span class="file-path" style="color:#f0c080">memory.md</span>
+      <span class="gen-badge tag-authored">authored + synced</span>
+      <span class="arrow-label">human edits → DB on save</span>
+    </div>
+    <div class="file-row" style="margin-left:12px">
+      <span class="file-path" style="color:#f0c080">devlog.md</span>
+      <span class="gen-badge tag-authored">authored + synced</span>
+      <span class="arrow-label">agent appends · human reads</span>
+    </div>
+
+    <div style="margin-top:10px;font-size:11px;color:#888;border-top:1px solid #1f3a1f;padding-top:8px">
+      Human can edit memory.md directly. On next <code style="color:#7ec8a0">synlynk exec</code>, edits are re-read into context. Generated files are overwritten each cycle — don't hand-edit them.
+    </div>
+  </div>
+
+  <div class="arch-box" style="background:#0d0d1a;border:1.5px solid #3498db;margin-top:10px">
+    <div class="arch-label" style="color:#5ba4d4">what stays in git — unchanged</div>
+    <div class="file-row">
+      <span class="file-path" style="color:#7ab8e8">CLAUDE.md</span>
+      <span class="arrow-label">/ AGENTS.md / GEMINI.md — session protocol</span>
+    </div>
+    <div class="file-row">
+      <span class="file-path" style="color:#7ab8e8">synlynk/__init__.py</span>
+      <span class="arrow-label">— your actual source code</span>
+    </div>
+    <div style="margin-top:6px;font-size:11px;color:#666">
+      .gitignore gains: <code style="color:#7ab8e8">project-docs/</code> → removed entirely, not ignored
+    </div>
+  </div>
+
+</div>
+
+<!-- RIGHT COLUMN: new tables + flow -->
+<div>
+
+  <div class="arch-box" style="background:#0d1020;border:1.5px solid #3498db">
+    <div class="arch-label" style="color:#5ba4d4">state.db — new tables added</div>
+
+    <div style="font-size:12px;color:#ccc;margin-bottom:10px">Existing tables unchanged. Two additions:</div>
+
+    <div style="background:#0a0f1a;border:1px solid #2a3a5a;border-radius:6px;padding:10px;margin-bottom:8px">
+      <div style="color:#7ab8e8;font-weight:700;font-size:12px;margin-bottom:6px">notes (was memory.md)</div>
+      <div style="font-family:monospace;font-size:11px;color:#aaa;line-height:1.8">
+        id · TEXT<br>
+        content · TEXT &nbsp;<span style="color:#555">-- the decision/note</span><br>
+        author · TEXT &nbsp;&nbsp;<span style="color:#555">-- git user</span><br>
+        tags · TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#555">-- JSON array</span><br>
+        ts · TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#555">-- ISO timestamp</span><br>
+        <span style="color:#5dbb7a">ed25519_sig · TEXT</span>&nbsp;<span style="color:#555">-- signed at write</span>
+      </div>
+    </div>
+
+    <div style="background:#0a0f1a;border:1px solid #2a3a5a;border-radius:6px;padding:10px">
+      <div style="color:#7ab8e8;font-weight:700;font-size:12px;margin-bottom:6px">devlog_entries (was devlogs/&lt;user&gt;.md)</div>
+      <div style="font-family:monospace;font-size:11px;color:#aaa;line-height:1.8">
+        id · TEXT<br>
+        author · TEXT<br>
+        session_date · TEXT<br>
+        content · TEXT &nbsp;<span style="color:#555">-- markdown narrative</span><br>
+        ts · TEXT
+      </div>
+    </div>
+  </div>
+
+  <div class="arch-box" style="background:#0d1020;border:1.5px solid #27ae60;margin-top:10px">
+    <div class="arch-label" style="color:#5dbb7a">generate_context() — new flow</div>
+    <div style="font-size:12px;color:#ccc;line-height:2">
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#5dbb7a">1</span> Read <code style="color:#7ec8a0">state.db</code> → active stories → <code>todo.md</code> view</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#5dbb7a">2</span> Read <code style="color:#7ec8a0">notes</code> table → <code>memory.md</code> view</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#5dbb7a">3</span> Read <code style="color:#7ec8a0">devlog_entries</code> → last 3 sessions</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#5dbb7a">4</span> Read <code style="color:#7ec8a0">source_symbols</code> → architecture block</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#5dbb7a">5</span> Write <code style="color:#7ec8a0">context.md</code> → agent reads this</div>
+    </div>
+  </div>
+
+  <div class="arch-box" style="background:#1f1a2a;border:1.5px solid #9b59b6;margin-top:10px">
+    <div class="arch-label" style="color:#c084e8">relay sync scope (v0.9.3)</div>
+    <div style="font-size:12px;color:#ccc;line-height:1.8">
+      Relay syncs these tables as deltas:<br>
+      <span style="color:#c084e8">stories</span> · <span style="color:#c084e8">notes</span> · <span style="color:#c084e8">devlog_entries</span> · <span style="color:#c084e8">capability_ratings</span><br><br>
+      <span style="color:#888">NOT synced (local only):</span><br>
+      <span style="color:#555">source_symbols · telemetry · autopilot_runs</span><br><br>
+      <span style="color:#aaa">Conflict resolution: last-write-wins per row for <code style="color:#c084e8">notes</code>. Append-only for <code style="color:#c084e8">devlog_entries</code> and <code style="color:#c084e8">capability_ratings</code> — never conflict.</span>
+    </div>
+  </div>
+
+  <div class="arch-box" style="background:#0d1a0d;border:1.5px solid #27ae60;margin-top:10px">
+    <div class="arch-label" style="color:#5dbb7a">synlynk migrate — one-time command</div>
+    <div style="font-size:12px;color:#ccc;line-height:1.8">
+      <div style="font-family:monospace;color:#7ec8a0;margin-bottom:8px">$ synlynk migrate</div>
+      1. Parse <code>project-docs/todo.md</code> → INSERT stories<br>
+      2. Parse <code>project-docs/memory.md</code> → INSERT notes<br>
+      3. Parse <code>project-docs/devlogs/*.md</code> → INSERT devlog_entries<br>
+      4. Parse <code>project-docs/costs.md</code> → already in telemetry<br>
+      5. <code>git rm -r project-docs/</code><br>
+      6. Generate initial views in <code>~/.synlynk/projects/&lt;hash&gt;/</code><br>
+      7. Commit: <em>"chore: migrate project-docs to synlynk state.db"</em>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div style="margin-top:20px;padding:14px;background:#0a0a0a;border:1px solid #333;border-radius:8px;font-size:12px;color:#ccc;line-height:1.9">
+  <strong style="color:#fff;font-size:13px">What the human experiences after migration:</strong><br>
+  <span style="color:#7ec8a0">→</span> "what's next?" — agent reads state.db, answers conversationally<br>
+  <span style="color:#7ec8a0">→</span> "remember we're using postgres" — <code>synlynk memory add "using postgres not mysql"</code> or agent does it inline<br>
+  <span style="color:#7ec8a0">→</span> "show me the roadmap" — <code>synlynk roadmap</code> generates from state.db, prints to terminal<br>
+  <span style="color:#7ec8a0">→</span> job completes → HUD bar expands, collapses after 4s<br>
+  <span style="color:#7ec8a0">→</span> relay syncs teammate's story update → HUD shows "2 stories synced from @teammate"<br>
+  <span style="color:#5dbb7a;font-weight:700">Zero markdown files in git. Zero conflicts. Ever.</span>
+</div>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>This is the design — write the spec</h3>
+      <p>Architecture is right. State model, new tables, migration flow, relay scope, HUD events all clear. Let's write the spec doc.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise: keep memory.md as a plain file, not a DB table</h3>
+      <p>Memory decisions are human-authored narrative — forcing them into a structured notes table adds friction. Keep as ~/.synlynk/.../memory.md, read on each context cycle. Simpler.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Revise: something else needs changing</h3>
+      <p>The generate_context() flow, relay scope, migration steps, or something else needs a rethink. Tell me what.</p>
+    </div>
+  </div>
+</div>

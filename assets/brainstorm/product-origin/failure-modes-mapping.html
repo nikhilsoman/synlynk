@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Failure Modes → Product Requirements</title>
+<style>
+:root {
+  --bg: #0E0E0F; --bg-card: #111115; --blue: #5B8DEF; --purple: #A259F7; --teal: #2EC4A0;
+  --orange: #D97757; --text: #E9E9EE; --muted: rgba(233,233,238,0.55); --border: rgba(255,255,255,0.07);
+  --font: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:20px;}
+.title{font-size:15px;font-weight:700;letter-spacing:-0.5px;text-align:center;margin-bottom:4px;}
+.subtitle{font-size:11px;color:var(--muted);text-align:center;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:20px;}
+.wrap{max-width:920px;margin:0 auto;display:grid;grid-template-columns:1fr 48px 1fr;gap:16px;align-items:start;}
+.col{display:flex;flex-direction:column;}
+.col-header{font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;padding:0 4px;}
+.failure .col-header{color:#f87171;}
+.req .col-header{color:var(--teal);}
+.mode{
+  background:var(--bg-card);border:1px solid #3f2a2a;border-radius:10px;padding:12px 14px;margin-bottom:12px;position:relative;
+}
+.mode:last-child{margin-bottom:0;}
+.mode-title{font-weight:600;font-size:13px;margin-bottom:4px;color:#fca5a5;}
+.mode-desc{font-size:11px;color:var(--muted);line-height:1.35;}
+.req-item{
+  background:var(--bg-card);border:1px solid rgba(46,196,160,0.25);border-radius:10px;padding:12px 14px;margin-bottom:12px;
+}
+.req-item:last-child{margin-bottom:0;}
+.req-title{font-weight:600;font-size:13px;margin-bottom:4px;color:var(--teal);}
+.req-desc{font-size:11px;color:var(--muted);line-height:1.35;}
+.arrow-col{display:flex;flex-direction:column;justify-content:space-around;padding-top:38px;}
+.arrow{
+  width:100%;height:1px;background:linear-gradient(to right, #f87171, var(--teal));
+  position:relative;margin:28px 0;
+}
+.arrow::after{
+  content:'→';position:absolute;right:-2px;top:-8px;color:var(--teal);font-size:15px;
+}
+.label{
+  position:absolute;left:50%;top:-18px;transform:translateX(-50%);font-size:9px;letter-spacing:0.5px;color:var(--muted);white-space:nowrap;
+}
+</style>
+</head>
+<body>
+<div class="title">The 4 Failure Modes That Built synlynk</div>
+<div class="subtitle">Empirical studies → architecture requirements</div>
+
+<div class="wrap">
+  <div class="col failure">
+    <div class="col-header">Failure Modes</div>
+    <div class="mode">
+      <div class="mode-title">Context Asymmetry</div>
+      <div class="mode-desc">Claude carries cross-session memory. Gemini and Codex start cold every session.</div>
+    </div>
+    <div class="mode">
+      <div class="mode-title">Memory Asymmetry</div>
+      <div class="mode-desc">Single point of institutional knowledge (Claude). Bus factor of 1 for the workgroup.</div>
+    </div>
+    <div class="mode">
+      <div class="mode-title">Manual Coordination Overhead</div>
+      <div class="mode-desc">Human becomes the message-passing layer between agents.</div>
+    </div>
+    <div class="mode">
+      <div class="mode-title">No Constraint Propagation</div>
+      <div class="mode-desc">Org constraints in one agent's memory never reach the others.</div>
+    </div>
+  </div>
+
+  <div class="arrow-col">
+    <div class="arrow"><span class="label">→ shared ledger</span></div>
+    <div class="arrow"><span class="label">→ harness memory</span></div>
+    <div class="arrow"><span class="label">→ autonomous dispatch</span></div>
+    <div class="arrow"><span class="label">→ unified instruction files</span></div>
+  </div>
+
+  <div class="col req">
+    <div class="col-header">Product Requirements</div>
+    <div class="req-item">
+      <div class="req-title">Shared context snapshot</div>
+      <div class="req-desc">project-docs/ (later state.db) — tool-agnostic, human-readable.</div>
+    </div>
+    <div class="req-item">
+      <div class="req-title">Persistent memory with attribution</div>
+      <div class="req-desc">memory.md + devlogs + costs — with [@username] and provenance.</div>
+    </div>
+    <div class="req-item">
+      <div class="req-title">Shell-native dispatch</div>
+      <div class="req-desc">synlynk dispatch / start — agents coordinate without human copy-paste.</div>
+    </div>
+    <div class="req-item">
+      <div class="req-title">Budget + sentinel limits</div>
+      <div class="req-desc">Constraint surface that applies to every agent on every run.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Synaptic Diagram Options</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',system-ui,sans-serif;background:#0e0e0f;color:#ccc;padding:32px 40px;}
+h1{font-size:18px;font-weight:600;color:#fff;margin-bottom:6px;}
+.sub{font-size:13px;color:#555;margin-bottom:28px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.option{background:#111;border:2px solid #222;border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color 0.2s;}
+.option:hover{border-color:#444;}
+.option.selected{border-color:#5B8DEF;}
+.opt-label{padding:14px 18px 0;display:flex;align-items:center;justify-content:space-between;}
+.opt-tag{font-size:10px;letter-spacing:2px;font-weight:600;text-transform:uppercase;}
+.opt-name{font-size:14px;font-weight:600;color:#eee;margin:4px 18px 0;}
+.opt-desc{font-size:11px;color:#555;margin:3px 18px 12px;line-height:1.5;}
+.opt-svg{padding:0 18px 18px;display:flex;justify-content:center;}
+.sel-indicator{font-size:10px;color:#5B8DEF;font-weight:600;opacity:0;transition:opacity 0.2s;}
+.option.selected .sel-indicator{opacity:1;}
+</style>
+</head>
+<body>
+<h1>Synaptic Network Diagram — 4 Options</h1>
+<p class="sub">Click to select your preferred visual direction for the "unlock" section. Each represents a different fidelity and metaphor for synlynk as the coordination hub.</p>
+
+<div class="grid">
+
+  <!-- OPTION A: Anatomical Synapse -->
+  <div class="option" onclick="this.classList.toggle('selected')">
+    <div class="opt-label">
+      <span class="opt-tag" style="color:#5B8DEF;">Option A</span>
+      <span class="sel-indicator">✓ Selected</span>
+    </div>
+    <div class="opt-name">Anatomical Synapse</div>
+    <div class="opt-desc">Scientifically accurate neuron anatomy. Labeled dendritic arbors, axon hillock, myelin sheath, Ranvier nodes, boutons, synaptic cleft. Clinical precision — signals a rigorous technical product.</div>
+    <div class="opt-svg">
+      <svg width="360" height="300" viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="a-soma" cx="40%" cy="35%"><stop offset="0%" stop-color="#1a2a4a"/><stop offset="100%" stop-color="#0d1830"/></radialGradient>
+          <radialGradient id="a-nuc" cx="40%" cy="35%"><stop offset="0%" stop-color="#4a7fdf"/><stop offset="100%" stop-color="#2a4fa8"/></radialGradient>
+        </defs>
+
+        <!-- background hint -->
+        <rect width="360" height="300" fill="#090910" rx="10"/>
+
+        <!-- ── PRE-SYNAPTIC NEURON (left) ── -->
+        <!-- dendritic tree (top-left) — branching organic structure -->
+        <path d="M 60 20 C 60 40 55 60 58 80" stroke="#5B8DEF" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+        <path d="M 58 40 C 45 35 32 28 28 20" stroke="#5B8DEF" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+        <path d="M 58 50 C 70 44 80 38 86 30" stroke="#5B8DEF" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+        <path d="M 45 36 C 38 28 30 22 26 14" stroke="#5B8DEF" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 72 44 C 80 38 90 34 96 28" stroke="#5B8DEF" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.3"/>
+        <!-- dendritic spine tips -->
+        <circle cx="28" cy="20" r="2" fill="#5B8DEF" opacity="0.5"/>
+        <circle cx="86" cy="30" r="2" fill="#5B8DEF" opacity="0.5"/>
+        <circle cx="26" cy="14" r="1.5" fill="#5B8DEF" opacity="0.4"/>
+        <circle cx="96" cy="28" r="1.5" fill="#5B8DEF" opacity="0.4"/>
+        <circle cx="60" cy="20" r="1.5" fill="#5B8DEF" opacity="0.4"/>
+
+        <!-- soma (cell body) -->
+        <ellipse cx="60" cy="100" rx="32" ry="28" fill="url(#a-soma)" stroke="#5B8DEF" stroke-width="1.5" opacity="0.9"/>
+        <!-- nucleus -->
+        <ellipse cx="58" cy="98" rx="16" ry="14" fill="url(#a-nuc)" stroke="#7aaaf0" stroke-width="1" opacity="0.85"/>
+        <!-- nucleolus -->
+        <circle cx="55" cy="94" r="5" fill="#1a3a8a" opacity="0.8"/>
+        <!-- nuclear pores -->
+        <circle cx="58" cy="84" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="68" cy="89" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="72" cy="99" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="66" cy="110" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="55" cy="113" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="46" cy="106" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="43" cy="95" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <circle cx="49" cy="86" r="1.8" fill="#7aaaf0" opacity="0.6"/>
+        <!-- label: soma -->
+        <text x="98" y="101" font-family="monospace" font-size="8" fill="#5B8DEF" opacity="0.7">← soma</text>
+
+        <!-- axon hillock (tapered transition) -->
+        <path d="M 60 128 C 60 138 62 148 65 158" stroke="#5B8DEF" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <text x="94" y="142" font-family="monospace" font-size="8" fill="#5B8DEF" opacity="0.6">← axon hillock</text>
+
+        <!-- myelinated axon with Ranvier nodes -->
+        <!-- myelin segments (thick blue) with gaps -->
+        <path d="M 65 158 C 68 168 70 176 72 182" stroke="#5B8DEF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.5"/>
+        <circle cx="72" cy="182" r="3.5" fill="#0e0e0f" stroke="#5B8DEF" stroke-width="1.5" opacity="0.8"/><!-- Ranvier 1 -->
+        <path d="M 72 185 C 74 192 76 198 78 205" stroke="#5B8DEF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.5"/>
+        <circle cx="78" cy="205" r="3.5" fill="#0e0e0f" stroke="#5B8DEF" stroke-width="1.5" opacity="0.8"/><!-- Ranvier 2 -->
+        <path d="M 78 208 C 80 215 82 220 84 226" stroke="#5B8DEF" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.5"/>
+        <!-- labels -->
+        <text x="94" y="178" font-family="monospace" font-size="8" fill="#444">← myelin</text>
+        <text x="94" y="207" font-family="monospace" font-size="8" fill="#444">← node of Ranvier</text>
+
+        <!-- axon terminal / bouton cluster -->
+        <path d="M 84 226 C 86 232 88 238 90 242" stroke="#5B8DEF" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="94" cy="248" r="8" fill="#1a2a4a" stroke="#5B8DEF" stroke-width="1.5" opacity="0.9"/><!-- bouton -->
+        <circle cx="84" cy="252" r="6" fill="#1a2a4a" stroke="#5B8DEF" stroke-width="1.2" opacity="0.7"/>
+        <!-- synaptic vesicles inside bouton -->
+        <circle cx="92" cy="246" r="2" fill="#5B8DEF" opacity="0.7"/>
+        <circle cx="96" cy="250" r="2" fill="#5B8DEF" opacity="0.6"/>
+        <circle cx="93" cy="253" r="2" fill="#5B8DEF" opacity="0.5"/>
+        <circle cx="88" cy="248" r="1.5" fill="#5B8DEF" opacity="0.6"/>
+        <circle cx="97" cy="244" r="1.5" fill="#5B8DEF" opacity="0.5"/>
+        <text x="8" y="254" font-family="monospace" font-size="8" fill="#5B8DEF" opacity="0.7">bouton →</text>
+
+        <!-- ── SYNAPTIC CLEFT ── -->
+        <line x1="88" y1="260" x2="200" y2="260" stroke="#333" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.6"/>
+        <text x="130" y="268" font-family="monospace" font-size="8" fill="#444" text-anchor="middle">— synaptic cleft —</text>
+        <!-- neurotransmitter dots crossing cleft -->
+        <circle cx="110" cy="263" r="2" fill="#A259F7" opacity="0.7"/>
+        <circle cx="125" cy="261" r="2" fill="#A259F7" opacity="0.6"/>
+        <circle cx="140" cy="264" r="2" fill="#A259F7" opacity="0.7"/>
+        <circle cx="155" cy="262" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="170" cy="263" r="2" fill="#A259F7" opacity="0.6"/>
+        <text x="130" y="257" font-family="monospace" font-size="7" fill="#A259F7" opacity="0.6" text-anchor="middle">neurotransmitters</text>
+
+        <!-- ── POST-SYNAPTIC CELL: synlynk soma ── -->
+        <!-- post-synaptic density (receptor zone) -->
+        <rect x="88" y="272" width="120" height="6" rx="3" fill="#A259F7" opacity="0.3"/>
+        <text x="148" y="268" font-family="monospace" font-size="7" fill="#A259F7" opacity="0.5" text-anchor="middle">post-synaptic density</text>
+
+        <!-- synlynk soma -->
+        <ellipse cx="210" cy="220" rx="48" ry="44" fill="#0d1020" stroke="#A259F7" stroke-width="1.5" opacity="0.9"/>
+        <!-- ER/ribosomes -->
+        <path d="M 182 218 C 188 213 194 223 200 218 C 206 213 212 223 218 218" stroke="#2a1a4a" stroke-width="1.2" fill="none" opacity="0.8"/>
+        <path d="M 198 232 C 204 227 210 237 216 232 C 222 227 228 237 234 232" stroke="#2a1a4a" stroke-width="1.2" fill="none" opacity="0.7"/>
+        <!-- nucleus -->
+        <ellipse cx="208" cy="218" rx="24" ry="22" fill="#1a0d30" stroke="#A259F7" stroke-width="1.2" opacity="0.9"/>
+        <!-- nucleolus -->
+        <circle cx="204" cy="214" r="8" fill="#2a1040" opacity="0.9"/>
+        <!-- nuclear pores -->
+        <circle cx="208" cy="196" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="221" cy="202" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="230" cy="216" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="224" cy="230" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="210" cy="238" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="196" cy="232" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="188" cy="220" r="2" fill="#A259F7" opacity="0.5"/>
+        <circle cx="194" cy="206" r="2" fill="#A259F7" opacity="0.5"/>
+        <!-- synlynk S-glyph -->
+        <g transform="translate(210,218) scale(0.65)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 14" fill="none" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3.5" fill="#5B8DEF"/>
+          <circle cx="3" cy="14" r="3.5" fill="#2EC4A0"/>
+        </g>
+        <text x="210" y="278" text-anchor="middle" font-family="monospace" font-size="11" font-weight="500" fill="#A259F7">synlynk</text>
+        <text x="210" y="290" text-anchor="middle" font-family="monospace" font-size="8" fill="#555">post-synaptic soma</text>
+
+        <!-- additional pre-synaptic inputs from right (Gemini) -->
+        <path d="M 320 80 C 300 100 280 140 265 200 C 258 226 248 248 240 258" stroke="#2EC4A0" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
+        <circle cx="302" cy="104" r="3" fill="#0e0e0f" stroke="#2EC4A0" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="278" cy="140" r="3" fill="#0e0e0f" stroke="#2EC4A0" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="258" cy="226" r="3" fill="#0e0e0f" stroke="#2EC4A0" stroke-width="1.2" opacity="0.7"/>
+        <!-- terminal -->
+        <circle cx="240" cy="262" r="7" fill="#0d1a18" stroke="#2EC4A0" stroke-width="1.5" opacity="0.9"/>
+        <circle cx="233" cy="256" r="5" fill="#0d1a18" stroke="#2EC4A0" stroke-width="1.2" opacity="0.7"/>
+        <!-- vesicles -->
+        <circle cx="238" cy="260" r="1.8" fill="#2EC4A0" opacity="0.7"/>
+        <circle cx="242" cy="264" r="1.8" fill="#2EC4A0" opacity="0.6"/>
+        <circle cx="236" cy="265" r="1.8" fill="#2EC4A0" opacity="0.5"/>
+
+        <!-- agent labels -->
+        <text x="60" y="148" text-anchor="middle" font-family="system-ui" font-size="9" font-weight="600" fill="#5B8DEF">Claude</text>
+        <text x="330" y="72" text-anchor="middle" font-family="system-ui" font-size="9" font-weight="600" fill="#2EC4A0">Gemini</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- OPTION B: Astrocyte Star -->
+  <div class="option" onclick="this.classList.toggle('selected')">
+    <div class="opt-label">
+      <span class="opt-tag" style="color:#A259F7;">Option B</span>
+      <span class="sel-indicator">✓ Selected</span>
+    </div>
+    <div class="opt-name">Astrocyte Hub</div>
+    <div class="opt-desc">synlynk rendered as an astrocyte (star-shaped glial cell) — the brain's coordination cell that regulates synaptic transmission. Agents are neurons whose axon terminals contact the astrocyte processes (endfeet). Biologically, astrocytes modulate every synapse they touch.</div>
+    <div class="opt-svg">
+      <svg width="360" height="300" viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="b-core" cx="50%" cy="50%"><stop offset="0%" stop-color="#1a0d30"/><stop offset="100%" stop-color="#0e0a1a"/></radialGradient>
+          <radialGradient id="b-glow" cx="50%" cy="50%"><stop offset="0%" stop-color="rgba(162,89,247,0.15)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+        </defs>
+        <rect width="360" height="300" fill="#090910" rx="10"/>
+
+        <!-- Astrocyte glow -->
+        <circle cx="180" cy="150" r="90" fill="url(#b-glow)"/>
+
+        <!-- Astrocyte processes (long branching extensions to each agent) -->
+        <!-- Process 1: to Claude (top-left) -->
+        <path d="M 180 150 C 160 130 120 100 75 65" stroke="#A259F7" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <!-- Branch off process 1 -->
+        <path d="M 130 102 C 118 90 105 84 92 80" stroke="#A259F7" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.35"/>
+        <path d="M 110 88 C 102 78 96 72 88 68" stroke="#A259F7" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.25"/>
+        <!-- Endfoot (astrocyte terminal that wraps the bouton) -->
+        <circle cx="78" cy="68" r="10" fill="rgba(162,89,247,0.12)" stroke="#A259F7" stroke-width="1.2" stroke-dasharray="3,2" opacity="0.7"/>
+
+        <!-- Process 2: to Gemini (top-right) -->
+        <path d="M 180 150 C 200 130 240 100 285 65" stroke="#5B8DEF" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <path d="M 230 102 C 242 90 255 84 268 80" stroke="#5B8DEF" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.35"/>
+        <path d="M 250 88 C 258 78 264 72 272 68" stroke="#5B8DEF" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.25"/>
+        <circle cx="282" cy="68" r="10" fill="rgba(91,141,239,0.12)" stroke="#5B8DEF" stroke-width="1.2" stroke-dasharray="3,2" opacity="0.7"/>
+
+        <!-- Process 3: to Grok (bottom-left) -->
+        <path d="M 180 150 C 160 170 120 200 75 235" stroke="#2EC4A0" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <path d="M 130 198 C 118 210 105 216 92 220" stroke="#2EC4A0" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.35"/>
+        <path d="M 110 212 C 102 222 96 228 88 232" stroke="#2EC4A0" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.25"/>
+        <circle cx="78" cy="232" r="10" fill="rgba(46,196,160,0.12)" stroke="#2EC4A0" stroke-width="1.2" stroke-dasharray="3,2" opacity="0.7"/>
+
+        <!-- Process 4: to Codex (bottom-right) -->
+        <path d="M 180 150 C 200 170 240 200 285 235" stroke="#888" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+        <path d="M 230 198 C 242 210 255 216 268 220" stroke="#888" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 250 212 C 258 222 264 228 272 232" stroke="#888" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.2"/>
+        <circle cx="282" cy="232" r="10" fill="rgba(136,136,136,0.1)" stroke="#888" stroke-width="1.2" stroke-dasharray="3,2" opacity="0.6"/>
+
+        <!-- Additional shorter processes (astrocytes have many processes) -->
+        <path d="M 180 150 C 175 128 178 108 180 95" stroke="#A259F7" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 180 150 C 198 145 215 148 228 152" stroke="#5B8DEF" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 180 150 C 162 155 148 152 136 148" stroke="#2EC4A0" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 180 150 C 178 168 176 184 174 196" stroke="#888" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.3"/>
+
+        <!-- Central astrocyte body (irregular, star-like soma) -->
+        <polygon points="180,118 192,138 215,138 197,153 204,176 180,163 156,176 163,153 145,138 168,138" fill="#1a0d30" stroke="#A259F7" stroke-width="1.5" opacity="0.9"/>
+        <!-- Inner glow ring -->
+        <polygon points="180,126 189,141 208,141 193,153 199,172 180,161 161,172 167,153 152,141 171,141" fill="none" stroke="#A259F7" stroke-width="0.5" opacity="0.4"/>
+        <!-- synlynk S-glyph in center -->
+        <g transform="translate(180,150) scale(0.7)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3" fill="#5B8DEF"/>
+          <circle cx="3" cy="13" r="3" fill="#2EC4A0"/>
+        </g>
+
+        <!-- Agent neuron somas at each tip -->
+        <!-- Claude -->
+        <circle cx="58" cy="52" r="20" fill="#0d1020" stroke="#A259F7" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="55" cy="49" r="8" fill="#1a1a3a" stroke="#A259F7" stroke-width="0.8" opacity="0.7"/>
+        <circle cx="52" cy="46" r="3.5" fill="#A259F7" opacity="0.6"/>
+        <text x="58" y="82" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#D97757">Claude</text>
+        <!-- Claude icon -->
+        <circle cx="62" cy="52" r="4" fill="none" stroke="#D97757" stroke-width="1.2" opacity="0.7"/>
+        <line x1="62" y1="46" x2="62" y2="49" stroke="#D97757" stroke-width="1" stroke-linecap="round" opacity="0.7"/>
+        <line x1="62" y1="55" x2="62" y2="58" stroke="#D97757" stroke-width="1" stroke-linecap="round" opacity="0.7"/>
+
+        <!-- Gemini -->
+        <circle cx="302" cy="52" r="20" fill="#0d1020" stroke="#5B8DEF" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="299" cy="49" r="8" fill="#0d1a2a" stroke="#5B8DEF" stroke-width="0.8" opacity="0.7"/>
+        <circle cx="296" cy="46" r="3.5" fill="#5B8DEF" opacity="0.6"/>
+        <path d="M 302 44 C 302 44 304.5 50 307 52 C 304.5 54 302 60 302 60 C 302 60 299.5 54 297 52 C 299.5 50 302 44 302 44Z" fill="#1a73e8" opacity="0.75"/>
+        <text x="302" y="82" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#1a73e8">Gemini</text>
+
+        <!-- Grok -->
+        <circle cx="58" cy="248" r="20" fill="#0d0d0d" stroke="#2EC4A0" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="55" cy="245" r="8" fill="#111" stroke="#2EC4A0" stroke-width="0.8" opacity="0.7"/>
+        <circle cx="52" cy="242" r="3.5" fill="#888" opacity="0.5"/>
+        <line x1="54" y1="244" x2="64" y2="254" stroke="#555" stroke-width="2" stroke-linecap="round"/>
+        <line x1="64" y1="244" x2="54" y2="254" stroke="#555" stroke-width="2" stroke-linecap="round"/>
+        <text x="58" y="278" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#888">Grok</text>
+
+        <!-- Codex -->
+        <circle cx="302" cy="248" r="20" fill="#0d0d0d" stroke="#888" stroke-width="1.2" opacity="0.9"/>
+        <circle cx="299" cy="245" r="8" fill="#111" stroke="#666" stroke-width="0.8" opacity="0.7"/>
+        <circle cx="296" cy="242" r="3.5" fill="#666" opacity="0.5"/>
+        <circle cx="302" cy="248" r="5" stroke="#555" stroke-width="1.2" fill="none" opacity="0.85"/>
+        <text x="302" y="278" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#666">Codex</text>
+
+        <!-- center label -->
+        <text x="180" y="196" text-anchor="middle" font-family="monospace" font-size="11" font-weight="500" fill="#A259F7">synlynk</text>
+        <text x="180" y="208" text-anchor="middle" font-family="system-ui" font-size="8" fill="#555">astrocyte hub</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- OPTION C: Network Graph -->
+  <div class="option" onclick="this.classList.toggle('selected')">
+    <div class="opt-label">
+      <span class="opt-tag" style="color:#2EC4A0;">Option C</span>
+      <span class="sel-indicator">✓ Selected</span>
+    </div>
+    <div class="opt-name">Neural Network Graph</div>
+    <div class="opt-desc">Clean force-directed graph with concentric layers. Agents on outer ring, synlynk at center, inner ring shows data layer (state, dispatch, relay, profiles). Inspired by network topology and connectome mapping. More tech-product than biology.</div>
+    <div class="opt-svg">
+      <svg width="360" height="300" viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="c-core" cx="50%" cy="50%"><stop offset="0%" stop-color="#1a0a2e"/><stop offset="100%" stop-color="#0d0820"/></radialGradient>
+          <radialGradient id="c-bg" cx="50%" cy="50%"><stop offset="0%" stop-color="rgba(91,141,239,0.04)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+        </defs>
+        <rect width="360" height="300" fill="#090910" rx="10"/>
+        <circle cx="180" cy="150" r="130" fill="url(#c-bg)"/>
+
+        <!-- Outer ring: agent nodes -->
+        <!-- Claude: top-left 45° -->
+        <line x1="180" y1="150" x2="88" y2="58" stroke="#D97757" stroke-width="1.5" opacity="0.4"/>
+        <line x1="88" y1="58" x2="131" y2="102" stroke="#D97757" stroke-width="1" stroke-dasharray="4,3" opacity="0.25"/>
+        <circle cx="88" cy="58" r="22" fill="#1a1008" stroke="#D97757" stroke-width="1.5" opacity="0.9"/>
+        <circle cx="86" cy="56" r="9" fill="#2a1a10" stroke="#D97757" stroke-width="1" opacity="0.8"/>
+        <!-- Claude mark -->
+        <circle cx="92" cy="58" r="4.5" fill="none" stroke="#D97757" stroke-width="1.3" opacity="0.85"/>
+        <line x1="92" y1="52" x2="92" y2="55" stroke="#D97757" stroke-width="1.1" stroke-linecap="round" opacity="0.8"/>
+        <line x1="92" y1="61" x2="92" y2="64" stroke="#D97757" stroke-width="1.1" stroke-linecap="round" opacity="0.8"/>
+        <line x1="86" y1="58" x2="89" y2="58" stroke="#D97757" stroke-width="1.1" stroke-linecap="round" opacity="0.8"/>
+        <line x1="95" y1="58" x2="98" y2="58" stroke="#D97757" stroke-width="1.1" stroke-linecap="round" opacity="0.8"/>
+        <text x="88" y="90" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#D97757">Claude</text>
+
+        <!-- Gemini: top-right -->
+        <line x1="180" y1="150" x2="272" y2="58" stroke="#1a73e8" stroke-width="1.5" opacity="0.4"/>
+        <circle cx="272" cy="58" r="22" fill="#081020" stroke="#1a73e8" stroke-width="1.5" opacity="0.9"/>
+        <circle cx="270" cy="56" r="9" fill="#0d1a30" stroke="#1a73e8" stroke-width="1" opacity="0.8"/>
+        <path d="M 272 50 C 272 50 274.5 56 277 58 C 274.5 60 272 66 272 66 C 272 66 269.5 60 267 58 C 269.5 56 272 50 272 50Z" fill="#1a73e8" opacity="0.8"/>
+        <text x="272" y="90" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#1a73e8">Gemini</text>
+
+        <!-- Grok: bottom-left -->
+        <line x1="180" y1="150" x2="88" y2="242" stroke="#888" stroke-width="1.5" opacity="0.35"/>
+        <circle cx="88" cy="242" r="22" fill="#0d0d0d" stroke="#666" stroke-width="1.5" opacity="0.9"/>
+        <circle cx="86" cy="240" r="9" fill="#111" stroke="#555" stroke-width="1" opacity="0.8"/>
+        <line x1="83" y1="237" x2="93" y2="247" stroke="#666" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="93" y1="237" x2="83" y2="247" stroke="#666" stroke-width="2.2" stroke-linecap="round"/>
+        <text x="88" y="274" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#777">Grok</text>
+
+        <!-- Codex: bottom-right -->
+        <line x1="180" y1="150" x2="272" y2="242" stroke="#666" stroke-width="1.5" opacity="0.3"/>
+        <circle cx="272" cy="242" r="22" fill="#0d0d0d" stroke="#555" stroke-width="1.5" opacity="0.9"/>
+        <circle cx="270" cy="240" r="9" fill="#111" stroke="#444" stroke-width="1" opacity="0.8"/>
+        <circle cx="272" cy="242" r="6" stroke="#555" stroke-width="1.5" fill="none" opacity="0.85"/>
+        <path d="M 269 246 L 267 250" stroke="#555" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+        <path d="M 275 246 L 277 250" stroke="#555" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+        <line x1="267" y1="250" x2="277" y2="250" stroke="#555" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+        <text x="272" y="274" text-anchor="middle" font-family="system-ui" font-size="10" font-weight="600" fill="#666">Codex</text>
+
+        <!-- Inner ring: data layer nodes -->
+        <!-- State -->
+        <circle cx="145" cy="115" r="12" fill="#111" stroke="#5B8DEF" stroke-width="1" opacity="0.7"/>
+        <text x="145" y="119" text-anchor="middle" font-family="monospace" font-size="7" fill="#5B8DEF">state</text>
+        <line x1="180" y1="150" x2="150" y2="121" stroke="#5B8DEF" stroke-width="1" opacity="0.3"/>
+
+        <!-- Dispatch -->
+        <circle cx="215" cy="115" r="12" fill="#111" stroke="#A259F7" stroke-width="1" opacity="0.7"/>
+        <text x="215" y="119" text-anchor="middle" font-family="monospace" font-size="7" fill="#A259F7">dispatch</text>
+        <line x1="180" y1="150" x2="210" y2="121" stroke="#A259F7" stroke-width="1" opacity="0.3"/>
+
+        <!-- Relay -->
+        <circle cx="215" cy="185" r="12" fill="#111" stroke="#2EC4A0" stroke-width="1" opacity="0.7"/>
+        <text x="215" y="189" text-anchor="middle" font-family="monospace" font-size="7" fill="#2EC4A0">relay</text>
+        <line x1="180" y1="150" x2="210" y2="179" stroke="#2EC4A0" stroke-width="1" opacity="0.3"/>
+
+        <!-- Profiles -->
+        <circle cx="145" cy="185" r="12" fill="#111" stroke="#FFD060" stroke-width="1" opacity="0.7"/>
+        <text x="145" y="189" text-anchor="middle" font-family="monospace" font-size="7" fill="#FFD060">profiles</text>
+        <line x1="180" y1="150" x2="150" y2="179" stroke="#FFD060" stroke-width="1" opacity="0.3"/>
+
+        <!-- Center: synlynk core -->
+        <circle cx="180" cy="150" r="32" fill="url(#c-core)" stroke="#A259F7" stroke-width="1.5" opacity="0.9"/>
+        <circle cx="180" cy="150" r="22" fill="none" stroke="#A259F7" stroke-width="0.5" opacity="0.3"/>
+        <g transform="translate(180,150) scale(0.75)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3" fill="#5B8DEF"/>
+          <circle cx="3" cy="13" r="3" fill="#2EC4A0"/>
+        </g>
+        <text x="180" y="196" text-anchor="middle" font-family="monospace" font-size="10" font-weight="500" fill="#ccc">synlynk</text>
+
+        <!-- Pulse rings -->
+        <circle cx="180" cy="150" r="40" fill="none" stroke="#A259F7" stroke-width="0.5" opacity="0.15"/>
+        <circle cx="180" cy="150" r="65" fill="none" stroke="#5B8DEF" stroke-width="0.5" opacity="0.1"/>
+        <circle cx="180" cy="150" r="92" fill="none" stroke="#2EC4A0" stroke-width="0.5" opacity="0.07"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- OPTION D: Synaptic Cleft Cross-Section -->
+  <div class="option" onclick="this.classList.toggle('selected')">
+    <div class="opt-label">
+      <span class="opt-tag" style="color:#FFD060;">Option D</span>
+      <span class="sel-indicator">✓ Selected</span>
+    </div>
+    <div class="opt-name">Synaptic Cleft (Cross-section)</div>
+    <div class="opt-desc">A zoomed-in cross-section of the synapse itself — the moment of signal transmission. Each agent is a pre-synaptic terminal, synlynk is the post-synaptic density. Shows vesicles, receptors, and neurotransmitter release. Most biologically literal — like a textbook illustration but in dark-mode brand colors.</div>
+    <div class="opt-svg">
+      <svg width="360" height="300" viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="d-pre-c" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1a1028"/><stop offset="100%" stop-color="#150e22"/></linearGradient>
+          <linearGradient id="d-pre-g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0d1828"/><stop offset="100%" stop-color="#0a1020"/></linearGradient>
+          <linearGradient id="d-pre-gr" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#111"/><stop offset="100%" stop-color="#0d0d0d"/></linearGradient>
+          <linearGradient id="d-post" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0a0818"/><stop offset="100%" stop-color="#130a20"/></linearGradient>
+        </defs>
+        <rect width="360" height="300" fill="#090910" rx="10"/>
+
+        <!-- Pre-synaptic terminals (3 agents at top) -->
+        <!-- Claude terminal -->
+        <rect x="18" y="10" width="92" height="108" rx="8" fill="url(#d-pre-c)" stroke="#D97757" stroke-width="1.2" opacity="0.85"/>
+        <text x="64" y="26" text-anchor="middle" font-family="system-ui" font-size="9" font-weight="600" fill="#D97757">Claude</text>
+        <text x="64" y="37" text-anchor="middle" font-family="system-ui" font-size="7" fill="#555">pre-synaptic terminal</text>
+        <!-- mitochondria (energy for vesicle release) -->
+        <ellipse cx="38" cy="56" rx="12" ry="7" fill="#1a0808" stroke="#D97757" stroke-width="0.8" opacity="0.6"/>
+        <path d="M 30 56 C 33 52 36 60 39 56 C 42 52 45 60 48 56" stroke="#D97757" stroke-width="0.7" fill="none" opacity="0.4"/>
+        <text x="38" y="73" text-anchor="middle" font-family="monospace" font-size="6" fill="#555">mito</text>
+        <!-- synaptic vesicles -->
+        <circle cx="72" cy="48" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.8"/>
+        <circle cx="84" cy="44" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.7"/>
+        <circle cx="76" cy="60" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.7"/>
+        <circle cx="88" cy="58" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.6"/>
+        <circle cx="80" cy="72" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.8"/>
+        <circle cx="92" cy="70" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.7"/>
+        <circle cx="68" cy="76" r="5" fill="#1a0818" stroke="#D97757" stroke-width="1" opacity="0.6"/>
+        <text x="80" y="50" text-anchor="middle" font-family="monospace" font-size="6" fill="#555">vesicles</text>
+        <!-- active zone (where vesicles release) -->
+        <rect x="30" y="112" width="60" height="4" rx="2" fill="#D97757" opacity="0.6"/>
+        <text x="60" y="108" text-anchor="middle" font-family="monospace" font-size="6" fill="#D97757" opacity="0.7">active zone</text>
+
+        <!-- Gemini terminal -->
+        <rect x="134" y="10" width="92" height="108" rx="8" fill="url(#d-pre-g)" stroke="#1a73e8" stroke-width="1.2" opacity="0.85"/>
+        <text x="180" y="26" text-anchor="middle" font-family="system-ui" font-size="9" font-weight="600" fill="#1a73e8">Gemini</text>
+        <text x="180" y="37" text-anchor="middle" font-family="system-ui" font-size="7" fill="#555">pre-synaptic terminal</text>
+        <ellipse cx="152" cy="56" rx="12" ry="7" fill="#080d18" stroke="#1a73e8" stroke-width="0.8" opacity="0.6"/>
+        <path d="M 144 56 C 147 52 150 60 153 56 C 156 52 159 60 162 56" stroke="#1a73e8" stroke-width="0.7" fill="none" opacity="0.4"/>
+        <circle cx="188" cy="48" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.8"/>
+        <circle cx="200" cy="44" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.7"/>
+        <circle cx="192" cy="60" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.7"/>
+        <circle cx="204" cy="58" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.6"/>
+        <circle cx="196" cy="72" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.8"/>
+        <circle cx="208" cy="70" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.7"/>
+        <circle cx="184" cy="76" r="5" fill="#0a1020" stroke="#1a73e8" stroke-width="1" opacity="0.6"/>
+        <rect x="146" y="112" width="60" height="4" rx="2" fill="#1a73e8" opacity="0.6"/>
+        <rect x="18" y="116" width="92" height="4" rx="0" fill="#D97757" opacity="0.08"/><!-- spacer -->
+
+        <!-- Grok terminal -->
+        <rect x="250" y="10" width="92" height="108" rx="8" fill="url(#d-pre-gr)" stroke="#666" stroke-width="1.2" opacity="0.85"/>
+        <text x="296" y="26" text-anchor="middle" font-family="system-ui" font-size="9" font-weight="600" fill="#888">Grok</text>
+        <text x="296" y="37" text-anchor="middle" font-family="system-ui" font-size="7" fill="#555">pre-synaptic terminal</text>
+        <ellipse cx="268" cy="56" rx="12" ry="7" fill="#111" stroke="#666" stroke-width="0.8" opacity="0.6"/>
+        <path d="M 260 56 C 263 52 266 60 269 56 C 272 52 275 60 278 56" stroke="#666" stroke-width="0.7" fill="none" opacity="0.4"/>
+        <circle cx="304" cy="48" r="5" fill="#111" stroke="#666" stroke-width="1" opacity="0.8"/>
+        <circle cx="316" cy="44" r="5" fill="#111" stroke="#666" stroke-width="1" opacity="0.7"/>
+        <circle cx="308" cy="60" r="5" fill="#111" stroke="#666" stroke-width="1" opacity="0.7"/>
+        <circle cx="320" cy="58" r="5" fill="#111" stroke="#666" stroke-width="1" opacity="0.6"/>
+        <circle cx="312" cy="72" r="5" fill="#111" stroke="#666" stroke-width="1" opacity="0.8"/>
+        <circle cx="296" cy="76" r="5" fill="#111" stroke="#666" stroke-width="1" opacity="0.6"/>
+        <rect x="262" y="112" width="60" height="4" rx="2" fill="#666" opacity="0.5"/>
+
+        <!-- SYNAPTIC CLEFT (the gap) -->
+        <rect x="0" y="118" width="360" height="26" fill="#090910"/>
+        <text x="180" y="128" text-anchor="middle" font-family="monospace" font-size="8" fill="#333">── synaptic cleft (20nm) ──</text>
+        <!-- neurotransmitter molecules crossing cleft -->
+        <!-- from Claude terminal -->
+        <circle cx="45" cy="125" r="3" fill="#D97757" opacity="0.9"/>
+        <circle cx="58" cy="130" r="3" fill="#D97757" opacity="0.8"/>
+        <circle cx="72" cy="123" r="3" fill="#D97757" opacity="0.9"/>
+        <circle cx="85" cy="132" r="3" fill="#D97757" opacity="0.7"/>
+        <circle cx="95" cy="125" r="2.5" fill="#D97757" opacity="0.6"/>
+        <!-- from Gemini -->
+        <circle cx="148" cy="126" r="3" fill="#1a73e8" opacity="0.9"/>
+        <circle cx="162" cy="130" r="3" fill="#1a73e8" opacity="0.8"/>
+        <circle cx="176" cy="124" r="3" fill="#1a73e8" opacity="0.9"/>
+        <circle cx="190" cy="131" r="3" fill="#1a73e8" opacity="0.7"/>
+        <circle cx="204" cy="125" r="2.5" fill="#1a73e8" opacity="0.6"/>
+        <!-- from Grok -->
+        <circle cx="262" cy="127" r="3" fill="#888" opacity="0.8"/>
+        <circle cx="276" cy="122" r="3" fill="#888" opacity="0.7"/>
+        <circle cx="290" cy="130" r="3" fill="#888" opacity="0.8"/>
+        <circle cx="304" cy="124" r="3" fill="#888" opacity="0.6"/>
+        <circle cx="318" cy="129" r="2.5" fill="#888" opacity="0.6"/>
+
+        <!-- POST-SYNAPTIC MEMBRANE: synlynk -->
+        <!-- post-synaptic density (receptor clusters, one per agent input) -->
+        <!-- Claude receptors -->
+        <rect x="28" y="144" width="8" height="10" rx="2" fill="#D97757" opacity="0.7"/>
+        <rect x="44" y="144" width="8" height="10" rx="2" fill="#D97757" opacity="0.6"/>
+        <rect x="60" y="144" width="8" height="10" rx="2" fill="#D97757" opacity="0.7"/>
+        <rect x="76" y="144" width="8" height="10" rx="2" fill="#D97757" opacity="0.6"/>
+        <rect x="92" y="144" width="8" height="10" rx="2" fill="#D97757" opacity="0.5"/>
+        <!-- Gemini receptors -->
+        <rect x="145" y="144" width="8" height="10" rx="2" fill="#1a73e8" opacity="0.7"/>
+        <rect x="161" y="144" width="8" height="10" rx="2" fill="#1a73e8" opacity="0.6"/>
+        <rect x="177" y="144" width="8" height="10" rx="2" fill="#1a73e8" opacity="0.7"/>
+        <rect x="193" y="144" width="8" height="10" rx="2" fill="#1a73e8" opacity="0.6"/>
+        <rect x="209" y="144" width="8" height="10" rx="2" fill="#1a73e8" opacity="0.5"/>
+        <!-- Grok receptors -->
+        <rect x="262" y="144" width="8" height="10" rx="2" fill="#666" opacity="0.7"/>
+        <rect x="278" y="144" width="8" height="10" rx="2" fill="#666" opacity="0.6"/>
+        <rect x="294" y="144" width="8" height="10" rx="2" fill="#666" opacity="0.7"/>
+        <rect x="310" y="144" width="8" height="10" rx="2" fill="#666" opacity="0.5"/>
+
+        <!-- synlynk post-synaptic cell body -->
+        <rect x="10" y="154" width="340" height="136" rx="8" fill="url(#d-post)" stroke="#A259F7" stroke-width="1.2" opacity="0.9"/>
+        <text x="180" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#555">post-synaptic density — signal integration</text>
+
+        <!-- signal pathways inside post-synaptic cell -->
+        <path d="M 64 158 C 64 168 80 175 100 178 C 130 182 160 182 180 182" stroke="#D97757" stroke-width="1.2" fill="none" opacity="0.4" stroke-dasharray="4,2"/>
+        <path d="M 180 158 C 180 165 180 172 180 182" stroke="#1a73e8" stroke-width="1.2" fill="none" opacity="0.4" stroke-dasharray="4,2"/>
+        <path d="M 296 158 C 296 168 280 175 260 178 C 230 182 200 182 180 182" stroke="#666" stroke-width="1.2" fill="none" opacity="0.35" stroke-dasharray="4,2"/>
+
+        <!-- synlynk nucleus -->
+        <ellipse cx="180" cy="224" rx="52" ry="42" fill="#1a0a30" stroke="#A259F7" stroke-width="1.5" opacity="0.9"/>
+        <ellipse cx="178" cy="221" rx="32" ry="27" fill="#130820" stroke="#A259F7" stroke-width="0.8" opacity="0.8"/>
+        <circle cx="174" cy="216" r="11" fill="#0d0618" opacity="0.9"/>
+        <!-- S-glyph -->
+        <g transform="translate(180,222) scale(0.75)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3" fill="#5B8DEF"/>
+          <circle cx="3" cy="13" r="3" fill="#2EC4A0"/>
+        </g>
+        <text x="180" y="278" text-anchor="middle" font-family="monospace" font-size="11" font-weight="500" fill="#A259F7">synlynk</text>
+        <text x="180" y="290" text-anchor="middle" font-family="system-ui" font-size="8" fill="#444">integrating inputs from all agents</text>
+      </svg>
+    </div>
+  </div>
+
+</div><!-- /grid -->
+</body>
+</html>

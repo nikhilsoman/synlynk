@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk — Context Docs to Tokq Metamorphosis</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #020617; color: #e2e8f0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; padding: 20px; }
+  h1 { font-size: 18px; color: #f1f5f9; margin-bottom: 4px; }
+  .subtitle { color: #64748b; font-size: 12px; margin-bottom: 20px; }
+  h2 { font-size: 13px; font-weight: 600; margin-bottom: 10px; letter-spacing: .04em; text-transform: uppercase; }
+  .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: #0f172a; padding: 1px 5px; border-radius: 3px; }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; }
+  .dim { color: #475569; }
+  .green { color: #10b981; }
+  .blue { color: #60a5fa; }
+  .purple { color: #a78bfa; }
+  .amber { color: #fbbf24; }
+  .pink { color: #f472b6; }
+  .red { color: #f87171; }
+  .row { display: flex; gap: 12px; margin-bottom: 14px; }
+  .card { background: #0f172a; border-radius: 10px; padding: 14px; border: 1px solid #1e293b; }
+  .sep { border: none; border-top: 1px solid #1e293b; margin: 14px 0; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; letter-spacing: .04em; display: inline-block; }
+  .tag-private  { background: #1c1917; color: #a8a29e; }
+  .tag-pub      { background: #064e3b; color: #6ee7b7; }
+  .tag-optpub   { background: #1e1b4b; color: #a5b4fc; }
+  .tag-nosync   { background: #1c0909; color: #f87171; }
+  .tag-optsync  { background: #172554; color: #93c5fd; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #475569; padding: 6px 8px; border-bottom: 1px solid #1e293b; }
+  td { padding: 6px 8px; border-bottom: 1px solid #0f172a; font-size: 12px; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  /* timeline */
+  .timeline { display: flex; gap: 0; }
+  .tblock { flex: 1; padding: 12px; border-radius: 0; border-right: 1px solid #1e293b; position: relative; }
+  .tblock:first-child { border-radius: 8px 0 0 8px; }
+  .tblock:last-child  { border-radius: 0 8px 8px 0; border-right: none; }
+  .tarrow { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); z-index: 2; font-size: 16px; color: #334155; }
+
+  /* mapping comparison */
+  .cmp-row { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .cmp-left  { background: #1c1917; border: 1px solid #292524; border-radius: 7px; padding: 8px 10px; }
+  .cmp-right { background: #0c2132; border: 1px solid #1d4ed8; border-radius: 7px; padding: 8px 10px; }
+  .cmp-arrow { text-align: center; color: #475569; font-size: 16px; }
+  .cmp-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+
+  /* unit types */
+  .unit { border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid; }
+  .unit-strategic { background: #0d2218; border-color: #10b981; }
+  .unit-context   { background: #0e1f35; border-color: #60a5fa; }
+  .unit-execution { background: #1a0d2e; border-color: #a78bfa; }
+  .unit-activity  { background: #1f1a08; border-color: #fbbf24; }
+  .unit-capability{ background: #0f1220; border-color: #818cf8; }
+
+  /* sync flow */
+  .flow-box { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 10px 14px; }
+  .flow-arrow { text-align: center; color: #334155; font-size: 20px; margin: 4px 0; }
+  .enc-badge { display: inline-block; background: #1c1917; border: 1px solid #44403c; color: #a8a29e; border-radius: 4px; padding: 2px 8px; font-size: 10px; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<h1>synlynk: Context Docs → state.db → NATS → Tokq</h1>
+<p class="subtitle">How the same information metamorphoses across the storage stack — and the corrected memory unit mapping at v1.0</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1: INFRASTRUCTURE TIMELINE -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:14px">
+  <h2 class="label" style="color:#64748b;margin-bottom:12px">Storage Metamorphosis — one constant through every layer</h2>
+
+  <div class="timeline">
+
+    <div class="tblock" style="background:#0a1a11">
+      <div class="label green">v0.3–v0.4.0</div>
+      <div style="font-size:11px;color:#94a3b8;margin:6px 0">Flat Files</div>
+      <div class="mono dim">project-docs/
+  memory.md
+  roadmap.md
+  todo.md
+  costs.md
+  devlogs/
+.synlynk/
+  context.md ←
+  telemetry.json
+  jobs.json
+  config.json</div>
+      <div class="tarrow">›</div>
+    </div>
+
+    <div class="tblock" style="background:#0c1a2e">
+      <div class="label blue">v0.5.0–v0.6.0</div>
+      <div style="font-size:11px;color:#94a3b8;margin:6px 0">SQLite WAL</div>
+      <div class="mono dim">~/.synlynk/
+  workspaces/
+    &lt;name&gt;/
+      state.db
+        arc
+        phase
+        epic
+        story
+        event
+        memory
+        agent_profiles
+        costs ← (costs.md kept)
+        external_refs</div>
+      <div class="tarrow">›</div>
+    </div>
+
+    <div class="tblock" style="background:#1a0d2e">
+      <div class="label purple">v0.7.0–v0.9.0</div>
+      <div style="font-size:11px;color:#94a3b8;margin:6px 0">HTTP + Event Log</div>
+      <div class="mono dim">localhost:27471
+  GET /context
+  GET /story/&lt;id&gt;
+  POST /checkpoint
+
+state.db
+  + event append-only log
+  + dispatch_log (signed)
+  + inbox (per-role)
+
+.synlynk/
+  identity.json
+  identity.key</div>
+      <div class="tarrow">›</div>
+    </div>
+
+    <div class="tblock" style="background:#1a1208">
+      <div class="label amber">v1.0</div>
+      <div style="font-size:11px;color:#94a3b8;margin:6px 0">NATS leaf schema</div>
+      <div class="mono dim">state.db
+  ↓ serialized to
+NATS message:
+  subject:
+    synlynk.&lt;ws_id&gt;
+      .events
+  payload:
+    event_id
+    agent_uuid
+    story_id
+    type
+    data {}
+    signature ✍</div>
+      <div class="tarrow">›</div>
+    </div>
+
+    <div class="tblock" style="background:#1a0818">
+      <div class="label pink">Tokq Alpha</div>
+      <div style="font-size:11px;color:#94a3b8;margin:6px 0">NATS leaf→hub</div>
+      <div class="mono dim">NATS leaf node
+  ↓ AES-256-GCM
+  ↓ HKDF-SHA256
+  ↓ Ed25519 signed
+NATS hub (Tokq)
+  memory units
+    strategic
+    context
+    execution
+    activity
+    capability
+  marketplace
+    collections
+    subscriptions
+    gas tank</div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:12px;padding:10px;background:#0a1117;border-radius:7px;border:1px solid #1e293b">
+    <span class="green">→</span>
+    <span style="font-size:12px;color:#94a3b8">
+      <b style="color:#e2e8f0">One constant through every layer:</b>
+      <code>generate_context()</code> always produces <code>.synlynk/context.md</code> for agents.
+      v0.3: reads markdown files. v0.5: queries state.db. v0.7: served over HTTP. v1.0: from NATS-synced state.
+      Agents see identical format at every version — the metamorphosis is invisible to them.
+    </span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: MAPPING CORRECTION -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="row">
+<div class="card" style="flex:1">
+  <h2 class="label" style="color:#f87171;margin-bottom:12px">❌ Old mapping (broken after v0.5.0)</h2>
+  <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">
+    "One memory unit per <code>project-docs/*.md</code> file" — references files that no longer exist after <code>synlynk migrate</code>
+  </div>
+
+  <table>
+    <tr><th>Tokq field</th><th>Old synlynk source</th></tr>
+    <tr>
+      <td class="dim mono">memory_id</td>
+      <td><code class="red">sha256(session_id + <b>filename</b> + version)</code><br><span class="dim" style="font-size:11px">filename = memory.md, roadmap.md…</span></td>
+    </tr>
+    <tr>
+      <td class="dim mono">encrypted_data</td>
+      <td><span class="red">Full file content</span> of <code>project-docs/*.md</code><br><span class="dim" style="font-size:11px">— file doesn't exist after v0.5.0 migrate</span></td>
+    </tr>
+    <tr>
+      <td class="dim mono">metadata.title</td>
+      <td>filename without extension</td>
+    </tr>
+    <tr>
+      <td class="dim mono">metadata.tags</td>
+      <td><code>[@username]</code> scraped from file text</td>
+    </tr>
+    <tr>
+      <td class="dim mono">granularity</td>
+      <td><b class="red">file-grain</b> — 5–8 units per project regardless of size</td>
+    </tr>
+  </table>
+
+  <div style="margin-top:10px;padding:8px;background:#1c0909;border-radius:6px;font-size:11px;color:#fca5a5">
+    ⚠ After <code>synlynk migrate</code> (v0.5.0), <code>project-docs/</code> is gitignored.
+    The file-grain mapping silently breaks. A sync run after migration would produce empty or stale memory units.
+  </div>
+</div>
+
+<div class="card" style="flex:1">
+  <h2 class="label" style="color:#10b981;margin-bottom:12px">✓ New mapping (state.db view-grain, v1.0)</h2>
+  <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">
+    One memory unit per <b>purpose-typed state.db view</b>. Structured JSON payload, not raw file content.
+    Backward-compat: file-grain used if <code>state_db: false</code> in config (pre-migration).
+  </div>
+
+  <table>
+    <tr><th>Tokq field</th><th>New synlynk source</th></tr>
+    <tr>
+      <td class="dim mono">memory_id</td>
+      <td><code class="green">sha256(workspace_id + unit_type + entity_id + version)</code><br><span class="dim" style="font-size:11px">entity_id = phase.id | epic.id | workspace.id | date_bucket</span></td>
+    </tr>
+    <tr>
+      <td class="dim mono">encrypted_data</td>
+      <td><span class="green">Structured JSON view</span> of state.db tables<br><span class="dim" style="font-size:11px">— generated fresh, never stale</span></td>
+    </tr>
+    <tr>
+      <td class="dim mono">metadata.title</td>
+      <td><code>"&lt;unit_type&gt;:&lt;entity.title&gt;"</code></td>
+    </tr>
+    <tr>
+      <td class="dim mono">metadata.tags</td>
+      <td>DB-sourced tags (arc.tags, epic.labels, event.type set)</td>
+    </tr>
+    <tr>
+      <td class="dim mono">granularity</td>
+      <td><b class="green">semantic-grain</b> — scales with project: N epics → N execution units</td>
+    </tr>
+  </table>
+
+  <div style="margin-top:10px;padding:8px;background:#0a1f14;border-radius:6px;font-size:11px;color:#6ee7b7">
+    ✓ Idempotent: same entity_id + same state → same memory_id.
+    ✓ Scales: a project with 20 epics → 20 execution units, 1 context unit, N strategic units.
+    ✓ Queryable: Tokq can reconstruct a project template from strategic units alone.
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: 5 MEMORY UNIT TYPES -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:14px">
+  <h2 class="label" style="color:#64748b;margin-bottom:12px">The 5 Memory Unit Types</h2>
+
+  <div class="row">
+  <div style="flex:1">
+
+    <div class="unit unit-strategic">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="label green">strategic</span>
+        <div><span class="badge tag-pub">publishable</span></div>
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Arc + Phase roadmap structure</div>
+      <div class="mono dim" style="font-size:11px;line-height:1.7">
+        source: <span class="green">arc + phase</span> tables<br>
+        replaces: roadmap.md<br>
+        entity_id: phase.id<br>
+        payload: {arc, phases[], generated_at}<br>
+        tags: arc.tags + phase.labels
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:#6ee7b7">
+        → <code>synlynk publish conventions</code> packages these as a Tokq collection.
+        Subscribers get your project structure as a template.
+      </div>
+    </div>
+
+    <div class="unit unit-context">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="label blue">context</span>
+        <div><span class="badge tag-optpub">opt-in publish</span></div>
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Architecture decisions + positioning</div>
+      <div class="mono dim" style="font-size:11px;line-height:1.7">
+        source: <span class="blue">memory</span> table rows<br>
+        replaces: memory.md<br>
+        entity_id: workspace.id (one per workspace)<br>
+        payload: {decisions[], architecture[], positioning}<br>
+        tags: domain tags from memory table
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:#93c5fd">
+        → Optionally published as "architecture patterns" collection.
+        Private by default — team shares via workspace sync.
+      </div>
+    </div>
+
+    <div class="unit unit-execution">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="label purple">execution</span>
+        <div><span class="badge tag-private">private</span></div>
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Epic + open stories (current work)</div>
+      <div class="mono dim" style="font-size:11px;line-height:1.7">
+        source: <span class="purple">epic + story</span> (status='open')<br>
+        replaces: todo.md + partial memory.md<br>
+        entity_id: epic.id (N units per project)<br>
+        payload: {epic, stories[], done_criteria[]}<br>
+        tags: epic.labels + story.labels
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:#a78bfa">
+        → Scales with work: 1 epic → 1 unit. Cross-machine team sync
+        delivers active task state without sharing raw code.
+      </div>
+    </div>
+
+  </div>
+  <div style="flex:1">
+
+    <div class="unit unit-activity">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="label amber">activity</span>
+        <div><span class="badge tag-private">private</span></div>
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Per-user event stream (replaces devlogs)</div>
+      <div class="mono dim" style="font-size:11px;line-height:1.7">
+        source: <span class="amber">event</span> table, git_user + time window<br>
+        replaces: devlogs/&lt;user&gt;.md<br>
+        entity_id: git_user + ISO_date_bucket (daily)<br>
+        payload: {user, events[], date_range}<br>
+        tags: git_user + event.type distinct values
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:#fcd34d">
+        → Always private. Team members sync their own activity units;
+        teammates see them via shared workspace event stream.
+      </div>
+    </div>
+
+    <div class="unit unit-capability">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="label" style="color:#818cf8">capability</span>
+        <div><span class="badge tag-optsync">opt-in sync</span></div>
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Agent fitness scores (no project-docs equivalent)</div>
+      <div class="mono dim" style="font-size:11px;line-height:1.7">
+        source: <span style="color:#818cf8">agent_profiles</span> + scoring history<br>
+        replaces: (new — nothing in project-docs)<br>
+        entity_id: agent_uuid + scoring_period<br>
+        payload: {agent_profiles[], scores[], half_life_decay}<br>
+        tags: agent.name + domain + phase.type
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:#a5b4fc">
+        → Machine-local by default. Opt-in to sync enables "bring your
+        capability profile to a new machine / new project" use case.
+      </div>
+    </div>
+
+    <div class="card" style="background:#0a1117;border:1px dashed #1e293b;margin-top:8px">
+      <div class="label" style="color:#475569;margin-bottom:8px">never synced</div>
+      <div style="font-size:11px;color:#475569;line-height:1.7">
+        <span class="badge tag-nosync" style="margin-right:4px">costs.md / costs table</span> local ops ledger — separate from Tokq gas tank (ledger boundary, FR-6)<br><br>
+        <span class="badge tag-nosync" style="margin-right:4px">external_refs</span> workspace-specific GitHub/Jira/Linear links — not portable<br><br>
+        <span class="badge tag-nosync" style="margin-right:4px">sentinel.md</span> ephemeral alert state — no historical value
+      </div>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4: SYNC FLOW + ENCRYPTION BOUNDARY -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="row">
+
+<div style="flex:1">
+  <div class="card" style="height:100%">
+    <h2 class="label" style="color:#64748b;margin-bottom:12px">Sync Flow — Tokq Alpha</h2>
+
+    <div class="flow-box" style="border-color:#10b981">
+      <div class="label green" style="margin-bottom:4px">state.db</div>
+      <div class="mono dim" style="font-size:11px">arc · phase · epic · story · event · memory · agent_profiles</div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="flow-box" style="border-color:#475569">
+      <div class="label" style="color:#94a3b8;margin-bottom:4px">synlynk sync (daemon, v1.0)</div>
+      <div class="mono dim" style="font-size:11px">Materializes 5 view types → JSON payloads<br>
+      Detects changes via <code>version_counter</code> on each entity<br>
+      Skips unchanged entities (idempotent)</div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="flow-box" style="border-color:#a78bfa">
+      <div class="label purple" style="margin-bottom:4px">ZK encryption (Tokq Alpha)</div>
+      <div class="mono dim" style="font-size:11px">
+        AES-256-GCM — key from Ed25519 private via HKDF-SHA256<br>
+        <b style="color:#a78bfa">strategic</b> unit → encrypted with <i>publish key</i> if published<br>
+        all others → encrypted with <i>personal key</i> only
+      </div>
+      <div class="enc-badge">🔐 Tokq stores only ciphertext — zero-knowledge</div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="flow-box" style="border-color:#f472b6">
+      <div class="label pink" style="margin-bottom:4px">NATS leaf → hub</div>
+      <div class="mono dim" style="font-size:11px">
+        Subject: <code>synlynk.&lt;workspace_id&gt;.units.&lt;unit_type&gt;</code><br>
+        Payload: MessagePack-encoded memory unit<br>
+        Ed25519 signature in envelope header
+      </div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="flow-box" style="border-color:#fbbf24">
+      <div class="label amber" style="margin-bottom:4px">Tokq cloud</div>
+      <div class="mono dim" style="font-size:11px">
+        Memory unit CRUD + versioning<br>
+        Marketplace collections (strategic units only)<br>
+        Gas tank deduction per write op
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="flex:1">
+  <div class="card" style="height:100%">
+    <h2 class="label" style="color:#64748b;margin-bottom:12px">Marketplace Publishing Path</h2>
+
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">
+      Only <b class="green">strategic</b> and optionally <b class="blue">context</b> units are publishable.
+      Execution, activity, and capability units are always private (personal key only).
+    </div>
+
+    <div style="background:#0a1117;border-radius:8px;padding:12px;margin-bottom:10px">
+      <div class="label green" style="margin-bottom:8px">synlynk publish conventions</div>
+      <div class="mono" style="font-size:11px;color:#94a3b8;line-height:1.8">
+        <span class="green">arc</span> "Multi-Agent OS conventions"<br>
+        <span class="dim">  ↳</span> <span class="green">phase</span> v0.4.0 — IPC Bootstrap<br>
+        <span class="dim">  ↳</span> <span class="green">phase</span> v0.5.0 — Capability Engine<br>
+        <span class="dim">  ↳</span> <span class="green">phase</span> v0.6.0 — Job Control<br>
+        <span class="dim">  …</span><br>
+        <br>
+        → Packaged as 1 Tokq collection<br>
+        → Encrypted with <i>publish key</i> (separate from personal key)<br>
+        → Subscribers can read; cannot access personal memory units<br>
+        → 70/30 revenue split on marketplace
+      </div>
+    </div>
+
+    <div style="background:#0a1117;border-radius:8px;padding:12px;margin-bottom:10px">
+      <div class="label" style="color:#64748b;margin-bottom:8px">encryption key boundary</div>
+      <table>
+        <tr>
+          <th>Unit type</th>
+          <th>Key used</th>
+          <th>Subscriber access?</th>
+        </tr>
+        <tr>
+          <td class="green">strategic</td>
+          <td>publish key (if published)</td>
+          <td class="green">✓ yes</td>
+        </tr>
+        <tr>
+          <td class="blue">context</td>
+          <td>personal / publish key</td>
+          <td class="amber">opt-in only</td>
+        </tr>
+        <tr>
+          <td class="purple">execution</td>
+          <td>personal key only</td>
+          <td class="red">✗ never</td>
+        </tr>
+        <tr>
+          <td class="amber">activity</td>
+          <td>personal key only</td>
+          <td class="red">✗ never</td>
+        </tr>
+        <tr>
+          <td style="color:#818cf8">capability</td>
+          <td>personal key only</td>
+          <td class="red">✗ never</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background:#0a1117;border-radius:8px;padding:12px">
+      <div class="label" style="color:#64748b;margin-bottom:8px">backward compat (pre-migration)</div>
+      <div class="mono" style="font-size:11px;color:#94a3b8;line-height:1.7">
+        <code>state_db: false</code> in .synlynk/config.json<br>
+        → synlynk sync uses legacy file-grain mapping<br>
+        → reads project-docs/*.md files<br>
+        → same Tokq API, different serializer<br>
+        <br>
+        <code>state_db: true</code> (set by synlynk migrate)<br>
+        → synlynk sync uses view-grain mapping<br>
+        → queries state.db materialized views<br>
+        → version_counter reset to 0 on first post-migration sync
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: UPDATED memory_id FORMULA -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <h2 class="label" style="color:#64748b;margin-bottom:10px">Updated memory_id Formula</h2>
+  <div class="row" style="gap:8px;margin-bottom:0">
+    <div style="flex:1;background:#0a1117;border-radius:7px;padding:10px">
+      <div class="label red" style="margin-bottom:6px">old</div>
+      <code>sha256(session_id + <b>filename</b> + version_counter)</code>
+      <div class="mono dim" style="font-size:11px;margin-top:4px">filename = "memory.md" | "roadmap.md" | …</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 4px;color:#475569;font-size:18px">→</div>
+    <div style="flex:2;background:#0a1117;border-radius:7px;padding:10px">
+      <div class="label green" style="margin-bottom:6px">new</div>
+      <code>sha256(workspace_id + unit_type + entity_id + version_counter)</code>
+      <div class="mono dim" style="font-size:11px;margin-top:6px;line-height:1.7">
+        entity_id = <span class="green">phase.id</span> (strategic) | <span class="blue">workspace.id</span> (context) | <span class="purple">epic.id</span> (execution) | <span class="amber">git_user+date</span> (activity) | <span style="color:#818cf8">agent_uuid+period</span> (capability)<br>
+        workspace_id replaces session_id — stable across multi-repo workspaces (not per-repo)
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

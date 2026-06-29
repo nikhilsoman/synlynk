@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Website Architecture + Pipeline</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:12px;font-size:11px;}
+.title{font-size:13px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:8px;}
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:840px;margin:0 auto;}
+.panel{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;}
+.panel h4{font-size:10px;margin-bottom:4px;color:var(--teal);}
+.node{font-size:9px;background:#0a0a0b;padding:2px 5px;border-radius:3px;margin:2px 0;display:inline-block;}
+.pipe{font-size:9px;line-height:1.35;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="title">BS-5 Site Architecture + Content Pipeline</div>
+
+<div class="panels">
+  <div class="panel">
+    <h4>Site map</h4>
+    <div class="node">/ (homepage)</div>
+    <div style="margin-left:12px;font-size:9px;color:var(--muted);">↓ spokes</div>
+    <div class="node">/blog → /blog/:slug</div>
+    <div class="node">/docs</div>
+    <div class="node">/features</div>
+    <div class="node">/changelog</div>
+    <div class="node">/about</div>
+  </div>
+  <div class="panel">
+    <h4>Build pipeline</h4>
+    <div class="pipe">docs/blog/*.md + CHANGELOG.md + docs/brainstorm/**/*.html<br>↓ .eleventy.js transforms<br>src/blog/posts/ + src/changelog.md + src/assets/brainstorm/<br>↓ 11ty build<br>_site/</div>
+  </div>
+</div>
+</body>
+</html>

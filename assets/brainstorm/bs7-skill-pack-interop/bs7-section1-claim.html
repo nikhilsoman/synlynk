@@ -1,0 +1,74 @@
+<h2>Section 1 — The Claim</h2>
+<p class="subtitle">The architecture that makes "better together" literally true, not just marketing</p>
+
+<div class="section">
+  <div style="background:#0d1117;border:1px solid #30363d;border-radius:12px;padding:28px;margin-top:8px">
+
+    <!-- Stack diagram -->
+    <div style="display:flex;flex-direction:column;gap:0;max-width:600px;margin:0 auto">
+
+      <!-- Top: Applications -->
+      <div style="display:flex;gap:8px;margin-bottom:2px">
+        <div style="flex:1;background:#1a1a3e;border:1px solid #3a3a7c;border-radius:8px 8px 0 0;padding:14px 16px;text-align:center">
+          <div class="label" style="color:#a78bfa">Application Layer</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap">
+            <span style="background:#2a1a4e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace">Superpowers</span>
+            <span style="background:#2a1a4e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace">GStack</span>
+            <span style="background:#1a2a2e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace;color:#888">GSD</span>
+            <span style="background:#1a2a2e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace;color:#888">Everything-CC</span>
+          </div>
+          <p style="font-size:11px;color:#666;margin:8px 0 0">Domain expertise modules — TDD workflows, code quality, prompt patterns</p>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="text-align:center;color:#3fb950;font-size:18px;line-height:1.2">▼ runs on top of ▼</div>
+
+      <!-- Middle: synlynk OS -->
+      <div style="background:#0a2a0a;border:2px solid #2ea043;border-radius:0;padding:18px 16px;text-align:center">
+        <div class="label" style="color:#3fb950">OS Layer — synlynk</div>
+        <div style="display:flex;gap:16px;justify-content:center;margin-top:10px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#888">persistent memory</span>
+          <span style="font-size:12px;color:#888">·</span>
+          <span style="font-size:12px;color:#888">context injection</span>
+          <span style="font-size:12px;color:#888">·</span>
+          <span style="font-size:12px;color:#888">flatline sentinel</span>
+          <span style="font-size:12px;color:#888">·</span>
+          <span style="font-size:12px;color:#888">cost tracking</span>
+          <span style="font-size:12px;color:#888">·</span>
+          <span style="font-size:12px;color:#888">dispatch + consensus</span>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="text-align:center;color:#58a6ff;font-size:18px;line-height:1.2">▼ wraps ▼</div>
+
+      <!-- Bottom: AI CLIs -->
+      <div style="background:#0d1a2e;border:1px solid #1f4a7c;border-radius:0 0 8px 8px;padding:14px 16px;text-align:center">
+        <div class="label" style="color:#58a6ff">AI CLI Layer</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap">
+          <span style="background:#0d1a3e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace">claude</span>
+          <span style="background:#0d1a3e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace">agy</span>
+          <span style="background:#0d1a3e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace">codex</span>
+          <span style="background:#0d1a3e;padding:4px 10px;border-radius:4px;font-size:12px;font-family:monospace">grok</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- The claim -->
+    <div style="margin-top:24px;padding:16px;background:#0a1a0a;border-left:3px solid #3fb950;border-radius:4px">
+      <p style="margin:0;font-size:14px;line-height:1.6">
+        <strong>The claim:</strong> Skill packs operate at the <em>prompt/workflow</em> layer. synlynk operates at the <em>process/state</em> layer. They solve different problems and never compete for the same instruction surface — when configured correctly.
+      </p>
+    </div>
+
+    <!-- The coexistence failure mode -->
+    <div style="margin-top:12px;padding:16px;background:#1a0a0a;border-left:3px solid #f85149;border-radius:4px">
+      <p style="margin:0;font-size:14px;line-height:1.6">
+        <strong>The failure mode:</strong> When both inject into <code>CLAUDE.md</code> / <code>system_prompt</code> without a priority contract, agents see conflicting instructions and exhibit non-adherence or unpredictable behaviour. This is AB-11 — what <code>git-drift</code> prevents.
+      </p>
+    </div>
+  </div>
+</div>
+
+<p style="color:#888;font-size:13px;margin-top:16px">Does this architecture framing look right? Continuing in terminal ↓</p>

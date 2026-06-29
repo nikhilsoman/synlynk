@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Post 24 — v0.9.4: Context, Dispatch, and Relay</h1>
+<p><strong>Branch:</strong> <code>feat/v0.9.4-context-dispatch-relay</code><br>
+<strong>Version:</strong> v0.9.4</p>
+<hr>
+<h2>Where we were</h2>
+<p>At the end of PR #59 (dispatch context scoping), synlynk had a working async daemon with background job dispatch. The P0 race condition was fixed: <code>generate_context()</code> now returns a string, <code>dispatch_agent()</code> uses it in-memory instead of reading a shared file, and <code>context_mode</code> lets tasks opt out of context injection. The foundation for v0.9.4 was clean.</p>
+<h2>What moved the goalpost</h2>
+<p>BS-1 (2026-06-24) answered Q1–Q10 on the context/dispatch/relay layer. Nine decisions locked:</p>
+<ol>
+<li><strong>Context delivery</strong>: in-memory (already in P0) — no global file read in dispatch path</li>
+<li><strong>SQLite canon</strong>: <code>stories</code> table is primary; <code>todo.md</code> is a generated view</li>
+<li><strong><code>synlynk jobs</code></strong>: one-shot table (TUI HUD deferred to v1.0)</li>
+<li><strong>Relay topology</strong>: standalone HTTP broker (SSE fan-out, POST publish, stdlib only)</li>
+<li><strong>Relay event schema</strong>: 7 types — <code>story_updated</code>, <code>job_dispatched</code>, <code>job_completed</code>, <code>alert_raised</code>, <code>context_checkpoint</code>, <code>table_changed</code>, <code>broadcast</code></li>
+<li><strong><code>broadcast</code> event</strong>: <code>kind</code> field (motd|wellness|message|joke|custom) — presence layer for team ambient awareness</li>
+<li><strong>Pre-flight gate</strong>: agent CLI must be on PATH before dispatch</li>
+<li><strong>Context budget</strong>: soft warn at 80KB (<code>_warn_context_size</code>), hard block via agent profile <code>context_max_bytes</code></li>
+<li><strong>Agent profiles</strong>: <code>.agents/&lt;agent&gt;.json</code> overrides <code>context_mode</code> and <code>context_max_bytes</code> per agent</li>
+</ol>
+<p>Three additional fixes surfaced during dispatch dogfooding:</p>
+<ul>
+<li><code>subprocess.Popen</code> in <code>dispatch_agent()</code> had no <code>cwd=</code> — Codex inferred the worktree path from process CWD, but Agy resets its CWD on startup</li>
+<li>Agy prompt needed an explicit <code>## Working Directory</code> header — added to <code>_format_prompt_for_agent()</code></li>
+<li>Claude headless dispatch was blocked by the permission system — added <code>--dangerously-skip-permissions</code> to Claude's <code>non_interactive_flags</code></li>
+</ul>
+<h2>What this PR ships</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/relay-vps-deep-dive/relay-architecture.html" title="Relay architecture" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Relay architecture</figcaption>
+</figure>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/v041-architecture/v041-architecture.html" title="Context-dispatch architecture" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Context-dispatch architecture</figcaption>
+</figure>
+<p><strong>T1 — SQLite canon (stories.status + generated todo.md)</strong><br>
+<code>_migrate_db()</code> now adds a <code>status TEXT DEFAULT 'open'</code> column to <code>stories</code> idempotently. <code>_generate_todo_md()</code> reads the <code>stories</code> table and writes <code>project-docs/todo.md</code> as a generated view (<code>- [ ]</code> open, <code>- [x]</code> done, <code>- [-]</code> deferred). <code>_import_todo_to_stories()</code> parses hand-written <code>- [ ]</code> lines and inserts new story rows, skipping any with a known <code>&lt;!-- id:story-XXXX --&gt;</code> tag. <code>cmd_story_create()</code> calls <code>_generate_todo_md()</code> after every create. SQLite is now the single source of truth — no more manual todo.md editing for task state.</p>
+<p><strong>T2 — Per-agent context profiles (<code>.agents/&lt;agent&gt;.json</code>)</strong><br>
+<code>_load_agent_profile(agent) -&gt; dict</code> reads <code>.agents/&lt;agent&gt;.json</code> silently (returns <code>{}</code> if absent, unlike <code>_load_agent_config()</code> which raises). <code>dispatch_agent()</code> loads the profile and applies: <code>context_mode</code> override and <code>context_max_bytes</code> truncation before prompt assembly. <code>_format_prompt_for_agent()</code> agy branch drops the hardcoded <code>[:2000]</code> truncation — truncation is now profile-controlled. <code>synlynk agent configure &lt;name&gt;</code> writes the profile interactively.</p>
+<p><strong>T3 — <code>synlynk jobs</code> SQLite read + <code>--watch</code> + pre-flight gate</strong><br>
+<code>cmd_jobs()</code> replaced: now reads <code>daemon_jobs</code> SQLite, prints a one-shot table (ID, AGENT, STORY, STATUS, AGE, EXIT), supports <code>--all</code> to include done/failed, <code>--watch</code> for 2s auto-refresh. <code>_preflight_dispatch(agent)</code> checks the agent CLI is on PATH before spawning — raises <code>ValueError</code> with install hint on miss. <code>dispatch_agent()</code> now writes a row to <code>daemon_jobs</code> (mirror of jobs.json for structured queries). <code>synlynk dispatch</code> gained <code>--context-mode {none,task,full}</code>.</p>
+<p><strong>T4 — Relay wire protocol (HTTP SSE broker)</strong><br>
+<code>RELAY_EVENT_TYPES</code> frozenset defines the 7 valid event types. <code>_build_relay_event(type, payload) -&gt; dict</code> adds <code>ts</code> and <code>origin_node</code>, rejects unknown types with <code>ValueError</code>. <code>_make_relay_handler(subscribers, lock)</code> returns an <code>http.server.BaseHTTPRequestHandler</code> subclass: <code>GET /events</code> (SSE stream), <code>POST /publish</code> (fan-out to all subscribers, returns <code>{&quot;ok&quot;: true, &quot;fans&quot;: N}</code>), <code>GET /health</code> (liveness check). <code>SynlynkRelay</code> wraps the server with <code>start()</code> (foreground, blocks on Ctrl-C) and <code>is_alive()</code>. <code>synlynk relay start [--port N]</code> and <code>synlynk relay broadcast &lt;body&gt; [--kind motd|wellness|message|joke|custom] [--relay-url URL]</code> wired to CLI.</p>
+<p><strong>T5 — Sentinel VERIFY_SKIP pattern</strong><br>
+<code>_extract_compliance_tags(output_text) -&gt; dict</code> scans agent output for test and verify phrases (<code>ran_tests</code>, <code>verify_before_commit</code> boolean flags). Pattern 4 in <code>check_sentinel_patterns()</code>: when <code>exit_code == 0</code> but neither flag is True, fires an informational <code>VERIFY_SKIP</code> alert to <code>sentinel.md</code>. Builds the compliance dataset for the upcoming Agent Behaviour (AB) epic.</p>
+<p><strong>Dispatch fixes (committed as pre-T2 patch)</strong></p>
+<ul>
+<li><code>subprocess.Popen</code> in <code>dispatch_agent()</code> now sets <code>cwd=os.getcwd()</code></li>
+<li>Agy prompt header now leads with <code>## Working Directory\n{os.getcwd()}\nAll file edits MUST be in this directory.</code></li>
+<li>Claude <code>non_interactive_flags</code> now includes <code>--dangerously-skip-permissions</code> for headless dispatch</li>
+</ul>
+<h2>Dispatch dogfooding findings</h2>
+<p>All 5 tasks were dispatched via <code>synlynk dispatch</code> using the system's own dispatch mechanism. Key learnings:</p>
+<ul>
+<li><strong>Codex</strong> (T1, T2, T3, T5): reliable for TDD loops when given scannable criteria. Completed all 4 tasks cleanly.</li>
+<li><strong>Agy</strong> (T4 attempt): authenticated, CWD fix worked (probe confirmed), but stalls on multi-step tasks when it hits a blocking shell command (waited for <code>pytest</code> to finish instead of proceeding). Good for read-only exploration, not TDD loops.</li>
+<li><strong>Claude</strong> (T2 attempt in prior session): blocked by permission system in non-interactive mode. Fixed by <code>--dangerously-skip-permissions</code>.</li>
+<li><strong>CWD inheritance</strong>: <code>subprocess.Popen</code> without <code>cwd=</code> relies on the calling process CWD — works for Codex (reads workdir from process), not for Agy (resets CWD on startup).</li>
+</ul>
+<h2>Visuals</h2>
+<p>BS-1 brainstorm visuals that informed this PR: <code>docs/brainstorm/bs1-context-dispatch-relay/relay-events-final.html</code> (event schema, broadcast kinds, deployment staircase) and <code>agent-failure-surface.html</code> (pre-flight gate, job lifecycle, context budget).</p>
+<h2>What this achieves</h2>
+<p>synlynk now has a coherent context/dispatch layer: task state is SQLite-primary with generated views, dispatch is profile-driven per agent, jobs are queryable from SQLite, relay events have a typed schema and a working HTTP broker, and the sentinel now detects when agents skip verification. 465 tests, +26 since T1 baseline (439).</p>
+<h2>New goalpost</h2>
+<p>v0.9.4 merged → next: BS-2 (Onboarding + Mode Taxonomy), BS-3 (Agent Behaviour — builds on VERIFY_SKIP), BS-4 (Command Audit). Agent Ecosystem Epic (v0.8.1–v0.8.4) remains parked for contiguous effort after BS-2/3/4 complete.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

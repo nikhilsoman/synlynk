@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BS-5 Diagram Implementation</title>
+  <style>
+    :root {
+      --bg: #0E0E0F;
+      --bg2: #1A1A1C;
+      --blue: #5B8DEF;
+      --purple: #A259F7;
+      --teal: #2EC4A0;
+      --text: #E9E9EE;
+      --muted: rgba(233, 233, 238, 0.62);
+      --line: rgba(233, 233, 238, 0.11);
+      --lineSoft: rgba(233, 233, 238, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(1100px 650px at 50% 45%, rgba(91, 141, 239, 0.12), transparent 38%),
+        radial-gradient(800px 500px at 78% 18%, rgba(162, 89, 247, 0.10), transparent 42%),
+        radial-gradient(700px 500px at 20% 80%, rgba(46, 196, 160, 0.08), transparent 38%),
+        linear-gradient(180deg, #101012 0%, #0B0B0C 100%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .frame {
+      width: 500px;
+      max-width: calc(100vw - 36px);
+      aspect-ratio: 500 / 420;
+      border-radius: 24px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+      box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255,255,255,0.04),
+        0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .title {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      fill: rgba(233, 233, 238, 0.54);
+    }
+
+    .subtle {
+      fill: rgba(233, 233, 238, 0.36);
+      font-size: 10px;
+    }
+
+    .label {
+      fill: rgba(233, 233, 238, 0.84);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .label.muted {
+      fill: rgba(233, 233, 238, 0.58);
+      font-weight: 500;
+    }
+
+    .tiny {
+      fill: rgba(233, 233, 238, 0.48);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .node-shell {
+      filter: url(#nodeGlow);
+    }
+
+    .agent-shell {
+      filter: url(#nodeGlowSoft);
+    }
+
+    .center-core {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: breathe 2s ease-in-out infinite;
+    }
+
+    .pulse-ring {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: ring 3.2s ease-out infinite;
+      opacity: 0;
+    }
+
+    .pulse-ring.r2 { animation-delay: 1.05s; }
+    .pulse-ring.r3 { animation-delay: 2.1s; }
+
+    .edge {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.6;
+      opacity: 0.26;
+      transition: opacity 180ms linear, stroke-width 180ms linear, filter 180ms linear;
+    }
+
+    .edge.soft { opacity: 0.11; stroke-dasharray: 2 6; }
+
+    .edge.active {
+      opacity: 1;
+      stroke-width: 2.6;
+      filter: url(#edgeGlow);
+    }
+
+    .signal {
+      opacity: 0;
+      filter: url(#signalGlow);
+    }
+
+    .signal-core {
+      stroke: rgba(255,255,255,0.82);
+      stroke-width: 1.2;
+    }
+
+    .signal-halo {
+      opacity: 0.74;
+    }
+
+    .node-dot {
+      opacity: 0.95;
+      filter: url(#nodeGlowSoft);
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    @keyframes ring {
+      0%   { opacity: 0; transform: scale(0.72); }
+      12%  { opacity: 0.13; }
+      60%  { opacity: 0.05; }
+      100% { opacity: 0; transform: scale(1.24); }
+    }
+
+    @media (max-width: 560px) {
+      body { padding: 10px; }
+      .frame { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame" aria-label="synlynk coordination hub diagram">
+    <svg viewBox="0 0 500 420" width="500" height="420" role="img" aria-labelledby="diagramTitle diagramDesc">
+      <title id="diagramTitle">synlynk coordination hub between four AI agents</title>
+      <desc id="diagramDesc">A dark network graph with synlynk in the center, four data-layer nodes on an inner ring, and Claude, Gemini, Grok, and Codex on an outer ring connected by curved lines and animated pulses.</desc>
+      <defs>
+        <radialGradient id="bgGlow" cx="50%" cy="45%" r="70%">
+          <stop offset="0%" stop-color="#15151A"/>
+          <stop offset="55%" stop-color="#101013"/>
+          <stop offset="100%" stop-color="#0E0E0F"/>
+        </radialGradient>
+
+        <radialGradient id="centerFill" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stop-color="#1A1A1C"/>
+          <stop offset="100%" stop-color="#111113"/>
+        </radialGradient>
+
+        <linearGradient id="centerStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#5B8DEF"/>
+          <stop offset="55%" stop-color="#A259F7"/>
+          <stop offset="100%" stop-color="#2EC4A0"/>
+        </linearGradient>
+
+        <linearGradient id="edgeBluePurple" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#5B8DEF" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#A259F7" stop-opacity="0.95"/>
+        </linearGradient>
+
+        <linearGradient id="edgePurpleTeal" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#A259F7" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#2EC4A0" stop-opacity="0.95"/>
+        </linearGradient>
+
+        <linearGradient id="edgeTealBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#2EC4A0" stop-opacity="0.92"/>
+          <stop offset="100%" stop-color="#5B8DEF" stop-opacity="0.9"/>
+        </linearGradient>
+
+        <filter id="nodeGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="5" result="blur"/>
+          <feColorMatrix in="blur" type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            0 0 0 0.8 0" />
+        </filter>
+
+        <filter id="nodeGlowSoft" x="-70%" y="-70%" width="240%" height="240%">
+          <feGaussianBlur stdDeviation="3.6" result="blur"/>
+          <feColorMatrix in="blur" type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            0 0 0 0.65 0" />
+        </filter>
+
+        <filter id="edgeGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="2.2" result="blur"/>
+          <feColorMatrix in="blur" type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            0 0 0 0.7 0" />
+        </filter>
+
+        <filter id="signalGlow" x="-120%" y="-120%" width="340%" height="340%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feColorMatrix in="blur" type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            0 0 0 0.85 0" />
+        </filter>
+
+        <pattern id="microGrid" width="22" height="22" patternUnits="userSpaceOnUse">
+          <path d="M 22 0 L 0 0 0 22" fill="none" stroke="rgba(255,255,255,0.035)" stroke-width="1"/>
+          <circle cx="1" cy="1" r="0.8" fill="rgba(255,255,255,0.03)"/>
+        </pattern>
+      </defs>
+
+      <rect x="0" y="0" width="500" height="420" fill="url(#bgGlow)"/>
+      <rect x="0" y="0" width="500" height="420" fill="url(#microGrid)" opacity="0.5"/>
+
+      <text x="24" y="30" class="title">synlynk coordination graph</text>
+      <text x="24" y="46" class="subtle">Four agents route through shared state, dispatch, relay, and profiles.</text>
+
+      <!-- ambient rings -->
+      <g opacity="0.9">
+        <circle cx="250" cy="210" r="62" fill="none" stroke="rgba(91,141,239,0.14)" stroke-width="1.5"/>
+        <circle cx="250" cy="210" r="92" fill="none" stroke="rgba(162,89,247,0.12)" stroke-width="1.2"/>
+        <circle cx="250" cy="210" r="182" fill="none" stroke="rgba(46,196,160,0.08)" stroke-width="1"/>
+      </g>
+
+      <!-- pulse rings -->
+      <g class="center-core">
+        <circle class="pulse-ring r1" cx="250" cy="210" r="52" fill="none" stroke="rgba(91,141,239,0.28)" stroke-width="1.2"/>
+        <circle class="pulse-ring r2" cx="250" cy="210" r="52" fill="none" stroke="rgba(162,89,247,0.22)" stroke-width="1.2"/>
+        <circle class="pulse-ring r3" cx="250" cy="210" r="52" fill="none" stroke="rgba(46,196,160,0.18)" stroke-width="1.2"/>
+      </g>
+
+      <!-- edges are injected by JS -->
+      <g id="edges"></g>
+
+      <!-- nodes -->
+      <g id="nodes">
+        <!-- inner ring -->
+        <g transform="translate(250 120)" class="node-shell" id="node-state">
+          <circle r="17" fill="#131316" stroke="rgba(91,141,239,0.85)" stroke-width="1.8"/>
+          <circle class="node-dot" r="7" fill="#5B8DEF" opacity="0.16"/>
+          <text x="0" y="36" text-anchor="middle" class="label muted">state</text>
+        </g>
+
+        <g transform="translate(340 210)" class="node-shell" id="node-dispatch">
+          <circle r="17" fill="#131316" stroke="rgba(162,89,247,0.85)" stroke-width="1.8"/>
+          <circle class="node-dot" r="7" fill="#A259F7" opacity="0.16"/>
+          <text x="0" y="36" text-anchor="middle" class="label muted">dispatch</text>
+        </g>
+
+        <g transform="translate(250 300)" class="node-shell" id="node-relay">
+          <circle r="17" fill="#131316" stroke="rgba(46,196,160,0.85)" stroke-width="1.8"/>
+          <circle class="node-dot" r="7" fill="#2EC4A0" opacity="0.16"/>
+          <text x="0" y="36" text-anchor="middle" class="label muted">relay</text>
+        </g>
+
+        <g transform="translate(160 210)" class="node-shell" id="node-profiles">
+          <circle r="17" fill="#131316" stroke="rgba(91,141,239,0.55)" stroke-width="1.8"/>
+          <circle class="node-dot" r="7" fill="#5B8DEF" opacity="0.12"/>
+          <text x="0" y="36" text-anchor="middle" class="label muted">profiles</text>
+        </g>
+
+        <!-- outer ring -->
+        <g transform="translate(378 84)" class="agent-shell" id="agent-claude">
+          <circle r="25" fill="#151315" stroke="rgba(217,119,87,0.95)" stroke-width="1.8"/>
+          <g transform="translate(0 0)" stroke="#D97757" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="2">
+            <path d="M 0 -10 L 0 -4"/>
+            <path d="M 0 4 L 0 10"/>
+            <path d="M -10 0 L -4 0"/>
+            <path d="M 4 0 L 10 0"/>
+            <path d="M -7 -7 L -3 -3"/>
+            <path d="M 3 3 L 7 7"/>
+            <path d="M -7 7 L -3 3"/>
+            <path d="M 3 -3 L 7 -7"/>
+          </g>
+          <text x="0" y="44" text-anchor="middle" class="label">Claude</text>
+        </g>
+
+        <g transform="translate(378 336)" class="agent-shell" id="agent-gemini">
+          <circle r="25" fill="#151315" stroke="rgba(26,115,232,0.95)" stroke-width="1.8"/>
+          <g fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round">
+            <path d="M 0 -10 L 4 -4 L 10 0 L 4 4 L 0 10 L -4 4 L -10 0 L -4 -4 Z"/>
+          </g>
+          <text x="0" y="44" text-anchor="middle" class="label">Gemini</text>
+        </g>
+
+        <g transform="translate(122 336)" class="agent-shell" id="agent-grok">
+          <circle r="25" fill="#151315" stroke="rgba(136,136,136,0.92)" stroke-width="1.8"/>
+          <g stroke="#888" stroke-linecap="round" stroke-width="3.2">
+            <path d="M -9 -9 L 9 9"/>
+            <path d="M 9 -9 L -9 9"/>
+          </g>
+          <text x="0" y="44" text-anchor="middle" class="label">Grok</text>
+        </g>
+
+        <g transform="translate(122 84)" class="agent-shell" id="agent-codex">
+          <circle r="25" fill="#151315" stroke="rgba(85,85,85,0.95)" stroke-width="1.8"/>
+          <circle cx="0" cy="-2" r="8.5" fill="none" stroke="#555" stroke-width="2.2"/>
+          <path d="M -10 9 L 10 9" stroke="#555" stroke-width="2.2" stroke-linecap="round"/>
+          <text x="0" y="44" text-anchor="middle" class="label">Codex</text>
+        </g>
+
+        <g id="center-node" class="center-core" transform="translate(250 210)">
+          <circle r="38" fill="url(#centerFill)" stroke="url(#centerStroke)" stroke-width="1.8"/>
+          <circle r="28" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <g transform="translate(0 0) scale(1.05)">
+            <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="1" cy="-9" r="3.5" fill="#5B8DEF"/>
+            <circle cx="3" cy="13" r="3.5" fill="#2EC4A0"/>
+          </g>
+        </g>
+
+        <text x="250" y="266" text-anchor="middle" class="label" style="font-size: 12px;">synlynk</text>
+        <text x="250" y="282" text-anchor="middle" class="subtle">coordination hub</text>
+      </g>
+
+      <!-- signal dots -->
+      <g id="signals">
+        <circle id="signal-claude" class="signal signal-halo" r="5.5" fill="#D97757"/>
+        <circle id="signal-gemini" class="signal signal-halo" r="5.5" fill="#1a73e8"/>
+        <circle id="signal-grok" class="signal signal-halo" r="5.5" fill="#888"/>
+        <circle id="signal-codex" class="signal signal-halo" r="5.5" fill="#555"/>
+
+        <circle id="signal-claude-core" class="signal signal-core" r="2.3" fill="rgba(255,255,255,0.92)"/>
+        <circle id="signal-gemini-core" class="signal signal-core" r="2.3" fill="rgba(255,255,255,0.92)"/>
+        <circle id="signal-grok-core" class="signal signal-core" r="2.3" fill="rgba(255,255,255,0.92)"/>
+        <circle id="signal-codex-core" class="signal signal-core" r="2.3" fill="rgba(255,255,255,0.92)"/>
+      </g>
+    </svg>
+  </div>
+
+  <script>
+    (function () {
+      const edges = document.getElementById("edges");
+      const signals = {
+        claude: [document.getElementById("signal-claude"), document.getElementById("signal-claude-core")],
+        gemini: [document.getElementById("signal-gemini"), document.getElementById("signal-gemini-core")],
+        grok: [document.getElementById("signal-grok"), document.getElementById("signal-grok-core")],
+        codex: [document.getElementById("signal-codex"), document.getElementById("signal-codex-core")]
+      };
+
+      const center = { x: 250, y: 210 };
+      const points = {
+        state: { x: 250, y: 120 },
+        dispatch: { x: 340, y: 210 },
+        relay: { x: 250, y: 300 },
+        profiles: { x: 160, y: 210 },
+        claude: { x: 378, y: 84 },
+        gemini: { x: 378, y: 336 },
+        grok: { x: 122, y: 336 },
+        codex: { x: 122, y: 84 }
+      };
+
+      const routeSpec = [
+        {
+          key: "claude",
+          color: "#D97757",
+          start: "claude",
+          primary: "state",
+          secondary: "dispatch",
+          mainGradient: "url(#edgeBluePurple)",
+          secondaryGradient: "rgba(233,233,238,0.13)",
+          directGradient: "rgba(233,233,238,0.14)",
+          phase: 0,
+          duration: 3800
+        },
+        {
+          key: "gemini",
+          color: "#1a73e8",
+          start: "gemini",
+          primary: "dispatch",
+          secondary: "relay",
+          mainGradient: "url(#edgePurpleTeal)",
+          secondaryGradient: "rgba(233,233,238,0.13)",
+          directGradient: "rgba(233,233,238,0.14)",
+          phase: 900,
+          duration: 3900
+        },
+        {
+          key: "grok",
+          color: "#888",
+          start: "grok",
+          primary: "relay",
+          secondary: "profiles",
+          mainGradient: "url(#edgeTealBlue)",
+          secondaryGradient: "rgba(233,233,238,0.13)",
+          directGradient: "rgba(233,233,238,0.14)",
+          phase: 1800,
+          duration: 3700
+        },
+        {
+          key: "codex",
+          color: "#555",
+          start: "codex",
+          primary: "profiles",
+          secondary: "state",
+          mainGradient: "url(#edgeBluePurple)",
+          secondaryGradient: "rgba(233,233,238,0.13)",
+          directGradient: "rgba(233,233,238,0.14)",
+          phase: 2700,
+          duration: 3850
+        }
+      ];
+
+      function curvePath(a, b, bias) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const c1x = mx + nx * len * bias;
+        const c1y = my + ny * len * bias;
+        return `M ${a.x} ${a.y} C ${c1x} ${c1y} ${c1x} ${c1y} ${b.x} ${b.y}`;
+      }
+
+      function addEdge(id, a, b, stroke, opacity, extraClass) {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("id", id);
+        path.setAttribute("class", `edge ${extraClass || ""}`.trim());
+        const target = b === "center" ? center : points[b];
+        path.setAttribute("d", curvePath(points[a], target, 0.12));
+        path.setAttribute("stroke", stroke);
+        path.setAttribute("opacity", opacity);
+        edges.appendChild(path);
+        return path;
+      }
+
+      function addEdgeGroup(agentKey, startKey, primaryKey, secondaryKey, gradients) {
+        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        group.setAttribute("data-agent", agentKey);
+
+        const direct = addEdge(`${agentKey}-direct`, startKey, "center", gradients.directGradient, 0.16, "edge");
+        direct.setAttribute("d", curvePath(points[startKey], center, 0.16));
+
+        const secondary = addEdge(`${agentKey}-secondary`, startKey, secondaryKey, gradients.secondaryGradient, 0.10, "edge soft");
+        secondary.setAttribute("d", curvePath(points[startKey], points[secondaryKey], 0.18));
+
+        const primary = addEdge(`${agentKey}-primary-a`, startKey, primaryKey, gradients.mainGradient, 0.22, "edge");
+        primary.setAttribute("d", curvePath(points[startKey], points[primaryKey], 0.24));
+
+        const bridge = addEdge(`${agentKey}-primary-b`, primaryKey, "center", gradients.mainGradient, 0.22, "edge");
+        bridge.setAttribute("d", curvePath(points[primaryKey], center, 0.13));
+
+        group.appendChild(direct);
+        group.appendChild(secondary);
+        group.appendChild(primary);
+        group.appendChild(bridge);
+        edges.appendChild(group);
+
+        return { direct, secondary, primary, bridge };
+      }
+
+      const edgeMap = {};
+      for (const spec of routeSpec) {
+        edgeMap[spec.key] = addEdgeGroup(
+          spec.key,
+          spec.start,
+          spec.primary,
+          spec.secondary,
+          spec
+        );
+      }
+
+      const paths = {};
+      for (const spec of routeSpec) {
+        const start = points[spec.start];
+        const primary = points[spec.primary];
+        const toCenter = center;
+
+        const p1 = document.getElementById(`${spec.key}-primary-a`);
+        const p2 = document.getElementById(`${spec.key}-primary-b`);
+        p1.setAttribute("d", curvePath(start, primary, spec.key === "claude" ? 0.24 : spec.key === "gemini" ? 0.22 : spec.key === "grok" ? 0.24 : 0.21));
+        p2.setAttribute("d", curvePath(primary, toCenter, spec.key === "claude" ? 0.11 : spec.key === "gemini" ? 0.12 : spec.key === "grok" ? 0.11 : 0.1));
+
+        const d1 = document.getElementById(`${spec.key}-direct`);
+        d1.setAttribute("d", curvePath(start, toCenter, spec.key === "claude" ? 0.16 : spec.key === "gemini" ? -0.14 : spec.key === "grok" ? 0.14 : -0.12));
+
+        const d2 = document.getElementById(`${spec.key}-secondary`);
+        d2.setAttribute("d", curvePath(start, points[spec.secondary], spec.key === "claude" ? -0.14 : spec.key === "gemini" ? 0.12 : spec.key === "grok" ? -0.12 : 0.14));
+
+        paths[spec.key] = {
+          outbound: p1,
+          inbound: p2,
+          direct: d1,
+          secondary: d2,
+          len1: p1.getTotalLength(),
+          len2: p2.getTotalLength(),
+          total: p1.getTotalLength() + p2.getTotalLength()
+        };
+      }
+
+      const nowStart = performance.now();
+      const signalPairs = Object.fromEntries(
+        routeSpec.map((spec) => [spec.key, signals[spec.key]])
+      );
+
+      function setActive(agentKey, outboundActive, inboundActive) {
+        const edgeSet = edgeMap[agentKey];
+        edgeSet.primary.classList.toggle("active", outboundActive);
+        edgeSet.bridge.classList.toggle("active", inboundActive);
+        edgeSet.direct.classList.toggle("active", false);
+        edgeSet.secondary.classList.toggle("active", false);
+      }
+
+      function animate(ts) {
+        const elapsed = ts - nowStart;
+
+        for (const spec of routeSpec) {
+          const route = paths[spec.key];
+          const dot = signalPairs[spec.key];
+          const phase = (elapsed + spec.phase) % spec.duration;
+          const travel = phase / spec.duration;
+          const outboundWindow = 0.46;
+          const inboundWindow = 0.94;
+
+          let pt;
+          if (travel < outboundWindow) {
+            const l = route.len1 * (travel / outboundWindow);
+            pt = document.getElementById(`${spec.key}-primary-a`).getPointAtLength(l);
+            setActive(spec.key, true, false);
+          } else if (travel < inboundWindow) {
+            const l = route.len2 * ((travel - outboundWindow) / (inboundWindow - outboundWindow));
+            pt = document.getElementById(`${spec.key}-primary-b`).getPointAtLength(l);
+            setActive(spec.key, false, true);
+          } else {
+            pt = null;
+            setActive(spec.key, false, false);
+          }
+
+          for (const circle of dot) {
+            circle.style.opacity = pt ? String(travel < outboundWindow ? 0.95 : 0.92) : "0";
+            circle.setAttribute("cx", pt ? pt.x : -100);
+            circle.setAttribute("cy", pt ? pt.y : -100);
+            circle.setAttribute("r", circle.id.endsWith("-core") ? (pt ? 2.3 : 0.001) : (pt ? 5.5 : 0.001));
+          }
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.9.2 — Team Onboarding + Consensus | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 22, 2026</span>
+        
+          <span class="blog-post-pr">PR feat/v0.9.2 — 6 tasks, merged to main</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.9.2 — Team Onboarding + Consensus</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of Post #20</h2>
+<p>Post #20 was about closing production gaps revealed by dogfooding — the install binary crash and the init overwrite problem that appeared the moment we ran synlynk in a non-synlynk repo. Both were fixed in a hotfix session before any new feature work began.</p>
+<p>The stated next goalpost was v0.9.2: bring the team onboarding flow into the CLI so that adding a new developer to a synlynk-managed project doesn't require manual setup of devlogs, AI context files, and digest reads.</p>
+<hr>
+<h2>What Changed in This PR</h2>
+<p>No strategic shifts. The feature set was well-defined from the v0.9.2 design spec and implementation plan. This was a clean 6-task execution with hybrid dispatch (Claude for exploratory tasks, Codex for targeted additions).</p>
+<hr>
+<h2>What Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/team-onboarding/team-onboarding-consensus.html" title="v0.9.2 — Team Onboarding and Consensus Primitives" loading="lazy" frameborder="0"></iframe>
+  <figcaption>v0.9.2 — Team Onboarding and Consensus Primitives</figcaption>
+</figure>
+<h3><code>synlynk join</code></h3>
+<p>The entry point for a new team member. Running <code>synlynk join</code> in a synlynk-managed repo:</p>
+<ol>
+<li>Seeds <code>project-docs/devlogs/&lt;username&gt;.md</code> with a stub entry attributed to the joining user — so the devlog exists and shows up in team digests from day one</li>
+<li>Regenerates CLAUDE.md, GEMINI.md, and AGENTS.md with the joining member's <code>git config user.name</code> in the agent identity header</li>
+<li>Prints a team digest: who else is in the project, what they've been working on, how to read their devlogs</li>
+</ol>
+<pre><code class="language-bash">$ synlynk join
+
+✓  Seeded devlog for nikhil (10 recent commits found)
+✓  Regenerated CLAUDE.md, GEMINI.md, AGENTS.md
+
+Team — 2 members:
+  alice   last active 2026-06-21  focus: SQLite migration, scoped context
+  bob     last active 2026-06-20  focus: source scanner, symbol extraction
+
+Next: synlynk exec claude — your context is ready
+</code></pre>
+<h3><code>synlynk team status</code></h3>
+<p>A point-in-time view of the entire workgroup:</p>
+<pre><code class="language-bash">$ synlynk team status
+
+Member     Last Active     Stories         Budget Used
+─────────  ──────────────  ──────────────  ───────────
+alice      2026-06-21      S4 (active)     12,400 tok
+bob        2026-06-20      S5 (active)     8,200 tok
+nikhil     2026-06-22      S6 (planned)    —
+</code></pre>
+<p>Reads <code>project-docs/devlogs/</code> for all contributors and the <code>stories</code> table for active assignments. The <code>Budget Used</code> column reads <code>estimated_tokens</code> from the stories table.</p>
+<h3><code>synlynk decide</code></h3>
+<p>Multi-agent consensus on any decision question:</p>
+<pre><code class="language-bash">$ synlynk decide &quot;Should we store decision records in SQLite or Markdown files?&quot; \
+    --panel claude,codex,agy
+
+Dispatching panel: claude, codex, agy...
+
+  claude  →  SQLite — queryable, survives file renames, joins with stories
+  codex   →  Markdown — human-readable, diffable in PRs, zero migration cost
+  agy     →  SQLite — aligns with existing state.db pattern
+
+Consensus: SQLite (2/3 panel)
+
+Run with --record to write a signed Decision record.
+</code></pre>
+<p>With <code>--record</code>, writes <code>project-docs/decisions/YYYY-MM-DD-&lt;slug&gt;.md</code> containing the topic, panel responses, consensus position, and Ed25519 signature. Decisions become first-class artifacts that agents can reference in their context.</p>
+<h3>Pull-before-write arbitration</h3>
+<p>Every command that writes to <code>project-docs/</code> now calls <code>_check_upstream_divergence()</code> first. If the local branch is behind the remote, the command warns:</p>
+<pre><code>⚠ project-docs/ may be out of date — consider git pull before writing
+  (remote has 2 commits ahead of local)
+  Continuing anyway...
+</code></pre>
+<p>The warning does not block — offline and disconnected workflows still function. The goal is visibility: if two developers' agents are writing to devlogs concurrently and one of them sees this warning, they know to pull before pushing to avoid a merge conflict.</p>
+<h3>Token budgets on stories</h3>
+<p><code>synlynk story create</code> accepts a <code>--tokens N</code> flag:</p>
+<pre><code class="language-bash">synlynk story create &quot;Add Stripe webhook handler&quot; --tokens 50000
+</code></pre>
+<p>The <code>estimated_tokens</code> column is visible in <code>synlynk team status</code> and in the dispatch planner's budget check. Stories with a budget cap trigger a warning when <code>_check_budgets()</code> sees cumulative tokens approaching the limit.</p>
+<hr>
+<h2>Key Implementation Decisions</h2>
+<p><strong><code>synlynk join</code> identity detection:</strong> Uses <code>git config user.name</code> + <code>git config user.email</code> rather than asking interactively. This matches how synlynk has always identified members (via git attribution) and avoids prompting on first run.</p>
+<p><strong><code>decide</code> panel dispatch:</strong> Each panel agent is dispatched non-interactively with <code>_run_agent_sync()</code> — the same mechanism used by the support engineer agent. The structured <code>DECISION:</code> block is extracted by regex from each agent's stdout. If an agent returns without the marker, its response is shown as &quot;no structured decision&quot; but the other panel members' votes still count.</p>
+<p><strong>Consensus algorithm:</strong> All panel responses are collected, then sent back to <code>panel[0]</code> (the first named agent) as a synthesis prompt. The synthesizer produces a final unified decision, and <code>cmd_decide</code> extracts the sentence starting with <code>&quot;Decision:&quot;</code> from the synthesis output as the canonical result. This means the first panel member is also the synthesizer — a deliberate simplicity tradeoff. Future versions may allow configuring a separate synthesizer agent or a voting-based alternative.</p>
+<p><strong>Pull-before-write arbitration:</strong> Implemented as a <code>git fetch --dry-run</code> + <code>git rev-list HEAD..origin/HEAD --count</code> check. Runs before every write to <code>project-docs/</code>. The check is skipped if the repo has no configured remote (<code>git remote -v</code> returns empty) so it doesn't break offline use.</p>
+<hr>
+<h2>Test Approach</h2>
+<p>25 new tests across the 6 tasks. Key coverage:</p>
+<ul>
+<li><code>_seed_devlog</code> with no prior commits (empty project) → writes minimal stub</li>
+<li><code>_seed_devlog</code> with 10+ commits → truncates to last 10</li>
+<li><code>cmd_join</code> in a repo with existing devlog → skips overwrite, prints status</li>
+<li><code>cmd_decide</code> with panel of 1 → no consensus required, decision recorded directly</li>
+<li><code>_check_upstream_divergence</code> with clean local → no warning</li>
+<li><code>_check_upstream_divergence</code> with mock remote ahead → warning + exit</li>
+</ul>
+<hr>
+<h2>Brainstorm Visuals Used</h2>
+<p>None for this feature. The v0.9.2 design spec (<code>docs/superpowers/specs/2026-06-22-v0.9.2-team-onboarding-consensus-design.md</code>) was written without a visual companion session — the feature set was well-understood from the invisible-state spec and team-mode requirements that preceded it.</p>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><strong>Agents can now onboard themselves into a team context.</strong></p>
+<p>Before v0.9.2, adding a new developer (human or agent) to a synlynk-managed project required manually writing a devlog stub, manually updating agent instruction files with the new member's name, and manually reading all existing devlogs to understand team state. Each of these steps was error-prone and skipped under time pressure.</p>
+<p>After v0.9.2:</p>
+<ul>
+<li><code>synlynk join</code> runs in under five seconds and produces a correctly attributed devlog + up-to-date AI context files</li>
+<li><code>synlynk team status</code> gives any agent a snapshot of team activity without reading multiple files</li>
+<li><code>synlynk decide</code> closes the loop on one of the most common agent-coordination patterns: &quot;I need three different agents to weigh in on this before I commit&quot;</li>
+</ul>
+<p>The pull-before-write arbitration is the piece that makes team mode safe to use concurrently. Without it, two agents writing to devlogs in the same repo in the same minute would produce a merge conflict that required human intervention. Now they don't.</p>
+<hr>
+<h2>Strategic Note: The Goal at the End of This Post</h2>
+<p>Team features at v0.9.2 complete the synchronous layer of the multi-agent OS. Every human and agent on the team can now join, see team state, and participate in structured decisions — all locally, all offline-capable.</p>
+<p>The next layer is the async daemon (v0.9.3): <code>synlynk daemon start</code> registers a background process that monitors <code>project-docs/</code>, fires context regeneration on writes, and exposes a local HTTP endpoint (<code>localhost:27471</code>) for agents to pull context without invoking the CLI. This moves synlynk from an on-demand tool to an always-running substrate — the step before the relay tier.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

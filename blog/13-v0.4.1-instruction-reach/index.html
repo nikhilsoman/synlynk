@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.4.1 — Instruction Reach: Context Injection Across Every IDE | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 17, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.4.1 — Instruction Reach: Context Injection Across Every IDE</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>After v0.4.0 (PR #39) shipped the dispatch plane — agent discovery, <code>synlynk dispatch</code>, job store, workgroup identity — the roadmap pointed toward the Capability Engine (v0.5.0): routing tasks to the right agent based on a performance ledger rather than sending every task to every agent. That work required <code>AGENT_CAPABILITY_BASELINES</code> to become data-driven and a SQLite capability registry to land.</p>
+<p>But a gap surfaced in the audit between v0.4.0 and v0.5.0: synlynk's context injection pipeline only reached Claude Code (<code>CLAUDE.md</code>), OpenAI Codex (<code>AGENTS.md</code>), and AntiGravity CLI (<code>GEMINI.md</code>). Cursor, GitHub Copilot, Windsurf, and every other IDE had no synlynk presence. Developers using any of those tools were flying blind — no context.md injection, no worktree directive, no sentinel awareness. This PR patches that gap before the capability ledger work begins.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p><strong>v0.4.1 is a focused minor release inserted between v0.4.0 and v0.5.0.</strong> The decision was: don't let the capability work start on a foundation where half of modern AI IDEs have no visibility into synlynk context. Instruction reach is low-blast-radius, high-value, and can land in a single PR.</p>
+<p>Two strategic clarifications sharpened during design:</p>
+<p><strong>1. Gemini CLI is EOL'd — replaced by AntiGravity (AGY).</strong> The AGY CLI (<code>agy</code>) replaced Gemini as synlynk's third trio member. This required removing <code>&quot;gemini&quot;</code> from <code>AGENT_CAPABILITY_BASELINES</code>, <code>AGENT_DISCOVERY_DEFAULTS</code>, and <code>_probe_model_version</code> probe commands. <code>GEMINI.md</code> was updated to reference the AGY engine and dropped the transition-window hedge. This was the right moment to make the cut — before v0.5.0 locks in the capability ledger schema.</p>
+<p><strong>2. Drift detection is more valuable than silent overwrites.</strong> The initial instinct was to have <code>synlynk exec</code> re-regenerate instruction files on every run. Code review pushed back: users may intentionally edit instruction files and don't want their changes silently clobbered. The right model is to detect drift (SHA mismatch against a manifest), fire an INSTRUCTION_DRIFT sentinel, and let the user decide — <code>synlynk instructions update</code> to regenerate, or <code>synlynk instructions ack</code> to acknowledge the divergence.</p>
+<h2>What This PR Shipped</h2>
+<h3>AGY Cleanup</h3>
+<p>Removed all <code>&quot;gemini&quot;</code> references from agent baselines, discovery defaults, probe patterns, and argparse help strings. <code>GEMINI.md</code> template now uses <code>agy-2.x</code> engine and contains AGY-specific instructions without any Gemini transition context. <code>agent_slots</code> default changed from <code>&quot;agy&quot;: &quot;gemini&quot;</code> to <code>&quot;agy&quot;: &quot;agy&quot;</code>.</p>
+<h3>Section Marker System</h3>
+<p>Three marker styles encode synlynk ownership in instruction files:</p>
+<ul>
+<li><strong><code>html</code></strong> — <code>&lt;!-- synlynk:start version=&quot;0.4.1&quot; tool=&quot;claude&quot; --&gt;</code> / <code>&lt;!-- synlynk:end --&gt;</code> — used for CLAUDE.md, GEMINI.md, AGENTS.md, Copilot, AI_INSTRUCTIONS.md</li>
+<li><strong><code>hash</code></strong> — <code># synlynk:start</code> / <code># synlynk:end</code> — used for <code>.windsurfrules</code> (no HTML comments in Windsurf rules format)</li>
+<li><strong><code>none</code></strong> — synlynk owns the whole file, no markers — used for <code>.cursor/rules/synlynk.mdc</code> (Cursor's MDC format has frontmatter that must be the first thing in the file)</li>
+</ul>
+<p><code>_extract_synlynk_section(content, marker_style)</code> extracts only the synlynk-owned region, excluding surrounding user content. This is the key primitive: SHAs are computed on the section only, so user edits outside markers never trigger false drift events.</p>
+<h3><code>_write_instruction_file()</code> — Three-Case Write Logic</h3>
+<p>Every instruction target goes through one function:</p>
+<ol>
+<li><strong>Create</strong> — file doesn't exist: write the full content with markers</li>
+<li><strong>Append</strong> — file exists but no markers: append the synlynk section as a new block, preserving user content</li>
+<li><strong>Replace-section</strong> — markers found: swap the block between existing markers, user content outside is untouched</li>
+</ol>
+<p><code>marker_style='none'</code> always overwrites — Cursor's <code>.mdc</code> file is synlynk-owned entirely.</p>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/instruction-reach/instruction-reach-ecosystem.html" title="Instruction Reach — 7 IDE/Agent Targets" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Instruction Reach — 7 IDE/Agent Targets</figcaption>
+</figure>
+<h3>Tool-Native Templates</h3>
+<p>Three new content builders for extended targets:</p>
+<ul>
+<li><strong><code>_build_cursor_mdc()</code></strong> — MDC frontmatter with <code>alwaysApply: true</code>, Session Start, Git Worktree sections. Cursor loads this as a persistent context rule.</li>
+<li><strong><code>_build_copilot_instructions()</code></strong> — Plain markdown, no frontmatter. GitHub Copilot reads <code>.github/copilot-instructions.md</code> directly.</li>
+<li><strong><code>_build_windsurf_rules()</code></strong> — Terse 6 lines with hash markers. Windsurf rules are more opinionated about format.</li>
+</ul>
+<h3>Instruction Manifest — <code>.synlynk/instructions.json</code></h3>
+<p>Every <code>synlynk init</code> now writes a SHA manifest tracking the synlynk-owned section of each instruction file:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: 1,
+  &quot;generated_at&quot;: &quot;2026-06-17T14:00:00&quot;,
+  &quot;synlynk_version&quot;: &quot;0.4.1&quot;,
+  &quot;files&quot;: {
+    &quot;CLAUDE.md&quot;: {&quot;tool&quot;: &quot;claude&quot;, &quot;sha&quot;: &quot;a3f8c2e1&quot;, &quot;last_checked&quot;: &quot;...&quot;},
+    &quot;.cursor/rules/synlynk.mdc&quot;: {&quot;tool&quot;: &quot;cursor&quot;, &quot;sha&quot;: &quot;b7d91f44&quot;, &quot;last_checked&quot;: &quot;...&quot;}
+  }
+}
+</code></pre>
+<p>SHAs are the first 16 hex chars of SHA-256 of the synlynk section content. The manifest merges on update — user-managed entries outside <code>_INSTRUCTION_TARGETS</code> are preserved.</p>
+<h3><code>_check_instruction_drift()</code> — Runtime Sentinel</h3>
+<p>Hooked into <code>exec_command()</code> after <code>check_sentinel_patterns()</code>. On every agent invocation:</p>
+<ol>
+<li>Load manifest</li>
+<li>For each tracked file in the manifest, extract current section and compute SHA</li>
+<li>If SHA differs from manifest entry → fire <code>INSTRUCTION_DRIFT</code> in <code>sentinel.md</code> + update manifest to current SHA (deduplication: next run sees matching SHA, won't re-fire)</li>
+<li>Return list of drifted paths for logging</li>
+</ol>
+<p>Deduplication is the key design decision: the sentinel fires once per change, not once per exec invocation.</p>
+<h3><code>synlynk instructions</code> CLI</h3>
+<p>Four subcommands:</p>
+<pre><code class="language-bash">synlynk instructions status          # Columnar table: 7 tracked files × status (ok/missing/drifted/untracked/no-markers)
+synlynk instructions diff [&lt;file&gt;]   # Shows user content outside synlynk markers
+synlynk instructions update [&lt;file&gt;] # Re-generates synlynk section, refreshes manifest SHA
+synlynk instructions ack &lt;file&gt;      # Removes INSTRUCTION_DRIFT lines from sentinel.md
+</code></pre>
+<p><code>status</code> uses <code>_YELLOW</code> for missing and drifted states (not error-level red — these are informational alerts, not failures).</p>
+<h3><code>init()</code> Refactored for All 7 Targets</h3>
+<p>Previously <code>init()</code> wrote 3 template files. Now it writes up to 7:</p>
+<ul>
+<li><strong>Trio (always):</strong> CLAUDE.md, GEMINI.md, AGENTS.md — gated by <code>agent_set</code> (discovered agents)</li>
+<li><strong>Extended (environment-gated):</strong> <code>.cursor/rules/synlynk.mdc</code> only if <code>.cursor/</code> exists; <code>.github/copilot-instructions.md</code> only if <code>.github/</code> exists; <code>.windsurfrules</code> and <code>AI_INSTRUCTIONS.md</code> always</li>
+</ul>
+<p>Detection guards are sourced from <code>_INSTRUCTION_TARGETS[i][3]</code> (the <code>detection_fn</code> field) — single source of truth, no duplicate gate dict.</p>
+<h3>Test Approach</h3>
+<p>34 new tests in <code>tests/test_instruction_reach.py</code>, covering every layer:</p>
+<ul>
+<li><code>_extract_synlynk_section</code>: all three marker styles, missing markers, nested content</li>
+<li><code>_write_instruction_file</code>: create/append/replace-section for html + hash + none styles</li>
+<li>Template builders: cursor MDC frontmatter, copilot no-frontmatter, windsurf terse format</li>
+<li>Manifest: write/load/merge, missing file, corrupt JSON</li>
+<li>Drift detection: clean run (no fire), drifted file (fires once), deduplication (no re-fire)</li>
+<li><code>cmd_instructions_status</code>: all five status values rendered correctly</li>
+<li><code>cmd_instructions_diff/update/ack</code>: section extraction, re-generation, sentinel cleanup</li>
+<li>CLI subparser: <code>instructions</code> verb wired with all four sub-subcommands</li>
+</ul>
+<p>Existing tests updated: AGY baseline replaces gemini, version test bumped to <code>&quot;0.4.1&quot;</code>, init test renamed to <code>test_init_appends_to_existing_without_force</code> (behavior is now append-not-skip), <code>.cursorrules</code> removed from template keys test.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>No dedicated brainstorm HTML was produced for v0.4.1. The design originated from the gap analysis in the four-imperatives brainstorm session (post #10) and was formalized in <code>docs/superpowers/specs/2026-06-17-instruction-reach-design.md</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Before this PR, synlynk's instruction injection stopped at the three CLI agents. After this PR:</p>
+<ul>
+<li>Every IDE with an instruction file convention now has a synlynk block with project context and the worktree directive</li>
+<li>The SHA manifest gives synlynk observability over all 7 instruction files — it knows if a human edited them</li>
+<li>Runtime drift detection means agents calling <code>synlynk exec</code> get alerted when their instruction files diverge from what synlynk last generated</li>
+<li><code>synlynk instructions update</code> closes the loop: when context changes (new milestone, new teammates, new capability), one command refreshes all instruction files</li>
+</ul>
+<p>This PR extends synlynk's reach from 3 CLI targets to 7 tracked files across all major AI development environments.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>v0.4.1 closes the instruction reach gap. The roadmap picks back up at v0.5.0 (Capability Ledger): SQLite-backed <code>capability.json</code>, <code>AGENT_CAPABILITY_BASELINES</code> becoming a data-driven registry, and <code>synlynk score</code> for recording post-run ratings. That work can now proceed on a foundation where every AI tool in the workspace has synlynk context injected — routing decisions will be visible to Cursor, Copilot, and Windsurf, not just the CLI trio.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

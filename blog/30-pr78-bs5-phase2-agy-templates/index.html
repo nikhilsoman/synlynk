@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR — BS-5 Phase 2: Homepage Sections and CSS Design System | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 28, 2026</span>
+        
+          <span class="blog-post-pr">PR #78</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR — BS-5 Phase 2: Homepage Sections and CSS Design System</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>In Phase 1, the standalone 11ty v3 website scaffold, design tokens, typography, and section primitives were set up. The goal of Phase 2 is to bring content fidelity, layout completeness, and a comprehensive CSS design system to the homepage sections assigned to Agy (Sections 1, 3, 4, 5).</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>We transitioned the inline-styled mockup from <code>hero-v4.html</code> into a clean, class-based CSS architecture. Repeating components (relief, step, and feature cards) were extracted into Nunjucks macros to keep the template files DRY and maintainable, paving the way for easier updates in subsequent website iterations.</p>
+<h2>What This PR Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/homepage-design-system.html" title="BS-5 Phase 2 — Homepage Design System" loading="lazy" frameborder="0"></iframe>
+  <figcaption>BS-5 Phase 2 — Homepage Design System</figcaption>
+</figure>
+<ul>
+<li><strong>Section 1 (Tagline Hero)</strong>: Completed tagline hero section porting layout from <code>hero-v4.html</code>. Added hook label, hero byline, gradient-styled brand tagline, two CTA links (<code>.btn-primary</code> and <code>.btn-ghost</code>), an install command bar, and brand-color agent chips (Claude, Gemini, Grok, Codex) using classes rather than inline styles.</li>
+<li><strong>Section 3 (Relief Section)</strong>: Implemented the relief section with 3 <code>.relief-card</code> components showcasing Context injection, Unified cost tracking, and Sentinel monitoring, alongside the token economics callout detailing the ~60% cheaper effective rate when distributed across 3 agents.</li>
+<li><strong>Section 4 (How It Works)</strong>: Rendered the 4-step terminal/command flow (Install, Init, Exec, Dispatch) with description and code blocks for each step.</li>
+<li><strong>Section 5 (Features Spotlight)</strong>: Implemented the 2x2 spotlight grid with cards for Dispatch, Context Injection, Sentinel Monitoring, and Agent Profiles, complete with command blocks, descriptions, and tags.</li>
+<li><strong>Nunjucks Macros</strong>: Created <code>website/src/_includes/macros.njk</code> to modularize relief, step, and feature card components.</li>
+<li><strong>CSS Design System</strong>: Extended <code>website/src/assets/css/main.css</code> to add styles for primary/ghost buttons, gradient clips, install bar copy states, agent chips, relief/step/feature cards, and terminal-inspired window chrome.</li>
+<li><strong>Base Layout Fix</strong>: Updated the footer in <code>base.njk</code> to link to <code>/#docs</code> instead of <code>#docs</code> to prevent broken navigation on subpages.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/bs5-website-redesign/hero-v4.html</code> (reference for layout, copy, markup structure, and color/alternation design)</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>By separating structure, presentation, and logic, and using class-based CSS instead of inline styling, the codebase remains highly adaptable. Working alongside Grok (who owns the terminal carousel and JS logic), this step-by-step layout and styling implementation demonstrates clean coordination boundaries between autonomous agents.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

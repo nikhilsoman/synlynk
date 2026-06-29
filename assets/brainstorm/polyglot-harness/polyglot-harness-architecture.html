@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Polyglot Harness Architecture</title>
+<style>
+:root {
+  --bg: #0E0E0F;
+  --bg-card: #111115;
+  --blue: #5B8DEF;
+  --purple: #A259F7;
+  --teal: #2EC4A0;
+  --orange: #D97757;
+  --text: #E9E9EE;
+  --muted: rgba(233,233,238,0.55);
+  --border: rgba(255,255,255,0.07);
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  padding: 24px;
+  line-height: 1.4;
+}
+.title-bar {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.title-bar h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+.title-bar .subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+}
+.col-header {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #0a0a0b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.agent:last-child { margin-bottom: 0; }
+.agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.agent-dot.claude { background: var(--purple); }
+.agent-dot.agy { background: var(--blue); }
+.agent-dot.codex { background: var(--orange); }
+.agent-name { font-weight: 600; font-size: 13px; }
+.agent-meta { font-size: 10px; color: var(--muted); margin-left: auto; }
+
+.context-bubble {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #0a0a0b;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.isolated { opacity: 0.6; }
+
+.central {
+  border: 1px solid var(--blue);
+  background: linear-gradient(145deg, #111115 0%, #0c0c10 100%);
+}
+.synlynk-core {
+  text-align: center;
+  padding: 14px 12px;
+}
+.synlynk-core .label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--blue);
+  font-weight: 600;
+}
+.synlynk-core .name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 6px 0 10px;
+}
+.feature {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: rgba(91,141,239,0.1);
+  border-radius: 999px;
+  display: inline-block;
+  margin: 2px;
+  color: var(--blue);
+}
+.connection {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--blue), transparent);
+  margin: 8px 0;
+  position: relative;
+}
+.connection::after {
+  content: '↓';
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  transform: translateX(-50%);
+  color: var(--blue);
+  font-size: 12px;
+  background: var(--bg);
+  padding: 0 4px;
+}
+.legend {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+.legend-claude { background: var(--purple); }
+.legend-agy { background: var(--blue); }
+.legend-codex { background: var(--orange); }
+.caption-muted { font-size:10px; color:var(--muted); text-align:center; margin-top:4px; }
+.caption-teal { font-size:10px; color:var(--teal); text-align:center; margin-top:4px; }
+.synlynk-sub { margin-top:10px; font-size:10px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="title-bar">
+  <h1>From Polyglot Chaos to Coordinated OS</h1>
+  <div class="subtitle">The harness lives outside every tool</div>
+</div>
+
+<div class="container">
+  <!-- WITHOUT -->
+  <div class="col">
+    <div class="col-header">Without synlynk</div>
+    <div class="card">
+      <div class="agent">
+        <div class="agent-dot claude"></div>
+        <div>
+          <div class="agent-name">Claude Code</div>
+          <div class="agent-meta">Sonnet 4.6</div>
+        </div>
+      </div>
+      <div class="context-bubble isolated">Own context · own memory · own costs</div>
+
+      <div class="agent">
+        <div class="agent-dot agy"></div>
+        <div>
+          <div class="agent-name">Agy (Gemini)</div>
+          <div class="agent-meta">2.5 Pro</div>
+        </div>
+      </div>
+      <div class="context-bubble isolated">Own context · own memory · own costs</div>
+
+      <div class="agent">
+        <div class="agent-dot codex"></div>
+        <div>
+          <div class="agent-name">Codex</div>
+          <div class="agent-meta">o3 / 4o</div>
+        </div>
+      </div>
+      <div class="context-bubble isolated">Own context · own memory · own costs</div>
+    </div>
+    <div class="caption-muted">3 tools, 3 contexts, 0 shared state</div>
+  </div>
+
+  <!-- WITH -->
+  <div class="col">
+    <div class="col-header">With synlynk</div>
+    <div class="card">
+      <div class="agent">
+        <div class="agent-dot claude"></div>
+        <div>
+          <div class="agent-name">Claude Code</div>
+          <div class="agent-meta">Architect / PM</div>
+        </div>
+      </div>
+      <div class="agent">
+        <div class="agent-dot agy"></div>
+        <div>
+          <div class="agent-name">Agy</div>
+          <div class="agent-meta">Builder</div>
+        </div>
+      </div>
+      <div class="agent">
+        <div class="agent-dot codex"></div>
+        <div>
+          <div class="agent-name">Codex</div>
+          <div class="agent-meta">Verifier / Refactor</div>
+        </div>
+      </div>
+
+      <div class="connection"></div>
+
+      <div class="card central">
+        <div class="synlynk-core">
+          <div class="label">SYNLYNK</div>
+          <div class="name">synlynk</div>
+          <div>
+            <span class="feature">context injection</span>
+            <span class="feature">cost tracking</span>
+            <span class="feature">sentinel</span>
+          </div>
+          <div class="synlynk-sub">shared project state · single constraint surface</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption-teal">All agents read from the same source of truth</div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot legend-claude"></div> Claude</div>
+  <div class="legend-item"><div class="legend-dot legend-agy"></div> Agy</div>
+  <div class="legend-item"><div class="legend-dot legend-codex"></div> Codex</div>
+</div>
+</body>
+</html>

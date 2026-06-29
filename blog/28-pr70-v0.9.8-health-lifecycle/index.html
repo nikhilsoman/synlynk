@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Post 28 — PR #70 — v0.9.8: Health Pulse + Lifecycle Commands</h1>
+<p><strong>Date:</strong> 2026-06-27<br>
+<strong>Branch:</strong> <code>feat/v0.9.8-health-lifecycle</code><br>
+<strong>Version:</strong> 0.9.7 → 0.9.8</p>
+<hr>
+<h2>Where we left off</h2>
+<p>v0.9.7 added Grok as the fourth first-class agent peer. The CLI could now discover, inject, and dispatch to all four harnesses (Claude, Agy, Codex, Grok). The <code>synlynk doctor</code> command and <code>HealthCheck</code> registry were already in place from an earlier cycle — but the lifecycle was incomplete: once synlynk was running in a repo, there was no clean way to step back out or push updated artifacts forward.</p>
+<h2>What moved the goalpost</h2>
+<p>The BS-5 website redesign design phase completed this session, and BS-7 (Skill Pack Interoperability + Benchmarks) is queued for next session. Both require synlynk to be easy to install, evaluate, and remove cleanly — especially for benchmarking where a &quot;before synlynk&quot; vs &quot;after synlynk&quot; comparison requires running the suite with synlynk fully stripped from the repo.</p>
+<p>That gap — no clean exit path — was OB-13 through OB-17 from the Onboarding epic. v0.9.8 closes it.</p>
+<h2>What shipped</h2>
+<h3><code>synlynk exit</code> (OB-13/14/15)</h3>
+<p>Reverses onboarding. Steps:</p>
+<ol>
+<li>Reads <code>.synlynk/instructions.json</code> manifest to find every tracked instruction file</li>
+<li>Strips the <code>&lt;!-- synlynk:start --&gt;…&lt;!-- synlynk:end --&gt;</code> block from each file, preserving surrounding user content</li>
+<li>Removes <code>.agents/</code> profiles and the <code>.synlynk/</code> directory</li>
+<li>Optionally removes <code>project-docs/</code> with <code>--remove-docs</code></li>
+<li>Writes <code>SYNLYNK_HANDOFF.md</code> summarising what was configured, including a ready-to-paste <code>synlynk init</code> command to reinstate</li>
+</ol>
+<p>Dry-run by default. Pass <code>--confirm</code> to execute.</p>
+<pre><code class="language-bash">synlynk exit              # preview what would be removed
+synlynk exit --confirm    # execute
+synlynk exit --confirm --remove-docs   # also delete project-docs/
+</code></pre>
+<p>The key implementation decision: strip synlynk sections rather than delete instruction files. A developer's CLAUDE.md typically has both synlynk-managed content and their own. Deleting the file would destroy their custom instructions — so <code>_strip_synlynk_section()</code> removes only the managed block using the existing marker regex, leaving everything else intact.</p>
+<h3><code>synlynk repair</code> (OB-13)</h3>
+<p>Exit + re-init in one command. Reads config before exiting (agents, mode, org, repo, docs-dir), then calls <code>init()</code> with the same parameters. Useful when synlynk state has drifted or <code>.synlynk/</code> has been manually edited into an inconsistent state.</p>
+<pre><code class="language-bash">synlynk repair              # preview
+synlynk repair --confirm    # execute
+</code></pre>
+<h3><code>synlynk sync</code> (OB-16/17)</h3>
+<p>Propagates updated artifacts to an existing repo without destroying and rebuilding:</p>
+<ul>
+<li>Re-writes the synlynk-managed sections in all tracked instruction files with current templates</li>
+<li>Creates any missing <code>.agents/&lt;name&gt;.json</code> profiles for slots in config</li>
+<li>Updates <code>.synlynk/instructions.json</code> manifest SHAs</li>
+</ul>
+<p>Does NOT touch <code>project-docs/</code>. Safe to run on any repo that's already initialised.</p>
+<pre><code class="language-bash">synlynk sync              # preview
+synlynk sync --confirm    # execute
+</code></pre>
+<h3><code>_strip_synlynk_section()</code> helper</h3>
+<p>Internal function that removes synlynk blocks from instruction files:</p>
+<ul>
+<li><code>html</code> marker style: removes <code>&lt;!-- synlynk:start … --&gt;</code> through <code>&lt;!-- synlynk:end --&gt;</code></li>
+<li><code>hash</code> marker style: removes <code># synlynk:start</code> through <code># synlynk:end</code></li>
+<li><code>none</code> marker style: deletes the file entirely (synlynk owns 100% of it, e.g. <code>.cursorrules</code>)</li>
+</ul>
+<p>Returns <code>True</code> if a section was found and removed, <code>False</code> if no markers present (file left unchanged).</p>
+<h3>Tests</h3>
+<p>13 new tests covering all three commands and the helper:</p>
+<ul>
+<li><code>test_cmd_exit_dry_run_prints_plan</code> — dry-run output, no files removed</li>
+<li><code>test_cmd_exit_confirm_removes_synlynk_dir</code> — .synlynk/ gone, SYNLYNK_HANDOFF.md written</li>
+<li><code>test_cmd_exit_strips_instruction_sections</code> — CLAUDE.md markers removed, user content preserved</li>
+<li><code>test_cmd_exit_remove_docs_flag</code> — project-docs/ deleted with <code>--remove-docs</code></li>
+<li><code>test_strip_synlynk_section_html</code> — html markers removed, surrounding content preserved</li>
+<li><code>test_strip_synlynk_section_none_removes_file</code> — full-file ownership deletes the file</li>
+<li><code>test_strip_synlynk_section_no_markers</code> — no-op when no markers present</li>
+<li><code>test_cmd_repair_dry_run</code> — .synlynk still present after dry run</li>
+<li><code>test_cmd_repair_confirm_reinits</code> — init() called with captured config, .synlynk reappears</li>
+<li><code>test_cmd_sync_dry_run</code> — prints plan, no writes</li>
+<li><code>test_cmd_sync_confirm_updates_instruction_files</code> — sections rewritten, manifest updated</li>
+<li><code>test_cmd_sync_no_manifest</code> — advisory printed, returns 0</li>
+</ul>
+<p>Suite: 513 → 524 passing (+11 net, 1 skipped for brainstorm HTML not present on this branch).</p>
+<h2>Where we are now</h2>
+<p>Lifecycle is complete: <code>init → join → exit → repair → sync</code>. synlynk can be cleanly installed, evaluated, stripped for benchmarking, and re-installed with one command. This unblocks the BS-7 benchmark session (skill pack interoperability) which requires a clean before/after comparison.</p>
+<p>Next: BS-7 brainstorm (2026-06-28/29), then v0.10.0 developer preview (packaging, <code>pipx install</code>, first-run polish, <code>synlynk viz</code>).</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

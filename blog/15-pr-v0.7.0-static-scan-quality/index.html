@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog 15 — v0.7.0: Static Scan Quality</h1>
+<p><strong>PR:</strong> feat/v0.7.0-static-scan-quality<br>
+<strong>Date:</strong> 2026-06-18</p>
+<hr>
+<h2>The Previous Goalpost</h2>
+<p>At the end of PR #47 (v0.6.1), synlynk had a solid execution harness: context injection from <code>project-docs/</code>, sentinel detection, cost tracking, job dispatch, and a full capability scoring engine backed by SQLite WAL. But every <code>synlynk exec</code> session started with zero visibility into the <em>source code</em> of the repo it was operating on. Agents knew what tasks were active and what the roadmap said — they had no idea what modules, public symbols, or entry points existed in the actual codebase.</p>
+<h2>The Shift</h2>
+<p>This PR was fully driven by the brainstorm session of 2026-06-17 where we designed Static Scan Quality as the third of four initiative tracks. The design decision that most shaped the implementation was <strong>dual storage</strong>: SQLite <code>source_symbols</code> table as the primary structured store (queryable, future Tokq-sync-ready) plus <code>project-docs/source-map.md</code> as a materialized flat-file export (cloneable by any collaborator without running tooling). A third layer — <code>scan-meta.json</code> — serves as a hot skeleton cache keyed on <code>git rev-parse HEAD</code>.</p>
+<h2>What Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/static-scan-quality/static-scan-context-injection.html" title="v0.7.0 — Source Architecture in Every Exec Context" loading="lazy" frameborder="0"></iframe>
+  <figcaption>v0.7.0 — Source Architecture in Every Exec Context</figcaption>
+</figure>
+<h3>Symbol extraction engine</h3>
+<p>A regex-based per-language symbol extractor covering 9 languages (Python, JavaScript, TypeScript, Go, Rust, Ruby, Java, Kotlin, Shell) plus a generic fallback. Each file is read at most 300 lines. Language is detected from extension via <code>_SOURCE_EXTENSIONS</code>. Patterns are compiled regexes in <code>_SYMBOL_PATTERNS</code> — the first match per line wins. Shell coverage handles both <code>name()</code> and <code>function name()</code> syntax.</p>
+<p>Symbol types recorded: <code>function</code>, <code>async_function</code>, <code>class</code>, <code>interface</code>, <code>struct</code>, <code>trait</code>, <code>enum</code>, <code>type</code>, <code>constant</code>, <code>module</code>.</p>
+<h3>File prioritization scoring</h3>
+<p><code>_score_source_files()</code> walks the tree and scores every source file:</p>
+<ul>
+<li><strong>+3</strong> for known entry-point filenames (<code>main.py</code>, <code>index.ts</code>, <code>main.go</code>, etc.) or <code>cmd/main.go</code></li>
+<li><strong>+1</strong> per appearance in the last 50 git commits (<code>git log --name-only --pretty=format: -50</code>)</li>
+<li><strong>−1</strong> per directory level beyond depth 2</li>
+</ul>
+<p>Top 15 by score are surfaced in the skeleton. Ties broken by path ascending.</p>
+<h3>Passive HEAD-keyed cache</h3>
+<p><code>_check_scan_cache()</code> is called inside <code>generate_context()</code> on every <code>synlynk exec</code> and <code>checkpoint</code>. It compares <code>git rev-parse HEAD</code> against the SHA stored in <code>.synlynk/scan-meta.json</code>. On match: return cached skeleton instantly. On mismatch: call <code>_scan_source_skeleton()</code>, update <code>scan-meta.json</code>, return fresh result. No DB writes on the passive path — those only happen on <code>--deep</code>.</p>
+<h3>Context injection</h3>
+<p><code>generate_context()</code> now writes a <code>## Source Architecture</code> section between Active Tasks and Roadmap (active). Format:</p>
+<pre><code>## Source Architecture
+_Scanned: 2026-06-18T14:22 · HEAD: abc1234 · 15 files · cache hit_
+
+### src/auth/  [typescript · 2 files]
+`src/auth/service.ts` — AuthService, verifyToken(), hashPassword()
+`src/auth/models.ts` — User, Role
+
+### [root]  [python · 1 file]
+`manage.py` — main()
+
+&gt; 9 more files in source-map.md — run `synlynk scan --deep` to refresh
+---
+</code></pre>
+<h3>CLI surface</h3>
+<pre><code>synlynk scan              # force-refresh skeleton
+synlynk scan --deep       # full tree → state.db + project-docs/source-map.md
+synlynk scan --status     # show cache age, HEAD SHA, file/symbol counts
+</code></pre>
+<h3>Dual storage</h3>
+<p><code>synlynk scan --deep</code> does a full tree walk, bulk-inserts all extracted symbols into <code>state.db:source_symbols</code> (with <code>DELETE WHERE head_sha != current</code> for single-SHA retention), and materialises <code>project-docs/source-map.md</code> with full symbol lists including line numbers and type annotations. The SQLite table has indexes on <code>head_sha</code> and <code>file</code> for future Tokq-sync queries.</p>
+<h3><code>_SCAN_SKIP_DIRS</code> extended</h3>
+<p>Added: <code>venv</code>, <code>env</code>, <code>vendor</code>, <code>.worktrees</code>, <code>coverage</code>, <code>.nyc_output</code>, <code>target</code>, <code>out</code>, <code>tmp</code>.</p>
+<h3>Test coverage</h3>
+<p>New test file <code>tests/test_static_scan.py</code> with 41 tests covering all layers: per-language symbol extraction, 300-line boundary, file scoring and depth penalty, cache hit/miss, context injection ordering, source-map format, DB population, stale row clearing, and CLI output.</p>
+<h2>What Is Achieved</h2>
+<p>Every <code>synlynk exec</code> session now starts with structural knowledge of the repository — without AI calls, without build tools, without breaking the stdlib-only single-file constraint. The passive cache means there is zero overhead on cache-hit executions. Signal types A (structural) and D (change surface via git activity) are implemented; B (import graph) and C (vocabulary) remain future work as designed.</p>
+<h2>New Goalpost</h2>
+<p>v0.7.0 completes the source-intelligence layer. The next initiative is <strong>Capability Dogfood</strong> — using synlynk to dispatch real tasks to agents and accumulate live capability ledger data in <code>state.db</code> to validate the scoring engine against real-world outcomes.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

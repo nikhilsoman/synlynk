@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog Post 27 — PR #69: <code>synlynk doctor</code> Health Command (v0.9.8)</h1>
+<p><strong>Series:</strong> Building synlynk — The Coordination OS for Multi-Agent Development<br>
+<strong>PR:</strong> #69 — <code>feat/v0.9.8-doctor</code><br>
+<strong>Date:</strong> 2026-06-27</p>
+<hr>
+<h2>Where We Were After PR #68</h2>
+<p>PR #68 shipped <code>pyproject.toml</code> + <code>synlynk/__main__.py</code> — standard packaging so <code>pipx install git+...</code> works as the primary install path. The v0.10.0 Developer Preview checklist now has packaging checked off. The next prerequisite before the public launch was <code>synlynk doctor</code>: a health-check command that gives a new developer (or an existing one debugging a broken setup) a single command to verify their installation.</p>
+<h2>What This PR Ships</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/synlynk-doctor/synlynk-doctor-health-checks.html" title="synlynk doctor — 7-Check Installation Health" loading="lazy" frameborder="0"></iframe>
+  <figcaption>synlynk doctor — 7-Check Installation Health</figcaption>
+</figure>
+<p><strong><code>HealthCheck</code> dataclass</strong> — four fields: <code>name</code>, <code>status</code> (<code>&quot;ok&quot;</code> | <code>&quot;warn&quot;</code> | <code>&quot;fail&quot;</code>), <code>message</code>, and <code>fix</code> (empty by default). Deliberately minimal — one clear data unit, no inheritance, no base class.</p>
+<p><strong><code>HEALTH_CHECKS</code> registry</strong> — an ordered list of seven check functions. Ordered from most fundamental to least: a failing Python version check is more load-bearing than a missing agent profile warning. Each function returns one <code>HealthCheck</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>python_version</code></td>
+<td>Python &gt;= 3.9</td>
+</tr>
+<tr>
+<td><code>project_init</code></td>
+<td><code>.synlynk/config.json</code> present</td>
+</tr>
+<tr>
+<td><code>docs_dir</code></td>
+<td><code>project-docs/</code> contains roadmap.md, todo.md, memory.md</td>
+</tr>
+<tr>
+<td><code>identity_key</code></td>
+<td><code>~/.synlynk/identity.key</code> (and <code>.pub</code>) exists</td>
+</tr>
+<tr>
+<td><code>agent_profiles</code></td>
+<td>Each agent in <code>config.agent_slots</code> has <code>.agents/&lt;name&gt;.json</code></td>
+</tr>
+<tr>
+<td><code>instruction_files</code></td>
+<td>CLAUDE.md, GEMINI.md, AGENTS.md, GROK.md at repo root</td>
+</tr>
+<tr>
+<td><code>version_current</code></td>
+<td>GitHub API check against latest release tag (5s timeout, degrades gracefully offline)</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>cmd_doctor(checks=None)</code></strong> — runs the registry, prints a formatted report, returns exit code 0 (ok/warn) or 1 (any fail). The <code>checks</code> param accepts a custom list for testing without hitting real filesystem or network.</p>
+<p><strong>Output design</strong> — matches the <code>brew doctor</code> / <code>cargo doctor</code> idiom: green ✓ / yellow ⚠ / red ✗ icons, name+message on one line, fix suggestion indented below on mismatch:</p>
+<pre><code>synlynk doctor
+
+  ✓  python_version: Python 3.14.4
+  ✗  project_init: Project not initialized — .synlynk/config.json missing
+     → Run: synlynk init
+  ✓  docs_dir: project-docs complete (project-docs)
+  ✓  identity_key: Ed25519 identity key present
+  ⚠  agent_profiles: Missing .agents/ profiles: claude, agy, codex
+     → Run: synlynk agent configure &lt;name&gt;
+  ⚠  instruction_files: Missing instruction files: AGENTS.md
+     → Run: synlynk init
+  ✓  version_current: synlynk 0.9.7 is up to date
+
+  1 check(s) failed — fix these before running synlynk.
+</code></pre>
+<p><strong>19 new tests</strong> — one per check (ok + fail/warn variants), plus dataclass defaults and <code>cmd_doctor()</code> aggregation behavior. 510 tests total, all passing.</p>
+<h2>One Note on Version Check Testability</h2>
+<p>The version check makes a real HTTP call. The tests monkeypatch <code>urllib.request.urlopen</code> rather than reaching the network — a <code>FakeResp</code> context manager that returns a preset <code>{&quot;tag_name&quot;: &quot;...&quot;}</code> JSON body. Offline degradation (returns <code>warn</code> with &quot;offline or timeout&quot; message) is tested by patching <code>urlopen</code> to throw <code>urllib.error.URLError</code>.</p>
+<h2>Progress Toward Developer Preview</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dispatch context isolation (story-5b86c353)</td>
+<td>✅ PR #67</td>
+</tr>
+<tr>
+<td>pipx/pip packaging</td>
+<td>✅ PR #68</td>
+</tr>
+<tr>
+<td><code>synlynk doctor</code> health command</td>
+<td>✅ This PR</td>
+</tr>
+<tr>
+<td>README overhaul</td>
+<td>Sunday — <code>chore/readme-overhaul</code></td>
+</tr>
+<tr>
+<td>BS-5 website brainstorm</td>
+<td>Saturday PM</td>
+</tr>
+<tr>
+<td>BS-6 OKF + visualization</td>
+<td>Sunday AM</td>
+</tr>
+<tr>
+<td>BS-7 skill pack interop + benchmarks</td>
+<td>Sunday AM/PM</td>
+</tr>
+<tr>
+<td>HN launch post draft</td>
+<td>Sunday PM</td>
+</tr>
+</tbody>
+</table>
+<h2>New Goalpost</h2>
+<p><code>synlynk doctor</code> closes the last code prereq for v0.10.0. What remains is documentation and narrative: the README overhaul, three brainstorm sessions (BS-5 website, BS-6 OKF+viz, BS-7 skill pack interop), and the HN launch draft. The v0.10.0 Named Release will cut when those are done.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

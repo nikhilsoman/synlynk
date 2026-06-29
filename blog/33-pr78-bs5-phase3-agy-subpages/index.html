@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #78 — BS-5 Phase 3: Sections 7+8, Subpages, and Blog Pipeline | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 28, 2026</span>
+        
+          <span class="blog-post-pr">PR #78</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #78 — BS-5 Phase 3: Sections 7+8, Subpages, and Blog Pipeline</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the end of Phase 2, the core homepage narrative structure (tagline, terminal carousel, relief section, getting started guide, and feature spotlight) was successfully implemented. The goal of Phase 3 is to achieve full content completion for the website redesign. This includes implementing Section 7 (Docs download), Section 8 (Waitlist form + recent blog posts), creating the standalone subpages (/blog, /docs, /features, /changelog, /about), and setting up the blog compilation pipeline.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The primary challenge of this phase was sourcing the blog posts. The posts are written and stored in the root <code>docs/blog/</code> directory, which is outside the website source input folder (<code>website/src/</code>).</p>
+<p>To avoid duplicating files in git or introducing heavy NPM build-step dependencies, we implemented a config-time copy strategy inside <code>website/.eleventy.js</code>. Whenever the Eleventy build starts, the configuration dynamically reads the blog posts, copies them to <code>website/src/blog/posts/</code> (which is ignored in <code>.gitignore</code>), and writes a Directory Data File (<code>posts.json</code>) to apply the blog post Nunjucks layout (<code>blog-post.njk</code>) and slug-based permalinks (<code>/blog/33-pr78-bs5-phase3-agy-subpages/</code>).</p>
+<p>For the <code>/changelog</code> subpage, rather than manual copy-pasting, we automated the processing of the root <code>CHANGELOG.md</code> inside <code>.eleventy.js</code>. It strips metadata headers, parses versions, and wraps added/changed/fixed tags in semantic HTML classes so they can be styled with vibrant badges.</p>
+<h2>What This PR Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/website-architecture-pipeline.html" title="BS-5 Site Architecture + Content Pipeline" loading="lazy" frameborder="0"></iframe>
+  <figcaption>BS-5 Site Architecture + Content Pipeline</figcaption>
+</figure>
+<ul>
+<li><strong>Section 7 (Documentation Download)</strong>: Replaced the docs section shell with a 3-column grid featuring Quick Start Guide, Command Reference, and The Manual, each with a distinctive dark-gradient header box and link.</li>
+<li><strong>Section 8 (Waitlist + Blog teasers)</strong>: Replaced the waitlist shell. Added a waitlist form with a JavaScript submission handler that validates inputs, hides the form, and displays a success message. Below the form, a dynamic teaser section renders cards for the 3 most recent blog posts.</li>
+<li><strong>Subpage Suite</strong>:
+<ul>
+<li><code>/blog</code>: Grid layout displaying all posts sorted by date descending, featuring responsive grids, and mapped hero images or premium fallback gradients.</li>
+<li><code>/blog/&lt;slug&gt;</code>: Clean, high-readability typography layout with code block highlights and back-navigation links.</li>
+<li><code>/docs</code>: Layout with a responsive sticky sidebar nav linking to individual command reference blocks.</li>
+<li><code>/features</code>: Grid expanding the homepage feature spotlight to show Budget Tracking and decentralized Team Mode.</li>
+<li><code>/changelog</code>: Automatically rendered root changelog, styled with version badges and green/red/blue status tags.</li>
+<li><code>/about</code>: Renders the synlynk mission statement, OS layer architectural definitions, and the roster of humans and agent archetypes.</li>
+</ul>
+</li>
+<li><strong>Blog Hero Pipeline</strong>: Created <code>blogHeroes.json</code> and documented the browser screenshot capture workflow in <code>website/scripts/extract-heroes.js</code> and <code>website/README.md</code>.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/bs5-website-redesign/hero-v4.html</code> (layout and color alternation guidelines)</li>
+<li><code>docs/synlynk-quickstart-apple.html</code> (prose and document styles reference)</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This PR completes the presentation layers of the synlynk ecosystem. By dynamically extracting information from active development documents (<code>CHANGELOG.md</code> and <code>docs/blog/*.md</code>), it demonstrates that presentation pages can be kept in sync with the codebase autonomously. Multi-agent coordination (where Grok owns animations and Agy owns styling/templates) operates within strict boundaries, allowing parallel contributions to coexist seamlessly.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With all content and subpages in place, the website is feature-complete. The next phase (Phase 4) involves verifying the production build, checking link integrity across all subpages, and integrating the deployment workflow with GitHub Pages ahead of the v0.10.0 developer preview.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

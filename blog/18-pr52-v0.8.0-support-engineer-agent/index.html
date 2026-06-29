@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog 18 — PR #52: v0.8.0 Support Engineer Agent</h1>
+<p><strong>Series:</strong> Building toward full autonomous multi-agent dispatch<br>
+<strong>PR:</strong> #52 — <code>feat/v0.8.0-support-engineer-agent</code><br>
+<strong>Date:</strong> 2026-06-21</p>
+<hr>
+<h2>Where we left off (PR #51)</h2>
+<p>PR #51 solved the Codex headless dispatch problem: <code>codex exec -</code> reads a prompt from stdin without requiring a TTY, and <code>-s workspace-write</code> confines writes to the workdir. The key lesson was that <code>--dangerously-bypass-approvals-and-sandbox</code> silently overrides <code>-s</code> entirely — caught by both AGY and Codex in a dual-agent review. The goalpost after PR #51: get an autonomous monitoring agent running so synlynk watches itself.</p>
+<hr>
+<h2>Strategic shift: Definition B decomposed</h2>
+<p>The original Definition B spec described three agents — Support Engineer, PM Agent, and Marketing Intern — as a single milestone. AGY's gap analysis (committed as <code>docs/proposals/autopilot-gap-analysis-agy.md</code>) raised five unresolved questions about ownership models, HITL thresholds, and cold-start logistics. Rather than spec all three at once, we scoped down to Support Engineer only. PM Agent and Marketing Intern remain as <code>.agents/pm.yaml</code> / <code>.agents/marketing.yaml</code> files to create later — no engine changes needed to add them.</p>
+<hr>
+<h2>What shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/agent-allocation/agent-allocation.html" title="Agent allocation model" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Agent allocation model</figcaption>
+</figure>
+<h3>New subcommand: <code>synlynk agent run &lt;name&gt;</code></h3>
+<pre><code class="language-bash">synlynk agent run support          # collect signals, investigate, file issues, attempt fixes
+synlynk agent run support --dry-run   # print findings only, no dispatch or GitHub calls
+synlynk agent run support --install-cron  # idempotent crontab install (0 */6 * * *)
+synlynk agent list                 # show .agents/*.json files and last run timestamp
+</code></pre>
+<h3>Agent config: <code>.agents/support.json</code></h3>
+<p>Agents are defined by a JSON file, not code. The engine reads it; adding PM Agent later = a new <code>.agents/pm.json</code>, no engine changes:</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;support-engineer&quot;,
+  &quot;investigator&quot;: &quot;claude&quot;,
+  &quot;fixer&quot;: &quot;claude&quot;,
+  &quot;signals&quot;: [
+    {&quot;type&quot;: &quot;test_suite&quot;,      &quot;command&quot;: &quot;pytest tests/ -q --tb=short&quot;},
+    {&quot;type&quot;: &quot;sentinel_alerts&quot;, &quot;path&quot;: &quot;.synlynk/sentinel.md&quot;},
+    {&quot;type&quot;: &quot;telemetry_anomaly&quot;, &quot;failure_rate_threshold&quot;: 0.30},
+    {&quot;type&quot;: &quot;capability_drop&quot;,   &quot;drop_threshold&quot;: 1.5},
+    {&quot;type&quot;: &quot;github_issues&quot;,     &quot;labels&quot;: [&quot;bug&quot;, &quot;needs-triage&quot;]}
+  ],
+  &quot;hitl&quot;: {&quot;auto_merge&quot;: false}
+}
+</code></pre>
+<p><code>auto_merge: false</code> is B-mode — draft PRs only. Flipping to <code>true</code> upgrades to C-mode without any code change.</p>
+<h3>5 signal collectors</h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Method</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_suite</code></td>
+<td><code>subprocess.run([&quot;pytest&quot;, ...])</code></td>
+<td>Any failure → high</td>
+</tr>
+<tr>
+<td><code>sentinel_alerts</code></td>
+<td>Read <code>.synlynk/sentinel.md</code> for <code>⚠</code> lines</td>
+<td>FLATLINE/QUOTA → high, others → medium</td>
+</tr>
+<tr>
+<td><code>telemetry_anomaly</code></td>
+<td>Last 20 telemetry entries, compute failure rate</td>
+<td>&gt;60% → high, &gt;30% → medium</td>
+</tr>
+<tr>
+<td><code>capability_drop</code></td>
+<td>7-day vs prior-7-day avg quality per agent</td>
+<td>Δ&gt;3pts → high, Δ&gt;1.5pts → medium</td>
+</tr>
+<tr>
+<td><code>github_issues</code></td>
+<td><code>gh issue list --label bug,needs-triage --json</code></td>
+<td>Always medium</td>
+</tr>
+</tbody>
+</table>
+<p>CI detection: <code>GITHUB_ACTIONS=true</code> skips <code>sentinel_alerts</code> and <code>telemetry_anomaly</code> (which require local <code>.synlynk/</code> state).</p>
+<h3>7-day dedup window (<code>autopilot_runs</code> table)</h3>
+<p>New SQLite table prevents re-investigating the same signal within 7 days (30 days for <code>github_issues</code>, to avoid re-filing duplicate issues on persistent open bugs). <code>signal_hash</code> = MD5 of the finding's key content.</p>
+<h3>Investigation pipeline</h3>
+<p>For each new finding (not in dedup window):</p>
+<ol>
+<li>Create a story in <code>state.db</code> with deterministic ID <code>support-&lt;hash[:8]&gt;</code></li>
+<li>Build prompt: signal detail + project context from <code>generate_context()</code> + task instruction</li>
+<li>Run investigator <strong>foreground</strong> via <code>subprocess.run()</code> (300s timeout) — not the background <code>dispatch_agent()</code></li>
+<li>Detect fix signal: <code># FIX:</code> marker or <code>--- a/</code> unified diff in log output</li>
+<li>File GitHub issue via <code>gh issue create --label bug,support-engineer</code></li>
+<li>If fix signal: extract diff, <code>git apply</code>, run tests, open draft PR or post failure comment</li>
+<li>Write <code>autopilot_runs</code> row with status + PR URL</li>
+</ol>
+<p>Engine caps at 5 findings per run (highest severity first).</p>
+<h3>Key implementation decisions</h3>
+<p><strong>JSON not YAML for config files</strong>: synlynk is stdlib-only. Python 3 has no built-in YAML parser. JSON is equivalent for this config structure.</p>
+<p><strong><code>subprocess.run</code> foreground, not <code>dispatch_agent</code></strong>: <code>dispatch_agent()</code> uses <code>Popen</code> with <code>start_new_session=True</code> (background, fire-and-forget). The investigation pipeline needs to block and read the output before proceeding to file an issue. Building the same shell command pattern with <code>subprocess.run(timeout=300)</code> was the cleanest path without modifying <code>dispatch_agent</code>.</p>
+<p><strong><code>_attempt_fix</code> returns <code>(status, pr_url)</code> tuple</strong>: The final code review caught that <code>pr_url</code> was always NULL in <code>autopilot_runs</code>. Changed return type to tuple so the PR URL from <code>gh pr create</code> is captured and stored.</p>
+<p><strong>Temp patch file cleanup</strong>: <code>NamedTemporaryFile(delete=False)</code> + <code>git apply</code> is wrapped in <code>try/finally</code> with <code>os.unlink(patch_path)</code> to prevent accumulation in <code>/tmp/</code>.</p>
+<h3>GitHub Actions trigger</h3>
+<p><code>.github/workflows/support-engineer.yml</code> fires on push to <code>main</code> and on a <code>0 */6 * * *</code> schedule. Requires <code>ANTHROPIC_API_KEY</code> and uses <code>GITHUB_TOKEN</code> (auto-provided) for issue/PR creation.</p>
+<h3>Tests: 200 passing (up from 176)</h3>
+<p>24 new tests cover every signal collector, dedup windows, the investigation dispatch, issue filing, diff extraction, fix attempt, engine orchestration (including dry-run no-side-effects), and cron install idempotency.</p>
+<hr>
+<h2>What was achieved</h2>
+<p>synlynk now watches itself. On every push to main (and every 6 hours), the Support Engineer collects health signals across 5 dimensions, deduplicates against a 7/30-day history, dispatches Claude to investigate new findings, files GitHub issues with investigation results, and opens draft fix PRs when the investigation produces a diff that passes the test suite.</p>
+<p>The agent config file pattern means adding PM Agent or Marketing Intern = a new <code>.agents/*.json</code> file. The engine routes to them automatically.</p>
+<hr>
+<h2>New goalpost</h2>
+<p>v0.9.0: Support Engineer running stably in CI for at least one full week. Once confirmed, write <code>.agents/pm.json</code> for the PM Agent (growth-signal collector: star velocity, clone counts, install rate).</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

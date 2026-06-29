@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Grok Agent Integration</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:14px;}
+.title{font-size:13px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:10px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:720px;margin:0 auto;}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px;}
+.card.c1{border-color:var(--purple);}
+.card.c2{border-color:var(--blue);}
+.card.c3{border-color:var(--orange);}
+.card.c4{border-color:var(--teal);}
+.name{font-weight:700;}
+.meta{font-size:9px;color:var(--muted);}
+.center{margin:10px auto 4px;width:74px;text-align:center;background:#0a0a0b;border:1px solid var(--blue);border-radius:6px;padding:4px;font-size:10px;color:var(--blue);}
+.badges{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap;}
+.badge{font-size:9px;background:#0a0a0b;padding:2px 7px;border-radius:4px;border:1px solid var(--border);}
+</style>
+</head>
+<body>
+<div class="title">The Four-Agent Peer System</div>
+
+<div class="grid">
+  <div class="card c1"><div class="name">Claude</div><div class="meta">Anthropic • Architect / PM • reads CLAUDE.md</div></div>
+  <div class="card c2"><div class="name">Agy</div><div class="meta">AntiGravity • Builder • reads GEMINI.md</div></div>
+  <div class="card c3"><div class="name">Codex</div><div class="meta">OpenAI • Refactorer / Verify • reads AGENTS.md</div></div>
+  <div class="card c4"><div class="name">Grok</div><div class="meta">xAI • Canvas / JS • --rules injection</div></div>
+</div>
+
+<div class="center">synlynk dispatch routing</div>
+
+<div class="badges">
+  <div class="badge">--rules injection</div>
+  <div class="badge">capability baseline recording</div>
+</div>
+</body>
+</html>

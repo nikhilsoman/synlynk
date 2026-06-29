@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post v0.9.0 — The Gap Between Shipping and Working | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 22, 2026</span>
+        
+          <span class="blog-post-pr">PR hotfix — 3 commits to main</span>
+        
+      </div>
+      <h1 class="blog-post-title">Post v0.9.0 — The Gap Between Shipping and Working</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of PR #53</h2>
+<p>PR #53 shipped v0.9.0 — the kernel hardening release. The package split moved ~4700 lines from <code>bin/synlynk.py</code> into a proper <code>synlynk/</code> package. Scoped dispatch context, per-agent prompt framing, Ed25519 signing, anti-gaming quality caps, and the package structure were all locked in. The stated next goal was v0.9.1: <code>synlynk relay join</code> onboarding and the community-first relay model.</p>
+<p>We had 365 passing tests. We felt good about the state of the code.</p>
+<h2>The Strategic Shift: Dogfooding Reveals Production Gaps</h2>
+<p>The morning after shipping v0.9.0, we ran <code>synlynk init</code> in <code>rxcc</code> — a separate, mature repo. Two things broke immediately.</p>
+<p>This is not a v0.9.1 feature post. It's a gap post. The gaps mattered enough to fix before moving forward because they revealed something important: <strong>synlynk had only ever been used inside its own repo</strong>. The moment it was used in the wild, the seams showed.</p>
+<p>Neither gap was theoretical. Both were reproducible in under 30 seconds. Both would have confused every agent that ran <code>synlynk init</code> in any non-synlynk repo.</p>
+<hr>
+<h2>What Broke and Why</h2>
+<h3>Gap 1: <code>ModuleNotFoundError: No module named 'synlynk'</code></h3>
+<p>The install script (<code>install.sh</code>) copies <code>bin/synlynk.py</code> to <code>~/.synlynk/bin/synlynk</code>. Before the v0.9.0 package split, that file contained the entire application — self-contained, zero dependencies. After the split, <code>bin/synlynk.py</code> became a 5-line shim:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from synlynk import main
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<p>The <code>sys.path.insert</code> line resolves to <code>parent(parent(__file__))</code>. In the dev repo that's <code>~/dev/synlynk/</code> — which contains the <code>synlynk/</code> package. But when installed to <code>~/.synlynk/bin/synlynk</code>, the same path arithmetic resolves to <code>~/.synlynk/</code> — which has no <code>synlynk</code> package. The shim was never updated for its new deployment context.</p>
+<p><strong>The fix:</strong></p>
+<ul>
+<li><code>install.sh</code> now copies the <code>synlynk/</code> package to <code>~/.synlynk/lib/synlynk/</code> alongside the shim</li>
+<li>For curl installs (no local repo), downloads <code>synlynk/__init__.py</code> directly</li>
+<li>Patches the installed shim's sys.path line from the dev-repo-relative path to <code>os.path.expanduser(&quot;~/.synlynk/lib&quot;)</code></li>
+<li>The installed <code>~/.synlynk/bin/synlynk</code> was also patched immediately so existing installs worked without reinstalling</li>
+</ul>
+<h3>Gap 2: <code>synlynk init</code> Was Blind to Existing Docs</h3>
+<p><code>rxcc</code> already had <code>roadmap.md</code>, <code>todo.md</code>, and a <code>rxcc_memory.md</code> at the repo root — hundreds of entries of real project history. Running <code>synlynk init</code> created a fresh <code>project-docs/</code> directory with blank skeleton files generated from git commit topics.</p>
+<p>AGY (running in rxcc) saw two sets of project docs: the real ones at root, and the blank ones in <code>project-docs/</code>. It correctly diagnosed the conflict and proposed symlinks to reconcile them. The user declined the destructive command and asked why.</p>
+<p>The answer was that <code>synlynk init</code> had only ever been run on the synlynk repo itself, where <code>project-docs/</code> didn't exist yet. It had no detection logic for pre-existing project documentation in any other location.</p>
+<p>This was the more important gap. An OS for multi-agent development that corrupts context on first run in any mature repo is not ready for use beyond its own development.</p>
+<hr>
+<h2>What Was Shipped</h2>
+<h3>Fix 1: Configurable <code>project_docs_dir</code></h3>
+<p>All ~35 hardcoded <code>&quot;project-docs/&quot;</code> strings in <code>synlynk/__init__.py</code> were replaced with calls to a new <code>_docs_dir()</code> helper:</p>
+<pre><code class="language-python">def _docs_dir() -&gt; str:
+    config_file = &quot;.synlynk/config.json&quot;
+    if os.path.exists(config_file):
+        try:
+            with open(config_file) as f:
+                return json.load(f).get(&quot;project_docs_dir&quot;, &quot;project-docs&quot;)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return &quot;project-docs&quot;
+</code></pre>
+<p><code>load_config()</code> defaults now include <code>&quot;project_docs_dir&quot;: &quot;project-docs&quot;</code> so all existing repos are unaffected. A new <code>--docs-dir</code> flag on <code>synlynk init</code> writes the setting to <code>.synlynk/config.json</code> before any file creation happens:</p>
+<pre><code class="language-bash">synlynk init --docs-dir .   # keeps docs at repo root
+</code></pre>
+<p>All functions that previously read from a hardcoded path — <code>generate_context()</code>, <code>checkpoint()</code>, <code>parse_costs_md()</code>, <code>update_costs()</code>, <code>get_mode()</code>, <code>_deep_scan()</code> — now read from <code>_docs_dir()</code> at call time.</p>
+<h3>Fix 2: <code>_find_existing_doc()</code> — Doc Migration on Init</h3>
+<p><code>_write_informed_skeleton()</code> was rewritten to search for existing doc content before generating from git history. A new <code>_find_existing_doc(basename, target_dir, project_name)</code> helper runs the search:</p>
+<pre><code class="language-python">candidates = []
+if target_dir not in (&quot;.&quot;, &quot;&quot;):
+    candidates.append(basename)                         # root level
+if target_dir != &quot;project-docs&quot;:
+    candidates.append(os.path.join(&quot;project-docs&quot;, basename))
+# Project-prefixed variants: rxcc_memory.md, rxcc-memory.md
+stem, ext = os.path.splitext(basename)
+if slug:
+    candidates += [f&quot;{slug}_{stem}{ext}&quot;, f&quot;{slug}-{stem}{ext}&quot;]
+</code></pre>
+<p>First candidate with &gt;200 bytes wins. The content is copied verbatim to the target path. The <code>init</code> output now tells you exactly what happened:</p>
+<pre><code>Step 3/6 — Bootstrapping ./
+  ✓ ./roadmap.md  (migrated from project-docs/roadmap.md)
+  ✓ ./memory.md   (migrated from project-docs/memory.md)
+  ✓ ./todo.md     (migrated from project-docs/todo.md)
+</code></pre>
+<p>vs the fallback on a genuinely new repo:</p>
+<pre><code>  ✓ project-docs/roadmap.md  (generated from git history)
+</code></pre>
+<p>Blank skeletons from git history are now the last resort, not the default.</p>
+<hr>
+<h2>Brainstorm Visuals Used</h2>
+<p>None for this post — these were hotfixes identified through direct usage, not a designed feature. The invisible-state spec (<code>docs/superpowers/specs/2026-06-21-invisible-state-design.md</code>) and its brainstorm visuals (<code>docs/brainstorm/invisible-state/</code>) are related in that both address how project docs are discovered, owned, and migrated — but they weren't consulted for these specific fixes.</p>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><strong>Agents can now init themselves correctly in any mature repo.</strong></p>
+<p>Before these fixes, running <code>synlynk init</code> in a repo with existing docs produced a corrupted context: two sets of docs pointing at different states, with agents unable to know which was authoritative. The symlink workaround AGY proposed was reasonable but brittle — git doesn't track symlink targets, CI environments break them, and the underlying indexing problem remained.</p>
+<p>After these fixes:</p>
+<ul>
+<li>The installed binary works regardless of where it's installed</li>
+<li><code>synlynk init --docs-dir .</code> correctly defers to the repo's existing convention</li>
+<li><code>synlynk init --force</code> on a mature repo reads existing docs and migrates them rather than overwriting with blank templates</li>
+</ul>
+<p>This is foundational for the relay and workspace tiers in the invisible-state design. Before you can sync project state across teammates, the state needs to be correctly initialised on each machine. A broken init undermines every downstream feature.</p>
+<p><strong>The meta-lesson:</strong> synlynk was built and tested exclusively within its own repo until v0.9.0 shipped. The instant it ran in <code>rxcc</code>, two gaps appeared that 365 tests hadn't caught — because those tests ran in a controlled environment where <code>project-docs/</code> was always the expected location and the installed binary was never tested separately from the dev repo. Dogfooding in a real external project revealed what the test suite couldn't.</p>
+<hr>
+<h2>Strategic Note: The Goal at the End of This Post</h2>
+<p>The install-time and init-time gaps are closed. synlynk can now be reliably initialised in any repo regardless of where its existing docs live.</p>
+<p>The invisible-state spec (<code>docs/superpowers/specs/2026-06-21-invisible-state-design.md</code>) is written and awaiting user review. It addresses the deeper version of this problem: why should project docs be in git at all, and what does the path to local SQLite state + relay sync look like?</p>
+<p>The immediate next goalpost remains v0.9.1 — but the init hardening work here is also a stepping stone to <code>synlynk migrate</code>, which the invisible-state spec describes as the one-time migration from <code>project-docs/</code> to <code>~/.synlynk/projects/&lt;hash&gt;/state.db</code>. The <code>_find_existing_doc()</code> logic written in this post will be reused there.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

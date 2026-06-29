@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk — Motherboard / Metro Network Diagram</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:#080A0C;
+  color:#ccc;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  min-height:100vh;
+  padding:32px;
+}
+h1{font-size:13px;font-weight:600;color:#888;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;text-align:center;}
+p{font-size:11px;color:#444;text-align:center;margin-bottom:28px;font-family:'JetBrains Mono',monospace;}
+
+.frame{
+  width:900px;
+  max-width:100%;
+  aspect-ratio:900/660;
+  position:relative;
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,0.06);
+  box-shadow:0 40px 120px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+canvas{display:block;width:100%;height:100%;}
+
+/* HUD overlay */
+.hud{
+  position:absolute;inset:0;pointer-events:none;
+  padding:18px 20px;
+}
+.hud-title{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.35);
+  margin-bottom:2px;
+}
+.hud-sub{font-size:9px;color:rgba(255,255,255,0.18);font-family:'JetBrains Mono',monospace;}
+.legend{
+  position:absolute;bottom:16px;right:16px;
+  display:flex;flex-direction:column;gap:5px;
+}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:9px;color:rgba(255,255,255,0.3);font-family:'JetBrains Mono',monospace;}
+.legend-line{width:20px;height:2px;border-radius:1px;}
+</style>
+</head>
+<body>
+
+<h1>synlynk — Motherboard / Metro Network</h1>
+<p>Central NPU · Hotswap CPU stacks · Metro route lines · Interchange stations</p>
+
+<div class="frame">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-title">SYNLYNK COORD-OS · MOTHERBOARD VIEW</div>
+    <div class="hud-sub">4 harnesses · 11 model variants · 5 metro lines active</div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line" style="background:#D97757;"></div>Claude Line</div>
+      <div class="legend-item"><div class="legend-line" style="background:#1a73e8;"></div>Gemini Line</div>
+      <div class="legend-item"><div class="legend-line" style="background:#A259F7;"></div>Grok Line</div>
+      <div class="legend-item"><div class="legend-line" style="background:#666;"></div>Codex Line</div>
+      <div class="legend-item"><div class="legend-line" style="background:#2EC4A0;"></div>Dispatch Trunk</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// HiDPI
+const SCALE = window.devicePixelRatio || 1;
+const W = 900, H = 660;
+canvas.width = W * SCALE;
+canvas.height = H * SCALE;
+canvas.style.width = W + 'px';
+canvas.style.height = H + 'px';
+ctx.scale(SCALE, SCALE);
+
+// ── COLORS ──────────────────────────────────────────────────────
+const C = {
+  bg:      '#080A0C',
+  board:   '#09100E',
+  trace:   'rgba(46,196,160,0.05)',
+  traceB:  'rgba(46,196,160,0.10)',
+  grid:    'rgba(46,196,160,0.04)',
+  claude:  '#D97757',
+  gemini:  '#4285F4',
+  grok:    '#A259F7',
+  codex:   '#7A7A7A',
+  trunk:   '#2EC4A0',
+  blue:    '#5B8DEF',
+  purple:  '#A259F7',
+  teal:    '#2EC4A0',
+  text:    'rgba(233,233,238,0.85)',
+  muted:   'rgba(233,233,238,0.38)',
+  dim:     'rgba(233,233,238,0.15)',
+};
+
+// ── LAYOUT ──────────────────────────────────────────────────────
+// Center NPU
+const CX = W / 2, CY = H / 2 + 10;
+
+// Harness zone centers (corners, well inside frame)
+const ZONES = {
+  claude: { x: 155, y: 130, color: C.claude, name: 'Claude', models: ['Opus 4','Sonnet 4','Haiku 4'] },
+  gemini: { x: 745, y: 130, color: C.gemini, name: 'Gemini', models: ['Pro 2.5','Flash 2.5','Flash 8B'] },
+  grok:   { x: 155, y: 530, color: C.grok,   name: 'Grok',   models: ['Grok 3','Grok 3 mini'] },
+  codex:  { x: 745, y: 530, color: C.codex,  name: 'Codex',  models: ['o3','o4-mini','GPT-4.1'] },
+};
+
+// Metro interchange stations (midpoints on routes)
+const STATIONS = [
+  { x: CX,       y: 200, label: 'dispatch', line: 'trunk' },
+  { x: CX - 160, y: CY,  label: 'state',    line: 'trunk' },
+  { x: CX + 160, y: CY,  label: 'relay',    line: 'trunk' },
+  { x: CX,       y: CY + 160, label: 'profiles', line: 'trunk' },
+  // branching interchange points
+  { x: 340, y: 270, label: 'ctx·L', line: 'claude' },
+  { x: 560, y: 270, label: 'ctx·G', line: 'gemini' },
+  { x: 340, y: CY + 100, label: 'ctx·X', line: 'grok' },
+  { x: 560, y: CY + 100, label: 'ctx·C', line: 'codex' },
+];
+
+// ── PCB PATTERN ────────────────────────────────────────────────
+let t = 0;
+const packets = [];
+
+// Build metro route paths between each zone and center
+function metroPath(zone, isCurved) {
+  const sx = zone.x, sy = zone.y;
+  const ex = CX, ey = CY;
+  // Two-segment metro turn (L-shaped with one diagonal kink)
+  const mx = (sx + ex) / 2;
+  const my = (sy + ey) / 2;
+  return [{x:sx,y:sy},{x:mx,y:sy},{x:mx,y:my},{x:ex,y:my},{x:ex,y:ey}];
+}
+
+// ── PACKET class ────────────────────────────────────────────────
+class Packet {
+  constructor(route, color, speed) {
+    this.route = route;
+    this.color = color;
+    this.speed = speed || 1;
+    this.progress = 0;
+    this.totalLen = 0;
+    for (let i = 1; i < route.length; i++) {
+      const dx = route[i].x - route[i-1].x;
+      const dy = route[i].y - route[i-1].y;
+      this.totalLen += Math.sqrt(dx*dx+dy*dy);
+    }
+    this.done = false;
+  }
+  update() {
+    this.progress += this.speed;
+    if (this.progress >= this.totalLen) this.done = true;
+  }
+  getPos() {
+    let rem = this.progress;
+    for (let i = 1; i < this.route.length; i++) {
+      const dx = this.route[i].x - this.route[i-1].x;
+      const dy = this.route[i].y - this.route[i-1].y;
+      const seg = Math.sqrt(dx*dx+dy*dy);
+      if (rem <= seg) {
+        const frac = rem / seg;
+        return { x: this.route[i-1].x + dx*frac, y: this.route[i-1].y + dy*frac };
+      }
+      rem -= seg;
+    }
+    return this.route[this.route.length - 1];
+  }
+  draw() {
+    const p = this.getPos();
+    ctx.save();
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = this.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI*2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+    // tail
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// Precompute metro routes
+const routes = {};
+Object.keys(ZONES).forEach(k => {
+  routes[k] = metroPath(ZONES[k]);
+});
+// Reverse routes (center → zone)
+const routesRev = {};
+Object.keys(ZONES).forEach(k => {
+  routesRev[k] = [...routes[k]].reverse();
+});
+
+function spawnPackets() {
+  const keys = Object.keys(ZONES);
+  const k = keys[Math.floor(Math.random() * keys.length)];
+  const dir = Math.random() > 0.5 ? routes[k] : routesRev[k];
+  packets.push(new Packet(dir, ZONES[k].color, 1.4 + Math.random() * 0.8));
+  // occasional trunk packet (teal, along inner ring)
+  if (Math.random() > 0.65) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = 80;
+    const ex = CX + Math.cos(angle + Math.PI) * r;
+    const ey = CY + Math.sin(angle + Math.PI) * r;
+    packets.push(new Packet(
+      [{x: CX + Math.cos(angle)*r, y: CY + Math.sin(angle)*r}, {x:ex,y:ey}],
+      C.trunk, 1.0 + Math.random()
+    ));
+  }
+}
+
+// ── DRAW FUNCTIONS ───────────────────────────────────────────────
+
+function drawBoardBg() {
+  // PCB substrate
+  ctx.fillStyle = '#070E0C';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(46,196,160,0.035)';
+  ctx.lineWidth = 0.5;
+  const step = 28;
+  for (let x = 0; x < W; x += step) {
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += step) {
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Random via holes (small PCB details)
+  ctx.save();
+  ctx.fillStyle = 'rgba(46,196,160,0.08)';
+  const vias = [
+    [80,80],[820,80],[80,580],[820,580],
+    [240,200],[660,200],[240,460],[660,460],
+    [450,80],[450,580],[80,330],[820,330],
+    [310,130],[590,130],[310,530],[590,530],
+  ];
+  vias.forEach(([x,y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI*2);
+    ctx.fillStyle = '#070E0C';
+    ctx.fill();
+    ctx.fillStyle = 'rgba(46,196,160,0.08)';
+  });
+  ctx.restore();
+}
+
+function drawMetroLine(points, color, width, dashed) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  if (dashed) ctx.setLineDash([5,5]);
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawStation(x, y, color, size, label, sub) {
+  // outer ring
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, size + 3, 0, Math.PI*2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.25;
+  ctx.stroke();
+  ctx.restore();
+
+  // fill
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, Math.PI*2);
+  ctx.fillStyle = '#070E0C';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // inner dot
+  ctx.beginPath();
+  ctx.arc(x, y, size * 0.35, 0, Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  if (label) {
+    ctx.font = `500 9px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = 'rgba(233,233,238,0.55)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, y + size + 13);
+  }
+  if (sub) {
+    ctx.font = `400 8px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = 'rgba(233,233,238,0.22)';
+    ctx.fillText(sub, x, y + size + 23);
+  }
+}
+
+function drawCPUStack(zone) {
+  const { x, y, color, name, models } = zone;
+  const stackH = 26;
+  const stackW = 100;
+  const gap = 5;
+  const totalH = models.length * (stackH + gap) - gap;
+  const startY = y - totalH / 2;
+
+  // chassis/housing outline
+  ctx.save();
+  const pad = 10;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.5;
+  ctx.globalAlpha = 0.15;
+  ctx.strokeRect(x - stackW/2 - pad, startY - pad, stackW + pad*2, totalH + pad*2);
+  ctx.restore();
+
+  // Label above
+  ctx.font = `700 11px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText(name.toUpperCase(), x, startY - 18);
+  ctx.font = `400 9px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillText('HARNESS', x, startY - 8);
+
+  models.forEach((model, i) => {
+    const cy = startY + i * (stackH + gap);
+
+    // CPU chip body
+    ctx.save();
+    const grad = ctx.createLinearGradient(x - stackW/2, cy, x - stackW/2, cy + stackH);
+    grad.addColorStop(0, '#111418');
+    grad.addColorStop(1, '#0d1012');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = i === 0 ? 1.5 : 0.8;
+    ctx.globalAlpha = i === 0 ? 1 : 0.65 - i * 0.1;
+    roundRect(ctx, x - stackW/2, cy, stackW, stackH, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // CPU pin marks on sides
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = color;
+    const pinCount = 5;
+    const pinH = 4;
+    const pinGap = (stackH - pinCount * pinH) / (pinCount + 1);
+    for (let p = 0; p < pinCount; p++) {
+      const py = cy + pinGap * (p+1) + pinH * p;
+      ctx.fillRect(x - stackW/2 - 3, py, 3, pinH);
+      ctx.fillRect(x + stackW/2, py, 3, pinH);
+    }
+    ctx.restore();
+
+    // Model name
+    ctx.font = `600 9px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = i === 0 ? color : 'rgba(255,255,255,0.3)';
+    ctx.textAlign = 'center';
+    ctx.fillText(model, x, cy + stackH/2 + 3.5);
+
+    // capacity bar (top model is widest)
+    const barW = stackW * 0.6 * (1 - i * 0.22);
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = color;
+    ctx.fillRect(x - barW/2, cy + stackH - 5, barW, 2);
+    ctx.restore();
+  });
+
+  // Connector port at bottom of stack
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.4;
+  ctx.strokeRect(x - 8, startY + totalH + 10, 16, 6);
+  ctx.restore();
+}
+
+function drawCentralNPU(pulse) {
+  // Glow aura
+  const grad = ctx.createRadialGradient(CX, CY, 0, CX, CY, 110);
+  grad.addColorStop(0, 'rgba(91,141,239,0.10)');
+  grad.addColorStop(0.4, 'rgba(162,89,247,0.06)');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(CX, CY, 110, 0, Math.PI*2);
+  ctx.fill();
+
+  // Pulse rings
+  const pulseR = 70 + Math.sin(pulse * 0.02) * 8;
+  [110, pulseR, 48].forEach((r, i) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(CX, CY, r, 0, Math.PI*2);
+    ctx.strokeStyle = i === 2 ? 'rgba(162,89,247,0.35)' : 'rgba(91,141,239,0.08)';
+    ctx.lineWidth = i === 2 ? 1.5 : 0.8;
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Inner "die" area
+  const npuW = 86, npuH = 80;
+  ctx.save();
+  const boardGrad = ctx.createLinearGradient(CX-npuW/2, CY-npuH/2, CX+npuW/2, CY+npuH/2);
+  boardGrad.addColorStop(0, '#0d0818');
+  boardGrad.addColorStop(1, '#080c18');
+  ctx.fillStyle = boardGrad;
+  ctx.strokeStyle = 'rgba(162,89,247,0.5)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, CX - npuW/2, CY - npuH/2, npuW, npuH, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // Internal grid lines on NPU
+  ctx.save();
+  ctx.strokeStyle = 'rgba(162,89,247,0.06)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(CX - npuW/2, CY - npuH/2 + i*npuH/4); ctx.lineTo(CX + npuW/2, CY - npuH/2 + i*npuH/4); ctx.stroke();
+  }
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(CX - npuW/2 + i*npuW/4, CY - npuH/2); ctx.lineTo(CX - npuW/2 + i*npuW/4, CY + npuH/2); ctx.stroke();
+  }
+  ctx.restore();
+
+  // NPU pins
+  ctx.save();
+  ctx.fillStyle = 'rgba(162,89,247,0.3)';
+  const pinConfigs = [
+    // top
+    ...[-24,-8,8,24].map(dx => ({x: CX+dx, y: CY-npuH/2-3, w:4, h:3})),
+    // bottom
+    ...[-24,-8,8,24].map(dx => ({x: CX+dx, y: CY+npuH/2, w:4, h:3})),
+    // left
+    ...[-20,-6,8].map(dy => ({x: CX-npuW/2-3, y: CY+dy, w:3, h:4})),
+    // right
+    ...[-20,-6,8].map(dy => ({x: CX+npuW/2, y: CY+dy, w:3, h:4})),
+  ];
+  pinConfigs.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+  ctx.restore();
+
+  // S-glyph (synlynk logo)
+  drawSGlyph(CX, CY - 6, 1.0);
+
+  // Label
+  ctx.font = `700 9px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = 'rgba(162,89,247,0.7)';
+  ctx.textAlign = 'center';
+  ctx.fillText('synlynk', CX, CY + npuH/2 + 14);
+  ctx.font = `400 8px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillText('COORD · NPU', CX, CY + npuH/2 + 24);
+}
+
+function drawSGlyph(x, y, scale) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.lineCap = 'round';
+
+  const s = 10;
+  // Top curve (purple)
+  ctx.beginPath();
+  ctx.moveTo(1, -s);
+  ctx.bezierCurveTo(1, -s, -s*0.7, -s, -s*0.7, -s*0.4);
+  ctx.bezierCurveTo(-s*0.7, s*0.1, s*0.3, s*0.1, s*0.3, s*0.6);
+  ctx.strokeStyle = '#A259F7';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // Bottom curve (blue)
+  ctx.beginPath();
+  ctx.moveTo(s*0.3, s*0.6);
+  ctx.bezierCurveTo(s*0.3, s*0.6, s, s*0.6, s, s*0.1);
+  ctx.bezierCurveTo(s, -s*0.4, 1, -s*0.4, 1, -s);
+  ctx.strokeStyle = '#5B8DEF';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // Vertical stem (teal)
+  ctx.beginPath();
+  ctx.moveTo(s*0.3, s*0.6);
+  ctx.lineTo(s*0.3, s*1.4);
+  ctx.strokeStyle = '#2EC4A0';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // Endpoints
+  ctx.beginPath(); ctx.arc(1, -s, 2.5, 0, Math.PI*2); ctx.fillStyle = '#5B8DEF'; ctx.fill();
+  ctx.beginPath(); ctx.arc(s*0.3, s*1.4, 2.5, 0, Math.PI*2); ctx.fillStyle = '#2EC4A0'; ctx.fill();
+  ctx.restore();
+}
+
+function drawInnerNodes(pulse) {
+  // 4 inner nodes connected to NPU center
+  const nodeR = 90;
+  const nodeConfigs = [
+    { angle: -Math.PI/2, label: 'dispatch', color: C.teal },
+    { angle: Math.PI,    label: 'state',    color: C.blue },
+    { angle: 0,          label: 'relay',    color: C.blue },
+    { angle: Math.PI/2,  label: 'profiles', color: C.purple },
+  ];
+
+  nodeConfigs.forEach(({ angle, label, color }) => {
+    const nx = CX + Math.cos(angle) * nodeR;
+    const ny = CY + Math.sin(angle) * nodeR;
+
+    // line from NPU to node (trunk line)
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.3;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(CX + Math.cos(angle)*44, CY + Math.sin(angle)*44);
+    ctx.lineTo(nx, ny);
+    ctx.stroke();
+    ctx.restore();
+
+    // node
+    drawStation(nx, ny, color, 10, label);
+  });
+}
+
+function drawMetroRoutes() {
+  const zoneKeys = Object.keys(ZONES);
+  zoneKeys.forEach(k => {
+    const z = ZONES[k];
+    const pts = routes[k];
+
+    // Shadow/glow under line
+    ctx.save();
+    ctx.strokeStyle = z.color;
+    ctx.lineWidth = 4;
+    ctx.globalAlpha = 0.06;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+
+    // Metro line (solid)
+    ctx.save();
+    ctx.strokeStyle = z.color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.55;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+
+    // Interchange station mid-point
+    const midPt = pts[Math.floor(pts.length/2)];
+    drawStation(midPt.x, midPt.y, z.color, 7, null, null);
+  });
+
+  // Trunk lines (inner cross connecting inner nodes to each other)
+  ctx.save();
+  ctx.strokeStyle = C.teal;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.15;
+  ctx.setLineDash([3,6]);
+  // horizontal and vertical through center
+  ctx.beginPath();
+  ctx.moveTo(CX - 90, CY); ctx.lineTo(CX + 90, CY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(CX, CY - 90); ctx.lineTo(CX, CY + 90);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+}
+
+// Connection lines from CPU stacks to zone's metro entry point
+function drawZoneConnectors() {
+  Object.keys(ZONES).forEach(k => {
+    const z = ZONES[k];
+    const pts = routes[k];
+    const entryPt = pts[0]; // zone start (same as zone center)
+    // Line from chip housing to entry
+    ctx.save();
+    ctx.strokeStyle = z.color;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.25;
+    ctx.setLineDash([2,4]);
+    ctx.beginPath();
+    ctx.moveTo(z.x, z.y + 40);
+    ctx.lineTo(entryPt.x, entryPt.y);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+// ── ANIMATE ─────────────────────────────────────────────────────
+let frame = 0;
+let lastSpawn = 0;
+
+function draw() {
+  frame++;
+  ctx.clearRect(0, 0, W, H);
+
+  drawBoardBg();
+  drawMetroRoutes();
+  drawInnerNodes(frame);
+
+  // CPU stacks
+  Object.values(ZONES).forEach(z => drawCPUStack(z));
+
+  // NPU
+  drawCentralNPU(frame);
+
+  // Packets
+  if (frame - lastSpawn > 38) {
+    spawnPackets();
+    lastSpawn = frame;
+  }
+  for (let i = packets.length - 1; i >= 0; i--) {
+    packets[i].update();
+    packets[i].draw();
+    if (packets[i].done) packets.splice(i, 1);
+  }
+
+  // Scanline shimmer
+  ctx.save();
+  const shimX = ((frame * 1.2) % (W + 40)) - 20;
+  const shimGrad = ctx.createLinearGradient(shimX - 20, 0, shimX + 20, 0);
+  shimGrad.addColorStop(0, 'transparent');
+  shimGrad.addColorStop(0.5, 'rgba(46,196,160,0.025)');
+  shimGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = shimGrad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>

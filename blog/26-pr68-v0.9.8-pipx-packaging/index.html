@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog Post 26 — PR #68: pipx/pip Packaging (v0.9.8 prep)</h1>
+<p><strong>Series:</strong> Building synlynk — The Coordination OS for Multi-Agent Development<br>
+<strong>PR:</strong> #68 — <code>feat/pipx-install</code><br>
+<strong>Date:</strong> 2026-06-27</p>
+<hr>
+<h2>Where We Were After PR #67</h2>
+<p>PR #67 fixed a critical concurrency bug (story-5b86c353): concurrent <code>dispatch_agent</code> calls were clobbering each other's context snapshot by writing to a shared <code>.synlynk/context.md</code>. The fix gave each dispatched job its own isolated context file at <code>.synlynk/contexts/&lt;job_id&gt;.md</code>. With that debt cleared, the working plan was to finish the packaging story as the next zero-debt prerequisite before the v0.10.0 Developer Preview launch.</p>
+<h2>The Strategic Shift</h2>
+<p>The v0.10.0 milestone was redefined this session from a version bump into a full <strong>Named Release</strong> — meaning HN post, README overhaul, <code>synlynk doctor</code>, and a one-sentence pitch. For that to land credibly, <code>pipx install git+https://github.com/nikhilsoman/synlynk</code> needs to work on the first try. That made <code>pyproject.toml</code> packaging a prerequisite for the dev preview, not a nice-to-have.</p>
+<h2>What This PR Ships</h2>
+<p><strong><code>pyproject.toml</code></strong> — standard <code>setuptools.build_meta</code> backend with:</p>
+<ul>
+<li>Entry point <code>synlynk = &quot;synlynk:main&quot;</code> so <code>pipx install</code> drops a <code>synlynk</code> binary directly in PATH</li>
+<li><code>requires-python = &quot;&gt;=3.9&quot;</code>, MIT license, PyPI classifiers, project URLs</li>
+<li><code>[tool.setuptools.packages.find]</code> scoped to <code>include = [&quot;synlynk*&quot;]</code> — no accidental inclusion of <code>tests/</code>, <code>bin/</code>, etc.</li>
+</ul>
+<p><strong><code>synlynk/__main__.py</code></strong> — three-line file enabling <code>python -m synlynk</code> as a canonical invocation path:</p>
+<pre><code class="language-python">from synlynk import main
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<p><strong><code>install.sh</code></strong> — header updated to surface pipx as the recommended install path while preserving the curl-based script install as a fallback for environments without pipx.</p>
+<p><strong>Two new tests</strong> — both guarding against the silent version drift that would break a future PyPI publish:</p>
+<ul>
+<li><code>test_pyproject_version_matches_module</code> — reads <code>pyproject.toml</code> with <code>tomllib</code>/<code>tomli</code> and asserts <code>version == synlynk.VERSION</code></li>
+<li><code>test_main_entrypoint_importable</code> — <code>importlib.import_module(&quot;synlynk.__main__&quot;)</code> verifies the entrypoint is importable cleanly</li>
+</ul>
+<p>Verified install paths before committing:</p>
+<pre><code class="language-bash">pipx install . --force  # → synlynk 0.9.7
+python -m synlynk --version  # → synlynk 0.9.7
+</code></pre>
+<p>493 tests passing.</p>
+<h2>One Build Stumble Worth Noting</h2>
+<p>First attempt used <code>build-backend = &quot;setuptools.backends.legacy:build&quot;</code> — a path that doesn't exist in the <code>setuptools</code> module namespace. <code>pip install -e .</code> failed with <code>ModuleNotFoundError: No module named 'setuptools.backends'</code>. The correct backend is <code>setuptools.build_meta</code> (the string that has shipped in every setuptools &gt;= 40.8). Documentation for the wrong string is unfortunately easy to find in older blog posts.</p>
+<h2>Progress Toward Developer Preview</h2>
+<p>The dev preview checklist now has its packaging box checked. Remaining before v0.10.0:</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dispatch context isolation (story-5b86c353)</td>
+<td>✅ PR #67</td>
+</tr>
+<tr>
+<td>pipx/pip packaging</td>
+<td>✅ This PR</td>
+</tr>
+<tr>
+<td><code>synlynk doctor</code> health command</td>
+<td>Queued — v0.9.8</td>
+</tr>
+<tr>
+<td>README overhaul</td>
+<td>Sunday — <code>chore/readme-overhaul</code></td>
+</tr>
+<tr>
+<td>BS-5 website brainstorm</td>
+<td>Saturday PM</td>
+</tr>
+<tr>
+<td>BS-6 OKF + visualization</td>
+<td>Sunday AM</td>
+</tr>
+<tr>
+<td>BS-7 skill pack interop + benchmarks</td>
+<td>Sunday AM/PM</td>
+</tr>
+<tr>
+<td>HN launch post draft</td>
+<td>Sunday PM</td>
+</tr>
+</tbody>
+</table>
+<h2>New Goalpost</h2>
+<p>v0.9.8 closes with the <code>synlynk doctor</code> health command (story-048f5fe5). After that, the README overhaul and brainstorm sessions (BS-5, BS-6, BS-7) feed directly into the v0.10.0 Named Release — the first public artifact of synlynk as a packaging-installable coordination layer for multi-agent development.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

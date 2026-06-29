@@ -1,0 +1,138 @@
+<h2>Design — Section 3: Entitlements</h2>
+<p class="subtitle">Authorization (what can start) + Sandboxing (what it can do while running)</p>
+
+<div class="section">
+  <p class="label">Two entitlement layers</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Authorization — gate before dispatch</div>
+      <div class="mockup-body" style="font-size:0.83em;line-height:1.9">
+        Answers: can this story auto-start?<br>
+        Checked by daemon before dispatch.<br><br>
+        Dimensions:<br>
+        · <strong>cost ceiling</strong> — auto if estimate &lt; $X<br>
+        · <strong>path sensitivity</strong> — infra/, auth/, main branch<br>
+        · <strong>action type</strong> — create PR vs merge to main<br>
+        · <strong>novelty</strong> — first run of this domain needs approval<br>
+        · <strong>competency floor</strong> — agent score below threshold → hold<br><br>
+        Outcome: AUTO-DISPATCH · HOLD-FOR-APPROVAL · REJECT
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Sandboxing — constraints while running</div>
+      <div class="mockup-body" style="font-size:0.83em;line-height:1.9">
+        Answers: what can the agent touch?<br>
+        Enforced by synlynk wrapper around exec.<br><br>
+        Dimensions:<br>
+        · <strong>filesystem paths</strong> — read/write per glob pattern<br>
+        · <strong>git ops</strong> — branch · commit · push · PR · merge<br>
+        · <strong>network</strong> — external API calls allowed/blocked<br>
+        · <strong>token ceiling</strong> — max tokens per story execution<br>
+        · <strong>time ceiling</strong> — max duration before check-in required<br><br>
+        Outcome: ALLOW · BLOCK · ESCALATE-TO-HUMAN
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Default role entitlement matrix</p>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:0.8em">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border)">
+          <th style="text-align:left;padding:0.5rem 0.75rem;color:var(--text-muted)">Entitlement</th>
+          <th style="text-align:center;padding:0.5rem 0.75rem;color:#a78bfa">Architect</th>
+          <th style="text-align:center;padding:0.5rem 0.75rem;color:#34d399">Builder</th>
+          <th style="text-align:center;padding:0.5rem 0.75rem;color:#60a5fa">Verifier</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Write src/</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Write docs/ · specs/</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Write infra/ · .github/</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#fbbf24">⚠ approval</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#fbbf24">⚠ approval</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Create branch · commit · push</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Create PR</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Merge to main</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#fbbf24">⚠ approval</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#fbbf24">⚠ approval</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Run tests · shell commands</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#f87171">✗</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓ auto</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:0.5rem 0.75rem">Auto-dispatch if cost &lt; $0.50</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#4ade80">✓</td>
+        </tr>
+        <tr>
+          <td style="padding:0.5rem 0.75rem">Token ceiling per story</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#888">50K</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#888">200K</td>
+          <td style="text-align:center;padding:0.5rem 0.75rem;color:#888">100K</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78em;color:#888;margin-top:0.5rem">✓ auto = dispatches without approval &nbsp;·&nbsp; ⚠ approval = email sent, waits for reply &nbsp;·&nbsp; ✗ = blocked, never dispatched in this role</p>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Approval flow — email bridge in action</p>
+  <div class="mockup">
+    <div class="mockup-header">Story requires approval → email → human replies → dispatch or hold</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2">
+      story #42: "migrate auth to OAuth2" · role=Builder · domain=auth · estimate=$1.20<br>
+      &nbsp;&nbsp;→ cost > $0.50 threshold AND domain=auth (sensitive) → HOLD-FOR-APPROVAL<br>
+      &nbsp;&nbsp;→ emit event type="approval_requested" · story_id=42<br>
+      &nbsp;&nbsp;→ email to nikhilsoman@gmail.com:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp; "Story #42 ready · Builder/claude-code · est. $1.20 · touches src/auth/<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Reply YES to dispatch · HOLD to defer · REASSIGN claude→gemini"<br><br>
+      human replies "YES"<br>
+      &nbsp;&nbsp;→ synlynk reads reply (Gmail API or webhook)<br>
+      &nbsp;&nbsp;→ emit event type="approval_granted" · user="nikhilsoman"<br>
+      &nbsp;&nbsp;→ daemon dispatches story #42 to Builder/claude-code<br>
+      &nbsp;&nbsp;→ entitlement record: approved by nikhilsoman at 14:32
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">Where entitlements live in state.db</p>
+  <p style="margin-top:0.5rem;font-size:0.85em;line-height:1.9">
+    <code>entitlements</code> table — one row per (role, dimension, value). Defaults seeded at <code>synlynk init</code>. Editable via <code>synlynk entitle Builder write:src/ allow</code>.<br>
+    Per-story overrides: a story can declare <code>required_approval: true</code> regardless of role thresholds.<br>
+    All entitlement checks and outcomes written to <code>events</code> table — full audit trail.
+  </p>
+</div>

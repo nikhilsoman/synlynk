@@ -1,0 +1,226 @@
+<h2>synlynk HUD — terminal presence</h2>
+<p class="subtitle">When does it appear, what does it show, where does it live?</p>
+
+<style>
+  .terminal-frame {
+    background: #0d0d0d;
+    border-radius: 8px;
+    border: 1px solid #333;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .terminal-chrome {
+    background: #222;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid #333;
+  }
+  .dot { width:10px; height:10px; border-radius:50%; }
+  .terminal-body { padding: 14px 16px; color: #ccc; line-height: 1.7; min-height: 120px; }
+  .terminal-cmd { color: #7ec8a0; }
+  .terminal-output { color: #aaa; }
+  .hud-bar {
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+    flex-wrap: wrap;
+  }
+  .hud-item { display: flex; align-items: center; gap: 5px; }
+  .hud-dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .pill { padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+</style>
+
+<!-- OPTION A: Bottom anchored bar -->
+<div class="section">
+  <h3 style="color:#fff;margin-bottom:4px">A — Bottom bar (always visible, ambient)</h3>
+  <p style="font-size:12px;color:#aaa;margin-bottom:10px">Persistent strip at bottom of terminal. Shows live state at a glance. Like tmux status or starship prompt — always there, low noise.</p>
+  <div class="terminal-frame">
+    <div class="terminal-chrome">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <span style="color:#888;font-size:11px;margin-left:4px">synlynk — ~/dev/synlynk</span>
+    </div>
+    <div class="terminal-body">
+      <div class="terminal-cmd">$ synlynk exec claude</div>
+      <div class="terminal-output">  ✓ Context saved to .synlynk/context.md</div>
+      <div class="terminal-output">  ✓ Dispatching claude...</div>
+      <div style="height:40px"></div>
+    </div>
+    <!-- Bottom HUD bar -->
+    <div class="hud-bar" style="background:#111;border-top:1px solid #2a2a2a;color:#ccc">
+      <div class="hud-item">
+        <span class="hud-dot" style="background:#27ae60"></span>
+        <span style="color:#5dbb7a;font-weight:600">synlynk</span>
+      </div>
+      <div style="color:#444">|</div>
+      <div class="hud-item">
+        <span style="color:#888">story</span>
+        <span style="color:#7ab8e8">auth-oauth-flow</span>
+      </div>
+      <div style="color:#444">|</div>
+      <div class="hud-item">
+        <span style="color:#888">agent</span>
+        <span style="color:#c084e8">claude ●</span>
+        <span style="color:#555;font-size:10px">running</span>
+      </div>
+      <div style="color:#444">|</div>
+      <div class="hud-item">
+        <span style="color:#888">budget</span>
+        <span style="color:#ffd966">$3.40</span>
+        <span style="color:#555">/ $10</span>
+      </div>
+      <div style="color:#444">|</div>
+      <div class="hud-item">
+        <span style="color:#888">relay</span>
+        <span class="hud-dot" style="background:#27ae60"></span>
+        <span style="color:#5dbb7a">2 peers</span>
+      </div>
+      <div style="color:#444">|</div>
+      <div class="hud-item">
+        <span style="color:#888">alerts</span>
+        <span style="color:#5dbb7a">none</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION B: Pop-up notification -->
+<div class="section" style="margin-top:20px">
+  <h3 style="color:#fff;margin-bottom:4px">B — Contextual pop-up (appears on events, auto-dismisses)</h3>
+  <p style="font-size:12px;color:#aaa;margin-bottom:10px">HUD is invisible until something needs attention. Pops in from top or bottom when: job completes, budget threshold crossed, sentinel fires, relay disconnects. Dismisses after 5s or on keypress.</p>
+  <div class="terminal-frame">
+    <div class="terminal-chrome">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <span style="color:#888;font-size:11px;margin-left:4px">~/dev/synlynk</span>
+    </div>
+    <!-- Pop-up notification at top -->
+    <div style="background:#1a2a1a;border-bottom:1px solid #27ae60;padding:8px 16px;display:flex;align-items:center;gap:12px;animation:none">
+      <span style="color:#5dbb7a;font-size:16px">✓</span>
+      <div>
+        <div style="color:#fff;font-size:12px;font-weight:600">job-34ab991e completed</div>
+        <div style="color:#888;font-size:11px">codex · fix bare open() in cmd_identity_init · 8s · 365 tests pass</div>
+      </div>
+      <div style="margin-left:auto;color:#555;font-size:11px">↵ dismiss · s synlynk logs</div>
+    </div>
+    <div class="terminal-body">
+      <div class="terminal-cmd">$ git commit -m "feat: add OAuth flow"</div>
+      <div class="terminal-output">[main 4f2c1a3] feat: add OAuth flow</div>
+      <div class="terminal-cmd" style="margin-top:8px">$ █</div>
+    </div>
+  </div>
+
+  <!-- Second pop-up example: alert -->
+  <div class="terminal-frame" style="margin-top:8px">
+    <div class="terminal-chrome">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+    </div>
+    <!-- Alert pop-up -->
+    <div style="background:#2a1a00;border-bottom:1px solid #f39c12;padding:8px 16px;display:flex;align-items:center;gap:12px">
+      <span style="color:#f39c12;font-size:16px">⚠</span>
+      <div>
+        <div style="color:#fff;font-size:12px;font-weight:600">Budget 80% used — $8.12 of $10.00</div>
+        <div style="color:#888;font-size:11px">relay · nikhil synced 3 stories from teammate AGY run</div>
+      </div>
+      <div style="margin-left:auto;color:#555;font-size:11px">↵ dismiss</div>
+    </div>
+    <div class="terminal-body" style="min-height:60px">
+      <div class="terminal-cmd">$ synlynk dispatch agy --story auth-001 --task "write tests"</div>
+      <div class="terminal-output">  ✓ job-a1b2c3d4 started</div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION C: Hybrid -->
+<div class="section" style="margin-top:20px">
+  <h3 style="color:#fff;margin-bottom:4px">C — Hybrid: thin ambient bar + rich pop-up on events</h3>
+  <p style="font-size:12px;color:#aaa;margin-bottom:10px">A minimal 1-line bar is always present (story + budget + relay health). When an event fires, it expands into a richer notification in-place. Collapses back automatically. Like a macOS menu bar that pops open briefly.</p>
+  <div class="terminal-frame">
+    <div class="terminal-chrome">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+    </div>
+    <div class="terminal-body">
+      <div class="terminal-cmd">$ git push origin feat/auth</div>
+      <div class="terminal-output">  Everything up-to-date</div>
+      <div class="terminal-cmd" style="margin-top:8px">$ █</div>
+      <div style="height:20px"></div>
+    </div>
+    <!-- Thin ambient bar -->
+    <div class="hud-bar" style="background:#0d0d0d;border-top:1px solid #1a1a1a;color:#555;font-size:11px">
+      <span style="color:#27ae60">●</span>
+      <span>auth-oauth-flow</span>
+      <span style="color:#333">·</span>
+      <span>$3.40</span>
+      <span style="color:#333">·</span>
+      <span>relay 2↑</span>
+      <span style="color:#333">·</span>
+      <span>no alerts</span>
+    </div>
+  </div>
+  <!-- Same terminal mid-event -->
+  <div style="font-size:11px;color:#666;text-align:center;margin:4px 0">↓ when job completes, bar expands briefly then collapses</div>
+  <div class="terminal-frame">
+    <div class="terminal-chrome">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+    </div>
+    <div class="terminal-body" style="min-height:60px">
+      <div class="terminal-cmd">$ git push origin feat/auth</div>
+      <div class="terminal-output">  Everything up-to-date</div>
+    </div>
+    <!-- Expanded bar on event -->
+    <div style="background:#1a2a1a;border-top:1px solid #27ae60;padding:8px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="color:#5dbb7a">✓ job-a1b2 done</span>
+        <span style="color:#444">·</span>
+        <span style="color:#aaa;font-size:11px">agy wrote 12 tests · all passing</span>
+        <span style="margin-left:auto;color:#555;font-size:10px">auto-collapses in 4s</span>
+      </div>
+      <!-- Collapses to thin line after -->
+      <div style="margin-top:6px;padding-top:6px;border-top:1px solid #1f3a1f;display:flex;gap:12px;color:#555;font-size:11px">
+        <span style="color:#27ae60">●</span>
+        <span>auth-oauth-flow</span>
+        <span>·</span><span>$3.40</span>
+        <span>·</span><span>relay 2↑</span>
+        <span>·</span><span>no alerts</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:24px">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Bottom bar — always visible</h3>
+      <p>Ambient. Low-noise. Always there like a tmux statusline. Good for solo power users who want constant situational awareness.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Contextual pop-up only</h3>
+      <p>Invisible until something happens. Zero distraction baseline. Respects terminal real estate. Better for newcomers and pair sessions.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid: thin ambient bar + expands on events</h3>
+      <p>Minimal presence always. Rich notification on demand. Collapses back. Best of both — awareness without noise.</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,124 @@
+<h2>Revised Roadmap — Post AGY + Codex Review</h2>
+<p class="subtitle">Foundation first, then community. Kernel fixes pulled forward, agent series slowed, split before v1.0.</p>
+
+<div style="margin-bottom:20px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:14px;">
+  <div style="font-size:11px;font-weight:700;color:#f87171;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">⚠ Three decisions locked before spec is written</div>
+  <div style="font-size:12px;color:#fca5a5;line-height:1.8;">
+    1. <strong>Daemon:</strong> All v0.8.x agents trigger via GitHub Actions + crontab only — no daemon until v1.1.<br>
+    2. <strong>Scoped context:</strong> <code>generate_context(scope=...)</code> pulled from v1.3.0 → v0.9.0 (affects every agent dispatch).<br>
+    3. <strong>Package split:</strong> <code>bin/synlynk.py</code> split into clean modules in v0.9.0 — before the agent series lands.
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px;">
+
+  <!-- SHIPPED -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#6b7280;padding-top:6px;font-style:italic;">SHIPPED<br>v0.1 – v0.8.0</div>
+    <div style="background:rgba(30,30,40,0.5);border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:10px 14px;">
+      <span style="color:#818cf8;font-weight:700;">Kernel · IPC · Capability Engine · Source Scan · Support Engineer (Maintainer #1) ✅</span>
+    </div>
+  </div>
+
+  <!-- v0.9.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#fbbf24;padding-top:6px;font-weight:700;">THIS WEEK<br>v0.9.0</div>
+    <div style="background:rgba(245,158,11,0.08);border:2px solid rgba(245,158,11,0.5);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fbbf24;margin-bottom:8px;">Foundation + Team Onboarding</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:#cbd5e1;line-height:1.8;">
+        <div>
+          <div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:4px;">🔧 KERNEL FIXES (pull-forward)</div>
+          • Scoped context: <code>generate_context(scope=task)</code><br>
+          • Task → file-path mapping in dispatch prompt<br>
+          • Verify contract injected per-dispatch<br>
+          • Wire Ed25519 signing into <code>_write_capability_rating</code><br>
+          • Per-agent dispatch framing (Codex ≠ Claude ≠ AGY)<br>
+          • Package split: <code>bin/synlynk.py</code> → modules
+        </div>
+        <div>
+          <div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:4px;">🤝 TEAM ONBOARDING</div>
+          • <code>synlynk join</code> — 60-second onboard<br>
+          • Mature-project scan → rich AI context files<br>
+          • Per-member devlog seeded automatically<br>
+          • Team digest: who's active, in-progress, just shipped<br>
+          • Task recommendation from todo.md<br>
+          • Lightweight write-arbitration (pull-before-write + conflict warn)<br>
+          • Token budgets at story creation + audited at PR merge
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.8.x agent series (running in parallel, slower) -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#34d399;padding-top:6px;font-weight:600;">PARALLEL TRACK<br>v0.8.1–0.8.4</div>
+    <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#34d399;margin-bottom:8px;">Agent Series — 2–4 agents max (GitHub Actions + crontab only, no daemon)</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        <span style="color:#fbbf24;">v0.8.1</span> Security Guard (Maintainer) — dep vulns, secret leaks, CVEs<br>
+        <span style="color:#fbbf24;">v0.8.2</span> Marketing Intern (Communicator) — blog, release notes, social copy<br>
+        <span style="color:#fbbf24;">v0.8.3</span> PM Agent (Orchestrator) — growth signals, story routing, sprint pulse<br>
+        <span style="color:#94a3b8;">v0.8.4+</span> Compliance Officer, Docs Keeper — when foundation is stable<br>
+        <span style="color:#6b7280;font-size:11px;">SME archetype deferred to v1.0 (needs event bus + job model changes)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.10.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">2–3 weeks<br>v0.10.0</div>
+    <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#a5b4fc;margin-bottom:6px;">Multi-Repo Workspace</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • <code>synlynk workspace init/join</code> — link repos into one workspace<br>
+        • Cross-repo epics spanning multiple repos<br>
+        • Shared context slice + workspace-level Support Engineer<br>
+        • Write-arbitration scales to workspace level
+      </div>
+    </div>
+  </div>
+
+  <!-- v1.0.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">4–6 weeks<br>v1.0.0</div>
+    <div style="background:rgba(99,102,241,0.09);border:1px solid rgba(99,102,241,0.3);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#c7d2fe;margin-bottom:6px;">Community Layer: Local Workgroup + Public Launch</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • Workgroup protocol — shared capability ledger across humans + agents + autopilots<br>
+        • <strong>Game-resistance in capability scoring</strong> (anti-trivial-test gaming)<br>
+        • SME archetype + event bus (domain-tag subscriptions, file-path trigger)<br>
+        • PM Agent + Marketing Intern promoted to workgroup-level coordination<br>
+        • pipx / Homebrew distribution · stable CLI contract · public launch<br>
+        • synlynk.com live on independent hosting · public blog live
+      </div>
+    </div>
+  </div>
+
+  <!-- v1.1.0 -->
+  <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">v1.1.0+</div>
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fca5a5;margin-bottom:6px;">Community Expansion — server-side enters here</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        v1.1 — Async daemon + lightweight relay server · cross-workgroup (team level)<br>
+        v1.2 — Enterprise workspace (cross-team) · agent entitlements at org level<br>
+        v1.3 — Domain/discipline communities · Tokq convergence accelerates<br>
+        <span style="color:#f87171;font-size:11px;">→ MCP / Open Context Protocol lands here, when there's a server to serve it from</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div style="background:rgba(30,30,40,0.5);border:1px solid rgba(75,85,99,0.3);border-radius:8px;padding:12px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">🏗 Real moat (AGY)</div>
+    <div style="font-size:12px;color:#cbd5e1;line-height:1.7;">The <strong>accumulated routing graph</strong> — which agent/model, at which version, succeeded on which (engg × org × industry × phase) cell, decayed over time. A proprietary dataset that compounds and can't be cloned. <em>But only if it's signed, game-resistant, and large.</em></div>
+  </div>
+  <div style="background:rgba(30,30,40,0.5);border:1px solid rgba(75,85,99,0.3);border-radius:8px;padding:12px;">
+    <div style="font-size:11px;font-weight:700;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">🎯 Real unlock for agents (Codex)</div>
+    <div style="font-size:12px;color:#cbd5e1;line-height:1.7;"><strong>Scoped context + verify contract</strong> — "here are the 4 files, here's <code>pytest tests/test_x.py</code>." This is what makes dispatched agents one-shot tasks instead of flailing. Currently deferred to v1.3.0. Must be v0.9.0.</div>
+  </div>
+</div>
+
+<p style="margin-top:20px;font-size:13px;color:#94a3b8;text-align:center;">Does this revised arc feel right? Ready to write the spec?</p>

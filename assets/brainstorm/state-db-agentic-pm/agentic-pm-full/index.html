@@ -1,0 +1,104 @@
+<h2>Agentic PM — Full Hierarchy with Three Evolution Patterns</h2>
+<p class="subtitle">Derived from synlynk (pivot-heavy), rxcc (scale-complex), cc-videoreframing (dormant/resumable)</p>
+
+<div class="section">
+  <p class="label">The three evolution archetypes observed</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:1.5rem">
+    <div style="padding:0.875rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;font-size:0.95em">synlynk / Tokq</h3>
+      <p class="label" style="color:#a78bfa">Pivot-heavy</p>
+      <p style="font-size:0.82em;margin:0.4rem 0 0;line-height:1.7">Context injector → multi-agent fabric → OS layer. Tokq was a separate cloud project, then converged. Strategic arcs pivot, merge, and supersede. The archived proposals folder is the history of what we thought before we knew better.</p>
+    </div>
+    <div style="padding:0.875rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;font-size:0.95em">rxcc</h3>
+      <p class="label" style="color:#60a5fa">Scale-complex</p>
+      <p style="font-size:0.82em;margin:0.4rem 0 0;line-height:1.7">Linear direction but global scope with local nuance. No strategic pivots — but constant reprioritization within a stable direction. WhatsApp, vocab pipeline, GA4 all move up and down the queue. The complexity is in sequencing parallel tracks.</p>
+    </div>
+    <div style="padding:0.875rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;font-size:0.95em">cc-videoreframing</h3>
+      <p class="label" style="color:#34d399">Dormant / resumable</p>
+      <p style="font-size:0.82em;margin:0.4rem 0 0;line-height:1.7">Script → AWS infra → SaaS plan → paused. MEMORY.md has a full chronological history specifically because re-entry requires: current state, last decisions, what's blocked, what comes next. The SaaS plan sits waiting.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Full agentic hierarchy — revised with Arc layer</p>
+  <div class="mockup">
+    <div class="mockup-header">Project → Arc → Phase → Epic → Story → Event</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:2.2">
+      <span style="color:#e879f9">Arc</span> &nbsp;&nbsp;&nbsp;&nbsp; "OS for multi-agent dev" &nbsp;<span style="color:#888">← NEW LAYER — the missing piece</span><br>
+      <span style="color:#888;margin-left:1rem">↳ a strategic direction. not time-bound, intent-bound.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ status: active | archived | merged</span><br>
+      <span style="color:#888;margin-left:1rem">↳ pivot = archive old arc + start new arc + record external_trigger</span><br>
+      <span style="color:#888;margin-left:1rem">↳ convergence = two arcs merge, stories migrate to merged arc</span><br>
+      <span style="color:#888;margin-left:1rem">↳ human alias: "Phase 1", "v1 strategy" — optional</span><br><br>
+
+      <span style="color:#60a5fa">Phase</span> &nbsp;&nbsp; "SQLite Kernel" &nbsp;<span style="color:#888">← capability gate within an arc</span><br>
+      <span style="color:#888;margin-left:1rem">↳ has: capability_assertion, depends_on_phase, priority_order</span><br>
+      <span style="color:#888;margin-left:1rem">↳ reprioritize = change priority_order + emit reprioritize event</span><br>
+      <span style="color:#888;margin-left:1rem">↳ human alias: "v0.5.0", "Aug 2026" — optional labels only</span><br><br>
+
+      <span style="color:#34d399">Epic</span> &nbsp;&nbsp;&nbsp; "Context Bridge" &nbsp;<span style="color:#888">← agent-domain cluster (parallelism surface)</span><br>
+      <span style="color:#888;margin-left:1rem">↳ defines what can run concurrently within a phase</span><br>
+      <span style="color:#888;margin-left:1rem">↳ routable: assignable to a specific agent or human</span><br><br>
+
+      <span style="color:#fbbf24">Story</span> &nbsp;&nbsp; "migrate project-docs to state.db" &nbsp;<span style="color:#888">← was: task</span><br>
+      <span style="color:#888;margin-left:1rem">↳ done_criteria: "synlynk exec reads from state.db, not files"</span><br>
+      <span style="color:#888;margin-left:1rem">↳ depends_on: [story_id_1, story_id_2] — graph, not list</span><br>
+      <span style="color:#888;margin-left:1rem">↳ no time estimate. done when criteria pass, not when time elapses.</span><br><br>
+
+      <span style="color:#f87171">Event</span> &nbsp;&nbsp; &nbsp;<span style="color:#888">← the universal log. replaces devlog. covers everything.</span><br>
+      <span style="color:#888;margin-left:1rem">↳ types: started · completed · blocked · decision · note</span><br>
+      <span style="color:#888;margin-left:1rem">↳ <strong>pivot</strong> · <strong>reprioritize</strong> · <strong>checkpoint</strong> · <strong>resume</strong> · <strong>external_signal</strong></span><br>
+      <span style="color:#888;margin-left:1rem">↳ devlog = SELECT * FROM events WHERE user='nikhil' ORDER BY ts DESC</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">How each pattern maps</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem">
+
+    <div style="padding:0.875rem;border:1px solid #7c3aed44;border-radius:8px;background:#7c3aed0a">
+      <h3 style="margin:0 0 0.75rem;color:#a78bfa;font-size:0.9em">Pivot (synlynk/Tokq)</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:2">
+        Arc "multi-agent fabric" → archived<br>
+        external_signal: "OS framing resonates"<br>
+        Arc "OS layer" → active<br>
+        Arc "Tokq cloud" → merged into "OS layer"<br>
+        <span style="color:#888">History never deleted.<br>Why we pivoted is always traceable.</span>
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #1d4ed844;border-radius:8px;background:#1d4ed80a">
+      <h3 style="margin:0 0 0.75rem;color:#60a5fa;font-size:0.9em">Reprioritize (rxcc)</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:2">
+        Phase "WhatsApp": priority_order=1<br>
+        Phase "vocab pipeline": priority_order=2<br>
+        event type="reprioritize"<br>
+        rationale: "user demand signal"<br>
+        Phase "vocab pipeline": priority_order=1<br>
+        <span style="color:#888">Reorder freely. History of<br>every reorder preserved.</span>
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #06523444;border-radius:8px;background:#0652340a">
+      <h3 style="margin:0 0 0.75rem;color:#34d399;font-size:0.9em">Hibernate + Resume (cc-video)</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:2">
+        event type="checkpoint"<br>
+        snapshot: {phase, open_stories,<br>
+        &nbsp;&nbsp;last_decisions, blockers}<br>
+        — months pass —<br>
+        synlynk resume →<br>
+        re-entry brief from checkpoint<br>
+        <span style="color:#888">Any agent can resume cold.<br>No context lost.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">Why Arc is the missing piece in every PM tool</p>
+  <p style="margin-top:0.5rem;font-size:0.88em">Jira, Linear, GitHub Projects all treat strategic direction as implicit context — a README, a vision doc, a Notion page. When you pivot, you create a new project and the history of <em>why you thought the old direction was right</em> is severed. Arc makes strategic direction a first-class entity in the data model. Pivots become traceable. Convergences become modelable. The archived proposals folder becomes a queryable table.</p>
+</div>

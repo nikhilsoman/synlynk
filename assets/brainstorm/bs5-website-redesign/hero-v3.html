@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — BS-5 V3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+:root {
+  --blue:#5B8DEF; --purple:#A259F7; --teal:#2EC4A0;
+  --dark:#0E0E0F; --dark2:#1A1A1C; --dark3:#252527;
+  --rule:#e8e8e8; --surf:#f5f5f7; --t1:#1a1a1a; --t2:#444; --t3:#767676; --t4:#aaa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;background:var(--dark);overflow-x:hidden;}
+
+/* ── NAV ── */
+nav{
+  position:sticky;top:0;z-index:200;
+  background:rgba(14,14,15,0.92);backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(255,255,255,0.07);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 40px;height:52px;
+}
+.nav-left{display:flex;align-items:center;gap:10px;}
+.nav-wm{font-family:'Courier New',monospace;font-size:15px;font-weight:500;color:#d4d4d4;letter-spacing:-0.3px;text-decoration:none;}
+.nav-wm .l{color:var(--blue);}.nav-wm .y{color:var(--purple);}.nav-wm .n{color:var(--teal);}
+.nav-links{display:flex;align-items:center;gap:22px;}
+.nav-links a{color:#777;font-size:13px;text-decoration:none;}
+.nav-links a.act{color:var(--teal);}
+.nav-links .gh{border:1px solid #2e2e2e;border-radius:6px;padding:4px 13px;color:#bbb!important;font-size:12px;}
+
+/* ── HERO ── */
+.hero{
+  background:linear-gradient(160deg,#08061a 0%,#0d0d0d 55%);
+  padding:64px 40px 56px;
+  position:relative;overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);
+  width:1000px;height:700px;
+  background:radial-gradient(ellipse,rgba(91,141,239,0.07) 0%,transparent 65%);
+  pointer-events:none;
+}
+
+/* lockup */
+.hero-lockup{display:flex;align-items:center;gap:12px;margin-bottom:28px;}
+.hero-wm{font-family:'Courier New',monospace;font-size:30px;font-weight:500;color:#d4d4d4;letter-spacing:-1px;-webkit-font-smoothing:antialiased;}
+.hero-wm .l{color:var(--blue);}.hero-wm .y{color:var(--purple);}.hero-wm .n{color:var(--teal);}
+
+/* headline + sub in left column */
+.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;max-width:1280px;width:100%;}
+.hero-left{position:relative;z-index:1;}
+.hero-h1{font-size:32px;font-weight:700;line-height:1.22;letter-spacing:-0.03em;color:#fff;margin-bottom:10px;}
+.hero-h1 .grad{background:linear-gradient(90deg,var(--blue) 0%,var(--purple) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero-sub{font-size:14px;color:#555;line-height:1.7;margin-bottom:20px;}
+.hero-sub strong{color:#888;font-weight:500;}
+
+/* agent chips */
+.ww-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#3a3a3a;margin-bottom:10px;font-weight:500;}
+.agent-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;}
+.chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:7px;padding:6px 11px;font-size:12px;font-weight:500;color:#aaa;}
+
+/* CTAs */
+.hero-ctas{display:flex;gap:10px;margin-bottom:14px;}
+.btn-p{background:linear-gradient(90deg,var(--blue),var(--purple));color:#fff;font-size:13px;font-weight:600;padding:9px 22px;border-radius:6px;text-decoration:none;}
+.btn-s{border:1px solid #2e2e2e;color:#888;font-size:13px;padding:9px 22px;border-radius:6px;text-decoration:none;}
+.badges{display:flex;gap:7px;flex-wrap:wrap;}
+.bdg{font-family:'Courier New',monospace;font-size:10px;color:#3a3a3a;border:1px solid #222;border-radius:4px;padding:2px 8px;}
+
+/* ── TERMINAL CAROUSEL ── */
+.hero-right{position:relative;z-index:1;}
+.carousel-wrap{position:relative;}
+.carousel-track{display:flex;gap:16px;align-items:center;transition:transform 0.4s ease;}
+/* 3 visible: prev (shrunk) | center (full) | next (shrunk) */
+.c-slide{flex-shrink:0;width:calc(100% - 80px);transition:transform 0.3s,opacity 0.3s;}
+.c-slide.active{transform:scale(1.0);opacity:1;}
+.c-slide.side{transform:scale(0.88);opacity:0.45;}
+
+.term{background:var(--dark2);border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.6),0 1px 0 rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);}
+.term-bar{background:#252527;padding:9px 14px;display:flex;align-items:center;gap:6px;border-bottom:1px solid rgba(255,255,255,0.05);}
+.dot{width:11px;height:11px;border-radius:50%;}
+.dr{background:#FF5F57;}.dy{background:#FEBC2E;}.dg{background:#28C840;}
+.term-title{font-size:11px;color:rgba(255,255,255,0.22);margin-left:auto;font-family:'Courier New',monospace;}
+.term-body{padding:14px 18px;font-family:'Courier New',monospace;font-size:11.5px;line-height:1.9;color:#ccc;}
+.tp{color:rgba(255,255,255,0.18);}.tc{color:#8eb5f0;}.ts{color:var(--teal);}.tf{color:var(--purple);}.ta{color:#FFD060;}.tw{color:#FF7B72;}.tco{color:rgba(255,255,255,0.15);}
+
+.carousel-nav{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:14px;}
+.c-dot{width:7px;height:7px;border-radius:50%;background:#2e2e2e;cursor:pointer;transition:background 0.2s;}
+.c-dot.on{background:var(--blue);}
+.c-prev,.c-next{background:none;border:1px solid #2e2e2e;color:#666;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.c-prev:hover,.c-next:hover{border-color:#555;color:#ccc;}
+
+/* ── UNLOCK SECTION (split) ── */
+.unlock{background:#fff;padding:72px 40px;}
+.unlock-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;max-width:1280px;width:100%;}
+
+/* synaptic SVG */
+.synapse-wrap{background:#fafafa;border-radius:16px;border:1px solid #eee;padding:24px;display:flex;align-items:center;justify-content:center;}
+
+/* unlock text */
+.unlock-text .eyebrow{font-size:10px;letter-spacing:3px;font-weight:600;text-transform:uppercase;color:var(--purple);margin-bottom:14px;}
+.unlock-text h2{font-size:28px;font-weight:700;color:#111;line-height:1.25;letter-spacing:-0.02em;margin-bottom:16px;}
+.unlock-text p{font-size:14px;color:#666;line-height:1.75;margin-bottom:20px;}
+
+/* token callout */
+.tcall{background:#f8fffe;border:1px solid #c8ede6;border-left:3px solid var(--teal);border-radius:8px;padding:14px 18px;margin-bottom:20px;}
+.tcall-lbl{font-size:9px;letter-spacing:2px;color:var(--teal);font-weight:600;margin-bottom:5px;text-transform:uppercase;}
+.tcall-txt{font-size:12px;color:#555;line-height:1.65;}
+
+/* benefit slides */
+.benefit-slides{position:relative;}
+.bslide{display:none;animation:fadeIn 0.3s ease;}
+.bslide.on{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+.bslide-inner{background:var(--surf);border-radius:10px;padding:18px 20px;border:1px solid var(--rule);}
+.bslide-num{font-size:28px;font-weight:700;letter-spacing:-0.04em;line-height:1;margin-bottom:4px;}
+.bslide-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t4);margin-bottom:10px;}
+.bslide-desc{font-size:13px;color:var(--t2);line-height:1.65;}
+.bslide-tabs{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.btab{font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--rule);background:#fff;color:var(--t3);cursor:pointer;transition:all 0.15s;}
+.btab.on{background:var(--t1);color:#fff;border-color:var(--t1);}
+
+/* ── DOCS ── */
+.docs{background:var(--surf);padding:64px 40px;border-top:1px solid var(--rule);}
+.docs-inner{max-width:1280px;width:100%;}
+.docs-header{margin-bottom:28px;}
+.docs-header .eyebrow{font-size:10px;letter-spacing:3px;font-weight:600;text-transform:uppercase;color:var(--blue);margin-bottom:10px;}
+.docs-header h2{font-size:24px;font-weight:700;color:var(--t1);letter-spacing:-0.02em;margin-bottom:6px;}
+.docs-header p{font-size:13px;color:var(--t3);}
+.docs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+.doc-card{background:#fff;border-radius:14px;overflow:hidden;border:1px solid var(--rule);box-shadow:0 2px 12px rgba(0,0,0,0.05);}
+.doc-thumb{height:130px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:16px 18px;position:relative;overflow:hidden;}
+.dta{background:linear-gradient(135deg,#08061a 0%,#1a1040 100%);}
+.dtb{background:linear-gradient(135deg,#06101a 0%,#0a2030 100%);}
+.dtc{background:linear-gradient(135deg,#060e06 0%,#0a2010 100%);}
+.dt-logo{display:flex;align-items:center;gap:7px;}
+.dt-wm{font-family:'Courier New',monospace;font-size:11px;color:rgba(255,255,255,0.4);}
+.dt-wm .l{color:var(--blue);}.dt-wm .y{color:var(--purple);}.dt-wm .n{color:var(--teal);}
+.dt-title{font-size:16px;font-weight:700;color:#fff;line-height:1.2;letter-spacing:-0.02em;}
+.dt-sub{font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;margin-top:3px;}
+.dt-lines{position:absolute;right:14px;top:20px;bottom:20px;display:flex;flex-direction:column;justify-content:space-between;gap:4px;opacity:0.15;}
+.dt-line{height:2px;border-radius:1px;}
+.doc-body{padding:14px 18px;}
+.doc-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px;}
+.doc-desc{font-size:11px;color:var(--t3);line-height:1.55;margin-bottom:12px;}
+.doc-links{display:flex;gap:8px;}
+.dl{font-size:11px;font-weight:500;text-decoration:none;padding:4px 11px;border-radius:5px;border:1px solid var(--rule);color:var(--t2);}
+.dl.p1{background:var(--t1);color:#fff;border-color:var(--t1);}
+.dl.p2{background:var(--blue);color:#fff;border-color:var(--blue);}
+.dl.p3{background:var(--teal);color:#fff;border-color:var(--teal);}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-left">
+    <svg width="26" height="26" viewBox="-32 -32 64 64">
+      <rect x="-32" y="-32" width="64" height="64" rx="13" fill="#0E0E0F"/>
+      <rect x="-32" y="-32" width="64" height="12" rx="13" fill="#1C1C1E"/>
+      <rect x="-32" y="-26" width="64" height="6" fill="#1C1C1E"/>
+      <circle cx="-21" cy="-26" r="2.2" fill="#FF5F57"/>
+      <circle cx="-13" cy="-26" r="2.2" fill="#FEBC2E"/>
+      <circle cx="-5" cy="-26" r="2.2" fill="#28C840"/>
+      <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="2.8" stroke-linecap="round"/>
+      <circle cx="1" cy="-9" r="2.5" fill="#5B8DEF"/>
+      <circle cx="3" cy="13" r="2.5" fill="#2EC4A0"/>
+    </svg>
+    <a class="nav-wm" href="#">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</a>
+  </div>
+  <div class="nav-links">
+    <a href="#">How it works</a>
+    <a href="#">Features</a>
+    <a href="#docs">Docs</a>
+    <a href="#" class="act">Blog</a>
+    <a href="#" class="gh">GitHub ↗</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-grid">
+    <!-- LEFT: headline + chips + CTAs -->
+    <div class="hero-left">
+      <div class="hero-lockup">
+        <svg width="46" height="46" viewBox="-32 -32 64 64">
+          <rect x="-32" y="-32" width="64" height="64" rx="14" fill="#0E0E0F"/>
+          <rect x="-32" y="-32" width="64" height="12" rx="14" fill="#1C1C1E"/>
+          <rect x="-32" y="-26" width="64" height="6" fill="#1C1C1E"/>
+          <circle cx="-21" cy="-26" r="2.2" fill="#FF5F57"/>
+          <circle cx="-13" cy="-26" r="2.2" fill="#FEBC2E"/>
+          <circle cx="-5" cy="-26" r="2.2" fill="#28C840"/>
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3.2" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3" fill="#5B8DEF"/>
+          <circle cx="3" cy="13" r="3" fill="#2EC4A0"/>
+        </svg>
+        <div class="hero-wm">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</div>
+      </div>
+
+      <h1 class="hero-h1">
+        Most developers use<br>one agent at a time.<br>
+        <span class="grad">synlynk lets you run<br>a workgroup.</span>
+      </h1>
+      <p class="hero-sub">
+        Spread the work, spread the cost.<br>
+        <strong>Different models, different strengths,<br>one shared project state.</strong>
+      </p>
+
+      <div class="ww-label">works with</div>
+      <div class="agent-chips">
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect width="20" height="20" rx="5" fill="#D97757"/><circle cx="10" cy="10" r="2.2" fill="white" opacity="0.9"/><line x1="10" y1="4" x2="10" y2="7.5" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/><line x1="10" y1="12.5" x2="10" y2="16" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/><line x1="4" y1="10" x2="7.5" y2="10" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/><line x1="12.5" y1="10" x2="16" y2="10" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/><line x1="5.8" y1="5.8" x2="8.1" y2="8.1" stroke="white" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/><line x1="11.9" y1="11.9" x2="14.2" y2="14.2" stroke="white" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/><line x1="14.2" y1="5.8" x2="11.9" y2="8.1" stroke="white" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/><line x1="8.1" y1="11.9" x2="5.8" y2="14.2" stroke="white" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/></svg>
+          Claude
+        </div>
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect width="20" height="20" rx="5" fill="#1a73e8"/><path d="M10 2.5 C10 2.5 11.8 8.5 15.5 10 C11.8 11.5 10 17.5 10 17.5 C10 17.5 8.2 11.5 4.5 10 C8.2 8.5 10 2.5 10 2.5Z" fill="white" opacity="0.92"/></svg>
+          Gemini
+        </div>
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect width="20" height="20" rx="5" fill="#111"/><path d="M5 5 L15 15" stroke="white" stroke-width="2.2" stroke-linecap="round"/><path d="M15 5 L5 15" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Grok
+        </div>
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect width="20" height="20" rx="5" fill="#000"/><circle cx="10" cy="8.5" r="3.2" stroke="white" stroke-width="1.5" fill="none" opacity="0.9"/><path d="M7.2 11.5 L5 15.5" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/><path d="M12.8 11.5 L15 15.5" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/><line x1="5" y1="15.5" x2="15" y2="15.5" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/></svg>
+          Codex
+        </div>
+      </div>
+
+      <div class="hero-ctas">
+        <a href="#" class="btn-p">Get started →</a>
+        <a href="#" class="btn-s">Join waitlist</a>
+      </div>
+      <div class="badges">
+        <span class="bdg">Python 3.8+</span>
+        <span class="bdg">stdlib only</span>
+        <span class="bdg">MIT</span>
+        <span class="bdg">pipx install synlynk</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: terminal carousel -->
+    <div class="hero-right">
+      <div class="carousel-wrap">
+        <div class="carousel-track" id="ctrack">
+
+          <!-- Slide 1: dispatch -->
+          <div class="c-slide side" data-idx="0">
+            <div class="term">
+              <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="term-title">synlynk dispatch</span></div>
+              <div class="term-body">
+<span class="tp">$</span> <span class="tc">synlynk</span> <span class="ta">dispatch</span> <span class="tf">--agents</span> claude,gemini,grok <span class="tf">--story</span> <span class="ta">auth-refactor</span><br>
+<span class="ts">→</span> Routing by capability matrix...<br>
+<span class="ts">→</span> job-a3f2 &nbsp;<span class="tf">claude</span> &nbsp;&nbsp;[code:0.92] frontend refactor<br>
+<span class="ts">→</span> job-b7c1 &nbsp;<span class="tf">gemini</span> &nbsp;[sec:0.88] &nbsp;security audit<br>
+<span class="ts">→</span> job-c9d4 &nbsp;<span class="tf">grok</span> &nbsp;&nbsp;&nbsp;[edge:0.81] edge case review<br>
+<br>
+<span class="tco"># 3 agents, 1 story, 0 repeated context</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 2: jobs --watch (ACTIVE) -->
+          <div class="c-slide active" data-idx="1">
+            <div class="term">
+              <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="term-title">synlynk jobs --watch</span></div>
+              <div class="term-body">
+<span class="tp">$</span> <span class="tc">synlynk</span> <span class="ta">jobs</span> <span class="tf">--watch</span><br>
+<br>
+<span class="t4">JOB &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AGENT &nbsp;&nbsp;STATUS &nbsp;&nbsp;TIME &nbsp;&nbsp;TOKENS</span><br>
+<span class="ts">✓</span> job-a3f2 &nbsp;<span class="tf">claude</span> &nbsp; done &nbsp;&nbsp;&nbsp;2m14s &nbsp;42K<br>
+<span class="ts">✓</span> job-b7c1 &nbsp;<span class="tf">gemini</span> &nbsp; done &nbsp;&nbsp;&nbsp;1m58s &nbsp;38K<br>
+<span class="tw">⚑</span> job-c9d4 &nbsp;<span class="tf">grok</span> &nbsp;&nbsp;&nbsp;&nbsp;done &nbsp;&nbsp;&nbsp;1m33s &nbsp;31K &nbsp;<span class="tco">2 flags</span><br>
+<br>
+<span class="ts">Total:</span> 111K tokens · $0.34 · 6m05s wall clock<br>
+<span class="tco"># vs $1.20+ on one provider at rate limit</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 3: relay -->
+          <div class="c-slide side" data-idx="2">
+            <div class="term">
+              <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="term-title">synlynk relay</span></div>
+              <div class="term-body">
+<span class="tp">$</span> <span class="tc">synlynk</span> <span class="ta">relay</span> start<br>
+<span class="ts">✓</span> HTTP SSE broker listening on :27471<br>
+<span class="ts">✓</span> claude subscribed<br>
+<span class="ts">✓</span> gemini subscribed<br>
+<span class="ts">✓</span> grok subscribed<br>
+<br>
+<span class="tp">$</span> <span class="tc">synlynk</span> <span class="ta">relay</span> broadcast <span class="ta">"auth PR merged"</span><br>
+<span class="ts">→</span> 3 agents notified in 12ms<br>
+<span class="tco"># real-time coordination, no polling</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 4: doctor -->
+          <div class="c-slide side" data-idx="3">
+            <div class="term">
+              <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="term-title">synlynk doctor</span></div>
+              <div class="term-body">
+<span class="tp">$</span> <span class="tc">synlynk</span> <span class="ta">doctor</span><br>
+<br>
+<span class="ts">✓</span> version &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v0.9.7 (latest)<br>
+<span class="ts">✓</span> identity key &nbsp;&nbsp;Ed25519 configured<br>
+<span class="ts">✓</span> agent profiles &nbsp;claude · gemini · grok<br>
+<span class="tw">⚑</span> codex profile &nbsp;&nbsp;missing — run: synlynk init --agent codex<br>
+<span class="ts">✓</span> daemon &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;running (PID 47823)<br>
+<span class="ts">✓</span> relay &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:27471 healthy<br>
+<br>
+<span class="tco"># 1 warning · health score: 94/100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 5: decide -->
+          <div class="c-slide side" data-idx="4">
+            <div class="term">
+              <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="term-title">synlynk decide</span></div>
+              <div class="term-body">
+<span class="tp">$</span> <span class="tc">synlynk</span> <span class="ta">decide</span> <span class="ta">"Use PostgreSQL or SQLite for job store?"</span><br>
+<br>
+<span class="tf">claude</span> &nbsp;&nbsp;→ SQLite — zero-infra, WAL mode handles concurrency<br>
+<span class="tf">gemini</span> &nbsp;→ SQLite — sufficient at current scale, revisit at 10K jobs/day<br>
+<span class="tf">grok</span> &nbsp;&nbsp;&nbsp;→ PostgreSQL — future team features need real transactions<br>
+<br>
+<span class="ts">Consensus:</span> SQLite (2/3) · minority view logged<br>
+<span class="tco"># decision recorded in project-docs/memory.md</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /track -->
+
+        <div class="carousel-nav">
+          <button class="c-prev" onclick="cNav(-1)">‹</button>
+          <div class="c-dot on" onclick="cGo(0)"></div>
+          <div class="c-dot" onclick="cGo(1)"></div>
+          <div class="c-dot" onclick="cGo(2)"></div>
+          <div class="c-dot" onclick="cGo(3)"></div>
+          <div class="c-dot" onclick="cGo(4)"></div>
+          <button class="c-next" onclick="cNav(1)">›</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /hero-grid -->
+</section>
+
+<!-- UNLOCK / SYNAPTIC -->
+<section class="unlock">
+  <div class="unlock-grid">
+
+    <!-- LEFT: synaptic SVG -->
+    <div class="synapse-wrap">
+      <!--
+        Biologically accurate synaptic network:
+        - synlynk = central soma (cell body) with nucleus
+        - Each agent = presynaptic neuron with soma, axon, axon terminal (bouton)
+        - Curved axon paths with axon terminal knobs at the synapse
+        - Synaptic vesicle dots near the terminals
+        - Dendritic spines on the central soma
+        - Astrocyte-like wraparound on central hub (glial support)
+      -->
+      <svg width="420" height="380" viewBox="0 0 420 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- axon glow filters -->
+          <filter id="glow-blue" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow-purple" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow-teal" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="soma-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="8" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <!-- Gradients for axon paths -->
+          <linearGradient id="ax-claude" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#D97757" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#D97757" stop-opacity="0.9"/>
+          </linearGradient>
+          <linearGradient id="ax-gemini" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#1a73e8" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#1a73e8" stop-opacity="0.9"/>
+          </linearGradient>
+          <linearGradient id="ax-grok" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#888" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#aaa" stop-opacity="0.9"/>
+          </linearGradient>
+          <linearGradient id="ax-codex" x1="100%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stop-color="#555" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#888" stop-opacity="0.9"/>
+          </linearGradient>
+          <radialGradient id="soma-bg" cx="50%" cy="40%">
+            <stop offset="0%" stop-color="#f0f4ff"/>
+            <stop offset="100%" stop-color="#e8ecf8"/>
+          </radialGradient>
+          <radialGradient id="nucleus-grad" cx="40%" cy="35%">
+            <stop offset="0%" stop-color="#7fa8f8"/>
+            <stop offset="100%" stop-color="#3a6fd8"/>
+          </radialGradient>
+        </defs>
+
+        <!-- ══════ AXON PATHS (from agent somas to central boutons) ══════ -->
+        <!-- Each path: agent soma → axon hillcock → myelinated axon → axon terminal (bouton) -->
+        <!-- The paths converge on the central soma's dendritic region -->
+
+        <!-- Claude axon: top-left → central (upper-left dendritic spine) -->
+        <!-- Axon trunk (thicker myelinated segment) -->
+        <path d="M 82 82 C 100 100 130 115 155 145" stroke="url(#ax-claude)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <!-- Ranvier nodes (gaps in myelin = small circles along axon) -->
+        <circle cx="104" cy="104" r="2.5" fill="#D97757" opacity="0.5"/>
+        <circle cx="127" cy="120" r="2.5" fill="#D97757" opacity="0.5"/>
+        <circle cx="143" cy="133" r="2.5" fill="#D97757" opacity="0.5"/>
+        <!-- Terminal bouton cluster (synaptic knobs) -->
+        <circle cx="162" cy="152" r="5" fill="#D97757" opacity="0.85"/>
+        <circle cx="155" cy="145" r="4" fill="#D97757" opacity="0.6"/>
+        <circle cx="168" cy="148" r="3.5" fill="#D97757" opacity="0.5"/>
+        <!-- Synaptic vesicles (tiny dots near bouton) -->
+        <circle cx="159" cy="156" r="1.5" fill="#D97757" opacity="0.7"/>
+        <circle cx="164" cy="158" r="1.5" fill="#D97757" opacity="0.6"/>
+        <circle cx="157" cy="160" r="1.5" fill="#D97757" opacity="0.5"/>
+        <circle cx="161" cy="163" r="1.5" fill="#D97757" opacity="0.4"/>
+
+        <!-- Gemini axon: top-right → central (upper-right dendritic spine) -->
+        <path d="M 338 82 C 320 100 290 115 265 145" stroke="url(#ax-gemini)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <circle cx="316" cy="104" r="2.5" fill="#1a73e8" opacity="0.5"/>
+        <circle cx="293" cy="120" r="2.5" fill="#1a73e8" opacity="0.5"/>
+        <circle cx="277" cy="133" r="2.5" fill="#1a73e8" opacity="0.5"/>
+        <!-- Terminal boutons -->
+        <circle cx="258" cy="152" r="5" fill="#1a73e8" opacity="0.85"/>
+        <circle cx="265" cy="145" r="4" fill="#1a73e8" opacity="0.6"/>
+        <circle cx="252" cy="148" r="3.5" fill="#1a73e8" opacity="0.5"/>
+        <!-- Vesicles -->
+        <circle cx="261" cy="156" r="1.5" fill="#1a73e8" opacity="0.7"/>
+        <circle cx="256" cy="158" r="1.5" fill="#1a73e8" opacity="0.6"/>
+        <circle cx="263" cy="161" r="1.5" fill="#1a73e8" opacity="0.5"/>
+        <circle cx="259" cy="164" r="1.5" fill="#1a73e8" opacity="0.4"/>
+
+        <!-- Grok axon: bottom-left → central (lower-left dendritic spine) -->
+        <path d="M 82 298 C 100 280 130 265 155 238" stroke="url(#ax-grok)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <circle cx="104" cy="276" r="2.5" fill="#888" opacity="0.5"/>
+        <circle cx="127" cy="260" r="2.5" fill="#888" opacity="0.5"/>
+        <circle cx="143" cy="247" r="2.5" fill="#888" opacity="0.5"/>
+        <!-- Terminal boutons -->
+        <circle cx="162" cy="231" r="5" fill="#888" opacity="0.85"/>
+        <circle cx="155" cy="238" r="4" fill="#888" opacity="0.6"/>
+        <circle cx="168" cy="235" r="3.5" fill="#888" opacity="0.5"/>
+        <!-- Vesicles -->
+        <circle cx="159" cy="226" r="1.5" fill="#888" opacity="0.7"/>
+        <circle cx="164" cy="224" r="1.5" fill="#888" opacity="0.6"/>
+        <circle cx="157" cy="222" r="1.5" fill="#888" opacity="0.5"/>
+        <circle cx="161" cy="219" r="1.5" fill="#888" opacity="0.4"/>
+
+        <!-- Codex axon: bottom-right → central (lower-right dendritic spine) -->
+        <path d="M 338 298 C 320 280 290 265 265 238" stroke="url(#ax-codex)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <circle cx="316" cy="276" r="2.5" fill="#666" opacity="0.5"/>
+        <circle cx="293" cy="260" r="2.5" fill="#666" opacity="0.5"/>
+        <circle cx="277" cy="247" r="2.5" fill="#666" opacity="0.5"/>
+        <!-- Terminal boutons -->
+        <circle cx="258" cy="231" r="5" fill="#666" opacity="0.85"/>
+        <circle cx="265" cy="238" r="4" fill="#666" opacity="0.6"/>
+        <circle cx="252" cy="235" r="3.5" fill="#666" opacity="0.5"/>
+        <!-- Vesicles -->
+        <circle cx="261" cy="226" r="1.5" fill="#666" opacity="0.7"/>
+        <circle cx="256" cy="224" r="1.5" fill="#666" opacity="0.6"/>
+        <circle cx="263" cy="221" r="1.5" fill="#666" opacity="0.5"/>
+
+        <!-- ══════ CENTRAL SOMA (synlynk) ══════ -->
+        <!-- Astrocyte processes (glial support cells — star-shaped extensions) -->
+        <path d="M 210 190 L 200 168" stroke="#d0d8f0" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        <path d="M 210 190 L 225 165" stroke="#d0d8f0" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 210 190 L 235 195" stroke="#d0d8f0" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        <path d="M 210 190 L 228 210" stroke="#d0d8f0" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+        <path d="M 210 190 L 192 212" stroke="#d0d8f0" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        <path d="M 210 190 L 182 197" stroke="#d0d8f0" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+
+        <!-- Dendritic spines (small protrusions on soma where boutons synapse) -->
+        <!-- Upper-left dendritic spine -->
+        <path d="M 175 165 C 170 160 168 155 172 152" stroke="#8eb5f0" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="172" cy="151" r="4" fill="#8eb5f0" opacity="0.5"/>
+        <!-- Upper-right dendritic spine -->
+        <path d="M 245 165 C 250 160 252 155 248 152" stroke="#8eb5f0" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="248" cy="151" r="4" fill="#8eb5f0" opacity="0.5"/>
+        <!-- Lower-left dendritic spine -->
+        <path d="M 175 215 C 170 220 168 225 172 228" stroke="#8eb5f0" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="172" cy="229" r="4" fill="#8eb5f0" opacity="0.5"/>
+        <!-- Lower-right dendritic spine -->
+        <path d="M 245 215 C 250 220 252 225 248 228" stroke="#8eb5f0" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="248" cy="229" r="4" fill="#8eb5f0" opacity="0.5"/>
+
+        <!-- Soma membrane (cell body) — irregular organic shape -->
+        <ellipse cx="210" cy="190" rx="52" ry="48" fill="url(#soma-bg)" stroke="#b8c8f0" stroke-width="1.5" opacity="0.95"/>
+
+        <!-- Endoplasmic reticulum suggestion (wavy lines inside soma) -->
+        <path d="M 182 188 C 188 183 194 193 200 188 C 206 183 212 193 218 188" stroke="#c8d8f8" stroke-width="1" fill="none" opacity="0.5"/>
+        <path d="M 195 202 C 201 197 207 207 213 202 C 219 197 225 207 231 202" stroke="#c8d8f8" stroke-width="1" fill="none" opacity="0.4"/>
+
+        <!-- Nucleus (large, within soma, with nucleolus) -->
+        <ellipse cx="208" cy="187" rx="22" ry="20" fill="url(#nucleus-grad)" stroke="#5B8DEF" stroke-width="1.2" opacity="0.9"/>
+        <!-- Nucleolus (dense spot within nucleus) -->
+        <circle cx="204" cy="183" r="6" fill="#2a4fa8" opacity="0.7"/>
+        <!-- Nuclear pore complexes (small dots on nucleus membrane) -->
+        <circle cx="208" cy="167" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="220" cy="173" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="228" cy="186" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="222" cy="200" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="208" cy="207" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="195" cy="201" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="188" cy="188" r="2" fill="#4a7fdf" opacity="0.6"/>
+        <circle cx="194" cy="173" r="2" fill="#4a7fdf" opacity="0.6"/>
+
+        <!-- synlynk S-glyph inside nucleus -->
+        <g transform="translate(210,188) scale(0.55)">
+          <path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" opacity="0.95"/>
+          <path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M 3 6 L 3 14" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="1" cy="-9" r="3.5" fill="white" opacity="0.9"/>
+          <circle cx="3" cy="14" r="3.5" fill="white" opacity="0.8"/>
+        </g>
+
+        <!-- ══════ AGENT SOMAS (presynaptic neurons) ══════ -->
+
+        <!-- Claude — top-left -->
+        <ellipse cx="68" cy="72" rx="38" ry="32" fill="#fff8f5" stroke="#f0c8b0" stroke-width="1.5"/>
+        <!-- Claude nucleus -->
+        <ellipse cx="66" cy="70" rx="15" ry="13" fill="#fce8dc" stroke="#D97757" stroke-width="1" opacity="0.8"/>
+        <circle cx="63" cy="67" r="4.5" fill="#D97757" opacity="0.7"/>
+        <!-- Claude logo mark -->
+        <circle cx="68" cy="71" r="3.5" fill="none" stroke="#D97757" stroke-width="1.5" opacity="0.9"/>
+        <line x1="68" y1="64" x2="68" y2="67.5" stroke="#D97757" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+        <line x1="68" y1="74.5" x2="68" y2="78" stroke="#D97757" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+        <line x1="61" y1="71" x2="64.5" y2="71" stroke="#D97757" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+        <line x1="71.5" y1="71" x2="75" y2="71" stroke="#D97757" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+        <!-- Agent label -->
+        <text x="68" y="106" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="600" fill="#D97757">Claude</text>
+        <text x="68" y="119" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#aaa">Anthropic</text>
+        <!-- Axon hillock (tapered start of axon) -->
+        <path d="M 82 80 C 86 84 88 88 87 92" stroke="#D97757" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Gemini — top-right -->
+        <ellipse cx="352" cy="72" rx="38" ry="32" fill="#f5f8ff" stroke="#b0c8f8" stroke-width="1.5"/>
+        <ellipse cx="350" cy="70" rx="15" ry="13" fill="#dce8fc" stroke="#1a73e8" stroke-width="1" opacity="0.8"/>
+        <circle cx="347" cy="67" r="4.5" fill="#1a73e8" opacity="0.65"/>
+        <!-- Gemini diamond mark -->
+        <path d="M 352 63 C 352 63 354.5 69 357 71 C 354.5 73 352 79 352 79 C 352 79 349.5 73 347 71 C 349.5 69 352 63 352 63Z" fill="#1a73e8" opacity="0.85"/>
+        <text x="352" y="106" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="600" fill="#1a73e8">Gemini</text>
+        <text x="352" y="119" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#aaa">Google</text>
+        <path d="M 338 80 C 334 84 332 88 333 92" stroke="#1a73e8" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Grok — bottom-left -->
+        <ellipse cx="68" cy="308" rx="38" ry="32" fill="#f8f8f8" stroke="#ccc" stroke-width="1.5"/>
+        <ellipse cx="66" cy="306" rx="15" ry="13" fill="#eee" stroke="#888" stroke-width="1" opacity="0.8"/>
+        <circle cx="63" cy="303" r="4.5" fill="#888" opacity="0.5"/>
+        <!-- Grok X mark -->
+        <line x1="63" y1="302" x2="73" y2="312" stroke="#555" stroke-width="2" stroke-linecap="round"/>
+        <line x1="73" y1="302" x2="63" y2="312" stroke="#555" stroke-width="2" stroke-linecap="round"/>
+        <text x="68" y="342" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="600" fill="#666">Grok</text>
+        <text x="68" y="355" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#aaa">xAI</text>
+        <path d="M 82 300 C 86 296 88 292 87 288" stroke="#888" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Codex — bottom-right -->
+        <ellipse cx="352" cy="308" rx="38" ry="32" fill="#f5f5f5" stroke="#ccc" stroke-width="1.5"/>
+        <ellipse cx="350" cy="306" rx="15" ry="13" fill="#eaeaea" stroke="#666" stroke-width="1" opacity="0.8"/>
+        <circle cx="347" cy="303" r="4.5" fill="#666" opacity="0.5"/>
+        <!-- OpenAI-ish mark -->
+        <circle cx="352" cy="306" r="5" stroke="#444" stroke-width="1.5" fill="none" opacity="0.85"/>
+        <path d="M 349 311 L 347 315" stroke="#444" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+        <path d="M 355 311 L 357 315" stroke="#444" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+        <line x1="347" y1="315" x2="357" y2="315" stroke="#444" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+        <text x="352" y="342" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="600" fill="#555">Codex</text>
+        <text x="352" y="355" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#aaa">OpenAI</text>
+        <path d="M 338 300 C 334 296 332 292 333 288" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- ══════ SYNLYNK LABEL ══════ -->
+        <text x="210" y="253" text-anchor="middle" font-family="'Courier New',monospace" font-size="13" font-weight="500" fill="#333">
+          syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan>k
+        </text>
+        <text x="210" y="268" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#aaa" letter-spacing="1">SYNAPTIC HUB</text>
+
+        <!-- Electrical impulse animation suggestion (static dots along paths) -->
+        <circle cx="115" cy="112" r="2" fill="#D97757" opacity="0.8"><animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" begin="0s"/></circle>
+        <circle cx="305" cy="112" r="2" fill="#1a73e8" opacity="0.8"><animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" begin="0.5s"/></circle>
+        <circle cx="115" cy="268" r="2" fill="#888" opacity="0.8"><animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" begin="1s"/></circle>
+        <circle cx="305" cy="268" r="2" fill="#666" opacity="0.8"><animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" begin="1.5s"/></circle>
+      </svg>
+    </div>
+
+    <!-- RIGHT: text + benefit slides -->
+    <div class="unlock-text">
+      <div class="eyebrow">The unlock</div>
+      <h2>One init. Every agent reads<br>the same project state.</h2>
+      <p>Claude, Gemini, Grok, and Codex each have distinct training legacies — different strengths, different blind spots. synlynk is the synaptic hub: shared state flows in, coordinated output flows out. No repeated context, no duplicated cost.</p>
+
+      <div class="token-callout" style="margin-bottom:20px;">
+        <div class="tcall-lbl">Token economics</div>
+        <div class="tcall-txt">Sticking to one model concentrates your token spend, hits rate limits faster, and locks out model diversity. Spread work across agents — spread cost across providers. A workgroup is cheaper <em>and</em> richer.</div>
+      </div>
+
+      <!-- Benefit slides -->
+      <div class="benefit-slides">
+        <div class="bslide on" id="bs-0">
+          <div class="bslide-inner">
+            <div class="bslide-num" style="color:var(--blue);">3×</div>
+            <div class="bslide-label">Parallel coverage</div>
+            <div class="bslide-desc">Three agents working the same story simultaneously — different perspectives, one ledger. What takes Claude 2 minutes, Gemini might flag in 30 seconds.</div>
+          </div>
+        </div>
+        <div class="bslide" id="bs-1">
+          <div class="bslide-inner">
+            <div class="bslide-num" style="color:var(--teal);">0</div>
+            <div class="bslide-label">Repeated context setup</div>
+            <div class="bslide-desc">Every agent reads from the same <code>project-docs/</code> ledger. Switch from Claude to Gemini mid-story — zero re-briefing, zero lost decisions.</div>
+          </div>
+        </div>
+        <div class="bslide" id="bs-2">
+          <div class="bslide-inner">
+            <div class="bslide-num" style="color:var(--purple);">72%</div>
+            <div class="bslide-label">Lower token cost</div>
+            <div class="bslide-desc">Distributing across 3 providers at their free tier limits eliminates rate-limit bottlenecks. Multi-provider dispatch is the cheapest way to run a workgroup.</div>
+          </div>
+        </div>
+        <div class="bslide" id="bs-3">
+          <div class="bslide-inner">
+            <div class="bslide-num" style="color:var(--blue);">∞</div>
+            <div class="bslide-label">Perspective diversity</div>
+            <div class="bslide-desc">Claude reflects Anthropic's safety-first training. Gemini reflects Google's systems depth. Grok reflects adversarial thinking. That diversity is a feature — synlynk makes it available to everyone.</div>
+          </div>
+        </div>
+
+        <div class="bslide-tabs">
+          <div class="btab on" onclick="bGo(0,this)">3× coverage</div>
+          <div class="btab" onclick="bGo(1,this)">0 rework</div>
+          <div class="btab" onclick="bGo(2,this)">72% cheaper</div>
+          <div class="btab" onclick="bGo(3,this)">∞ perspective</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /unlock-grid -->
+</section>
+
+<!-- DOCS -->
+<section class="docs" id="docs">
+  <div class="docs-inner">
+    <div class="docs-header">
+      <div class="eyebrow" style="font-size:10px;letter-spacing:3px;font-weight:600;text-transform:uppercase;color:var(--blue);margin-bottom:10px;">Documentation</div>
+      <h2 style="font-size:24px;font-weight:700;color:var(--t1);letter-spacing:-0.02em;margin-bottom:6px;">Everything you need</h2>
+      <p style="font-size:13px;color:var(--t3);">Quick Start · Command Reference · Full Manual — HTML and PDF</p>
+    </div>
+    <div class="docs-grid">
+      <div class="doc-card">
+        <div class="doc-thumb dta">
+          <div class="dt-logo">
+            <svg width="16" height="16" viewBox="-32 -32 64 64"><rect x="-32" y="-32" width="64" height="64" rx="10" fill="#111"/><path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="3" stroke-linecap="round"/><path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="3" stroke-linecap="round"/><path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3" stroke-linecap="round"/></svg>
+            <span class="dt-wm">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</span>
+          </div>
+          <div><div class="dt-title">Quick Start<br>Guide</div><div class="dt-sub">5 minutes to first dispatch</div></div>
+          <div class="dt-lines"><div class="dt-line" style="width:55px;background:var(--blue);"></div><div class="dt-line" style="width:70px;background:var(--purple);"></div><div class="dt-line" style="width:45px;background:var(--teal);"></div><div class="dt-line" style="width:60px;background:rgba(255,255,255,0.2);"></div></div>
+        </div>
+        <div class="doc-body">
+          <div class="doc-title">Quick Start Guide</div>
+          <div class="doc-desc">Install, init, and run your first multi-agent dispatch in under 5 minutes. Solo and team mode.</div>
+          <div class="doc-links"><a href="#" class="dl p1">PDF</a><a href="#" class="dl">HTML</a></div>
+        </div>
+      </div>
+      <div class="doc-card">
+        <div class="doc-thumb dtb">
+          <div class="dt-logo"><svg width="16" height="16" viewBox="-32 -32 64 64"><rect x="-32" y="-32" width="64" height="64" rx="10" fill="#111"/><path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="3" stroke-linecap="round"/><path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="3" stroke-linecap="round"/><path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3" stroke-linecap="round"/></svg><span class="dt-wm">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</span></div>
+          <div><div class="dt-title">Command<br>Reference</div><div class="dt-sub">Every flag · every option</div></div>
+          <div class="dt-lines"><div class="dt-line" style="width:65px;background:var(--teal);"></div><div class="dt-line" style="width:50px;background:rgba(255,255,255,0.15);"></div><div class="dt-line" style="width:75px;background:var(--blue);"></div><div class="dt-line" style="width:55px;background:var(--purple);"></div></div>
+        </div>
+        <div class="doc-body">
+          <div class="doc-title">Command Reference</div>
+          <div class="doc-desc">Complete reference for all synlynk commands — init, exec, dispatch, jobs, relay, doctor, and more.</div>
+          <div class="doc-links"><a href="#" class="dl p2">PDF</a><a href="#" class="dl">HTML</a></div>
+        </div>
+      </div>
+      <div class="doc-card">
+        <div class="doc-thumb dtc">
+          <div class="dt-logo"><svg width="16" height="16" viewBox="-32 -32 64 64"><rect x="-32" y="-32" width="64" height="64" rx="10" fill="#111"/><path d="M 1 -9 C 1 -9 -6 -9 -6 -4 C -6 1 3 1 3 6" fill="none" stroke="#5B8DEF" stroke-width="3" stroke-linecap="round"/><path d="M 3 6 C 3 6 10 6 10 1 C 10 -4 1 -4 1 -9" fill="none" stroke="#A259F7" stroke-width="3" stroke-linecap="round"/><path d="M 3 6 L 3 13" fill="none" stroke="#2EC4A0" stroke-width="3" stroke-linecap="round"/></svg><span class="dt-wm">syn<span class="l">l</span><span class="y">y</span><span class="n">n</span>k</span></div>
+          <div><div class="dt-title">Official<br>Manual</div><div class="dt-sub">Architecture deep dive</div></div>
+          <div class="dt-lines"><div class="dt-line" style="width:60px;background:var(--purple);"></div><div class="dt-line" style="width:75px;background:rgba(255,255,255,0.12);"></div><div class="dt-line" style="width:50px;background:var(--teal);"></div><div class="dt-line" style="width:65px;background:var(--blue);"></div></div>
+        </div>
+        <div class="doc-body">
+          <div class="doc-title">Official Manual</div>
+          <div class="doc-desc">Full architecture reference — state model, dispatch protocol, relay broker, agent profiles, SQLite schema.</div>
+          <div class="doc-links"><a href="#" class="dl p3">PDF</a><a href="#" class="dl">HTML</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:12px 40px;font-size:11px;color:#333;font-family:monospace;">
+  <strong style="color:var(--blue);">BS-5 V3</strong> · Sections continuing: How it works · Features · OS Vision · Waitlist · Blog · Footer
+</div>
+
+<script>
+// ── Terminal carousel ──
+const slides = document.querySelectorAll('.c-slide');
+const dots   = document.querySelectorAll('.c-dot');
+let cur = 1; // start on center slide (idx 1)
+
+function renderCarousel() {
+  slides.forEach((s, i) => {
+    s.classList.remove('active','side');
+    s.classList.add('side');
+  });
+  slides[cur].classList.remove('side');
+  slides[cur].classList.add('active');
+  dots.forEach((d,i) => d.classList.toggle('on', i === cur));
+}
+
+function cNav(dir) { cur = (cur + dir + slides.length) % slides.length; renderCarousel(); }
+function cGo(idx)  { cur = idx; renderCarousel(); }
+
+// Auto-advance every 4s
+setInterval(() => cNav(1), 4000);
+renderCarousel();
+
+// ── Benefit slides ──
+function bGo(idx, el) {
+  document.querySelectorAll('.bslide').forEach(s => s.classList.remove('on'));
+  document.getElementById('bs-' + idx).classList.add('on');
+  document.querySelectorAll('.btab').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+}
+</script>
+</body>
+</html>

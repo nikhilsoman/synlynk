@@ -1,0 +1,116 @@
+<h2>The Real Problem — Agentic Velocity vs. Manual Sync</h2>
+<p class="subtitle">Why export/import breaks down, and what the right fix is</p>
+
+<div class="section">
+  <p class="label">What agent velocity looks like on a real morning</p>
+  <div class="mockup">
+    <div class="mockup-header">Nikhil's machine · daemon running · 90 minutes</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.77em;line-height:2">
+      <span style="color:#888">09:00</span> &nbsp;dispatched Story #31 (JWT endpoint) → Builder/claude<br>
+      <span style="color:#888">09:04</span> &nbsp;Story #31 done → Story #33 (JWT tests) auto-unblocked → dispatched<br>
+      <span style="color:#888">09:09</span> &nbsp;Story #33 done → Story #35 (API docs) auto-unblocked → dispatched<br>
+      <span style="color:#888">09:14</span> &nbsp;Constraint added: "no breaking API changes — Gaurav is integrating today"<br>
+      <span style="color:#888">09:17</span> &nbsp;Story #35 done → Epic #12 backend complete<br>
+      <span style="color:#888">09:18</span> &nbsp;Epic #13 "Notifications" created → Story #36, #37, #38 created<br>
+      <span style="color:#888">09:31</span> &nbsp;Story #36 dispatched → Story #37 auto-dispatched in parallel<br>
+      <span style="color:#888">09:47</span> &nbsp;Stories #36, #37 done → #38 unblocked → dispatched<br>
+      <span style="color:#888">10:02</span> &nbsp;Story #38 done. Epic #13 complete.<br>
+      <span style="color:#888">10:15</span> &nbsp;Memory updated: "notification service uses Redis pub/sub"<br>
+      <span style="color:#888">10:29</span> &nbsp;<span style="color:#f87171">Gaurav finally imports Nikhil's morning snapshot.</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#f87171">He was building Story #32 (frontend login form) the whole time</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#f87171">— against a backend that no longer exists as he knew it.</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#f87171">The constraint added at 09:14? He never saw it.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">The root cause — state.db is the wrong sync unit</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div style="padding:0.875rem;border:1px solid #7f1d1d44;border-radius:8px;font-size:0.82em;line-height:1.85">
+      <strong style="color:#f87171">Syncing the full DB (export/import)</strong><br><br>
+      · Binary blob — can't diff, can't stream<br>
+      · All-or-nothing — you get everything or nothing<br>
+      · Merge is expensive — compare every table<br>
+      · Manual cadence — humans forget<br>
+      · No partial update — can't just send "here's the new constraint"
+    </div>
+    <div style="padding:0.875rem;border:1px solid #06523444;border-radius:8px;font-size:0.82em;line-height:1.85">
+      <strong style="color:#34d399">Syncing events (the right unit)</strong><br><br>
+      · Events are append-only — no conflicts possible<br>
+      · Each event is tiny (200–500 bytes)<br>
+      · Signed — cryptographically attributed<br>
+      · Streamable — send only new events since last sync<br>
+      · Materialized state = apply events in order
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">The fix — event-log sync via a shared channel</p>
+  <div class="mockup">
+    <div class="mockup-header">Architecture: local SQLite + event sync via shared git repo (pre-Tokq)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.79em;line-height:2.1">
+      <span style="color:#e879f9">Each machine:</span><br>
+      &nbsp;&nbsp;state.db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← local SQLite, fast queries, full schema<br>
+      &nbsp;&nbsp;events table &nbsp;&nbsp;&nbsp;← append-only log (already in our schema)<br><br>
+
+      <span style="color:#60a5fa">Sync channel (pre-Tokq):</span><br>
+      &nbsp;&nbsp;~/.synlynk/workspaces/my-product/sync/ &nbsp;← bare git repo<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">OR shared GitHub repo</span><br>
+      &nbsp;&nbsp;nikhil/ → events.ndjson &nbsp;&nbsp;&nbsp;&nbsp;← Nikhil's new events (signed)<br>
+      &nbsp;&nbsp;gaurav/ → events.ndjson &nbsp;&nbsp;&nbsp;&nbsp;← Gaurav's new events (signed)<br>
+      &nbsp;&nbsp;kunal/  → events.ndjson &nbsp;&nbsp;&nbsp;&nbsp;← Kunal's new events (signed)<br><br>
+
+      <span style="color:#34d399">Daemon sync loop (every 5 min, or on every event write):</span><br>
+      &nbsp;&nbsp;1. Write new local events → sync/nikhil/events.ndjson → git push<br>
+      &nbsp;&nbsp;2. git pull → read gaurav/ and kunal/ events<br>
+      &nbsp;&nbsp;3. Apply new events to local state.db (idempotent, ordered by ts)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ story status updated · memory updated · constraints visible<br><br>
+
+      <span style="color:#fbbf24">Result: max drift = ~5 minutes. Constraint added at 09:14 visible to Gaurav by 09:19.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">The same morning, with event sync</p>
+  <div class="mockup">
+    <div class="mockup-header">Gaurav's view — syncing every 5 minutes</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.77em;line-height:2">
+      <span style="color:#888">09:00</span> &nbsp;Gaurav starts working on Story #32 (login form)<br>
+      <span style="color:#888">09:05</span> &nbsp;<span style="color:#34d399">sync pulls</span> → Story #31 done, Story #33 dispatched → visible<br>
+      <span style="color:#888">09:10</span> &nbsp;<span style="color:#34d399">sync pulls</span> → Story #33 done, Story #35 dispatched → visible<br>
+      <span style="color:#888">09:15</span> &nbsp;<span style="color:#34d399">sync pulls</span> → <span style="color:#fbbf24">⚠ Constraint: "no breaking API changes — Gaurav is integrating today"</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ constraint auto-injected into Gaurav's next agent context<br>
+      <span style="color:#888">09:20</span> &nbsp;<span style="color:#34d399">sync pulls</span> → API docs done, backend complete, memory updated<br>
+      <span style="color:#888">09:25</span> &nbsp;Gaurav's agent sees: correct API shape + constraint + latest memory<br>
+      <span style="color:#888">10:02</span> &nbsp;Story #32 done. Gaurav pushes events. Nikhil's daemon picks up at 10:05.
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Path to Tokq Alpha — same events, different transport</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div style="padding:0.875rem;border:1px solid #1d4ed844;border-radius:8px;font-size:0.82em;line-height:1.85">
+      <strong style="color:#60a5fa">Pre-Tokq (v0.6.0+)</strong><br><br>
+      Events → git repo sync channel<br>
+      Daemon polls every 5 min<br>
+      Per-member branches, no conflicts<br>
+      Shared GitHub repo = team hub<br>
+      Max drift: ~5 minutes
+    </div>
+    <div style="padding:0.875rem;border:1px solid #7c3aed44;border-radius:8px;font-size:0.82em;line-height:1.85">
+      <strong style="color:#e879f9">Tokq Alpha (NATS)</strong><br><br>
+      Events → NATS subjects (same format)<br>
+      Daemon subscribes, real-time push<br>
+      ZK-encrypted in transit<br>
+      Tokq hub = team hub<br>
+      Max drift: &lt;1 second
+    </div>
+  </div>
+  <div style="margin-top:0.6rem;font-size:0.82em;color:#888;line-height:1.7;padding:0.5rem">
+    The event format is identical in both cases. The only thing that changes is the transport layer — git repo → NATS subject. The daemon sync loop is the same code with a different I/O backend. Migration cost at Tokq Alpha: near zero.
+  </div>
+</div>

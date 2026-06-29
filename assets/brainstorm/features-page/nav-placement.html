@@ -1,0 +1,52 @@
+<h2>Where does "Features" live in the nav?</h2>
+<p class="subtitle">Current nav: synlynk logo · How it works · Install · Blog · GitHub</p>
+
+<div class="options">
+  <div class="option" data-choice="toplevel" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Top-level nav item (Recommended)</h3>
+      <p>Features sits alongside How it works, Install, Blog. Gives it equal weight as a primary destination. Best for developers who land on the home page and want to evaluate capabilities before installing.</p>
+      <div class="mock-nav" style="margin-top:12px;font-size:12px">
+        <span style="color:#2EC4A0;font-family:monospace;font-weight:600">synlynk</span>
+        &nbsp;&nbsp;·&nbsp;&nbsp;How it works
+        &nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#2EC4A0;font-weight:600">Features ←</span>
+        &nbsp;&nbsp;·&nbsp;&nbsp;Install
+        &nbsp;&nbsp;·&nbsp;&nbsp;Blog
+        &nbsp;&nbsp;·&nbsp;&nbsp;<span style="background:#252526;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px">GitHub ↗</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="howit" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Linked from "How it works"</h3>
+      <p>Features is not in the main nav. Instead, the "How it works" page (or section) has a "See full feature matrix →" CTA. Keeps the nav minimal. Good if you want the home page narrative to funnel visitors naturally before they hit the matrix.</p>
+      <div class="mock-nav" style="margin-top:12px;font-size:12px">
+        <span style="color:#2EC4A0;font-family:monospace;font-weight:600">synlynk</span>
+        &nbsp;&nbsp;·&nbsp;&nbsp;How it works
+        &nbsp;&nbsp;·&nbsp;&nbsp;Install
+        &nbsp;&nbsp;·&nbsp;&nbsp;Blog
+        &nbsp;&nbsp;·&nbsp;&nbsp;<span style="background:#252526;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px">GitHub ↗</span>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#888;font-style:italic">↳ "See full feature matrix →" CTA on the How it works page</div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="footer" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Footer only</h3>
+      <p>Features is discoverable but not prominent. Footer adds "Features" alongside Changelog, Discussions, MIT. Keeps the nav laser-focused on the primary actions (How it works → Install → GitHub).</p>
+      <div class="mock-nav" style="margin-top:12px;font-size:12px">
+        <span style="color:#2EC4A0;font-family:monospace;font-weight:600">synlynk</span>
+        &nbsp;&nbsp;·&nbsp;&nbsp;How it works
+        &nbsp;&nbsp;·&nbsp;&nbsp;Install
+        &nbsp;&nbsp;·&nbsp;&nbsp;Blog
+        &nbsp;&nbsp;·&nbsp;&nbsp;<span style="background:#252526;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px">GitHub ↗</span>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#888;font-style:italic">↳ footer: v0.3.0 · GitHub · Discussions · Changelog · <strong>Features</strong> · MIT</div>
+    </div>
+  </div>
+</div>

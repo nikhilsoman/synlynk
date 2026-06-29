@@ -1,0 +1,143 @@
+<h2>Revised Roadmap v2 — Daemon + Relay Pulled Forward</h2>
+<p class="subtitle">v0.9.0 is a 2-week sprint, not 1. Everything else unlocks faster because of it.</p>
+
+<div style="margin-bottom:16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:12px 14px;font-size:12px;color:#cbd5e1;line-height:1.8;">
+  <strong style="color:#34d399;">Why pulling daemon + relay to v0.9.0 is correct:</strong><br>
+  • Resolves Codex contradiction — schedule-triggered agents (Security Guard, Compliance Officer…) need a daemon; now they have one<br>
+  • Replaces "git pull every 5 min" social contract with a real-time workgroup sync channel<br>
+  • Learnings from a live lightweight relay directly inform the v1.1 cross-workgroup server — can't wait<br>
+  • Multiple workgroup reviews recommended it — that's a pattern, not noise
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px;">
+
+  <!-- SHIPPED -->
+  <div style="display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#6b7280;padding-top:6px;font-style:italic;">SHIPPED<br>v0.1 – v0.8.0</div>
+    <div style="background:rgba(30,30,40,0.5);border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:10px 14px;">
+      <span style="color:#818cf8;font-weight:700;">Kernel · IPC · Capability Engine · Source Scan · Support Engineer ✅</span>
+    </div>
+  </div>
+
+  <!-- v0.9.0 -->
+  <div style="display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#fbbf24;padding-top:6px;font-weight:700;">~2 WEEKS<br>v0.9.0</div>
+    <div style="background:rgba(245,158,11,0.09);border:2px solid rgba(245,158,11,0.55);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fbbf24;font-size:14px;margin-bottom:10px;">Foundation · Team Onboarding · Daemon · Relay</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:12px;color:#cbd5e1;line-height:1.85;">
+
+        <div>
+          <div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">🔧 Kernel Fixes</div>
+          • <code>generate_context(scope=task)</code> — pulled from v1.3.0<br>
+          • Task → file-path mapping in dispatch prompt<br>
+          • Verify contract injected per dispatch<br>
+          • Per-agent framing: Codex ≠ Claude ≠ AGY<br>
+          • Wire Ed25519 signing into capability ratings<br>
+          • Game-resistance baseline in quality scoring<br>
+          • Package split: <code>bin/synlynk.py</code> → modules
+        </div>
+
+        <div>
+          <div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">🤝 Team Onboarding</div>
+          • <code>synlynk join</code> — 60s onboard to existing project<br>
+          • Mature-project scan → rich AI context files<br>
+          • Team digest: active members, in-progress, just shipped<br>
+          • Task recommendation from todo.md<br>
+          • Token budgets at story creation + PR merge audit<br>
+          • Lightweight write-arbitration (pull-before-write)
+        </div>
+
+        <div>
+          <div style="font-size:11px;color:#34d399;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">⚙️ Async Daemon</div>
+          • <code>synlynk daemon start/stop/status</code><br>
+          • launchd (macOS) / systemd (Linux) integration<br>
+          • Job queue in <code>state.db</code> — persist across restarts<br>
+          • Scheduled agent dispatch (replaces crontab)<br>
+          • Crash recovery from last completed phase artifact<br>
+          • HTTP context server on <code>localhost:27471</code>
+        </div>
+
+        <div>
+          <div style="font-size:11px;color:#34d399;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">📡 Workgroup Relay</div>
+          • Lightweight event relay — one process per workgroup<br>
+          • Any member's machine can host, or a small VPS<br>
+          • Daemons push/subscribe over HTTP SSE or WebSocket<br>
+          • Replaces git-branch-per-member sync model<br>
+          • Events: append-only, signed (Ed25519 identity)<br>
+          • <span style="color:#fbbf24;">Learnings here directly shape v1.1 community server</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.8.x agent series -->
+  <div style="display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#34d399;padding-top:6px;font-weight:600;">PARALLEL<br>v0.8.1–0.8.4</div>
+    <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.28);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#34d399;margin-bottom:6px;">Agent Series — now unblocked by daemon</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.85;">
+        <span style="color:#fbbf24;">v0.8.1</span> Security Guard (Maintainer) — dep vulns, secret leaks, CVEs — <em>schedule-triggered via daemon</em><br>
+        <span style="color:#fbbf24;">v0.8.2</span> Marketing Intern (Communicator) — blog, release notes, social copy<br>
+        <span style="color:#fbbf24;">v0.8.3</span> PM Agent (Orchestrator) — growth signals, story routing, sprint pulse<br>
+        <span style="color:#fbbf24;">v0.8.4</span> Compliance Officer, Docs Keeper — convention drift, docs staleness<br>
+        <span style="color:#6b7280;font-size:11px;">SME archetype deferred to v1.0 — needs event bus + non-mutating job role</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.10.0 -->
+  <div style="display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">3–4 weeks<br>v0.10.0</div>
+    <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#a5b4fc;margin-bottom:6px;">Multi-Repo Workspace</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • <code>synlynk workspace init/join</code> — link repos, shared context slice, cross-repo epics<br>
+        • Relay extended to workspace scope (all repos share one relay)<br>
+        • Support Engineer + daemon monitor all repos in workspace
+      </div>
+    </div>
+  </div>
+
+  <!-- v1.0.0 -->
+  <div style="display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">5–7 weeks<br>v1.0.0</div>
+    <div style="background:rgba(99,102,241,0.09);border:1px solid rgba(99,102,241,0.28);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#c7d2fe;margin-bottom:6px;">Community Layer: Local Workgroup + Public Launch</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        • Workgroup protocol — shared, signed capability ledger<br>
+        • SME archetype + event bus (domain-tag subscriptions, file-path triggers)<br>
+        • Game-resistance hardened in quality scoring<br>
+        • All three autopilot classes at workgroup level (Maintainers + Communicators + Orchestrators)<br>
+        • pipx / Homebrew · stable CLI contract · public launch<br>
+        • synlynk.com live · public blog live (Marketing Intern maintains it)
+      </div>
+    </div>
+  </div>
+
+  <!-- v1.1.0+ -->
+  <div style="display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;">
+    <div style="font-size:11px;color:#94a3b8;padding-top:6px;">v1.1.0+</div>
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:6px;padding:12px 14px;">
+      <div style="font-weight:700;color:#fca5a5;margin-bottom:6px;">Community Expansion — relay graduates to community server</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        v1.1 — Cross-workgroup (team level) · relay → community server · agent entitlements<br>
+        v1.2 — Enterprise workspace (cross-team) · org-level governance agents<br>
+        v1.3 — Domain/discipline communities · Tokq convergence · MCP / Open Context Protocol<br>
+        <span style="color:#f87171;font-size:11px;">Server-side product strategy articulated at v0.9.0 spec, implemented incrementally from v1.1</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:18px;background:rgba(30,30,40,0.5);border:1px solid rgba(75,85,99,0.3);border-radius:8px;padding:12px 14px;">
+  <div style="font-size:11px;font-weight:700;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">🌐 Public Presence — parallel track, starts now</div>
+  <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+    <strong>synlynk.com</strong> — independent hosting (not GitHub Pages), interactivity + community onboarding · live at v1.0.0<br>
+    <strong>Public blog</strong> — Marketing Intern (Autopilot) maintains, richer graphically, public audience · live at v1.0.0<br>
+    <strong>Contributor blog</strong> — stays in <code>docs/blog/</code>, PR-by-PR technical updates, current posts stay here
+  </div>
+</div>
+
+<p style="margin-top:18px;font-size:13px;color:#94a3b8;text-align:center;">Does this feel right? Ready to write the spec and update project docs?</p>

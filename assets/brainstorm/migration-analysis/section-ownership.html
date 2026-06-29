@@ -1,0 +1,65 @@
+<h2>Plugin co-existence in agent instruction files</h2>
+<p class="subtitle">CLAUDE.md gets written by multiple tools — how should synlynk handle that?</p>
+
+<div style="margin-bottom:24px">
+  <h3>The reality of CLAUDE.md in a fully-tooled repo</h3>
+  <div class="mockup">
+    <div class="mockup-header">CLAUDE.md — section landscape</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      <span style="color:#a78bfa">## Session Start Protocol</span> <span style="color:#94a3b8">← rxcc-specific (hand-written)</span><br>
+      <span style="color:#a78bfa">## Tech Stack</span> <span style="color:#94a3b8">← rxcc-specific (hand-written)</span><br>
+      <span style="color:#a78bfa">## Encryption Practice</span> <span style="color:#94a3b8">← rxcc-specific (hand-written)</span><br>
+      <span style="color:#60a5fa">## Superpowers Skills</span> <span style="color:#94a3b8">← written by Superpowers plugin</span><br>
+      <span style="color:#60a5fa">## GStack Config</span> <span style="color:#94a3b8">← written by GStack plugin (hypothetical)</span><br>
+      <span style="color:#4ade80">## Live Issues SOP</span> <span style="color:#94a3b8">← synlynk-owned</span><br>
+      <span style="color:#4ade80">## Git Worktree-First Policy</span> <span style="color:#94a3b8">← synlynk-owned</span><br>
+      <span style="color:#4ade80">## Mid-Session Anti-Amnesia Protocol</span> <span style="color:#94a3b8">← synlynk-owned</span><br>
+      <span style="color:#4ade80">## Mandatory 4-Doc Discipline</span> <span style="color:#94a3b8">← synlynk-owned</span><br>
+      <span style="color:#4ade80">## GitHub Projects v2 Integration</span> <span style="color:#94a3b8">← synlynk-owned</span><br>
+    </div>
+  </div>
+</div>
+
+<h3>Two approaches to section ownership</h3>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Section-aware / idempotent <span style="color:#4ade80;font-size:0.8em">★ recommended</span></h3>
+      <p>synlynk knows its own section headers. On migrate (and every <code>init</code>): scan for synlynk-owned headers, append only what's missing, never touch the rest.</p>
+      <div class="mockup" style="margin-top:10px">
+        <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.6">
+          <span style="color:#94a3b8">Checking CLAUDE.md for synlynk sections...</span><br>
+          <span style="color:#4ade80">✓ Live Issues SOP</span> already present — skip<br>
+          <span style="color:#fbbf24">+ Mid-Session Anti-Amnesia</span> missing — appending<br>
+          <span style="color:#94a3b8">→ Superpowers, GStack sections: untouched</span><br>
+          <span style="color:#94a3b8">→ rxcc-specific sections: untouched</span>
+        </div>
+      </div>
+      <p style="margin-top:8px"><strong>Plugin overlap:</strong> complementary. Superpowers writes its sections, synlynk writes its sections, rxcc writes its sections. No conflicts — different headers, different content, same file.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Section fencing with markers</h3>
+      <p>Wrap synlynk content in explicit markers. Clean boundaries, easy to update or remove programmatically.</p>
+      <div class="mockup" style="margin-top:10px">
+        <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.6">
+          <span style="color:#4ade80">&lt;!-- synlynk:start --&gt;</span><br>
+          <span style="color:#4ade80">## Live Issues SOP</span><br>
+          <span style="color:#4ade80">## Mid-Session Anti-Amnesia Protocol</span><br>
+          <span style="color:#4ade80">&lt;!-- synlynk:end --&gt;</span>
+        </div>
+      </div>
+      <p style="margin-top:8px">Allows <code>synlynk update</code> to replace the fenced block cleanly in future. But HTML comments in Markdown are unusual and may confuse some agents.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.05);border-radius:8px;border-left:3px solid #4ade80">
+  <p class="label">Key insight</p>
+  <p style="margin:4px 0 0">Superpowers and GStack are <strong>complementary</strong> — they each own distinct sections. synlynk's sections don't overlap with theirs in practice. Section-aware detection (A) is sufficient for v0.4.0. Fencing (B) is worth adding later if synlynk needs to update its own sections in-place (e.g. a <code>synlynk upgrade-templates</code> command in v1.0).</p>
+</div>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #26 — v0.3.0: The Multi-Agent Foundation | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 03, 2026</span>
+        
+          <span class="blog-post-pr">PR #26</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #26 — v0.3.0: The Multi-Agent Foundation</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #26 — v0.3.0: The Multi-Agent Foundation</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/26">feat: synlynk v0.3.0 — multi-agent foundation</a><br>
+<strong>Merged:</strong> 2026-06-03<br>
+<strong>Tests:</strong> 60 passing (plus 3 pre-existing gh CLI mock failures, unrelated)</p>
+<hr>
+<h2>The Broader Goal at the End of v0.2.2</h2>
+<p>At v0.2.2, the goal was: stable solo workflow for a developer switching between Claude, Gemini, and Codex. The harness provided shared context, cost visibility, and loop detection. The roadmap anticipated a &quot;Lite → Full&quot; tier progression and eventual team mode.</p>
+<p>The vision was real but conservative: synlynk as a better context switcher.</p>
+<hr>
+<h2>The Strategic Shift That Changed the Goalpost</h2>
+<p>Between v0.2.2 and v0.3.0, three things happened:</p>
+<p><strong>1. The hybrid workgroup studies were written.</strong> Claude, Gemini, and Codex each independently analyzed the RxCC.me workgroup across ~294 PRs. All three converged on the same four failure modes (context asymmetry, memory asymmetry, manual coordination overhead, no constraint propagation). The studies were not hypothetical — they were empirical analysis of production behavior across hundreds of actual software deliveries.</p>
+<p><strong>2. The Trio Protocol design was completed.</strong> A full architectural spec was written for rearchitecting synlynk as a workgroup orchestrator: an Architect→Build→Verify pipeline, capability-based routing, domain keyword inference, cold-start round-robin assignment, interactive TUI review, and async dispatch via a background daemon. The spec documented not just what to build but why each decision was made and what the alternatives were.</p>
+<p><strong>3. The OS metaphor crystallized.</strong> The v1.0 architecture design session mapped synlynk's evolution to OS primitives — kernel, filesystem, IPC, scheduler, shell, ecosystem interface. The framing recast everything: synlynk is not a workflow tool on top of the existing OS; it is the OS that agents run on.</p>
+<p>These three events together shifted the goalpost from &quot;stable Lite tool&quot; to &quot;workgroup orchestrator on a path to autonomous dispatch.&quot; v0.3.0 was the first release designed with that destination in mind.</p>
+<hr>
+<h2>What This PR Shipped</h2>
+<h3>AGENTS.md — third agent, first-class support</h3>
+<p>v0.2.x generated <code>CLAUDE.md</code> and <code>GEMINI.md</code>. Codex (OpenAI CLI) had no instruction file. v0.3.0 adds <code>AGENTS.md</code>, generated alongside the other two.</p>
+<p>This matters structurally, not just cosmetically. The constraint propagation failure mode — organizational constraints not reaching all agents — requires that every agent has an instruction file that the harness generates from the same source of truth. Adding <code>AGENTS.md</code> closes the gap for Codex.</p>
+<p>The three instruction files become the harness's primary IPC mechanism in the flat-file era: instead of message-passing between agents, the harness writes the shared constraints once and all agents read their own copy at session start.</p>
+<h3><code>synlynk init</code> flags — parametric initialization</h3>
+<p>Four new flags:</p>
+<pre><code class="language-bash">synlynk init \
+  --agents claude,agy,codex \      # which agent files to generate
+  --mode solo|team \               # written to .synlynk_config.json
+  --org &lt;github-org&gt; \             # stored in .synlynk/config.json
+  --repo &lt;repo-name&gt; \             # stored in .synlynk/config.json
+  --project-id &lt;PJ_kwDO...&gt;        # fills PROJECT_ID placeholder in all agent files
+</code></pre>
+<p>The <code>--project-id</code> flag is the most consequential. GitHub Projects v2 uses opaque node IDs (<code>PVT_*</code> for projects, <code>PJ_kwDO*</code> for project items). These IDs are required for the GraphQL mutations that move board items. Previously, agent instruction files contained <code>TODO: PROJECT_ID</code> placeholders that the user had to manually fill in.</p>
+<p>With <code>--project-id</code>, the harness fills the placeholders at init time, and the agent instruction files contain live, usable GraphQL blocks immediately:</p>
+<pre><code class="language-graphql">mutation MoveItem {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: &quot;PJ_kwDOA1234&quot;    ← filled by synlynk init
+    itemId: &quot;&lt;item-node-id&gt;&quot;
+    fieldId: &quot;TODO: STATUS_FIELD_ID&quot;
+    value: { singleSelectOptionId: &quot;TODO: IN_PROGRESS_OPTION_ID&quot; }
+  }) { projectV2Item { id } }
+}
+</code></pre>
+<p>This is a small but meaningful step toward autonomous board management: the agent has a live GraphQL block it can execute, not a template it has to fill in manually.</p>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/multi-agent-foundation/multi-agent-foundation-pivot.html" title="The v0.3.0 Pivot: Solo Tool → Workgroup OS" loading="lazy" frameborder="0"></iframe>
+  <figcaption>The v0.3.0 Pivot: Solo Tool → Workgroup OS</figcaption>
+</figure>
+<h3>Enriched agent instruction templates</h3>
+<p>The session protocol in all three agent files was significantly expanded:</p>
+<p><strong>Live Issues SOP.</strong> A full escalation framework — Sev1 (core broken / data loss → full RCA doc), Sev2 (major feature degraded → comment-level RCA), Sev3 (minor UX → no RCA required). With a process: Declare → Investigate → Post findings → Write RCA (Sev1) → Action tickets → Resolution comment → Close.</p>
+<p><strong>Git Worktree-First Policy.</strong> Every feature requires a dedicated worktree: <code>git worktree add ../feat+&lt;name&gt; feat/&lt;agent-prefix&gt;/&lt;name&gt;</code>. Branch current confirmed before every commit. No commits on main, no reuse of a worktree checked out to a different feature's branch.</p>
+<p><strong>Mid-Session Anti-Amnesia Protocol.</strong> Phase 1 (context ≤ 75%): every ~25,000 tokens, write devlog entry + memory update. Phase 2 (context &gt; 75%): every ~5,000 tokens, same plus a <code>⚠️ Compaction imminent:</code> rescue bullet listing open threads and &quot;about to do X&quot; states.</p>
+<p><strong>Mandatory 4-Doc Discipline.</strong> All four docs (roadmap, devlogs, costs, memory) updated during the session — not only at session end. Specifically: any numbered list of fixes, options, or recommendations written to devlog in the same response that presents them, not later.</p>
+<p><strong>GitHub Projects v2 GraphQL integration block.</strong> A complete, parameterized example for moving board items and looking up field/option IDs via the GraphQL API.</p>
+<p>These are not suggestions injected into a README. They are the behavioral contract encoded in the agent's primary instruction file — the file the agent reads at session start, every session, without exception.</p>
+<h3><code>_build_templates()</code> — parametric template generation</h3>
+<p>Internally, the static <code>TEMPLATES</code> dict and <code>_SESSION_PROTOCOL</code> string were replaced by <code>_build_templates(org, repo, project_id)</code>. This function returns the complete template dictionary with all values filled in from the provided parameters.</p>
+<p>This refactor is load-bearing for v0.4.0's <code>migrate()</code> command: a repo that already has agent instruction files needs semantic section matching to identify what's already covered and what needs to be added. That matching works against template sections, which must be generated from parameters that vary per repo. A static dict cannot support this.</p>
+<hr>
+<h2>The Brainstorm Behind This Release</h2>
+<p>The Trio Protocol design was a full brainstorming session documented in the spec at <code>docs/superpowers/specs/2026-06-01-synlynk-trio-protocol-design.md</code>. The key design decisions:</p>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Choice</th>
+<th>Reasoning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Role assignment</td>
+<td>Emergent from usage</td>
+<td>Routing earned by data, not assumed by vendor identity</td>
+</tr>
+<tr>
+<td>Primary interaction</td>
+<td>Autonomous dispatch</td>
+<td>Human reviews the result, not each sub-task</td>
+</tr>
+<tr>
+<td>Cold-start routing</td>
+<td>Round-robin</td>
+<td>Systematically generates diverse score data</td>
+</tr>
+<tr>
+<td>Phase failure</td>
+<td>Auto-retry once, then halt</td>
+<td>Minimizes human interruption for transient failures</td>
+</tr>
+<tr>
+<td>Score decay</td>
+<td>Recency-weighted</td>
+<td>Agent improvement surfaces in routing within ~3–4 jobs</td>
+</tr>
+</tbody>
+</table>
+<p>The gap analysis that preceded this spec surfaced the core strategic insight: the roadmap was building a better solo dev assistant. The studies described a workgroup coordinator. The difference was not one feature — it was a different conceptual model of what synlynk was for.</p>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>v0.3.0 is the foundation layer for multi-agent coordination:</p>
+<ol>
+<li>
+<p><strong>Instruction file parity.</strong> All three major agent CLIs now have a harness-generated instruction file. Constraint propagation can now reach all agents — the architectural prerequisite for the constraint system in v0.6.0.</p>
+</li>
+<li>
+<p><strong>GitHub Projects v2 integration.</strong> The <code>--project-id</code> flag and the GraphQL block in agent instruction files establish the board as the coordination layer. <code>synlynk start</code> in v0.4.0 builds directly on this: it reads the cached field IDs and moves board items autonomously.</p>
+</li>
+<li>
+<p><strong>Behavioral contracts formalized.</strong> The enriched templates turn session protocols from developer suggestions into formalized agent contracts. The Anti-Amnesia Protocol and 4-Doc Discipline, in particular, directly address the memory asymmetry failure mode.</p>
+</li>
+<li>
+<p><strong>Parametric template generation.</strong> <code>_build_templates()</code> is the infrastructure that makes <code>migrate()</code> possible in v0.4.0 — the ability to analyze an existing repo's agent files, identify what sections are present, and append only what's missing.</p>
+</li>
+</ol>
+<hr>
+<h2>Strategic Note: The Goal Moved</h2>
+<p>The goal at the end of v0.3.0 was no longer &quot;stable solo workflow.&quot; It was:</p>
+<blockquote>
+<p><strong>Workgroup orchestrator on a path to full autonomy.</strong> The OS for multi-agent development. synlynk = the local OS client. Tokq = the distributed backend. Stable v1.0 in Q1 2027, Tokq Alpha bridge in Q3 2027.</p>
+</blockquote>
+<p>The three studies, the Trio Protocol spec, and the v1 architecture design session together constituted the first complete articulation of what synlynk was eventually building toward. The Solo/Team/Enterprise tier model was retired. The OS layer model — Kernel → Filesystem → IPC → Scheduler → Shell → Ecosystem Interface — replaced it.</p>
+<p>v0.3.0's code is modest — enriched templates, four new init flags, a refactored template generator. But the release marks the moment when the product knew what it was building.</p>
+<hr>
+<p><em>Next: <a href="./06-pr27-v0.4.0-autonomy-driver.md">PR #27 — v0.4.0: The Autonomy Driver</a> — <code>synlynk migrate</code> and <code>synlynk start</code>: the first autonomous board management and the first steps toward hands-off dispatch.</em></p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

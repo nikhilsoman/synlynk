@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk — Isometric Motherboard / Tube Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:#060C0A;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:20px;
+  font-family:'Inter',system-ui,sans-serif;
+}
+h1{font-size:11px;font-weight:600;color:rgba(255,255,255,0.25);letter-spacing:3px;
+  text-transform:uppercase;text-align:center;margin-bottom:4px;}
+p{font-size:10px;color:rgba(255,255,255,0.12);text-align:center;
+  font-family:'JetBrains Mono',monospace;margin-bottom:16px;}
+.frame{
+  position:relative;border-radius:16px;overflow:hidden;
+  border:1px solid rgba(255,255,255,0.05);
+  box-shadow:0 40px 100px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.03);
+}
+canvas{display:block;}
+/* Legend */
+.legend{
+  position:absolute;bottom:14px;right:14px;
+  display:flex;flex-direction:column;gap:4px;
+  background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;
+}
+.li{display:flex;align-items:center;gap:7px;font-size:9px;
+  color:rgba(255,255,255,0.35);font-family:'JetBrains Mono',monospace;}
+.lc{width:18px;height:2.5px;border-radius:2px;}
+.legend-head{font-size:8px;color:rgba(255,255,255,0.2);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:4px;font-family:'JetBrains Mono',monospace;}
+/* Pulse animation overlay */
+.corner-hud{
+  position:absolute;top:14px;left:14px;
+  font-family:'JetBrains Mono',monospace;
+}
+.hud-l1{font-size:9px;letter-spacing:3px;color:rgba(46,196,160,0.4);text-transform:uppercase;}
+.hud-l2{font-size:8px;color:rgba(255,255,255,0.15);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<h1>synlynk · Coordination OS</h1>
+<p>Isometric motherboard · agent harnesses as CPU stacks · London Tube routing</p>
+
+<div class="frame">
+  <canvas id="c"></canvas>
+  <div class="corner-hud">
+    <div class="hud-l1">COORD·OS v0.9.4</div>
+    <div class="hud-l2">4 harnesses · 11 model variants · 5 lines active</div>
+  </div>
+  <div class="legend">
+    <div class="legend-head">Metro Lines</div>
+    <div class="li"><div class="lc" style="background:#D97757;box-shadow:0 0 6px #D97757;"></div>Claude Line</div>
+    <div class="li"><div class="lc" style="background:#4285F4;box-shadow:0 0 6px #4285F4;"></div>Gemini Line</div>
+    <div class="li"><div class="lc" style="background:#B67FFF;box-shadow:0 0 6px #B67FFF;"></div>Grok Line</div>
+    <div class="li"><div class="lc" style="background:#7A8A9A;box-shadow:0 0 6px #7A8A9A;"></div>Codex Line</div>
+    <div class="li"><div class="lc" style="background:#2EC4A0;box-shadow:0 0 6px #2EC4A0;"></div>Dispatch Trunk</div>
+  </div>
+</div>
+
+<script>
+// ── SETUP ──────────────────────────────────────────────────────
+const DPR = window.devicePixelRatio || 1;
+const CW = 920, CH = 600;
+
+const canvas = document.getElementById('c');
+canvas.width = CW * DPR;
+canvas.height = CH * DPR;
+canvas.style.width = CW + 'px';
+canvas.style.height = CH + 'px';
+const ctx = canvas.getContext('2d');
+ctx.scale(DPR, DPR);
+
+// ── ISO PROJECTION ─────────────────────────────────────────────
+// Grid 22 wide x 14 deep. Camera above-right.
+const TW = 20.5;  // half-width of iso cell in px
+const TH = 10.2;  // half-height
+const ZS = 17;    // px per z-unit
+const OX = 358;   // screen origin
+const OY = 108;
+
+function iso(gx, gy, gz=0) {
+  return {
+    x: OX + (gx - gy) * TW,
+    y: OY + (gx + gy) * TH - gz * ZS
+  };
+}
+
+// ── COLOR PALETTES ─────────────────────────────────────────────
+const COL = {
+  board:   '#060D0A',
+  surface: '#081410',
+  gridL:   'rgba(46,196,160,0.04)',
+  gridD:   'rgba(46,196,160,0.07)',
+  via:     'rgba(46,196,160,0.12)',
+  claude:  { line:'#D97757', top:'#E88B6A', left:'#B55E3A', right:'#8A4020', dark:'#5A2A10' },
+  gemini:  { line:'#4285F4', top:'#6AA3FF', left:'#2870E0', right:'#1858C0', dark:'#0C3888' },
+  grok:    { line:'#B67FFF', top:'#C890FF', left:'#9060D8', right:'#6E44B8', dark:'#4A2888' },
+  codex:   { line:'#7A8A9A', top:'#95A5B5', left:'#5A6A7A', right:'#3A4A5A', dark:'#1A2A3A' },
+  npu:     { top:'#1a0a38', side1:'#0e0522', side2:'#0a0318', glow:'#A259F7' },
+  trunk:   '#2EC4A0',
+  text:    'rgba(233,233,238,0.75)',
+  textDim: 'rgba(233,233,238,0.3)',
+};
+
+// ── HELPERS ────────────────────────────────────────────────────
+function poly(pts, fill, stroke, sw=0.5, alpha=1) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=sw; ctx.stroke(); }
+  ctx.restore();
+}
+
+function isoBox(gx, gy, gw, gd, z0, zh, pal, glowColor) {
+  // Painter: right face, left face, top face (back to front)
+  const p = (x,y,z) => iso(x,y,z);
+
+  // Right face (south-east facing, gy+gd edge)
+  const rf = [p(gx,gy+gd,z0), p(gx+gw,gy+gd,z0), p(gx+gw,gy+gd,zh), p(gx,gy+gd,zh)];
+  poly(rf, pal.left, '#000', 0.4, 0.95);
+
+  // Left face (south-west facing, gx+gw edge)
+  const lf = [p(gx+gw,gy,z0), p(gx+gw,gy+gd,z0), p(gx+gw,gy+gd,zh), p(gx+gw,gy,zh)];
+  poly(lf, pal.right, '#000', 0.4, 0.95);
+
+  // Top face
+  const tf = [p(gx,gy,zh), p(gx+gw,gy,zh), p(gx+gw,gy+gd,zh), p(gx,gy+gd,zh)];
+  poly(tf, pal.top, glowColor || pal.line, glowColor ? 1 : 0.4, 0.95);
+
+  if (glowColor) {
+    ctx.save();
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = glowColor;
+    ctx.beginPath();
+    ctx.moveTo(tf[0].x, tf[0].y);
+    for (let i=1;i<tf.length;i++) ctx.lineTo(tf[i].x, tf[i].y);
+    ctx.closePath();
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ── BOARD PLATFORM ─────────────────────────────────────────────
+function drawBoard() {
+  const GW=22, GH=14, BH=0.6;
+
+  // Board main top surface
+  const tl = iso(0,0,BH), tr = iso(GW,0,BH), br = iso(GW,GH,BH), bl = iso(0,GH,BH);
+
+  // Create subtle gradient for board surface
+  const grad = ctx.createLinearGradient(tl.x, tl.y, br.x, br.y);
+  grad.addColorStop(0, '#07120E');
+  grad.addColorStop(1, '#050E0B');
+  poly([tl,tr,br,bl], null, 'rgba(46,196,160,0.06)', 0.5);
+
+  // Board front-left face (GH edge)
+  const fl = [iso(0,GH,0), iso(GW,GH,0), iso(GW,GH,BH), iso(0,GH,BH)];
+  poly(fl, '#04090A', 'rgba(46,196,160,0.05)', 0.5);
+
+  // Board front-right face (GW edge)
+  const fr = [iso(GW,0,0), iso(GW,GH,0), iso(GW,GH,BH), iso(GW,0,BH)];
+  poly(fr, '#030807', 'rgba(46,196,160,0.05)', 0.5);
+
+  // Fill board surface with color
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(tl.x,tl.y); ctx.lineTo(tr.x,tr.y); ctx.lineTo(br.x,br.y); ctx.lineTo(bl.x,bl.y);
+  ctx.closePath();
+  ctx.fillStyle = '#060F0C';
+  ctx.fill();
+  ctx.restore();
+
+  // Grid lines on board surface
+  ctx.save();
+  ctx.strokeStyle = 'rgba(46,196,160,0.045)';
+  ctx.lineWidth = 0.5;
+  for (let x=2; x<GW; x+=2) {
+    const a=iso(x,0,BH), b=iso(x,GH,BH);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  for (let y=2; y<GH; y+=2) {
+    const a=iso(0,y,BH), b=iso(GW,y,BH);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Via holes (solder pads)
+  const vias = [
+    [3,3],[5,1],[7,3],[3,11],[5,13],[7,11],
+    [15,3],[17,1],[19,3],[15,11],[17,13],[19,11],
+    [1,7],[21,7],[11,1],[11,13],
+    [4,6],[4,8],[18,6],[18,8],
+  ];
+  ctx.save();
+  vias.forEach(([vx,vy]) => {
+    const p = iso(vx,vy,BH);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.8, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(46,196,160,0.18)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 1.2, 0, Math.PI*2);
+    ctx.fillStyle = '#030907'; ctx.fill();
+  });
+  ctx.restore();
+}
+
+// ── TUBE LINE SEGMENTS ─────────────────────────────────────────
+const BH = 0.6; // board top z
+const TZ = BH + 0.15; // tube z (sits on board)
+
+function tubeLine(x1,y1,x2,y2, color, width=3.2, alpha=0.9) {
+  const p1=iso(x1,y1,TZ), p2=iso(x2,y2,TZ);
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.shadowBlur=7; ctx.shadowColor=color;
+  ctx.strokeStyle=color; ctx.lineWidth=width;
+  ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  // White centerline (tube map detail)
+  ctx.shadowBlur=0; ctx.globalAlpha=alpha*0.2;
+  ctx.strokeStyle='#fff'; ctx.lineWidth=0.8;
+  ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  ctx.restore();
+}
+
+// Station dot
+function station(gx,gy, colors, isHub=false, label='', labelOff={x:0,y:0}) {
+  const p = iso(gx,gy,TZ+0.05);
+  const r = isHub ? 7 : 4.5;
+
+  ctx.save();
+  // Multi-line interchange: white ring with colored dots
+  if (colors.length > 1) {
+    ctx.shadowBlur=10; ctx.shadowColor=colors[0];
+    ctx.beginPath(); ctx.arc(p.x,p.y, r+2, 0, Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  ctx.shadowBlur=12; ctx.shadowColor=colors[0];
+  ctx.beginPath(); ctx.arc(p.x,p.y, r, 0, Math.PI*2);
+  ctx.fillStyle='#070E0C'; ctx.fill();
+  ctx.strokeStyle=colors[0]; ctx.lineWidth = isHub ? 2.5 : 1.8;
+  ctx.stroke();
+  if (colors.length>1) {
+    ctx.strokeStyle=colors[1]; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(p.x,p.y, r-2, 0, Math.PI*2); ctx.stroke();
+  }
+  // Hub gets a filled center dot
+  if (isHub) {
+    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2);
+    ctx.fillStyle=colors[0]; ctx.fill();
+  }
+  ctx.restore();
+
+  if (label) {
+    ctx.save();
+    ctx.font = isHub ? `600 9px 'JetBrains Mono',monospace` : `500 8px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = isHub ? colors[0] : 'rgba(233,233,238,0.45)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, p.x + labelOff.x, p.y + labelOff.y);
+    ctx.restore();
+  }
+}
+
+// ── CPU STACK ──────────────────────────────────────────────────
+function cpuStack(gx, gy, models, pal, labelName, isLeft) {
+  // models: [{name, zh, z0}]
+  models.forEach(m => {
+    isoBox(gx, gy, 2.5, 2.5, m.z0, m.zh, pal);
+  });
+
+  // Chip label on top face of top model
+  const topZ = models[models.length-1].zh;
+  const center = iso(gx+1.25, gy+1.25, topZ);
+  ctx.save();
+  ctx.font = `600 8px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = pal.line;
+  ctx.textAlign = 'center';
+  ctx.fillText(models[models.length-1].name, center.x, center.y + 3);
+  ctx.restore();
+
+  // Stack name label
+  const top0 = iso(gx+1.25, gy+1.25, topZ + 0.8);
+  ctx.save();
+  ctx.font = `700 10px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = pal.line;
+  ctx.textAlign = 'center';
+  ctx.shadowBlur=8; ctx.shadowColor=pal.line;
+  ctx.fillText(labelName.toUpperCase(), top0.x, top0.y);
+  ctx.restore();
+
+  // Model tier labels (stacked below name)
+  models.forEach((m, i) => {
+    if (i < models.length - 1) {
+      const mp = iso(gx+1.25, gy+1.25, m.zh);
+      ctx.save();
+      ctx.font = `500 7.5px 'JetBrains Mono',monospace`;
+      ctx.fillStyle = 'rgba(233,233,238,0.3)';
+      ctx.textAlign='center';
+      ctx.fillText(m.name, mp.x, mp.y + 2);
+      ctx.restore();
+    }
+  });
+
+  // HARNESS label
+  const harnessPt = iso(gx+1.25, gy+1.25, topZ + 1.6);
+  ctx.save();
+  ctx.font = `400 7px 'JetBrains Mono',monospace`;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.textAlign='center';
+  ctx.fillText('HARNESS', harnessPt.x, harnessPt.y);
+  ctx.restore();
+}
+
+// ── SYNLYNK NPU ────────────────────────────────────────────────
+function drawNPU(gx, gy, gw, gd, zh) {
+  // Socket surround (slightly larger box, lower height)
+  isoBox(gx-0.5, gy-0.5, gw+1, gd+1, 0.6, 0.9,
+    {top:'#0a0a12', left:'#07070e', right:'#050509'},
+    null);
+
+  // Pin contacts along edges
+  ctx.save();
+  ctx.strokeStyle='rgba(162,89,247,0.3)'; ctx.lineWidth=0.7;
+  for (let i=0;i<=gw;i+=0.5) {
+    const a=iso(gx+i, gy, 0.9), b=iso(gx+i, gy, 1.4);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  for (let j=0;j<=gd;j+=0.5) {
+    const a=iso(gx+gw, gy+j, 0.9), b=iso(gx+gw, gy+j, 1.4);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // NPU body - right face
+  const rf = [iso(gx,gy+gd,1.4), iso(gx+gw,gy+gd,1.4), iso(gx+gw,gy+gd,zh), iso(gx,gy+gd,zh)];
+  const rfGrad = ctx.createLinearGradient(rf[0].x, rf[0].y, rf[2].x, rf[2].y);
+  rfGrad.addColorStop(0,'#0e0525'); rfGrad.addColorStop(1,'#1a0840');
+  poly(rf, rfGrad, '#A259F7', 0.5);
+
+  // NPU body - left face
+  const lf = [iso(gx+gw,gy,1.4), iso(gx+gw,gy+gd,1.4), iso(gx+gw,gy+gd,zh), iso(gx+gw,gy,zh)];
+  const lfGrad = ctx.createLinearGradient(lf[0].x, lf[0].y, lf[2].x, lf[2].y);
+  lfGrad.addColorStop(0,'#08031a'); lfGrad.addColorStop(1,'#100528');
+  poly(lf, lfGrad, '#A259F7', 0.4);
+
+  // NPU top face (die surface)
+  const tf = [iso(gx,gy,zh), iso(gx+gw,gy,zh), iso(gx+gw,gy+gd,zh), iso(gx,gy+gd,zh)];
+
+  // Draw die grid on top face
+  const npuGrad = ctx.createLinearGradient(tf[0].x, tf[0].y, tf[2].x, tf[2].y);
+  npuGrad.addColorStop(0,'#18063c'); npuGrad.addColorStop(0.5,'#220850'); npuGrad.addColorStop(1,'#14043a');
+  poly(tf, npuGrad, 'rgba(162,89,247,0.5)', 1);
+
+  // Internal die grid lines
+  ctx.save();
+  ctx.strokeStyle='rgba(162,89,247,0.12)'; ctx.lineWidth=0.4;
+  for (let i=1; i<gw; i++) {
+    const a=iso(gx+i,gy,zh), b=iso(gx+i,gy+gd,zh);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  for (let j=1; j<gd; j++) {
+    const a=iso(gx,gy+j,zh), b=iso(gx+gw,gy+j,zh);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Inner die (darker square, inset)
+  const pad = 0.5;
+  const die = [iso(gx+pad,gy+pad,zh+0.1), iso(gx+gw-pad,gy+pad,zh+0.1),
+               iso(gx+gw-pad,gy+gd-pad,zh+0.1), iso(gx+pad,gy+gd-pad,zh+0.1)];
+  const dieGrad = ctx.createLinearGradient(die[0].x, die[0].y, die[2].x, die[2].y);
+  dieGrad.addColorStop(0,'rgba(162,89,247,0.08)'); dieGrad.addColorStop(1,'rgba(91,141,239,0.05)');
+  poly(die, dieGrad, 'rgba(162,89,247,0.25)', 0.6);
+
+  // NPU glow aura
+  ctx.save();
+  const center = iso(gx+gw/2, gy+gd/2, zh);
+  const glowGrad = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, 70);
+  glowGrad.addColorStop(0,'rgba(162,89,247,0.12)'); glowGrad.addColorStop(1,'transparent');
+  ctx.fillStyle=glowGrad;
+  ctx.beginPath(); ctx.arc(center.x, center.y, 70, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // S-glyph on top face center
+  drawSGlyph(iso(gx+gw/2, gy+gd/2, zh+0.15), 0.9);
+
+  // Label below chip
+  const lbl = iso(gx+gw/2, gy+gd/2, zh + 1.6);
+  ctx.save();
+  ctx.font=`800 11px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='#A259F7'; ctx.textAlign='center';
+  ctx.shadowBlur=12; ctx.shadowColor='#A259F7';
+  ctx.fillText('synlynk', lbl.x, lbl.y);
+  ctx.font=`500 8px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.shadowBlur=0;
+  ctx.fillText('COORD · NPU', lbl.x, lbl.y + 11);
+  ctx.restore();
+}
+
+function drawSGlyph(screenPt, scale) {
+  ctx.save();
+  ctx.translate(screenPt.x, screenPt.y);
+  ctx.scale(scale, scale);
+  ctx.lineCap='round';
+  const s=8;
+  // top arc
+  ctx.beginPath();
+  ctx.moveTo(0,-s); ctx.bezierCurveTo(-s*0.9,-s,-s*0.9,-s*0.1,0,0);
+  ctx.bezierCurveTo(s*0.9,s*0.1,s*0.9,s,0,s);
+  ctx.strokeStyle='#A259F7'; ctx.lineWidth=2.5; ctx.stroke();
+  // overlapping stroke in blue
+  ctx.beginPath();
+  ctx.moveTo(0,-s); ctx.bezierCurveTo(-s*0.9,-s,-s*0.9,-s*0.1,0,0);
+  ctx.strokeStyle='#5B8DEF'; ctx.lineWidth=1.5; ctx.stroke();
+  // stem
+  ctx.beginPath(); ctx.moveTo(0,s); ctx.lineTo(0,s*1.6);
+  ctx.strokeStyle='#2EC4A0'; ctx.lineWidth=2.5; ctx.stroke();
+  // endpoints
+  ctx.beginPath(); ctx.arc(0,-s,2,0,Math.PI*2); ctx.fillStyle='#5B8DEF'; ctx.fill();
+  ctx.beginPath(); ctx.arc(0,s*1.6,2,0,Math.PI*2); ctx.fillStyle='#2EC4A0'; ctx.fill();
+  ctx.restore();
+}
+
+// ── PARTICLES ──────────────────────────────────────────────────
+const ROUTES_DEF = [
+  // [x1,y1, x2,y2, color]
+  [3.5,3.5,   8,3.5,  COL.claude.line],
+  [8,3.5,     8,5,    COL.claude.line],
+  [18.5,3.5,  14,3.5, COL.gemini.line],
+  [14,3.5,    14,5,   COL.gemini.line],
+  [3.5,10.5,  8,10.5, COL.grok.line],
+  [8,10.5,    8,9,    COL.grok.line],
+  [18.5,10.5, 14,10.5,COL.codex.line],
+  [14,10.5,   14,9,   COL.codex.line],
+  [8,5,       14,5,   COL.trunk],
+  [8,9,       14,9,   COL.trunk],
+  [8,5,       8,9,    COL.trunk],
+  [14,5,      14,9,   COL.trunk],
+];
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    const r = ROUTES_DEF[Math.floor(Math.random()*ROUTES_DEF.length)];
+    this.x1=r[0]; this.y1=r[1]; this.x2=r[2]; this.y2=r[3]; this.color=r[4];
+    this.t=0; this.speed=0.012+Math.random()*0.008;
+    this.rev = Math.random()>0.5;
+    if(this.rev){const tmp=[this.x1,this.y1]; this.x1=this.x2; this.y1=this.y2; this.x2=tmp[0]; this.y2=tmp[1];}
+    this.size=1.8+Math.random()*1.2;
+  }
+  update(){ this.t+=this.speed; if(this.t>1.0) this.reset(); }
+  draw(){
+    const x=this.x1+(this.x2-this.x1)*this.t;
+    const y=this.y1+(this.y2-this.y1)*this.t;
+    const p=iso(x,y,TZ+0.3);
+    const alpha=Math.sin(this.t*Math.PI)*0.9;
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.shadowBlur=10; ctx.shadowColor=this.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,this.size,0,Math.PI*2);
+    ctx.fillStyle=this.color; ctx.fill();
+    ctx.restore();
+  }
+}
+
+const particles = Array.from({length:55},()=>new Particle());
+
+// ── DECORATIVE COMPONENTS ─────────────────────────────────────
+function drawCapacitor(gx, gy, color) {
+  // small cylinder (isometric box that's narrow and tall)
+  isoBox(gx, gy, 0.5, 0.5, BH, BH+1.8,
+    {top:color+'44', left:color+'22', right:color+'11'});
+}
+
+function drawBusGroup(gx, gy, dir, color, count=3) {
+  // parallel traces grouped like a bus cable
+  const spacing = 0.4;
+  for (let i=0;i<count;i++) {
+    const off = (i - (count-1)/2) * spacing;
+    if(dir==='x') tubeLine(gx, gy+off, gx+2.5, gy+off, color, 1.2, 0.25);
+    else           tubeLine(gx+off, gy, gx+off, gy+2.5, color, 1.2, 0.25);
+  }
+}
+
+// ── MAIN DRAW LOOP ─────────────────────────────────────────────
+let frame=0;
+
+function draw() {
+  ctx.clearRect(0,0,CW,CH);
+
+  // Background
+  ctx.fillStyle='#060C0A';
+  ctx.fillRect(0,0,CW,CH);
+
+  // ── BOARD ──
+  drawBoard();
+
+  // ── BUS GROUPS (decorative parallel traces) ──
+  drawBusGroup(5.5, 3.5, 'x', COL.claude.line);
+  drawBusGroup(14.5, 3.5, 'x', COL.gemini.line);
+  drawBusGroup(5.5, 10.5, 'x', COL.grok.line);
+  drawBusGroup(14.5, 10.5, 'x', COL.codex.line);
+
+  // ── TUBE LINES (main metro routes) ──
+  // Claude line
+  tubeLine(3.5,3.5, 8,3.5,    COL.claude.line, 3.2);
+  tubeLine(8,3.5,   8,5,       COL.claude.line, 3.2);
+  // Gemini line
+  tubeLine(18.5,3.5, 14,3.5,  COL.gemini.line, 3.2);
+  tubeLine(14,3.5,  14,5,      COL.gemini.line, 3.2);
+  // Grok line
+  tubeLine(3.5,10.5, 8,10.5,  COL.grok.line, 3.2);
+  tubeLine(8,10.5,   8,9,      COL.grok.line, 3.2);
+  // Codex line
+  tubeLine(18.5,10.5, 14,10.5, COL.codex.line, 3.2);
+  tubeLine(14,10.5,  14,9,     COL.codex.line, 3.2);
+  // Inner trunk ring
+  tubeLine(8,5,  14,5,  COL.trunk, 2.5);
+  tubeLine(8,9,  14,9,  COL.trunk, 2.5);
+  tubeLine(8,5,   8,9,  COL.trunk, 2.5);
+  tubeLine(14,5, 14,9,  COL.trunk, 2.5);
+  // Connector stubs from hub to line
+  tubeLine(2.75,3.5,  3.5,3.5,  COL.claude.line, 2);
+  tubeLine(21.25,3.5, 18.5,3.5, COL.gemini.line, 2);
+  tubeLine(2.75,10.5, 3.5,10.5, COL.grok.line, 2);
+  tubeLine(21.25,10.5,18.5,10.5,COL.codex.line, 2);
+
+  // ── STATIONS ──
+  // Inner trunk nodes
+  station(8,  5,   [COL.trunk, COL.claude.line], true, 'dispatch', {x:0,y:-13});
+  station(14, 5,   [COL.trunk, COL.gemini.line], true, 'relay',    {x:0,y:-13});
+  station(8,  9,   [COL.trunk, COL.grok.line],   true, 'profiles', {x:0,y:12});
+  station(14, 9,   [COL.trunk, COL.codex.line],  true, 'state',    {x:0,y:12});
+  // Line inflection stations
+  station(8,  3.5, [COL.claude.line], false, 'ctx·L', {x:0,y:-10});
+  station(14, 3.5, [COL.gemini.line], false, 'ctx·G', {x:0,y:-10});
+  station(8, 10.5, [COL.grok.line],   false, 'ctx·X', {x:0,y:10});
+  station(14,10.5, [COL.codex.line],  false, 'ctx·C', {x:0,y:10});
+
+  // ── DECORATIVE CAPACITORS ──
+  drawCapacitor(5.5, 1,   COL.claude.line);
+  drawCapacitor(6.5, 1,   COL.claude.line);
+  drawCapacitor(15.5,1,   COL.gemini.line);
+  drawCapacitor(16.5,1,   COL.gemini.line);
+  drawCapacitor(5.5, 12.5,COL.grok.line);
+  drawCapacitor(6.5, 12.5,COL.grok.line);
+  drawCapacitor(15.5,12.5,COL.codex.line);
+  drawCapacitor(16.5,12.5,COL.codex.line);
+
+  // ── CPU STACKS (sorted back to front: ascending gx+gy) ──
+
+  // Claude NW (gx≈1.5, gy≈1.5, sum≈3) — drawn first (farthest back)
+  cpuStack(1.5, 1.5, [
+    {name:'HAIKU·4',   z0:BH, zh:2.2},
+    {name:'SONNET·4',  z0:2.2,zh:3.8},
+    {name:'OPUS·4',    z0:3.8,zh:5.0},
+  ], COL.claude, 'Claude', true);
+
+  // Grok SW (gx≈1.5, gy≈9.5, sum≈11)
+  cpuStack(1.5, 9.0, [
+    {name:'GROK·3 mini', z0:BH, zh:2.4},
+    {name:'GROK·3',      z0:2.4,zh:4.4},
+  ], COL.grok, 'Grok', true);
+
+  // Gemini NE (gx≈18.5, gy≈1.5, sum≈20)
+  cpuStack(18.0, 1.5, [
+    {name:'FLASH·2.5',  z0:BH, zh:2.2},
+    {name:'PRO·2.5',    z0:2.2,zh:4.8},
+  ], COL.gemini, 'Gemini', false);
+
+  // Synlynk NPU center (gx=9, gy=5, sum=14) — drawn here so SE chips cover it
+  drawNPU(9, 5, 4, 4, 5.8);
+
+  // Codex SE (gx≈18.5, gy≈9.5, sum≈28) — drawn last (closest to viewer)
+  cpuStack(18.0, 9.0, [
+    {name:'GPT-4.1',  z0:BH, zh:1.8},
+    {name:'O4·MINI',  z0:1.8,zh:3.4},
+    {name:'O3',       z0:3.4,zh:5.2},
+  ], COL.codex, 'Codex', false);
+
+  // Agent hub dots (over stacks, on board surface)
+  station(2.75, 3.5,  [COL.claude.line], true, '', {});
+  station(21.25,3.5,  [COL.gemini.line], true, '', {});
+  station(2.75, 10.5, [COL.grok.line],   true, '', {});
+  station(21.25,10.5, [COL.codex.line],  true, '', {});
+
+  // ── PARTICLES ──
+  particles.forEach(p => { p.update(); p.draw(); });
+
+  // ── SCANLINE ──
+  ctx.save();
+  const sx = ((frame*0.8)%(CW+80))-40;
+  const sg = ctx.createLinearGradient(sx,0,sx+60,0);
+  sg.addColorStop(0,'transparent'); sg.addColorStop(0.5,'rgba(46,196,160,0.02)'); sg.addColorStop(1,'transparent');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,CW,CH);
+  ctx.restore();
+
+  frame++;
+  requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>

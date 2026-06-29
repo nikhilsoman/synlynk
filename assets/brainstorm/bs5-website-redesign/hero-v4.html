@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk — Hero V4 + Full Page Sections</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0E0E0F;
+  --bg-card:#111115;
+  --bg-light:#f5f5f7;
+  --blue:#5B8DEF;
+  --purple:#A259F7;
+  --teal:#2EC4A0;
+  --orange:#D97757;
+  --google-blue:#1a73e8;
+  --text:#E9E9EE;
+  --muted:rgba(233,233,238,0.55);
+  --border:rgba(255,255,255,0.07);
+  --font:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Fira Code',monospace;
+}
+html{scroll-behavior:smooth;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);overflow-x:hidden;}
+
+/* NAV */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 48px;
+  background:rgba(14,14,15,0.85);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.nav-logo svg{width:28px;height:28px;}
+.nav-brand{font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.3px;}
+.nav-links{display:flex;align-items:center;gap:28px;}
+.nav-links a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:500;transition:color 0.2s;}
+.nav-links a:hover{color:#fff;}
+.nav-cta{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.2s;}
+.nav-cta:hover{opacity:0.85;}
+
+/* ─── SECTION 1: TAGLINE (full width, 100vh) ─── */
+.section-tagline{
+  min-height:100vh;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:120px 48px 80px;
+  text-align:center;
+  position:relative;
+  overflow:hidden;
+}
+.section-tagline::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 900px 600px at 50% 40%, rgba(91,141,239,0.12), transparent 60%),
+    radial-gradient(ellipse 600px 400px at 70% 20%, rgba(162,89,247,0.08), transparent 50%);
+  pointer-events:none;
+}
+.hook-label{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid rgba(91,141,239,0.3);
+  background:rgba(91,141,239,0.06);
+  border-radius:20px;padding:5px 14px;
+  font-size:12px;font-weight:600;color:var(--blue);
+  letter-spacing:0.5px;text-transform:uppercase;
+  margin-bottom:22px;
+}
+.hook-label::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+/* Headline = the hook/problem; byline = the unlock/solution */
+.hero-byline{
+  font-size:clamp(15px,1.6vw,20px);
+  font-weight:400;color:var(--muted);
+  letter-spacing:-0.2px;
+  max-width:640px;margin:0 auto 12px;
+  line-height:1.4;
+}
+.hero-headline{
+  font-size:clamp(32px,4vw,52px);
+  font-weight:800;line-height:1.08;
+  letter-spacing:-1.8px;color:#fff;
+  max-width:760px;margin:0 auto 28px;
+}
+.hero-headline .grad1{
+  background:linear-gradient(135deg,#fff 0%,#A259F7 55%,#5B8DEF 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:16px;color:var(--muted);
+  max-width:520px;margin:0 auto 28px;
+  line-height:1.65;font-weight:400;
+}
+.hero-sub strong{color:var(--teal);font-weight:600;}
+.hero-cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;}
+.btn-primary{
+  background:var(--blue);color:#fff;border:none;border-radius:10px;
+  padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;
+  font-family:var(--font);transition:transform 0.15s,opacity 0.2s;
+  display:inline-flex;align-items:center;gap:8px;
+}
+.btn-primary:hover{transform:translateY(-1px);opacity:0.9;}
+.btn-secondary{
+  background:transparent;color:var(--text);
+  border:1px solid var(--border);border-radius:10px;
+  padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;
+  font-family:var(--font);transition:border-color 0.2s,color 0.2s;
+  display:inline-flex;align-items:center;gap:8px;
+}
+.btn-secondary:hover{border-color:rgba(255,255,255,0.2);color:#fff;}
+/* Persistent install snippet */
+.install-bar{
+  display:flex;align-items:center;gap:0;
+  background:#0d0d12;border:1px solid #222;border-radius:10px;
+  font-family:var(--mono);font-size:13px;
+  max-width:400px;margin:0 auto 28px;overflow:hidden;
+}
+.install-cmd{
+  flex:1;padding:11px 16px;color:#aaa;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.install-cmd .install-prefix{color:#555;}
+.install-copy{
+  padding:11px 14px;background:transparent;border:none;border-left:1px solid #222;
+  color:#555;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:600;
+  transition:all 0.2s;white-space:nowrap;
+  display:flex;align-items:center;gap:5px;
+}
+.install-copy:hover{background:#161620;color:var(--teal);}
+.install-copy.copied{color:var(--teal);}
+.agent-logos{display:flex;align-items:center;gap:6px;justify-content:center;font-size:12px;color:#444;margin-bottom:28px;}
+.agent-logos span{color:#555;}
+.agent-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  border:1px solid #222;border-radius:6px;padding:3px 9px;
+  font-size:11px;font-weight:600;background:#111;
+}
+/* scroll hint removed */
+.scroll-hint{display:none;}
+@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(4px);}}
+
+/* ─── SECTION 2: CAROUSEL (full width, tall) ─── */
+.section-carousel{
+  padding:80px 48px;
+  background:linear-gradient(180deg, #0E0E0F 0%, #0a0a10 100%);
+  position:relative;overflow:hidden;
+}
+.section-carousel::before{
+  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:1px;height:100%;background:linear-gradient(to bottom,rgba(162,89,247,0.3),transparent);
+}
+.carousel-label{text-align:center;font-size:13px;font-weight:600;color:var(--purple);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;}
+.carousel-head{text-align:center;font-size:26px;font-weight:700;color:#fff;margin-bottom:6px;}
+.carousel-sub{text-align:center;font-size:14px;color:var(--muted);margin-bottom:44px;}
+
+.carousel-container{max-width:740px;margin:0 auto;position:relative;}
+.carousel-track{position:relative;}
+.terminal-slide{
+  display:none;
+  background:#0d0d12;
+  border:1px solid rgba(162,89,247,0.25);
+  border-radius:12px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(162,89,247,0.08), 0 12px 40px rgba(0,0,0,0.5);
+  animation:slideIn 0.35s ease;
+}
+.terminal-slide.active{display:block;}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.t-dots{display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid #1a1a2a;}
+.t-dot{width:9px;height:9px;border-radius:50%;}
+.t-red{background:#FF5F57;}
+.t-yellow{background:#FEBC2E;}
+.t-green{background:#28C840;}
+.t-title{font-family:var(--mono);font-size:10px;color:#444;padding:0 14px;line-height:9px;margin-left:auto;margin-right:auto;}
+.t-body{font-family:var(--mono);font-size:13px;padding:16px 18px 20px;line-height:1.75;color:#aaa;}
+.t-cmd{color:#ccc;} .t-arg{color:var(--teal);}
+.t-flag{color:var(--blue);} .t-val{color:var(--orange);}
+.t-out{color:#555;font-size:12px;}
+.t-ok{color:var(--teal);} .t-err{color:#ff6b6b;}
+.t-prompt{color:var(--purple);}
+
+.slide-nav{display:flex;gap:8px;justify-content:center;margin-top:8px;}
+.slide-dot{width:6px;height:6px;border-radius:50%;background:#222;cursor:pointer;transition:all 0.2s;}
+.slide-dot.active{background:var(--purple);width:20px;border-radius:3px;}
+.cmd-pill{
+  background:transparent;border:1px solid #222;border-radius:6px;
+  padding:5px 14px;font-size:11px;font-weight:600;color:#555;
+  font-family:var(--mono);cursor:pointer;transition:all 0.18s;
+}
+.cmd-pill:hover{border-color:#444;color:#888;}
+.cmd-pill.active{border-color:rgba(162,89,247,0.5);color:var(--purple);background:rgba(162,89,247,0.06);}
+
+/* ─── SECTION 3: RELIEF (light bg, "you're not crazy") ─── */
+.section-relief{
+  background:var(--bg-light);color:#1d1d1f;
+  padding:96px 48px;
+}
+.relief-inner{max-width:1080px;margin:0 auto;}
+.section-label{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:14px;}
+.section-label.dark{color:var(--purple);}
+.section-title{font-size:clamp(28px,4vw,48px);font-weight:800;letter-spacing:-1.5px;line-height:1.1;margin-bottom:16px;}
+.section-body{font-size:16px;line-height:1.7;color:#6e6e73;max-width:600px;margin-bottom:48px;}
+
+.relief-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:20px;}
+.relief-card{
+  background:#fff;border-radius:14px;padding:24px;
+  box-shadow:0 2px 12px rgba(0,0,0,0.06);
+  border:1px solid rgba(0,0,0,0.06);
+}
+.relief-card-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;font-size:16px;}
+.relief-card h4{font-size:15px;font-weight:700;margin-bottom:6px;color:#1d1d1f;}
+.relief-card p{font-size:13px;color:#6e6e73;line-height:1.6;}
+.cost-callout{
+  display:inline-flex;align-items:center;gap:8px;
+  background:linear-gradient(135deg,rgba(46,196,160,0.08),rgba(91,141,239,0.08));
+  border:1px solid rgba(46,196,160,0.2);
+  border-radius:10px;padding:12px 18px;margin-top:32px;font-size:14px;
+}
+.cost-callout strong{color:var(--teal);}
+
+/* ─── SECTION 4: HOW IT WORKS (dark) ─── */
+.section-how{
+  background:var(--bg);
+  padding:96px 48px;
+}
+.how-inner{max-width:1080px;margin:0 auto;}
+.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:48px;}
+.step-card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:14px;padding:24px;position:relative;overflow:hidden;
+}
+.step-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--blue),var(--purple));
+  opacity:0;transition:opacity 0.2s;
+}
+.step-card:hover::before{opacity:1;}
+.step-num{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--purple);margin-bottom:14px;letter-spacing:1px;}
+.step-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;}
+.step-body{font-size:13px;color:var(--muted);line-height:1.6;}
+.step-code{
+  font-family:var(--mono);font-size:11px;
+  background:#0a0a0f;border:1px solid #1e1e2e;
+  border-radius:7px;padding:10px 12px;margin-top:14px;
+  color:var(--teal);line-height:1.6;
+}
+
+/* ─── SECTION 5: FEATURES (light alternating) ─── */
+.section-features{background:var(--bg-light);color:#1d1d1f;padding:96px 48px;}
+.features-inner{max-width:1080px;margin:0 auto;}
+.features-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:48px;}
+.feat-card{
+  background:#fff;border-radius:16px;padding:28px;
+  box-shadow:0 2px 16px rgba(0,0,0,0.06);
+  border:1px solid rgba(0,0,0,0.06);
+  display:flex;flex-direction:column;gap:12px;
+}
+.feat-card.accent-blue{border-top:3px solid var(--blue);}
+.feat-card.accent-purple{border-top:3px solid var(--purple);}
+.feat-card.accent-teal{border-top:3px solid var(--teal);}
+.feat-card.accent-orange{border-top:3px solid var(--orange);}
+.feat-icon{font-size:24px;}
+.feat-title{font-size:18px;font-weight:800;letter-spacing:-0.5px;color:#1d1d1f;}
+.feat-body{font-size:14px;color:#6e6e73;line-height:1.65;}
+.feat-code{
+  font-family:var(--mono);font-size:12px;
+  background:#f2f2f7;border-radius:8px;padding:12px 14px;
+  color:#1d1d1f;line-height:1.7;
+  border-left:3px solid var(--blue);
+}
+.feat-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.feat-tag{background:#f2f2f7;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;color:#6e6e73;}
+
+/* ─── SECTION 6: OS VISION (dark, dramatic) ─── */
+.section-vision{
+  background:var(--bg);
+  padding:120px 48px;
+  position:relative;overflow:hidden;
+}
+.section-vision::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 800px 600px at 30% 50%, rgba(162,89,247,0.1), transparent 55%),
+    radial-gradient(ellipse 600px 400px at 80% 30%, rgba(91,141,239,0.08), transparent 50%);
+  pointer-events:none;
+}
+.vision-inner{max-width:1080px;margin:0 auto;position:relative;}
+.vision-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}
+.vision-text{}
+.vision-quote{
+  font-size:clamp(24px,3.5vw,40px);font-weight:800;
+  line-height:1.15;letter-spacing:-1px;
+  color:#fff;margin-bottom:24px;
+}
+.vision-quote .accent{
+  background:linear-gradient(135deg,var(--purple),var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.vision-body{font-size:16px;color:var(--muted);line-height:1.7;margin-bottom:32px;}
+.vision-stats{display:flex;gap:32px;}
+.vision-stat{}
+.stat-num{font-size:28px;font-weight:800;color:#fff;letter-spacing:-1px;}
+.stat-label{font-size:12px;color:var(--muted);font-weight:500;margin-top:2px;}
+.vision-diagram{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  height:520px;
+  border-radius:16px;
+  overflow:hidden;
+  background:#06100D;
+  border:1px solid rgba(162,89,247,0.12);
+  box-shadow:0 0 60px rgba(162,89,247,0.06);
+}
+.vision-diagram canvas{display:block;border-radius:16px;}
+.diagram-badge{
+  position:absolute;top:12px;left:14px;
+  font-family:var(--mono);font-size:8px;letter-spacing:2px;
+  color:rgba(46,196,160,0.4);text-transform:uppercase;
+  pointer-events:none;
+}
+
+/* ─── SECTION 7: DOCS DOWNLOAD ─── */
+.section-docs{background:var(--bg-light);color:#1d1d1f;padding:72px 48px;}
+.docs-inner{max-width:900px;margin:0 auto;text-align:center;}
+.docs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:40px;}
+.doc-card{
+  background:#fff;border-radius:16px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,0.08);
+  border:1px solid rgba(0,0,0,0.06);
+  transition:transform 0.2s,box-shadow 0.2s;cursor:pointer;text-decoration:none;
+}
+.doc-card:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,0.12);}
+.doc-thumb{height:120px;display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;}
+.doc-thumb.qt{background:linear-gradient(135deg,#1d1d1f 0%,#2a2a2f 100%);}
+.doc-thumb.cr{background:linear-gradient(135deg,#0a0a14 0%,#14142a 100%);}
+.doc-thumb.mn{background:linear-gradient(135deg,#080810 0%,#10101c 100%);}
+.doc-meta{padding:16px;}
+.doc-title{font-size:14px;font-weight:700;color:#1d1d1f;margin-bottom:3px;}
+.doc-sub{font-size:12px;color:#8e8e93;}
+.doc-badge{position:absolute;top:8px;right:8px;background:rgba(46,196,160,0.15);border:1px solid rgba(46,196,160,0.3);border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;color:var(--teal);letter-spacing:1px;}
+
+/* ─── SECTION 8: WAITLIST ─── */
+.section-waitlist{
+  background:var(--bg);padding:96px 48px;
+  position:relative;overflow:hidden;
+}
+.section-waitlist::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 700px 500px at 50% 60%, rgba(46,196,160,0.08), transparent 55%);
+  pointer-events:none;
+}
+.waitlist-inner{max-width:520px;margin:0 auto;text-align:center;position:relative;}
+.waitlist-headline{font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-1.5px;color:#fff;margin-bottom:14px;}
+.waitlist-sub{font-size:16px;color:var(--muted);line-height:1.65;margin-bottom:40px;}
+.waitlist-form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.waitlist-input{
+  background:#111;border:1px solid #222;border-radius:10px;
+  padding:13px 18px;font-size:15px;color:#fff;
+  font-family:var(--font);outline:none;width:260px;
+  transition:border-color 0.2s;
+}
+.waitlist-input:focus{border-color:var(--teal);}
+.waitlist-input::placeholder{color:#444;}
+.btn-teal{
+  background:var(--teal);color:#0d1a17;border:none;border-radius:10px;
+  padding:13px 24px;font-size:15px;font-weight:700;cursor:pointer;
+  font-family:var(--font);white-space:nowrap;transition:opacity 0.2s;
+}
+.btn-teal:hover{opacity:0.85;}
+.waitlist-trust{font-size:12px;color:#444;margin-top:16px;display:flex;align-items:center;gap:6px;justify-content:center;}
+.waitlist-trust svg{color:#333;}
+
+/* ─── BLOG + FOOTER ─── */
+.section-blog{background:var(--bg-light);color:#1d1d1f;padding:72px 48px;}
+.blog-inner{max-width:1080px;margin:0 auto;}
+.blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:40px;}
+.blog-card{
+  background:#fff;border-radius:14px;overflow:hidden;
+  box-shadow:0 2px 12px rgba(0,0,0,0.06);
+  border:1px solid rgba(0,0,0,0.06);
+  text-decoration:none;color:inherit;
+  transition:transform 0.2s;display:block;
+}
+.blog-card:hover{transform:translateY(-2px);}
+.blog-banner{height:80px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:600;}
+.blog-banner.b1{background:#0e0e0f;color:var(--blue);}
+.blog-banner.b2{background:#0e0e0f;color:var(--purple);}
+.blog-banner.b3{background:#0e0e0f;color:var(--teal);}
+.blog-content{padding:16px;}
+.blog-tag{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--blue);margin-bottom:6px;}
+.blog-title{font-size:14px;font-weight:700;margin-bottom:5px;line-height:1.4;}
+.blog-meta{font-size:11px;color:#8e8e93;}
+footer{
+  background:#0a0a0a;color:#444;
+  padding:48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px;
+  border-top:1px solid #111;
+}
+.footer-links{display:flex;gap:24px;}
+.footer-links a{color:#444;font-size:13px;text-decoration:none;transition:color 0.2s;}
+.footer-links a:hover{color:#888;}
+.footer-copy{font-size:13px;color:#333;}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/>
+      <circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/>
+    </svg>
+    <span class="nav-brand">synlynk</span>
+  </a>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#docs">Docs</a>
+    <a href="https://github.com/nikhilsoman/synlynk" target="_blank">GitHub</a>
+  </div>
+  <button class="nav-cta">Join waitlist</button>
+</nav>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 1: TAGLINE                -->
+<!-- ══════════════════════════════════ -->
+<section class="section-tagline" id="top">
+  <div class="hook-label">Multi-agent coordination</div>
+
+  <!-- Byline: the problem/hook -->
+  <p class="hero-byline">Most developers use one agent at a time.</p>
+
+  <!-- Headline: the unlock -->
+  <h1 class="hero-headline">
+    <span class="grad1">synlynk</span> lets you run<br>a workgroup.
+  </h1>
+
+  <p class="hero-sub">
+    Spread the work, spread the cost.
+    Different models, different strengths,
+    <strong>one shared project state</strong>.
+  </p>
+
+  <div class="hero-cta-row">
+    <button class="btn-primary" onclick="document.getElementById('install-bar').scrollIntoView({behavior:'smooth'});document.getElementById('install-copy-btn').classList.add('copied')">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M10 2v16M2 10l8 8 8-8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Install synlynk
+    </button>
+    <button class="btn-secondary">Read the docs</button>
+  </div>
+
+  <!-- Persistent install command -->
+  <div class="install-bar" id="install-bar">
+    <div class="install-cmd">
+      <span class="install-prefix">$</span>
+      curl -fsSL install.synlynk.com | bash
+    </div>
+    <button class="install-copy" id="install-copy-btn" onclick="
+      navigator.clipboard.writeText('curl -fsSL install.synlynk.com | bash');
+      this.innerHTML='<svg width=12 height=12 viewBox=\'0 0 20 20\' fill=\'none\'><path d=\'M4 10l4 4 8-8\' stroke=\'currentColor\' stroke-width=2.5 stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg> copied';
+      this.classList.add('copied');
+      setTimeout(()=>{this.innerHTML='<svg width=12 height=12 viewBox=\'0 0 20 20\' fill=\'none\'><rect x=7 y=3 width=10 height=13 rx=2 stroke=\'currentColor\' stroke-width=1.5/><path d=\'M4 6H3a1 1 0 00-1 1v10a1 1 0 001 1h9\' stroke=\'currentColor\' stroke-width=1.5 stroke-linecap=\'round\'/></svg> copy';this.classList.remove('copied');},2200)
+    ">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><rect x="7" y="3" width="10" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 6H3a1 1 0 00-1 1v10a1 1 0 001 1h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      copy
+    </button>
+  </div>
+
+  <div class="agent-logos">
+    <span>Works with</span>
+    <div class="agent-chip" style="color:#D97757;border-color:#3a1f10;">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" fill="#D97757"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M14.4 4.2l-1.4 1.4M4.2 14.4l1.4 1.4" stroke="#D97757" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Claude
+    </div>
+    <div class="agent-chip" style="color:#1a73e8;border-color:#0d1e35;">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 2 C10 2 12 8.5 16 10 C12 11.5 10 18 10 18 C10 18 8 11.5 4 10 C8 8.5 10 2 10 2Z" fill="#1a73e8"/></svg>
+      Gemini
+    </div>
+    <div class="agent-chip" style="color:#888;border-color:#222;">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M4 4l12 12M16 4L4 16" stroke="#888" stroke-width="2" stroke-linecap="round"/></svg>
+      Grok
+    </div>
+    <div class="agent-chip" style="color:#aaa;border-color:#222;">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.5" stroke="#aaa" stroke-width="1.5"/><path d="M4 18c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Codex
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 2: TERMINAL CAROUSEL      -->
+<!-- ══════════════════════════════════ -->
+<section class="section-carousel" id="carousel">
+  <div class="carousel-label">synlynk in action</div>
+  <h2 class="carousel-head">One command. Four agents. One project.</h2>
+  <p class="carousel-sub">Each slide shows a different dimension of the workgroup in your terminal.</p>
+
+  <div class="carousel-container">
+    <div class="carousel-track" id="carousel-track">
+
+      <!-- Slide 1: init -->
+      <div class="terminal-slide active">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — init</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk init</span>
+<br>
+<span class="t-out">? Project name: </span><span class="t-val">my-ai-project</span>
+<span class="t-out">? Team or solo? </span><span class="t-val">team</span>
+<span class="t-out">? Primary agent CLI installed: </span><span class="t-val">claude</span>
+<span class="t-out">? Budget limit (USD/session): </span><span class="t-val">5.00</span>
+<br>
+<span class="t-ok">✓ Created  project-docs/roadmap.md</span>
+<span class="t-ok">✓ Created  project-docs/memory.md</span>
+<span class="t-ok">✓ Created  project-docs/todo.md</span>
+<span class="t-ok">✓ Wrote    CLAUDE.md · GEMINI.md · AGENTS.md</span>
+<span class="t-ok">✓ Config   .synlynk/config.json  →  limit: $5.00</span>
+<br>
+<span class="t-out">Ready. Run <span class="t-arg">synlynk exec claude</span> to start.</span>
+        </div>
+      </div>
+
+      <!-- Slide 2: join -->
+      <div class="terminal-slide">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — join</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk join</span> <span class="t-flag">--scan</span>
+<br>
+<span class="t-out">Scanning repository…</span>
+<span class="t-out">  Found  63 source files · 4 test suites · 1 CI workflow</span>
+<span class="t-out">  Stack  TypeScript · React · Prisma · PostgreSQL</span>
+<br>
+<span class="t-ok">✓ Generating memory.md from codebase…</span>
+<span class="t-out">  Architecture  SPA + REST API + Postgres</span>
+<span class="t-out">  Entities      User · Project · Job · Agent</span>
+<span class="t-out">  Open items    14 TODOs across 8 files</span>
+<br>
+<span class="t-ok">✓ Created  project-docs/  (roadmap · todo · memory)</span>
+<span class="t-ok">✓ Wrote    CLAUDE.md with full stack context</span>
+<span class="t-out">  Team members  nikhil · alex · priya</span>
+<span class="t-ok">✓ Ready to coordinate across 3 teammates.</span>
+        </div>
+      </div>
+
+      <!-- Slide 3: dispatch -->
+      <div class="terminal-slide">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — dispatch</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk dispatch</span> <span class="t-arg">claude agy codex</span> \
+<span style="color:#333;">    </span><span class="t-flag">--task</span> <span class="t-val">"implement auth flow"</span> \
+<span style="color:#333;">    </span><span class="t-flag">--story</span> <span class="t-val">SL-42</span> <span class="t-flag">--context-mode</span> <span class="t-val">team</span>
+<br>
+<span class="t-out">Injecting context snapshot → 2,341 tokens</span>
+<span class="t-out">  memory.md · roadmap.md · todo.md · devlog/nikhil</span>
+<br>
+<span class="t-ok">▶ [job-a3f9]</span> <span class="t-arg">claude</span>  <span class="t-out">dispatched  PID 48201</span>
+<span class="t-ok">▶ [job-b7c2]</span> <span class="t-arg">agy   </span>  <span class="t-out">dispatched  PID 48207</span>
+<span class="t-ok">▶ [job-d1e4]</span> <span class="t-arg">codex </span>  <span class="t-out">dispatched  PID 48213</span>
+<br>
+<span class="t-ok">✓ 3 agents running in parallel — background</span>
+<span class="t-out">  synlynk logs --job job-a3f9   to follow</span>
+        </div>
+      </div>
+
+      <!-- Slide 4: status (from state.db) -->
+      <div class="terminal-slide">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span style="font-family:monospace;font-size:10px;color:#444;flex:1;text-align:center;">synlynk — status</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk status</span>
+<br>
+<span class="t-out">  JOB        AGENT   STATUS   </span><span class="t-ok"> DONE</span><span class="t-out"> / RUNNING   TOKENS    COST</span>
+<span class="t-out">  ─────────────────────────────────────────────────────</span>
+<span class="t-out">  job-a3f9   </span><span class="t-arg">claude</span><span class="t-out">  RUNNING  12m 04s             —        —</span>
+<span class="t-ok">  job-b7c2   agy     DONE     08m 31s        52,500   $0.48</span>
+<span class="t-out">  job-d1e4   </span><span class="t-arg">codex</span><span class="t-out">   RUNNING  09m 17s             —        —</span>
+<br>
+<span class="t-out">  Budget Pulse  ──────────────────────────────────────</span>
+<span class="t-out">  session   $0.48 / $5.00   </span><span class="t-ok">████</span><span class="t-out">░░░░░░░░░░  10%</span>
+<span class="t-out">  today     $1.24 / $20.00  </span><span class="t-ok">██</span><span class="t-out">░░░░░░░░░░░░  6%</span>
+<br>
+<span class="t-ok">✓ All agents within quota  ·  state.db last write 3s ago</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- slide nav + command pills -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:16px;">
+      <div style="display:flex;gap:8px;">
+        <button onclick="selectSlide(0)" class="cmd-pill active" id="pill-0">init</button>
+        <button onclick="selectSlide(1)" class="cmd-pill" id="pill-1">join</button>
+        <button onclick="selectSlide(2)" class="cmd-pill" id="pill-2">dispatch</button>
+        <button onclick="selectSlide(3)" class="cmd-pill" id="pill-3">status</button>
+      </div>
+      <div class="slide-nav" id="slide-nav">
+        <div class="slide-dot active" onclick="selectSlide(0)"></div>
+        <div class="slide-dot" onclick="selectSlide(1)"></div>
+        <div class="slide-dot" onclick="selectSlide(2)"></div>
+        <div class="slide-dot" onclick="selectSlide(3)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 3: RELIEF                 -->
+<!-- ══════════════════════════════════ -->
+<section class="section-relief" id="relief">
+  <div class="relief-inner">
+    <div class="section-label">The multi-agent unlock</div>
+    <h2 class="section-title">You're not limited to one agent.<br>You just needed a harness.</h2>
+    <p class="section-body">Every AI CLI is powerful in isolation. But they don't share context, don't know about each other, and don't report costs in one place. synlynk wires them up.</p>
+
+    <div class="relief-grid">
+      <div class="relief-card">
+        <div class="relief-card-icon" style="background:rgba(91,141,239,0.1);">🔀</div>
+        <h4>Context injection</h4>
+        <p>Every agent gets your project memory, roadmap, and current todos — automatically, before each invocation.</p>
+      </div>
+      <div class="relief-card">
+        <div class="relief-card-icon" style="background:rgba(162,89,247,0.1);">📊</div>
+        <h4>Unified cost tracking</h4>
+        <p>Token counts, per-agent spend, and budget limits in one dashboard. No more surprise bills.</p>
+      </div>
+      <div class="relief-card">
+        <div class="relief-card-icon" style="background:rgba(46,196,160,0.1);">🛡</div>
+        <h4>Sentinel monitoring</h4>
+        <p>Detects hallucination loops, quota hits, and consecutive failures. Alerts before they compound.</p>
+      </div>
+    </div>
+
+    <div class="cost-callout">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5 5.5.8-4 3.9.9 5.5L10 14.5l-4.9 2.7.9-5.5L2 7.8l5.5-.8z" fill="#2EC4A0"/></svg>
+      <span><strong>Claude alone:</strong> ~$0.015/1K tokens &nbsp;·&nbsp; <strong>Distributed across 3 agents:</strong> ~$0.006/1K tokens effective rate &nbsp;·&nbsp; <strong>60% cheaper on long tasks</strong></span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 4: HOW IT WORKS           -->
+<!-- ══════════════════════════════════ -->
+<section class="section-how" id="how">
+  <div class="how-inner">
+    <div class="section-label dark">Getting started</div>
+    <h2 class="section-title" style="color:#fff;letter-spacing:-1.5px;">Up in four commands.</h2>
+    <p class="section-body" style="color:var(--muted);">synlynk is a single-file Python CLI. No build step. No dependencies. Works with whatever AI CLIs you already have installed.</p>
+
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">STEP 01</div>
+        <div class="step-title">Install</div>
+        <div class="step-body">Single curl-pipe install. Puts the binary in <code style="font-family:var(--mono);font-size:11px;color:var(--teal);">~/.synlynk/bin/</code> and updates your PATH.</div>
+        <div class="step-code">curl -fsSL synlynk.com/install | bash</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">STEP 02</div>
+        <div class="step-title">Init</div>
+        <div class="step-body">Bootstrap your project — creates <code style="font-family:var(--mono);font-size:11px;color:var(--teal);">project-docs/</code>, config, and AI instruction files.</div>
+        <div class="step-code">synlynk init</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">STEP 03</div>
+        <div class="step-title">Exec</div>
+        <div class="step-body">Run any AI CLI through synlynk — context is injected, costs tracked, output monitored.</div>
+        <div class="step-code">synlynk exec claude</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">STEP 04</div>
+        <div class="step-title">Dispatch</div>
+        <div class="step-body">Parallelize tasks across multiple agents from one command. Results flow into shared project state.</div>
+        <div class="step-code">synlynk dispatch \<br>&nbsp;&nbsp;claude agy codex \<br>&nbsp;&nbsp;--task "ship it"</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 5: FEATURES               -->
+<!-- ══════════════════════════════════ -->
+<section class="section-features" id="features">
+  <div class="features-inner">
+    <div class="section-label">Feature spotlight</div>
+    <h2 class="section-title">Four things that make the workgroup work.</h2>
+
+    <div class="features-grid">
+
+      <div class="feat-card accent-purple">
+        <div class="feat-icon">🚀</div>
+        <div class="feat-title">Dispatch</div>
+        <div class="feat-body">Run a task across multiple agents in parallel. Each agent gets the same context snapshot. Results stream into a unified log with per-agent cost attribution.</div>
+        <div class="feat-code">synlynk dispatch claude agy codex \<br>&nbsp;&nbsp;--task "review PR #47" \<br>&nbsp;&nbsp;--story SL-12 --context-mode team</div>
+        <div class="feat-tags">
+          <span class="feat-tag">parallel execution</span>
+          <span class="feat-tag">background jobs</span>
+          <span class="feat-tag">story routing</span>
+        </div>
+      </div>
+
+      <div class="feat-card accent-blue">
+        <div class="feat-icon">🧠</div>
+        <div class="feat-title">Context Injection</div>
+        <div class="feat-body">Before every exec or dispatch, synlynk builds a context snapshot from your project docs — memory, roadmap, todos, and teammate devlogs — and injects it into the agent's prompt.</div>
+        <div class="feat-code">synlynk context --mode team<br># → memory + roadmap + devlog/nikhil<br># → 2,341 tokens injected</div>
+        <div class="feat-tags">
+          <span class="feat-tag">memory.md</span>
+          <span class="feat-tag">roadmap</span>
+          <span class="feat-tag">devlogs</span>
+        </div>
+      </div>
+
+      <div class="feat-card accent-teal">
+        <div class="feat-icon">🛡</div>
+        <div class="feat-title">Sentinel Monitoring</div>
+        <div class="feat-body">Real-time pattern detection on agent output. Flags FLATLINE (3 consecutive failures), SUCCESS_LOOP (identical outputs), QUOTA_EXHAUSTED, and other anomalies. Alerts go to sentinel.md.</div>
+        <div class="feat-code">synlynk sentinel --watch<br>⚠ SUCCESS_LOOP: job-d1e4<br>  3× identical output detected</div>
+        <div class="feat-tags">
+          <span class="feat-tag">loop detection</span>
+          <span class="feat-tag">quota alerts</span>
+          <span class="feat-tag">flatline</span>
+        </div>
+      </div>
+
+      <div class="feat-card accent-orange">
+        <div class="feat-icon">👤</div>
+        <div class="feat-title">Agent Profiles</div>
+        <div class="feat-body">Each agent has a profile describing its strengths, rate limits, and image-gen capabilities. Profiles inform dispatch routing — Imagen tasks go to Agy, DALL-E to Codex, Aurora to Grok.</div>
+        <div class="feat-code">synlynk profile set agy \<br>&nbsp;&nbsp;--role image-gen \<br>&nbsp;&nbsp;--model imagen-3</div>
+        <div class="feat-tags">
+          <span class="feat-tag">role assignment</span>
+          <span class="feat-tag">model routing</span>
+          <span class="feat-tag">image gen</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 6: OS VISION              -->
+<!-- ══════════════════════════════════ -->
+<section class="section-vision" id="vision">
+  <div class="vision-inner">
+    <div class="vision-grid">
+      <div class="vision-text">
+        <div class="section-label dark">The long arc</div>
+        <h2 class="vision-quote">
+          synlynk is becoming a<br>
+          <span class="accent">coordination OS</span><br>
+          for AI workgroups.
+        </h2>
+        <p class="vision-body">Today it's a CLI harness. Tomorrow it's the layer that schedules, routes, monitors, and accounts for every agent in your org — the way an OS does for processes.</p>
+        <div class="vision-stats">
+          <div class="vision-stat">
+            <div class="stat-num">4</div>
+            <div class="stat-label">agents supported</div>
+          </div>
+          <div class="vision-stat">
+            <div class="stat-num">0</div>
+            <div class="stat-label">dependencies (stdlib)</div>
+          </div>
+          <div class="vision-stat">
+            <div class="stat-num">MIT</div>
+            <div class="stat-label">open source</div>
+          </div>
+        </div>
+      </div>
+      <div class="vision-diagram">
+        <canvas id="iso-canvas"></canvas>
+        <div class="diagram-badge">COORD·OS v0.9.4 · 4 harnesses active</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 7: DOCS DOWNLOAD          -->
+<!-- ══════════════════════════════════ -->
+<section class="section-docs" id="docs">
+  <div class="docs-inner">
+    <div class="section-label">Resources</div>
+    <h2 class="section-title">Start with the quickstart. Dig into the manual when you're ready.</h2>
+    <div class="docs-grid">
+      <a href="#" class="doc-card">
+        <div class="doc-thumb qt">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="38" height="48" rx="4" fill="#1d1d1f" transform="translate(5 0)"/>
+            <rect width="32" height="3" rx="1.5" fill="#5B8DEF" opacity="0.7" transform="translate(8 8)"/>
+            <rect width="24" height="2" rx="1" fill="#555" transform="translate(8 14)"/>
+            <rect width="28" height="2" rx="1" fill="#555" transform="translate(8 19)"/>
+            <rect width="20" height="2" rx="1" fill="#555" transform="translate(8 24)"/>
+            <rect width="26" height="2" rx="1" fill="#555" transform="translate(8 29)"/>
+            <text x="24" y="42" text-anchor="middle" font-family="monospace" font-size="6" fill="#A259F7">QUICKSTART</text>
+          </svg>
+          <div class="doc-badge">PDF</div>
+        </div>
+        <div class="doc-meta">
+          <div class="doc-title">Quick Start Guide</div>
+          <div class="doc-sub">10 min · macOS & Linux · v0.9.4</div>
+        </div>
+      </a>
+      <a href="#" class="doc-card">
+        <div class="doc-thumb cr">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="38" height="48" rx="4" fill="#0a0a14" transform="translate(5 0)"/>
+            <rect width="32" height="3" rx="1.5" fill="#A259F7" opacity="0.7" transform="translate(8 8)"/>
+            <rect width="22" height="2" rx="1" fill="#2EC4A0" opacity="0.5" transform="translate(8 14)"/>
+            <rect width="18" height="2" rx="1" fill="#555" transform="translate(8 19)"/>
+            <rect width="26" height="2" rx="1" fill="#2EC4A0" opacity="0.5" transform="translate(8 24)"/>
+            <rect width="20" height="2" rx="1" fill="#555" transform="translate(8 29)"/>
+            <text x="24" y="42" text-anchor="middle" font-family="monospace" font-size="6" fill="#2EC4A0">COMMAND REF</text>
+          </svg>
+          <div class="doc-badge">PDF</div>
+        </div>
+        <div class="doc-meta">
+          <div class="doc-title">Command Reference</div>
+          <div class="doc-sub">Full flag listing · all commands · v0.9.4</div>
+        </div>
+      </a>
+      <a href="#" class="doc-card">
+        <div class="doc-thumb mn">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="38" height="48" rx="4" fill="#080810" transform="translate(5 0)"/>
+            <rect width="32" height="3" rx="1.5" fill="#5B8DEF" opacity="0.5" transform="translate(8 8)"/>
+            <rect width="20" height="2" rx="1" fill="#555" transform="translate(8 14)"/>
+            <rect width="30" height="2" rx="1" fill="#555" transform="translate(8 19)"/>
+            <rect width="16" height="2" rx="1" fill="#555" transform="translate(8 24)"/>
+            <rect width="28" height="2" rx="1" fill="#555" transform="translate(8 29)"/>
+            <rect width="22" height="2" rx="1" fill="#555" transform="translate(8 34)"/>
+            <text x="24" y="44" text-anchor="middle" font-family="monospace" font-size="6" fill="#5B8DEF">MANUAL</text>
+          </svg>
+          <div class="doc-badge">PDF</div>
+        </div>
+        <div class="doc-meta">
+          <div class="doc-title">The Manual</div>
+          <div class="doc-sub">Architecture · data model · internals</div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- SECTION 8: WAITLIST               -->
+<!-- ══════════════════════════════════ -->
+<section class="section-waitlist" id="waitlist">
+  <div class="waitlist-inner">
+    <div class="section-label dark" style="text-align:center;">Early access</div>
+    <h2 class="waitlist-headline">synlynk.com is coming.</h2>
+    <p class="waitlist-sub">Account management, team workspaces, and hosted coordination. Get early access when we open the doors.</p>
+    <div class="waitlist-form">
+      <input class="waitlist-input" type="email" placeholder="you@example.com" />
+      <button class="btn-teal">Join waitlist</button>
+    </div>
+    <div class="waitlist-trust">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 2l1.5 4.5H16l-3.7 2.7 1.4 4.3L10 11.2l-3.7 2.3 1.4-4.3L4 6.5h4.5z" fill="#333"/></svg>
+      Open source forever · MIT licensed · no spam
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ -->
+<!-- BLOG TEASERS                       -->
+<!-- ══════════════════════════════════ -->
+<section class="section-blog">
+  <div class="blog-inner">
+    <div class="section-label">Build log</div>
+    <h2 class="section-title">Building synlynk in public.</h2>
+    <div class="blog-grid">
+      <a href="#" class="blog-card">
+        <div class="blog-banner b1">$ synlynk dispatch claude agy codex</div>
+        <div class="blog-content">
+          <div class="blog-tag">v0.9.4</div>
+          <div class="blog-title">Context dispatch relay — routing tasks to the right agent</div>
+          <div class="blog-meta">Jun 2026 · 8 min read</div>
+        </div>
+      </a>
+      <a href="#" class="blog-card">
+        <div class="blog-banner b2">⚠ SUCCESS_LOOP detected</div>
+        <div class="blog-content">
+          <div class="blog-tag">v0.9.0</div>
+          <div class="blog-title">Kernel fixes — sentinel patterns, hallucination loops</div>
+          <div class="blog-meta">Jun 2026 · 6 min read</div>
+        </div>
+      </a>
+      <a href="#" class="blog-card">
+        <div class="blog-banner b3">$ synlynk init</div>
+        <div class="blog-content">
+          <div class="blog-tag">v0.8.0</div>
+          <div class="blog-title">From script to package — the synlynk/ module refactor</div>
+          <div class="blog-meta">May 2026 · 5 min read</div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <svg viewBox="0 0 22 22" width="20" height="20" fill="none">
+      <path d="M 7 5 C 7 5 2 5 2 9 C 2 13 9 13 9 17" fill="none" stroke="#A259F7" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M 9 17 C 9 17 14 17 14 13 C 14 9 7 9 7 5" fill="none" stroke="#5B8DEF" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="9" y1="17" x2="9" y2="21" stroke="#2EC4A0" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <span class="footer-copy">© 2026 synlynk · MIT License</span>
+  </div>
+  <div class="footer-links">
+    <a href="#">GitHub</a>
+    <a href="#">Docs</a>
+    <a href="#">Blog</a>
+    <a href="#">Changelog</a>
+    <a href="#">Privacy</a>
+  </div>
+</footer>
+
+<script>
+let currentSlide = 0;
+const slides = document.querySelectorAll('.terminal-slide');
+const dots = document.querySelectorAll('.slide-dot');
+const pills = document.querySelectorAll('.cmd-pill');
+let autoTimer;
+
+function selectSlide(idx) {
+  slides[currentSlide].classList.remove('active');
+  dots[currentSlide].classList.remove('active');
+  if (pills[currentSlide]) pills[currentSlide].classList.remove('active');
+  currentSlide = idx;
+  slides[currentSlide].classList.add('active');
+  dots[currentSlide].classList.add('active');
+  if (pills[currentSlide]) pills[currentSlide].classList.add('active');
+  clearInterval(autoTimer);
+  autoTimer = setInterval(autoAdvance, 4200);
+}
+
+function autoAdvance() {
+  selectSlide((currentSlide + 1) % slides.length);
+}
+
+autoTimer = setInterval(autoAdvance, 4200);
+
+// ── ISOMETRIC MOTHERBOARD DIAGRAM ──────────────────────────────
+(function() {
+  const cv = document.getElementById('iso-canvas');
+  if (!cv) return;
+  const container = cv.parentElement;
+
+  function resize() {
+    const W = container.clientWidth, H = container.clientHeight;
+    const DPR = window.devicePixelRatio || 1;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    return { W, H, DPR };
+  }
+
+  let dims = resize();
+  const ctx = cv.getContext('2d');
+
+  const COL = {
+    claude: { line:'#D97757', top:'#D98860', left:'#A85030', right:'#7A3818' },
+    gemini: { line:'#4285F4', top:'#5A9AFF', left:'#2870D8', right:'#1858B0' },
+    grok:   { line:'#B67FFF', top:'#C690FF', left:'#8850CC', right:'#6030A8' },
+    codex:  { line:'#7A8A9A', top:'#8A9AAA', left:'#4A5A6A', right:'#2A3A4A' },
+    trunk:  '#2EC4A0',
+  };
+
+  function iso(gx, gy, gz, W, H) {
+    // Scale so 22×14 grid fits in container: TW < W/36
+    const TW = Math.min(W * 0.024, 13), TH = TW * 0.5, ZS = TW * 0.85;
+    // OX must satisfy: 14*TW < OX < W - 22*TW
+    const OX = W * 0.41, OY = H * 0.19;
+    return { x: OX + (gx - gy) * TW, y: OY + (gx + gy) * TH - gz * ZS };
+  }
+
+  function poly(ctx, pts, fill, stroke, sw=0.5, alpha=1) {
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle=fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle=stroke; ctx.lineWidth=sw; ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function box(gx, gy, gw, gd, z0, zh, pal, W, H) {
+    const p=(x,y,z)=>iso(x,y,z,W,H);
+    poly(ctx,[p(gx,gy+gd,z0),p(gx+gw,gy+gd,z0),p(gx+gw,gy+gd,zh),p(gx,gy+gd,zh)],pal.left,'#000',0.3);
+    poly(ctx,[p(gx+gw,gy,z0),p(gx+gw,gy+gd,z0),p(gx+gw,gy+gd,zh),p(gx+gw,gy,zh)],pal.right,'#000',0.3);
+    const tf=[p(gx,gy,zh),p(gx+gw,gy,zh),p(gx+gw,gy+gd,zh),p(gx,gy+gd,zh)];
+    poly(ctx,tf,pal.top,pal.line,0.6);
+  }
+
+  function tube(gx1,gy1,gx2,gy2,color,W,H,lw=3) {
+    const p1=iso(gx1,gy1,0.7,W,H), p2=iso(gx2,gy2,0.7,W,H);
+    ctx.save();
+    ctx.shadowBlur=6; ctx.shadowColor=color;
+    ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.lineCap='round'; ctx.globalAlpha=0.85;
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function dot(gx,gy,color,r,W,H) {
+    const p=iso(gx,gy,0.75,W,H);
+    ctx.save();
+    ctx.shadowBlur=8; ctx.shadowColor=color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
+    ctx.fillStyle='#060F0C'; ctx.fill();
+    ctx.strokeStyle=color; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.restore();
+  }
+
+  function label(gx,gy,gz,text,color,W,H,fs=9,bold=false) {
+    const p=iso(gx,gy,gz,W,H);
+    ctx.save();
+    ctx.font=`${bold?'700':'500'} ${fs}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle=color; ctx.textAlign='center';
+    if(bold){ ctx.shadowBlur=8; ctx.shadowColor=color; }
+    ctx.fillText(text, p.x, p.y);
+    ctx.restore();
+  }
+
+  // particles
+  const SEGS=[
+    [3.5,3.5,8,3.5,COL.claude.line],[8,3.5,8,5,COL.claude.line],
+    [18.5,3.5,14,3.5,COL.gemini.line],[14,3.5,14,5,COL.gemini.line],
+    [3.5,10.5,8,10.5,COL.grok.line],[8,10.5,8,9,COL.grok.line],
+    [18.5,10.5,14,10.5,COL.codex.line],[14,10.5,14,9,COL.codex.line],
+    [8,5,14,5,COL.trunk],[8,9,14,9,COL.trunk],
+    [8,5,8,9,COL.trunk],[14,5,14,9,COL.trunk],
+  ];
+
+  class Pkt {
+    constructor(){this.reset();}
+    reset(){
+      const s=SEGS[Math.floor(Math.random()*SEGS.length)];
+      [this.x1,this.y1,this.x2,this.y2,this.col]=s;
+      if(Math.random()>.5){[this.x1,this.x2]=[this.x2,this.x1];[this.y1,this.y2]=[this.y2,this.y1];}
+      this.t=0; this.spd=0.013+Math.random()*0.009; this.sz=1.5+Math.random()*1;
+    }
+    step(){this.t+=this.spd; if(this.t>1)this.reset();}
+    draw({W,H}){
+      const x=this.x1+(this.x2-this.x1)*this.t, y=this.y1+(this.y2-this.y1)*this.t;
+      const p=iso(x,y,0.85,W,H);
+      const a=Math.sin(this.t*Math.PI)*0.9;
+      ctx.save(); ctx.globalAlpha=a;
+      ctx.shadowBlur=8; ctx.shadowColor=this.col;
+      ctx.beginPath(); ctx.arc(p.x,p.y,this.sz,0,Math.PI*2);
+      ctx.fillStyle=this.col; ctx.fill();
+      ctx.restore();
+    }
+  }
+  const pkts = Array.from({length:40},()=>new Pkt());
+
+  let fr=0;
+  function frame() {
+    const {W,H} = dims;
+    ctx.save(); ctx.scale(window.devicePixelRatio||1, window.devicePixelRatio||1); ctx.restore();
+    ctx.setTransform(window.devicePixelRatio||1,0,0,window.devicePixelRatio||1,0,0);
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#06100D'; ctx.fillRect(0,0,W,H);
+
+    // Board grid
+    ctx.save(); ctx.strokeStyle='rgba(46,196,160,0.04)'; ctx.lineWidth=0.5;
+    for(let x=0;x<=22;x+=2){const a=iso(x,0,0.6,W,H),b=iso(x,14,0.6,W,H);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+    for(let y=0;y<=14;y+=2){const a=iso(0,y,0.6,W,H),b=iso(22,y,0.6,W,H);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+    ctx.restore();
+
+    // Tube lines
+    const lw = W * 0.0035;
+    tube(3.5,3.5,8,3.5,COL.claude.line,W,H,lw); tube(8,3.5,8,5,COL.claude.line,W,H,lw);
+    tube(18.5,3.5,14,3.5,COL.gemini.line,W,H,lw); tube(14,3.5,14,5,COL.gemini.line,W,H,lw);
+    tube(3.5,10.5,8,10.5,COL.grok.line,W,H,lw); tube(8,10.5,8,9,COL.grok.line,W,H,lw);
+    tube(18.5,10.5,14,10.5,COL.codex.line,W,H,lw); tube(14,10.5,14,9,COL.codex.line,W,H,lw);
+    tube(2.75,3.5,3.5,3.5,COL.claude.line,W,H,lw*0.7); tube(21.25,3.5,18.5,3.5,COL.gemini.line,W,H,lw*0.7);
+    tube(2.75,10.5,3.5,10.5,COL.grok.line,W,H,lw*0.7); tube(21.25,10.5,18.5,10.5,COL.codex.line,W,H,lw*0.7);
+    // Trunk ring
+    tube(8,5,14,5,COL.trunk,W,H,lw*0.8); tube(8,9,14,9,COL.trunk,W,H,lw*0.8);
+    tube(8,5,8,9,COL.trunk,W,H,lw*0.8); tube(14,5,14,9,COL.trunk,W,H,lw*0.8);
+
+    // Stations
+    const dr = W * 0.005;
+    dot(8,3.5,COL.claude.line,dr,W,H); dot(14,3.5,COL.gemini.line,dr,W,H);
+    dot(8,10.5,COL.grok.line,dr,W,H); dot(14,10.5,COL.codex.line,dr,W,H);
+    dot(8,5,COL.trunk,dr*1.4,W,H); dot(14,5,COL.trunk,dr*1.4,W,H);
+    dot(8,9,COL.trunk,dr*1.4,W,H); dot(14,9,COL.trunk,dr*1.4,W,H);
+    dot(2.75,3.5,COL.claude.line,dr*1.3,W,H); dot(21.25,3.5,COL.gemini.line,dr*1.3,W,H);
+    dot(2.75,10.5,COL.grok.line,dr*1.3,W,H); dot(21.25,10.5,COL.codex.line,dr*1.3,W,H);
+
+    // Station labels
+    const fs = Math.max(7, W*0.016);
+    label(8,3.5,1.2,'ctx·L','rgba(233,233,238,0.35)',W,H,fs-1);
+    label(14,3.5,1.2,'ctx·G','rgba(233,233,238,0.35)',W,H,fs-1);
+    label(8,10.5,-0.8,'ctx·X','rgba(233,233,238,0.35)',W,H,fs-1);
+    label(14,10.5,-0.8,'ctx·C','rgba(233,233,238,0.35)',W,H,fs-1);
+    label(8,5,2,'dispatch',COL.trunk,W,H,fs-1);
+    label(14,5,2,'relay',COL.trunk,W,H,fs-1);
+    label(8,9,-1.2,'profiles',COL.trunk,W,H,fs-1);
+    label(14,9,-1.2,'state',COL.trunk,W,H,fs-1);
+
+    // CPU stacks (back to front: ascending gx+gy)
+    // Claude NW
+    box(1.5,1.5,2.5,2.5,0.6,2.0,COL.claude,W,H);
+    box(1.5,1.5,2.5,2.5,2.0,3.4,{...COL.claude,top:'#E09070'},W,H);
+    box(1.5,1.5,2.5,2.5,3.4,4.6,{...COL.claude,top:'#E8A080'},W,H);
+    label(2.75,2.75,5.3,'CLAUDE',COL.claude.line,W,H,fs,true);
+    label(2.75,2.75,4.7,'OPUS·4',COL.claude.line,W,H,fs-1.5);
+
+    // Grok SW
+    box(1.5,9.0,2.5,2.5,0.6,2.4,COL.grok,W,H);
+    box(1.5,9.0,2.5,2.5,2.4,4.2,{...COL.grok,top:'#CA90FF'},W,H);
+    label(2.75,10.25,5,'GROK',COL.grok.line,W,H,fs,true);
+    label(2.75,10.25,4.4,'GROK·3',COL.grok.line,W,H,fs-1.5);
+
+    // Gemini NE
+    box(18.0,1.5,2.5,2.5,0.6,2.2,COL.gemini,W,H);
+    box(18.0,1.5,2.5,2.5,2.2,4.4,{...COL.gemini,top:'#70AAFF'},W,H);
+    label(19.25,2.75,5.1,'GEMINI',COL.gemini.line,W,H,fs,true);
+    label(19.25,2.75,4.5,'PRO·2.5',COL.gemini.line,W,H,fs-1.5);
+
+    // NPU Center (drawn before SE to let SE overlap it at bottom)
+    // NPU body
+    const np=(x,y,z)=>iso(x,y,z,W,H);
+    // Socket ring
+    const sock=[np(8.5,4.5,0.6),np(13.5,4.5,0.6),np(13.5,9.5,0.6),np(8.5,9.5,0.6)];
+    poly(ctx,sock,'#09120F','rgba(162,89,247,0.2)',0.6);
+    // Side faces
+    poly(ctx,[np(9,5,1),np(13,5,1),np(13,5,5.6),np(9,5,5.6)],'#0a0320','rgba(162,89,247,0.3)',0.5);
+    poly(ctx,[np(13,5,1),np(13,9,1),np(13,9,5.6),np(13,5,5.6)],'#070220','rgba(162,89,247,0.2)',0.4);
+    // Top
+    const ntf=[np(9,5,5.6),np(13,5,5.6),np(13,9,5.6),np(9,9,5.6)];
+    const ng=ctx.createLinearGradient(ntf[0].x,ntf[0].y,ntf[2].x,ntf[2].y);
+    ng.addColorStop(0,'#1a063c'); ng.addColorStop(1,'#0e0328');
+    poly(ctx,ntf,ng,'rgba(162,89,247,0.6)',1);
+    // Die grid on top
+    ctx.save(); ctx.strokeStyle='rgba(162,89,247,0.1)'; ctx.lineWidth=0.3;
+    for(let i=1;i<4;i++){const a=np(9+i,5,5.65),b=np(9+i,9,5.65);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+    for(let j=1;j<4;j++){const a=np(9,5+j,5.65),b=np(13,5+j,5.65);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+    ctx.restore();
+    // S glyph
+    const sc=iso(11,7,5.8,W,H);
+    ctx.save(); ctx.translate(sc.x,sc.y); ctx.scale(W/1100,W/1100); ctx.lineCap='round';
+    const s=9;
+    ctx.beginPath();ctx.moveTo(0,-s);ctx.bezierCurveTo(-s,-s,-s,0,0,0);ctx.bezierCurveTo(s,0,s,s,0,s);
+    ctx.strokeStyle='#A259F7'; ctx.lineWidth=2.8; ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,-s);ctx.bezierCurveTo(-s,-s,-s,0,0,0);
+    ctx.strokeStyle='#5B8DEF'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,s);ctx.lineTo(0,s*1.55);
+    ctx.strokeStyle='#2EC4A0'; ctx.lineWidth=2.8; ctx.stroke();
+    ctx.beginPath();ctx.arc(0,-s,2,0,Math.PI*2);ctx.fillStyle='#5B8DEF';ctx.fill();
+    ctx.beginPath();ctx.arc(0,s*1.55,2,0,Math.PI*2);ctx.fillStyle='#2EC4A0';ctx.fill();
+    ctx.restore();
+    // NPU glow
+    ctx.save();
+    const gc=ctx.createRadialGradient(sc.x,sc.y,0,sc.x,sc.y,W*0.12);
+    gc.addColorStop(0,'rgba(162,89,247,0.10)'); gc.addColorStop(1,'transparent');
+    ctx.fillStyle=gc; ctx.beginPath(); ctx.arc(sc.x,sc.y,W*0.12,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    label(11,7,6.8,'synlynk','#A259F7',W,H,fs+1,true);
+    label(11,7,6.1,'COORD · NPU','rgba(255,255,255,0.25)',W,H,fs-1.5);
+
+    // Codex SE (front-most)
+    box(18.0,9.0,2.5,2.5,0.6,1.6,COL.codex,W,H);
+    box(18.0,9.0,2.5,2.5,1.6,3.2,{...COL.codex,top:'#9AAABB'},W,H);
+    box(18.0,9.0,2.5,2.5,3.2,5.0,{...COL.codex,top:'#AABBC8'},W,H);
+    label(19.25,10.25,5.8,'CODEX',COL.codex.line,W,H,fs,true);
+    label(19.25,10.25,5.1,'O3',COL.codex.line,W,H,fs-1.5);
+
+    // Packets
+    pkts.forEach(p=>{ p.step(); p.draw({W,H}); });
+
+    fr++;
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', () => { dims = resize(); });
+  frame();
+})();
+</script>
+
+</body>
+</html>

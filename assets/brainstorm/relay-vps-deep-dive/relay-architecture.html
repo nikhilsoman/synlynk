@@ -1,0 +1,106 @@
+<h2>Relay Architecture — Enterprise Network Reality</h2>
+<p class="subtitle">Port 443 + WSS as the universal transport. Three deployment modes covering LAN, VPN, and public.</p>
+
+<div style="margin-bottom:16px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px 14px;font-size:12px;color:#fca5a5;line-height:1.8;">
+  <strong>The core problem:</strong> Corporate firewalls block unknown inbound ports. Any relay on a non-standard port (27471, 8080, etc.) will be silently dropped. The relay must travel on port <strong>443 (HTTPS/WSS)</strong> — the one port universally allowed, even through deep-packet inspection.
+</div>
+
+<!-- Two ports, two purposes -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+  <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.35);border-radius:8px;padding:14px;">
+    <div style="font-size:11px;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">⚙️ Daemon — localhost:27471</div>
+    <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+      <strong>Only ever localhost.</strong> No external traffic ever reaches this port — it's the local HTTP context server agents talk to on the same machine. Standardizing at 27471 is fine — it's invisible to corporate firewalls.<br><br>
+      <span style="color:#94a3b8;">Well-known so any IDE extension or tool knows where to find context without config.</span>
+    </div>
+  </div>
+  <div style="background:rgba(239,68,68,0.09);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px;">
+    <div style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">📡 Relay — port 443, WSS</div>
+    <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+      <strong>WebSocket Secure (WSS) over port 443.</strong> Maximum firewall compatibility — this is how Figma, Linear, Slack, GitHub all do real-time. Corporate DPI inspects 443 for TLS handshake, sees valid cert, lets it through. Events flow over the persistent WS connection.<br><br>
+      <span style="color:#94a3b8;">TLS cert required. Self-signed for LAN, real cert for public VPS.</span>
+    </div>
+  </div>
+</div>
+
+<!-- Three deployment modes -->
+<div class="section">
+  <span class="label">Three deployment modes — same protocol, different connectivity</span>
+
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+
+    <!-- Mode 1: LAN -->
+    <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:700;color:#34d399;">Mode 1 — LAN (same office / same network)</span>
+        <span style="font-size:11px;color:#6b7280;background:rgba(16,185,129,0.15);padding:2px 8px;border-radius:4px;">self-hosted, day 1</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:#cbd5e1;line-height:1.8;">
+        <div>
+          <strong>Setup:</strong> Any team member runs <code>synlynk relay start</code> on their machine. Relay announces itself via <strong>mDNS</strong> (Bonjour/Avahi — same as printers, AirPlay). Other members' daemons auto-discover it on the local network — zero config.<br><br>
+          <strong>Port:</strong> 8443 (non-root) or 443 (root). Self-signed TLS cert auto-generated.
+        </div>
+        <div>
+          <strong>Firewall behaviour:</strong> Internal LAN traffic is almost never firewalled between peers. mDNS multicast on port 5353 (always allowed on corporate LAN). WSS traffic stays on the internal subnet.<br><br>
+          <strong>Remote members:</strong> Connect via corporate VPN → appear on the same LAN subnet → auto-discover relay via mDNS. Standard enterprise VPN pattern.
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode 2: Cloudflare Tunnel -->
+    <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:700;color:#fbbf24;">Mode 2 — Cloudflare Tunnel (no VPN, no open ports)</span>
+        <span style="font-size:11px;color:#6b7280;background:rgba(245,158,11,0.15);padding:2px 8px;border-radius:4px;">hybrid teams, WFH</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:#cbd5e1;line-height:1.8;">
+        <div>
+          <strong>Setup:</strong> Host runs <code>cloudflared tunnel</code> alongside <code>synlynk relay start</code>. Cloudflare Tunnel punches an outbound-only connection to Cloudflare edge — <strong>no inbound ports required</strong>. Free tier. Team gets a public HTTPS endpoint (<code>relay.yourteam.workers.dev</code> or custom domain).<br><br>
+          <strong>Migration:</strong> Move relay to VPS → update Cloudflare Tunnel config → same public URL. Zero disruption.
+        </div>
+        <div>
+          <strong>Why this works in corporate environments:</strong> The tunnel is outbound-only (HTTPS to Cloudflare). Corporate firewalls allow outbound 443 universally. Team members connect inbound via Cloudflare's edge on 443. The firewall sees standard HTTPS traffic.<br><br>
+          <strong>Tailscale alternative:</strong> Same principle — private mesh network, all traffic encrypted, no open ports. Better for teams already on Tailscale.
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode 3: VPS -->
+    <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:700;color:#a5b4fc;">Mode 3 — VPS (persistent, no single host dependency)</span>
+        <span style="font-size:11px;color:#6b7280;background:rgba(99,102,241,0.15);padding:2px 8px;border-radius:4px;">teams with budget, always-on</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:#cbd5e1;line-height:1.8;">
+        <div>
+          <strong>Setup:</strong> Relay deployed to Fly.io / Hetzner / Railway. Real TLS cert (Let's Encrypt, auto-managed). <code>synlynk relay connect wss://relay.yourteam.com</code>. All daemons connect outbound to 443 — firewall transparent.<br><br>
+          <strong>Cost:</strong> Fly.io free tier covers 4-10 person team. Hetzner €4/mo if you want dedicated.
+        </div>
+        <div>
+          <strong>This is the graduation path:</strong><br>
+          Day 1 → LAN (mDNS, self-hosted)<br>
+          Growing team → Cloudflare Tunnel (no VPN requirement)<br>
+          Stable team → VPS (always-on, no single-host dependency)<br><br>
+          Migration between modes = update relay URL in workspace config + broadcast. Same WSS protocol, same event format throughout.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Revolving host protocol -->
+<div style="margin-top:16px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:14px;">
+  <div style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">🔄 Revolving Host Protocol — loud by design</div>
+  <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+    <code>synlynk relay handover &lt;member&gt;</code> — triggers the handover sequence:<br>
+    1. <strong>Old host broadcasts signed RELAY_HANDOVER event</strong> to all connected daemons (new URL, new host identity, timestamp)<br>
+    2. <strong>Grace period: 10 minutes</strong> — old relay stays alive, proxies any laggard connections to new relay<br>
+    3. All daemons reconnect to new relay, acknowledge with signed RELAY_CONNECTED event<br>
+    4. Old relay shuts down after grace period OR when all members confirmed<br>
+    5. <strong>Degraded-mode warning</strong>: any daemon that hasn't confirmed within 5 min gets a loud local alert — "relay host changed, work may not be syncing"<br><br>
+    <span style="color:#f87171;">Rule: no silent host changes. A member going offline mid-session triggers a degraded-mode warning to all, not a silent failure.</span>
+  </div>
+</div>
+
+<p style="margin-top:16px;font-size:13px;color:#94a3b8;text-align:center;">Does this relay architecture address the enterprise concerns? Ready to include this in the spec?</p>

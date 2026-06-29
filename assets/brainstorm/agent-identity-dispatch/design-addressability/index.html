@@ -1,0 +1,120 @@
+<h2>Agent Addressability — Where does work land?</h2>
+<p class="subtitle">Identity says who the agent is. Address says where to send work to reach it.</p>
+
+<div class="section">
+  <p class="label">Two distinct concerns</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Dispatch address — machine to agent</div>
+      <div class="mockup-body" style="font-size:0.84em;line-height:1.9">
+        How does the daemon/coordinator hand a story to the right agent process?<br><br>
+        Needs to work:<br>
+        · locally (same machine, subprocess)<br>
+        · across machines (remote agent picking up work)<br>
+        · cross-network (Tokq era)<br>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Human-agent bridge — approvals & notifications</div>
+      <div class="mockup-body" style="font-size:0.84em;line-height:1.9">
+        How does a human get notified, approve, or redirect?<br><br>
+        Needs to work:<br>
+        · approval requests before auto-dispatch<br>
+        · completion / blocker notifications<br>
+        · escalation when agent is stuck<br>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Dispatch address options</p>
+  <div class="options">
+
+    <div class="option" data-choice="inbox" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>state.db inbox table <span style="font-size:0.75em;color:var(--accent)">★ Recommended for local</span></h3>
+        <p>Each role has an inbox in state.db. Daemon writes a <code>dispatch_request</code> row. Agent worker (or one-shot <code>synlynk worker --role Builder</code>) polls/watches and picks up. Address = <code>synlynk://&lt;project_id&gt;/roles/builder/inbox</code> resolved locally to state.db.</p>
+        <div class="pros-cons">
+          <div class="pros"><h4>Pros</h4><ul>
+            <li>No new infrastructure — state.db already exists</li>
+            <li>Works with daemon (push) and one-shot (pull)</li>
+            <li>Full audit trail in events table</li>
+            <li>Natural path to NATS (same address scheme, different transport)</li>
+          </ul></div>
+          <div class="cons"><h4>Cons</h4><ul>
+            <li>Machine-local only until Tokq/NATS</li>
+            <li>Polling adds latency (mitigated: SQLite WAL notify)</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="option" data-choice="nats" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>NATS subject (Tokq-era)</h3>
+        <p>Each role gets a NATS subject: <code>synlynk.&lt;project_id&gt;.builder</code>. Daemon publishes; any subscribed agent picks up. Cross-machine, cross-network out of the box. Already the v1.0 transport.</p>
+        <div class="pros-cons">
+          <div class="pros"><h4>Pros</h4><ul>
+            <li>Cross-machine natively</li>
+            <li>At-most-once or at-least-once delivery semantics</li>
+            <li>Tokq alignment — same transport, same subjects</li>
+          </ul></div>
+          <div class="cons"><h4>Cons</h4><ul>
+            <li>Requires NATS — not available until v1.0</li>
+            <li>Premature for local-only use</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="option" data-choice="email" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Email alias under human account</h3>
+        <p>Each agent role gets an email alias: <code>builder+synlynk@gmail.com</code> or <code>builder@&lt;project&gt;.synlynk.io</code>. Work dispatched cross-machine lands as email; agent polls via Gmail API. Human's email is the routing fabric.</p>
+        <div class="pros-cons">
+          <div class="pros"><h4>Pros</h4><ul>
+            <li>Cross-machine, cross-network today — no NATS needed</li>
+            <li>Human-readable, auditable in existing inbox</li>
+            <li>Integrates with existing notification workflows</li>
+          </ul></div>
+          <div class="cons"><h4>Cons</h4><ul>
+            <li>Email latency (~seconds to minutes)</li>
+            <li>Requires Gmail API or SMTP setup</li>
+            <li>Not designed for high-frequency dispatch</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Human-agent bridge — separate concern, recommended design</p>
+  <div class="mockup">
+    <div class="mockup-header">Email as the approval + notification channel (not the dispatch channel)</div>
+    <div class="mockup-body" style="font-size:0.86em;line-height:1.9">
+      The dispatch address (A or B above) handles machine→agent work handoff.<br>
+      Email handles the human loop — a different, lower-frequency channel:<br><br>
+      <strong>Approval request:</strong> "Story #42 (refactor auth) is ready to dispatch to Builder/claude.<br>
+      &nbsp;&nbsp;Estimated cost: $0.18. Approve? → reply YES / HOLD / REASSIGN"<br><br>
+      <strong>Completion notice:</strong> "Story #42 completed. done_criteria verified. Next: Story #43 queued."<br><br>
+      <strong>Escalation:</strong> "Story #44 blocked — dependency on Story #40 still in_progress for 2h.<br>
+      &nbsp;&nbsp;Human review needed."<br><br>
+      <span style="color:#888">This makes the human's inbox the audit trail and approval interface.<br>
+      No new UI needed. Works across machines. Familiar.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">Recommended layering</p>
+  <p style="margin-top:0.5rem;font-size:0.88em">
+    <strong>Now (v0.5–v0.7):</strong> state.db inbox as dispatch address. Email as human-agent bridge for approvals + notifications.<br>
+    <strong>v1.0+:</strong> NATS subject replaces state.db inbox for cross-machine dispatch. Email bridge stays — it's the right channel for human interaction regardless of transport.
+  </p>
+</div>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #28 — The Architecture Pivot: Designing the Rest of the OS | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 09, 2026</span>
+        
+          <span class="blog-post-pr">PR #28</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #28 — The Architecture Pivot: Designing the Rest of the OS</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #28 — The Architecture Pivot: Designing the Rest of the OS</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/28">chore: 2026-06-07 design session docs — state-db, identity, workspace, arc gap analysis</a><br>
+<strong>Merged:</strong> 2026-06-09<br>
+<strong>Contents:</strong> 4 design specs, 13 brainstorm HTML screens, memory + devlog updates, unified roadmap</p>
+<hr>
+<h2>The Broader Goal at the End of v0.4.0</h2>
+<p>By v0.4.0, the goal was: autonomous issue pickup and board management. The <code>synlynk start</code> command was the first real autonomy primitive. The harness could act on behalf of the user without step-by-step direction.</p>
+<p>But the flat-file architecture — <code>project-docs/roadmap.md</code>, <code>todo.md</code>, <code>memory.md</code>, <code>costs.md</code>, <code>devlogs/</code> — was showing its limits. Multiple worktrees could not safely write to the same files. There was no queryable state. The agentic PM hierarchy had no representation. Agent identity was a GitHub login, not a cryptographic anchor. The workspace concept (one product, multiple repos) had no model at all.</p>
+<p>v0.4.0 needed to land before the architecture could be redesigned. This PR is the design.</p>
+<hr>
+<h2>The Strategic Shift: From File-Based to State-Based</h2>
+<p>The most important architectural decision in this session is stated as a hard invariant:</p>
+<blockquote>
+<p><strong>State never branches. All worktrees share <code>~/.synlynk/projects/&lt;project_id&gt;/state.db</code>.</strong></p>
+</blockquote>
+<p>This is a complete reversal of the file-based model, where each worktree checks out its own copy of <code>project-docs/</code>. The flat files work for human-maintained content (decisions written with deliberate thought). They do not work for machine-maintained state (task status, cost accumulation, agent telemetry) where concurrent writes from multiple worktrees produce merge conflicts.</p>
+<p>SQLite WAL (Write-Ahead Logging) mode allows concurrent readers and one writer at a time, with readers never blocking the writer. A <code>~/.synlynk/</code> location (outside the git worktree) means the database is shared across all worktrees for a given project. A single authoritative state store, accessible from anywhere, with no git-related conflicts.</p>
+<p>This shift also enables the second major architectural decision: <code>project-docs/</code> is retired at v0.5.0. The human-readable docs that were the primary state store become generated views over state.db, gitignored, and not committed. The ledger moves into the database. The context bridge (<code>.synlynk/context.md</code>) remains unchanged — it is still a generated artifact that agents read, but now computed from SQL queries rather than file concatenation.</p>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/architecture-pivot/architecture-pivot-state-db.html" title="The Architecture Pivot — Flat Files to SQLite" loading="lazy" frameborder="0"></iframe>
+  <figcaption>The Architecture Pivot — Flat Files to SQLite</figcaption>
+</figure>
+<hr>
+<h2>The Four Design Specs</h2>
+<h3>1. State DB &amp; Agentic PM</h3>
+<p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-06-07-synlynk-state-db-agentic-pm-design.md</code></p>
+<p>The agentic PM hierarchy that replaces <code>todo.md</code> and <code>roadmap.md</code>:</p>
+<pre><code>Arc        — strategic direction (pivot/archive/merge). The layer missing from all PM tools.
+  Phase    — structural backbone (was: roadmap row)
+    Epic   — one implementation plan (output of the writing-plans skill)
+      Story — one agent task: done_criteria + depends_on graph
+        Event — append-only universal log
+</code></pre>
+<p>The <code>Arc</code> level is the novel contribution. Every PM tool has epics and stories. None has the strategic meta-layer: &quot;we pivoted from X to Y because of Z.&quot; The arc captures product direction changes with the reasoning attached, making them first-class historical artifacts rather than buried commit messages.</p>
+<p><code>Story</code> is the atomic unit of dispatch: a task with explicit <code>done_criteria</code>, a <code>depends_on</code> graph for sequencing, an <code>estimated_tokens</code> budget, and an <code>assigned_agent</code> FK into the agent registry. Stories are routed by capability → quota → cost (in that priority order). Token budget replaces story points — it is the quantity that actually matters for autonomous dispatch.</p>
+<p>The cost attribution model gains four new FK columns: <code>story_id</code>, <code>epic_id</code>, <code>phase_id</code>, <code>arc_id</code>. Every dollar spent is attributable to a specific story in a specific epic in a specific phase. This makes per-feature cost reporting possible for the first time.</p>
+<p>The <code>agent_quotas</code> table tracks per-agent spending limits within a project — the mechanism that prevents runaway autonomous execution before human review.</p>
+<p><strong>Migration:</strong> <code>synlynk migrate</code> (v0.5.0) parses <code>project-docs/</code> into <code>state.db</code> and untracks the files with <code>git rm --cached</code>. One-way, one-time, versioned.</p>
+<h3>2. Agent Identity, Dispatch &amp; Entitlements</h3>
+<p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-06-07-agent-identity-dispatch-design.md</code></p>
+<p><strong>Brainstorm visuals:</strong></p>
+<ul>
+<li><a href="../brainstorm/v1-architecture/identity-evolution.html">Identity Evolution</a> — the progression from agent-tied-to-human → role+competency+scope → capability graph</li>
+<li><a href="../brainstorm/v1-architecture/competency-model.html">Competency as Vector</a> — why synthetic agents achieve full-stack as a default and what synlynk's role is</li>
+</ul>
+<p>The identity model is <strong>two-layered</strong>:</p>
+<p><strong>Local Identity</strong> — a machine-level Ed25519 keypair at <code>~/.synlynk/identity.key</code>, one per person per machine. Shared across all workspaces. Generates a stable <code>agent_uuid</code> for each agent slot. This is the cryptographic anchor: all <code>dispatch_log</code> rows and completed story events are signed by this key.</p>
+<p>Ed25519 was pulled forward from v0.9.0 to v0.5.0 because the case for it became clear: non-repudiable audit trails from day one. A harness that enables autonomous agent actions must have a cryptographic record of who authorized what. Without signatures, the audit log is a text file that anyone can edit.</p>
+<p><strong>Role</strong> — the primary entitlement unit. Three roles: Architect, Builder, Verifier. Roles are stable; they do not change per-session. Agent profiles are dynamic (fitness scores, model version, environment health).</p>
+<p><strong>Four dispatch modes:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Description</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>Daemon persistent listener</td>
+<td>Default when daemon is running</td>
+</tr>
+<tr>
+<td>B</td>
+<td>Self-chain (completion re-evaluates)</td>
+<td>Multi-step autonomous chains</td>
+</tr>
+<tr>
+<td>C</td>
+<td><code>synlynk dispatch</code> one-shot</td>
+<td>Universal fallback; always works</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Agent-native scheduling</td>
+<td>When the agent CLI has its own scheduling (Claude Code routines)</td>
+</tr>
+</tbody>
+</table>
+<p>Mode A fails → Mode C always works. The fallback chain is the safety net.</p>
+<p><strong>Entitlements: two layers</strong></p>
+<p>Authorization gates before dispatch:</p>
+<ul>
+<li><code>auto</code> — dispatch immediately</li>
+<li><code>approval</code> — wait for human <code>synlynk story approve &lt;id&gt;</code></li>
+<li><code>hold</code> — pause all dispatch for this story</li>
+<li><code>reject</code> — block permanently</li>
+</ul>
+<p>Merge to main is always <code>approval</code> — no threshold or override exists for this gate.</p>
+<p>Sandboxing constrains while running:</p>
+<ul>
+<li>Token ceiling per story (hard kill above limit)</li>
+<li>Time ceiling (daemon kills process on timeout)</li>
+<li>Network ACLs (block external calls for security-sensitive tasks)</li>
+<li>Path ACLs (restrict file access to project directory)</li>
+</ul>
+<h3>3. Workspace &amp; Multi-Repo</h3>
+<p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-06-07-synlynk-workspace-multi-repo-design.md</code></p>
+<p><strong>Brainstorm visuals:</strong></p>
+<ul>
+<li><a href="../brainstorm/v1-architecture/agent-comms.html">Inter-Agent Communication</a> — the GitHub Issues + Projects v2 board-as-IPC model and its evolution</li>
+<li><a href="../brainstorm/v1-architecture/future-comms.html">Future Comms</a> — SQLite → Context Server → NATS leaf node progression</li>
+</ul>
+<p><strong>Workspace = one product, N repos.</strong> <code>~/.synlynk/workspaces/&lt;name&gt;/state.db</code> is the single state store for all repos in the product. Repos are a <code>repo_id</code> dimension within one DB, not separate DBs.</p>
+<p>The key design constraint: <code>synlynk init</code> in repo #1 creates a workspace transparently (solo = invisible to the user; team = named). <code>synlynk workspace join &lt;name&gt;</code> adds repo #2. Auto-detection from GitHub org match makes the common case (same org, same product) zero-configuration.</p>
+<p><strong>Cross-repo Epics</strong> are first-class: a Story has a <code>repo_id</code> FK. An Epic spans multiple repos by default. The Architect's context view = full epic across all repos. Builder and Verifier context = workspace shared conventions + repo-specific slice.</p>
+<p><strong>Team sync: event-log via shared git repo.</strong> Per-member branches in a shared git repo, daemon pushing every 5 minutes. Maximum drift between members: ~5 minutes. This is a deliberate choice over a sync endpoint: no new infrastructure, observable history, and the same event format that becomes NATS subjects at Tokq Alpha.</p>
+<p><strong>Simulated team for solo developers.</strong> Switch <code>git config user.name</code> to simulate teammates (Gaurav, Kunal). Events record the different git user, same machine key. Full attribution per simulated team member — useful for testing multi-agent dynamics before bringing a real team member online.</p>
+<h3>4. Arc Gap Analysis</h3>
+<p><strong>Document:</strong> <code>docs/superpowers/2026-06-07-arc-gap-analysis.md</code></p>
+<p>12 design gaps identified across v0.4.0–v1.0.0, prioritized by blocking relationship:</p>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Gap</th>
+<th>Blocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>v0.5.0 scope split</td>
+<td>Next impl plan</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Constraint vs. entitlement boundary</td>
+<td>v0.6.0</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Story state machine unification</td>
+<td>v0.6.0</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>synlynk run</code> vs. <code>dispatch</code> overlap</td>
+<td>v0.6.0</td>
+</tr>
+<tr>
+<td>5</td>
+<td>HTTP Context Server API</td>
+<td>v0.7.0</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Review TUI design</td>
+<td>v0.7.0</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Open Context Protocol spec</td>
+<td>v0.8.0</td>
+</tr>
+<tr>
+<td>8</td>
+<td>MCP server design</td>
+<td>v0.8.0</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Team safety model</td>
+<td>v0.9.0</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Network identity / multi-project keypair</td>
+<td>v0.9.0</td>
+</tr>
+<tr>
+<td>11</td>
+<td>NATS leaf node schema</td>
+<td>v1.0.0, defer</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Packaging + distribution</td>
+<td>v1.0.0, defer</td>
+</tr>
+</tbody>
+</table>
+<p>Gap #1 (v0.5.0 scope split) is the immediate blocker: the current v0.5.0 spec combines SQLite migration, agent identity, Ed25519, capability routing, and the full PM hierarchy in one release. That is too large. Before writing the v0.5.0 implementation plan, this gap must be resolved into a specific scope split.</p>
+<p><strong>Immediately ready:</strong> v0.4.0 Trio Protocol implementation (no gaps — all design decisions are locked).</p>
+<hr>
+<h2>The Brainstorm Session: 13 Screens</h2>
+<p>The v1.0 architecture brainstorm (2026-06-03) produced 7 HTML pages:</p>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>Topic</th>
+<th>Key decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../brainstorm/v1-architecture/index.html">Index</a></td>
+<td>Session overview</td>
+<td>6-screen survey of all design decisions</td>
+</tr>
+<tr>
+<td><a href="../brainstorm/v1-architecture/agent-comms.html">Agent Comms</a></td>
+<td>Inter-agent communication</td>
+<td>GitHub Issues + Projects v2 (B+A) for v1.0</td>
+</tr>
+<tr>
+<td><a href="../brainstorm/v1-architecture/future-comms.html">Future Comms</a></td>
+<td>Transport evolution</td>
+<td>SQLite → Context Server → NATS (same room abstraction at every tier)</td>
+</tr>
+<tr>
+<td><a href="../brainstorm/v1-architecture/enterprise-scale.html">Enterprise Scale</a></td>
+<td>NATS JetStream architecture</td>
+<td>3-tier: Solo daemon = NATS leaf, Team = NATS hub, Enterprise = JetStream cluster</td>
+</tr>
+<tr>
+<td><a href="../brainstorm/v1-architecture/identity-evolution.html">Identity Evolution</a></td>
+<td>Identity model</td>
+<td>Role + competency + scope; no biological/synthetic gate</td>
+</tr>
+<tr>
+<td><a href="../brainstorm/v1-architecture/competency-model.html">Competency Model</a></td>
+<td>Competency as vector</td>
+<td>Synthetic agents achieve full-stack as default when context-funded</td>
+</tr>
+<tr>
+<td><a href="../brainstorm/v1-architecture/tui-evolution.html">TUI Evolution</a></td>
+<td>Management interface</td>
+<td>TUI (Textual) → Web portal → Enterprise admin console</td>
+</tr>
+</tbody>
+</table>
+<p>The GitHub Projects v2 integration brainstorm (2026-06-01) added 4 more screens covering approaches, context, design architecture, and command design — all available at <code>docs/brainstorm/github-projects-v2/</code>.</p>
+<hr>
+<h2>The Competency Vector: synlynk as Context Funding</h2>
+<p>The competency model brainstorm produced the reframe that is now central to synlynk's product story:</p>
+<blockquote>
+<p>synlynk is not a &quot;context injector.&quot; It is a <strong>context funding mechanism</strong> — the infrastructure that accumulates room history, structures it, and delivers it to agents at retrieval speed.</p>
+</blockquote>
+<p>A biological specialist is constrained by cognitive load. A synthetic agent has no cognitive load constraint; its ceiling is context depth × breadth × retrieval speed. A well-funded synthetic agent — one with deep, structured room history across all domains — achieves full-stack competency as a default.</p>
+<p>The competency vector per agent:</p>
+<pre><code class="language-json">{
+  &quot;sub&quot;: &quot;claude.nikhil&quot;,
+  &quot;role&quot;: &quot;implementer&quot;,
+  &quot;competency&quot;: {
+    &quot;backend&quot;:  0.95,
+    &quot;frontend&quot;: 0.60,
+    &quot;infra&quot;:    0.80,
+    &quot;data&quot;:     0.70,
+    &quot;testing&quot;:  0.75,
+    &quot;security&quot;: 0.65
+  },
+  &quot;context_funded_by&quot;: [&quot;rxcc.feat.&gt;&quot;, &quot;rxcc.live.&gt;&quot;, &quot;rxcc.deploy.&gt;&quot;]
+}
+</code></pre>
+<p>Scores are derived from: PRs merged cleanly per domain, incidents caused (negative signal), room history depth per subject, test pass rate, peer review acceptance rate.</p>
+<p>This frames synlynk's entire product arc: from context injector (v0.1) to context funding infrastructure (v1.0) to the local client of a distributed context marketplace (Tokq Alpha). Each release increases the depth and breadth of context available to agents; each increase in context depth expands the effective competency of the agents that synlynk runs.</p>
+<hr>
+<h2>The Revised Roadmap</h2>
+<p>The unified roadmap that emerged from this session:</p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Theme</th>
+<th>Infrastructure</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v0.4.0</td>
+<td>Conventions + Trio Bootstrap</td>
+<td>Flat files</td>
+<td>Jul 2026</td>
+</tr>
+<tr>
+<td>v0.5.0</td>
+<td>Capability Engine</td>
+<td>SQLite WAL</td>
+<td>Aug 2026</td>
+</tr>
+<tr>
+<td>v0.6.0</td>
+<td>Job Control + Constraints</td>
+<td>SQLite extended</td>
+<td>Sep 2026</td>
+</tr>
+<tr>
+<td>v0.7.0</td>
+<td>Async Pipeline + Daemon</td>
+<td>HTTP Context Server</td>
+<td>Oct 2026</td>
+</tr>
+<tr>
+<td>v0.8.0</td>
+<td>Open Context Protocol</td>
+<td>HTTP server (public)</td>
+<td>Nov 2026</td>
+</tr>
+<tr>
+<td>v0.9.0</td>
+<td>Review TUI + Team Safety</td>
+<td>JSONL event log</td>
+<td>Dec 2026</td>
+</tr>
+<tr>
+<td>v1.0.0</td>
+<td>Stable OS + Tokq Bridge Ready</td>
+<td>NATS leaf node schema</td>
+<td>Q1 2027</td>
+</tr>
+<tr>
+<td>Tokq Alpha</td>
+<td>Cloud Bridge</td>
+<td>NATS + MessagePack</td>
+<td>Q3 2027</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This PR is a design document, not a code change. But design documents that lock architecture decisions are the prerequisite for implementations that compound correctly.</p>
+<p>What was locked:</p>
+<ol>
+<li>
+<p><strong>The state DB invariant.</strong> State never branches. All worktrees share one DB. This is the architectural decision that makes reliable autonomous dispatch possible — you cannot safely dispatch from multiple worktrees without a single authoritative state store.</p>
+</li>
+<li>
+<p><strong>The cryptographic identity.</strong> Ed25519 keypairs, signed events. Autonomous actions leave a non-repudiable audit trail. Without this, the dispatch log is a claim. With it, it is a proof.</p>
+</li>
+<li>
+<p><strong>The entitlement model.</strong> Authorization + sandboxing as two separate layers. The gate (approve/auto/hold/reject) is separate from the constraint (token ceiling, time ceiling, path ACLs). This layering makes the safety model legible and testable.</p>
+</li>
+<li>
+<p><strong>The workspace model.</strong> One product = one state DB. Cross-repo Epics as first-class. This is what makes synlynk a platform rather than a per-repo tool.</p>
+</li>
+<li>
+<p><strong>The 12 arc gaps.</strong> Knowing what is not yet designed is as valuable as knowing what is. The gap analysis is a forcing function: no implementation plan for v0.5.0 can be written until Gap #1 (scope split) is resolved. This prevents over-engineering a release before its dependencies are ready.</p>
+</li>
+</ol>
+<hr>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<blockquote>
+<p><strong>The OS for multi-agent development.</strong> synlynk = local OS client. Tokq = distributed backend. Both survive independently; cloud is additive. v1.0 in Q1 2027 defines the NATS leaf schema; Tokq Alpha connects to it in Q3 2027.</p>
+</blockquote>
+<p>The flat-file era ends with v0.4.0. The state-DB era begins at v0.5.0. The architecture is complete enough to be implemented sequentially, release by release, with each release independently useful and the path forward never requiring a rewrite.</p>
+<p>The human is still in the loop at every release — as approver, reviewer, and the final merge gate. But the loop gets shorter with each release. v0.4.0: human says &quot;start 42.&quot; v0.6.0: human says &quot;run this feature.&quot; v0.8.0: agents publish context they produced; other agents consume it without human mediation. v1.0: human reviews the result of an autonomous sprint. Tokq Alpha: the sprint runs across machines, teams, and time zones.</p>
+<p>That is the arc. synlynk is the OS that makes it possible.</p>
+<hr>
+<p><em>Next posts in this series will cover each PR from here forward — one post per PR, drafted as part of the synlynk development workflow.</em></p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Superpowers Brainstorming</title>
+  <style>
+    /*
+     * BRAINSTORM COMPANION FRAME TEMPLATE
+     *
+     * This template provides a consistent frame with:
+     * - OS-aware light/dark theming
+     * - Fixed header and selection indicator bar
+     * - Scrollable main content area
+     * - CSS helpers for common UI patterns
+     *
+     * Content is injected via placeholder comment in #claude-content.
+     */
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    /* ===== THEME VARIABLES ===== */
+    :root {
+      --bg-primary: #f5f5f7;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #e5e5e7;
+      --border: #d1d1d6;
+      --text-primary: #1d1d1f;
+      --text-secondary: #86868b;
+      --text-tertiary: #aeaeb2;
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --success: #34c759;
+      --warning: #ff9f0a;
+      --error: #ff3b30;
+      --selected-bg: #e8f4fd;
+      --selected-border: #0071e3;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1d1d1f;
+        --bg-secondary: #2d2d2f;
+        --bg-tertiary: #3d3d3f;
+        --border: #424245;
+        --text-primary: #f5f5f7;
+        --text-secondary: #86868b;
+        --text-tertiary: #636366;
+        --accent: #0a84ff;
+        --accent-hover: #409cff;
+        --selected-bg: rgba(10, 132, 255, 0.15);
+        --selected-border: #0a84ff;
+      }
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* ===== FRAME STRUCTURE ===== */
+    .header {
+      background: var(--bg-secondary);
+      padding: 0.5rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header h1 { font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); }
+    .header .status { font-size: 0.7rem; color: var(--success); display: flex; align-items: center; gap: 0.4rem; }
+    .header .status::before { content: ''; width: 6px; height: 6px; background: var(--success); border-radius: 50%; }
+
+    .main { flex: 1; overflow-y: auto; }
+    #claude-content { padding: 2rem; min-height: 100%; }
+
+    .indicator-bar {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 0.5rem 1.5rem;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .indicator-bar span {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .indicator-bar .selected-text {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--text-secondary); margin-bottom: 1.5rem; }
+    .section { margin-bottom: 2rem; }
+    .label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+
+    /* ===== OPTIONS (for A/B/C choices) ===== */
+    .options { display: flex; flex-direction: column; gap: 0.75rem; }
+    .option {
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .option:hover { border-color: var(--accent); }
+    .option.selected { background: var(--selected-bg); border-color: var(--selected-border); }
+    .option .letter {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      width: 1.75rem; height: 1.75rem;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 0.85rem; flex-shrink: 0;
+    }
+    .option.selected .letter { background: var(--accent); color: white; }
+    .option .content { flex: 1; }
+    .option .content h3 { font-size: 0.95rem; margin-bottom: 0.15rem; }
+    .option .content p { color: var(--text-secondary); font-size: 0.85rem; margin: 0; }
+
+    /* ===== CARDS (for showing designs/mockups) ===== */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .card.selected { border-color: var(--selected-border); border-width: 2px; }
+    .card-image { background: var(--bg-tertiary); aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center; }
+    .card-body { padding: 1rem; }
+    .card-body h3 { margin-bottom: 0.25rem; }
+    .card-body p { color: var(--text-secondary); font-size: 0.85rem; }
+
+    /* ===== MOCKUP CONTAINER ===== */
+    .mockup {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+    .mockup-header {
+      background: var(--bg-tertiary);
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .mockup-body { padding: 1.5rem; }
+
+    /* ===== SPLIT VIEW (side-by-side comparison) ===== */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 700px) { .split { grid-template-columns: 1fr; } }
+
+    /* ===== PROS/CONS ===== */
+    .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+    .pros, .cons { background: var(--bg-secondary); border-radius: 8px; padding: 1rem; }
+    .pros h4 { color: var(--success); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .cons h4 { color: var(--error); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .pros ul, .cons ul { margin-left: 1.25rem; font-size: 0.85rem; color: var(--text-secondary); }
+    .pros li, .cons li { margin-bottom: 0.25rem; }
+
+    /* ===== PLACEHOLDER (for mockup areas) ===== */
+    .placeholder {
+      background: var(--bg-tertiary);
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-tertiary);
+    }
+
+    /* ===== INLINE MOCKUP ELEMENTS ===== */
+    .mock-nav { background: var(--accent); color: white; padding: 0.75rem 1rem; display: flex; gap: 1.5rem; font-size: 0.9rem; }
+    .mock-sidebar { background: var(--bg-tertiary); padding: 1rem; min-width: 180px; }
+    .mock-content { padding: 1.5rem; flex: 1; }
+    .mock-button { background: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; }
+    .mock-input { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><a href="https://github.com/obra/superpowers" style="color: inherit; text-decoration: none;">Superpowers Brainstorming</a></h1>
+    <div class="status" style="background:none">synlynk v1.0 architecture brainstorm · 2026-06-03</div>
+  </div>
+
+  <div class="main">
+    <div id="claude-content">
+      <h2>Synlynk Management Interface — Evolution</h2>
+<p class="subtitle">Five screens across four tiers. Same mental model, expanding surface area. Click a tier to preview.</p>
+
+<div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap" id="tier-tabs">
+  <button onclick="showTier('solo')" id="tab-solo" class="mock-button" style="background:rgba(168,255,120,0.2);border:1px solid rgba(168,255,120,0.5);color:#a8ff78;padding:0.4rem 1rem;border-radius:4px;cursor:pointer;font-size:0.82rem">Solo v1.0 — TUI</button>
+  <button onclick="showTier('soloplus')" id="tab-soloplus" class="mock-button" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);color:#888;padding:0.4rem 1rem;border-radius:4px;cursor:pointer;font-size:0.82rem">Solo+ — Enhanced TUI</button>
+  <button onclick="showTier('team')" id="tab-team" class="mock-button" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);color:#888;padding:0.4rem 1rem;border-radius:4px;cursor:pointer;font-size:0.82rem">Team — Web Portal</button>
+  <button onclick="showTier('enterprise')" id="tab-enterprise" class="mock-button" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);color:#888;padding:0.4rem 1rem;border-radius:4px;cursor:pointer;font-size:0.82rem">Enterprise — Admin Console</button>
+</div>
+
+<!-- SOLO TUI -->
+<div id="tier-solo" class="tier-content">
+  <p style="font-size:0.82rem;color:#888;margin-bottom:0.75rem">Built with <strong style="color:#a8ff78">Textual</strong> (Python, zero new deps beyond stdlib+textual). Launched via <code>synlynk ui</code>. Five panels, keyboard-navigable.</p>
+
+  <div class="mockup">
+    <div class="mockup-header" style="font-family:monospace;display:flex;justify-content:space-between">
+      <span>synlynk — rxcc · @nikhil · claude.nikhil · watching ●</span>
+      <span style="color:#666">q:quit  tab:panel  ?:help</span>
+    </div>
+    <div class="mockup-body" style="padding:0;overflow:hidden">
+
+      <!-- Nav sidebar + main area -->
+      <div style="display:grid;grid-template-columns:160px 1fr;height:460px">
+
+        <!-- Sidebar nav -->
+        <div style="border-right:1px solid rgba(255,255,255,0.1);padding:0.5rem 0;font-size:0.78rem;font-family:monospace">
+          <div style="padding:0.3rem 0.75rem;color:#666;font-size:0.7rem;letter-spacing:0.1em;margin-bottom:0.25rem">SYNLYNK</div>
+          <div id="nav-dashboard" onclick="showPanel('dashboard')" style="padding:0.35rem 0.75rem;background:rgba(168,255,120,0.15);color:#a8ff78;cursor:pointer;border-left:2px solid #a8ff78">⬡ Dashboard</div>
+          <div id="nav-board" onclick="showPanel('board')" style="padding:0.35rem 0.75rem;color:#888;cursor:pointer;border-left:2px solid transparent">⬡ Board</div>
+          <div id="nav-agents" onclick="showPanel('agents')" style="padding:0.35rem 0.75rem;color:#888;cursor:pointer;border-left:2px solid transparent">⬡ Agents</div>
+          <div id="nav-memory" onclick="showPanel('memory')" style="padding:0.35rem 0.75rem;color:#888;cursor:pointer;border-left:2px solid transparent">⬡ Memory</div>
+          <div id="nav-messages" onclick="showPanel('messages')" style="padding:0.35rem 0.75rem;color:#888;cursor:pointer;border-left:2px solid transparent">⬡ Messages</div>
+
+          <div style="margin-top:1rem;padding:0.3rem 0.75rem;color:#666;font-size:0.7rem;letter-spacing:0.1em">STATUS</div>
+          <div style="padding:0.35rem 0.75rem;font-size:0.75rem">
+            <div style="color:#a8ff78">● watching</div>
+            <div style="color:#666;margin-top:0.25rem">$2.14 / $10.00</div>
+            <div style="color:#666">3 active tasks</div>
+            <div style="color:#ffd878;margin-top:0.25rem">⚠ 1 sentinel</div>
+          </div>
+        </div>
+
+        <!-- Main panels -->
+        <div style="overflow:hidden;position:relative">
+
+          <!-- Dashboard panel -->
+          <div id="panel-dashboard" style="padding:0.75rem;height:100%;overflow-y:auto;font-size:0.78rem;font-family:monospace">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:0.75rem">
+              <div style="background:rgba(168,255,120,0.08);border:1px solid rgba(168,255,120,0.2);border-radius:4px;padding:0.5rem">
+                <div style="color:#666;font-size:0.7rem">BUDGET</div>
+                <div style="color:#a8ff78;font-size:1.1rem;margin:0.25rem 0">$2.14</div>
+                <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px"><div style="width:21%;height:100%;background:#a8ff78;border-radius:2px"></div></div>
+                <div style="color:#666;font-size:0.7rem;margin-top:0.2rem">of $10.00 · 21%</div>
+              </div>
+              <div style="background:rgba(120,200,255,0.08);border:1px solid rgba(120,200,255,0.2);border-radius:4px;padding:0.5rem">
+                <div style="color:#666;font-size:0.7rem">ACTIVE TASKS</div>
+                <div style="color:#78c8ff;font-size:1.1rem;margin:0.25rem 0">3</div>
+                <div style="color:#666;font-size:0.7rem">2 in progress · 1 review</div>
+              </div>
+              <div style="background:rgba(255,216,120,0.08);border:1px solid rgba(255,216,120,0.2);border-radius:4px;padding:0.5rem">
+                <div style="color:#666;font-size:0.7rem">SENTINEL</div>
+                <div style="color:#ffd878;font-size:1.1rem;margin:0.25rem 0">1 alert</div>
+                <div style="color:#666;font-size:0.7rem">costs.md stale 2h</div>
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border-radius:4px;padding:0.5rem;margin-bottom:0.5rem">
+              <div style="color:#666;font-size:0.7rem;margin-bottom:0.35rem">ACTIVE ROOMS</div>
+              <div style="display:flex;gap:0.35rem;flex-wrap:wrap">
+                <span style="background:rgba(168,255,120,0.15);color:#a8ff78;padding:0.2rem 0.5rem;border-radius:3px;font-size:0.72rem">rxcc/feat-ux-cluster</span>
+                <span style="background:rgba(120,200,255,0.15);color:#78c8ff;padding:0.2rem 0.5rem;border-radius:3px;font-size:0.72rem">rxcc/live-issues</span>
+                <span style="background:rgba(255,168,120,0.15);color:#ffa878;padding:0.2rem 0.5rem;border-radius:3px;font-size:0.72rem">rxcc/deploy</span>
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border-radius:4px;padding:0.5rem">
+              <div style="color:#666;font-size:0.7rem;margin-bottom:0.35rem">RECENT ACTIVITY</div>
+              <div style="color:#aaa;line-height:1.9">
+                <div><span style="color:#666">14:32</span> claude.nikhil · PR #412 opened · fix/live-15-follow-up</div>
+                <div><span style="color:#666">14:15</span> agy.nikhil · checkpoint · 2 tasks archived</div>
+                <div><span style="color:#666">13:58</span> codex.nikhil · test suite · 47 passing</div>
+                <div><span style="color:#666">13:22</span> claude.nikhil · room rxcc/live-issues · LIVE-16 opened</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Board panel -->
+          <div id="panel-board" style="padding:0.75rem;height:100%;overflow-y:auto;font-size:0.78rem;font-family:monospace;display:none">
+            <div style="color:#666;font-size:0.7rem;margin-bottom:0.5rem">GITHUB PROJECTS V2 — rxcc · Programme Board &nbsp;<span style="color:#444">r:refresh  n:new issue  enter:open</span></div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.4rem;font-size:0.72rem">
+              <div>
+                <div style="color:#666;padding:0.25rem 0.4rem;background:rgba(255,255,255,0.04);border-radius:3px;margin-bottom:0.4rem">BACKLOG (12)</div>
+                <div style="background:rgba(255,255,255,0.04);padding:0.3rem 0.4rem;border-radius:3px;margin-bottom:0.3rem;border-left:2px solid #666">#413 UX-11 polish<br><span style="color:#555">domain:frontend</span></div>
+                <div style="background:rgba(255,255,255,0.04);padding:0.3rem 0.4rem;border-radius:3px;border-left:2px solid #666">#414 auth hardening<br><span style="color:#555">domain:backend</span></div>
+              </div>
+              <div>
+                <div style="color:#78c8ff;padding:0.25rem 0.4rem;background:rgba(120,200,255,0.08);border-radius:3px;margin-bottom:0.4rem">IN PROGRESS (3)</div>
+                <div style="background:rgba(168,255,120,0.06);padding:0.3rem 0.4rem;border-radius:3px;margin-bottom:0.3rem;border-left:2px solid #a8ff78">#408 LIVE-16b<br><span style="color:#a8ff78">claude.nikhil ●</span></div>
+                <div style="background:rgba(120,200,255,0.06);padding:0.3rem 0.4rem;border-radius:3px;border-left:2px solid #78c8ff">#410 UX-cluster<br><span style="color:#78c8ff">agy.nikhil ●</span></div>
+              </div>
+              <div>
+                <div style="color:#ffd878;padding:0.25rem 0.4rem;background:rgba(255,216,120,0.08);border-radius:3px;margin-bottom:0.4rem">IN REVIEW (2)</div>
+                <div style="background:rgba(255,216,120,0.06);padding:0.3rem 0.4rem;border-radius:3px;border-left:2px solid #ffd878">#411 fix dash<br><span style="color:#ffd878">PR #412 open</span></div>
+              </div>
+              <div>
+                <div style="color:#ffa878;padding:0.25rem 0.4rem;background:rgba(255,168,120,0.08);border-radius:3px;margin-bottom:0.4rem">APPROVED (1)</div>
+                <div style="background:rgba(255,168,120,0.06);padding:0.3rem 0.4rem;border-radius:3px;border-left:2px solid #ffa878">#409 SEC-2<br><span style="color:#ffa878">awaiting merge</span></div>
+              </div>
+              <div>
+                <div style="color:#a8ff78;padding:0.25rem 0.4rem;background:rgba(168,255,120,0.08);border-radius:3px;margin-bottom:0.4rem">DONE (47)</div>
+                <div style="background:rgba(255,255,255,0.03);padding:0.3rem 0.4rem;border-radius:3px;margin-bottom:0.3rem;color:#555">#407 LIVE-15</div>
+                <div style="background:rgba(255,255,255,0.03);padding:0.3rem 0.4rem;border-radius:3px;color:#555">#406 DI-7</div>
+              </div>
+            </div>
+            <div style="margin-top:0.75rem;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.04);border-radius:4px;color:#666;font-size:0.72rem">
+              Agent routing rules: frontend→agy · backend→claude · testing→codex · deploy→claude+approval
+            </div>
+          </div>
+
+          <!-- Agents panel -->
+          <div id="panel-agents" style="padding:0.75rem;height:100%;overflow-y:auto;font-size:0.78rem;font-family:monospace;display:none">
+            <div style="color:#666;font-size:0.7rem;margin-bottom:0.5rem">AGENT INSTRUCTIONS &nbsp;<span style="color:#444">e:edit file  r:reload  d:diff vs template</span></div>
+            <div style="display:grid;grid-template-columns:160px 1fr;gap:0.5rem;height:380px">
+              <div>
+                <div onclick="showAgent('claude')" id="afile-claude" style="padding:0.35rem 0.5rem;background:rgba(168,255,120,0.1);color:#a8ff78;border-radius:3px;margin-bottom:0.25rem;cursor:pointer;border-left:2px solid #a8ff78">CLAUDE.md</div>
+                <div onclick="showAgent('gemini')" id="afile-gemini" style="padding:0.35rem 0.5rem;color:#888;border-radius:3px;margin-bottom:0.25rem;cursor:pointer;border-left:2px solid transparent">GEMINI.md</div>
+                <div onclick="showAgent('agents')" id="afile-agents" style="padding:0.35rem 0.5rem;color:#888;border-radius:3px;margin-bottom:0.25rem;cursor:pointer;border-left:2px solid transparent">AGENTS.md</div>
+                <div onclick="showAgent('antigrav')" id="afile-antigrav" style="padding:0.35rem 0.5rem;color:#888;border-radius:3px;margin-bottom:0.25rem;cursor:pointer;border-left:2px solid transparent">AntiGravity.md</div>
+                <div style="margin-top:0.75rem;padding:0.35rem 0.5rem;color:#666;font-size:0.7rem">COMPETENCY</div>
+                <div style="padding:0.25rem 0.5rem;font-size:0.72rem;line-height:1.8">
+                  <div>claude.nikhil</div>
+                  <div style="color:#a8ff78">backend ████░ 0.95</div>
+                  <div style="color:#78c8ff">frontend ███░░ 0.60</div>
+                  <div style="color:#ffa878">infra ████░ 0.80</div>
+                </div>
+              </div>
+              <div id="agent-file-content" style="background:rgba(255,255,255,0.03);border-radius:4px;padding:0.5rem;overflow-y:auto;font-size:0.73rem;line-height:1.6;color:#aaa;border:1px solid rgba(255,255,255,0.07)">
+                <span style="color:#a8ff78"># CLAUDE.md — RxCC.me</span><br><br>
+                <span style="color:#666">## Domain</span><br>
+                Claude owns: backend · infra · auth · FHIR · payments<br>
+                Do NOT pick up: frontend · data (Gemini) · testing (Codex)<br><br>
+                <span style="color:#666">## Session start protocol</span><br>
+                1. git config user.name → @username<br>
+                2. synlynk watch status<br>
+                3. Read .synlynk/context.md<br>
+                4. Check sentinel.md<br>
+                5. Greet: last task · next task · sentinel<br><br>
+                <span style="color:#666">## GitHub Projects v2</span><br>
+                Set Agent=Claude + Status=InProgress before code...<br><br>
+                <span style="color:#ffd878">⚠ 3 lines differ from template · d to diff</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Memory panel -->
+          <div id="panel-memory" style="padding:0.75rem;height:100%;overflow-y:auto;font-size:0.78rem;font-family:monospace;display:none">
+            <div style="color:#666;font-size:0.7rem;margin-bottom:0.5rem">MEMORY BROWSER — project-docs/memory.md &nbsp;<span style="color:#444">/ :search  e:edit  a:append decision</span></div>
+            <div style="display:grid;grid-template-columns:200px 1fr;gap:0.5rem;height:380px">
+              <div style="overflow-y:auto">
+                <div style="color:#666;font-size:0.7rem;margin-bottom:0.25rem">DECISIONS (24)</div>
+                <div onclick="showMemory('schema')" style="padding:0.3rem 0.4rem;background:rgba(168,255,120,0.1);color:#a8ff78;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">costs.md schema ✓</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">exec exit code contract</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">encryption: ENCRYPTED_FIELDS</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">pnpm deploy --legacy</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">ACM cert us-east-1</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">ECS task def pattern</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:4px;padding:0.5rem;border:1px solid rgba(255,255,255,0.07)">
+                <div style="color:#a8ff78;margin-bottom:0.5rem">costs.md canonical schema <span style="color:#555">· [@nikhilsoman] · 2026-05-17</span></div>
+                <div style="color:#aaa;line-height:1.7">6 columns — Date | User | Requests | Tokens (In/Out) | Estimated Cost USD | Summary<br><br>Cost is at parts[5] (1-indexed col 5). This is the parser's expected format as of v0.2.1.<br><br>Do not add columns without updating parse_costs_md().</div>
+                <div style="margin-top:0.75rem;padding:0.35rem 0.5rem;background:rgba(255,255,255,0.04);border-radius:3px;font-size:0.72rem;color:#666">Used by: parse_costs_md() · check_budgets() · status dashboard</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages panel -->
+          <div id="panel-messages" style="padding:0.75rem;height:100%;overflow-y:auto;font-size:0.78rem;font-family:monospace;display:none">
+            <div style="color:#666;font-size:0.7rem;margin-bottom:0.5rem">MESSAGE BROWSER — .synlynk/state.db &nbsp;<span style="color:#444">/ :filter room  d:decode payload  x:export json</span></div>
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:0.5rem;height:380px">
+              <div style="overflow-y:auto">
+                <div style="color:#666;font-size:0.7rem;margin-bottom:0.25rem">ROOMS</div>
+                <div style="padding:0.3rem 0.4rem;background:rgba(168,255,120,0.1);color:#a8ff78;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">rxcc/feat-ux-cluster (14)</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">rxcc/live-issues (8)</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">rxcc/deploy (3)</div>
+                <div style="padding:0.3rem 0.4rem;color:#888;border-radius:3px;margin-bottom:0.2rem;cursor:pointer;font-size:0.73rem">rxcc/main (47)</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:4px;border:1px solid rgba(255,255,255,0.07);overflow-y:auto">
+                <div style="padding:0.4rem 0.5rem;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between">
+                  <span style="color:#a8ff78">rxcc/feat-ux-cluster</span>
+                  <span style="color:#666">14 msgs · 2.1 KB compressed</span>
+                </div>
+                <div style="padding:0.35rem 0.5rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#aaa">
+                  <span style="color:#666">14:32 </span><span style="color:#a8ff78">claude</span> <span style="color:#555">handoff</span> → agy · PR #412 ready for review
+                </div>
+                <div style="padding:0.35rem 0.5rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#aaa">
+                  <span style="color:#666">14:15 </span><span style="color:#78c8ff">agy</span> <span style="color:#555">wip-claim</span> · UX-cluster · branch feat/gemini/ux-cluster
+                </div>
+                <div style="padding:0.35rem 0.5rem;border-bottom:1px solid rgba(255,255,255,0.04);background:rgba(168,255,120,0.04);color:#aaa">
+                  <span style="color:#666">13:58 </span><span style="color:#a8ff78">claude</span> <span style="color:#555">checkpoint</span><br>
+                  <div style="margin:0.3rem 0 0.25rem 1rem;padding:0.4rem;background:rgba(255,255,255,0.04);border-radius:3px;font-size:0.72rem">
+                    <span style="color:#666">MSGPACK decoded:</span><br>
+                    <span style="color:#a8ff78">{</span><br>
+                    &nbsp;&nbsp;<span style="color:#78c8ff">"type"</span>: <span style="color:#ffd878">"checkpoint"</span>,<br>
+                    &nbsp;&nbsp;<span style="color:#78c8ff">"tasks_archived"</span>: <span style="color:#ffa878">2</span>,<br>
+                    &nbsp;&nbsp;<span style="color:#78c8ff">"context_size_kb"</span>: <span style="color:#ffa878">14.2</span>,<br>
+                    &nbsp;&nbsp;<span style="color:#78c8ff">"room"</span>: <span style="color:#ffd878">"rxcc/feat-ux-cluster"</span><br>
+                    <span style="color:#a8ff78">}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SOLO+ -->
+<div id="tier-soloplus" class="tier-content" style="display:none">
+  <p style="font-size:0.82rem;color:#888;margin-bottom:0.75rem">Same TUI, three new panels: <strong style="color:#78c8ff">Competency</strong> (track and tune scores), <strong style="color:#78c8ff">Rules</strong> (routing, thresholds, gates), <strong style="color:#78c8ff">Context Rooms</strong> (subscribe/unsubscribe, view depth).</p>
+  <div class="mockup">
+    <div class="mockup-header" style="font-family:monospace">synlynk — rxcc · Solo+ · 3 agents · SQLite context server running ●</div>
+    <div class="mockup-body" style="font-size:0.78rem;font-family:monospace;padding:0.75rem">
+      <div style="display:grid;grid-template-columns:160px 1fr;gap:0.5rem">
+        <div style="font-size:0.75rem">
+          <div style="color:#666;font-size:0.7rem;margin-bottom:0.25rem">PANELS</div>
+          <div style="color:#888;padding:0.25rem 0.4rem">⬡ Dashboard</div>
+          <div style="color:#888;padding:0.25rem 0.4rem">⬡ Board</div>
+          <div style="color:#888;padding:0.25rem 0.4rem">⬡ Agents</div>
+          <div style="color:#888;padding:0.25rem 0.4rem">⬡ Memory</div>
+          <div style="color:#888;padding:0.25rem 0.4rem">⬡ Messages</div>
+          <div style="color:#78c8ff;padding:0.25rem 0.4rem;background:rgba(120,200,255,0.1);border-radius:3px;border-left:2px solid #78c8ff">⬡ Competency ✦</div>
+          <div style="color:#78c8ff;padding:0.25rem 0.4rem">⬡ Rules ✦</div>
+          <div style="color:#78c8ff;padding:0.25rem 0.4rem">⬡ Rooms ✦</div>
+        </div>
+        <div>
+          <div style="color:#78c8ff;margin-bottom:0.75rem;font-size:0.8rem">COMPETENCY PROFILES</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;font-size:0.73rem">
+            <div style="background:rgba(168,255,120,0.06);border:1px solid rgba(168,255,120,0.2);border-radius:4px;padding:0.5rem">
+              <div style="color:#a8ff78;margin-bottom:0.35rem">claude.nikhil</div>
+              <div>backend &nbsp;<span style="color:#a8ff78">████░ 0.95</span></div>
+              <div>frontend <span style="color:#ffd878">███░░ 0.60</span></div>
+              <div>infra &nbsp;&nbsp;&nbsp;<span style="color:#a8ff78">████░ 0.80</span></div>
+              <div>data &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ffd878">███░░ 0.70</span></div>
+              <div>testing &nbsp;<span style="color:#ffd878">███░░ 0.75</span></div>
+              <div style="margin-top:0.4rem;color:#a8ff78;font-size:0.7rem">full-stack at 0.75+ threshold: ✓ 4/5</div>
+            </div>
+            <div style="background:rgba(120,200,255,0.06);border:1px solid rgba(120,200,255,0.2);border-radius:4px;padding:0.5rem">
+              <div style="color:#78c8ff;margin-bottom:0.35rem">agy.nikhil</div>
+              <div>backend &nbsp;<span style="color:#ffd878">███░░ 0.55</span></div>
+              <div>frontend <span style="color:#78c8ff">████░ 0.90</span></div>
+              <div>infra &nbsp;&nbsp;&nbsp;<span style="color:#ff7878">██░░░ 0.40</span></div>
+              <div>data &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#78c8ff">████░ 0.85</span></div>
+              <div>testing &nbsp;<span style="color:#ffd878">███░░ 0.65</span></div>
+              <div style="margin-top:0.4rem;color:#ffd878;font-size:0.7rem">full-stack at 0.75+: ✗ 2/5 — specialist</div>
+            </div>
+            <div style="background:rgba(255,216,120,0.06);border:1px solid rgba(255,216,120,0.2);border-radius:4px;padding:0.5rem">
+              <div style="color:#ffd878;margin-bottom:0.35rem">codex.nikhil</div>
+              <div>backend &nbsp;<span style="color:#ffd878">███░░ 0.70</span></div>
+              <div>frontend <span style="color:#ffd878">███░░ 0.65</span></div>
+              <div>infra &nbsp;&nbsp;&nbsp;<span style="color:#ffd878">███░░ 0.70</span></div>
+              <div>data &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ffd878">███░░ 0.60</span></div>
+              <div>testing &nbsp;<span style="color:#a8ff78">████░ 0.95</span></div>
+              <div style="margin-top:0.4rem;color:#ffd878;font-size:0.7rem">full-stack at 0.75+: ✗ 1/5 — testing-focused</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TEAM WEB PORTAL -->
+<div id="tier-team" class="tier-content" style="display:none">
+  <p style="font-size:0.82rem;color:#888;margin-bottom:0.75rem">TUI graduates to a <strong style="color:#ffa878">web portal</strong> for Team tier. Same information architecture, but multi-user, RBAC-gated, and served by the synlynk hub server. <code>synlynk portal</code> opens it.</p>
+  <div class="mockup">
+    <div class="mockup-header">synlynk portal — Team · Dialify · 4 members · NATS hub ●</div>
+    <div class="mockup-body" style="padding:0">
+      <div style="display:grid;grid-template-columns:200px 1fr;height:380px;font-size:0.78rem;font-family:monospace">
+        <div style="border-right:1px solid rgba(255,255,255,0.1);padding:0.5rem">
+          <div style="color:#666;font-size:0.7rem;margin-bottom:0.5rem">TEAM: DIALIFY</div>
+          <div style="color:#888;padding:0.25rem 0.5rem">📊 Overview</div>
+          <div style="color:#ffa878;padding:0.25rem 0.5rem;background:rgba(255,168,120,0.1);border-radius:3px">👥 Members</div>
+          <div style="color:#888;padding:0.25rem 0.5rem">⚙️ Agent Routing</div>
+          <div style="color:#888;padding:0.25rem 0.5rem">🔐 RBAC Rules</div>
+          <div style="color:#888;padding:0.25rem 0.5rem">📡 Rooms</div>
+          <div style="color:#888;padding:0.25rem 0.5rem">📋 Audit Log</div>
+          <div style="color:#888;padding:0.25rem 0.5rem">💰 Budget</div>
+          <div style="margin-top:0.75rem;padding:0.25rem 0.5rem;font-size:0.72rem;color:#666">
+            NATS hub: hub.dialify.internal<br>
+            4 leaf nodes connected<br>
+            Rooms: 12 active
+          </div>
+        </div>
+        <div style="padding:0.75rem;overflow-y:auto">
+          <div style="color:#ffa878;margin-bottom:0.75rem">MEMBERS — 4 active agents</div>
+          <div style="display:grid;gap:0.4rem">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px;gap:0.5rem;color:#666;font-size:0.72rem;padding:0 0.5rem;margin-bottom:0.25rem">
+              <span>IDENTITY</span><span>ROLE</span><span>COMPETENCY</span><span>SCOPE</span><span>STATUS</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px;gap:0.5rem;background:rgba(168,255,120,0.06);border:1px solid rgba(168,255,120,0.15);border-radius:4px;padding:0.4rem 0.5rem;align-items:center;font-size:0.75rem">
+              <span style="color:#a8ff78">claude.nikhil</span>
+              <span>implementer</span>
+              <span style="color:#a8ff78">full-stack (4/5)</span>
+              <span style="color:#666">rxcc.feat.* rxcc.live.*</span>
+              <span style="color:#a8ff78">● active</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px;gap:0.5rem;background:rgba(120,200,255,0.06);border:1px solid rgba(120,200,255,0.15);border-radius:4px;padding:0.4rem 0.5rem;align-items:center;font-size:0.75rem">
+              <span style="color:#78c8ff">agy.nikhil</span>
+              <span>implementer</span>
+              <span>frontend+data</span>
+              <span style="color:#666">rxcc.feat.* (UI)</span>
+              <span style="color:#a8ff78">● active</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px;gap:0.5rem;background:rgba(255,216,120,0.06);border:1px solid rgba(255,216,120,0.15);border-radius:4px;padding:0.4rem 0.5rem;align-items:center;font-size:0.75rem">
+              <span style="color:#ffd878">codex.nikhil</span>
+              <span>tester</span>
+              <span>testing-focused</span>
+              <span style="color:#666">rxcc.test.*</span>
+              <span style="color:#666">○ idle</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px;gap:0.5rem;background:rgba(255,120,120,0.06);border:1px solid rgba(255,120,120,0.15);border-radius:4px;padding:0.4rem 0.5rem;align-items:center;font-size:0.75rem">
+              <span style="color:#ff7878">nikhil</span>
+              <span style="color:#ff7878">roadmap-authority<br>deploy-authority</span>
+              <span style="color:#666">human · owner</span>
+              <span style="color:#666">*.roadmap *.deploy</span>
+              <span style="color:#ffd878">⊙ approver</span>
+            </div>
+          </div>
+          <div style="margin-top:0.75rem;padding:0.5rem;background:rgba(255,255,255,0.04);border-radius:4px;font-size:0.73rem;color:#666">
+            + Invite member · + Provision agent · Configure NATS credentials · Export audit log
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ENTERPRISE -->
+<div id="tier-enterprise" class="tier-content" style="display:none">
+  <p style="font-size:0.82rem;color:#888;margin-bottom:0.75rem">Full admin console. Org hierarchy, SSO/IdP integration, RBAC policy editor, compliance dashboard, multi-region room topology. Deployed as a standalone service.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:0.75rem;font-size:0.78rem">
+      <div class="label" style="margin-bottom:0.5rem">Enterprise additions vs Team portal</div>
+      <ul style="padding-left:1rem;line-height:2;color:#aaa">
+        <li>Org hierarchy tree (org → team → project → agent)</li>
+        <li>SSO/IdP provider config (Okta, Azure AD, Google Workspace)</li>
+        <li>RBAC policy editor — visual rule builder, not YAML</li>
+        <li>Competency threshold configuration per org policy</li>
+        <li>Immutable audit log viewer with retention controls</li>
+        <li>Multi-region NATS cluster topology map</li>
+        <li>Integration marketplace (Jira, Linear, Slack, PagerDuty)</li>
+        <li>Trust score override + appeals workflow</li>
+        <li>Air-gap deployment mode (no external calls)</li>
+      </ul>
+    </div>
+    <div style="background:rgba(255,168,120,0.06);border:1px solid rgba(255,168,120,0.2);border-radius:6px;padding:0.75rem;font-size:0.78rem">
+      <div class="label" style="margin-bottom:0.5rem;color:#ffa878">What stays the same across all tiers</div>
+      <ul style="padding-left:1rem;line-height:2;color:#aaa">
+        <li>Information architecture (same five core panels)</li>
+        <li>Room/message model (subject namespace, msgpack payload)</li>
+        <li>Competency vector schema (scores just gain more signal sources)</li>
+        <li>Agent instruction file editor (CLAUDE/GEMINI/AGENTS/AGY)</li>
+        <li>Board view (GH Projects v2 → Jira/Linear at enterprise)</li>
+        <li>Memory browser (project-docs → room history)</li>
+        <li>The concept of "funding" an agent via room subscriptions</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+function showTier(tier) {
+  document.querySelectorAll('.tier-content').forEach(el => el.style.display = 'none');
+  document.getElementById('tier-' + tier).style.display = 'block';
+  document.querySelectorAll('#tier-tabs button').forEach(btn => {
+    btn.style.background = 'rgba(255,255,255,0.05)';
+    btn.style.borderColor = 'rgba(255,255,255,0.15)';
+    btn.style.color = '#888';
+  });
+  const colors = {solo:'#a8ff78',soloplus:'#78c8ff',team:'#ffa878',enterprise:'#e878ff'};
+  const tab = document.getElementById('tab-' + tier);
+  tab.style.background = 'rgba('+hexToRgb(colors[tier])+',0.15)';
+  tab.style.borderColor = 'rgba('+hexToRgb(colors[tier])+',0.5)';
+  tab.style.color = colors[tier];
+}
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return r+','+g+','+b;
+}
+function showPanel(panel) {
+  document.querySelectorAll('[id^="panel-"]').forEach(el => el.style.display = 'none');
+  document.getElementById('panel-' + panel).style.display = 'block';
+  document.querySelectorAll('[id^="nav-"]').forEach(el => {
+    el.style.background = 'transparent'; el.style.color = '#888'; el.style.borderLeft = '2px solid transparent';
+  });
+  document.getElementById('nav-' + panel).style.background = 'rgba(168,255,120,0.15)';
+  document.getElementById('nav-' + panel).style.color = '#a8ff78';
+  document.getElementById('nav-' + panel).style.borderLeft = '2px solid #a8ff78';
+}
+function showAgent(file) {
+  document.querySelectorAll('[id^="afile-"]').forEach(el => {
+    el.style.background='transparent'; el.style.color='#888'; el.style.borderLeft='2px solid transparent';
+  });
+  document.getElementById('afile-'+file).style.background='rgba(168,255,120,0.1)';
+  document.getElementById('afile-'+file).style.color='#a8ff78';
+  document.getElementById('afile-'+file).style.borderLeft='2px solid #a8ff78';
+}
+</script>
+
+<script>
+function toggleSelect(el) {
+  const container = el.closest('[data-multiselect]') || el.closest('.options');
+  if (!container || !container.hasAttribute('data-multiselect')) {
+    container && container.querySelectorAll('.option.selected').forEach(o => o.classList.remove('selected'));
+  }
+  el.classList.toggle('selected');
+  const selected = document.querySelectorAll('.option.selected');
+  const indicator = document.getElementById('indicator-text');
+  if (indicator) {
+    indicator.textContent = selected.length
+      ? Array.from(selected).map(o => o.querySelector('h3')?.textContent || o.dataset.choice).join(', ')
+      : 'Click an option above, then return to the terminal';
+    indicator.className = selected.length ? 'selected-text' : '';
+  }
+}
+function showTier(tier) {
+  document.querySelectorAll('.tier-content').forEach(el => el.style.display = 'none');
+  const t = document.getElementById('tier-' + tier);
+  if (t) t.style.display = 'block';
+  const colors = {solo:'#a8ff78',soloplus:'#78c8ff',team:'#ffa878',enterprise:'#e878ff'};
+  document.querySelectorAll('#tier-tabs button').forEach(btn => {
+    btn.style.background = 'rgba(255,255,255,0.05)';
+    btn.style.borderColor = 'rgba(255,255,255,0.15)';
+    btn.style.color = '#888';
+  });
+  function hexToRgb(hex) { const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return r+','+g+','+b; }
+  const tab = document.getElementById('tab-' + tier);
+  if (tab && colors[tier]) {
+    tab.style.background = 'rgba('+hexToRgb(colors[tier])+',0.15)';
+    tab.style.borderColor = 'rgba('+hexToRgb(colors[tier])+',0.5)';
+    tab.style.color = colors[tier];
+  }
+}
+function showPanel(panel) {
+  document.querySelectorAll('[id^="panel-"]').forEach(el => el.style.display = 'none');
+  const p = document.getElementById('panel-' + panel);
+  if (p) p.style.display = 'block';
+  document.querySelectorAll('[id^="nav-"]').forEach(el => {
+    el.style.background = 'transparent'; el.style.color = '#888'; el.style.borderLeft = '2px solid transparent';
+  });
+  const n = document.getElementById('nav-' + panel);
+  if (n) { n.style.background='rgba(168,255,120,0.15)'; n.style.color='#a8ff78'; n.style.borderLeft='2px solid #a8ff78'; }
+}
+function showAgent(file) {
+  document.querySelectorAll('[id^="afile-"]').forEach(el => { el.style.background='transparent'; el.style.color='#888'; el.style.borderLeft='2px solid transparent'; });
+  const a = document.getElementById('afile-'+file);
+  if (a) { a.style.background='rgba(168,255,120,0.1)'; a.style.color='#a8ff78'; a.style.borderLeft='2px solid #a8ff78'; }
+}
+function showMemory(k) {}
+</script>
+
+    </div>
+  </div>
+
+  <div class="indicator-bar">
+    <span id="indicator-text">Click an option above, then return to the terminal</span>
+  </div>
+
+</body>
+</html>

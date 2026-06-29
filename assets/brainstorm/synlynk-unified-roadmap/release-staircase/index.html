@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Staircase</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; padding: 20px 24px; }
+h1 { font-size: 1.3rem; font-weight: 700; color: #f8fafc; margin-bottom: 3px; }
+.subtitle { color: #64748b; font-size: 0.84rem; margin-bottom: 20px; }
+
+/* ═══ STAIRCASE ═══ */
+.staircase { display: flex; flex-direction: column; gap: 8px; }
+
+.release {
+  display: grid;
+  grid-template-columns: 88px 1fr 1fr 220px;
+  gap: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #1e293b;
+  transition: border-color .2s;
+  min-height: 90px;
+}
+.release:hover { border-color: #334155; }
+
+/* Version badge */
+.rel-ver {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 12px 8px;
+  gap: 4px;
+  border-right: 1px solid #1e293b;
+}
+.ver-num  { font-size: 1rem; font-weight: 800; line-height: 1; }
+.ver-name { font-size: 0.58rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; text-align: center; line-height: 1.3; }
+.ver-status { font-size: 0.56rem; padding: 1px 5px; border-radius: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+/* Ships section */
+.rel-ships {
+  padding: 10px 14px;
+  border-right: 1px solid #1e293b;
+}
+.rel-ships h4 { font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
+.rel-ships ul { list-style: none; padding: 0; }
+.rel-ships li { font-size: 0.68rem; color: #64748b; padding: 1px 0; display: flex; gap: 6px; align-items: baseline; line-height: 1.4; }
+.rel-ships li::before { content: '·'; color: #334155; flex-shrink: 0; }
+.rel-ships li strong { color: #94a3b8; font-weight: 600; }
+
+/* OS layer tag */
+.rel-layer {
+  padding: 10px 14px;
+  border-right: 1px solid #1e293b;
+}
+.rel-layer h4 { font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
+.layer-tag {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: .05em;
+  padding: 2px 8px; border-radius: 4px; width: fit-content; margin-bottom: 5px;
+}
+.rel-layer p { font-size: 0.66rem; color: #475569; line-height: 1.4; }
+
+/* Unlock — the key column */
+.rel-unlock {
+  padding: 10px 14px;
+  background: #09111a;
+}
+.rel-unlock h4 { font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
+.unlock-headline { font-size: 0.77rem; font-weight: 700; line-height: 1.3; margin-bottom: 5px; }
+.unlock-detail { font-size: 0.65rem; color: #64748b; line-height: 1.45; }
+
+/* ── v0.3 — shipped ── */
+.v03 { background: #09100e; }
+.v03 .rel-ver { background: #0a160e; }
+.v03 .ver-num { color: #4ade80; }
+.v03 .ver-name { color: #166534; }
+.v03 .ver-status { background: #14401e; color: #4ade80; }
+.v03 .layer-tag { background: #0a1a10; color: #4ade80; }
+.v03 .unlock-headline { color: #4ade80; }
+
+/* ── v0.4 ── */
+.v04 { background: #091018; }
+.v04 .rel-ver { background: #0a1820; }
+.v04 .ver-num { color: #22d3ee; }
+.v04 .ver-name { color: #0e6a7a; }
+.v04 .ver-status { background: #0a2030; color: #22d3ee; }
+.v04 .layer-tag { background: #0a1e2a; color: #22d3ee; }
+.v04 .unlock-headline { color: #22d3ee; }
+
+/* ── v0.5 ── */
+.v05 { background: #08101a; }
+.v05 .rel-ver { background: #081828; }
+.v05 .ver-num { color: #38bdf8; }
+.v05 .ver-name { color: #0c4a6a; }
+.v05 .ver-status { background: #082035; color: #38bdf8; }
+.v05 .layer-tag { background: #071a2a; color: #38bdf8; }
+.v05 .unlock-headline { color: #38bdf8; }
+
+/* ── v0.6 ── */
+.v06 { background: #09100f; }
+.v06 .rel-ver { background: #0b1a18; }
+.v06 .ver-num { color: #2dd4bf; }
+.v06 .ver-name { color: #0d5048; }
+.v06 .ver-status { background: #092520; color: #2dd4bf; }
+.v06 .layer-tag { background: #082018; color: #2dd4bf; }
+.v06 .unlock-headline { color: #2dd4bf; }
+
+/* ── v0.7 ── */
+.v07 { background: #0e0e18; }
+.v07 .rel-ver { background: #121230; }
+.v07 .ver-num { color: #818cf8; }
+.v07 .ver-name { color: #3730a3; }
+.v07 .ver-status { background: #0e0e30; color: #818cf8; }
+.v07 .layer-tag { background: #0c0c28; color: #818cf8; }
+.v07 .unlock-headline { color: #818cf8; }
+
+/* ── v0.8 ── */
+.v08 { background: #100d1c; }
+.v08 .rel-ver { background: #130d28; }
+.v08 .ver-num { color: #a78bfa; }
+.v08 .ver-name { color: #5b21b6; }
+.v08 .ver-status { background: #120a28; color: #a78bfa; }
+.v08 .layer-tag { background: #100820; color: #a78bfa; }
+.v08 .unlock-headline { color: #a78bfa; }
+
+/* ── v0.9 ── */
+.v09 { background: #12100a; }
+.v09 .rel-ver { background: #1e1408; }
+.v09 .ver-num { color: #fb923c; }
+.v09 .ver-name { color: #9a3412; }
+.v09 .ver-status { background: #1e1008; color: #fb923c; }
+.v09 .layer-tag { background: #1a0e08; color: #fb923c; }
+.v09 .unlock-headline { color: #fb923c; }
+
+/* ── v1.0 ── */
+.v10 { background: #120f08; border-color: #fbbf2440 !important; }
+.v10 .rel-ver { background: #1a1208; }
+.v10 .ver-num { color: #fbbf24; font-size: 1.1rem; }
+.v10 .ver-name { color: #92400e; }
+.v10 .ver-status { background: #1a1208; color: #fbbf24; }
+.v10 .layer-tag { background: #181008; color: #fbbf24; }
+.v10 .unlock-headline { color: #fbbf24; }
+
+/* ── Legend ── */
+.legend {
+  display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px;
+  padding-top: 14px; border-top: 1px solid #1e293b;
+  font-size: 0.62rem; color: #475569;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<h1>v0.3 → v1.0 — The Release Staircase</h1>
+<p class="subtitle">8 releases. Each usable on its own. Each one unlocking a capability the previous couldn't do. No dead releases.</p>
+
+<div class="staircase">
+
+  <!-- v0.3 SHIPPED -->
+  <div class="release v03">
+    <div class="rel-ver">
+      <div class="ver-num">v0.3</div>
+      <div class="ver-name">Foundation</div>
+      <div class="ver-status">Shipped</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Shipped</h4>
+      <ul>
+        <li>exec, telemetry, flatline, budget pulse</li>
+        <li>project-docs/ ledger (memory, roadmap, todo, costs)</li>
+        <li>Enriched CLAUDE.md / GEMINI.md / AGENTS.md templates</li>
+        <li>init flags: --agents, --mode, --org, --repo, --project-id</li>
+        <li>47 tests passing</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">Kernel + Filesystem</div>
+      <p>The OS is bootable. Agents can read shared state. Sessions don't lose memory.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Never lose context between sessions</div>
+      <div class="unlock-detail">Any agent picks up exactly where the last one stopped. The memory problem is solved.</div>
+    </div>
+  </div>
+
+  <!-- v0.4 -->
+  <div class="release v04">
+    <div class="rel-ver">
+      <div class="ver-num">v0.4</div>
+      <div class="ver-name">Conventions + Trio Bootstrap</div>
+      <div class="ver-status">Next</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>conventions.md</strong> — always-injected shared rules layer</li>
+        <li><strong>synlynk trio init</strong> — name and configure 3 agent slots</li>
+        <li><strong>synlynk run</strong> — foreground Architect → Build → Verify pipeline</li>
+        <li>Keyword domain inference (frontend / backend / infra / testing…)</li>
+        <li>Round-robin cold-start routing (first 3 samples)</li>
+        <li><strong>synlynk doctor</strong> — diagnose setup problems</li>
+        <li>Scan + maturity detection (unreleased commits, already done)</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">IPC — Inter-Agent Comms</div>
+      <p>Agents start sharing rules (conventions) and receiving structured work packets (Architect → Build → Verify).</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Run any task through a 3-phase pipeline with one command</div>
+      <div class="unlock-detail"><code>synlynk run "implement login endpoint"</code> → Architect plans it, Build implements it, Verify checks it. Human reviews the bundle. First time coordination feels automatic.</div>
+    </div>
+  </div>
+
+  <!-- v0.5 -->
+  <div class="release v05">
+    <div class="rel-ver">
+      <div class="ver-num">v0.5</div>
+      <div class="ver-name">Capability Engine</div>
+      <div class="ver-status">Planned</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>capability.json</strong> — scored samples per (agent, phase, domain)</li>
+        <li><strong>synlynk score show/add/reset</strong> — view and tune routing</li>
+        <li>Recency-weighted routing after 3 samples per domain</li>
+        <li><strong>synlynk trio status</strong> — current routing assignments</li>
+        <li><strong>synlynk cost add</strong> — structured cost entry (no more manual rows)</li>
+        <li>Shell completions (zsh / bash / fish)</li>
+        <li>Config validation + clear errors on malformed config</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">Scheduler — Data-Driven</div>
+      <p>The scheduler stops guessing and starts learning. Routing is earned by performance, not assumed by vendor.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Synlynk learns which agent is best at what — automatically</div>
+      <div class="unlock-detail">After a few tasks, Claude gets frontend work less often if Gemini is consistently better at it. Routing improves without any user configuration. The right agent does the right job.</div>
+    </div>
+  </div>
+
+  <!-- v0.6 -->
+  <div class="release v06">
+    <div class="rel-ver">
+      <div class="ver-num">v0.6</div>
+      <div class="ver-name">Job Control + Constraints</div>
+      <div class="ver-status">Planned</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>synlynk constraint add/remove/list</strong> — propagates to all agents instantly</li>
+        <li><strong>synlynk status &lt;job-id&gt;</strong> — per-job progress tracking</li>
+        <li><strong>synlynk cancel / synlynk retry</strong> — job control commands</li>
+        <li><strong>synlynk context --task N / --changed</strong> — scoped context slices</li>
+        <li><strong>synlynk next</strong> — recommends next task from roadmap + todo</li>
+        <li>Auto-retry on phase failure (next-best agent, once)</li>
+        <li>Handoff context between phases (task-packet → build-notes → verify-report)</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">IPC — Constraints + Scoped Context</div>
+      <p>Constraints propagate to all agents with one command. Context gets scoped to what's actually needed.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">One command freezes all agents during a stability window</div>
+      <div class="unlock-detail"><code>synlynk constraint add "pre-launch" --expires 2026-07-01</code> — instantly injected into every agent's context. No more individually updating CLAUDE.md, GEMINI.md, AGENTS.md. One source of truth.</div>
+    </div>
+  </div>
+
+  <!-- v0.7 -->
+  <div class="release v07">
+    <div class="rel-ver">
+      <div class="ver-num">v0.7</div>
+      <div class="ver-name">Async Pipeline</div>
+      <div class="ver-status">Planned</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>synlynk dispatch</strong> — async job submission, daemon-managed</li>
+        <li><strong>synlynk daemon start/stop/restart/status</strong></li>
+        <li>Full job state machine: pending → architect → build → verify → awaiting_review</li>
+        <li><strong>synlynk review &lt;job-id&gt;</strong> — interactive TUI review bundle</li>
+        <li><strong>synlynk schedule add</strong> — OS-native cron/launchd scheduling</li>
+        <li><strong>synlynk queue add/run</strong> — overnight batch execution</li>
+        <li>Daemon crash recovery (resume from last completed phase artifact)</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">Shell — Async Execution</div>
+      <p>The OS runs jobs in the background. Human submits work and comes back to a review bundle.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Submit a task, walk away, come back to a completed review bundle</div>
+      <div class="unlock-detail"><code>synlynk dispatch "refactor auth module"</code> → close your laptop. Daemon runs Architect → Build → Verify. Morning: <code>synlynk review</code> opens the TUI. Agents worked while you slept.</div>
+    </div>
+  </div>
+
+  <!-- v0.8 -->
+  <div class="release v08">
+    <div class="rel-ver">
+      <div class="ver-num">v0.8</div>
+      <div class="ver-name">Open Context Protocol</div>
+      <div class="ver-status">Planned</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>synlynk context --for &lt;tool&gt;</strong> — scoped context for any external tool</li>
+        <li><strong>synlynk checkpoint --from &lt;tool&gt;</strong> — any tool writes back to Synlynk</li>
+        <li><strong>MCP server</strong> — Synlynk as a tool call in any MCP-compatible agent</li>
+        <li>SuperPowers native integration (skill reads context.md automatically)</li>
+        <li>GStack context bridge (personas open with project state loaded)</li>
+        <li>Protocol spec published — any tool integrates in &lt;10 lines</li>
+        <li>GitHub Actions sync gateway (non-adopting teammates contribute to state)</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">Ecosystem Interface</div>
+      <p>Synlynk becomes connectable. Any tool in the ecosystem reads and writes project state through an open protocol.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Every tool in your stack gets Synlynk's memory — without changing how you use them</div>
+      <div class="unlock-detail">SuperPowers brainstorms grounded in real project decisions. GStack personas remember last session. HermesAgent/OpenClaw/NmoClaw stop colliding because they all see the same task manifest. Two commands — that's the whole integration.</div>
+    </div>
+  </div>
+
+  <!-- v0.9 -->
+  <div class="release v09">
+    <div class="rel-ver">
+      <div class="ver-num">v0.9</div>
+      <div class="ver-name">Review TUI + Team Safety</div>
+      <div class="ver-status">Planned</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>Full curses TUI</strong> — navigate phases, rate quality, accept/reject with keyboard</li>
+        <li>Per-job cost roll-up across all phases (cost-weighted scoring)</li>
+        <li>Budget alerts at job level (not just session level)</li>
+        <li><strong>Append-only event log</strong> (JSONL) — project-docs/ becomes a generated view</li>
+        <li>Pull-before-write guardrails (conflict detection for team use)</li>
+        <li>Attribution validation — enforces [@username] in team mode</li>
+        <li>Local team rollups — per-agent totals, per-job totals, open blockers</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">Shell — Review UX + Team Safety</div>
+      <p>The review experience is polished. Team mode is safe. The human-in-the-loop interface is complete.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Review 3 phases of agent work in 60 seconds from a keyboard-driven interface</div>
+      <div class="unlock-detail">Navigate Architect → Build → Verify artifacts, rate quality, accept or reject — all in one TUI without touching the mouse. Team mode is safe: no merge conflicts, full attribution, conflict detection before any write.</div>
+    </div>
+  </div>
+
+  <!-- v1.0 -->
+  <div class="release v10">
+    <div class="rel-ver">
+      <div class="ver-num">v1.0</div>
+      <div class="ver-name">Stable OS — Tokq Bridge Ready</div>
+      <div class="ver-status">Target Q3 2026</div>
+    </div>
+    <div class="rel-ships">
+      <h4>Ships</h4>
+      <ul>
+        <li><strong>Frozen CLI + schema contract</strong> — breaking changes require migration notes</li>
+        <li><strong>pipx / Homebrew</strong> distribution — install, upgrade, uninstall cleanly</li>
+        <li><strong>synlynk migrate</strong> — safe upgrade path from older project-docs schemas</li>
+        <li>Full cross-platform test matrix (macOS + Linux CI)</li>
+        <li>Complete docs + support playbook</li>
+        <li><strong>Tokq bridge API defined</strong> — schema and auth ready for Tokq Alpha to connect</li>
+        <li>Public launch (HN, Product Hunt) — stable enough to recommend</li>
+      </ul>
+    </div>
+    <div class="rel-layer">
+      <h4>OS Layer</h4>
+      <div class="layer-tag">Stable Platform API</div>
+      <p>The local OS is complete and stable. The foundation Tokq builds its cloud layer on. The thing other tools depend on.</p>
+    </div>
+    <div class="rel-unlock">
+      <h4>Unlocks</h4>
+      <div class="unlock-headline">Installable from package managers. Stable enough for teams to build on. Tokq Alpha begins.</div>
+      <div class="unlock-detail">v1.0 is not the end — it's the stable base. Tokq Alpha starts connecting to it. The local OS becomes a node in a distributed network. The Jan 2026 vision becomes buildable.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="leg-dot" style="background:#4ade80"></div>v0.3: Memory (shipped)</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#22d3ee"></div>v0.4: Coordination</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#38bdf8"></div>v0.5: Intelligence</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#2dd4bf"></div>v0.6: Control</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#818cf8"></div>v0.7: Autonomy</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#a78bfa"></div>v0.8: Ecosystem</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#fb923c"></div>v0.9: Polish + Team</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#fbbf24"></div>v1.0: Platform</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,84 @@
+<h2>synlynk v0.4.0 — Design</h2>
+<p class="subtitle">Two features, ship together, unblock rxcc</p>
+
+<div class="section">
+  <h3>Scope</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="padding:14px;background:rgba(74,222,128,0.08);border-radius:8px;border:1px solid rgba(74,222,128,0.2)">
+      <p class="label" style="color:#4ade80">In v0.4.0</p>
+      <ul style="margin:8px 0 0;padding-left:18px;line-height:1.9;font-size:0.88em">
+        <li><code>synlynk migrate</code> — repo migration command</li>
+        <li><code>synlynk start &lt;issue-id&gt;</code> — autonomy driver</li>
+        <li>GH Projects v2 board sync (GraphQL, auto-discover fields)</li>
+        <li>Board config cache in <code>.synlynk/board-cache.json</code></li>
+      </ul>
+    </div>
+    <div style="padding:14px;background:rgba(148,163,184,0.08);border-radius:8px;border:1px solid rgba(148,163,184,0.15)">
+      <p class="label">Pushed to v0.5.0</p>
+      <ul style="margin:8px 0 0;padding-left:18px;line-height:1.9;font-size:0.88em;color:#94a3b8">
+        <li>Textual TUI (5 panels)</li>
+        <li>SQLite rooms / WIP signals</li>
+        <li>Context Server</li>
+        <li>Competency tracking</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Feature 1 — <code>synlynk migrate</code></h3>
+  <div class="mockup">
+    <div class="mockup-header">Flow</div>
+    <div class="mockup-body" style="font-size:0.85em;line-height:1.8">
+      <strong>1. Scan</strong> — find project docs (roadmap.md, todo.md, memory.md, costs.md, devlogs/) anywhere in repo tree<br>
+      <strong>2. Detect repo maturity</strong> — agent file &gt;100 lines OR 3+ unknown sections → "evolved repo" path<br>
+      <strong>3. Evolved repo menu:</strong><br>
+      &nbsp;&nbsp; A — Adopt + combine: semantic section match, extract GH IDs, add only missing sections<br>
+      &nbsp;&nbsp; B — Exit (no changes)<br>
+      &nbsp;&nbsp; C — Full replace (requires typing 'replace')<br>
+      <strong>4. Fresh repo:</strong> normal init flow, move docs to <code>project-docs/</code><br>
+      <strong>5. Always:</strong> extract GH Projects v2 IDs into <code>.synlynk/config.json</code> if found<br>
+      <strong>6. Always:</strong> create AGENTS.md if missing<br>
+      <strong>7.</strong> <code>synlynk init</code> nudge: "Existing docs detected outside project-docs/ — run <code>synlynk migrate</code>"
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Feature 2 — <code>synlynk start &lt;issue-id&gt;</code></h3>
+  <div class="mockup">
+    <div class="mockup-header">Flow</div>
+    <div class="mockup-body" style="font-size:0.85em;line-height:1.8">
+      <strong>1. Read issue</strong> — <code>gh api repos/:owner/:repo/issues/:id</code> → body + labels<br>
+      <strong>2. Infer agent</strong> — find <code>agent:&lt;name&gt;</code> label → map to exec command<br>
+      <strong>3. Discover board fields</strong> — check <code>.synlynk/board-cache.json</code>; if stale/missing, query GH Projects v2 GraphQL → cache result<br>
+      <strong>4. Move board</strong> — set Status = In Progress + Agent field via GraphQL<br>
+      <strong>5. Build context</strong> — <code>generate_context()</code> + prepend issue body + domain label<br>
+      <strong>6. Launch agent</strong> — <code>exec_command([agent_exec])</code> with context injected
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>New data</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.8">
+      <span style="color:#4ade80">.synlynk/board-cache.json</span> — discovered field IDs + option IDs, cached<br>
+      &nbsp;&nbsp;{ project_id, status_field_id, agent_field_id,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;status_options: {todo, in_progress, done, ...},<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;agent_options: {claude, agy, codex, ...},<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;cached_at: timestamp }<br>
+      <br>
+      <span style="color:#4ade80">.synlynk/config.json</span> — gains: owner, repo (for gh api calls)<br>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;padding:14px;background:rgba(255,255,255,0.05);border-radius:8px">
+  <p class="label">Files changed</p>
+  <p style="margin:4px 0 0;font-size:0.88em">
+    <code>bin/synlynk.py</code> — add <code>migrate()</code>, <code>cmd_start()</code>, <code>discover_board_fields()</code>, extend <code>load_config()</code>, extend <code>init()</code> with nudge<br>
+    <code>tests/test_synlynk.py</code> — new tests for all above<br>
+    <code>CHANGELOG.md</code>, <code>README.md</code> — v0.4.0 section
+  </p>
+</div>

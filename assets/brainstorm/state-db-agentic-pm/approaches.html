@@ -1,0 +1,73 @@
+<h2>Context Bridge — 3 Approaches</h2>
+<p class="subtitle">How should synlynk store and serve agent context so all worktrees share the same live state?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>.git-adjacent SQLite</h3>
+      <p>State lives in <code>.git/synlynk/state.db</code>. Since all worktrees share the same <code>.git</code> dir, every agent reads the same DB with zero config. Gitignored from tracked files. Not cloned — fresh clones start empty and repopulate from first <code>synlynk exec</code>.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Zero config — works instantly</li>
+          <li>Shared by all worktrees automatically</li>
+          <li>No path resolution needed</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Lost on fresh clone (no migration path yet)</li>
+          <li>Breaks multi-machine workflows</li>
+          <li>Hidden in .git — not obvious to users</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>~/.synlynk/projects/ home store <span style="font-size:0.75em;color:var(--accent)">★ Recommended</span></h3>
+      <p>State lives in <code>~/.synlynk/projects/&lt;project-id&gt;/state.db</code>. All worktrees resolve to the same store via <code>.synlynk/config.json → project_id</code>. Survives re-clones, explicit location, natural home for Tokq sync. Markdown files become generated output, not source of truth.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Shared across all worktrees — no drift possible</li>
+          <li>Survives re-clones and machine migrations</li>
+          <li>Aligns with v0.5.0 SQLite arc</li>
+          <li>Natural Tokq sync target (project_id is the key)</li>
+          <li>Human dump on demand: <code>synlynk context dump</code></li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Requires project_id to be set at init</li>
+          <li>Multi-machine sync is manual until Tokq</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Append-only event log → SQLite projection</h3>
+      <p>Every agent action is an event appended to <code>.git/synlynk/events.jsonl</code> (append-only = no merge conflicts even if git-tracked). SQLite is a read-optimized projection rebuilt from events. Full audit trail and time-travel. This is the v0.9.0 "append-only event log" pulled forward to solve the worktree problem now.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Append-only means no write conflicts ever</li>
+          <li>Full audit trail — who did what, when</li>
+          <li>Time-travel: replay state at any point</li>
+          <li>Natural fit for multi-agent coordination</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Most complex to implement now</li>
+          <li>Projection rebuild adds latency</li>
+          <li>Event schema needs careful design upfront</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:2rem;padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">What all three share</p>
+  <p style="margin-top:0.5rem">Project-docs markdown files (<code>memory.md</code>, <code>roadmap.md</code>, <code>todo.md</code>, <code>devlog</code>) are removed from git tracking entirely. AI templates (<code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>AGENTS.md</code>) stay in git — they are configuration, not state.</p>
+</div>

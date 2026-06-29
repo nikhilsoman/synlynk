@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — v0.3.0 Multi-Agent Pivot</title>
+<style>
+:root {
+  --bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;
+  --text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:18px;}
+.title{font-size:15px;font-weight:700;letter-spacing:-0.5px;text-align:center;margin-bottom:14px;}
+.stage{display:grid;grid-template-columns:1fr 80px 1fr;gap:14px;max-width:920px;margin:0 auto;align-items:center;}
+.panel{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;
+}
+.panel.before{border-color:#3f2a2a;}
+.panel.after{border-color:rgba(46,196,160,0.4);}
+.panel-head{font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.agent-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:#0a0a0b;border-radius:6px;border:1px solid var(--border);}
+.agent-row:last-child{margin-bottom:0;}
+.dot{width:7px;height:7px;border-radius:50%;}
+.dot.purple{background:var(--purple);} .dot.blue{background:var(--blue);} .dot.orange{background:var(--orange);}
+.agent-label{font-size:12px;font-weight:600;}
+.flow{font-size:11px;color:var(--muted);text-align:center;line-height:1.3;}
+.pivot{
+  background:#111115;border:1px dashed var(--blue);border-radius:8px;padding:10px 8px;text-align:center;
+}
+.pivot-label{font-size:10px;color:var(--blue);letter-spacing:0.5px;text-transform:uppercase;}
+.pivot-text{font-size:11px;font-weight:600;margin-top:4px;line-height:1.25;}
+.legend{margin-top:18px;font-size:10px;color:var(--muted);text-align:center;}
+.flow-tight{margin-top:8px;font-size:10px;}
+.flow-sub{margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="title">The v0.3.0 Pivot: Solo Tool → Workgroup OS</div>
+
+<div class="stage">
+  <!-- BEFORE -->
+  <div class="panel before">
+    <div class="panel-head">Solo Workflow Tool — v0.2.x</div>
+    <div class="agent-row"><div class="dot purple"></div><div class="agent-label">Claude</div></div>
+    <div class="flow">project-docs/ → exec → output</div>
+    <div class="flow flow-tight">Single agent · single context</div>
+  </div>
+
+  <!-- PIVOT -->
+  <div class="pivot">
+    <div class="pivot-label">v0.3.0 Pivot</div>
+    <div class="pivot-text">Hybrid Workgroup studies<br>3 models, 3 strength profiles<br>parallel tasks</div>
+  </div>
+
+  <!-- AFTER -->
+  <div class="panel after">
+    <div class="panel-head">Workgroup Orchestrator</div>
+    <div class="agent-row">
+      <div class="dot purple"></div>
+      <div class="agent-label">Claude = Architect</div>
+    </div>
+    <div class="agent-row">
+      <div class="dot blue"></div>
+      <div class="agent-label">Agy = Builder</div>
+    </div>
+    <div class="agent-row">
+      <div class="dot orange"></div>
+      <div class="agent-label">Codex = Verify</div>
+    </div>
+    <div class="flow flow-sub">synlynk ↔ shared project state</div>
+  </div>
+</div>
+
+<div class="legend">Three agents in a triangle formation, coordinated through the harness</div>
+</body>
+</html>

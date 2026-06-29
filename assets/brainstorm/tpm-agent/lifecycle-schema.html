@@ -1,0 +1,211 @@
+<meta charset="UTF-8">
+<h2>Lifecycle as First-Class Entity</h2>
+<p class="subtitle">A lifecycle is a typed, configurable artifact chain. Each stage has a placement point, an artifact it produces, and a set of agent roles that can act on it.</p>
+
+<!-- SCHEMA DEFINITION -->
+<div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:10px;padding:16px;margin-bottom:20px">
+  <div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#94a3b8;text-transform:uppercase;margin-bottom:10px">Lifecycle Type Schema</div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <pre style="font-size:10px;color:#e2e8f0;line-height:1.6;margin:0;background:#0f172a;border:none">{
+  "id": "software-development",
+  "label": "Software Dev",
+  "stages": [
+    {
+      "id": "brainstorm",
+      "label": "Brainstorm",
+      "artifact_out": "brainstorm_session",
+      "agent_roles": ["architect"],
+      "consent": "approve",
+      "advance": "manual"
+    },
+    {
+      "id": "spec",
+      "artifact_in": "brainstorm_session",
+      "artifact_out": "spec_doc",
+      "agent_roles": ["architect", "reviewer"],
+      "consent": "approve",
+      "advance": "on_file: docs/superpowers/specs/*.md"
+    },
+    ...
+  ]
+}</pre>
+    </div>
+    <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:#1e293b;border-radius:6px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:4px">Stage fields</div>
+        <div style="font-size:10px;color:#94a3b8;line-height:1.7">
+          <b style="color:#e2e8f0">artifact_in</b> — what the stage consumes<br>
+          <b style="color:#e2e8f0">artifact_out</b> — what the stage produces<br>
+          <b style="color:#e2e8f0">agent_roles</b> — which roles can act here<br>
+          <b style="color:#e2e8f0">consent</b> — auto / notify / approve<br>
+          <b style="color:#e2e8f0">advance</b> — what triggers next stage
+        </div>
+      </div>
+      <div style="background:#1e293b;border-radius:6px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:4px">advance triggers</div>
+        <div style="font-size:10px;color:#94a3b8;line-height:1.7">
+          <b style="color:#e2e8f0">manual</b> — human runs lifecycle advance<br>
+          <b style="color:#e2e8f0">on_file: glob</b> — artifact file appears<br>
+          <b style="color:#e2e8f0">on_exit_0</b> — shell command exits clean<br>
+          <b style="color:#e2e8f0">on_db: table.status</b> — DB row state
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TWO BUILT-IN LIFECYCLE TYPES -->
+<div style="display:flex;flex-direction:column;gap:14px">
+
+  <!-- SOFTWARE DEVELOPMENT LIFECYCLE -->
+  <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px">
+    <div style="font-size:10px;font-weight:700;color:#60a5fa;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px">Type A &mdash; Software Development</div>
+    <div style="display:flex;align-items:center;gap:0;overflow-x:auto">
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:7px;padding:10px 12px;min-width:110px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#a78bfa">Brainstorm</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">session_transcript</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#0ea5e9">Architect</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;flex-shrink:0">
+        <div style="font-size:9px;color:#4ade80;font-weight:600">spec_doc</div>
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#4ade80,#334155);margin:3px 0"></div>
+        <div style="font-size:8px;color:#64748b">on_file</div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:7px;padding:10px 12px;min-width:110px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#a78bfa">Spec</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">spec_doc.md</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#0ea5e9">Architect</span> <span style="color:#94a3b8">Reviewer</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;flex-shrink:0">
+        <div style="font-size:9px;color:#4ade80;font-weight:600">plan_doc</div>
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#4ade80,#334155);margin:3px 0"></div>
+        <div style="font-size:8px;color:#64748b">on_file</div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:7px;padding:10px 12px;min-width:110px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#a78bfa">Plan</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">plan_doc.md</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#0ea5e9">Architect</span> <span style="color:#f97316">TPM</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;flex-shrink:0">
+        <div style="font-size:9px;color:#4ade80;font-weight:600">task_set</div>
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#4ade80,#334155);margin:3px 0"></div>
+        <div style="font-size:8px;color:#64748b">on_db</div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:7px;padding:10px 12px;min-width:110px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#a78bfa">Execution</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">branches + PRs</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">TPM</span> <span style="color:#94a3b8">Codex Claude AGY</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;flex-shrink:0">
+        <div style="font-size:9px;color:#4ade80;font-weight:600">merged_sha</div>
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#4ade80,#334155);margin:3px 0"></div>
+        <div style="font-size:8px;color:#64748b">on_exit_0</div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:7px;padding:10px 12px;min-width:110px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#a78bfa">Review + Merge</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">merged commit</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">TPM</span> <span style="color:#94a3b8">Reviewer</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RELEASE LIFECYCLE -->
+  <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px">
+    <div style="font-size:10px;font-weight:700;color:#f97316;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px">Type B &mdash; Release (already designed!)</div>
+    <div style="display:flex;align-items:center;gap:0;overflow-x:auto">
+
+      <div style="background:#0f172a;border:1px solid #431407;border-radius:7px;padding:10px 12px;min-width:100px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#fb923c">Detect</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">release_state.json</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">Release Agent</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:52px;flex-shrink:0">
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#fb923c,#334155);margin:3px 0"></div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #431407;border-radius:7px;padding:10px 12px;min-width:100px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#fb923c">Changelog</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">release-notes.md</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">Release Agent</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:52px;flex-shrink:0">
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#fb923c,#334155);margin:3px 0"></div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #431407;border-radius:7px;padding:10px 12px;min-width:100px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#fb923c">Bump + Tag</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">git tag v{N}</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">Release Agent</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:52px;flex-shrink:0">
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#fb923c,#334155);margin:3px 0"></div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #431407;border-radius:7px;padding:10px 12px;min-width:100px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#fb923c">Publish</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">GitHub Release</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">Release Agent</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:52px;flex-shrink:0">
+        <div style="height:2px;width:44px;background:linear-gradient(to right,#334155,#fb923c,#334155);margin:3px 0"></div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #431407;border-radius:7px;padding:10px 12px;min-width:100px;flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#fb923c">Blog Post</div>
+        <div style="font-size:9px;color:#64748b;margin-top:3px">artifact out:<br><span style="color:#94a3b8">docs/blog/*.md</span></div>
+        <div style="font-size:9px;color:#64748b;margin-top:4px">roles:<br><span style="color:#f97316">Marketing Intern</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- USER-DEFINED + ONBOARDING -->
+<div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap">
+
+  <div style="flex:1;min-width:200px;background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;color:#94a3b8;margin-bottom:6px">Extensibility</div>
+    <div style="font-size:10px;color:#64748b;line-height:1.7">
+      User defines lifecycle in <span style="color:#e2e8f0">project-docs/lifecycle.json</span><br>
+      Each stage maps to known agent roles<br>
+      Unknown roles = placeholder (attach later)<br>
+      Lifecycle types stored in <span style="color:#e2e8f0">.synlynk/lifecycle-types/</span>
+    </div>
+  </div>
+
+  <div style="flex:1;min-width:200px;background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;color:#94a3b8;margin-bottom:6px">Onboarding + Config</div>
+    <div style="font-size:10px;color:#64748b;line-height:1.7">
+      <span style="color:#e2e8f0">synlynk init</span> &mdash; prompts "which lifecycle?"<br>
+      <span style="color:#e2e8f0">synlynk lifecycle set &lt;type&gt;</span> &mdash; switch<br>
+      <span style="color:#e2e8f0">synlynk lifecycle status</span> &mdash; current stage<br>
+      <span style="color:#e2e8f0">synlynk lifecycle advance</span> &mdash; manual trigger
+    </div>
+  </div>
+
+  <div style="flex:1;min-width:200px;background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;color:#94a3b8;margin-bottom:6px">Open question</div>
+    <div style="font-size:10px;color:#64748b;line-height:1.7">
+      Can multiple lifecycle instances run concurrently?<br>
+      (e.g. Feature A at Execution stage while Feature B is at Spec stage)<br>
+      Answer shapes whether lifecycle state is per-project or per-story.
+    </div>
+  </div>
+
+</div>

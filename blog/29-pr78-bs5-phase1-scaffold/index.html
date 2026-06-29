@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #78 — BS-5 Phase 1: Standalone Website Scaffold | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 28, 2026</span>
+        
+          <span class="blog-post-pr">PR #78</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #78 — BS-5 Phase 1: Standalone Website Scaffold</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the end of v0.9.8 (health pulse + lifecycle commands), the CLI was hardened for clean onboarding, exit, repair, and observability. The understood next step was shifting focus toward public launch preparation — making the project discoverable and understandable to new users beyond the GitHub repo and internal docs.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>BS-5 is the first concrete step toward a real synlynk.com. This moves synlynk from &quot;CLI tool with project-docs&quot; to &quot;product with a face&quot;. The website/ directory is a standalone 11ty v3 site (parallel to legacy site/) explicitly scoped as design-first. Phase 1 (Grok) delivers the scaffold, tokens, structure, and handoff surface so that Phase 2 (Agy) can focus on content fidelity, full visual system, and subpages without fighting structural or specificity problems.</p>
+<h2>What This PR Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/visual-direction.html" title="Visual direction study" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Visual direction study</figcaption>
+</figure>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/bs5-website-redesign/page-structure-bs5.html" title="Page structure plan" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Page structure plan</figcaption>
+</figure>
+<ul>
+<li><code>website/</code> 11ty v3 project:
+<ul>
+<li><code>package.json</code> (eleventy ^3, scripts for build/serve)</li>
+<li><code>.eleventy.js</code> with passthrough, dateFilter, stub collections</li>
+<li><code>src/_includes/base.njk</code>: fixed nav, font preconnects, footer stub, content slot</li>
+<li><code>src/index.njk</code>: 8 section shells with correct IDs (#top #carousel #relief #how #features #vision #docs #waitlist)</li>
+<li><code>src/assets/css/main.css</code>: design tokens from spec/hero-v4, reset, nav, primitive section rules, responsive</li>
+<li>S-glyph logo (from brainstorm <code>03-terminal-s-glyph.svg</code>) placed at <code>src/assets/img/logo/s-glyph.svg</code> and used in nav</li>
+</ul>
+</li>
+<li>Dark/light alternation primitives and typography stack (Inter + JetBrains Mono) matching the visual system</li>
+<li>Clean agent role split demonstrated: Grok authored scaffold + structure + build; no content fidelity beyond shells</li>
+<li>Addressed all R1 Claude review findings in this branch:
+<ul>
+<li>Scoped <code>section p</code> muted color only to dark sections (<code>#top p, ...</code>)</li>
+<li>Converted ID rules (<code>#top, #...</code>) to <code>.section-dark</code> / <code>.section-light</code> classes + applied classes to sections in index.njk</li>
+<li>Stripped every inline <code>style=</code> attribute from the entire #top hero section (hero-headline / hero-byline classes preserved as pure hooks)</li>
+<li>Replaced onclick <code>getElementById('waitlist')</code> button with <code>&lt;a href=&quot;/#waitlist&quot;&gt;</code> link (crash-proof on subpages)</li>
+<li>Removed duplicate <code>@import</code> Google Fonts line from main.css (base.njk <code>&lt;link&gt;</code> + preconnect is sufficient)</li>
+<li>Fixed <code>dateFilter</code> to force local-day parsing for ISO date strings (<code>date + 'T00:00:00'</code>)</li>
+</ul>
+</li>
+<li>Blog post (this file) per CLAUDE.md convention</li>
+</ul>
+<p><code>cd website &amp;&amp; npm install &amp;&amp; npm run build</code> produces a working <code>_site/</code> with nav + all 8 sections.</p>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/bs5-website-redesign/hero-v4.html</code> (hero, layout, tokens, color/alternation direction)</li>
+<li>Supporting logo and diagram assets referenced in <code>docs/superpowers/specs/2026-06-27-bs5-website-redesign-design.md</code></li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This PR puts the multi-agent workflow on public display: different agents (Grok scaffold/animations, Agy templates+CSS+copy, Claude reviewer) collaborate on a real product artifact with clear ownership boundaries and clean handoff contracts. The specificity and style-stripping fixes ensure Agy can own the design system in Phase 2 without cascade fights or <code>!important</code>. The site itself is the external manifestation of &quot;the OS for multi-agent development&quot; — the thing a new visitor lands on and immediately understands the value of workgroups, shared state, and model diversity.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Phase 1 complete: runnable 11ty build, correct tokens and structure, Phase 2 handoff surface ready. New goalpost: Agy fills the 8 sections with full content and micro-copy, implements the complete CSS design system (cards, components, states, responsive details), adds the blog index + subpages (docs, features, changelog, about), wires any interactive shells (carousel etc.), and ensures visual parity with the hero-v4 reference. Then full review + merge to unblock the rest of the launch arc.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

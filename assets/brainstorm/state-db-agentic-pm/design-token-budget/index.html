@@ -1,0 +1,133 @@
+<h2>Token Budget, Quota Routing & Platform Sync</h2>
+<p class="subtitle">Token cost replaces time as the primary project execution constraint</p>
+
+<div class="section">
+  <p class="label">The shift — what replaces story points and sprint velocity</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color:#f87171">Human PM execution constraints</div>
+      <div class="mockup-body" style="font-size:0.84em;line-height:1.9">
+        Story points → effort estimate<br>
+        Sprint capacity → team hours available<br>
+        Velocity → points/sprint<br>
+        Deadline → calendar date<br>
+        Blocking → waiting on a human<br><br>
+        <span style="color:#888">None of these apply to agents.<br>Agents don't get tired.<br>Agents don't have capacity.<br>Agents have quotas.</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color:#4ade80">Agentic PM execution constraints</div>
+      <div class="mockup-body" style="font-size:0.84em;line-height:1.9">
+        Token estimate → story cost<br>
+        Quota headroom → agent availability<br>
+        Throughput → tokens/quota-period<br>
+        Critical path → dependency graph<br>
+        Blocking → unmet dependency or quota<br><br>
+        <span style="color:#888">If 3 agents each have 100K hourly quota,<br>max throughput = 300K tokens/hour.<br>An epic at 900K tokens = 3 quota-hours<br>minimum, even with perfect parallelism.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">New table — agent_quotas</p>
+  <div class="mockup">
+    <div class="mockup-header">~/.synlynk/projects/&lt;id&gt;/state.db → agent_quotas</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.9">
+      id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;INTEGER PK<br>
+      agent &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "claude" | "gemini" | "codex"</span><br>
+      model &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "claude-sonnet-4-6"</span><br>
+      quota_type &nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "hourly" | "daily" | "weekly" | "monthly"</span><br>
+      limit_tokens INTEGER &nbsp;&nbsp;<span style="color:#888">← e.g. 100_000 for hourly</span><br>
+      used_tokens &nbsp;INTEGER &nbsp;&nbsp;<span style="color:#888">← consumed in current period</span><br>
+      headroom &nbsp;&nbsp;&nbsp;&nbsp;COMPUTED &nbsp;&nbsp;<span style="color:#888">← limit_tokens - used_tokens (virtual col)</span><br>
+      reset_at &nbsp;&nbsp;&nbsp;&nbsp;TIMESTAMP &nbsp;<span style="color:#888">← when quota resets</span><br>
+      updated_at &nbsp;&nbsp;TIMESTAMP<br><br>
+      <span style="color:#888">synlynk exec updates used_tokens after each run via extract_tokens().<br>synlynk trio status shows live quota headroom per agent.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">stories + costs — token budget columns added</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">stories — new columns</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.9">
+        <span style="color:#888">... existing columns ...</span><br>
+        estimated_tokens INTEGER &nbsp;<span style="color:#888">← upfront estimate</span><br>
+        actual_tokens &nbsp;&nbsp;&nbsp;INTEGER &nbsp;<span style="color:#888">← measured after done</span><br>
+        assigned_agent &nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← routing decision</span><br>
+        assigned_model &nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← model chosen</span><br>
+        routing_reason &nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "capability:api·quota:ok·cost:$0.12"</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">costs — project FK columns added</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.9">
+        <span style="color:#888">... existing columns ...</span><br>
+        story_id INTEGER FK &nbsp;<span style="color:#888">← nullable</span><br>
+        epic_id &nbsp;INTEGER FK &nbsp;<span style="color:#888">← nullable</span><br>
+        phase_id INTEGER FK &nbsp;<span style="color:#888">← nullable</span><br><br>
+        <span style="color:#888">Now answerable:<br>"Phase v0.5.0 total cost = $X.XX"<br>"Context Bridge epic burned $Y.YY"<br>"Story #42 cost $0.18 vs $0.10 estimate"</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Routing decision — capability → quota → cost</p>
+  <div class="mockup">
+    <div class="mockup-header">synlynk run — agent selection for a story</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:2">
+      1. story.domain = "api" + story.complexity = "medium"<br>
+      &nbsp;&nbsp; → capability_scores WHERE domain='api' ORDER BY score DESC<br>
+      &nbsp;&nbsp; → candidates: [claude:0.92, gemini:0.78, codex:0.71]<br><br>
+      2. story.estimated_tokens = 40_000<br>
+      &nbsp;&nbsp; → agent_quotas WHERE headroom >= 40_000<br>
+      &nbsp;&nbsp; → filter out: codex (headroom=12K, reset in 23min)<br>
+      &nbsp;&nbsp; → remaining: [claude:88K headroom, gemini:61K headroom]<br><br>
+      3. cost comparison for 40K tokens:<br>
+      &nbsp;&nbsp; claude-sonnet-4-6 → ~$0.18<br>
+      &nbsp;&nbsp; gemini-2.0-flash &nbsp;→ ~$0.04<br>
+      &nbsp;&nbsp; capability gap: 0.92 vs 0.78 — within threshold (0.15)<br>
+      &nbsp;&nbsp; → ROUTE TO: gemini (capability sufficient, 4.5× cheaper)<br><br>
+      story.assigned_agent = "gemini"<br>
+      story.routing_reason = "capability:ok·quota:61K·cost:$0.04 vs $0.18"<br>
+      event type="started" content={routing_decision}
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">New table — external_refs (platform sync)</p>
+  <div class="mockup">
+    <div class="mockup-header">How Arc/Phase/Epic/Story maps to external platforms</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.9">
+      <span style="color:#60a5fa">external_refs table:</span><br>
+      entity_type TEXT &nbsp;<span style="color:#888">← "arc"|"phase"|"epic"|"story"</span><br>
+      entity_id &nbsp;&nbsp;INTEGER<br>
+      platform &nbsp;&nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;<span style="color:#888">← "github"|"jira"|"linear"|"asana"</span><br>
+      external_id TEXT &nbsp;&nbsp;&nbsp;<span style="color:#888">← issue #, ticket key, etc.</span><br>
+      external_url TEXT<br>
+      last_synced &nbsp;TIMESTAMP<br><br>
+      <span style="color:#fbbf24">Platform mappings:</span><br>
+      Arc &nbsp;&nbsp;&nbsp;→ GitHub Project board &nbsp;| Jira Epic &nbsp;&nbsp;&nbsp;| Linear Project<br>
+      Phase &nbsp;→ GitHub Milestone &nbsp;&nbsp;&nbsp;&nbsp;| Jira Version &nbsp;| Linear Cycle<br>
+      Epic &nbsp;&nbsp;→ GitHub Epic label &nbsp;&nbsp;&nbsp;| Jira Story &nbsp;&nbsp;| Linear Project<br>
+      Story &nbsp;→ GitHub Issue &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| Jira Sub-task | Linear Issue<br><br>
+      <span style="color:#888">state.db is canonical. Platforms are views.<br>synlynk sync --github pushes; incoming webhooks pull back status changes as events.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">What becomes queryable that wasn't before</p>
+  <p style="margin-top:0.5rem;font-size:0.85em;line-height:1.9">
+    "Which agent has quota to take this story right now?" — <code>agent_quotas WHERE headroom >= estimated_tokens</code><br>
+    "What did Phase v0.5.0 cost total?" — <code>SUM(costs.cost_usd) WHERE phase_id=5</code><br>
+    "How accurate are our story estimates?" — <code>AVG(actual_tokens/estimated_tokens) per epic</code><br>
+    "What's our throughput ceiling this hour?" — <code>SUM(headroom) across all active agents</code><br>
+    "Which stories are blocked by quota, not dependency?" — <code>stories WHERE status='blocked' AND block_reason='quota'</code>
+  </p>
+</div>

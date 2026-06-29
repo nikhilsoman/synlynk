@@ -1,0 +1,122 @@
+<h2>Section 3 — Benchmark Design</h2>
+<p class="subtitle">Building <code>flatline</code> four ways — the controlled experiment that proves the claim</p>
+
+<div class="section">
+  <h3>The Target: <code>flatline</code></h3>
+  <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:16px;margin-top:8px;display:flex;gap:16px;align-items:flex-start">
+    <div style="flex:1">
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#ccc">A standalone Python CLI circuit-breaker. <code>flatline pnpm test</code> wraps any shell command, hashes stdout on failure, and kills the process after 3 consecutive identical failures — saving developers from runaway agent token bills.</p>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <span style="background:#1a2a1a;border:1px solid #2ea043;padding:3px 8px;border-radius:4px;font-size:11px">~150 lines Python</span>
+        <span style="background:#1a2a1a;border:1px solid #2ea043;padding:3px 8px;border-radius:4px;font-size:11px">stdlib only</span>
+        <span style="background:#1a2a1a;border:1px solid #2ea043;padding:3px 8px;border-radius:4px;font-size:11px">3-session build</span>
+        <span style="background:#1a2a1a;border:1px solid #2ea043;padding:3px 8px;border-radius:4px;font-size:11px">pip-installable</span>
+      </div>
+    </div>
+    <div style="background:#0a1a0a;border:1px solid #2ea043;border-radius:6px;padding:12px;font-family:monospace;font-size:12px;color:#3fb950;min-width:220px">
+      S1: design CLI + spec<br>
+      S2: implement hashing logic<br>
+      S3: tests + package
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Phase 0 — Validation (before benchmark runs)</h3>
+  <div style="background:#1a1a0a;border:1px solid #d29922;border-radius:8px;padding:14px;margin-top:8px">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="font-size:20px">🔍</div>
+      <div>
+        <p style="margin:0;font-size:13px;color:#ccc">Dispatch Agy + Codex to install Superpowers and GStack in sandboxed temp repos. Capture diff of all instruction files before/after (<code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>settings.json</code>). Manually review and confirm findings. Update conflict taxonomy before running any benchmark round.</p>
+        <p style="margin:8px 0 0;font-size:11px;color:#888">If real installs reveal different surfaces than assumed in Section 2, update the taxonomy before locking round definitions.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>The 4 Rounds</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+
+    <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="background:#30363d;color:#8b949e;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">R1</span>
+        <strong>Bare Agent</strong>
+      </div>
+      <p style="font-size:12px;color:#888;margin:0">Claude Code with no skill packs, no synlynk. 3 sessions. Baseline token spend + coverage.</p>
+      <div style="margin-top:10px;font-size:11px;color:#666">Environment: fresh Claude Code install, empty project</div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #3a3a7c;border-radius:8px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="background:#3a3a7c;color:#a78bfa;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">R2</span>
+        <strong>Superpowers only</strong>
+      </div>
+      <p style="font-size:12px;color:#888;margin:0">Claude Code + Superpowers skill pack. Same 3-session task. Measures skill pack overhead and quality lift.</p>
+      <div style="margin-top:10px;font-size:11px;color:#666">No synlynk. Superpowers TDD + brainstorming skills active.</div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #1f4a7c;border-radius:8px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="background:#1f4a7c;color:#58a6ff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">R3</span>
+        <strong>synlynk only</strong>
+      </div>
+      <p style="font-size:12px;color:#888;margin:0">Claude Code + synlynk, no skill packs. Measures synlynk's context injection and cost tracking contribution in isolation.</p>
+      <div style="margin-top:10px;font-size:11px;color:#666">project-docs/ initialized. Context injection active. Flatline sentinel on.</div>
+    </div>
+
+    <div style="background:#0a1a0a;border:2px solid #2ea043;border-radius:8px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="background:#2ea043;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">R4</span>
+        <strong style="color:#3fb950">synlynk + Superpowers</strong>
+      </div>
+      <p style="font-size:12px;color:#888;margin:0">The "better together" round. synlynk provides state + cost control; Superpowers provides workflow discipline. Expect lowest token spend + highest coverage.</p>
+      <div style="margin-top:10px;font-size:11px;color:#3fb950">git-drift pre-commit hook active — no instruction conflict possible.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Metrics Scorecard</h3>
+  <div style="margin-top:10px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#161b22;color:#8b949e">
+          <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #30363d">Metric</th>
+          <th style="padding:8px 12px;text-align:center;border-bottom:1px solid #30363d">Tier</th>
+          <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #30363d">Source</th>
+          <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #30363d">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #21262d">
+          <td style="padding:8px 12px">Total token spend (3 sessions)</td>
+          <td style="padding:8px 12px;text-align:center"><span style="background:#2ea043;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">PRIMARY</span></td>
+          <td style="padding:8px 12px;color:#888"><code>project-docs/costs.md</code></td>
+          <td style="padding:8px 12px;color:#888">Objective; synlynk captures automatically in R3+R4</td>
+        </tr>
+        <tr style="border-bottom:1px solid #21262d">
+          <td style="padding:8px 12px">Session count to working CLI</td>
+          <td style="padding:8px 12px;text-align:center"><span style="background:#2ea043;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">PRIMARY</span></td>
+          <td style="padding:8px 12px;color:#888">Git commit log</td>
+          <td style="padding:8px 12px;color:#888">Did it need a 4th session to fix breakage?</td>
+        </tr>
+        <tr style="border-bottom:1px solid #21262d">
+          <td style="padding:8px 12px">Test coverage % (pytest-cov)</td>
+          <td style="padding:8px 12px;text-align:center"><span style="background:#1f4a7c;color:#58a6ff;padding:2px 6px;border-radius:4px;font-size:10px">SECONDARY</span></td>
+          <td style="padding:8px 12px;color:#888"><code>pytest --cov</code> output</td>
+          <td style="padding:8px 12px;color:#888">Quality sanity check; directional not definitive</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px">Retry / loop incidents</td>
+          <td style="padding:8px 12px;text-align:center"><span style="background:#1f4a7c;color:#58a6ff;padding:2px 6px;border-radius:4px;font-size:10px">SECONDARY</span></td>
+          <td style="padding:8px 12px;color:#888"><code>.synlynk/telemetry.json</code></td>
+          <td style="padding:8px 12px;color:#888">R3+R4 only; manually count for R1+R2</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<p style="color:#888;font-size:13px;margin-top:16px">Does the benchmark structure look right? Continuing in terminal ↓</p>

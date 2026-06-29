@@ -1,0 +1,99 @@
+<h2>Design — Section 3: Data Model + Migration</h2>
+<p class="subtitle">state.db table schemas and the one-time migration from project-docs/</p>
+
+<div class="section">
+  <p class="label">state.db — table schemas</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.5rem">memory</h3>
+      <div style="font-family:monospace;font-size:0.8em;line-height:1.9;color:var(--text)">
+        id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;INTEGER PK<br>
+        key &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TEXT UNIQUE &nbsp;<span style="color:#888">← "auth_pattern"</span><br>
+        value &nbsp;&nbsp;&nbsp;TEXT<br>
+        agent &nbsp;&nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← who wrote it</span><br>
+        updated_at TIMESTAMP
+      </div>
+    </div>
+
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.5rem">tasks</h3>
+      <div style="font-family:monospace;font-size:0.8em;line-height:1.9;color:var(--text)">
+        id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;INTEGER PK<br>
+        text &nbsp;&nbsp;&nbsp;&nbsp;TEXT<br>
+        status &nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← pending/done</span><br>
+        owner &nbsp;&nbsp;&nbsp;TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← agent name</span><br>
+        priority INTEGER<br>
+        created_at TIMESTAMP
+      </div>
+    </div>
+
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.5rem">devlog</h3>
+      <div style="font-family:monospace;font-size:0.8em;line-height:1.9;color:var(--text)">
+        id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;INTEGER PK AUTOINCREMENT<br>
+        session TEXT &nbsp;&nbsp;<span style="color:#888">← date + seq</span><br>
+        agent &nbsp;&nbsp;TEXT<br>
+        content TEXT<br>
+        ts &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TIMESTAMP<br>
+        <span style="color:#888;font-size:0.9em">append-only in practice</span>
+      </div>
+    </div>
+
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.5rem">costs</h3>
+      <div style="font-family:monospace;font-size:0.8em;line-height:1.9;color:var(--text)">
+        id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;INTEGER PK<br>
+        session_date DATE<br>
+        agent &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TEXT<br>
+        model &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TEXT<br>
+        tokens_in &nbsp;&nbsp;INTEGER<br>
+        tokens_out &nbsp;INTEGER<br>
+        cost_usd &nbsp;&nbsp;&nbsp;REAL<br>
+        ts &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TIMESTAMP
+      </div>
+    </div>
+
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.5rem">roadmap</h3>
+      <div style="font-family:monospace;font-size:0.8em;line-height:1.9;color:var(--text)">
+        id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;INTEGER PK<br>
+        version TEXT UNIQUE<br>
+        theme &nbsp;&nbsp;TEXT<br>
+        status &nbsp;TEXT &nbsp;<span style="color:#888">← shipped/next/planned</span><br>
+        target &nbsp;TEXT<br>
+        notes &nbsp;&nbsp;TEXT
+      </div>
+    </div>
+
+    <div style="padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="margin:0 0 0.5rem">config</h3>
+      <div style="font-family:monospace;font-size:0.8em;line-height:1.9;color:var(--text)">
+        key &nbsp;&nbsp;TEXT PRIMARY KEY<br>
+        value TEXT<br><br>
+        <span style="color:#888">← mode, version, project_name,<br>
+        &nbsp;&nbsp;&nbsp;init_ts, limit_usd, limit_requests</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Migration — one-time, <code>synlynk migrate</code></p>
+  <div class="mockup">
+    <div class="mockup-header">What migrate does</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.84em;line-height:2">
+      1. Create ~/.synlynk/projects/&lt;project_id&gt;/state.db<br>
+      2. Parse project-docs/memory.md &nbsp;→ INSERT INTO memory<br>
+      3. Parse project-docs/todo.md &nbsp;&nbsp;&nbsp;→ INSERT INTO tasks<br>
+      4. Parse project-docs/costs.md &nbsp;&nbsp;→ INSERT INTO costs<br>
+      5. Parse project-docs/devlogs/* &nbsp;→ INSERT INTO devlog<br>
+      6. Parse project-docs/roadmap.md &nbsp;→ INSERT INTO roadmap<br>
+      7. Add project-docs/ to .gitignore<br>
+      8. git rm --cached project-docs/ &nbsp;<span style="color:#888">← untrack without deleting</span><br>
+      9. Print summary + prompt to commit .gitignore change
+    </div>
+  </div>
+  <p style="margin-top:0.75rem;color:#888;font-size:0.9em">Files remain on disk after migration — nothing deleted. Agents just stop seeing them in git and stop writing them as files.</p>
+</div>

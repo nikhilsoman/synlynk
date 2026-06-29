@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Post 23 — P0 Fix: Dispatch Context Scoping</h1>
+<p><strong>Branch:</strong> <code>fix/dispatch-context-scoping</code><br>
+<strong>Version target:</strong> patch on top of v0.9.3</p>
+<hr>
+<h2>Where we were</h2>
+<p>At the end of PR #30 (v0.9.3 async daemon), synlynk had a working background job dispatcher. <code>dispatch_agent()</code> could fan out tasks to claude, agy, or codex, queue them in <code>daemon_jobs</code>, and stream logs. The daemon was operational.</p>
+<p>But a concrete failure mode surfaced during BS-1 brainstorm: an rxcc PR review dispatch injected 119KB of full project context into a task that needed ~400 bytes. The <code>generate_context()</code> function was also writing to a single shared <code>.synlynk/context.md</code> file — a race condition waiting to happen under concurrent dispatches.</p>
+<h2>What moved the goalpost</h2>
+<p>BS-1 (2026-06-24) answered Q1–Q10 on the context layer. Two decisions required a P0 patch before v0.9.4 work could begin:</p>
+<ol>
+<li><strong>In-memory delivery (Q8):</strong> <code>generate_context()</code> should return the string; dispatch should use the return value directly, never reading back from a global file.</li>
+<li><strong>Context mode (Q1):</strong> dispatch needs a <code>context_mode</code> flag so self-contained tasks can opt out of context injection entirely.</li>
+</ol>
+<p>These were P0 because every v0.9.4 story that touches <code>dispatch_agent()</code> would otherwise be building on a broken foundation.</p>
+<h2>What this PR ships</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/context-scoping/context-delivery-isolation.html" title="P0 Fix — Per-Job Context Isolation" loading="lazy" frameborder="0"></iframe>
+  <figcaption>P0 Fix — Per-Job Context Isolation</figcaption>
+</figure>
+<p><strong><code>_generate_task_context()</code> refactored to return a string</strong></p>
+<p>Rewrote to accumulate into a <code>StringIO</code> buffer, build the string, write to <code>.synlynk/context.md</code> for daemon HTTP endpoint compatibility, then return the string. The file write is preserved — external tooling and the daemon's <code>/context</code> HTTP endpoint are unchanged.</p>
+<p><strong><code>generate_context()</code> return value added</strong></p>
+<p>Changed return type from <code>None</code> to <code>str</code>. Task-scope path now returns the <code>_generate_task_context()</code> return value directly. Full-scope path returns <code>open(context_file).read()</code> after the write block. Early-exit paths return <code>&quot;&quot;</code>.</p>
+<p><strong><code>dispatch_agent()</code> — in-memory delivery + <code>context_mode</code> param</strong></p>
+<p>Removed the <code>context_path = &quot;.synlynk/context.md&quot;</code> file-read block. Replaced with:</p>
+<pre><code class="language-python">context_text = &quot;&quot;
+if context_mode != &quot;none&quot;:
+    scope = f&quot;task:{story_id}&quot; if (context_mode == &quot;task&quot; and story_id) else &quot;full&quot;
+    context_text = generate_context(scope=scope) or &quot;&quot;
+_warn_context_size(context_text)
+</code></pre>
+<p><code>context_mode</code> values:</p>
+<ul>
+<li><code>&quot;none&quot;</code> — no context injection (self-contained tasks, cross-repo dispatches)</li>
+<li><code>&quot;task&quot;</code> — story-scoped slim context, default (~400–2000 bytes)</li>
+<li><code>&quot;full&quot;</code> — full project context (explicit opt-in only)</li>
+</ul>
+<p><strong><code>_warn_context_size()</code> helper</strong></p>
+<p>New helper: warns at 80KB (<code>_CONTEXT_WARN_BYTES = 81920</code>) with the <code>--context-mode task</code> escape hatch printed inline. Warns but does not block — hard limit via <code>context_tokens_max</code> config is v0.9.4 T3.</p>
+<p><strong>7 new tests, all passing. 439 total (432 baseline).</strong></p>
+<h2>Visuals</h2>
+<p>BS-1 brainstorm visuals that informed this fix: <code>docs/brainstorm/bs1-context-dispatch-relay/context-flow-today.html</code>, <code>context-delivery-options.html</code>.</p>
+<h2>What this achieves</h2>
+<p>The race condition is gone. Concurrent dispatches no longer compete over a single file. A self-contained task (PR review, one-shot instruction) can now dispatch with <code>context_mode=&quot;none&quot;</code> and inject exactly 0 bytes of project context. The default <code>&quot;task&quot;</code> mode gives ~400–2000 bytes vs the previous 119KB for the same dispatch.</p>
+<h2>New goalpost</h2>
+<p><code>fix/dispatch-context-scoping</code> merged → v0.9.4 implementation begins. Next: T1 (SQLite canon — <code>stories</code> as primary, todo.md as generated view), T2 (<code>.agents/&lt;agent&gt;.json</code> profile loading), T3 (<code>synlynk jobs</code> + pre-flight gate), T4 (relay wire protocol), T5 (sentinel <code>VERIFY_SKIP</code>).</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

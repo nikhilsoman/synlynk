@@ -1,0 +1,116 @@
+<h2>Final Schema — Corrected & Verified</h2>
+<p class="subtitle">All tables with clarified roles. Memory stays. Arc is new. Phase/Epic/Story replace roadmap/tasks.</p>
+
+<div class="section">
+  <p class="label">Hierarchy — roles locked</p>
+  <div class="mockup">
+    <div class="mockup-header">Project → Arc → Phase → Epic → Story → Event</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:2.2">
+      <span style="color:#e879f9">Arc</span> &nbsp;&nbsp;&nbsp; Strategic direction. Pivots, convergences, external triggers. Active | Archived | Merged.<br>
+      <span style="color:#60a5fa">Phase</span> &nbsp; Structural project backbone. Rarely changes. The "bones." &nbsp;<span style="color:#888">← was: roadmap row</span><br>
+      <span style="color:#34d399">Epic</span> &nbsp;&nbsp; One implementation plan. &nbsp;<span style="color:#888">← what superpowers:writing-plans generates</span><br>
+      <span style="color:#fbbf24">Story</span> &nbsp; One agent task unit. Assigned, verifiable. &nbsp;<span style="color:#888">← was: task row</span><br>
+      <span style="color:#f87171">Event</span> &nbsp; State transition log. Append-only. &nbsp;<span style="color:#888">← replaces devlog</span><br>
+      <span style="color:#94a3b8">Memory</span> Curated durable decisions. Stays as-is. decision events may overlap — expected.
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem" class="section">
+
+  <div style="padding:1rem;border:1px solid #7c3aed55;border-radius:8px">
+    <h3 style="margin:0 0 0.5rem;color:#e879f9">arcs</h3>
+    <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      id INTEGER PK<br>
+      name TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "OS for multi-agent dev"</span><br>
+      status TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← active | archived | merged</span><br>
+      rationale TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← why this arc exists / why archived</span><br>
+      external_trigger TEXT <span style="color:#888">← what caused a pivot</span><br>
+      merged_into INTEGER <span style="color:#888">← FK to arc.id if merged</span><br>
+      created_at TIMESTAMP<br>
+      archived_at TIMESTAMP
+    </div>
+    <p style="font-size:0.78em;margin-top:0.75rem;color:#888">synlynk example:<br>"multi-agent fabric" → archived<br>"OS layer" → active<br>"Tokq cloud" → merged into "OS layer"</p>
+  </div>
+
+  <div style="padding:1rem;border:1px solid #1d4ed855;border-radius:8px">
+    <h3 style="margin:0 0 0.5rem;color:#60a5fa">phases</h3>
+    <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      id INTEGER PK<br>
+      arc_id INTEGER FK<br>
+      name TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "SQLite Kernel"</span><br>
+      os_layer TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "Scheduler — data-driven routing"</span><br>
+      infrastructure TEXT &nbsp;<span style="color:#888">← "SQLite WAL"</span><br>
+      capability_assertion TEXT <span style="color:#888">← "after this, X works"</span><br>
+      status TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← shipped | next | planned</span><br>
+      priority_order INTEGER <span style="color:#888">← reorderable, history in events</span><br>
+      target_alias TEXT &nbsp;&nbsp;<span style="color:#888">← "v0.5.0 · Aug 2026" (human label)</span>
+    </div>
+    <p style="font-size:0.78em;margin-top:0.75rem;color:#888">Structural backbone. Rarely changes.<br>Reorder via priority_order + reprioritize event.</p>
+  </div>
+
+  <div style="padding:1rem;border:1px solid #06523455;border-radius:8px">
+    <h3 style="margin:0 0 0.5rem;color:#34d399">epics</h3>
+    <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      id INTEGER PK<br>
+      phase_id INTEGER FK<br>
+      name TEXT &nbsp;&nbsp;&nbsp;<span style="color:#888">← "Context Bridge"</span><br>
+      source TEXT &nbsp;&nbsp;<span style="color:#888">← "superpowers-plan" | "manual"</span><br>
+      owner TEXT &nbsp;&nbsp;&nbsp;<span style="color:#888">← agent or user assigned</span><br>
+      status TEXT &nbsp;&nbsp;<span style="color:#888">← pending | active | done</span><br>
+      created_at TIMESTAMP
+    </div>
+    <p style="font-size:0.78em;margin-top:0.75rem;color:#888">One implementation plan = one epic.<br>writing-plans creates the epic + all its stories in one shot.<br>The parallelism surface within a phase.</p>
+  </div>
+
+  <div style="padding:1rem;border:1px solid #92400055;border-radius:8px">
+    <h3 style="margin:0 0 0.5rem;color:#fbbf24">stories</h3>
+    <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      id INTEGER PK<br>
+      epic_id INTEGER FK<br>
+      text TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "migrate project-docs to state.db"</span><br>
+      done_criteria TEXT &nbsp;<span style="color:#888">← "synlynk exec reads from state.db"</span><br>
+      depends_on TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← JSON [story_id, ...] — graph not list</span><br>
+      status TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← pending | in_progress | done | blocked</span><br>
+      owner TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← agent name</span><br>
+      created_at TIMESTAMP
+    </div>
+    <p style="font-size:0.78em;margin-top:0.75rem;color:#888">Atomic agent task unit. Done when done_criteria pass,<br>not when time elapses. No story points.</p>
+  </div>
+
+  <div style="padding:1rem;border:1px solid #7f1d1d55;border-radius:8px">
+    <h3 style="margin:0 0 0.5rem;color:#f87171">events</h3>
+    <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      id INTEGER PK AUTOINCREMENT<br>
+      type TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← started | completed | blocked</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">&nbsp;&nbsp;decision | note | external_signal</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">&nbsp;&nbsp;pivot | reprioritize | checkpoint | resume</span><br>
+      story_id INTEGER &nbsp;<span style="color:#888">← nullable FK</span><br>
+      epic_id INTEGER &nbsp;&nbsp;<span style="color:#888">← nullable FK</span><br>
+      phase_id INTEGER &nbsp;<span style="color:#888">← nullable FK</span><br>
+      arc_id INTEGER &nbsp;&nbsp;&nbsp;<span style="color:#888">← nullable FK</span><br>
+      user TEXT<br>
+      content TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← narrative or structured JSON</span><br>
+      ts TIMESTAMP
+    </div>
+    <p style="font-size:0.78em;margin-top:0.75rem;color:#888">Universal append-only log.<br>devlog = SELECT WHERE user='nikhil' ORDER BY ts DESC<br>pivot history = SELECT WHERE type='pivot'</p>
+  </div>
+
+  <div style="padding:1rem;border:1px solid #37415155;border-radius:8px">
+    <h3 style="margin:0 0 0.5rem;color:#94a3b8">memory + costs — unchanged</h3>
+    <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      memory: heading | body | agent | updated_at<br>
+      <span style="color:#888">← curated durable decisions, full sections</span><br>
+      <span style="color:#888">← decision events may overlap — expected</span><br><br>
+      costs: session_date | user | model | tokens_in<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| tokens_out | cost_usd | ts<br>
+      <span style="color:#888">← session ledger, not injected into context</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">superpowers integration point</p>
+  <p style="margin-top:0.5rem;font-size:0.88em"><code>writing-plans</code> output → one <strong>Epic</strong> row + N <strong>Story</strong> rows inserted into state.db under the current Phase. The plan document becomes the source of record for the Epic; the individual tasks become Stories. <code>synlynk run</code> picks up pending Stories from the active Epic and dispatches them to agents.</p>
+</div>

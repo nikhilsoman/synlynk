@@ -1,250 +1,505 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-agent development OS | synlynk</title>
-    <link rel="stylesheet" href="/assets/css/main.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
 </head>
-<body class="home">
-    <nav class="sticky-nav">
-        <div class="container nav-container">
-            <a href="/" class="wordmark">
-                <img src="/assets/img/logo/icon.svg" alt="Synlynk Icon" class="nav-icon">
-                <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
-            </a>
-            <div class="nav-links">
-                <a href="#how-it-works">How it works</a>
-                <a href="/features/">Features</a>
-                <a href="#install">Install</a>
-                <a href="/releases/">Releases</a>
-                <a href="/blog/" class="teal-link">Blog</a>
-                <a href="https://github.com/nikhilsoman/synlynk" class="github-btn">GitHub ↗</a>
-            </div>
-        </div>
-    </nav>
-
-    <main>
-        
-<header class="hero">
-    <div class="container">
-        <div class="wordmark-hero">
-            <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
-        </div>
-        <p class="tagline">The harness that turns AI tools into a team.</p>
-        <p class="description">
-            A single-file Python CLI that injects project context, dispatches agents, tracks capability, and keeps every agent in sync via a shared SQLite state, agent profiles, and an HTTP relay — so your workgroup moves as a unit.
-        </p>
-
-        <div class="code-block-wrapper">
-            <div class="code-block">
-                curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
-            </div>
-            <button class="copy-btn" data-copy="curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-            </button>
-        </div>
-
-        <div class="hero-ctas">
-            <a href="#install" class="btn primary">Get started →</a>
-            <a href="https://github.com/nikhilsoman/synlynk" class="btn outline">View on GitHub</a>
-        </div>
-
-        <div class="requirement-badges">
-            <span class="badge">v0.9.4</span>
-            <span class="badge">Python 3.8+</span>
-            <span class="badge">stdlib only</span>
-            <span class="badge">MIT</span>
-        </div>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
     </div>
-</header>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
 
-<section class="problem">
-    <div class="container">
-        <div class="section-label">The Problem</div>
-        <blockquote>
-            Every AI session starts from scratch. Agents don't know what the last agent decided, can't see what's running, and have no shared memory. The more agents you add, the worse the coordination gets.
-        </blockquote>
+  <main>
+    
+
+
+<!-- Section 1: Tagline Hero (dark, 100vh) -->
+<section id="top" class="section-tagline section-dark">
+  <div class="hook-label">Multi-agent coordination</div>
+
+  <p class="hero-byline">Most developers use one agent at a time.</p>
+
+  <h1 class="hero-headline">
+    <span class="grad1">synlynk</span> lets you run<br>a workgroup.
+  </h1>
+
+  <p class="hero-sub">
+    Spread the work, spread the cost.
+    Different models, different strengths,
+    <strong>one shared project state</strong>.
+  </p>
+
+  <div class="hero-agent-logos">
+    <div class="hero-agent-logo-icon claude" title="Claude">
+      <svg width="32" height="32" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" fill="currentColor"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M14.4 4.2l-1.4 1.4M4.2 14.4l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     </div>
+    <div class="hero-agent-logo-icon gemini" title="Gemini">
+      <svg width="32" height="32" viewBox="0 0 20 20" fill="none"><path d="M10 2 C10 2 12 8.5 16 10 C12 11.5 10 18 10 18 C10 18 8 11.5 4 10 C8 8.5 10 2 10 2Z" fill="currentColor"/></svg>
+    </div>
+    <div class="hero-agent-logo-icon grok" title="Grok">
+      <svg width="32" height="32" viewBox="0 0 20 20" fill="none"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+    </div>
+    <div class="hero-agent-logo-icon codex" title="Codex">
+      <svg width="32" height="32" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M4 18c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <div class="hero-cta-row">
+    <a href="/#waitlist" class="btn-primary">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M10 2v16M2 10l8 8 8-8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Install synlynk
+    </a>
+    <a href="/#docs" class="btn-ghost">Read the docs</a>
+  </div>
+
+  <div class="install-bar">
+    <div class="install-cmd">
+      <span class="install-prefix">$</span>
+      curl -fsSL install.synlynk.com | bash
+    </div>
+    <button class="copy-btn" data-copy="curl -fsSL install.synlynk.com | bash">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><rect x="7" y="3" width="10" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 6H3a1 1 0 00-1 1v10a1 1 0 001 1h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      copy
+    </button>
+  </div>
 </section>
 
-<section id="how-it-works" class="how-it-works">
-    <div class="container">
-        <div class="section-label">How it works</div>
-        <div class="step-grid">
-            <div class="step">
-                <div class="step-num">1</div>
-                <h3>init</h3>
-                <p>Bootstrap <code>project-docs/</code> and AI instruction files — one setup, every agent reads the same state</p>
-            </div>
-            <div class="step">
-                <div class="step-num">2</div>
-                <h3>exec</h3>
-                <p>Wrap any AI CLI — synlynk injects context, captures tokens, enforces budgets, detects failure loops</p>
-            </div>
-            <div class="step">
-                <div class="step-num">3</div>
-                <h3>dispatch</h3>
-                <p>Queue work for Claude, Codex, or Agy — synlynk routes to the best-fit agent based on capability scores</p>
-            </div>
-            <div class="step">
-                <div class="step-num">4</div>
-                <h3>daemon</h3>
-                <p>Always-on process keeps <code>context.md</code> fresh and exposes it over HTTP so agents pull without invoking the CLI</p>
-            </div>
+<!-- Section 2: Terminal Carousel (dark) -->
+<section id="carousel" class="section-carousel section-dark">
+  <div class="carousel-label">synlynk in action</div>
+  <h2 class="carousel-head">One command. Four agents. One project.</h2>
+  <p class="carousel-sub">Dispatch, monitor, and coordinate your whole workgroup from a single terminal.</p>
+
+  <div class="carousel-container">
+    <div class="carousel-track" id="carousel-track">
+
+      <!-- Slide 1: init -->
+      <div class="carousel-slide active" data-slide="0">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span class="carousel-slide-title">synlynk — init</span>
         </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk init</span>
+<br>
+<span class="t-out">? Project name: </span><span class="t-val">my-ai-project</span>
+<span class="t-out">? Team or solo? </span><span class="t-val">team</span>
+<span class="t-out">? Primary agent CLI installed: </span><span class="t-val">claude</span>
+<span class="t-out">? Budget limit (USD/session): </span><span class="t-val">5.00</span>
+<br>
+<span class="t-ok">✓ Created  project-docs/roadmap.md</span>
+<span class="t-ok">✓ Created  project-docs/memory.md</span>
+<span class="t-ok">✓ Created  project-docs/todo.md</span>
+<span class="t-ok">✓ Wrote    CLAUDE.md · GEMINI.md · AGENTS.md</span>
+<span class="t-ok">✓ Config   .synlynk/config.json  →  limit: $5.00</span>
+<br>
+<span class="t-out">Ready. Run <span class="t-arg">synlynk exec claude</span> to start.</span>
+        </div>
+      </div>
+
+      <!-- Slide 2: join -->
+      <div class="carousel-slide" data-slide="1">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span class="carousel-slide-title">synlynk — join</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk join</span> <span class="t-flag">--scan</span>
+<br>
+<span class="t-out">Scanning repository…</span>
+<span class="t-out">  Found  63 source files · 4 test suites · 1 CI workflow</span>
+<span class="t-out">  Stack  TypeScript · React · Prisma · PostgreSQL</span>
+<br>
+<span class="t-ok">✓ Generating memory.md from codebase…</span>
+<span class="t-out">  Architecture  SPA + REST API + Postgres</span>
+<span class="t-out">  Entities      User · Project · Job · Agent</span>
+<span class="t-out">  Open items    14 TODOs across 8 files</span>
+<br>
+<span class="t-ok">✓ Created  project-docs/  (roadmap · todo · memory)</span>
+<span class="t-ok">✓ Wrote    CLAUDE.md with full stack context</span>
+<span class="t-out">  Team members  nikhil · alex · priya</span>
+<span class="t-ok">✓ Ready to coordinate across 3 teammates.</span>
+        </div>
+      </div>
+
+      <!-- Slide 3: dispatch -->
+      <div class="carousel-slide" data-slide="2">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span class="carousel-slide-title">synlynk — dispatch</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk dispatch</span> <span class="t-arg">claude agy codex</span> \
+<span class="t-cont">    </span><span class="t-flag">--task</span> <span class="t-val">"implement auth flow"</span> \
+<span class="t-cont">    </span><span class="t-flag">--story</span> <span class="t-val">SL-42</span> <span class="t-flag">--context-mode</span> <span class="t-val">team</span>
+<br>
+<span class="t-out">Injecting context snapshot → 2,341 tokens</span>
+<span class="t-out">  memory.md · roadmap.md · todo.md · devlog/nikhil</span>
+<br>
+<span class="t-ok">▶ [job-a3f9]</span> <span class="t-arg">claude</span>  <span class="t-out">dispatched  PID 48201</span>
+<span class="t-ok">▶ [job-b7c2]</span> <span class="t-arg">agy   </span>  <span class="t-out">dispatched  PID 48207</span>
+<span class="t-ok">▶ [job-d1e4]</span> <span class="t-arg">codex </span>  <span class="t-out">dispatched  PID 48213</span>
+<br>
+<span class="t-ok">✓ 3 agents running in parallel — background</span>
+<span class="t-out">  synlynk logs --job job-a3f9   to follow</span>
+        </div>
+      </div>
+
+      <!-- Slide 4: status -->
+      <div class="carousel-slide" data-slide="3">
+        <div class="t-dots">
+          <div class="t-dot t-red"></div><div class="t-dot t-yellow"></div><div class="t-dot t-green"></div>
+          <span class="carousel-slide-title">synlynk — status</span>
+        </div>
+        <div class="t-body">
+<span class="t-prompt">$</span> <span class="t-cmd">synlynk status</span>
+<br>
+<span class="t-out">  JOB        AGENT   STATUS   </span><span class="t-ok"> DONE</span><span class="t-out"> / RUNNING   TOKENS    COST</span>
+<span class="t-out">  ─────────────────────────────────────────────────────</span>
+<span class="t-out">  job-a3f9   </span><span class="t-arg">claude</span><span class="t-out">  RUNNING  12m 04s             —        —</span>
+<span class="t-ok">  job-b7c2   agy     DONE     08m 31s        52,500   $0.48</span>
+<span class="t-out">  job-d1e4   </span><span class="t-arg">codex</span><span class="t-out">   RUNNING  09m 17s             —        —</span>
+<br>
+<span class="t-out">  Budget Pulse  ──────────────────────────────────────</span>
+<span class="t-out">  session   $0.48 / $5.00   </span><span class="t-ok">████</span><span class="t-out">░░░░░░░░░░  10%</span>
+<span class="t-out">  today     $1.24 / $20.00  </span><span class="t-ok">██</span><span class="t-out">░░░░░░░░░░░░  6%</span>
+<br>
+<span class="t-ok">✓ All agents within quota  ·  state.db last write 3s ago</span>
+        </div>
+      </div>
+
     </div>
+
+    <!-- Pills + dots -->
+    <div class="carousel-controls-wrap">
+      <div class="carousel-pills-row">
+        <button class="cmd-pill active" data-pill="0">init</button>
+        <button class="cmd-pill" data-pill="1">join</button>
+        <button class="cmd-pill" data-pill="2">dispatch</button>
+        <button class="cmd-pill" data-pill="3">status</button>
+      </div>
+      <div class="slide-nav" id="slide-nav">
+        <div class="slide-dot active" data-dot="0"></div>
+        <div class="slide-dot" data-dot="1"></div>
+        <div class="slide-dot" data-dot="2"></div>
+        <div class="slide-dot" data-dot="3"></div>
+      </div>
+    </div>
+  </div>
 </section>
 
-<section class="features">
-    <div class="container">
-        <div class="section-label">Features</div>
-        <div class="feature-grid">
-            <div class="feature-card">
-                <span class="glyph">⟡</span>
-                <h3>Context injection</h3>
-                <p>Reads <code>project-docs/</code> into <code>context.md</code> before every exec — every AI session starts with current project state, no setup required</p>
-            </div>
-            <div class="feature-card">
-                <span class="glyph">◉</span>
-                <h3>Always-on daemon</h3>
-                <p><code>synlynk daemon start</code> runs a background process with an HTTP API on <code>localhost:27471</code>; agents pull context over HTTP and dispatch jobs without invoking the CLI</p>
-            </div>
-            <div class="feature-card">
-                <span class="glyph">◳</span>
-                <h3>Persistent job queue</h3>
-                <p>Priority-ordered <code>daemon_jobs</code> in SQLite with dependency chains — jobs survive daemon restarts; <code>synlynk jobs --watch</code> shows live status across every dispatched agent</p>
-            </div>
-            <div class="feature-card">
-                <span class="glyph">⌁</span>
-                <h3>Workgroup relay</h3>
-                <p><code>synlynk relay start</code> runs an HTTP SSE broker; <code>synlynk relay broadcast</code> publishes events to every connected agent — wellness checks, MOTDs, and coordination signals across the workgroup</p>
-            </div>
-            <div class="feature-card">
-                <span class="glyph">◈</span>
-                <h3>Capability engine</h3>
-                <p>Every dispatch scores the agent across 40+ domains — quality, speed, cost, test results. Per-agent profiles (<code>.agents/</code>) set context scope and model preferences. Ratings are Ed25519-signed.</p>
-            </div>
-            <div class="feature-card">
-                <span class="glyph">⬡</span>
-                <h3>Team coordination</h3>
-                <p><code>synlynk join</code>, <code>synlynk team status</code>, <code>synlynk decide</code> — multi-agent consensus panels, pull-before-write arbitration, and team digests across all contributors</p>
-            </div>
-            <div class="feature-card">
-                <span class="glyph">◬</span>
-                <h3>Sentinel &amp; cost controls</h3>
-                <p>Flatline detection halts after 3 consecutive identical failures. Budget limits with 80% warnings. Per-session token tracking across every agent.</p>
-            </div>
-        </div>
+<!-- Section 3: Relief (light bg) -->
+<section id="relief" class="section-relief section-light">
+  <div class="relief-inner">
+    <div class="section-label">The multi-agent unlock</div>
+    <h2 class="section-title">You're not limited to one agent.<br>You just needed a harness.</h2>
+    <p class="section-body">Every AI CLI is powerful in isolation. But they don't share context, don't know about each other, and don't report costs in one place. synlynk wires them up.</p>
+
+    <div class="relief-grid">
+      
+<div class="relief-card">
+  <div class="relief-card-icon icon-blue">🔀</div>
+  <h4>Context injection</h4>
+  <p>Every agent gets your project memory, roadmap, and current todos — automatically, before each invocation.</p>
+</div>
+
+      
+<div class="relief-card">
+  <div class="relief-card-icon icon-teal">📊</div>
+  <h4>Unified cost tracking</h4>
+  <p>Token counts, per-agent spend, and budget limits in one dashboard. No more surprise bills.</p>
+</div>
+
+      
+<div class="relief-card">
+  <div class="relief-card-icon icon-orange">🛡</div>
+  <h4>Sentinel monitoring</h4>
+  <p>Detects hallucination loops, quota hits, and consecutive failures. Alerts before they compound.</p>
+</div>
+
     </div>
+
+    <div class="cost-callout">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5 5.5.8-4 3.9.9 5.5L10 14.5l-4.9 2.7.9-5.5L2 7.8l5.5-.8z" fill="#2EC4A0"/></svg>
+      <span><strong>Claude alone:</strong> ~$0.015/1K tokens &nbsp;·&nbsp; <strong>Distributed across 3 agents:</strong> ~$0.006/1K tokens effective rate &nbsp;·&nbsp; <strong>~60% cheaper effective rate when distributed across 3 agents</strong></span>
+    </div>
+  </div>
 </section>
 
-<section class="install-band" id="install">
-    <div class="container">
-        <div class="section-label">Install</div>
-        <p style="color: var(--text-muted); margin-bottom: 1.2rem; font-size: 14px;">Installs to <code>~/.synlynk/bin/synlynk</code> — no dependencies beyond Python 3.8+</p>
-        <div class="code-block-wrapper">
-            <div class="code-block">
-                curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
-            </div>
-            <button class="copy-btn" data-copy="curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash">
-                <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-            </button>
-        </div>
-        <div style="margin-top: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
-            <div class="code-block-wrapper secondary" style="flex: 1; min-width: 240px;">
-                <div class="code-block">synlynk init</div>
-            </div>
-            <div class="code-block-wrapper secondary" style="flex: 1; min-width: 240px;">
-                <div class="code-block">synlynk daemon start</div>
-            </div>
-        </div>
+<!-- Section 4: How It Works (dark) -->
+<section id="how" class="section-how section-dark">
+  <div class="how-inner">
+    <div class="section-label dark">Getting started</div>
+    <h2 class="section-title">Up in four commands.</h2>
+    <p class="section-body">synlynk is a single-file Python CLI. No build step. No dependencies. Works with whatever AI CLIs you already have installed.</p>
+
+    <div class="steps-grid">
+      
+<div class="step-card">
+  <div class="step-number">STEP 01</div>
+  <div class="step-title">Install</div>
+  <div class="step-body">Single curl-pipe install. Puts the binary in ~/.synlynk/bin/ and updates your PATH.</div>
+  <div class="step-code">curl -fsSL install.synlynk.com | bash</div>
+</div>
+
+      
+<div class="step-card">
+  <div class="step-number">STEP 02</div>
+  <div class="step-title">Init</div>
+  <div class="step-body">Bootstrap your project — creates project-docs/, config, and AI instruction files.</div>
+  <div class="step-code">synlynk init</div>
+</div>
+
+      
+<div class="step-card">
+  <div class="step-number">STEP 03</div>
+  <div class="step-title">Exec</div>
+  <div class="step-body">Run any AI CLI through synlynk — context is injected, costs tracked, output monitored.</div>
+  <div class="step-code">synlynk exec claude</div>
+</div>
+
+      
+<div class="step-card">
+  <div class="step-number">STEP 04</div>
+  <div class="step-title">Dispatch</div>
+  <div class="step-body">Parallelize tasks across multiple agents from one command. Results flow into shared project state.</div>
+  <div class="step-code">synlynk dispatch <br>  claude agy codex <br>  --task "ship it"</div>
+</div>
+
     </div>
+  </div>
 </section>
 
-<section class="docs-downloads">
-    <div class="container">
-        <div class="section-label">Documentation</div>
-        <div class="docs-grid">
-            <a class="doc-card" href="https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-official-reference.pdf" target="_blank" rel="noopener">
-                <img class="doc-thumb" src="/assets/img/docs/synlynk-official-reference-thumb.png" alt="synlynk Official Reference thumbnail">
-                <div class="doc-meta">
-                    <div class="doc-title">Official Reference</div>
-                    <div class="doc-desc">Complete 14-page reference: architecture, every command with all flags, agent profiles, relay protocol, SQLite schema, and changelog</div>
-                    <span class="doc-download-link">Download PDF →</span>
-                </div>
-            </a>
-            <a class="doc-card" href="https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-command-reference.pdf" target="_blank" rel="noopener">
-                <img class="doc-thumb" src="/assets/img/docs/synlynk-command-reference-thumb.png" alt="synlynk Command Reference thumbnail">
-                <div class="doc-meta">
-                    <div class="doc-title">Command Reference</div>
-                    <div class="doc-desc">9-page command reference: commands by category with flags, options, and real usage scenarios — keep it open next to your terminal</div>
-                    <span class="doc-download-link">Download PDF →</span>
-                </div>
-            </a>
-            <a class="doc-card" href="https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-quickstart-guide.pdf" target="_blank" rel="noopener">
-                <img class="doc-thumb" src="/assets/img/docs/synlynk-quickstart-guide-thumb.png" alt="synlynk Quick Start Guide thumbnail">
-                <div class="doc-meta">
-                    <div class="doc-title">Quick Start Guide</div>
-                    <div class="doc-desc">5-page getting-started guide: install, init, dispatch your first agent, invite your team, and key features at a glance</div>
-                    <span class="doc-download-link">Download PDF →</span>
-                </div>
-            </a>
-        </div>
+<!-- Section 5: Features (light) -->
+<section id="features" class="section-features section-light">
+  <div class="features-inner">
+    <div class="section-label">Feature spotlight</div>
+    <h2 class="section-title">Four things that make the workgroup work.</h2>
+
+    <div class="features-grid">
+      
+<div class="feat-card accent-purple">
+  <div class="feat-icon">🚀</div>
+  <div class="feat-title">Dispatch</div>
+  <div class="feat-body">Run a task across multiple agents in parallel. Each agent gets the same context snapshot. Results stream into a unified log with per-agent cost attribution.</div>
+  <div class="feat-code">synlynk dispatch claude agy codex &#92;
+  --task &quot;review PR #47&quot; &#92;
+  --story SL-12 --context-mode team</div>
+  
+    <div class="feat-tags">
+      
+        <span class="feat-tag">parallel execution</span>
+      
+        <span class="feat-tag">background jobs</span>
+      
+        <span class="feat-tag">story routing</span>
+      
     </div>
+  
+</div>
+
+
+      
+<div class="feat-card accent-blue">
+  <div class="feat-icon">🧠</div>
+  <div class="feat-title">Context Injection</div>
+  <div class="feat-body">Before every exec or dispatch, synlynk builds a context snapshot from your project docs — memory, roadmap, todos, and teammate devlogs — and injects it into the agent&#39;s prompt.</div>
+  <div class="feat-code">synlynk context --mode team
+# → memory + roadmap + devlog/nikhil
+# → 2,341 tokens injected</div>
+  
+    <div class="feat-tags">
+      
+        <span class="feat-tag">memory.md</span>
+      
+        <span class="feat-tag">roadmap</span>
+      
+        <span class="feat-tag">devlogs</span>
+      
+    </div>
+  
+</div>
+
+
+      
+<div class="feat-card accent-teal">
+  <div class="feat-icon">🛡</div>
+  <div class="feat-title">Sentinel Monitoring</div>
+  <div class="feat-body">Real-time pattern detection on agent output. Flags FLATLINE (3 consecutive failures), SUCCESS_LOOP (identical outputs), QUOTA_EXHAUSTED, and other anomalies. Alerts go to sentinel.md.</div>
+  <div class="feat-code">synlynk sentinel --watch
+⚠ SUCCESS_LOOP: job-d1e4
+  3× identical output detected</div>
+  
+    <div class="feat-tags">
+      
+        <span class="feat-tag">loop detection</span>
+      
+        <span class="feat-tag">quota alerts</span>
+      
+        <span class="feat-tag">flatline</span>
+      
+    </div>
+  
+</div>
+
+
+      
+<div class="feat-card accent-orange">
+  <div class="feat-icon">👤</div>
+  <div class="feat-title">Agent Profiles</div>
+  <div class="feat-body">Each agent has a profile describing its strengths, rate limits, and image-gen capabilities. Profiles inform dispatch routing — Imagen tasks go to Agy, DALL-E to Codex, Aurora to Grok.</div>
+  <div class="feat-code">synlynk profile set agy &#92;
+  --role image-gen &#92;
+  --model imagen-3</div>
+  
+    <div class="feat-tags">
+      
+        <span class="feat-tag">role assignment</span>
+      
+        <span class="feat-tag">model routing</span>
+      
+        <span class="feat-tag">image gen</span>
+      
+    </div>
+  
+</div>
+
+    </div>
+  </div>
 </section>
 
-<section class="roadmap">
-    <div class="container">
-        <div class="section-label">Roadmap</div>
-        <div class="roadmap-grid">
-            <div class="roadmap-item shipped">
-                <div class="status-dot"></div>
-                <h3>v0.9.3 — shipped</h3>
-                <p>Async Daemon: <code>synlynk daemon</code>, persistent job queue, 10-endpoint HTTP API on <code>localhost:27471</code>, launchd/systemd/crontab service install. 432 tests.</p>
-            </div>
-            <div class="roadmap-item shipped">
-                <div class="status-dot"></div>
-                <h3>v0.9.4 — shipped</h3>
-                <p>Context / Dispatch / Relay: SQLite task canon, agent profiles, <code>synlynk jobs --watch</code>, HTTP SSE relay broker (<code>synlynk relay start/broadcast</code>), VERIFY_SKIP sentinel. 472 tests.</p>
-            </div>
-            <div class="roadmap-item active">
-                <div class="status-dot"></div>
-                <h3>v0.10.0 — next</h3>
-                <p>Multi-Repo Workspace: <code>synlynk workspace init/join</code>, cross-repo epics, workspace relay scope — one synlynk across your entire microservices stack.</p>
-            </div>
-            <div class="roadmap-item">
-                <div class="status-dot"></div>
-                <h3>v1.0 — the OS</h3>
-                <p>Stable API, pipx/Homebrew packaging, open context protocol, signed capability ledger, Tokq cloud bridge, synlynk.com community server.</p>
-            </div>
-        </div>
-        <div class="roadmap-cta">
-            <a href="https://github.com/nikhilsoman/synlynk/discussions">Vote on what to build next →</a>
-        </div>
+<section id="vision" class="section-vision section-dark">
+  <div class="vision-inner">
+    <div class="vision-text">
+      <div class="section-label dark">The coordination layer</div>
+      <h2 class="section-title">synlynk is becoming a coordination OS for AI workgroups.</h2>
+      <p class="section-body">Dispatch, relay, monitor, and account for every agent in your org — from a single shared project state.</p>
+      <div class="vision-stats">
+        <div class="stat-item"><div class="stat-value">4</div><div class="stat-label">agents</div></div>
+        <div class="stat-item"><div class="stat-value">0</div><div class="stat-label">deps</div></div>
+        <div class="stat-item"><div class="stat-value">MIT</div><div class="stat-label">license</div></div>
+      </div>
     </div>
+    <div class="vision-canvas-wrap">
+      <canvas id="motherboard-canvas" width="520" height="460"></canvas>
+    </div>
+  </div>
 </section>
 
-    </main>
+<!-- Section 7: Docs (light) -->
+<section id="docs" class="section-docs section-light">
+  <div class="docs-inner">
+    <div class="section-label">Documentation</div>
+    <h2 class="section-title">Everything you need to get started.</h2>
+    
+    <div class="docs-grid">
+      <div class="doc-card">
+        <div class="doc-card-thumb">⏱️</div>
+        <h3 class="doc-card-title">Quick Start Guide</h3>
+        <p class="doc-card-body">Get synlynk up and running in under five minutes with our step-by-step setup guide and example project.</p>
+        <a href="/docs/#quick-start" class="doc-card-link">Read Guide →</a>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-thumb">💻</div>
+        <h3 class="doc-card-title">Command Reference</h3>
+        <p class="doc-card-body">Detailed syntax and examples for every command including exec, join, dispatch, status, and doctor.</p>
+        <a href="/docs/#exec" class="doc-card-link">View Reference →</a>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-thumb">📖</div>
+        <h3 class="doc-card-title">The Manual</h3>
+        <p class="doc-card-body">A deep dive into state.db schemas, agent role definitions, budget enforcement, and relay network architecture.</p>
+        <a href="/docs/" class="doc-card-link">Explore Manual →</a>
+      </div>
+    </div>
+  </div>
+</section>
 
-    <footer class="site-footer">
-        <div class="container footer-container">
-            <div class="footer-left">
-                <div class="wordmark">
-                    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
-                </div>
-                <div class="version">v0.9.4</div>
-            </div>
-            <div class="footer-right">
-                <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
-                <a href="https://github.com/nikhilsoman/synlynk/discussions">Discussions</a>
-                <a href="https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md">Changelog</a>
-                <a href="/releases/">Releases</a>
-                <span class="license">MIT</span>
-            </div>
-        </div>
-    </footer>
+<!-- Section 8: Waitlist + Blog teasers (dark) -->
+<section id="waitlist" class="section-waitlist section-dark">
+  <div class="waitlist-inner">
+    <div class="waitlist-content">
+      <div class="section-label dark">Early access</div>
+      <h2 class="section-title">Get early access to synlynk.com</h2>
+      <p class="section-body">Account management, team workspaces, and hosted dispatch — coming soon.</p>
+      
+      <form class="waitlist-form">
+        <input type="email" class="waitlist-input" placeholder="Enter your email address" required>
+        <button type="submit" class="btn-teal">Request Access</button>
+      </form>
+      
+      <div class="waitlist-thanks">
+        Thanks — you are on the list. (synlynk.com account portal coming soon)
+      </div>
+    </div>
 
-    <script src="/assets/js/copy.js"></script>
+    <!-- Blog Teasers (3 most recent posts) -->
+    <div class="blog-teasers">
+      
+        <article class="blog-teaser-card">
+          <div class="blog-teaser-date">Jun 29, 2026</div>
+          <h3 class="blog-teaser-title"></h3>
+          <p class="blog-teaser-excerpt">19 — v0.9.0 Kernel Fixes: Dispatch Quality + Package Structure PR branch: feat/v0.9.0-kernel-fixes Commits: 8 (Tasks 1–7...</p>
+          <a href="/blog/19-v0.9.0-kernel-fixes/" class="blog-teaser-link">Read Post →</a>
+        </article>
+      
+        <article class="blog-teaser-card">
+          <div class="blog-teaser-date">Jun 29, 2026</div>
+          <h3 class="blog-teaser-title"></h3>
+          <p class="blog-teaser-excerpt">Post 23 — P0 Fix: Dispatch Context Scoping Branch: fix/dispatch-context-scoping Version target: patch on top of v0.9.3...</p>
+          <a href="/blog/23-fix-dispatch-context-scoping/" class="blog-teaser-link">Read Post →</a>
+        </article>
+      
+        <article class="blog-teaser-card">
+          <div class="blog-teaser-date">Jun 29, 2026</div>
+          <h3 class="blog-teaser-title"></h3>
+          <p class="blog-teaser-excerpt">Post 24 — v0.9.4: Context, Dispatch, and Relay Branch: feat/v0.9.4-context-dispatch-relay Version: v0.9.4 Where we were...</p>
+          <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/" class="blog-teaser-link">Read Post →</a>
+        </article>
+      
+    </div>
+  </div>
+</section>
+
+<script src='/assets/js/motherboard.js'></script>
+
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,183 @@
+<h2>v0.9.3 Daemon Architecture</h2>
+<p class="subtitle">SynlynkDaemon — subclass of WatchDaemon + two threads</p>
+
+<style>
+.arch-wrap { display: flex; gap: 24px; align-items: flex-start; margin-top: 20px; }
+.arch-col { flex: 1; }
+.arch-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: var(--surface);
+}
+.arch-box.inherited { border-color: var(--blue); }
+.arch-box.new { border-color: var(--green); }
+.arch-box.http { border-color: var(--purple); }
+.arch-box.queue { border-color: var(--yellow); }
+.arch-box h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.arch-box.inherited h4 { color: var(--blue); }
+.arch-box.new h4 { color: var(--green); }
+.arch-box.http h4 { color: var(--purple); }
+.arch-box.queue h4 { color: var(--yellow); }
+.arch-box p { margin: 0; font-size: 12px; color: var(--t3); line-height: 1.6; }
+.arch-box code { font-size: 11px; color: var(--t2); background: var(--bg); padding: 1px 4px; border-radius: 3px; }
+
+.process-box {
+  border: 2px solid var(--green);
+  border-radius: 10px;
+  padding: 16px;
+  background: rgba(46,196,160,0.05);
+}
+.process-box h3 { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: var(--green); }
+.thread-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.thread {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.thread-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t4); margin-bottom: 4px; }
+.thread h4 { margin: 0 0 4px; font-size: 12px; }
+.thread p { margin: 0; font-size: 11px; color: var(--t3); line-height: 1.5; }
+
+.arrow { text-align: center; color: var(--t4); font-size: 18px; margin: 4px 0; }
+
+.api-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.api-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.api-row .method { font-weight: 700; color: var(--blue); font-size: 10px; letter-spacing: 0.05em; }
+.api-row .path { font-family: monospace; color: var(--t2); }
+.api-row .desc { color: var(--t4); margin-top: 2px; }
+
+.section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t4); margin: 16px 0 8px; }
+</style>
+
+<div class="arch-wrap">
+
+  <!-- LEFT: Process structure -->
+  <div class="arch-col" style="flex: 1.2;">
+    <div class="section-label">Daemon Process (double-fork)</div>
+    <div class="process-box">
+      <h3>SynlynkDaemon (subclasses WatchDaemon)</h3>
+
+      <div class="thread-row">
+        <div class="thread">
+          <div class="thread-label">Inherited from WatchDaemon</div>
+          <h4>🔵 Poll Thread</h4>
+          <p>Every 3s: check mtime on <code>project-docs/</code>, regenerate <code>context.md</code> on change, run <code>_reconcile_jobs()</code>, dispatch queued + ready jobs</p>
+        </div>
+      </div>
+
+      <div class="thread-row">
+        <div class="thread">
+          <div class="thread-label">New in SynlynkDaemon</div>
+          <h4>🟣 HTTP Thread</h4>
+          <p><code>http.server</code> on <code>localhost:27471</code> — serves context, job queue, stories, capability, sentinel over REST. Runs <code>serve_forever()</code> in a daemon thread.</p>
+        </div>
+      </div>
+
+      <div style="font-size:11px; color: var(--t4); margin-top: 6px;">
+        Pidfile: <code>.synlynk/daemon.pid</code> &nbsp;·&nbsp; Log: <code>.synlynk/daemon.log</code>
+      </div>
+    </div>
+
+    <div class="section-label">Persistence</div>
+    <div class="arch-box queue">
+      <h4>Job Queue in state.db</h4>
+      <p>New <code>daemon_jobs</code> table — survives restarts. Fields: <code>job_id, agent, task, story_id, status, priority, depends_on, pid, enqueued_at, started_at, completed_at, exit_code</code></p>
+    </div>
+
+    <div class="section-label">Service Registration</div>
+    <div class="arch-box new">
+      <h4>--install-service</h4>
+      <p>
+        <strong>macOS:</strong> launchd plist → <code>~/Library/LaunchAgents/com.synlynk.daemon.plist</code><br>
+        <strong>Linux:</strong> systemd user unit → <code>~/.config/systemd/user/synlynk-daemon.service</code><br>
+        <strong>Fallback:</strong> <code>@reboot</code> crontab entry
+      </p>
+    </div>
+  </div>
+
+  <!-- RIGHT: HTTP API -->
+  <div class="arch-col">
+    <div class="section-label">HTTP API — localhost:27471</div>
+    <div class="api-grid">
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/context</span></div>
+        <div class="desc">Current context.md (plain text or JSON)</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/status</span></div>
+        <div class="desc">Daemon health, queue depth, uptime</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/jobs</span></div>
+        <div class="desc">All jobs — queued, running, done</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/jobs/:id</span></div>
+        <div class="desc">Single job + log tail</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">POST</span> <span class="path">/dispatch</span></div>
+        <div class="desc">Enqueue job — agent, task, priority, depends_on</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/stories</span></div>
+        <div class="desc">Story list from state.db</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/stories/:id</span></div>
+        <div class="desc">Single story detail</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/capability</span></div>
+        <div class="desc">Capability ratings by agent × domain</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">GET</span> <span class="path">/sentinel</span></div>
+        <div class="desc">Active sentinel alerts</div>
+      </div>
+      <div class="api-row">
+        <div><span class="method">POST</span> <span class="path">/checkpoint</span></div>
+        <div class="desc">Trigger context regeneration on demand</div>
+      </div>
+    </div>
+
+    <div class="section-label">CLI Surface</div>
+    <div class="arch-box inherited">
+      <h4>synlynk daemon &lt;action&gt;</h4>
+      <p>
+        <code>start</code> · <code>stop</code> · <code>status</code> · <code>restart</code><br>
+        <code>--install-service</code> · <code>--uninstall-service</code>
+      </p>
+    </div>
+
+    <div class="section-label">Job Queue Rules</div>
+    <div class="arch-box queue">
+      <h4>Dispatch logic (poll thread)</h4>
+      <p>
+        <strong>Concurrency cap:</strong> <code>max_parallel</code> in config (default 4)<br>
+        <strong>Priority:</strong> integer 1–10, lower = higher priority<br>
+        <strong>Dependencies:</strong> <code>depends_on</code> = JSON array of job_ids; job stays <code>queued</code> until all deps are <code>done</code>
+      </p>
+    </div>
+  </div>
+
+</div>

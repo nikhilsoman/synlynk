@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-5 Hero Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0e0e0f; font-family: system-ui, -apple-system, sans-serif; }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(14,14,15,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid #1e1e1e;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 48px; height: 52px;
+  }
+  .nav-wordmark {
+    font-family: 'Courier New', monospace; font-size: 16px; font-weight: 500;
+    letter-spacing: -0.3px; text-decoration: none;
+  }
+  .nav-wordmark .syn, .nav-wordmark .k { color: #d4d4d4; }
+  .nav-wordmark .l { color: #5B8DEF; }
+  .nav-wordmark .y { color: #A259F7; }
+  .nav-wordmark .n { color: #2EC4A0; }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a { color: #888; font-size: 13px; text-decoration: none; transition: color 0.15s; }
+  .nav-links a:hover { color: #ccc; }
+  .nav-links .btn-gh {
+    background: transparent; border: 1px solid #3a3a3c;
+    color: #ccc; padding: 5px 14px; border-radius: 6px; font-size: 12px;
+  }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    background: linear-gradient(160deg, #0a0814 0%, #0e0e0f 55%);
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 80px 24px 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 700px; height: 500px;
+    background: radial-gradient(ellipse, rgba(91,141,239,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-inner { max-width: 680px; position: relative; z-index: 1; }
+
+  .hero-wordmark {
+    font-family: 'Courier New', monospace;
+    font-size: 32px; font-weight: 500; letter-spacing: -1px;
+    margin-bottom: 28px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hero-wordmark .syn, .hero-wordmark .k { color: #d4d4d4; }
+  .hero-wordmark .l { color: #5B8DEF; }
+  .hero-wordmark .y { color: #A259F7; }
+  .hero-wordmark .n { color: #2EC4A0; }
+
+  .hero-headline {
+    font-size: 30px; font-weight: 700; line-height: 1.25;
+    color: #ffffff; margin-bottom: 6px; letter-spacing: -0.5px;
+  }
+  .hero-headline .gradient-line {
+    background: linear-gradient(90deg, #5B8DEF 0%, #A259F7 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subhead {
+    font-size: 14px; color: #666; margin-top: 14px; line-height: 1.6; max-width: 500px; margin-left: auto; margin-right: auto;
+  }
+  .hero-subhead strong { color: #999; font-weight: 500; }
+
+  .code-block-wrap {
+    position: relative; margin: 28px auto 0; max-width: 520px;
+  }
+  .code-block {
+    background: #252526; border: 1px solid #3a3a3c; border-radius: 8px;
+    padding: 13px 48px 13px 18px;
+    font-family: 'Courier New', monospace; font-size: 12px; color: #2EC4A0;
+    text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .copy-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; color: #888; padding: 4px;
+  }
+  .code-secondary {
+    background: #1a1a1c; border: 1px solid #2a2a2c; border-radius: 6px;
+    padding: 9px 48px 9px 18px; margin-top: 8px;
+    font-family: 'Courier New', monospace; font-size: 11px; color: #555;
+    text-align: left;
+  }
+
+  .hero-ctas { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+  .btn-primary {
+    background: linear-gradient(90deg, #5B8DEF, #A259F7);
+    color: #fff; font-size: 13px; font-weight: 600; padding: 9px 22px;
+    border-radius: 6px; text-decoration: none; letter-spacing: 0.1px;
+  }
+  .btn-secondary {
+    border: 1px solid #3a3a3c; color: #aaa; font-size: 13px; padding: 9px 22px;
+    border-radius: 6px; text-decoration: none;
+  }
+  .btn-secondary:hover { border-color: #666; color: #ccc; }
+
+  .hero-badges {
+    display: flex; gap: 10px; justify-content: center; margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-family: 'Courier New', monospace; font-size: 10px; color: #555;
+    border: 1px solid #2a2a2c; border-radius: 4px; padding: 3px 8px;
+  }
+
+  /* AGENT PILL ROW */
+  .agent-pills {
+    display: flex; gap: 8px; justify-content: center; margin-top: 32px; flex-wrap: wrap;
+  }
+  .agent-pill {
+    font-size: 11px; padding: 5px 12px; border-radius: 20px;
+    font-family: 'Courier New', monospace; letter-spacing: 0.3px;
+  }
+  .pill-claude { background: rgba(91,141,239,0.12); border: 1px solid rgba(91,141,239,0.3); color: #5B8DEF; }
+  .pill-gemini { background: rgba(162,89,247,0.12); border: 1px solid rgba(162,89,247,0.3); color: #A259F7; }
+  .pill-grok   { background: rgba(46,196,160,0.12); border: 1px solid rgba(46,196,160,0.3); color: #2EC4A0; }
+  .pill-codex  { background: rgba(200,200,200,0.08); border: 1px solid rgba(200,200,200,0.2); color: #999; }
+  .pills-label { font-size: 10px; color: #444; width: 100%; text-align: center; margin-bottom: -4px; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* RELIEF SECTION */
+  .relief {
+    background: #ffffff; padding: 80px 24px; text-align: center;
+  }
+  .section-label {
+    font-size: 10px; letter-spacing: 3px; font-weight: 600; text-transform: uppercase; margin-bottom: 16px;
+  }
+  .relief .section-label { color: #A259F7; }
+  .relief-headline {
+    font-size: 26px; font-weight: 700; color: #111; line-height: 1.3; max-width: 560px; margin: 0 auto;
+  }
+  .relief-body {
+    font-size: 14px; color: #777; margin-top: 14px; max-width: 480px; margin-left: auto; margin-right: auto; line-height: 1.7;
+  }
+
+  /* TOKEN CALLOUT */
+  .token-callout {
+    background: #f8f8f8; border: 1px solid #eee; border-left: 3px solid #2EC4A0;
+    border-radius: 6px; padding: 14px 18px; max-width: 480px; margin: 24px auto 0;
+    text-align: left;
+  }
+  .token-callout-label { font-size: 9px; letter-spacing: 2px; color: #2EC4A0; font-weight: 600; margin-bottom: 6px; }
+  .token-callout-text { font-size: 12px; color: #555; line-height: 1.6; }
+
+  /* ANNOTATION STRIP */
+  .annotation {
+    background: #1a1a2e; border-top: 1px solid #2a2a3e; padding: 12px 24px;
+    font-size: 11px; color: #888; text-align: center; font-family: monospace;
+  }
+  .annotation strong { color: #5B8DEF; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-wordmark" href="#">
+    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+  </a>
+  <div class="nav-links">
+    <a href="#">How it works</a>
+    <a href="#">Features</a>
+    <a href="#" style="color:#2EC4A0;">Blog</a>
+    <a href="#" class="btn-gh">GitHub ↗</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+
+    <div class="hero-wordmark">
+      <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
+    </div>
+
+    <div class="hero-headline">
+      Most developers use one agent at a time.<br>
+      <span class="gradient-line">synlynk lets you run a workgroup.</span>
+    </div>
+
+    <p class="hero-subhead">
+      Spread the work, spread the cost.<br>
+      <strong>Different models, different strengths, one shared project state.</strong>
+    </p>
+
+    <div class="agent-pills">
+      <div class="pills-label">works with</div>
+      <div class="agent-pill pill-claude">claude</div>
+      <div class="agent-pill pill-gemini">gemini</div>
+      <div class="agent-pill pill-grok">grok</div>
+      <div class="agent-pill pill-codex">codex</div>
+    </div>
+
+    <div class="code-block-wrap">
+      <div class="code-block">curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash</div>
+      <button class="copy-btn" title="Copy">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+      </button>
+    </div>
+    <div class="code-secondary">python3 -m synlynk &lt;command&gt; &nbsp;·&nbsp; no install needed</div>
+
+    <div class="hero-ctas">
+      <a href="#" class="btn-primary">Get started →</a>
+      <a href="#" class="btn-secondary">Join waitlist</a>
+    </div>
+
+    <div class="hero-badges">
+      <span class="badge">Python 3.8+</span>
+      <span class="badge">stdlib only</span>
+      <span class="badge">MIT</span>
+      <span class="badge">pipx install synlynk</span>
+    </div>
+
+  </div>
+</section>
+
+<section class="relief">
+  <div class="section-label">The unlock</div>
+  <div class="relief-headline">
+    One init. Every agent reads<br>the same project state.
+  </div>
+  <p class="relief-body">
+    Claude works your frontend. Gemini audits your architecture. Grok stress-tests your assumptions.
+    All three dispatched from one job queue, writing to one shared ledger — no repeated setup, no lost state.
+  </p>
+  <div class="token-callout">
+    <div class="token-callout-label">Token economics</div>
+    <div class="token-callout-text">
+      Sticking to one model concentrates your token spend, hits rate limits faster, and locks out model diversity.
+      Spread work across agents — spread cost across providers. The workgroup model is cheaper and richer.
+    </div>
+  </div>
+</section>
+
+<div class="annotation">
+  <strong>BS-5 Hero Mockup</strong> &nbsp;·&nbsp; Sections below: How it works · Features (Dispatch, Context, Team, Profiles) · OS Vision · Waitlist · Blog · Footer
+</div>
+
+</body>
+</html>

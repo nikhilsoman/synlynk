@@ -1,0 +1,76 @@
+<h2>Migration UX — What does "merge" mean?</h2>
+<p class="subtitle"><code>synlynk migrate</code> finds your existing docs. Then what?</p>
+
+<div style="margin-bottom:20px;padding:14px;background:rgba(255,255,255,0.05);border-radius:8px">
+  <p class="label">Context</p>
+  <p style="margin:4px 0 0">rxcc has two types of files to migrate:<br>
+  <strong>1. Agent files</strong> (CLAUDE.md, GEMINI.md) — already at repo root, need new sections merged in<br>
+  <strong>2. Project docs</strong> (roadmap.md, todo.md, etc.) — may be at root or elsewhere, need moving to <code>project-docs/</code></p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Move + append missing sections <span style="color:#4ade80;font-size:0.8em">★ recommended</span></h3>
+      <p>For project docs: move to <code>project-docs/</code>, preserve content exactly.<br>
+      For agent files: append missing synlynk sections (Live Issues SOP, Anti-Amnesia etc.) below existing content.<br>
+      Show a preview of what will be appended before writing.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Terminal output</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.6">
+          <span style="color:#4ade80">✓ Found</span> roadmap.md at ./roadmap.md → moving to project-docs/roadmap.md<br>
+          <span style="color:#4ade80">✓ Found</span> todo.md at ./todo.md → moving to project-docs/todo.md<br>
+          <span style="color:#fbbf24">~ Found</span> CLAUDE.md at ./CLAUDE.md → will append 4 missing sections<br>
+          <br>
+          <span style="color:#94a3b8">Preview additions to CLAUDE.md:</span><br>
+          <span style="color:#4ade80">+ ## Live Issues SOP</span><br>
+          <span style="color:#4ade80">+ ## Mid-Session Anti-Amnesia Protocol</span><br>
+          <span style="color:#4ade80">+ ## Mandatory 4-Doc Discipline</span><br>
+          <span style="color:#4ade80">+ ## GitHub Projects v2 Integration</span><br>
+          <br>
+          Proceed? [Y/n/s(kip this file)]
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Move only — no content changes</h3>
+      <p>Move project docs to <code>project-docs/</code> unchanged. Leave agent files untouched. User manually adds new synlynk sections later (or on next <code>init --force</code>).</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Terminal output</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.6">
+          <span style="color:#4ade80">✓ Moved</span> ./roadmap.md → project-docs/roadmap.md<br>
+          <span style="color:#4ade80">✓ Moved</span> ./todo.md → project-docs/todo.md<br>
+          <span style="color:#94a3b8">→ Skipped</span> CLAUDE.md (agent file — edit manually)<br>
+          <br>
+          <span style="color:#94a3b8">Run `synlynk init --force` to update agent instruction files.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full interactive diff</h3>
+      <p>For each file: show a full side-by-side diff (existing vs. what synlynk would write). User picks line by line or section by section what to keep.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Terminal output</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:0.82em;line-height:1.6">
+          <span style="color:#94a3b8">--- CLAUDE.md (existing)</span><br>
+          <span style="color:#94a3b8">+++ CLAUDE.md (synlynk template)</span><br>
+          <span style="color:#ef4444">- # rxcc Claude Instructions</span><br>
+          <span style="color:#4ade80">+ # synlynk Claude Instructions</span><br>
+          <span style="color:#94a3b8">  ...</span><br>
+          <br>
+          <span style="color:#fbbf24">[k]eep existing  [u]se template  [m]erge  [s]kip</span>
+        </div>
+      </div>
+      <p style="color:#f87171;margin-top:8px;font-size:0.85em">Complex to implement correctly. Risk of data loss if user makes wrong choice.</p>
+    </div>
+  </div>
+</div>

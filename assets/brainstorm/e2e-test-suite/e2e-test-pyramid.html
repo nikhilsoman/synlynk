@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — E2E Test Strategy</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:16px;}
+.title{font-size:14px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:12px;}
+.tier{margin:0 auto;max-width:780px;}
+.t1{background:var(--blue);color:#0e0e0f;border-radius:12px;padding:14px 18px;margin-bottom:10px;}
+.t1-head{font-weight:700;font-size:12px;letter-spacing:0.5px;}
+.scenarios{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.scn{background:rgba(255,255,255,0.9);color:#111;font-size:10px;padding:2px 8px;border-radius:999px;}
+.t2{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;}
+.t2-head{font-size:11px;color:var(--muted);margin-bottom:6px;}
+.unit-list{font-size:10px;color:var(--muted);}
+.fixtures{background:#0a0a0b;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:10px;}
+</style>
+</head>
+<body>
+<div class="title">E2E Test Strategy — Black-box CLI Coverage</div>
+
+<div class="tier">
+  <div class="t1">
+    <div class="t1-head">E2E / Black-box CLI Tests — 17 scenarios</div>
+    <div class="scenarios">
+      <div class="scn">init creates dirs</div>
+      <div class="scn">exec runs agent</div>
+      <div class="scn">dispatch spawns job</div>
+      <div class="scn">sentinel detects flatline</div>
+      <div class="scn">budget enforced</div>
+      <div class="scn">context scoped</div>
+      <div class="scn">doctor reports</div>
+    </div>
+  </div>
+
+  <div class="t2">
+    <div class="t2-head">Unit Tests — function contracts</div>
+    <div class="unit-list">generate_context • extract_tokens • check_sentinel_patterns • update_costs • _write_instruction_file</div>
+    <div class="fixtures">
+      <strong>Cli fixture:</strong> tmp_dir + subprocess.run + capture stdout/stderr + exit code assert
+    </div>
+  </div>
+</div>
+</body>
+</html>

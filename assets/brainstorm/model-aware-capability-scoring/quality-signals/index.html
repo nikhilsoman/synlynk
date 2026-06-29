@@ -1,0 +1,111 @@
+<h2>Quality Signal Architecture</h2>
+<p class="subtitle">Three tiers feeding one ledger row — automated baseline, verifier primary, human override</p>
+
+<div style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1.25rem;">
+
+  <!-- Tier A: Auto signals -->
+  <div style="border: 1px solid rgba(125,211,252,0.25); border-radius: 12px; overflow: hidden;">
+    <div style="background: rgba(125,211,252,0.1); padding: 0.8rem 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="background: #7dd3fc; color: #000; font-weight: 700; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">AUTO</span>
+        <strong style="color: #e2e8f0;">Objective signals — always captured, zero human cost</strong>
+      </div>
+      <div style="font-size: 0.78rem; color: #64748b;"><code>signal_source = 'auto'</code> · weight: 0.60</div>
+    </div>
+    <div style="padding: 1.1rem 1.25rem; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
+      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.7rem 0.9rem;">
+        <div style="font-size: 0.78rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.25rem;">test_pass_rate</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">% tests passing after job completes. Scraped from CI log or test runner output in job log.</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.7rem 0.9rem;">
+        <div style="font-size: 0.78rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.25rem;">build_success</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">Boolean. Job exit code + build/lint output parsed from log.</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.7rem 0.9rem;">
+        <div style="font-size: 0.78rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.25rem;">rework_count</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">Number of re-dispatch cycles before story reached done. First-pass success vs trial-and-error.</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.7rem 0.9rem;">
+        <div style="font-size: 0.78rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.25rem;">duration_vs_estimate</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">Actual token/time cost vs story.estimated_tokens. Efficiency signal.</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.7rem 0.9rem;">
+        <div style="font-size: 0.78rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.25rem;">pr_review_cycles</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">How many PR review rounds before merge. More cycles = lower quality signal.</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.7rem 0.9rem;">
+        <div style="font-size: 0.78rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.25rem;">verified_by_ci</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">CI pipeline outcome after PR merge. Ground truth for correctness.</div>
+      </div>
+    </div>
+    <div style="padding: 0.6rem 1.25rem 0.9rem; font-size: 0.78rem; color: #64748b;">
+      Auto-score computed as weighted composite → normalised to 0–10. Stored as <code>quality_auto</code>. Used when no verifier or human rating exists. Flagged low-confidence in Tokq.
+    </div>
+  </div>
+
+  <!-- Tier B: Verifier agent -->
+  <div style="border: 1px solid rgba(167,139,250,0.3); border-radius: 12px; overflow: hidden;">
+    <div style="background: rgba(167,139,250,0.1); padding: 0.8rem 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="background: #a78bfa; color: #000; font-weight: 700; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">VERIFIER</span>
+        <strong style="color: #e2e8f0;">Peer agent rating — primary quality score in trio pipeline</strong>
+      </div>
+      <div style="font-size: 0.78rem; color: #64748b;"><code>signal_source = 'verifier'</code> · weight: 0.85</div>
+    </div>
+    <div style="padding: 1.1rem 1.25rem;">
+      <p style="font-size: 0.87rem; color: #cbd5e1; margin: 0 0 0.9rem 0;">At the end of a trio pipeline run, the Verifier agent is dispatched with the Builder's diff, the story's <code>done_criteria</code>, and the auto-signals. It emits a structured review ending with:</p>
+      <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.9rem 1.1rem; font-family: monospace; font-size: 0.8rem; color: #94a3b8; line-height: 1.7;">
+        <span style="color: #475569;"># synlynk-meta</span><br>
+        <span style="color: #a78bfa;">quality</span>=<span style="color: #fbbf24;">8</span><br>
+        <span style="color: #a78bfa;">correct</span>=<span style="color: #22c55e;">true</span><br>
+        <span style="color: #a78bfa;">rework_needed</span>=<span style="color: #ef4444;">false</span><br>
+        <span style="color: #a78bfa;">verifier_model</span>=<span style="color: #e2e8f0;">gemini-2.5-pro</span>
+      </div>
+      <p style="font-size: 0.78rem; color: #64748b; margin: 0.75rem 0 0 0;">Verifier's own <code>model_version</code> is recorded separately — the rating is a function of both the Builder's model <em>and</em> the Verifier's model. Important for Tokq: a high verifier score from a capable verifier is worth more.</p>
+    </div>
+  </div>
+
+  <!-- Tier C: Human -->
+  <div style="border: 1px solid rgba(251,191,36,0.25); border-radius: 12px; overflow: hidden;">
+    <div style="background: rgba(251,191,36,0.07); padding: 0.8rem 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="background: #fbbf24; color: #000; font-weight: 700; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">HUMAN</span>
+        <strong style="color: #e2e8f0;">Override — highest weight, not required</strong>
+      </div>
+      <div style="font-size: 0.78rem; color: #64748b;"><code>signal_source = 'human'</code> · weight: 1.0</div>
+    </div>
+    <div style="padding: 1.1rem 1.25rem; display: flex; gap: 1.25rem; align-items: flex-start;">
+      <div style="flex: 1;">
+        <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.7rem 1rem; font-family: monospace; font-size: 0.82rem; color: #94a3b8;">
+          synlynk score add &lt;story-id&gt; 9 [--note "nailed it"]<br>
+          synlynk score add &lt;story-id&gt; 3 --rework --note "missed edge cases"
+        </div>
+        <p style="font-size: 0.78rem; color: #64748b; margin: 0.6rem 0 0 0;">Human rating overwrites auto + verifier in the routing score. Carries a <code>note</code> field that flows into Tokq Memory Unit description.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Effective score formula -->
+<div style="margin-top: 1.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 1.25rem;">
+  <div class="label" style="margin-bottom: 0.75rem;">Effective score resolution — what gets written to capability_ratings</div>
+  <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+    <div style="background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.82rem; color: #fcd34d; text-align: center;">
+      Human rating<br><span style="font-size: 0.7rem; color: #64748b;">if present → wins</span>
+    </div>
+    <div style="color: #334155; font-size: 1.2rem;">→</div>
+    <div style="background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.2); border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.82rem; color: #c4b5fd; text-align: center;">
+      Verifier rating<br><span style="font-size: 0.7rem; color: #64748b;">else if present</span>
+    </div>
+    <div style="color: #334155; font-size: 1.2rem;">→</div>
+    <div style="background: rgba(125,211,252,0.08); border: 1px solid rgba(125,211,252,0.2); border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.82rem; color: #7dd3fc; text-align: center;">
+      Auto composite<br><span style="font-size: 0.7rem; color: #64748b;">low-confidence flag</span>
+    </div>
+    <div style="color: #334155; font-size: 1.2rem;">+</div>
+    <div style="background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.2); border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.82rem; color: #6ee7b7; text-align: center;">
+      Auto signals<br><span style="font-size: 0.7rem; color: #64748b;">always appended as metadata</span>
+    </div>
+  </div>
+  <p style="font-size: 0.78rem; color: #64748b; margin: 0.75rem 0 0 0;">Auto signals are always stored as metadata columns regardless of which tier provides the primary quality score. Routing uses effective score; Tokq exposes all tiers for subscribers to make their own judgments.</p>
+</div>

@@ -1,0 +1,93 @@
+<h2>Three-Dimensional Domain Taxonomy</h2>
+<p class="subtitle">Every story and Memory Unit carries a coordinate across all three layers</p>
+
+<div style="margin-top: 2rem; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem;">
+
+  <!-- Engineering -->
+  <div style="background: rgba(125,211,252,0.06); border: 1px solid rgba(125,211,252,0.25); border-radius: 12px; padding: 1.25rem;">
+    <div class="label" style="color: #7dd3fc; margin-bottom: 0.3rem;">Layer 1 — Engineering</div>
+    <p style="font-size: 0.78rem; color: #64748b; margin: 0 0 1rem 0;">Stack · environment · workflow · process</p>
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>architecture</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>frontend</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>backend</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>data</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>ml</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>testing</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>security</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>devops</code></div>
+      <div style="background: rgba(125,211,252,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #bae6fd;"><code>docs</code></div>
+    </div>
+    <div style="margin-top: 0.9rem; padding: 0.6rem 0.8rem; background: rgba(125,211,252,0.04); border-radius: 6px; font-size: 0.75rem; color: #64748b;">
+      <strong style="color: #93c5fd;">Inference:</strong> B (agent classifies task desc) → C fallback (file path heuristics)
+    </div>
+  </div>
+
+  <!-- Organizational -->
+  <div style="background: rgba(167,139,250,0.06); border: 1px solid rgba(167,139,250,0.25); border-radius: 12px; padding: 1.25rem;">
+    <div class="label" style="color: #a78bfa; margin-bottom: 0.3rem;">Layer 2 — Organizational</div>
+    <p style="font-size: 0.78rem; color: #64748b; margin: 0 0 1rem 0;">Product function · business capability</p>
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>personalization</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>monetization</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>adtech</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>workflow</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>analytics</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>growth</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>content</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>platform</code></div>
+      <div style="background: rgba(167,139,250,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #ddd6fe;"><code>identity</code></div>
+    </div>
+    <div style="margin-top: 0.9rem; padding: 0.6rem 0.8rem; background: rgba(167,139,250,0.04); border-radius: 6px; font-size: 0.75rem; color: #64748b;">
+      <strong style="color: #c4b5fd;">Inference:</strong> B (agent classifies from task + product context) → inherit from epic/phase tag
+    </div>
+  </div>
+
+  <!-- Industry Vertical -->
+  <div style="background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.25); border-radius: 12px; padding: 1.25rem;">
+    <div class="label" style="color: #34d399; margin-bottom: 0.3rem;">Layer 3 — Industry Vertical</div>
+    <p style="font-size: 0.78rem; color: #64748b; margin: 0 0 1rem 0;">Business context · market segment</p>
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>ott</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>streaming</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>fintech</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>banking</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>securities</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>healthcare</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>ecommerce</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>edtech</code></div>
+      <div style="background: rgba(52,211,153,0.1); border-radius: 5px; padding: 0.35rem 0.6rem; font-size: 0.8rem; color: #a7f3d0;"><code>gaming</code></div>
+    </div>
+    <div style="margin-top: 0.9rem; padding: 0.6rem 0.8rem; background: rgba(52,211,153,0.04); border-radius: 6px; font-size: 0.75rem; color: #64748b;">
+      <strong style="color: #6ee7b7;">Source:</strong> Workspace config at init (inherited by all stories). Per-story override allowed.
+    </div>
+  </div>
+
+</div>
+
+<!-- Coordinate example -->
+<div style="margin-top: 1.75rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 1.25rem;">
+  <div class="label" style="margin-bottom: 0.75rem;">Example: A story routing capability query</div>
+  <div style="font-family: monospace; font-size: 0.82rem; color: #94a3b8; line-height: 1.8;">
+    <span style="color: #64748b;">-- "Implement subscription billing endpoint"</span><br>
+    story.engg_domain &nbsp;&nbsp;&nbsp;= <span style="color: #7dd3fc;">'backend'</span><br>
+    story.org_domain &nbsp;&nbsp;&nbsp;&nbsp;= <span style="color: #a78bfa;">'monetization'</span><br>
+    story.industry &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color: #34d399;">'ott'</span> &nbsp;&nbsp;<span style="color: #334155; font-size: 0.75rem;">← inherited from workspace</span><br><br>
+    <span style="color: #64748b;">-- Routing query against capability_ratings</span><br>
+    SELECT agent, model_version, score FROM capability_scores<br>
+    WHERE engg_domain = <span style="color: #7dd3fc;">'backend'</span><br>
+    &nbsp;&nbsp;AND org_domain &nbsp;= <span style="color: #a78bfa;">'monetization'</span><br>
+    &nbsp;&nbsp;AND industry &nbsp;&nbsp;= <span style="color: #34d399;">'ott'</span><br>
+    &nbsp;&nbsp;AND phase &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 'build'<br>
+    ORDER BY score DESC;
+  </div>
+</div>
+
+<!-- Tokq address -->
+<div style="margin-top: 1rem; background: rgba(251,191,36,0.04); border: 1px solid rgba(251,191,36,0.2); border-radius: 10px; padding: 1.25rem;">
+  <div class="label" style="color: #fbbf24; margin-bottom: 0.6rem;">Tokq Memory Unit address — same coordinate becomes the marketplace key</div>
+  <div style="font-family: monospace; font-size: 0.82rem; color: #94a3b8; line-height: 1.8;">
+    <span style="color: #fbbf24;">tokq://</span>capability/<span style="color: #7dd3fc;">backend</span>/<span style="color: #a78bfa;">monetization</span>/<span style="color: #34d399;">ott</span>/<span style="color: #e2e8f0;">claude-opus-4-8</span><br>
+    <span style="color: #334155; font-size: 0.78rem;">↑ discoverable, subscribable, valued by sample_count + score distribution</span>
+  </div>
+</div>

@@ -1,0 +1,114 @@
+<meta charset="UTF-8">
+<h2>TPM View &mdash; Per-Story Lifecycle + Aggregation</h2>
+<p class="subtitle">Each story tracks its own lifecycle stage. The TPM sees the whole board and suggests batching opportunities.</p>
+
+<!-- BOARD VIEW -->
+<div style="overflow-x:auto;padding-bottom:8px">
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;min-width:800px">
+
+  <!-- Headers -->
+  <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:center;border-bottom:1px solid #1e293b">Brainstorm</div>
+  <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:center;border-bottom:1px solid #1e293b">Spec</div>
+  <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:center;border-bottom:1px solid #1e293b">Plan</div>
+  <div style="font-size:9px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:center;border-bottom:2px solid #0ea5e9">Execution</div>
+  <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:center;border-bottom:1px solid #1e293b">Review</div>
+  <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:center;border-bottom:1px solid #1e293b">Done</div>
+
+  <!-- Brainstorm column -->
+  <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px">
+    <div style="background:#1e293b;border:1px solid #334155;border-left:2px solid #a78bfa;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S7</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">Docs Keeper agent</div>
+      <div style="font-size:9px;color:#a78bfa;margin-top:4px">Architect</div>
+    </div>
+  </div>
+
+  <!-- Spec column -->
+  <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px">
+    <div style="background:#1e293b;border:1px solid #334155;border-left:2px solid #a78bfa;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S5</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">Release Agent</div>
+      <div style="font-size:9px;color:#a78bfa;margin-top:4px">Architect</div>
+    </div>
+    <div style="background:#1e293b;border:1px solid #334155;border-left:2px solid #a78bfa;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S6</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">TPM Agent</div>
+      <div style="font-size:9px;color:#a78bfa;margin-top:4px">Architect</div>
+    </div>
+  </div>
+
+  <!-- Plan column -->
+  <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px">
+    <div style="background:#1e293b;border:1px solid #334155;border-left:2px solid #60a5fa;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S4</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">Lifecycle engine</div>
+      <div style="font-size:9px;color:#60a5fa;margin-top:4px">TPM reading plan</div>
+    </div>
+  </div>
+
+  <!-- Execution column (highlighted - aggregation target) -->
+  <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px;background:#0f172a;border-radius:8px;padding:8px">
+    <div style="background:#1e293b;border:1px solid #0ea5e9;border-left:2px solid #0ea5e9;border-radius:6px;padding:8px 10px;box-shadow:0 0 8px #0ea5e922">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S1</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">Team onboarding v0.9.2</div>
+      <div style="font-size:9px;color:#0ea5e9;margin-top:4px">Wave 2 running</div>
+    </div>
+    <div style="background:#1e293b;border:1px solid #0ea5e9;border-left:2px solid #0ea5e9;border-radius:6px;padding:8px 10px;box-shadow:0 0 8px #0ea5e922">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S3</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">Kernel fixes v0.9.1</div>
+      <div style="font-size:9px;color:#0ea5e9;margin-top:4px">Wave 1 running</div>
+    </div>
+    <div style="background:#0ea5e9;border-radius:5px;padding:5px 8px;text-align:center;margin-top:2px">
+      <div style="font-size:9px;font-weight:700;color:#0f172a">TPM: batch S1+S3 wave?</div>
+    </div>
+  </div>
+
+  <!-- Review column -->
+  <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px">
+    <div style="background:#1e293b;border:1px solid #334155;border-left:2px solid #4ade80;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:600;color:#e2e8f0">S2</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">E2E test suite</div>
+      <div style="font-size:9px;color:#4ade80;margin-top:4px">PR open</div>
+    </div>
+  </div>
+
+  <!-- Done column -->
+  <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px">
+    <div style="background:#1e293b;border:1px solid #334155;border-left:2px solid #475569;border-radius:6px;padding:8px 10px;opacity:.6">
+      <div style="font-size:10px;font-weight:600;color:#94a3b8">S0</div>
+      <div style="font-size:9px;color:#64748b;margin-top:2px">Core CLI v0.9.0</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- AGGREGATION SUGGESTION DETAIL -->
+<div style="margin-top:16px;background:#0f172a;border:1px solid #0ea5e9;border-radius:10px;padding:14px 16px">
+  <div style="font-size:10px;font-weight:700;color:#0ea5e9;margin-bottom:10px">TPM Aggregation Suggestion</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <div style="flex:2;min-width:240px">
+      <div style="font-size:11px;color:#e2e8f0;line-height:1.7">
+        "S1 (Team onboarding) and S3 (Kernel fixes) are both at <b>Execution</b>.<br>
+        S1 Wave 2 tasks: T4, T5, T6 &mdash; no overlap with S3.<br>
+        Suggest: dispatch both as a combined wave. Estimated: <b>6 agents, ~$0.42</b>."
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:5px;padding:5px 10px;font-size:10px;color:#4ade80;cursor:pointer">Approve combined wave</div>
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:5px;padding:5px 10px;font-size:10px;color:#f97316;cursor:pointer">Run separately</div>
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:5px;padding:5px 10px;font-size:10px;color:#64748b;cursor:pointer">Skip for now</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:180px;display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em">Aggregation rules</div>
+      <div style="font-size:10px;color:#94a3b8;line-height:1.6">
+        Same stage + same lifecycle type<br>
+        No task-level dependency cross-story<br>
+        Combined cost within budget<br>
+        Consent: <span style="color:#0ea5e9">approve</span> (configurable)
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:14px;font-size:11px;color:#64748b">Next question: how does a story's lifecycle stage <b>advance</b>? Does the agent mark it done (auto-advance), or does the human call <code style="background:#1e293b;padding:1px 5px;border-radius:3px">synlynk lifecycle advance</code> after reviewing the artifact?</p>

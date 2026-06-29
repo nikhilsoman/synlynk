@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Carousel Interaction Flow</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:12px;font-size:11px;}
+.title{font-size:13px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:8px;}
+.slides{display:flex;gap:6px;justify-content:center;margin-bottom:6px;}
+.slide{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:6px 10px;min-width:118px;font-size:10px;text-align:center;}
+.slide.active{border-color:var(--blue);}
+.dots{display:flex;gap:6px;justify-content:center;margin-bottom:8px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--border);cursor:pointer;}
+.dot.active{background:var(--blue);}
+.swim{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;max-width:520px;margin:0 auto;}
+.swim div{background:#0a0a0b;padding:4px 6px;border-radius:4px;}
+.copy{margin-top:8px;text-align:center;font-size:9px;}
+.btn{display:inline-block;background:var(--blue);color:#fff;padding:1px 8px;border-radius:3px;font-size:9px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="title">BS-5 Carousel — Interaction State Machine</div>
+
+<div class="slides">
+  <div class="slide active" id="s1">Slide 1<br>Context Injection</div>
+  <div class="slide" id="s2">Slide 2<br>Dispatch</div>
+  <div class="slide" id="s3">Slide 3<br>Sentinel</div>
+  <div class="slide" id="s4">Slide 4<br>Relay</div>
+</div>
+<div class="dots" id="dots">
+  <div class="dot active" data-i="0"></div>
+  <div class="dot" data-i="1"></div>
+  <div class="dot" data-i="2"></div>
+  <div class="dot" data-i="3"></div>
+</div>
+
+<div class="swim">
+  <div><strong>Auto mode</strong><br>timer → advance → update dot</div>
+  <div><strong>Manual mode</strong><br>click dot → jump → reset timer</div>
+</div>
+
+<div class="copy">Copy button: click → clipboard.writeText → ✓ (2s)</div>
+
+<script>
+(function(){
+  const slides = [document.getElementById('s1'),document.getElementById('s2'),document.getElementById('s3'),document.getElementById('s4')];
+  const dots = Array.from(document.querySelectorAll('#dots .dot'));
+  let idx = 0;
+  let timer = null;
+  function show(i){
+    idx = i % 4;
+    slides.forEach((s,j)=> s.classList.toggle('active', j===idx));
+    dots.forEach((d,j)=> d.classList.toggle('active', j===idx));
+  }
+  function next(){ show(idx+1); }
+  function start(){ if(timer) clearInterval(timer); timer = setInterval(next, 4000); }
+  dots.forEach((d,i)=> d.addEventListener('click', ()=>{ show(i); start(); }));
+  slides.forEach((s,i)=> s.addEventListener('click', ()=>{ show(i); start(); }));
+  document.addEventListener('mouseover', e=>{ if(e.target.closest('.slides,.dots')) { if(timer) clearInterval(timer); } });
+  document.addEventListener('mouseout', e=>{ if(e.target.closest('.slides,.dots')) start(); });
+  start();
+})();
+</script>
+</body>
+</html>

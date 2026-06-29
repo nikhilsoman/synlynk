@@ -1,0 +1,81 @@
+<h2>Migration options for an evolved repo</h2>
+<p class="subtitle">synlynk detects rich existing content — what does the user choose?</p>
+
+<div style="margin-bottom:20px;padding:14px;background:rgba(255,255,255,0.05);border-radius:8px">
+  <p class="label">What synlynk sees in rxcc</p>
+  <p style="margin:4px 0 0;font-size:0.88em">
+    CLAUDE.md: 284 lines, 7 sections, rich rxcc-specific content<br>
+    Live Issues SOP: ✓ present (as <code>### Live Issues</code> under Git Workflow)<br>
+    Anti-Amnesia: ✓ present (as <code>### Mid-Session Persistence</code>)<br>
+    4-Doc Discipline: ✓ present (as <code>## Mandatory Document Maintenance</code>)<br>
+    GH Projects v2 IDs: ✓ present, real IDs hardcoded<br>
+    synlynk Start reference: ✗ missing<br>
+    AGENTS.md: ✗ missing
+  </p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Adopt + combine <span style="color:#4ade80;font-size:0.8em">★ recommended for evolved repos</span></h3>
+      <p>synlynk acknowledges the overlap, maps existing sections to its framework, adds only what's genuinely missing, and extracts config. Your existing content wins — synlynk fits around it.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">What synlynk migrate outputs</div>
+        <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.7">
+          <span style="color:#94a3b8">Analysing CLAUDE.md...</span><br>
+          <br>
+          <span style="color:#4ade80">✓ Covered</span> Live Issues SOP → your <code>### Live Issues</code> section (richer than template — keeping yours)<br>
+          <span style="color:#4ade80">✓ Covered</span> Anti-Amnesia → your <code>### Mid-Session Persistence</code> (keeping yours)<br>
+          <span style="color:#4ade80">✓ Covered</span> 4-Doc Discipline → your <code>## Mandatory Document Maintenance</code> (keeping yours)<br>
+          <span style="color:#4ade80">✓ Extracted</span> GH Projects v2 IDs → writing to <code>.synlynk/config.json</code><br>
+          <span style="color:#fbbf24">+ Adding</span> <code>## synlynk Start</code> reference (not present)<br>
+          <span style="color:#fbbf24">+ Creating</span> AGENTS.md (not present)<br>
+          <br>
+          <span style="color:#94a3b8">CLAUDE.md: 2 additions, 0 replacements, 0 deletions</span><br>
+          <span style="color:#94a3b8">config.json: project_id + field IDs written</span><br>
+          <br>
+          Proceed? [Y/n]
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Exit — no migration</h3>
+      <p>Don't touch anything. User keeps their current setup. synlynk installed but not integrated. Can re-run migrate later.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.7">
+          <span style="color:#94a3b8">Migration skipped. Your existing files are unchanged.</span><br>
+          <span style="color:#94a3b8">Run `synlynk migrate` again when ready.</span><br>
+          <span style="color:#fbbf24">⚠ synlynk start will not work until config.json</span><br>
+          <span style="color:#fbbf24">  contains project_id and field IDs.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full replace — synlynk templates win</h3>
+      <p>Overwrite CLAUDE.md, GEMINI.md with synlynk's generic templates. Existing rxcc-specific content (tech stack, encryption practice, agent routing, real IDs) is lost. Git is your rollback.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body" style="font-family:monospace;font-size:0.8em;line-height:1.7">
+          <span style="color:#ef4444">⚠ This will overwrite 284 lines of rxcc-specific content.</span><br>
+          <span style="color:#94a3b8">Rollback: git checkout CLAUDE.md</span><br>
+          <br>
+          Type <span style="color:#fbbf24">'replace'</span> to confirm:
+        </div>
+      </div>
+      <p style="color:#f87171;margin-top:8px;font-size:0.85em">Loses encryption practice, tech stack, agent routing, real GH IDs. Not recommended for rxcc.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.05);border-radius:8px;border-left:3px solid #4ade80">
+  <p class="label">How synlynk detects "evolved repo"</p>
+  <p style="margin:4px 0 0;font-size:0.88em">Agent instruction file > 100 lines OR contains 3+ sections not in synlynk's template → treat as evolved. Show this three-option menu. For fresh repos (blank or synlynk-generated), go straight to the normal init flow.</p>
+</div>

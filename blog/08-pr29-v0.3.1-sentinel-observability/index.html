@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #29 — v0.3.1: When the OS Learns to Self-Diagnose | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 10, 2026</span>
+        
+          <span class="blog-post-pr">PR #29</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #29 — v0.3.1: When the OS Learns to Self-Diagnose</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #29 — v0.3.1: When the OS Learns to Self-Diagnose</h1>
+<p><strong>PR:</strong> feat: synlynk v0.3.1 — sentinel + observability hardening<br>
+<strong>Branch:</strong> <code>feat/v0.3.1-sentinel-observability</code><br>
+<strong>Status:</strong> open<br>
+<strong>Contents:</strong> 9 new features, 40 new tests, 12 commits — all in <code>bin/synlynk.py</code>, zero new dependencies</p>
+<hr>
+<h2>The Broader Goal at the End of PR #28</h2>
+<p>The 2026-06-07 design session locked the architecture from v0.5.0 through v1.0: state.db, agent identity, workspace model, dispatch modes, entitlements. The flat-file era was declared complete with v0.4.0. The immediate next step, per PR #28, was implementation of v0.4.0 — the Trio Protocol (Architect → Build → Verify pipeline, shared conventions, <code>synlynk run</code>).</p>
+<p>The roadmap read: v0.4.0 is immediately ready, no gaps, all design decisions locked.</p>
+<hr>
+<h2>The Strategic Shift: One Prerequisite Hidden in the Schema</h2>
+<p>Before writing the v0.4.0 implementation plan, we upgraded the locally-installed synlynk from v1.2.0-lite to v0.3.0. That's when the regression surfaced.</p>
+<p>v0.3.0 switched <code>exec_command</code> to TTY pass-through (<code>subprocess.Popen</code> with inherited stdio) to support interactive CLIs like Claude Code and Gemini. The right call for interactive mode — but it silently dropped <code>extract_tokens()</code> and <code>update_costs()</code> in the process. Token scraping had existed since v1.2.x. It was gone.</p>
+<p>Then we looked at the v0.5.0 state.db schema spec:</p>
+<pre><code>agent_quotas:
+  used_tokens: INTEGER  -- populated by extract_tokens(), unchanged
+</code></pre>
+<p><code>extract_tokens()</code> was listed as a prerequisite of v0.5.0 — explicitly, in the spec. A regression that blocks two releases upstream is not a cosmetic fix. It's a pre-condition.</p>
+<p><strong>The pivot:</strong> Do v0.3.1 before v0.4.0. Restore the regression. While there, harden the sentinel and observability layer — a cohesive set of health signals that the OS should have had from the start.</p>
+<hr>
+<h2>What This PR Shipped</h2>
+<h3>The Foundation: Structured Sentinel Alerts</h3>
+<p>Everything else builds on two new functions:</p>
+<pre><code class="language-python">def _write_sentinel_alert(severity: str, code: str, message: str) -&gt; None:
+    # Appends to .synlynk/sentinel.md:
+    # - [CRITICAL] [2026-06-10 14:23] ZOMBIE_DAEMON: message
+
+def _read_sentinel_alerts(severity: Optional[str] = None) -&gt; list:
+    # Returns alert lines, optionally filtered by severity
+    # Old free-form lines (pre-v0.3.1 format) preserved as-is
+</code></pre>
+<p>The severity filter uses a field-level regex (<code>re.match(r'^- \[([A-Z]+)\]', line)</code>) rather than a substring check — so <code>[WARN]</code> in the message body doesn't false-positive on a <code>CRITICAL</code> filter. A subtle distinction that matters when the sentinel layer is the last line of defense.</p>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/sentinel-observability/sentinel-observability-system.html" title="v0.3.1 — The 9-Signal Self-Diagnostic Layer" loading="lazy" frameborder="0"></iframe>
+  <figcaption>v0.3.1 — The 9-Signal Self-Diagnostic Layer</figcaption>
+</figure>
+<h3>Restored: <code>extract_tokens</code> + <code>update_costs</code></h3>
+<p><code>extract_tokens(output_text: str) -&gt; tuple</code> matches five patterns across all supported CLIs:</p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>CLI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Input tokens: N / Output tokens: N</code></td>
+<td>claude text mode</td>
+</tr>
+<tr>
+<td><code>&quot;input_tokens&quot;: N, &quot;output_tokens&quot;: N</code></td>
+<td>claude JSON mode</td>
+</tr>
+<tr>
+<td><code>Tokens used: N input, N output</code></td>
+<td>gemini</td>
+</tr>
+<tr>
+<td><code>prompt_tokens: N / completion_tokens: N</code></td>
+<td>openai-compat</td>
+</tr>
+<tr>
+<td><code>Total tokens: N</code> (80/20 split fallback)</td>
+<td>any</td>
+</tr>
+</tbody>
+</table>
+<p><code>update_costs</code> appends a markdown row to <code>project-docs/costs.md</code> at <code>$0.003/1K input + $0.015/1K output</code>.</p>
+<h3>Non-Interactive Token Scraping (the Hard Part)</h3>
+<p>The reason <code>extract_tokens</code> was dropped was real: you cannot capture stdout from a process that's also using it as a TTY. The solution is detection + conditional capture:</p>
+<pre><code class="language-python">def _is_interactive(cmd_args: list) -&gt; bool:
+    NON_INTERACTIVE = [&quot;--no-tty&quot;, &quot;--output-format json&quot;, &quot;--print&quot;,
+                       &quot;--non-interactive&quot;, &quot;-p &quot;]
+    return not any(flag in &quot; &quot;.join(cmd_args) for flag in NON_INTERACTIVE)
+</code></pre>
+<p>For non-interactive execs, stdout is captured via a tee thread that streams to the terminal in real time while buffering for token scraping:</p>
+<pre><code class="language-python">def _tee_process(process, buffer: list) -&gt; None:
+    for line in iter(process.stdout.readline, b''):
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
+        buffer.append(line.decode('utf-8', errors='replace'))
+    process.stdout.close()
+</code></pre>
+<p>Interactive mode (TTY pass-through) is completely unchanged. The tee path is only taken when <code>_is_interactive()</code> returns False.</p>
+<p>After each non-interactive exec with <code>in_tokens &gt; 0</code>, a cost pulse is printed:</p>
+<pre><code>  ⚡ Tokens: 4,821 in / 312 out  |  est. $0.0191
+</code></pre>
+<h3>Zombie Daemon Detection</h3>
+<p><code>WatchDaemon._is_running()</code> (a <code>os.kill(pid, 0)</code> check) was extended into <code>_health()</code> returning a tri-state:</p>
+<pre><code class="language-python">def _health(self) -&gt; str:  # &quot;running&quot; | &quot;stopped&quot; | &quot;zombie&quot;
+</code></pre>
+<p>&quot;zombie&quot; = pidfile exists, process dead. <code>check_daemon_health()</code> writes a CRITICAL sentinel on zombie and is called from <code>cmd_status()</code>. Before this, a dead daemon was silent.</p>
+<h3>Stall Detection</h3>
+<p><code>set_state(&quot;active&quot;)</code> writes <code>.synlynk/state</code> at exec start. If state is still &quot;active&quot; and the file's mtime is older than <code>exec_timeout_minutes</code> (default 30, configurable), the exec has likely stalled:</p>
+<pre><code class="language-python">def check_stall() -&gt; None:
+    age_minutes = (time.time() - os.path.getmtime(state_file)) / 60
+    timeout = load_config().get(&quot;exec_timeout_minutes&quot;, 30)
+    if age_minutes &gt; timeout:
+        _write_sentinel_alert(&quot;WARN&quot;, &quot;STALL&quot;, ...)
+</code></pre>
+<p>Detection is retrospective (runs on next <code>status</code> or <code>exec</code> call) — no background thread required. Single-file CLI constraint preserved.</p>
+<h3><code>check_sentinel_patterns</code>: Three Detectors in One</h3>
+<p>The old <code>check_flatline()</code> was replaced and extended into <code>check_sentinel_patterns()</code>:</p>
+<p><strong>Pattern 1 — Flatline:</strong> Last 3 telemetry exec events have the same command and all non-zero exit codes → CRITICAL. The original flatline detector, now properly wired.</p>
+<p><strong>Pattern 2 — Success loop:</strong> Last 5 exec events same command, all exit 0, within 10 minutes → WARN. An automated script calling <code>synlynk exec claude</code> in a tight loop burns tokens with no progress — this catches it before the budget is gone.</p>
+<p><strong>Pattern 3 — Quota-exhausted:</strong> Known phrases in captured output (case-insensitive, first match, <code>break</code>):</p>
+<pre><code class="language-python">QUOTA_PATTERNS = [
+    &quot;rate limit&quot;, &quot;quota exceeded&quot;, &quot;resource exhausted&quot;,
+    &quot;billing&quot;, &quot;insufficient_quota&quot;, &quot;too many requests&quot;,
+    &quot;RESOURCE_EXHAUSTED&quot;,
+]
+</code></pre>
+<p>→ CRITICAL. One exec hitting quota and failing 3 times previously took 3 failures to get a FLATLINE alert. Now it's caught immediately on the first quota hit.</p>
+<h3>Pre-Exec Gate</h3>
+<p>Critical alerts now block exec:</p>
+<pre><code class="language-python">def _check_pre_exec_gate(force: bool = False) -&gt; bool:
+    criticals = _read_sentinel_alerts(severity=&quot;CRITICAL&quot;)
+    if criticals and not force:
+        print(&quot;  Exec blocked by CRITICAL sentinel alert.&quot;)
+        return False
+    return True
+</code></pre>
+<p>WARN alerts print but do not block. <code>synlynk exec --force</code> bypasses CRITICAL gates for emergency use.</p>
+<h3>Context Bloat Warning</h3>
+<p><code>generate_context()</code> now checks the size of <code>.synlynk/context.md</code> after writing it:</p>
+<ul>
+<li><code>&gt; 32 KB</code> → mild warning</li>
+<li><code>&gt; 64 KB</code> → strong warning with archiving suggestion</li>
+</ul>
+<p><code>context.md</code> is injected into every exec. At 64 KB that's thousands of tokens on every run. The warning is informational only — never a blocker.</p>
+<h3>Burn Rate + Runway</h3>
+<p><code>synlynk status</code> now shows:</p>
+<pre><code>  Budget: $1.24 / $10.00  (12.4%)  ·  23 requests
+  Burn:   $0.019/exec avg  |  ~461 execs remaining at current pace
+</code></pre>
+<p><code>_compute_burn_rate()</code> reads the last 10 costed telemetry events (those with <code>in_tokens &gt; 0</code>), computes avg $/exec, and divides remaining budget. Returns <code>(0.0, None)</code> when fewer than 3 costed events — not enough data to show a meaningful rate.</p>
+<h3><code>synlynk sentinel</code> CLI</h3>
+<pre><code class="language-bash">synlynk sentinel list          # List all active alerts
+synlynk sentinel clear          # Clear all structured alerts
+synlynk sentinel clear --severity WARN  # Clear only WARN
+synlynk sentinel clear --code STALL     # Clear by alert code
+</code></pre>
+<p>Old free-form sentinel lines (pre-v0.3.1 format) are preserved by <code>sentinel_clear</code> — it only removes structured <code>[SEVERITY] [TIMESTAMP] CODE:</code> format lines.</p>
+<hr>
+<h2>Implementation Approach: Subagent-Driven TDD</h2>
+<p>This was the first synlynk PR implemented entirely via subagent-driven development: a fresh Claude subagent per task, dispatched with a self-contained prompt containing the full task text, expected test output, and exact code to write. Two review subagents followed each implementer — one for spec compliance, one for code quality.</p>
+<p>The process caught two real bugs before they reached the PR:</p>
+<ol>
+<li>The severity filter used <code>f&quot;[{severity}]&quot; in line</code> — a substring match that would false-positive if the message body contained the severity string. Fixed to <code>re.match(r'^- \[([A-Z]+)\]', line)</code>.</li>
+<li><code>check_flatline()</code> was left as dead code when the stub was replaced. Removed; the 4 existing tests were updated to call <code>check_sentinel_patterns</code> with <code>&quot;type&quot;: &quot;exec&quot;</code> in their telemetry fixtures.</li>
+</ol>
+<p>10 tasks, 12 commits, 40 new tests. 123 total, all passing.</p>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>An OS that cannot self-diagnose will fail silently and expensively. Before v0.3.1, synlynk could detect a flatline — 3 consecutive failures — but nothing else. A zombie daemon, a stalled exec, a quota exhaustion, a success loop burning tokens in a tight cycle: all invisible.</p>
+<p>v0.3.1 closes that gap. <code>synlynk status</code> is now a health dashboard:</p>
+<ul>
+<li>Daemon alive or zombie?</li>
+<li>Last exec complete or stalled?</li>
+<li>Quota intact or exhausted?</li>
+<li>Burn rate sustainable or accelerating?</li>
+<li>Context size reasonable or bloated?</li>
+</ul>
+<p>These are the signals an autonomous system needs to decide whether to continue or escalate to the human. Without them, the human is always in the loop by necessity — the only entity who can tell if something is wrong by looking at the terminal. With them, <code>synlynk status</code> can make that call first.</p>
+<p>The pre-exec gate is the first step toward a sentinel layer that blocks bad execs before they happen. v0.5.0 introduces hard token ceilings at the story level. But the CRITICAL → block pattern established here is the same pattern that ceiling enforcement will use.</p>
+<p>And <code>extract_tokens()</code> is back — feeding real cost data into <code>project-docs/costs.md</code> and into the telemetry events that v0.5.0's <code>agent_quotas.used_tokens</code> will consume.</p>
+<hr>
+<h2>The New Goalpost</h2>
+<blockquote>
+<p>v0.4.0 — Conventions + Trio Bootstrap — is the next release. The Architect → Build → Verify pipeline, shared <code>.rules/</code> conventions, and <code>synlynk run &lt;task&gt;</code> as the first autonomous task primitive. All design decisions are locked. The implementation plan is next.</p>
+</blockquote>
+<p>The flat-file era ends at v0.4.0. v0.3.1 hardened the OS layer that ships with it.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

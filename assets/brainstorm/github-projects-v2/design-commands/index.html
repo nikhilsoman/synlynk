@@ -1,0 +1,79 @@
+<h2>Command Design — Step-by-Step Flows</h2>
+<p class="subtitle">What each command does internally</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 10px"><code>synlynk board connect &lt;project-url&gt;</code></h3>
+      <ol style="margin:0;padding-left:18px;line-height:2;color:#ccc;font-size:13px">
+        <li>Parse org/repo + project number from URL</li>
+        <li>GraphQL: fetch project metadata (id, fields, option IDs)</li>
+        <li>Detect Agent field + Status field by name convention (<code>"Agent"</code>, <code>"Status"</code>)</li>
+        <li>Write project_id + field schema to <code>.synlynk/config.json</code></li>
+        <li>Register repo in <code>~/.synlynk/config.json → registered_repos</code></li>
+        <li>Print confirmation table: fields found, agent options, status columns</li>
+      </ol>
+      <div style="margin-top:8px;background:#0d1117;padding:8px;border-radius:4px;font-size:11px;color:#4caf50">
+        $ synlynk board connect https://github.com/orgs/Dialify/projects/1<br>
+        ✓ Project: Programme Board (PVT_kwDO...)<br>
+        ✓ Status field: 5 columns detected<br>
+        ✓ Agent field: claude, gemini, codex<br>
+        ✓ Registered in ~/.synlynk/config.json
+      </div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 10px"><code>synlynk start --issue &lt;n&gt;</code></h3>
+      <ol style="margin:0;padding-left:18px;line-height:2;color:#ccc;font-size:13px">
+        <li>Fetch issue metadata (title, labels, current board item ID)</li>
+        <li>Read WIP state from all registered repos (read path)</li>
+        <li>Warn if issue's domain label routes to a different agent</li>
+        <li>GraphQL: set Agent = <em>self</em>, Status = In Progress</li>
+        <li>Add label <code>agent:&lt;name&gt;</code> to the issue</li>
+        <li>Create git worktree at <code>.synlynk/worktrees/&lt;branch&gt;</code></li>
+        <li>Inject <code>## Live WIP</code> block into <code>.synlynk/context.md</code></li>
+        <li>Print: "Ready. Working in worktree <code>.synlynk/worktrees/fix-ocr-timeout</code>"</li>
+      </ol>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 10px"><code>synlynk pr [--title &lt;t&gt;]</code></h3>
+      <ol style="margin:0;padding-left:18px;line-height:2;color:#ccc;font-size:13px">
+        <li>Read current issue from <code>.synlynk/wip.json</code> (set by <code>start</code>)</li>
+        <li>GraphQL: set Status = In Review on board</li>
+        <li>Derive suggested peer reviewer from <code>review_rotation</code> config</li>
+        <li>Run <code>gh pr create</code> with <code>Closes #N</code> in body</li>
+        <li>Assign suggested reviewer — print warning if overridden</li>
+        <li>Post WIP comment on issue: "PR opened by &lt;agent&gt;"</li>
+      </ol>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+      <h3 style="color:#7c6af7;margin:0 0 10px"><code>synlynk done</code></h3>
+      <ol style="margin:0;padding-left:18px;line-height:2;color:#ccc;font-size:13px">
+        <li>Verify PR is merged (warns if not)</li>
+        <li>GraphQL: set Status = Done on board</li>
+        <li>Archive checked-off tasks to devlog (existing <code>checkpoint</code> logic)</li>
+        <li>Delete git worktree + local branch</li>
+        <li>Clear <code>.synlynk/wip.json</code></li>
+        <li>Remove this issue from Live WIP in context.md</li>
+      </ol>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;background:#1a1a2e;border:1px solid #30304a;border-radius:8px;padding:16px">
+  <h3 style="color:#7c6af7;margin:0 0 8px"><code>synlynk board status</code> <span style="font-size:11px;color:#888">(read-only, no write)</span></h3>
+  <p style="color:#ccc;font-size:13px;margin:0 0 8px">Queries all registered boards, renders a terminal table of all In Progress + In Review items across repos. No daemon — one-shot query. This is the lightweight precursor to the v0.6 dashboard.</p>
+  <div style="background:#0d1117;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;color:#ccc">
+    $ synlynk board status<br><br>
+    <span style="color:#7c6af7">REPO          ISSUE  AGENT    BRANCH                        STATUS</span><br>
+    rxcc          #42    gemini   feat/gemini/ui-timeline       In Progress<br>
+    rxcc          #38    codex    test/codex/auth-suite         In Review<br>
+    synlynk       #12    claude   fix/claude/context-slice      In Progress<br>
+  </div>
+</div>
+
+<p style="color:#888;font-size:12px;margin-top:16px">Does the command design look right? Respond in terminal.</p>

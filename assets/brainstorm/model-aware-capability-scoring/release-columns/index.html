@@ -1,0 +1,52 @@
+<h2>Features Page: Defining the Release Columns</h2>
+<p class="subtitle">How granular should the feature matrix columns be?</p>
+
+<div class="section">
+  <div class="options">
+    <div class="option" data-choice="minor" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Group by minor version (v0.2.x, v0.3.x, v0.4.x…)</h3>
+        <p>Each column = a minor release series. Patch releases collapse into one column. The matrix stays narrow even as releases accumulate. Simpler to read — users care about "when did X land" at the minor level.</p>
+        <div style="margin-top:14px;font-size:12px;font-family:monospace;background:#f5f5f5;border-radius:6px;padding:12px 14px;overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <tr style="border-bottom:1px solid #ddd">
+              <th style="text-align:left;padding:4px 8px;color:#888">Feature</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.1.x</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.2.x</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.3.x</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.4.x ↓</th>
+            </tr>
+            <tr><td style="padding:4px 8px;font-size:11px">Context injection</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td></tr>
+            <tr><td style="padding:4px 8px;font-size:11px">Trio Protocol</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">✓</td></tr>
+            <tr><td style="padding:4px 8px;font-size:11px">Board management</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">✓</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="option" data-choice="patch" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Each version is its own column (v0.2.0, v0.2.1, v0.2.2…)</h3>
+        <p>Every release gets a column. Shows exactly which patch introduced a feature. More precise but the matrix gets wide fast — at v1.0 you could have 15+ columns. Better for developers who care about exact version pinning.</p>
+        <div style="margin-top:14px;font-size:12px;font-family:monospace;background:#f5f5f5;border-radius:6px;padding:12px 14px;overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <tr style="border-bottom:1px solid #ddd">
+              <th style="text-align:left;padding:4px 8px;color:#888">Feature</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.1.0</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.2.0</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.2.1</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.2.2</th>
+              <th style="text-align:center;padding:4px 8px;color:#888">v0.3.0 ↓</th>
+            </tr>
+            <tr><td style="padding:4px 8px;font-size:11px">Context injection</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td></tr>
+            <tr><td style="padding:4px 8px;font-size:11px">Multi-agent files</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">✓</td></tr>
+            <tr><td style="padding:4px 8px;font-size:11px">gh CLI identity</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="font-size:13px;color:#888;text-align:center;margin-top:8px">Current releases: v0.1.0, v0.2.0, v0.2.1, v0.2.2, v0.3.0 (latest). Moving window = 3 most recent minor versions.</p>

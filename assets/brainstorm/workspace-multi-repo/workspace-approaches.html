@@ -1,0 +1,98 @@
+<h2>Workspace Architecture — Three Approaches</h2>
+<p class="subtitle">Where does workspace state live, and how do repos relate to it?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="A" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Workspace-only DB <span style="font-size:0.75em;color:var(--accent)">★ Recommended</span></h3>
+      <p>One <code>state.db</code> per workspace at <code>~/.synlynk/workspaces/&lt;id&gt;/state.db</code>. Repos are a tag/dimension — a <code>repos</code> table, and every story/event/cost has a <code>repo_id</code> FK. No per-repo DB.</p>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.8;margin:0.5rem 0;padding:0.5rem;border:1px solid var(--border);border-radius:6px">
+        ~/.synlynk/workspaces/&lt;workspace_id&gt;/<br>
+        &nbsp;&nbsp;state.db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← everything lives here<br>
+        &nbsp;&nbsp;identity.key &nbsp;&nbsp;← machine-level keypair<br>
+        &nbsp;&nbsp;identity.json<br>
+        <br>
+        &lt;repo&gt;/.synlynk/<br>
+        &nbsp;&nbsp;config.json &nbsp;&nbsp;&nbsp;← { workspace_id, repo_id }<br>
+        &nbsp;&nbsp;context.md &nbsp;&nbsp;&nbsp;← generated (workspace + repo slice)
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Single source of truth — one DB to reason about</li>
+          <li>Cross-repo Epic/Story queries are trivial JOINs</li>
+          <li>Solo devs: workspace.db with one repo = identical to current design</li>
+          <li>SQLite WAL handles concurrent reads + sequential agent writes fine</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>All repos share one SQLite connection pool — minor contention risk at high parallelism</li>
+          <li>Workspace DB path changes (from current <code>~/.synlynk/projects/&lt;id&gt;/</code>)</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="B" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Federated DBs</h3>
+      <p>Workspace DB for shared state (arcs, phases, epics, identity, constraints, inbox). Per-repo DBs for execution state (stories, events, costs for that repo's work). Cross-repo Epics span both.</p>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.8;margin:0.5rem 0;padding:0.5rem;border:1px solid var(--border);border-radius:6px">
+        ~/.synlynk/workspaces/&lt;id&gt;/<br>
+        &nbsp;&nbsp;workspace.db &nbsp;&nbsp;← arcs, phases, epics, identity, constraints<br>
+        <br>
+        ~/.synlynk/projects/&lt;repo_id&gt;/<br>
+        &nbsp;&nbsp;state.db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← stories, events, costs (this repo only)<br>
+        <br>
+        &lt;repo&gt;/.synlynk/<br>
+        &nbsp;&nbsp;config.json &nbsp;&nbsp;&nbsp;← { workspace_id, repo_id }
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Per-repo isolation — agents write to their own DB</li>
+          <li>No SQLite write contention between repos</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Cross-repo queries require joining across multiple DB files</li>
+          <li>More complex: two DB schemas to maintain</li>
+          <li>Story dispatch logic spans two DBs — harder to reason about</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="C" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Event-log primary + Materialized workspace</h3>
+      <p>Each repo writes to a local append-only event log (<code>.synlynk/events.jsonl</code>). A workspace process periodically materializes all logs into a single workspace state.db. Cross-repo visibility is through the materialized view.</p>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.8;margin:0.5rem 0;padding:0.5rem;border:1px solid var(--border);border-radius:6px">
+        &lt;repo&gt;/.synlynk/<br>
+        &nbsp;&nbsp;events.jsonl &nbsp;&nbsp;← append-only log (repo writes here)<br>
+        <br>
+        ~/.synlynk/workspaces/&lt;id&gt;/<br>
+        &nbsp;&nbsp;state.db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← materialized view (periodic update)<br>
+        &nbsp;&nbsp;identity.key
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Zero write contention (each repo writes to its own log)</li>
+          <li>Natural NATS upgrade path (events = messages)</li>
+          <li>Works fully offline per-repo</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Workspace state is stale between materializations</li>
+          <li>Cross-repo story coordination requires waiting for next sync cycle</li>
+          <li>Two-layer complexity: log + materialized DB</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:1.25rem;padding:0.875rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:0.85em;line-height:1.75">
+  <p class="label">Why A is recommended</p>
+  SQLite WAL mode handles the concurrency pattern here comfortably — agents write sequentially within a phase, not 100 concurrent TPS. Cross-repo Epic queries are single-file JOINs. Solo devs get a workspace.db with one repo — structurally identical to the current state.db, just at a different path. Federated DBs (B) solve a contention problem that doesn't materially exist yet. Event-log primary (C) is the right architecture for Tokq/NATS but premature as a local-first design.
+</div>

@@ -1,0 +1,95 @@
+<h2>Four Agent Archetypes</h2>
+<p class="subtitle">SME added — domain expertise on-demand, triggered by domain tags + file paths, not just schedule</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:16px;">
+
+  <div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:10px;padding:16px;">
+    <div style="font-size:13px;font-weight:700;color:#818cf8;margin-bottom:4px;">🔧 Maintainers</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px;font-style:italic;">Trigger: schedule · push · CI</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;">Proactive health monitoring. Run on cadence. Maintain SOPs. Self-heal.</div>
+    <div style="font-size:12px;color:#e2e8f0;line-height:1.9;">
+      <span style="color:#34d399;">✅</span> Support Engineer<br>
+      <span style="color:#fbbf24;">0.8.1</span> Security Guard<br>
+      <span style="color:#fbbf24;">0.8.2</span> Compliance Officer<br>
+      <span style="color:#94a3b8;font-size:11px;">later: Incident Responder</span>
+    </div>
+  </div>
+
+  <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:16px;">
+    <div style="font-size:13px;font-weight:700;color:#34d399;margin-bottom:4px;">📣 Communicators</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px;font-style:italic;">Trigger: release · merge · schedule</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;">Content, marketing, community voice. Publish outward to right audience.</div>
+    <div style="font-size:12px;color:#e2e8f0;line-height:1.9;">
+      <span style="color:#fbbf24;">0.8.3</span> Marketing Intern<br>
+      <span style="color:#fbbf24;">0.8.4</span> Docs Keeper<br>
+      <span style="color:#94a3b8;font-size:11px;">later: Community Manager</span><br>
+      <span style="color:#94a3b8;font-size:11px;">later: Changelog Publisher</span>
+    </div>
+  </div>
+
+  <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:16px;">
+    <div style="font-size:13px;font-weight:700;color:#fbbf24;margin-bottom:4px;">🎯 Orchestrators</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px;font-style:italic;">Trigger: story events · signals · budget thresholds</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;">Work management, routing intelligence, cross-agent coordination.</div>
+    <div style="font-size:12px;color:#e2e8f0;line-height:1.9;">
+      <span style="color:#fbbf24;">0.8.5</span> PM Agent<br>
+      <span style="color:#fbbf24;">0.8.6</span> Growth Scout<br>
+      <span style="color:#94a3b8;font-size:11px;">later: Sprint Captain</span><br>
+      <span style="color:#94a3b8;font-size:11px;">later: Budget Sentinel</span>
+    </div>
+  </div>
+
+  <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:16px;">
+    <div style="font-size:13px;font-weight:700;color:#f87171;margin-bottom:4px;">🧠 SMEs</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px;font-style:italic;">Trigger: domain tag · file path · explicit consult</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;">Deep domain expertise. Consulted reactively. Can also proactively flag when domain is at risk.</div>
+    <div style="font-size:12px;color:#e2e8f0;line-height:1.9;">
+      <span style="color:#fbbf24;">0.8.7</span> Security SME<br>
+      <span style="color:#fbbf24;">0.8.8</span> Architecture SME<br>
+      <span style="color:#94a3b8;font-size:11px;">later: Performance SME</span><br>
+      <span style="color:#94a3b8;font-size:11px;">later: Data SME, UX SME…</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:20px;">
+  <span class="label">What makes SME different from the other archetypes</span>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
+
+    <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:14px;">
+      <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:8px;">Trigger model — pull, not push</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        Maintainers run on a <strong>schedule</strong> — always watching.<br>
+        SMEs are <strong>consulted</strong> — triggered by domain signal:<br>
+        • Story tagged <code>engg:security</code> → Security SME invoked<br>
+        • PR touches <code>auth/**</code> → Security SME reviews<br>
+        • <code>synlynk consult security-sme "is this JWT approach safe?"</code><br>
+        • SME can also <em>proactively flag</em> when its domain appears at risk
+      </div>
+    </div>
+
+    <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:14px;">
+      <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:8px;">Level behaviour</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+        <strong>Workgroup</strong>: codebase-level expert (knows your specific stack)<br>
+        <strong>Team</strong>: cross-repo domain reviewer (integration/arch)<br>
+        <strong>Enterprise</strong>: standards enforcer (org security policy, compliance)<br>
+        <strong>Community</strong>: best-practice curator (published to Tokq marketplace)<br>
+        <br>
+        → A "Security SME" sold in the marketplace = packaged security expertise for any project
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top:20px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;padding:14px;">
+  <div style="font-size:12px;color:#cbd5e1;line-height:1.8;">
+    <strong style="color:#a5b4fc;">Platform growth → more archetypes.</strong>
+    As synlynk reaches workspace and community levels, new archetypes will emerge naturally —
+    e.g. a <em>Governance</em> archetype (policy enforcement, audit trails) at enterprise level,
+    or a <em>Mentor</em> archetype (onboarding acceleration, knowledge transfer) at community level.
+    The archetype model is open — adding one = new <code>.agents/</code> config + signal collectors.
+  </div>
+</div>

@@ -1,0 +1,87 @@
+<h2>Proposed page structure — synlynk.com</h2>
+<p class="subtitle">Scrolling single-page landing + /blog/ for posts. Click any section to flag it for discussion.</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="hero" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Hero — dark full-width</h3>
+      <p><strong>Logo lockup</strong> (icon + wordmark), one-line tagline, dark terminal background. Install one-liner in a copyable code block. Two CTAs: <em>Get started →</em> and <em>View on GitHub</em>. Optional: animated typing effect showing <code>synlynk exec claude</code>.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="problem" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>The problem — light background</h3>
+      <p>2–3 short sentences: every AI session starts from zero, context is lost between tools, costs are invisible. No bullet points — tight prose. Possibly with a simple "before/after" diagram: <em>Claude forgets → synlynk remembers</em>.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="how-it-works" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>How it works — light background</h3>
+      <p>Numbered 4-step flow: <strong>init</strong> (bootstrap docs) → <strong>exec</strong> (context injected) → <strong>checkpoint</strong> (archive done tasks) → <strong>status</strong> (see budget + alerts). Each step has a small terminal snippet and one-line description. Uses logo accent colors for step numbers.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="features" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Features — light background, 4-card grid</h3>
+      <p>Four cards in a 2×2 grid:<br>
+      ⟡ <strong>Context injection</strong> — shared project-docs/ every AI tool reads<br>
+      ⟡ <strong>Cost tracking</strong> — budget limits, 80% warnings<br>
+      ⟡ <strong>Watch daemon</strong> — context.md stays fresh as you work<br>
+      ⟡ <strong>Sentinel alerts</strong> — detects flatline failure loops<br>
+      Each card uses an SVG icon or Unicode glyph, title, and 1-sentence description.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="install" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Install — subtle dark band</h3>
+      <p>One install line: <code>curl -sSL … | bash</code>. Secondary: <code>python3 bin/synlynk.py</code> for no-install use. Requirements badge: Python 3.8+, stdlib only. GitHub stars badge. Keeps it honest and minimal.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="roadmap" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>Roadmap — light background</h3>
+      <p>Three-stage horizontal progression with status indicators:<br>
+      ● <strong>Solo edition</strong> (current — v0.2.0)<br>
+      ○ <strong>Team edition</strong> (next)<br>
+      ○ <strong>Enterprise edition</strong> (future)<br>
+      Short paragraph per stage. Links to GitHub Discussions for community input.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="blog" onclick="toggleSelect(this)">
+    <div class="letter">7</div>
+    <div class="content">
+      <h3>Blog — light background</h3>
+      <p>Section header "From the build log" or "Dev notes". Lists 3 most-recent posts with title, date, and one-line excerpt. <em>See all posts →</em> links to <code>/blog/</code>. Individual posts live at <code>/blog/slug/</code> and use a focused reading layout: no sidebar, max-width prose, syntax highlighting.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="footer" onclick="toggleSelect(this)">
+    <div class="letter">8</div>
+    <div class="content">
+      <h3>Footer — dark to match hero</h3>
+      <p>Small logo mark, GitHub link, Discussions link, MIT license note, current version (v0.2.0). One line. No newsletter, no social links beyond GitHub — honest about where the project is today.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px; padding:16px; background:#f5f5f5; border-radius:8px; font-size:13px; color:#555; line-height:1.7;">
+  <strong>Blog posts (launch set):</strong><br>
+  📝 <em>"Why I built synlynk"</em> — the original problem: context loss across AI tools<br>
+  📝 <em>"From idea to v0.1.0: the first working CLI"</em> — what it was, what it wasn't<br>
+  📝 <em>"Redesigning for v0.2.0: watch daemon, checkpoint, and context compaction"</em> — the iteration, why<br>
+  📝 <em>"Release notes deep dive: v0.2.0"</em> — detailed changelog walkthrough
+</div>

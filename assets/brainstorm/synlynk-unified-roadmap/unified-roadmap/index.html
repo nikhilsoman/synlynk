@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unified Roadmap</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; padding: 24px; }
+h1 { font-size: 1.35rem; font-weight: 700; color: #f8fafc; margin-bottom: 3px; }
+.subtitle { color: #64748b; font-size: 0.85rem; margin-bottom: 22px; }
+
+/* ═══ ECOSYSTEM MAP ═══ */
+.eco-wrap {
+  background: #080c14;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.eco-title { font-size: 0.68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #475569; margin-bottom: 16px; }
+
+.eco-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 0;
+  align-items: center;
+}
+
+/* Tool cards — left column */
+.tool-col { display: flex; flex-direction: column; gap: 8px; }
+.tool-card {
+  border-radius: 8px;
+  padding: 10px 13px;
+  border: 1px solid #1e293b;
+  position: relative;
+}
+.tool-card h4  { font-size: 0.77rem; font-weight: 700; margin-bottom: 3px; }
+.tool-card p   { font-size: 0.65rem; color: #64748b; line-height: 1.4; }
+.tool-card .gets { font-size: 0.62rem; margin-top: 5px; padding-top: 5px; border-top: 1px solid #1e293b; color: #334155; line-height: 1.4; }
+.tool-card .gets strong { color: #475569; }
+
+.tc-sp   { background: #100e1a; border-color: #2d1b5e50; }
+.tc-sp   h4 { color: #a78bfa; }
+.tc-gs   { background: #1a0f08; border-color: #7c2d1250; }
+.tc-gs   h4 { color: #fb923c; }
+.tc-hm   { background: #0a1218; border-color: #0e4a6a50; }
+.tc-hm   h4 { color: #38bdf8; }
+.tc-oc   { background: #0a1a10; border-color: #14591e50; }
+.tc-oc   h4 { color: #4ade80; }
+.tc-nm   { background: #18100a; border-color: #7c3d1250; }
+.tc-nm   h4 { color: #fb923c; }
+.tc-any  { background: #0d1117; border-color: #1e293b; }
+.tc-any  h4 { color: #475569; }
+
+/* connector lines */
+.conn-left  { display: flex; flex-direction: column; justify-content: space-around; align-items: flex-end; padding-right: 12px; gap: 8px; }
+.conn-right { display: flex; flex-direction: column; justify-content: space-around; align-items: flex-start; padding-left: 12px; gap: 8px; }
+.conn-line  { height: 1px; background: linear-gradient(90deg, #1e293b, #22d3ee40); width: 100%; min-width: 30px; display: flex; align-items: center; justify-content: flex-end; }
+.conn-line-r { background: linear-gradient(270deg, #1e293b, #22d3ee40); }
+.conn-dot   { width: 5px; height: 5px; border-radius: 50%; background: #22d3ee; opacity: 0.6; flex-shrink: 0; }
+
+/* Center: Synlynk OS core */
+.center-core {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #0e7490;
+  box-shadow: 0 0 32px #22d3ee15;
+}
+.core-tokq {
+  background: linear-gradient(135deg, #130e22 0%, #0e0820 100%);
+  padding: 10px 14px;
+  border-bottom: 1px dashed #2d1b5e;
+}
+.core-tokq .ct-label { font-size: 0.58rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #7c3aed; margin-bottom: 3px; }
+.core-tokq h3 { font-size: 0.78rem; font-weight: 700; color: #c4b5fd; margin-bottom: 2px; }
+.core-tokq p  { font-size: 0.62rem; color: #4c3580; line-height: 1.35; }
+
+.core-bridge {
+  background: #071318;
+  padding: 5px 14px;
+  border-bottom: 1px solid #1e293b;
+  display: flex; align-items: center; gap: 6px;
+}
+.core-bridge span { font-size: 0.6rem; color: #0e7490; }
+.core-bridge code { font-size: 0.58rem; color: #22d3ee; background: #0a1e28; padding: 1px 5px; border-radius: 3px; }
+
+.core-syn {
+  background: linear-gradient(180deg, #071018 0%, #09141e 100%);
+  padding: 12px 14px;
+  flex: 1;
+}
+.core-syn .cs-label { font-size: 0.58rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #0891b2; margin-bottom: 6px; }
+.core-syn .cs-row   { font-size: 0.62rem; color: #334155; padding: 2px 0; border-bottom: 1px solid #0d1520; }
+.core-syn .cs-row:last-child { border-bottom: none; }
+.core-syn .cs-row em { color: #22d3ee; font-style: normal; }
+
+/* Context protocol box */
+.proto-box {
+  background: #071318;
+  padding: 8px 14px;
+  border-top: 1px solid #1e293b;
+}
+.proto-box p { font-size: 0.6rem; color: #334155; text-align: center; }
+.proto-box code { color: #22d3ee; font-size: 0.58rem; }
+
+/* ═══ RIGHT SIDE — Genuine Value ═══ */
+.value-col { display: flex; flex-direction: column; gap: 8px; }
+.val-card {
+  background: #080e14;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+.val-card .prob { font-size: 0.62rem; color: #475569; margin-bottom: 4px; font-style: italic; }
+.val-card h4    { font-size: 0.7rem; font-weight: 700; color: #22d3ee; margin-bottom: 3px; }
+.val-card p     { font-size: 0.62rem; color: #64748b; line-height: 1.4; }
+
+/* ═══ UNIFIED ROADMAP ═══ */
+.rm-wrap {
+  background: #080c14;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 20px 24px;
+}
+.rm-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+.rm-header h2 { font-size: 0.68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #475569; }
+.rm-note { font-size: 0.65rem; color: #334155; }
+
+/* Timeline row */
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  position: relative;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 22px; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, #4ade80, #22d3ee, #818cf8, #a78bfa, #fbbf24);
+  opacity: 0.3;
+  z-index: 0;
+}
+
+.tm-col { padding: 0 8px; position: relative; z-index: 1; }
+.tm-dot-row { display: flex; align-items: center; margin-bottom: 10px; height: 44px; }
+.tm-dot {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+  border: 2px solid transparent;
+  position: relative;
+}
+.tm-col:not(:first-child) .tm-dot-row::before {
+  content: '';
+  flex: 1;
+  height: 2px;
+  margin-right: 8px;
+  background: currentColor;
+  opacity: 0.2;
+}
+
+.tm-when  { font-size: 0.6rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 5px; }
+.tm-name  { font-size: 0.82rem; font-weight: 800; margin-bottom: 4px; line-height: 1.2; }
+.tm-track { font-size: 0.58rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; width: fit-content; margin-bottom: 5px; }
+.tm-items { font-size: 0.62rem; color: #475569; line-height: 1.6; padding-left: 10px; }
+.tm-items li { margin-bottom: 1px; }
+
+/* milestone colors */
+.ms-1 .tm-dot { background: #0a1a10; border-color: #4ade80; box-shadow: 0 0 12px #4ade8030; color: #4ade80; }
+.ms-1 .tm-when { color: #4ade80; }
+.ms-1 .tm-name { color: #4ade80; }
+.ms-1 .tm-track { background: #0a1a10; color: #4ade80; }
+
+.ms-2 .tm-dot { background: #0a1c24; border-color: #22d3ee; box-shadow: 0 0 12px #22d3ee30; color: #22d3ee; }
+.ms-2 .tm-when { color: #22d3ee; }
+.ms-2 .tm-name { color: #22d3ee; }
+.ms-2 .tm-track { background: #0a1824; color: #22d3ee; }
+
+.ms-3 .tm-dot { background: #0e0e20; border-color: #818cf8; box-shadow: 0 0 12px #818cf820; color: #818cf8; }
+.ms-3 .tm-when { color: #818cf8; }
+.ms-3 .tm-name { color: #818cf8; }
+.ms-3 .tm-track { background: #0a0a1e; color: #818cf8; }
+
+.ms-4 .tm-dot { background: #130e22; border-color: #a78bfa; box-shadow: 0 0 14px #a78bfa30; color: #a78bfa; }
+.ms-4 .tm-when { color: #a78bfa; }
+.ms-4 .tm-name { color: #a78bfa; }
+.ms-4 .tm-track { background: #0e0a1e; color: #a78bfa; }
+
+.ms-5 .tm-dot { background: #1a1208; border-color: #fbbf24; box-shadow: 0 0 16px #fbbf2440; color: #fbbf24; }
+.ms-5 .tm-when { color: #fbbf24; }
+.ms-5 .tm-name { color: #fbbf24; }
+.ms-5 .tm-track { background: #14100a; color: #fbbf24; }
+
+/* Principle strip */
+.principle-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #1e293b;
+}
+.principle { }
+.principle h4 { font-size: 0.7rem; font-weight: 700; color: #475569; margin-bottom: 3px; display: flex; align-items: center; gap: 5px; }
+.principle p  { font-size: 0.65rem; color: #334155; line-height: 1.45; }
+</style>
+</head>
+<body>
+
+<h1>Synlynk + Tokq — Unified Product Vision & Roadmap</h1>
+<p class="subtitle">The OS for multi-agent development. Coexist with every tool. Provide memory, coordination, and economics to the entire ecosystem.</p>
+
+<!-- ECOSYSTEM MAP -->
+<div class="eco-wrap">
+  <div class="eco-title">Ecosystem Coexistence Map — Synlynk as the substrate every tool connects to</div>
+
+  <div class="eco-grid">
+
+    <!-- Left tools -->
+    <div class="tool-col">
+      <div class="tool-card tc-sp">
+        <h4>SuperPowers</h4>
+        <p>Skills library. Brainstorming, TDD, code review workflows. Runs inside agent sessions.</p>
+        <div class="gets"><strong>Gets from Synlynk:</strong> Project context injected before every skill. Brainstorms grounded in real memory.md. TDD sees active task list. Reviews check conventions.md rules.</div>
+      </div>
+      <div class="tool-card tc-gs">
+        <h4>GStack</h4>
+        <p>Claude Code persona framework. CEO→EM→QA→Reviewer pipeline. Single-session only today.</p>
+        <div class="gets"><strong>Gets from Synlynk:</strong> Personas persist across sessions. CEO decisions land in memory.md. Next day EM opens with those decisions loaded. Can hand off to Gemini via Synlynk.</div>
+      </div>
+      <div class="tool-card tc-hm">
+        <h4>HermesAgent</h4>
+        <p>Agentic coding framework. Autonomous task execution across repos.</p>
+        <div class="gets"><strong>Gets from Synlynk:</strong> Shared project state so multiple Hermes instances don't collide. Conventions.md stops repeated rule violations. Cost tracking per task.</div>
+      </div>
+    </div>
+
+    <!-- Left connectors -->
+    <div class="conn-left">
+      <div class="conn-line"><div class="conn-dot"></div></div>
+      <div class="conn-line"><div class="conn-dot"></div></div>
+      <div class="conn-line"><div class="conn-dot"></div></div>
+    </div>
+
+    <!-- Center core -->
+    <div class="center-core">
+      <div class="core-tokq">
+        <div class="ct-label">☁️ Tokq — Cloud Layer</div>
+        <h3>Distributed Memory · Identity · Marketplace</h3>
+        <p>Cross-machine state · Knowledge economy · Gas tank economics · Agent reputation</p>
+      </div>
+      <div class="core-bridge">
+        <span>⟷</span>
+        <code>synlynk sync</code>
+        <span style="color:#334155;font-size:0.58rem;">· open context protocol</span>
+      </div>
+      <div class="core-syn">
+        <div class="cs-label">💻 Synlynk — Local OS</div>
+        <div class="cs-row"><em>Kernel</em> — exec, telemetry, flatline, budget</div>
+        <div class="cs-row"><em>Filesystem</em> — project-docs, context.md, devlogs</div>
+        <div class="cs-row"><em>IPC</em> — conventions.md, handoffs, constraints</div>
+        <div class="cs-row"><em>Scheduler</em> — Trio routing, capability engine</div>
+        <div class="cs-row"><em>Shell</em> — synlynk run, dispatch, review, status</div>
+      </div>
+      <div class="proto-box">
+        <p>Any tool reads: <code>synlynk context --for &lt;tool&gt;</code><br>Any tool writes: <code>synlynk checkpoint --from &lt;tool&gt;</code></p>
+      </div>
+    </div>
+
+    <!-- Right connectors -->
+    <div class="conn-right">
+      <div class="conn-line conn-line-r"><div class="conn-dot"></div></div>
+      <div class="conn-line conn-line-r"><div class="conn-dot"></div></div>
+      <div class="conn-line conn-line-r"><div class="conn-dot"></div></div>
+    </div>
+
+    <!-- Right: genuine value -->
+    <div class="value-col">
+      <div class="tool-card tc-oc">
+        <h4>OpenClaw</h4>
+        <p>Open-source coding agent. Autonomous PR generation and code review.</p>
+        <div class="gets"><strong>Gets from Synlynk:</strong> Task ownership manifest prevents duplicate PRs. Handoff notes from previous agent included in context. Capability scoring routes right tasks to OpenClaw's strengths.</div>
+      </div>
+      <div class="tool-card tc-nm">
+        <h4>NmoClaw</h4>
+        <p>Agent framework. Multi-step code generation and refactoring workflows.</p>
+        <div class="gets"><strong>Gets from Synlynk:</strong> Scoped context slices so NmoClaw only sees files relevant to active task. Constraint layer blocks moves during stability windows. Cost tracked per workflow run.</div>
+      </div>
+      <div class="tool-card tc-any">
+        <h4>Any future tool</h4>
+        <p>Whatever ships next — Cursor agents, Claude agents, IDE-native workers.</p>
+        <div class="gets"><strong>Gets from Synlynk:</strong> Two-line integration: read context.md at session start, call synlynk checkpoint at session end. That's the full protocol. No SDK required.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- UNIFIED ROADMAP -->
+<div class="rm-wrap">
+  <div class="rm-header">
+    <h2>Unified Roadmap — Five Milestones</h2>
+    <span class="rm-note">Synlynk track (local OS) and Tokq track (cloud) run in parallel from M3 onward</span>
+  </div>
+
+  <div class="timeline">
+
+    <div class="tm-col ms-1">
+      <div class="tm-dot-row"><div class="tm-dot">✓</div></div>
+      <div class="tm-when">Now · Shipped</div>
+      <div class="tm-name">Local OS Foundation</div>
+      <div class="tm-track">Synlynk v0.3</div>
+      <ul class="tm-items">
+        <li>Kernel: exec, telemetry, flatline</li>
+        <li>Filesystem: project-docs ledger</li>
+        <li>Enriched agent templates</li>
+        <li>Init flags (org, repo, project-id)</li>
+        <li>47 tests passing</li>
+      </ul>
+    </div>
+
+    <div class="tm-col ms-2">
+      <div class="tm-dot-row"><div class="tm-dot">⚙</div></div>
+      <div class="tm-when">Q3 2026</div>
+      <div class="tm-name">OS Complete + Context Protocol</div>
+      <div class="tm-track">Synlynk v0.4 → v1.0</div>
+      <ul class="tm-items">
+        <li>IPC: conventions + constraints</li>
+        <li>Trio: synlynk run + trio init</li>
+        <li>Scheduler: capability engine</li>
+        <li>Daemon + dispatch + TUI review</li>
+        <li>Doctor, cost add, completions</li>
+        <li><strong>Open context protocol published</strong></li>
+        <li>Any tool integrates in 2 lines</li>
+      </ul>
+    </div>
+
+    <div class="tm-col ms-3">
+      <div class="tm-dot-row"><div class="tm-dot">⟷</div></div>
+      <div class="tm-when">Q3 2026 parallel</div>
+      <div class="tm-name">Cloud Bridge</div>
+      <div class="tm-track">Tokq Alpha</div>
+      <ul class="tm-items">
+        <li>synlynk sync → Tokq store</li>
+        <li>Cross-machine project state</li>
+        <li>Team state, no merge conflicts</li>
+        <li>Local agent slots → Tokq identity</li>
+        <li>capability.json → reputation score</li>
+        <li>Invite-only alpha</li>
+      </ul>
+    </div>
+
+    <div class="tm-col ms-4">
+      <div class="tm-dot-row"><div class="tm-dot">🌐</div></div>
+      <div class="tm-when">Q4 2026</div>
+      <div class="tm-name">Ecosystem Integrations</div>
+      <div class="tm-track">Synlynk v1.x + Tokq Beta</div>
+      <ul class="tm-items">
+        <li>Native SuperPowers integration</li>
+        <li>GStack context bridge</li>
+        <li>HermesAgent / OpenClaw plugins</li>
+        <li>Tokq open beta</li>
+        <li>GitHub Actions sync gateway</li>
+        <li>Enterprise: DLP + SSO</li>
+      </ul>
+    </div>
+
+    <div class="tm-col ms-5">
+      <div class="tm-dot-row"><div class="tm-dot">✦</div></div>
+      <div class="tm-when">Q1 2027</div>
+      <div class="tm-name">Knowledge Economy</div>
+      <div class="tm-track">Tokq GA</div>
+      <ul class="tm-items">
+        <li>Knowledge marketplace live</li>
+        <li>Publish conventions.md collections</li>
+        <li>Subscribe to domain expertise</li>
+        <li>Creator economy: 70/30 split</li>
+        <li>Gas tank auto-cost-tracking</li>
+        <li>Tokq = original Jan 2026 vision</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="principle-strip">
+    <div class="principle">
+      <h4>🤝 Coexist, don't compete</h4>
+      <p>Every tool in the ecosystem is a distribution channel. A SuperPowers user who hits the "no persistent memory" ceiling is the ideal Synlynk prospect. Help them — don't fight them.</p>
+    </div>
+    <div class="principle">
+      <h4>📐 Open protocol, not lock-in</h4>
+      <p>The context protocol is two commands any tool can call. It should be documented, stable, and boring. The value is in the state Synlynk maintains — not in making integration hard.</p>
+    </div>
+    <div class="principle">
+      <h4>⚡ Genuine value first, features second</h4>
+      <p>Each milestone ships one thing developers will feel immediately: persistent memory, coordinated routing, cross-machine sync, marketplace knowledge. No milestone is about internal plumbing alone.</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

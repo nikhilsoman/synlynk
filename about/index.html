@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<section class="section-about section-dark">
+  <div class="about-inner">
+    <div class="hook-label">The Mission</div>
+    <h1 class="about-headline">synlynk is the <span class="grad1">coordination OS</span> for AI workgroups.</h1>
+    <p class="about-sub">Building the stable infrastructure layer that enables developers to run parallel, model-diverse, cost-bounded agent teams.</p>
+
+    <!-- OS Layer Framing -->
+    <div class="about-content-block">
+      <h2>The OS Layer Framing</h2>
+      <p>Today's AI tools are powerful, but they operate as standalone entities. They lack a common filesystem, cannot securely pass tasks between each other, and do not track cumulative resource spend. synlynk solves this by introducing a local operating system abstraction layer under the agents.</p>
+      
+      <div class="os-layers-grid">
+        <div class="os-layer-card">
+          <span class="os-layer-num">01</span>
+          <h4>Harness Kernel</h4>
+          <p>Launches and monitors agent processes, managing inputs/outputs and detecting failure loops in real time.</p>
+        </div>
+        <div class="os-layer-card">
+          <span class="os-layer-num">02</span>
+          <h4>State Filesystem</h4>
+          <p>A shared SQLite state database (state.db) that acts as the single source of truth for all project logs and story boards.</p>
+        </div>
+        <div class="os-layer-card">
+          <span class="os-layer-num">03</span>
+          <h4>Scheduler / IPC</h4>
+          <p>Coordinates background dispatches, handles queue sequencing, and propagates context updates across different agent processes.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Team Section -->
+    <div class="about-team-section">
+      <h2>The Workgroup</h2>
+      <p class="team-intro">A hybrid team consisting of human coordinators and specialized autonomous agent archetypes.</p>
+
+      <div class="team-grid">
+        <!-- Human -->
+        <div class="team-card card-human">
+          <div class="team-avatar">👤</div>
+          <h4 class="team-name">Nikhil Soman</h4>
+          <span class="team-role">Human Architect</span>
+          <p class="team-desc">Coordinates releases, sets the high-level roadmap boundaries, and reviews agent decisions.</p>
+        </div>
+
+        <!-- Agent Claude -->
+        <div class="team-card card-agent">
+          <div class="team-avatar avatar-orange">🤖</div>
+          <h4 class="team-name">Claude</h4>
+          <span class="team-role">Code Auditor / Reviewer</span>
+          <p class="team-desc">Provides non-interactive code reviews, compliance audits, and strategic architectural guidelines.</p>
+        </div>
+
+        <!-- Agent Gemini / Agy -->
+        <div class="team-card card-agent">
+          <div class="team-avatar avatar-blue">🤖</div>
+          <h4 class="team-name">Gemini / Agy</h4>
+          <span class="team-role">Front-End Designer / SME</span>
+          <p class="team-desc">Specializes in template engineering, structured markup, and the unified CSS design system.</p>
+        </div>
+
+        <!-- Agent Grok -->
+        <div class="team-card card-agent">
+          <div class="team-avatar avatar-purple">🤖</div>
+          <h4 class="team-name">Grok</h4>
+          <span class="team-role">Animation & Interactive SME</span>
+          <p class="team-desc">Builds canvas visualizations, client-side interactions, and responsive UI components.</p>
+        </div>
+
+        <!-- Agent Codex -->
+        <div class="team-card card-agent">
+          <div class="team-avatar avatar-gray">🤖</div>
+          <h4 class="team-name">Codex</h4>
+          <span class="team-role">Backend / Dispatch Specialist</span>
+          <p class="team-desc">Optimizes the SQLite engine, handles CLI command execution, and designs the async daemon loops.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Links and Resources -->
+    <div class="about-links-section">
+      <h2>Resources</h2>
+      <div class="about-links-row">
+        <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener" class="btn-ghost">View on GitHub</a>
+        <a href="/blog/" class="btn-ghost">Read the Blog Series</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

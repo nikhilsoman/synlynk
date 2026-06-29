@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Superpowers Brainstorming</title>
+  <style>
+    /*
+     * BRAINSTORM COMPANION FRAME TEMPLATE
+     *
+     * This template provides a consistent frame with:
+     * - OS-aware light/dark theming
+     * - Fixed header and selection indicator bar
+     * - Scrollable main content area
+     * - CSS helpers for common UI patterns
+     *
+     * Content is injected via placeholder comment in #claude-content.
+     */
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    /* ===== THEME VARIABLES ===== */
+    :root {
+      --bg-primary: #f5f5f7;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #e5e5e7;
+      --border: #d1d1d6;
+      --text-primary: #1d1d1f;
+      --text-secondary: #86868b;
+      --text-tertiary: #aeaeb2;
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --success: #34c759;
+      --warning: #ff9f0a;
+      --error: #ff3b30;
+      --selected-bg: #e8f4fd;
+      --selected-border: #0071e3;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1d1d1f;
+        --bg-secondary: #2d2d2f;
+        --bg-tertiary: #3d3d3f;
+        --border: #424245;
+        --text-primary: #f5f5f7;
+        --text-secondary: #86868b;
+        --text-tertiary: #636366;
+        --accent: #0a84ff;
+        --accent-hover: #409cff;
+        --selected-bg: rgba(10, 132, 255, 0.15);
+        --selected-border: #0a84ff;
+      }
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* ===== FRAME STRUCTURE ===== */
+    .header {
+      background: var(--bg-secondary);
+      padding: 0.5rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header h1 { font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); }
+    .header .status { font-size: 0.7rem; color: var(--success); display: flex; align-items: center; gap: 0.4rem; }
+    .header .status::before { content: ''; width: 6px; height: 6px; background: var(--success); border-radius: 50%; }
+
+    .main { flex: 1; overflow-y: auto; }
+    #claude-content { padding: 2rem; min-height: 100%; }
+
+    .indicator-bar {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 0.5rem 1.5rem;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .indicator-bar span {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .indicator-bar .selected-text {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--text-secondary); margin-bottom: 1.5rem; }
+    .section { margin-bottom: 2rem; }
+    .label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+
+    /* ===== OPTIONS (for A/B/C choices) ===== */
+    .options { display: flex; flex-direction: column; gap: 0.75rem; }
+    .option {
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .option:hover { border-color: var(--accent); }
+    .option.selected { background: var(--selected-bg); border-color: var(--selected-border); }
+    .option .letter {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      width: 1.75rem; height: 1.75rem;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 0.85rem; flex-shrink: 0;
+    }
+    .option.selected .letter { background: var(--accent); color: white; }
+    .option .content { flex: 1; }
+    .option .content h3 { font-size: 0.95rem; margin-bottom: 0.15rem; }
+    .option .content p { color: var(--text-secondary); font-size: 0.85rem; margin: 0; }
+
+    /* ===== CARDS (for showing designs/mockups) ===== */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .card.selected { border-color: var(--selected-border); border-width: 2px; }
+    .card-image { background: var(--bg-tertiary); aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center; }
+    .card-body { padding: 1rem; }
+    .card-body h3 { margin-bottom: 0.25rem; }
+    .card-body p { color: var(--text-secondary); font-size: 0.85rem; }
+
+    /* ===== MOCKUP CONTAINER ===== */
+    .mockup {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+    .mockup-header {
+      background: var(--bg-tertiary);
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .mockup-body { padding: 1.5rem; }
+
+    /* ===== SPLIT VIEW (side-by-side comparison) ===== */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 700px) { .split { grid-template-columns: 1fr; } }
+
+    /* ===== PROS/CONS ===== */
+    .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+    .pros, .cons { background: var(--bg-secondary); border-radius: 8px; padding: 1rem; }
+    .pros h4 { color: var(--success); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .cons h4 { color: var(--error); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .pros ul, .cons ul { margin-left: 1.25rem; font-size: 0.85rem; color: var(--text-secondary); }
+    .pros li, .cons li { margin-bottom: 0.25rem; }
+
+    /* ===== PLACEHOLDER (for mockup areas) ===== */
+    .placeholder {
+      background: var(--bg-tertiary);
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-tertiary);
+    }
+
+    /* ===== INLINE MOCKUP ELEMENTS ===== */
+    .mock-nav { background: var(--accent); color: white; padding: 0.75rem 1rem; display: flex; gap: 1.5rem; font-size: 0.9rem; }
+    .mock-sidebar { background: var(--bg-tertiary); padding: 1rem; min-width: 180px; }
+    .mock-content { padding: 1.5rem; flex: 1; }
+    .mock-button { background: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; }
+    .mock-input { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><a href="https://github.com/obra/superpowers" style="color: inherit; text-decoration: none;">Superpowers Brainstorming</a></h1>
+    <div class="status" style="background:none">synlynk v1.0 architecture brainstorm · 2026-06-03</div>
+  </div>
+
+  <div class="main">
+    <div id="claude-content">
+      <h2>Identity Evolution: From Agent-Tied-to-Human → Capability Graph</h2>
+<p class="subtitle">The architecture should not encode the biological/synthetic distinction — that's a temporary label on a permanent structure.<br>What survives: <strong>role · competency · context · scope</strong></p>
+
+<div style="margin-bottom:2rem">
+  <div class="mockup">
+    <div class="mockup-header">How Identity Evolves Across Tiers</div>
+    <div class="mockup-body">
+
+      <!-- Timeline -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.08);border-radius:8px;overflow:hidden">
+
+        <!-- Now -->
+        <div style="background:#111;padding:1rem">
+          <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;color:#a8ff78;margin-bottom:0.75rem">NOW — v1.0</div>
+          <div style="font-size:0.82rem;color:#aaa;margin-bottom:0.75rem">Synthetic agents hang off human nodes. Identity = agent-type + owner.</div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem">
+            <div style="padding:0.35rem 0.6rem;background:rgba(255,255,255,0.06);border-radius:4px;border-left:3px solid #888">
+              <span style="color:#888">human:</span> <strong>nikhil</strong>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(168,255,120,0.08);border-radius:4px;border-left:3px solid #a8ff78;margin-left:1rem">
+              <span style="color:#666">↳ synthetic:</span> <strong style="color:#a8ff78">claude@nikhil</strong>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(120,200,255,0.08);border-radius:4px;border-left:3px solid #78c8ff;margin-left:1rem">
+              <span style="color:#666">↳ synthetic:</span> <strong style="color:#78c8ff">agy@nikhil</strong>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(255,216,120,0.08);border-radius:4px;border-left:3px solid #ffd878;margin-left:1rem">
+              <span style="color:#666">↳ synthetic:</span> <strong style="color:#ffd878">codex@nikhil</strong>
+            </div>
+          </div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:#666">
+            NATS cred: <code>claude.nikhil</code><br>
+            Authority from: human ownership
+          </div>
+        </div>
+
+        <!-- Team -->
+        <div style="background:#111;padding:1rem">
+          <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;color:#78c8ff;margin-bottom:0.75rem">TEAM — v2.x</div>
+          <div style="font-size:0.82rem;color:#aaa;margin-bottom:0.75rem">Identity = role + competency + scope. Agent type becomes a capability tag, not identity.</div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem">
+            <div style="padding:0.35rem 0.6rem;background:rgba(168,255,120,0.08);border-radius:4px;border-left:3px solid #a8ff78">
+              <strong style="color:#a8ff78">implementer</strong><br>
+              <span style="color:#666">competency: backend, ts, fhir</span><br>
+              <span style="color:#666">scope: rxcc.feat.*</span><br>
+              <span style="color:#555;font-size:0.72rem">← could be claude@nikhil or sara@team</span>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(120,200,255,0.08);border-radius:4px;border-left:3px solid #78c8ff">
+              <strong style="color:#78c8ff">reviewer</strong><br>
+              <span style="color:#666">competency: frontend, ui, perf</span><br>
+              <span style="color:#666">scope: rxcc.review.*</span>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(255,120,120,0.08);border-radius:4px;border-left:3px solid #ff7878">
+              <strong style="color:#ff7878">deployer</strong><br>
+              <span style="color:#666">competency: infra, ecs, pulumi</span><br>
+              <span style="color:#666">scope: rxcc.deploy.* — approval required</span>
+            </div>
+          </div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:#666">
+            NATS cred: JWT with role + competency claims<br>
+            Authority from: role assertion
+          </div>
+        </div>
+
+        <!-- Enterprise -->
+        <div style="background:#111;padding:1rem">
+          <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;color:#ffa878;margin-bottom:0.75rem">ENTERPRISE — v3.x</div>
+          <div style="font-size:0.82rem;color:#aaa;margin-bottom:0.75rem">Org hierarchy. Roles inherit. Competency profiles versioned. Scope = org · team · repo · branch.</div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem">
+            <div style="padding:0.35rem 0.6rem;background:rgba(255,168,120,0.08);border-radius:4px;border-left:3px solid #ffa878">
+              <strong style="color:#ffa878">org.roadmap-authority</strong><br>
+              <span style="color:#666">scope: *.roadmap — write</span><br>
+              <span style="color:#555;font-size:0.72rem">← human-only today. not forever.</span>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(168,255,120,0.08);border-radius:4px;border-left:3px solid #a8ff78">
+              <strong style="color:#a8ff78">team.implementer</strong><br>
+              <span style="color:#666">inherits: org.implementer</span><br>
+              <span style="color:#666">scope: team.rxcc.*</span>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(255,120,120,0.08);border-radius:4px;border-left:3px solid #ff7878">
+              <strong style="color:#ff7878">org.deploy-authority</strong><br>
+              <span style="color:#666">scope: *.deploy.prod — approval gate</span><br>
+              <span style="color:#555;font-size:0.72rem">← gate is a policy, not a person</span>
+            </div>
+          </div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:#666">
+            NATS: operator JWTs · account hierarchy<br>
+            Authority from: org policy + competency proof
+          </div>
+        </div>
+
+        <!-- Far future -->
+        <div style="background:#111;padding:1rem">
+          <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;color:#e878ff;margin-bottom:0.75rem">FAR FUTURE — vX</div>
+          <div style="font-size:0.82rem;color:#aaa;margin-bottom:0.75rem">No biological/synthetic distinction. Agents are capability nodes in a graph. Context + demonstrated competency = authority.</div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem">
+            <div style="padding:0.5rem 0.6rem;background:rgba(232,120,255,0.08);border-radius:4px;border-left:3px solid #e878ff">
+              <strong style="color:#e878ff">capability-node</strong><br>
+              <span style="color:#666">skills: [backend, ts, fhir, deploy]</span><br>
+              <span style="color:#666">trust-score: 0.97 (from history)</span><br>
+              <span style="color:#666">context: rxcc.feat.di7</span><br>
+              <span style="color:#555;font-size:0.72rem;font-style:italic">← is this nikhil or claude?<br>does it matter?</span>
+            </div>
+            <div style="padding:0.35rem 0.6rem;background:rgba(255,255,255,0.04);border-radius:4px;font-size:0.75rem;color:#666;font-style:italic">
+              Authority = verifiable capability history + org policy. Identity is a credential bundle, not a category.
+            </div>
+          </div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:#666">
+            NATS: zero-trust mTLS + capability JWTs<br>
+            Authority from: cryptographic capability proof
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- The architectural implication -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+
+  <div style="padding:1rem;background:rgba(255,80,80,0.06);border:1px solid rgba(255,80,80,0.2);border-radius:8px">
+    <div class="label" style="margin-bottom:0.5rem;color:#ff7878">What NOT to bake into synlynk's identity model</div>
+    <ul style="font-size:0.85rem;padding-left:1rem;line-height:2;color:#aaa">
+      <li><code>is_human: true/false</code> — this field will be meaningless</li>
+      <li>Agent type as identity (<code>claude</code>, <code>gemini</code>) — these are engine tags, not identity</li>
+      <li>Hardcoded "human must approve" rules — gate on <em>role</em> not on biological status</li>
+      <li>Permission checks against agent name — check competency claim instead</li>
+    </ul>
+  </div>
+
+  <div style="padding:1rem;background:rgba(168,255,120,0.06);border:1px solid rgba(168,255,120,0.2);border-radius:8px">
+    <div class="label" style="margin-bottom:0.5rem;color:#a8ff78">What to build into the identity model now</div>
+    <ul style="font-size:0.85rem;padding-left:1rem;line-height:2;color:#aaa">
+      <li><code>role</code> — implementer, reviewer, deployer, roadmap-authority</li>
+      <li><code>competency[]</code> — backend, frontend, infra, data, testing</li>
+      <li><code>scope</code> — which rooms/subjects this identity can read/write</li>
+      <li><code>engine</code> — claude|agy|codex|human (tag only, no authority logic)</li>
+      <li><code>owner</code> — which human provisioned this agent (audit trail)</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- The NATS JWT shape -->
+<div class="mockup">
+  <div class="mockup-header">NATS Credential Shape — Designed for the Far Future, Works Today</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <div class="label" style="margin-bottom:0.5rem">v1.0 credential (Solo)</div>
+        <code style="display:block;white-space:pre;font-size:0.78rem;line-height:1.7;color:#a8ff78">{
+  "sub": "claude.nikhil",
+  "role": "implementer",
+  "competency": ["backend","ts","fhir"],
+  "scope": ["rxcc.feat.>","rxcc.live.>"],
+  "engine": "claude-sonnet-4-6",
+  "owner": "nikhil",
+  "exp": 1780557459
+}</code>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:0.5rem">v3.x credential (Enterprise)</div>
+        <code style="display:block;white-space:pre;font-size:0.78rem;line-height:1.7;color:#78c8ff">{
+  "sub": "cap-node.a4f9c2",
+  "role": "team.implementer",
+  "competency": ["backend","ts","fhir"],
+  "trust_score": 0.97,
+  "scope": ["rxcc.feat.>"],
+  "engine": "claude-opus-4-8",  ← tag only
+  "owner": "nikhil",            ← still present
+  "org": "dialify",
+  "exp": 1780557459
+}</code>
+      </div>
+    </div>
+    <div style="margin-top:0.75rem;padding:0.6rem;background:rgba(255,255,255,0.04);border-radius:4px;font-size:0.8rem;color:#888">
+      <strong style="color:#e878ff">The far-future shift:</strong> <code>sub</code> stops being a name and becomes a capability-node ID. <code>trust_score</code> is derived from verifiable history (PRs merged, incidents caused, test pass rate). <code>engine</code> stays as an audit tag — it never drives access decisions. The transition is a credential schema migration, not an architectural rebuild.
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleSelect(el) {
+  const container = el.closest('[data-multiselect]') || el.closest('.options');
+  if (!container || !container.hasAttribute('data-multiselect')) {
+    container && container.querySelectorAll('.option.selected').forEach(o => o.classList.remove('selected'));
+  }
+  el.classList.toggle('selected');
+  const selected = document.querySelectorAll('.option.selected');
+  const indicator = document.getElementById('indicator-text');
+  if (indicator) {
+    indicator.textContent = selected.length
+      ? Array.from(selected).map(o => o.querySelector('h3')?.textContent || o.dataset.choice).join(', ')
+      : 'Click an option above, then return to the terminal';
+    indicator.className = selected.length ? 'selected-text' : '';
+  }
+}
+function showTier(tier) {
+  document.querySelectorAll('.tier-content').forEach(el => el.style.display = 'none');
+  const t = document.getElementById('tier-' + tier);
+  if (t) t.style.display = 'block';
+  const colors = {solo:'#a8ff78',soloplus:'#78c8ff',team:'#ffa878',enterprise:'#e878ff'};
+  document.querySelectorAll('#tier-tabs button').forEach(btn => {
+    btn.style.background = 'rgba(255,255,255,0.05)';
+    btn.style.borderColor = 'rgba(255,255,255,0.15)';
+    btn.style.color = '#888';
+  });
+  function hexToRgb(hex) { const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return r+','+g+','+b; }
+  const tab = document.getElementById('tab-' + tier);
+  if (tab && colors[tier]) {
+    tab.style.background = 'rgba('+hexToRgb(colors[tier])+',0.15)';
+    tab.style.borderColor = 'rgba('+hexToRgb(colors[tier])+',0.5)';
+    tab.style.color = colors[tier];
+  }
+}
+function showPanel(panel) {
+  document.querySelectorAll('[id^="panel-"]').forEach(el => el.style.display = 'none');
+  const p = document.getElementById('panel-' + panel);
+  if (p) p.style.display = 'block';
+  document.querySelectorAll('[id^="nav-"]').forEach(el => {
+    el.style.background = 'transparent'; el.style.color = '#888'; el.style.borderLeft = '2px solid transparent';
+  });
+  const n = document.getElementById('nav-' + panel);
+  if (n) { n.style.background='rgba(168,255,120,0.15)'; n.style.color='#a8ff78'; n.style.borderLeft='2px solid #a8ff78'; }
+}
+function showAgent(file) {
+  document.querySelectorAll('[id^="afile-"]').forEach(el => { el.style.background='transparent'; el.style.color='#888'; el.style.borderLeft='2px solid transparent'; });
+  const a = document.getElementById('afile-'+file);
+  if (a) { a.style.background='rgba(168,255,120,0.1)'; a.style.color='#a8ff78'; a.style.borderLeft='2px solid #a8ff78'; }
+}
+function showMemory(k) {}
+</script>
+
+    </div>
+  </div>
+
+  <div class="indicator-bar">
+    <span id="indicator-text">Click an option above, then return to the terminal</span>
+  </div>
+
+</body>
+</html>

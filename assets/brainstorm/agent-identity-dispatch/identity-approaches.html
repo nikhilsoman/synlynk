@@ -1,0 +1,76 @@
+<h2>Agent Identity & Dispatch — 3 Approaches</h2>
+<p class="subtitle">The core architectural choice: how does autonomous dispatch work?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Pull model — agents poll state.db</h3>
+      <p>No central daemon. Each agent CLI runs a worker loop: check state.db for pending stories assigned to my role + profile, claim one, execute, signal completion, repeat. Trigger sources (cron, git hook, agent completion) all write to state.db; agents read from it on their own schedule.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>No persistent daemon — fits single-file, stdlib-only model</li>
+          <li>Agents are independent — one crash doesn't stop others</li>
+          <li>Trivially parallelisable — multiple agents poll the same DB</li>
+          <li>Simple: synlynk worker --role Builder --agent claude</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Polling latency — stories don't start instantly</li>
+          <li>Requires agent process to already be running or scheduled externally</li>
+          <li>Harder to enforce entitlements centrally — each agent enforces its own</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Push model — persistent daemon dispatches <span style="font-size:0.75em;color:var(--accent)">★ Recommended</span></h3>
+      <p>A watchman-style daemon (already designed in Trio Protocol) owns the dispatch loop. It watches state.db for stories with satisfied dependencies, evaluates entitlements, selects the best-fit agent profile, and launches the agent process. Agents don't need to know about each other — the daemon is the coordinator. Three trigger sources all feed into the same daemon: dependency completion (B), schedule (C), and manual <code>synlynk run</code> (A becomes an API call to the daemon).</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Entitlement enforcement is centralised — one place, auditable</li>
+          <li>Near-instant dispatch — no polling gap</li>
+          <li>All three trigger sources (schedule, completion, manual) unified</li>
+          <li>Daemon already designed in Trio Protocol — not starting from scratch</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Daemon must stay alive — process management complexity</li>
+          <li>Single point of failure (mitigated: daemon auto-restarts)</li>
+          <li>More complex than pull — harder to debug when silent</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid — event-triggered coordinator (stateless)</h3>
+      <p>No persistent process. A lightweight coordinator runs on each triggering event (story completion, cron tick, git hook, manual command) — checks state.db, dispatches ready stories, exits. The OS or a cron job is the persistence layer, not synlynk. Combine with launchd (macOS) or systemd (Linux) for the "always-on" behaviour when needed.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>No daemon to manage — OS handles persistence</li>
+          <li>Zero resident memory between events</li>
+          <li>Simpler failure model — each trigger is independent</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Latency between event and dispatch (cron granularity = minutes)</li>
+          <li>Requires OS-level integration (launchd/systemd) for always-on</li>
+          <li>Self-chaining (B: agent completes → triggers next) is harder to express</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:1.5rem;padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">What all three share — the identity model</p>
+  <p style="margin-top:0.5rem;font-size:0.88em">Regardless of dispatch architecture, agent identity is two-layered:<br>
+  <strong>Role</strong> (Architect · Builder · Verifier) → primary entitlement unit — what work can start, what it can touch<br>
+  <strong>Agent Profile</strong> (cli · model · competency_scores · environment_capabilities) → fitness function — best-fit selection within a role<br><br>
+  An agent earns the right to auto-dispatch a story by: having the role assigned to that story + sufficient competency score for its domain + quota headroom + environment capable of the required actions.</p>
+</div>

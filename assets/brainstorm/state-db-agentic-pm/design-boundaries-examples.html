@@ -1,0 +1,133 @@
+<h2>Schema Corrections — Before & After Examples</h2>
+<p class="subtitle">Real entries from current project-docs mapped to draft schema vs. corrected schema</p>
+
+<div class="section">
+  <h3>memory</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color:#f87171">✗ Draft schema (key/value)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        key: <span style="color:#60a5fa">"Positioning"</span><br>
+        value: <span style="color:#60a5fa">"synlynk — The OS for<br>&nbsp;&nbsp;multi-agent development."</span><br>
+        agent: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+        updated_at: <span style="color:#60a5fa">"2026-06-06"</span><br><br>
+        <span style="color:#f87171">Problem: loses the 4 bullets<br>under Positioning. Forces<br>one row per bullet or<br>one row per section — ambiguous.</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color:#4ade80">✓ Corrected schema (heading/body)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        heading: <span style="color:#60a5fa">"Positioning (decided 2026-06-06)"</span><br>
+        body: <span style="color:#60a5fa">"- **Name:** synlynk — The OS for<br>&nbsp;&nbsp;multi-agent development. [@nikhilsoman]<br>- **Framing:** Not a context injector,<br>&nbsp;&nbsp;skill package, or SaaS dashboard...<br>- **Tier model retired:** Solo/Team/Enterprise<br>&nbsp;&nbsp;replaced by the OS layer model..."</span><br>
+        agent: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+        updated_at: <span style="color:#60a5fa">"2026-06-06"</span><br><br>
+        <span style="color:#4ade80">One row per section. Body is the<br>full markdown block agents expect.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>tasks</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color:#f87171">✗ Draft schema (priority)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id: <span style="color:#60a5fa">1</span><br>
+        text: <span style="color:#60a5fa">"Generate conventions.md<br>&nbsp;&nbsp;at synlynk init"</span><br>
+        status: <span style="color:#60a5fa">"pending"</span><br>
+        owner: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+        priority: <span style="color:#60a5fa">1</span><br>
+        created_at: <span style="color:#60a5fa">"2026-06-06"</span><br><br>
+        <span style="color:#f87171">priority doesn't exist in the<br>doc. Also loses the version<br>grouping agents rely on.</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color:#4ade80">✓ Corrected schema (milestone)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        task_id: <span style="color:#60a5fa">20</span><br>
+        text: <span style="color:#60a5fa">"Generate project-docs/<br>&nbsp;&nbsp;conventions.md at synlynk init"</span><br>
+        status: <span style="color:#60a5fa">"pending"</span><br>
+        owner: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+        milestone: <span style="color:#60a5fa">"v0.4.0"</span><br>
+        created_at: <span style="color:#60a5fa">"2026-06-06"</span><br><br>
+        <span style="color:#4ade80">task_id=20 from &lt;!-- id: 20 --&gt;.<br>milestone preserves version grouping.<br>Context query: WHERE status='pending'.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>roadmap</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color:#f87171">✗ Draft schema (notes, missing columns)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        version: <span style="color:#60a5fa">"v0.5.0"</span><br>
+        theme: <span style="color:#60a5fa">"Capability Engine"</span><br>
+        status: <span style="color:#60a5fa">"Planned"</span><br>
+        target: <span style="color:#60a5fa">"Aug 2026"</span><br>
+        notes: <span style="color:#60a5fa">""</span><br><br>
+        <span style="color:#f87171">Drops os_layer and infrastructure —<br>both are in the actual table and<br>injected into context. notes<br>doesn't exist in the source doc.</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color:#4ade80">✓ Corrected schema (os_layer + infrastructure)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        version: <span style="color:#60a5fa">"v0.5.0"</span><br>
+        theme: <span style="color:#60a5fa">"Capability Engine"</span><br>
+        os_layer: <span style="color:#60a5fa">"Scheduler — data-driven routing,<br>&nbsp;&nbsp;capability.json → SQLite"</span><br>
+        infrastructure: <span style="color:#60a5fa">"SQLite WAL"</span><br>
+        status: <span style="color:#60a5fa">"Planned"</span><br>
+        target: <span style="color:#60a5fa">"Aug 2026"</span><br><br>
+        <span style="color:#4ade80">Faithful to the 6-column table.<br>Context query: WHERE status<br>IN ('Next','In Progress').</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>devlog</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color:#f87171">✗ Draft schema (agent, no session_title)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id: <span style="color:#60a5fa">1</span><br>
+        session: <span style="color:#60a5fa">"2026-06-06"</span><br>
+        agent: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+        content: <span style="color:#60a5fa">"Full-day brainstorm +<br>&nbsp;&nbsp;doc consolidation session..."</span><br>
+        ts: <span style="color:#60a5fa">"2026-06-06 23:00:00"</span><br><br>
+        <span style="color:#f87171">agent is ambiguous (human or model?).<br>session loses the session title<br>that makes entries scannable.</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color:#4ade80">✓ Corrected schema (user + session_title)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id: <span style="color:#60a5fa">1</span><br>
+        date: <span style="color:#60a5fa">"2026-06-06"</span><br>
+        session_title: <span style="color:#60a5fa">"Unified Roadmap — OS Framing,<br>&nbsp;&nbsp;Tokq Convergence, Gap Analysis"</span><br>
+        user: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+        content: <span style="color:#60a5fa">"Full-day brainstorm +<br>&nbsp;&nbsp;doc consolidation session..."</span><br>
+        ts: <span style="color:#60a5fa">"2026-06-06 23:00:00"</span><br><br>
+        <span style="color:#4ade80">user=git username (maps to devlogs/<br>nikhil.md). session_title preserves<br>the ## heading from the devlog.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>costs — no correction needed</h3>
+  <div class="mockup">
+    <div class="mockup-header" style="color:#4ade80">✓ Schema matches source exactly</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+      session_date: <span style="color:#60a5fa">"2026-06-06"</span><br>
+      user: <span style="color:#60a5fa">"nikhilsoman"</span><br>
+      model: <span style="color:#60a5fa">"claude-sonnet-4-6"</span><br>
+      tokens_in: <span style="color:#60a5fa">150000</span><br>
+      tokens_out: <span style="color:#60a5fa">30000</span><br>
+      cost_usd: <span style="color:#60a5fa">0.90</span><br>
+      ts: <span style="color:#60a5fa">"2026-06-06 23:00:00"</span><br><br>
+      <span style="color:#4ade80">Not injected into context. Used only<br>by check_budgets() and human review.<br>change agent → user for consistency.</span>
+    </div>
+  </div>
+</div>

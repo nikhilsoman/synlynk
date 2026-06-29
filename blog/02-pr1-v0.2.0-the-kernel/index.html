@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1 — v0.2.0: Laying the Kernel | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">May 17, 2026</span>
+        
+          <span class="blog-post-pr">PR #1</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1 — v0.2.0: Laying the Kernel</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1 — v0.2.0: Laying the Kernel</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1">feat: synlynk v0.2.0 — watch daemon, checkpoint, status command, context compaction</a><br>
+<strong>Merged:</strong> 2026-05-17<br>
+<strong>Tests:</strong> 46 passing</p>
+<hr>
+<h2>The Broader Goal at This Point</h2>
+<p>At v0.2.0, the stated goal was modest: make a solo developer with multiple AI tools feel like they have one consistent co-pilot. The product framing was a &quot;Context Switchboard&quot; — not a coordinator, not an orchestrator, just a reliable mechanism for keeping <code>context.md</code> fresh and making sure costs didn't accumulate invisibly.</p>
+<p>The three hybrid workgroup studies had not been written yet. The OS metaphor did not exist. The vision was: fix the context tax.</p>
+<hr>
+<h2>What This PR Shipped</h2>
+<p>v0.2.0 was the first functional release. v0.1.0 was <code>synlynk init</code> and <code>synlynk exec</code> — a scaffolder and a wrapper. v0.2.0 added the runtime infrastructure that makes the wrapper actually useful across a session.</p>
+<h3><code>synlynk watch start|stop|status</code> — the background daemon</h3>
+<p>The watch daemon polls <code>project-docs/</code> on a configurable interval (default 30s) with a 3s debounce and regenerates <code>.synlynk/context.md</code> whenever any file changes.</p>
+<p>The key implementation detail: the daemon uses <code>os.fork()</code> to detach from the current shell. It writes its PID to <code>.synlynk/watch.pid</code>, logs to <code>.synlynk/watch.log</code>, and tracks its state in <code>.synlynk/state</code>. The state file drives the terminal title bar update via ANSI escape sequences (<code>\033]0;{title}\007</code>) — a small but effective signal that the daemon is alive.</p>
+<pre><code class="language-python">def set_state(state: str) -&gt; None:
+    icons = {&quot;watching&quot;: &quot;●&quot;, &quot;active&quot;: &quot;⚡&quot;, &quot;stopped&quot;: &quot;○&quot;}
+    with open(state_file, &quot;w&quot;) as f:
+        f.write(state)
+    if sys.stdout.isatty():
+        project = os.path.basename(os.getcwd())
+        title = f&quot;{icons.get(state, '○')} synlynk: {state}  ·  {project}&quot;
+        sys.stdout.write(f&quot;\033]0;{title}\007&quot;)
+</code></pre>
+<p>The <code>os.fork()</code> approach means the daemon runs as a native process (Unix only — macOS or Linux), not a background thread inside the Python interpreter. This is the correct choice for a tool that must survive shell exits and terminal closure.</p>
+<h3><code>synlynk checkpoint</code> — archiving completed work</h3>
+<p><code>checkpoint</code> does three things atomically: it archives completed <code>[x]</code> tasks from <code>todo.md</code> into the user's devlog (identified via <code>get_username()</code>, a gh CLI + git config fallback chain), refreshes <code>context.md</code>, and emits a structured telemetry event.</p>
+<p>The devlog archiving rule: entries older than 30 days are moved to <code>devlogs/archive/YYYY-MM.md</code> to keep the active devlog readable. This was the first implementation of the &quot;cognitive exoskeleton&quot; pattern — the devlog as episodic memory, automatically maintained rather than manually curated.</p>
+<h3><code>synlynk status [--json]</code> — the project dashboard</h3>
+<p>The status dashboard aggregates:</p>
+<ul>
+<li>Active <code>[ ]</code> tasks from <code>todo.md</code></li>
+<li>Last checkpoint timestamp</li>
+<li>Current sentinel alerts from <code>.synlynk/sentinel.md</code></li>
+<li>Budget position (cumulative spend vs. configured limit)</li>
+<li>Watcher state</li>
+</ul>
+<p><code>--json</code> emits a versioned JSON structure and exits 1 if there are active sentinel alerts or a budget breach. This exit code behavior was deliberate: it allows CI to gate on project health, not just test results.</p>
+<h3>Context compaction</h3>
+<p>Before v0.2.0, <code>generate_context()</code> dumped the full <code>project-docs/</code> directory into <code>context.md</code>. This was expensive (many completed tasks, old roadmap rows, full devlog history) and increasingly noisy as the project aged.</p>
+<p>v0.2.0 compacts aggressively:</p>
+<ul>
+<li>Only <code>[ ]</code> (incomplete) tasks appear in the output — <code>[x]</code> tasks are stripped</li>
+<li>Only &quot;In Progress&quot; roadmap rows appear — done and planned rows are excluded</li>
+<li>Devlog is scoped to the last 7 days</li>
+<li>Sentinel alerts are injected at the top of context, before everything else</li>
+</ul>
+<p>This is the first implementation of a principle that will recur throughout the architecture: <strong>context should be minimal and relevant, not maximal and comprehensive</strong>. The agent reads what it needs for the current session. Historical state belongs in the ledger, not in the active context window.</p>
+<h3>The session protocol templates</h3>
+<p><code>synlynk init</code> now writes <code>CLAUDE.md</code> and <code>GEMINI.md</code> with a full session protocol — a startup checklist, during-session rules, and session-end steps. The key commitments the templates enforce:</p>
+<ol>
+<li>Run <code>synlynk watch status</code> at session start — start the watcher if stopped</li>
+<li>Read <code>.synlynk/context.md</code> — the authoritative project state</li>
+<li>Check <code>.synlynk/sentinel.md</code> — surface any active alerts before doing any work</li>
+<li>Mark tasks <code>[x]</code> in todo.md immediately upon completion, not at session end</li>
+<li>Run <code>synlynk checkpoint</code> at task boundaries and at session end</li>
+</ol>
+<p>These are not suggestions. They are the behavioral contract the harness enforces through the agent instruction files.</p>
+<h3>Breaking change: full TTY for <code>exec_command</code></h3>
+<p>The most important implementation detail in v0.2.0 is invisible in the feature list: <code>exec_command()</code> switched from <code>subprocess.run(capture_output=True)</code> to <code>subprocess.Popen</code> with stdio passed directly to the subprocess.</p>
+<p>This broke the previous behavior of extracting token counts from stdout but gained something more important: <strong>full TTY interactivity</strong>. Claude Code and Gemini CLI both rely on terminal features (cursor control, color, interactive confirmation prompts) that break when stdout is captured. Wrapping them with captured output produced a broken terminal experience. Passing stdio directly means the wrapped tool behaves exactly as if run without the wrapper.</p>
+<p>The cost of this decision: token extraction from stdout became impossible. Cost tracking moved to a manual model — the AI agent is instructed to write its costs to <code>costs.md</code> after each significant operation. This is a deliberate trade: correctness over automation. An interactive tool that captures stdout to extract tokens but breaks the terminal is not useful. An interactive tool that requires manual cost entry but works is.</p>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/v020-kernel/v020-kernel-architecture.html" title="v0.2.0 — The Kernel Components" loading="lazy" frameborder="0"></iframe>
+  <figcaption>v0.2.0 — The Kernel Components</figcaption>
+</figure>
+<hr>
+<h2>The Test Suite</h2>
+<p>46 pytest tests covering all new and changed behavior, with a <code>project_dir</code> fixture that creates a clean temporary filesystem for each test. This fixture pattern — create a real <code>project-docs/</code> structure, run the CLI function against it, assert on the resulting state — became the testing foundation for all subsequent versions.</p>
+<p>CI runs on Python 3.8, 3.10, and 3.12 via GitHub Actions, gating every push and PR. The 3.8 target is deliberate: it forces stdlib-only discipline. Any <code>str | None</code> union syntax (requires 3.10+) must be written as <code>Optional[str]</code> instead.</p>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>v0.2.0 established the runtime model that all subsequent releases build on:</p>
+<ol>
+<li>
+<p><strong>Persistent background process.</strong> The watch daemon is the precursor to the v0.7.0 dispatch daemon. The architectural shape is the same: a forked process with a state file, a PID file, and a log file.</p>
+</li>
+<li>
+<p><strong>Structured telemetry.</strong> <code>log_telemetry_event()</code> writes structured events with <code>schema_version</code> and <code>type</code> fields. Every <code>exec</code> and <code>checkpoint</code> event is recorded. This telemetry becomes the evidence base for capability routing in v0.5.0.</p>
+</li>
+<li>
+<p><strong>Context as a derived artifact.</strong> The principle that <code>context.md</code> is computed, not written, is foundational. In v0.5.0, this shifts to SQLite queries. In v0.7.0, to HTTP context server responses. But the principle — the agent reads a snapshot computed by the harness, not a document maintained by the agent — never changes.</p>
+</li>
+<li>
+<p><strong>Flatline sentinel.</strong> 3 consecutive non-zero exits with the same command trigger an alert in <code>sentinel.md</code>. This is the first safety mechanism against autonomous loops gone wrong — a concern that becomes structural in the dispatch and entitlements design.</p>
+</li>
+</ol>
+<hr>
+<h2>Strategic Note</h2>
+<p>At this point, the goal was: reliable solo workflow. Ship the kernel and test it in real use.</p>
+<p>The goal had not yet shifted to orchestrator. The multi-agent coordination architecture, the Trio Protocol, the state DB — none of those existed yet. synlynk was a context switchboard with a daemon and a dashboard.</p>
+<p>But the daemon, the telemetry, the compaction logic, and the session protocol templates are all load-bearing components of the eventual orchestrator. The kernel was right. The scope was just not yet known to be much larger.</p>
+<hr>
+<p><em>Next: <a href="./03-pr3-v0.2.1-correctness-patch.md">PR #3 — v0.2.1: The Correctness Tax</a> — real use found critical bugs in hours; correctness before velocity.</em></p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRs #56/#57/#58 — v0.9.3: synlynk Goes Always-On | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jun 23, 2026</span>
+        
+          <span class="blog-post-pr">PR #56, #57, #58</span>
+        
+      </div>
+      <h1 class="blog-post-title">PRs #56/#57/#58 — v0.9.3: synlynk Goes Always-On</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Post 21 ended with a clear statement of what had to come next:</p>
+<blockquote>
+<p>&quot;Team features at v0.9.2 complete the <em>synchronous</em> layer of the multi-agent OS. The next layer is the async daemon (v0.9.3): <code>synlynk daemon start</code> registers a background process that monitors <code>project-docs/</code>, fires context regeneration on writes, and exposes a local HTTP endpoint for agents to pull context without invoking the CLI. This moves synlynk from an on-demand tool to an always-running substrate — the step before the relay tier.&quot;</p>
+</blockquote>
+<p>That goalpost was precise. The daemon had been on the roadmap since v0.8. The question going into this work wasn't <em>what</em> to build but <em>how correctly to build it</em> — the failure modes in a background daemon are nastier than anything in the synchronous path.</p>
+<hr>
+<h2>Strategic Shifts in This PR</h2>
+<p>Two things changed between that goalpost and what shipped.</p>
+<p><strong>First: a three-agent delivery protocol, fully exercised for the first time.</strong> v0.9.3 was the first release where task allocation across Claude, Agy, and Codex was enforced end-to-end with a formal rule: <em>PRs reviewed by non-authoring agents; fixes applied only by the authoring agent.</em> Every previous release had humans doing this coordination informally. For v0.9.3 it was a strict protocol:</p>
+<table>
+<thead>
+<tr>
+<th>Tasks</th>
+<th>Author</th>
+<th>Reviewer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1–3: schema, reconcile/dispatch, SynlynkDaemon + HTTP API</td>
+<td>Claude</td>
+<td>Agy</td>
+</tr>
+<tr>
+<td>4: <code>synlynk daemon</code> CLI wiring</td>
+<td>Agy</td>
+<td>Codex</td>
+</tr>
+<tr>
+<td>5–6: <code>--install-service</code>/<code>--uninstall-service</code> + VERSION bump</td>
+<td>Codex</td>
+<td>Claude</td>
+</tr>
+</tbody>
+</table>
+<p>The authoring-agent-fixes-only rule was tested: Codex twice failed to apply a log path correction (<code>~/synlynk/</code> vs <code>~/.synlynk/</code>), and both times Claude (as reviewer, not author) had to re-dispatch rather than patch it directly. The second time, after Codex again baked in the wrong path with a regression test locking it, Claude applied the fix directly as a reviewer correction — the rule's edge case.</p>
+<p><strong>Second: correctness properties discovered during design review became the most important part of the implementation.</strong> Three bugs existed in the plan's pseudocode before a single line was written. Agy's review of PR #56 caught all three. Each one would have been silent in production.</p>
+<hr>
+<h2>What This PR Shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/v0.9.3-async-daemon/daemon-architecture.html" title="Daemon architecture" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Daemon architecture</figcaption>
+</figure>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/v0.9.3-async-daemon/daemon-approaches.html" title="Daemon approach comparison" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Daemon approach comparison</figcaption>
+</figure>
+<h3>Daemon architecture</h3>
+<p><code>SynlynkDaemon</code> subclasses <code>WatchDaemon</code> — it inherits the double-fork daemonization, pidfile management, mtime polling on <code>project-docs/</code>, and <code>context.md</code> regeneration. It adds exactly two things: a second thread running an HTTP server on <code>localhost:27471</code>, and <code>_dispatch_ready_jobs()</code> called on every poll tick.</p>
+<p>The separation was deliberate. <code>synlynk watch</code> still works unchanged. The daemon is a superset, not a replacement — users who only want background context regeneration don't need the HTTP server or job queue.</p>
+<pre><code class="language-python">class SynlynkDaemon(WatchDaemon):
+    HTTP_PORT = 27471
+
+    def _run_loop(self):
+        # Start HTTP thread
+        http_server = _ReuseAddrHTTPServer((&quot;127.0.0.1&quot;, self.HTTP_PORT), handler_class)
+        threading.Thread(target=http_server.serve_forever, daemon=True).start()
+
+        # Poll loop (inherited cadence + reconcile/dispatch injected each tick)
+        while True:
+            time.sleep(interval)
+            # ... mtime check → generate_context() if changed ...
+            _reconcile_daemon_jobs()
+            _dispatch_ready_jobs(max_parallel=max_parallel)
+</code></pre>
+<h3>The <code>daemon_jobs</code> table</h3>
+<pre><code class="language-sql">CREATE TABLE IF NOT EXISTS daemon_jobs (
+    job_id       TEXT PRIMARY KEY,
+    agent        TEXT NOT NULL,
+    task         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'queued',   -- queued → running → done | failed
+    priority     INTEGER NOT NULL DEFAULT 5,        -- 1 (highest) to 10 (lowest)
+    depends_on   TEXT NOT NULL DEFAULT '[]',        -- JSON array of job_ids
+    pid          INTEGER,
+    enqueued_at  TEXT NOT NULL,
+    started_at   TEXT,
+    completed_at TEXT,
+    exit_code    INTEGER,
+    log_path     TEXT
+);
+</code></pre>
+<p>Three correctness properties were the critical work in this table's dispatch logic:</p>
+<p><strong>Zombie-safe reaping.</strong> <code>os.kill(pid, 0)</code> returns <code>True</code> for zombie processes. A child process that exits while the daemon holds no reference to its <code>Popen</code> object stays in the process table as a zombie; <code>os.kill(pid, 0)</code> succeeds, the daemon thinks it's still running, and the job never transitions out of <code>running</code>. The tests used mock PIDs (<code>99999999</code>) that raise <code>ProcessLookupError</code> immediately, so they couldn't catch this. Fixed with <code>os.waitpid(pid, os.WNOHANG)</code>, with <code>ChildProcessError</code> fallback for processes adopted by init after a restart.</p>
+<p><strong>Dependency failure propagation.</strong> The original dispatch checked <code>WHERE status='done'</code> for all dependencies. If a dependency failed, its downstream job stayed <code>queued</code> forever — a silent deadlock. Fixed by checking dependency statuses explicitly: if any dep is <code>failed</code>, the blocked job is immediately marked <code>failed</code> rather than waiting.</p>
+<p><strong>Per-job commit.</strong> The original loop batched all spawned jobs in a single <code>conn.commit()</code> at the end. A daemon crash between spawning a process and committing left the job as <code>queued</code> in the DB while the process was already running — producing a duplicate execution on restart. Fixed by committing immediately after each spawn.</p>
+<h3>HTTP API (10 endpoints, stdlib only)</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/context</code></td>
+<td><code>context.md</code> as <code>{&quot;content&quot;: &quot;...&quot;}</code> or plain text</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/status</code></td>
+<td><code>{running, uptime_s, pid, jobs: {queued, running, done, failed}}</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/jobs</code></td>
+<td>All jobs; <code>?status=</code> filter</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/jobs/&lt;id&gt;</code></td>
+<td>Single job + last 100 log lines</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/dispatch</code></td>
+<td>Enqueue job: <code>{agent, task, story_id?, priority?, depends_on?}</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/stories</code></td>
+<td>Story list from <code>state.db</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/stories/&lt;id&gt;</code></td>
+<td>Single story</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/capability</code></td>
+<td>Capability ratings by agent × domain</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/sentinel</code></td>
+<td>Parsed <code>sentinel.md</code> alert objects</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/checkpoint</code></td>
+<td>Force-regenerate <code>context.md</code> immediately</td>
+</tr>
+</tbody>
+</table>
+<p>Two implementation details that mattered: <code>_ReuseAddrHTTPServer</code> (<code>allow_reuse_address = True</code>) prevents <code>Address already in use</code> errors on rapid daemon stop/start. A <code>threading.Lock</code> on <code>SynlynkDaemon</code> guards concurrent <code>generate_context()</code> calls — the HTTP <code>/checkpoint</code> handler and the poll thread's <code>on_change()</code> path both write to <code>context.md</code>, and without the lock a concurrent call corrupts the file.</p>
+<h3>Service installation</h3>
+<pre><code>synlynk daemon --install-service
+</code></pre>
+<p>Platform detection:</p>
+<ol>
+<li><code>sys.platform == 'darwin'</code> → launchd plist at <code>~/Library/LaunchAgents/com.synlynk.daemon.plist</code>, <code>launchctl load -w</code></li>
+<li><code>shutil.which('systemctl')</code> → systemd user unit at <code>~/.config/systemd/user/synlynk-daemon.service</code>, <code>systemctl --user enable --now</code></li>
+<li>Fallback → <code>@reboot synlynk daemon start</code> appended to crontab</li>
+</ol>
+<p><code>--uninstall-service</code> reverses each path. <code>FileNotFoundError</code> (service not installed) is caught and prints gracefully.</p>
+<h3>CLI surface (Task 4, authored by Agy)</h3>
+<pre><code>synlynk daemon start               # fork-daemonize
+synlynk daemon stop                # SIGTERM to pidfile pid
+synlynk daemon status              # running state + queue depth + HTTP URL
+synlynk daemon restart             # stop then start
+synlynk daemon --install-service
+synlynk daemon --uninstall-service
+</code></pre>
+<p>The <code>daemon</code> subparser was wired into <code>main()</code> with stub functions <code>_daemon_install_service()</code> and <code>_daemon_uninstall_service()</code> that Codex later replaced with real implementations in Task 5.</p>
+<h3>Test suite</h3>
+<p>432 tests on merge. New tests added across all three PRs:</p>
+<ul>
+<li>Task 1: <code>daemon_jobs</code> table exists and accepts inserts</li>
+<li>Task 2: zombie reaping via <code>os.waitpid</code>, dep-failure propagation, max-parallel cap, per-job commit ordering</li>
+<li>Task 3: 16 tests covering all 10 HTTP endpoints + 3 daemon lifecycle methods</li>
+<li>Task 4: 6 CLI integration tests (status, stop, default no-action, restart sequence, both service stubs)</li>
+<li>Task 5+6: platform-specific install/uninstall tests (mocked <code>subprocess.run</code>), <code>VERSION == '0.9.3'</code></li>
+</ul>
+<p>The restart test (<code>test_daemon_cli_restart_not_running</code>) went through two iterations: Agy's first version only asserted <code>&quot;not running&quot;</code> in stdout, which would pass even if <code>restart</code> called <code>stop()</code> but not <code>start()</code>. Codex's review caught the gap. Agy's second version uses a call tracker:</p>
+<pre><code class="language-python">calls = []
+monkeypatch.setattr(SynlynkDaemon, 'stop', lambda self: calls.append('stop') or print('  ✦ daemon not running'))
+monkeypatch.setattr(SynlynkDaemon, 'start', lambda self: calls.append('start'))
+# ...
+assert calls == ['stop', 'start']
+</code></pre>
+<hr>
+<h2>Brainstorm Visuals Used</h2>
+<p>The brainstorm session produced two visual companion pages that informed the design:</p>
+<ul>
+<li><code>docs/brainstorm/v0.9.3-async-daemon/daemon-approaches.html</code> — the three architecture options (extend WatchDaemon vs new SynlynkDaemon subclass vs standalone HTTP process). Architecture B (new subclass) was chosen because it reuses the double-fork + pidfile + mtime polling from WatchDaemon without entangling <code>synlynk watch</code>.</li>
+<li><code>docs/brainstorm/v0.9.3-async-daemon/daemon-architecture.html</code> — the two-thread process model, all 10 HTTP endpoints, job queue dispatch rules, and service registration options side-by-side.</li>
+</ul>
+<hr>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><strong>Agents can now operate without a human invoking the CLI.</strong></p>
+<p>Before v0.9.3, every agent interaction required <code>synlynk exec</code> — a human (or human-scheduled job) invoked the CLI, which injected context, ran the agent, and recorded telemetry. The agent couldn't self-service context or queue follow-on work without another CLI invocation.</p>
+<p>After v0.9.3:</p>
+<ul>
+<li>Any process on localhost can <code>GET localhost:27471/context</code> and get the current project state without invoking synlynk</li>
+<li>Any process can <code>POST localhost:27471/dispatch</code> to enqueue work for a specific agent with priority and dependency ordering</li>
+<li>The daemon keeps context current automatically — no poll-and-refresh loop needed</li>
+<li>Jobs survive daemon restarts and won't duplicate on crash</li>
+</ul>
+<p>The three-agent delivery protocol also advanced the autonomy goal in a different way: for the first time, the authoring/reviewing/fixing roles were enforced mechanically across a full feature. The protocol surfaced 7 distinct issues that would have shipped as bugs — none were caught by CI. That's the capability engine building its own case: agents reviewing each other's work is not a courtesy, it's a correctness mechanism.</p>
+<hr>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>v0.9.3 establishes synlynk as an always-running process. The HTTP API is exposed on <code>localhost:27471</code> — reachable from any process on the same machine.</p>
+<p>The next step is making it reachable from <em>other</em> machines in the same workgroup.</p>
+<p><strong>v0.9.4: Workgroup Relay</strong> — a WSS/443 relay that lets agents on different machines share context and dispatch across a workgroup without a shared filesystem. Three deployment modes: LAN (no internet dependency), Cloudflare Tunnel (zero-config public relay), VPS (self-hosted). The daemon's HTTP API becomes the data source; the relay becomes the transport.</p>
+<p>Once the relay ships, a developer on one machine can dispatch work to an agent running on another machine's daemon, with context propagating automatically. That's the workgroup tier. The OS tier above that is what v1.0 builds toward.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

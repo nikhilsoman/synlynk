@@ -1,0 +1,133 @@
+<h2>Design — Section 4: Schema + Dispatch Architecture</h2>
+<p class="subtitle">New state.db tables and the full dispatch flow across all three trigger modes</p>
+
+<div class="section">
+  <p class="label">New tables added to state.db</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+
+    <div style="padding:0.875rem;border:1px solid #7c3aed44;border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;color:#e879f9;font-size:0.9em">roles</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id INTEGER PK<br>
+        name TEXT UNIQUE &nbsp;<span style="color:#888">← "Builder"</span><br>
+        description TEXT<br>
+        created_at TIMESTAMP<br><br>
+        <span style="color:#888">Seeded at synlynk init.<br>Custom roles via synlynk role add.</span>
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #06523444;border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;color:#34d399;font-size:0.9em">agent_profiles</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id INTEGER PK<br>
+        agent TEXT &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "claude-code"</span><br>
+        environment TEXT <span style="color:#888">← "cli"|"desktop"|"ci"</span><br>
+        model TEXT<br>
+        capabilities TEXT <span style="color:#888">← JSON array</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">["bash","git","gh","edit"]</span><br>
+        active BOOLEAN DEFAULT 1<br>
+        UNIQUE(agent, environment)
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #92400044;border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;color:#fbbf24;font-size:0.9em">entitlements</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id INTEGER PK<br>
+        role_id INTEGER FK<br>
+        dimension TEXT &nbsp;<span style="color:#888">← "write:src/"</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">&nbsp;&nbsp;"git:merge" | "cost_ceiling"</span><br>
+        value TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← "allow"|"block"|"approval"</span><br>
+        threshold REAL &nbsp;<span style="color:#888">← for cost/token dims</span><br>
+        UNIQUE(role_id, dimension)
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #1d4ed844;border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;color:#60a5fa;font-size:0.9em">inbox</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id INTEGER PK<br>
+        role_id INTEGER FK &nbsp;&nbsp;<span style="color:#888">← who this is for</span><br>
+        story_id INTEGER FK<br>
+        status TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← pending|claimed|done</span><br>
+        claimed_by INTEGER FK &nbsp;<span style="color:#888">← agent_profiles.id</span><br>
+        created_at TIMESTAMP<br>
+        claimed_at TIMESTAMP<br><br>
+        <span style="color:#888">The dispatch address. Agent worker<br>polls/watches this table.</span>
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #37415144;border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;color:#94a3b8;font-size:0.9em">schedules</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id INTEGER PK<br>
+        name TEXT UNIQUE<br>
+        cron_expr TEXT &nbsp;&nbsp;&nbsp;<span style="color:#888">← "0 22 * * *"</span><br>
+        filter TEXT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← story tag or epic_id</span><br>
+        enabled BOOLEAN<br>
+        last_run TIMESTAMP<br>
+        next_run TIMESTAMP<br><br>
+        <span style="color:#888">Mode C trigger source.<br>synlynk schedule add "nightly"</span>
+      </div>
+    </div>
+
+    <div style="padding:0.875rem;border:1px solid #7f1d1d44;border-radius:8px">
+      <h3 style="margin:0 0 0.4rem;color:#f87171;font-size:0.9em">dispatch_log</h3>
+      <div style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        id INTEGER PK<br>
+        story_id INTEGER FK<br>
+        role_id INTEGER FK<br>
+        agent_profile_id INTEGER FK<br>
+        decision TEXT &nbsp;<span style="color:#888">← auto|approval|hold|reject</span><br>
+        routing_reason TEXT<br>
+        approver TEXT &nbsp;&nbsp;<span style="color:#888">← git username if approved</span><br>
+        approved_at TIMESTAMP<br>
+        dispatched_at TIMESTAMP<br><br>
+        <span style="color:#888">Full audit. Every dispatch decision<br>recorded — auto or human-approved.</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Full dispatch flow — all three trigger modes</p>
+  <div class="mockup">
+    <div class="mockup-header">State transitions from "story pending" to "story running"</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.79em;line-height:2.1">
+      <span style="color:#888">── TRIGGER SOURCES ────────────────────────────────────────</span><br>
+      [A] story.depends_on satisfied → emit event type="unblocked"<br>
+      [B] synlynk worker: agent completes → story.status='done' → re-evaluate dependents<br>
+      [C] schedules.next_run reached → cron tick event<br>
+      <span style="color:#888">───────────────────────────────────────────────────────────</span><br><br>
+
+      <span style="color:#60a5fa">daemon (or synlynk dispatch --once)</span> wakes on any trigger:<br>
+      &nbsp;&nbsp;SELECT stories WHERE status='pending' AND depends_on all done<br>
+      &nbsp;&nbsp;FOR each candidate story:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;1. resolve role from story.role_id<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;2. check entitlements → decision: auto | approval | hold | reject<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;3a. if auto:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; score agent_profiles for this role + domain + quota<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; INSERT INTO inbox {role_id, story_id, status='pending'}<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; INSERT INTO dispatch_log {decision='auto', routing_reason}<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;3b. if approval:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; emit event type='approval_requested'<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; send email → wait for reply → on YES → goto 3a<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;3c. if reject: emit event type='blocked', block_reason='entitlement'<br><br>
+
+      <span style="color:#34d399">agent worker</span> (daemon-launched or synlynk worker --role Builder):<br>
+      &nbsp;&nbsp;WATCH inbox WHERE role_id=my_role AND status='pending'<br>
+      &nbsp;&nbsp;claim story → UPDATE inbox SET status='claimed', claimed_by=my_profile_id<br>
+      &nbsp;&nbsp;run: synlynk exec claude (with story context injected)<br>
+      &nbsp;&nbsp;on completion → UPDATE stories SET status='done', actual_tokens=N<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ emit event type='completed' → daemon re-evaluates
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+  <p class="label">Identity keypair — where it fits in dispatch</p>
+  <p style="margin-top:0.5rem;font-size:0.86em;line-height:1.9">
+    Every <code>dispatch_log</code> row and every <code>completed</code> event is signed with the local Ed25519 private key (<code>.synlynk/identity.key</code>). Signature stored as <code>sig TEXT</code> on the event row. This proves which synlynk instance made each dispatch decision — the audit trail is non-repudiable. At Tokq Alpha, the same signature verifies against the registered public key in the Tokq cloud.
+  </p>
+</div>

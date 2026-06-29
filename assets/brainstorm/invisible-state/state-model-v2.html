@@ -1,0 +1,110 @@
+<h2>The core problem: state lives in two places</h2>
+<p class="subtitle">Today vs. the invisible state model — pick which framing resonates</p>
+
+<div class="split" style="gap:24px;align-items:start">
+
+  <!-- TODAY -->
+  <div style="flex:1">
+    <div class="mockup">
+      <div class="mockup-header" style="background:#c0392b;color:#fff;font-weight:700">TODAY — state split across git + SQLite</div>
+      <div class="mockup-body" style="font-size:13px;padding:16px;background:#1e1e1e">
+
+        <div style="background:#2a1a1a;border:1.5px solid #e74c3c;border-radius:6px;padding:12px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#ff6b6b;text-transform:uppercase;margin-bottom:8px">git-tracked — causes conflicts</div>
+          <div style="display:grid;gap:5px">
+            <div style="display:flex;align-items:center;gap:8px;color:#fff"><span style="color:#ff6b6b;font-size:16px">⚡</span><code style="color:#ffa07a">project-docs/todo.md</code></div>
+            <div style="display:flex;align-items:center;gap:8px;color:#fff"><span style="color:#ff6b6b;font-size:16px">⚡</span><code style="color:#ffa07a">project-docs/roadmap.md</code></div>
+            <div style="display:flex;align-items:center;gap:8px;color:#fff"><span style="color:#ff6b6b;font-size:16px">⚡</span><code style="color:#ffa07a">project-docs/memory.md</code></div>
+            <div style="display:flex;align-items:center;gap:8px;color:#fff"><span style="color:#ff6b6b;font-size:16px">⚡</span><code style="color:#ffa07a">project-docs/devlogs/nikhil.md</code></div>
+            <div style="display:flex;align-items:center;gap:8px;color:#ccc"><span style="color:#f39c12;font-size:16px">~</span><code style="color:#f0c080">project-docs/costs.md</code></div>
+            <div style="display:flex;align-items:center;gap:8px;color:#ccc"><span style="color:#f39c12;font-size:16px">~</span><code style="color:#f0c080">project-docs/source-map.md</code></div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:#aaa">⚡ merge conflict on every worktree or branch pull</div>
+        </div>
+
+        <div style="background:#1a2a1a;border:1.5px solid #27ae60;border-radius:6px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#5dbb7a;text-transform:uppercase;margin-bottom:8px">SQLite — no conflicts</div>
+          <div style="display:grid;gap:4px;font-size:12px;color:#ccc">
+            <div><code style="color:#7ec8a0">stories</code> — task metadata</div>
+            <div><code style="color:#7ec8a0">capability_ratings</code> — quality scores</div>
+            <div><code style="color:#7ec8a0">source_symbols</code> — file scan</div>
+            <div><code style="color:#7ec8a0">autopilot_runs</code> — agent history</div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:#aaa">~/.synlynk/projects/&lt;hash&gt;/state.db — shared across worktrees</div>
+        </div>
+
+        <div style="margin-top:12px;padding:10px;background:#2a2500;border:1px solid #856404;border-radius:6px;font-size:12px;color:#ffd966">
+          <strong>Why conflicts happen:</strong> checkpoint(), devlog appends, todo updates all write to git-tracked files → conflict on pull from any worktree.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FUTURE -->
+  <div style="flex:1">
+    <div class="mockup">
+      <div class="mockup-header" style="background:#1a6b3c;color:#fff;font-weight:700">FUTURE — invisible state, human talks to agent</div>
+      <div class="mockup-body" style="font-size:13px;padding:16px;background:#1e1e1e">
+
+        <div style="background:#1a2a1a;border:1.5px solid #27ae60;border-radius:6px;padding:12px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#5dbb7a;text-transform:uppercase;margin-bottom:6px">git-tracked — only your code</div>
+          <div style="font-size:12px;color:#ccc;line-height:1.7">
+            Your actual source code.<br>
+            <code style="color:#7ec8a0">CLAUDE.md</code> / <code style="color:#7ec8a0">AGENTS.md</code> — session protocol only.<br>
+            <em style="color:#aaa">Nothing else from synlynk lives in git.</em>
+          </div>
+        </div>
+
+        <div style="background:#1a1f2a;border:1.5px solid #3498db;border-radius:6px;padding:12px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#5ba4d4;text-transform:uppercase;margin-bottom:8px">local machine — ~/.synlynk/ (never committed)</div>
+          <div style="display:grid;gap:5px;font-size:12px;color:#ccc">
+            <div><code style="color:#7ab8e8">projects/&lt;hash&gt;/state.db</code> — all project state</div>
+            <div><code style="color:#7ab8e8">projects/&lt;hash&gt;/context.md</code> — generated per dispatch</div>
+            <div><code style="color:#7ab8e8">projects/&lt;hash&gt;/devlog.md</code> — local session notes</div>
+            <div><code style="color:#7ab8e8">projects/&lt;hash&gt;/memory.md</code> — decisions cache</div>
+          </div>
+        </div>
+
+        <div style="background:#1f1a2a;border:1.5px solid #9b59b6;border-radius:6px;padding:12px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#c084e8;text-transform:uppercase;margin-bottom:6px">team sync — relay (v0.9.3)</div>
+          <div style="font-size:12px;color:#ccc;line-height:1.7">
+            State propagates peer-to-peer over WSS.<br>
+            No git involved. No merge conflicts. Ever.
+          </div>
+        </div>
+
+        <div style="padding:10px;background:#0d2a1a;border:1px solid #27ae60;border-radius:6px;font-size:12px;color:#a8e6c3;line-height:1.8">
+          <strong style="color:#5dbb7a">Human interface:</strong><br>
+          "what's next?" → agent answers from state.db<br>
+          "show me the roadmap" → generated on demand<br>
+          Zero markdown to manage. Zero conflicts.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="options" style="margin-top:24px">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Full invisible state</h3>
+      <p>Move everything out of git. SQLite is the only source of truth. Markdown generated on demand. Relay syncs teams. Clean break.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Keep memory.md in git, move the rest</h3>
+      <p>The one file humans genuinely author stays git-tracked. Everything generated moves to ~/.synlynk/. Lower-risk migration path.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Absorb memory into SQLite too</h3>
+      <p>A notes table holds decisions with author + timestamp. synlynk memory add "..." CLI. Relay-synced. synlynk export generates any markdown view. Total consistency.</p>
+    </div>
+  </div>
+</div>

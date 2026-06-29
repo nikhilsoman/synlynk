@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog Post 17 — Codex Headless Dispatch: <code>codex exec</code> Unlocks the Third Agent</h1>
+<h2>Broader Goal (End of Previous PR)</h2>
+<p>PR #50 seeded the capability ledger with 20 PRs of Claude history and proved the AGY dispatch pipeline end-to-end. Codex was confirmed TTY-blocked — <code>synlynk dispatch codex</code> started the process but Codex exited immediately with <code>stdin is not a terminal</code>. The ledger had Claude and AGY data; Codex was a placeholder.</p>
+<h2>What Changed</h2>
+<p>The fix turned out to be a single baseline update. Codex ships a <code>codex exec</code> subcommand designed explicitly for non-interactive use. It reads the prompt from stdin (via <code>-</code> argument), runs without a TTY, and exits when done. The only other flags needed:</p>
+<ul>
+<li><code>-s read-only</code> — sandboxes any shell commands Codex issues during the task</li>
+<li><code>--dangerously-bypass-approvals-and-sandbox</code> — skips interactive approval prompts so the process runs unattended</li>
+</ul>
+<p>Updated baseline in <code>AGENT_CAPABILITY_BASELINES[&quot;codex&quot;]</code>:</p>
+<pre><code class="language-python">&quot;non_interactive_flags&quot;: [
+    &quot;exec&quot;, &quot;-&quot;,
+    &quot;-s&quot;, &quot;read-only&quot;,
+    &quot;--dangerously-bypass-approvals-and-sandbox&quot;,
+],
+</code></pre>
+<p>This generates a dispatch shell command of:</p>
+<pre><code class="language-bash">codex exec - -s read-only --dangerously-bypass-approvals-and-sandbox &lt; prompt.txt &gt; log.txt 2&gt;&amp;1
+</code></pre>
+<p>No PTY wrapper, no <code>tmux</code>, no <code>pexpect</code>. One config change.</p>
+<h2>Verification</h2>
+<p>Dispatched a real task headlessly to confirm:</p>
+<pre><code>synlynk dispatch codex --task &quot;List the top 3 functions in bin/synlynk.py by line count&quot; --force-agent
+</code></pre>
+<p>Codex wrote Python AST code to parse <code>bin/synlynk.py</code>, counted lines per function, and returned:</p>
+<pre><code>1. main — 237 lines
+2. _build_templates — 220 lines
+3. init — 174 lines
+</code></pre>
+<p>Exit 0, 17,850 tokens used, 468 lines of log output including the tool call trace.</p>
+<h2>Test</h2>
+<p><code>test_codex_baseline_uses_exec_subcommand</code> asserts that the shell command built by <code>dispatch_agent(&quot;codex&quot;, ...)</code> contains <code>codex exec</code> and <code>--dangerously-bypass-approvals-and-sandbox</code>. Test count: 318.</p>
+<h2>New Goalpost</h2>
+<p>All three agents — Claude, AGY, Codex — can now be dispatched headlessly via <code>synlynk dispatch</code>. The capability ledger has real data for Claude and AGY; Codex now needs live dispatch stories attested to complete its baseline. Definition B (three-agent Autopilot: PM Agent, Marketing Intern, Support Engineer) can begin.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

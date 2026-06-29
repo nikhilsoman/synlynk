@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>14 · v0.4.2 — Task Status Model</h1>
+<p><strong>Series:</strong> Building synlynk — a single-file Python CLI that turns any AI CLI into a context-aware multi-agent workgroup harness.</p>
+<hr>
+<h2>Where we were</h2>
+<p>v0.4.1 (PR #45) shipped <strong>Instruction Reach</strong> — synlynk now writes its context-injection protocol into 7 IDE and CLI instruction targets (CLAUDE.md, GEMINI.md, AGENTS.md, Cursor MDC, Copilot instructions, Windsurf rules, AI_INSTRUCTIONS.md) with SHA-based drift detection. Every agent in the workgroup receives identical constraints from a single source of truth.</p>
+<p>The broader goal at the end of v0.4.1: move synlynk toward a model where it can <em>operate itself</em> — dispatching Claude, AGY, and Codex on real tasks, with the capability ledger accumulating enough signal to route intelligently. That requires the project state layer (todo.md, roadmap.md, memory.md) to be expressive enough to represent not just what's open and what's done, but the full lifecycle of a task.</p>
+<hr>
+<h2>The shift this PR makes</h2>
+<p>v0.4.2 is a focused quality-of-life upgrade: the binary checkbox model (<code>[ ]</code>/<code>[x]</code>) is insufficient for real multi-agent workflows. When an agent supersedes an approach or scope is absorbed into another task, <code>[x]</code> is technically wrong (the work wasn't completed, it was <em>resolved differently</em>). And deferred tasks disappear from context even though they represent active intent.</p>
+<p>The fix: replace two states with five.</p>
+<hr>
+<h2>What shipped</h2>
+<figure class="brainstorm-visual">
+  <iframe src="/assets/brainstorm/task-status-model/task-status-lifecycle.html" title="Five-State Task Status Model" loading="lazy" frameborder="0"></iframe>
+  <figcaption>Five-State Task Status Model</figcaption>
+</figure>
+<h3><code>TASK_STATUSES</code> constant</h3>
+<p>A module-level dict that makes the 5-state vocabulary explicit and testable:</p>
+<pre><code class="language-python">TASK_STATUSES = {
+    &quot;[ ]&quot;: &quot;active&quot;,
+    &quot;[x]&quot;: &quot;done&quot;,
+    &quot;[-]&quot;: &quot;deferred&quot;,
+    &quot;[~]&quot;: &quot;superseded&quot;,
+    &quot;[&gt;]&quot;: &quot;absorbed&quot;,
+}
+</code></pre>
+<h3><code>generate_context()</code> — deferred tasks in context</h3>
+<p>Previously: only <code>[ ]</code> lines were surfaced in the context snapshot agents receive.</p>
+<p>Now: <code>[ ]</code> tasks appear under <code>## Active Tasks</code>; <code>[-]</code> deferred tasks appear under <code>### Deferred</code>. Superseded <code>[~]</code> and absorbed <code>[&gt;]</code> are intentionally excluded — they are resolved states that don't require agent attention.</p>
+<pre><code class="language-python">active, deferred = [], []
+for line in f:
+    if &quot;- [ ]&quot; in line:   active.append(line)
+    elif &quot;- [-]&quot; in line: deferred.append(line)
+if active or deferred:
+    out.write(&quot;## Active Tasks\n&quot;)
+    out.writelines(active)
+    if deferred:
+        out.write(&quot;\n### Deferred\n&quot;)
+        out.writelines(deferred)
+</code></pre>
+<h3><code>checkpoint()</code> — archives all resolved states</h3>
+<p>Previously: only <code>[x]</code> (done) lines were archived and removed from todo.md.</p>
+<p>Now: <code>[x]</code>, <code>[~]</code>, and <code>[&gt;]</code> are all archived as &quot;Resolved&quot;. Deferred <code>[-]</code> lines are kept. The devlog section heading changed from &quot;Completed&quot; to &quot;Resolved&quot; to reflect the broader semantics.</p>
+<p>Regex: <code>r'\s*-\s*\[(x|~|&gt;)\]'</code></p>
+<h3>Agent instruction templates</h3>
+<p>All three instruction builders (<code>_build_templates</code>, the GEMINI.md/AGENTS.md variant, and <code>_build_windsurf_rules</code>) now include the 5-state legend instead of &quot;Mark tasks <code>[x]</code>&quot;:</p>
+<pre><code>Update task status in project-docs/todo.md — do not delete tasks:
+`[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[&gt;]` absorbed
+</code></pre>
+<h3><code>init()</code> todo template</h3>
+<p>New init todo.md includes a one-line HTML comment legend so the format is self-documenting:</p>
+<pre><code class="language-markdown">&lt;!-- Status: [ ] active  [x] done  [-] deferred  [~] superseded  [&gt;] absorbed --&gt;
+</code></pre>
+<h3>Tests</h3>
+<p>7 new tests, 251 total passing:</p>
+<ul>
+<li><code>test_task_statuses_constant_defined</code> — validates all 5 states in the dict</li>
+<li><code>test_generate_context_includes_deferred_tasks</code> — <code>[-]</code> in context, <code>[x]</code> not</li>
+<li><code>test_generate_context_excludes_superseded_tasks</code> — <code>[~]</code> excluded</li>
+<li><code>test_generate_context_excludes_absorbed_tasks</code> — <code>[&gt;]</code> excluded</li>
+<li><code>test_checkpoint_archives_superseded_tasks</code> — <code>[~]</code> removed from todo after checkpoint</li>
+<li><code>test_checkpoint_archives_absorbed_tasks</code> — <code>[&gt;]</code> removed from todo after checkpoint</li>
+<li><code>test_checkpoint_keeps_deferred_tasks</code> — <code>[-]</code> survives checkpoint</li>
+</ul>
+<hr>
+<h2>Progress on the long arc</h2>
+<p>The 5-state model removes a subtle but important ambiguity that would have corrupted the capability ledger. If an agent marks a task <code>[x]</code> because the approach was superseded (not because the work was done), the telemetry records a false success. With <code>[~]</code> and <code>[&gt;]</code> as distinct resolved states, checkpoint can archive them separately — and future scoring logic can treat them differently from genuine completions.</p>
+<p>The three remaining brainstorm initiatives from this session are:</p>
+<ul>
+<li><strong>v0.5.1 Static Scan Quality</strong> — <code>generate_context()</code> reads source code architecture beyond README + git log</li>
+<li><strong>v0.6.1 Capability Dogfood</strong> — use synlynk to build synlynk, accumulate real routing signal</li>
+<li><strong>v0.7.0 Async Pipeline + Daemon</strong> — HTTP context server, background dispatch, TUI</li>
+</ul>
+<hr>
+<h2>New goalpost</h2>
+<p>v0.4.2 is the last patch on the 0.4.x line. The <code>project-docs/</code> state layer is now expressive enough to support the capability ledger without ambiguity.</p>
+<p>Next: <strong>v0.5.1 Static Scan Quality</strong> — <code>generate_context()</code> currently misses the most valuable signal available without AI calls: the repo's source code architecture. Surfacing key function signatures, module structure, and cross-file dependency patterns in context will narrow the semantic gap between what agents read and what the codebase actually contains.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

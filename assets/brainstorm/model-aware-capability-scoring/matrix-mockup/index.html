@@ -1,0 +1,220 @@
+<h2>Feature Matrix: Visual Design</h2>
+<p class="subtitle">Both view modes shown. The toggle switches between them. Click a view to select your preferred default.</p>
+
+<div style="display:flex;gap:12px;margin-bottom:28px;justify-content:center">
+  <button onclick="showView('os')" id="btn-os" style="padding:7px 18px;border-radius:20px;border:1px solid #2EC4A0;background:#2EC4A0;color:#fff;font-size:13px;cursor:pointer;font-weight:500">OS Layer view</button>
+  <button onclick="showView('user')" id="btn-user" style="padding:7px 18px;border-radius:20px;border:1px solid #ddd;background:#fff;color:#666;font-size:13px;cursor:pointer">User-facing view</button>
+</div>
+
+<!-- OS LAYER VIEW -->
+<div id="view-os">
+<div class="mockup">
+  <div class="mockup-header">OS Layer View — /features/</div>
+  <div class="mockup-body" style="padding:0;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+      <thead>
+        <tr style="border-bottom:2px solid #e8e8e8">
+          <th style="text-align:left;padding:14px 16px;font-size:12px;color:#999;font-weight:500;width:240px">Feature</th>
+          <th style="text-align:center;padding:14px 12px;min-width:100px">
+            <div style="font-size:12px;font-weight:600;color:#aaa">v0.2.x</div>
+            <div style="font-size:10px;color:#bbb;margin-top:2px">archived</div>
+          </th>
+          <th style="text-align:center;padding:14px 12px;min-width:100px">
+            <div style="font-size:12px;font-weight:600;color:#555">v0.3.x</div>
+            <div style="font-size:10px;color:#aaa;margin-top:2px">stable</div>
+          </th>
+          <th style="text-align:center;padding:14px 12px;min-width:110px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">
+            <div style="font-size:12px;font-weight:700;color:#2EC4A0">v0.4.x</div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+              <a href="#" style="font-size:10px;background:#2EC4A0;color:#fff;padding:2px 8px;border-radius:10px;text-decoration:none">↓ install</a>
+              <a href="#" style="font-size:10px;color:#2EC4A0;text-decoration:none">changelog →</a>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- KERNEL section -->
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Kernel — Context Engine</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Context injection</a><br><span style="font-size:11px;color:#aaa">Reads project-docs/ → .synlynk/context.md</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Flatline detection</a><br><span style="font-size:11px;color:#aaa">Halts on repeated identical failures</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <!-- FILESYSTEM section -->
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Filesystem — State & Telemetry</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Cost tracking</a><br><span style="font-size:11px;color:#aaa">Per-session $ + token attribution</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Budget enforcement</a><br><span style="font-size:11px;color:#aaa">Hard limits on USD + request count</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <!-- IPC section -->
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">IPC — Agent Files & Coordination</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Polyglot agent files</a><br><span style="font-size:11px;color:#aaa">CLAUDE.md · GEMINI.md · AGENTS.md</span></td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <!-- SCHEDULER section -->
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Scheduler — Dispatch</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px">
+            <a href="#" style="color:#222;text-decoration:none;font-size:13px">Trio Protocol</a>
+            <span style="display:inline-block;font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:500">new</span>
+            <br><span style="font-size:11px;color:#aaa">Architect → Build → Verify pipeline</span>
+          </td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px">
+            <a href="#" style="color:#222;text-decoration:none;font-size:13px">Board management</a>
+            <span style="display:inline-block;font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:500">new</span>
+            <br><span style="font-size:11px;color:#aaa">synlynk start — autonomous GitHub Projects v2</span>
+          </td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:12px 16px;font-size:11px;color:#bbb;border-top:1px solid #f0f0f0">
+      Older releases: <a href="/releases/" style="color:#aaa">View full release history →</a>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- USER-FACING VIEW -->
+<div id="view-user" style="display:none">
+<div class="mockup">
+  <div class="mockup-header">User-Facing View — /features/</div>
+  <div class="mockup-body" style="padding:0;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+      <thead>
+        <tr style="border-bottom:2px solid #e8e8e8">
+          <th style="text-align:left;padding:14px 16px;font-size:12px;color:#999;font-weight:500;width:240px">Feature</th>
+          <th style="text-align:center;padding:14px 12px;min-width:100px">
+            <div style="font-size:12px;font-weight:600;color:#aaa">v0.2.x</div>
+            <div style="font-size:10px;color:#bbb;margin-top:2px">archived</div>
+          </th>
+          <th style="text-align:center;padding:14px 12px;min-width:100px">
+            <div style="font-size:12px;font-weight:600;color:#555">v0.3.x</div>
+            <div style="font-size:10px;color:#aaa;margin-top:2px">stable</div>
+          </th>
+          <th style="text-align:center;padding:14px 12px;min-width:110px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">
+            <div style="font-size:12px;font-weight:700;color:#2EC4A0">v0.4.x</div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+              <a href="#" style="font-size:10px;background:#2EC4A0;color:#fff;padding:2px 8px;border-radius:10px;text-decoration:none">↓ install</a>
+              <a href="#" style="font-size:10px;color:#2EC4A0;text-decoration:none">changelog →</a>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Context Management</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Context injection</a><br><span style="font-size:11px;color:#aaa">Reads project-docs/ → .synlynk/context.md</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Loop detection</a><br><span style="font-size:11px;color:#aaa">Halts on repeated identical failures</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Cost & Visibility</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Cost tracking</a><br><span style="font-size:11px;color:#aaa">Per-session $ + token attribution</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Budget enforcement</a><br><span style="font-size:11px;color:#aaa">Hard limits on USD + request count</span></td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Agent Coordination</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px"><a href="#" style="color:#222;text-decoration:none;font-size:13px">Polyglot agent files</a><br><span style="font-size:11px;color:#aaa">CLAUDE.md · GEMINI.md · AGENTS.md</span></td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px">✓</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr style="background:#f7f7f8">
+          <td colspan="4" style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:2px;color:#999;text-transform:uppercase">Autonomy & Dispatch</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:10px 16px">
+            <a href="#" style="color:#222;text-decoration:none;font-size:13px">Trio Protocol</a>
+            <span style="display:inline-block;font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:500">new</span>
+            <br><span style="font-size:11px;color:#aaa">Architect → Build → Verify pipeline</span>
+          </td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px">
+            <a href="#" style="color:#222;text-decoration:none;font-size:13px">Board management</a>
+            <span style="display:inline-block;font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:500">new</span>
+            <br><span style="font-size:11px;color:#aaa">synlynk start — autonomous GitHub Projects v2</span>
+          </td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#ddd;font-size:16px">—</td>
+          <td style="text-align:center;color:#2EC4A0;font-size:16px;background:#f9fffe;border-left:2px solid #2EC4A0;border-right:2px solid #2EC4A0">✓</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:12px 16px;font-size:11px;color:#bbb;border-top:1px solid #f0f0f0">
+      Older releases: <a href="/releases/" style="color:#aaa">View full release history →</a>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function showView(v) {
+  document.getElementById('view-os').style.display = v === 'os' ? '' : 'none';
+  document.getElementById('view-user').style.display = v === 'user' ? '' : 'none';
+  document.getElementById('btn-os').style.background = v === 'os' ? '#2EC4A0' : '#fff';
+  document.getElementById('btn-os').style.color = v === 'os' ? '#fff' : '#666';
+  document.getElementById('btn-os').style.borderColor = v === 'os' ? '#2EC4A0' : '#ddd';
+  document.getElementById('btn-user').style.background = v === 'user' ? '#2EC4A0' : '#fff';
+  document.getElementById('btn-user').style.color = v === 'user' ? '#fff' : '#666';
+  document.getElementById('btn-user').style.borderColor = v === 'user' ? '#2EC4A0' : '#ddd';
+}
+</script>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Sentinel Observability System</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:16px;}
+.title{font-size:14px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:14px;}
+.center{display:flex;justify-content:center;margin-bottom:12px;}
+.hub{background:var(--bg-card);border:2px solid var(--blue);border-radius:999px;width:118px;height:118px;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;}
+.hub .l{font-size:9px;color:var(--blue);letter-spacing:1px;text-transform:uppercase;}
+.hub .n{font-size:15px;font-weight:700;margin-top:2px;}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:780px;margin:0 auto;}
+.detector{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:10px;
+}
+.detector.halt{border-color:#f87171;}
+.detector.warn{border-color:var(--orange);}
+.detector.info{border-color:var(--blue);}
+.det-name{font-weight:600;margin-bottom:2px;font-size:11px;}
+.det-desc{font-size:9px;color:var(--muted);line-height:1.25;}
+.legend{display:flex;gap:14px;justify-content:center;margin-top:14px;font-size:9px;color:var(--muted);}
+.leg-item{display:flex;align-items:center;gap:5px;}
+.leg-dot{width:6px;height:6px;border-radius:50%;}
+.leg-halt{background:#f87171;}
+.leg-warn{background:var(--orange);}
+.leg-info{background:var(--blue);}
+</style>
+</head>
+<body>
+<div class="title">v0.3.1 — The 9-Signal Self-Diagnostic Layer</div>
+
+<div class="center">
+  <div class="hub">
+    <div class="l">SENTINEL</div>
+    <div class="n">Engine</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="detector info"><div class="det-name">Token Scraping</div><div class="det-desc">Regex parse of stdout for usage</div></div>
+  <div class="detector info"><div class="det-name">Zombie Detection</div><div class="det-desc">Daemon pid file but no process</div></div>
+  <div class="detector info"><div class="det-name">Stall Detection</div><div class="det-desc">No output for long running task</div></div>
+  <div class="detector halt"><div class="det-name">Quota Exhausted</div><div class="det-desc">Budget or rate limit breach</div></div>
+  <div class="detector info"><div class="det-name">Success Loop</div><div class="det-desc">Same output repeated</div></div>
+  <div class="detector warn"><div class="det-name">Burn Rate</div><div class="det-desc">Cost velocity too high</div></div>
+  <div class="detector warn"><div class="det-name">Context Bloat</div><div class="det-desc">Context.md size warning</div></div>
+  <div class="detector halt"><div class="det-name">Pre-Exec Gate</div><div class="det-desc">CRITICAL sentinel blocks run</div></div>
+  <div class="detector info"><div class="det-name">Flatline</div><div class="det-desc">3× identical non-zero exits</div></div>
+</div>
+
+<div class="legend">
+  <div class="leg-item"><span class="leg-dot leg-halt"></span> Halts execution</div>
+  <div class="leg-item"><span class="leg-dot leg-warn"></span> Warning</div>
+  <div class="leg-item"><span class="leg-dot leg-info"></span> Telemetry / info</div>
+</div>
+</body>
+</html>

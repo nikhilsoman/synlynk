@@ -1,0 +1,119 @@
+<h2>Revised Roadmap — Shape & Tracks</h2>
+<p class="subtitle">Does this overall structure feel right before we fill in the details?</p>
+
+<div class="section">
+  <span class="label">Four parallel tracks</span>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:12px;">
+    <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:8px;padding:14px;">
+      <div style="font-size:11px;font-weight:700;color:#818cf8;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">🧱 Core Product</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.6;">Onboarding · Context quality · Token budgets · Value visibility</div>
+    </div>
+    <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);border-radius:8px;padding:14px;">
+      <div style="font-size:11px;font-weight:700;color:#34d399;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">🤝 Community Layer</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.6;">Workgroup → Team → Enterprise → Disciplines</div>
+    </div>
+    <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:14px;">
+      <div style="font-size:11px;font-weight:700;color:#fbbf24;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">🌐 Public Presence</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.6;">synlynk.com · Public blog (Marketing Agent) · Contributor blog stays in GitHub</div>
+    </div>
+    <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px;">
+      <div style="font-size:11px;font-weight:700;color:#f87171;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">☁️ Server-Side Strategy</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.6;">Articulate only — no implementation until v1.x community needs it</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <span class="label">Proposed version arc</span>
+
+  <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+
+    <!-- Shipped -->
+    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;">
+      <div style="font-size:11px;color:#6b7280;padding-top:4px;font-style:italic;">SHIPPED</div>
+      <div style="background:rgba(30,30,40,0.6);border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;grid-column:2/4;">
+        <span style="font-weight:700;color:#818cf8;">v0.1 – v0.8.0</span>
+        <span style="color:#94a3b8;margin-left:10px;">Kernel · IPC · Capability Engine · Source Scan · Support Engineer Agent ✅</span>
+      </div>
+    </div>
+
+    <!-- v0.9.0 - THIS WEEK -->
+    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;">
+      <div style="font-size:11px;color:#fbbf24;padding-top:4px;font-weight:700;">THIS WEEK</div>
+      <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);border-radius:6px;padding:10px 14px;grid-column:2/4;">
+        <span style="font-weight:700;color:#34d399;">v0.9.0 — Team Onboarding</span>
+        <span style="color:#94a3b8;margin-left:10px;">Core Product + Community track start</span>
+        <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.7;">
+          • <code>synlynk join</code> — new member onboard to existing project in 60 seconds<br>
+          • Mature-project context: repo scan → rich CLAUDE.md / GEMINI.md / AGENTS.md generation<br>
+          • Gemini + Codex context parity with Claude (all three get equally good context)<br>
+          • <code>synlynk team status</code> — who's working on what, recent devlog entries<br>
+          • Token budgets surfaced during <code>synlynk story add</code> + audited at PR merge
+        </div>
+      </div>
+    </div>
+
+    <!-- v0.10.0 -->
+    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;">
+      <div style="font-size:11px;color:#94a3b8;padding-top:4px;">2–3 weeks</div>
+      <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.25);border-radius:6px;padding:10px 14px;grid-column:2/4;">
+        <span style="font-weight:700;color:#6ee7b7;">v0.10.0 — Multi-Repo Workspace</span>
+        <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.7;">
+          • <code>synlynk workspace init/join</code> — link repos into one workspace<br>
+          • Cross-repo Epic spanning multiple repos (frontend + backend + infra)<br>
+          • Shared context slice: workspace summary injected alongside per-repo context<br>
+          • Support Engineer monitors all repos in workspace
+        </div>
+      </div>
+    </div>
+
+    <!-- v1.0.0 -->
+    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;">
+      <div style="font-size:11px;color:#94a3b8;padding-top:4px;">4–6 weeks</div>
+      <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;grid-column:2/4;">
+        <span style="font-weight:700;color:#a5b4fc;">v1.0.0 — Community Layer: Local Workgroup</span>
+        <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.7;">
+          • Workgroup protocol: shared capability ledger across humans + agents + autopilots<br>
+          • PM Agent + Marketing Agent join Support Engineer as first-class autopilots<br>
+          • Token/cost visibility across workgroup (who spent what, on which epic)<br>
+          • Stable CLI contract · pipx / Homebrew distribution · public launch
+        </div>
+      </div>
+    </div>
+
+    <!-- v1.1.0+ -->
+    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;">
+      <div style="font-size:11px;color:#94a3b8;padding-top:4px;">v1.1 – v1.x</div>
+      <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:10px 14px;grid-column:2/4;">
+        <span style="font-weight:700;color:#fca5a5;">Community Expansion (server-side needed here)</span>
+        <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.7;">
+          v1.1 — Cross-workgroup (team level, same project/multi-repo)<br>
+          v1.2 — Enterprise workspace (cross-team)<br>
+          v1.3 — Broader communities (discipline/domain)<br>
+          <span style="color:#f87171;">→ Server-side relay needed at v1.1; Tokq convergence accelerates v1.2+</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deferred -->
+    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:start;">
+      <div style="font-size:11px;color:#6b7280;padding-top:4px;font-style:italic;">DEFERRED</div>
+      <div style="background:rgba(30,30,40,0.4);border:1px solid rgba(75,85,99,0.3);border-radius:6px;padding:10px 14px;grid-column:2/4;opacity:0.7;">
+        <span style="font-weight:600;color:#9ca3af;">Async Daemon · HTTP Context Server · MCP / Open Context Protocol</span>
+        <span style="color:#6b7280;margin-left:8px;font-size:12px;">→ Absorbed into v1.1 server-side when actually needed</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:14px;">
+  <span class="label" style="color:#fbbf24;">Public Presence (parallel track, starts now)</span>
+  <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.7;">
+    • <strong>synlynk.com</strong> — independent hosting (not GitHub Pages), supports interactivity + community onboarding<br>
+    • <strong>Public blog</strong> — maintained by Marketing Agent (Autopilot), richer graphically, public consumption<br>
+    • <strong>Contributor blog</strong> — stays in GitHub (<code>docs/blog/</code>), technical PR-by-PR updates, current posts stay here
+  </div>
+</div>
+
+<p style="margin-top:20px;font-size:13px;color:#94a3b8;text-align:center;">Does this overall shape feel right? Any tracks or versions you'd move, merge, or cut?</p>

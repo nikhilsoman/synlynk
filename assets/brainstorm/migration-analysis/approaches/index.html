@@ -1,0 +1,66 @@
+<h2>synlynk v0.4.0 — Three Approaches</h2>
+<p class="subtitle">How to structure migration + <code>synlynk start</code></p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Separate <code>synlynk migrate</code> command <span style="color:#4ade80;font-size:0.8em">★ recommended</span></h3>
+      <p>Migration is its own explicit command. <code>synlynk init</code> stays unchanged. User runs <code>synlynk migrate</code> once when ready to adopt the layout.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>One-time op gets its own command — clear intent</li>
+          <li>Init stays fast and simple</li>
+          <li>Testable independently</li>
+          <li>User controls timing</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>User has to discover the command</li>
+          <li>Two commands to bootstrap a new project</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Migration woven into <code>synlynk init</code></h3>
+      <p>Before writing any files, <code>init</code> scans the repo, shows what it found, and walks through merge prompts inline. One command does everything.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Single command to fully bootstrap</li>
+          <li>Impossible to skip migration accidentally</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Init becomes much longer and interactive</li>
+          <li>Existing users hit migration scan even on re-runs</li>
+          <li>Harder to test in isolation</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Migration via <code>synlynk doctor</code></h3>
+      <p><code>synlynk doctor</code> detects stray files and suggests running migration. Migration itself is still a separate command, but discovery is automatic on every health check.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Most discoverable — doctor surfaces it</li>
+          <li>Clean separation of detection vs. execution</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Two separate concepts to explain</li>
+          <li><code>doctor</code> not yet fully specced</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.05);border-radius:8px;border-left:3px solid #4ade80">
+  <p class="label">Recommendation</p>
+  <p style="margin:4px 0 0"><strong>A — separate <code>synlynk migrate</code></strong>. Migration is a one-time repo setup operation, not something init should do on every run. Clear command, clear purpose. We can add a hint to init output later: "Existing docs detected — run <code>synlynk migrate</code> to move them."</p>
+</div>

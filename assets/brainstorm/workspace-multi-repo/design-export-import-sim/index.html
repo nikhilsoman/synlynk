@@ -1,0 +1,145 @@
+<h2>Export / Import — How It Works in Practice</h2>
+<p class="subtitle">A simulated 3-day collaboration between Nikhil, Gaurav, and Kunal</p>
+
+<div class="section">
+  <p class="label">The daily sync loop</p>
+  <div class="mockup">
+    <div class="mockup-header">What the cadence actually looks like</div>
+    <div class="mockup-body" style="font-size:0.82em;line-height:2">
+      <strong>Morning:</strong> &nbsp;<code>synlynk workspace import gaurav-monday.json kunal-monday.json</code><br>
+      <span style="color:#888">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ merges their overnight work into your local state.db</span><br>
+      <span style="color:#888">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ 2–5 seconds. File size: ~50–200KB for a week of activity.</span><br><br>
+      <strong>During day:</strong> Work normally. <code>synlynk run</code>, <code>synlynk dispatch</code>, stories complete.<br>
+      <span style="color:#888">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ all events written to your local state.db, signed with your key.</span><br><br>
+      <strong>Evening:</strong> &nbsp;<code>synlynk workspace export --out nikhil-tuesday.json</code><br>
+      <span style="color:#888">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ share via Slack DM, email, shared Drive, or team git repo</span><br><br>
+      <span style="color:#34d399">Reality check: this is basically "git pull at start, git push at end" — but for state, not code.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Simulation — Day 1 timeline</p>
+  <div style="position:relative;padding-left:1.5rem">
+
+    <div style="border-left:2px solid #7c3aed44;padding-left:1rem;margin-bottom:0">
+
+      <div style="margin-bottom:1rem">
+        <div style="font-size:0.75em;color:#888;margin-bottom:0.2rem">09:00 — Nikhil</div>
+        <div style="padding:0.6rem 0.75rem;border:1px solid #7c3aed44;border-radius:6px;font-family:monospace;font-size:0.78em;line-height:1.8">
+          Creates Epic #12 "User Auth" (cross-repo: frontend + backend)<br>
+          Creates Story #31 "JWT endpoint" → role=Builder, repo=backend<br>
+          Creates Story #32 "Login form" → role=Builder, repo=frontend<br>
+          Dispatches Story #31 to Gaurav
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <div style="font-size:0.75em;color:#888;margin-bottom:0.2rem">09:15 — Nikhil exports + shares</div>
+        <div style="padding:0.6rem 0.75rem;border:1px solid #7c3aed44;border-radius:6px;font-family:monospace;font-size:0.78em;line-height:1.8">
+          <span style="color:#fbbf24">synlynk workspace export --out nikhil-day1-am.json</span><br>
+          → Slack: "Morning snapshot attached — Epic 12 ready, Story 31 assigned to you Gaurav"
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <div style="font-size:0.75em;color:#888;margin-bottom:0.2rem">09:30 — Gaurav imports</div>
+        <div style="padding:0.6rem 0.75rem;border:1px solid #06523444;border-radius:6px;font-family:monospace;font-size:0.78em;line-height:1.8">
+          <span style="color:#34d399">synlynk workspace import nikhil-day1-am.json</span><br>
+          → Merged: Epic #12, Story #31 (assigned), Story #32<br>
+          → Verified: Nikhil's m1 signature on all events ✓<br>
+          <span style="color:#fbbf24">synlynk story claim 31</span> → starts working on JWT endpoint
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <div style="font-size:0.75em;color:#888;margin-bottom:0.2rem">14:00 — Gaurav completes Story #31</div>
+        <div style="padding:0.6rem 0.75rem;border:1px solid #06523444;border-radius:6px;font-family:monospace;font-size:0.78em;line-height:1.8">
+          Story #31 → status=done, actual_tokens=42K<br>
+          Event: completed, sig=<span style="color:#34d399">m2-gaurav</span><br>
+          <span style="color:#fbbf24">synlynk workspace export --since last-import --out gaurav-day1-pm.json</span><br>
+          → Slack: "JWT endpoint done, export attached"
+        </div>
+      </div>
+
+      <div style="margin-bottom:0">
+        <div style="font-size:0.75em;color:#888;margin-bottom:0.2rem">14:10 — Nikhil imports Gaurav's update</div>
+        <div style="padding:0.6rem 0.75rem;border:1px solid #7c3aed44;border-radius:6px;font-family:monospace;font-size:0.78em;line-height:1.8">
+          <span style="color:#fbbf24">synlynk workspace import gaurav-day1-pm.json</span><br>
+          → Story #31: pending → done ✓ (Gaurav's m2 sig verified)<br>
+          → Story #32 auto-unblocked → dispatched to Nikhil (frontend login form)<br>
+          → costs.db: 42K tokens attributed to gaurav/m2
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">What happens when two people edit the same thing — conflict simulation</p>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Nikhil updates Story #32 (offline)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        Story #32 done_criteria updated:<br>
+        "Must pass Lighthouse score ≥ 90"<br>
+        ts: 14:22:01 · sig: m1<br>
+        status: in_progress
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Gaurav updates Story #32 (same time)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:0.78em;line-height:1.9">
+        Story #32 done_criteria updated:<br>
+        "Must handle OAuth2 redirect"<br>
+        ts: 14:23:45 · sig: m2<br>
+        status: in_progress
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:0.6rem;padding:0.75rem;border:1px solid #fbbf2444;border-radius:8px;font-size:0.82em;line-height:1.85">
+    <strong style="color:#fbbf24">On import — conflict surfaced, not silently merged:</strong><br><br>
+    <code style="font-size:0.9em">synlynk workspace import gaurav-day1-pm.json</code><br><br>
+    <span style="color:#f87171">⚠ Conflict: Story #32 done_criteria</span><br>
+    &nbsp;&nbsp;Local (14:22, m1-nikhil): "Must pass Lighthouse score ≥ 90"<br>
+    &nbsp;&nbsp;Import (14:23, m2-gaurav): "Must handle OAuth2 redirect"<br><br>
+    Options: <strong>[k]</strong>eep local · <strong>[t]</strong>ake import · <strong>[m]</strong>erge both · <strong>[s]</strong>kip<br><br>
+    <span style="color:#34d399">→ [m] merge: "Must pass Lighthouse ≥ 90 AND handle OAuth2 redirect"</span><br>
+    → Event emitted: conflict_resolved, resolver=nikhilsoman, ts=14:25
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">What's actually in the export file</p>
+  <div class="mockup">
+    <div class="mockup-header">nikhil-day1-am.json — structure (abbreviated)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:0.76em;line-height:1.9">
+      {<br>
+      &nbsp;&nbsp;"export_version": 1,<br>
+      &nbsp;&nbsp;"workspace_id": "my-product",<br>
+      &nbsp;&nbsp;"exported_by": { "machine_uuid": "m1", "git_user": "nikhilsoman" },<br>
+      &nbsp;&nbsp;"exported_at": "2026-06-07T09:15:00Z",<br>
+      &nbsp;&nbsp;"identity": { "public_key": "...", "fingerprint": "ab:cd:ef" },<br>
+      &nbsp;&nbsp;"since": null, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">← null = full export</span><br>
+      &nbsp;&nbsp;"entities": {<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;"epics": [ { "id": 12, "name": "User Auth", ... } ],<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;"stories": [ { "id": 31, "repo_id": "backend", ... },<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{ "id": 32, "repo_id": "frontend", ... } ],<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;"events": [ { "type": "story_created", "sig": "...", ... }, ... ],<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;"memory": [ ... ],<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;"constraints": [ ... ]<br>
+      &nbsp;&nbsp;}<br>
+      }<br><br>
+      <span style="color:#888">Full export of a 2-week project: ~80–150KB. --since last-import: ~5–20KB daily.</span>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:0.75rem;padding:0.875rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:0.84em;line-height:1.8">
+  <p class="label">Honest limitations</p>
+  <strong>It's manual cadence.</strong> You have to remember to export and share. Forgetting for 2 days means a bigger merge — more potential conflicts.<br><br>
+  <strong>Not real-time.</strong> Gaurav won't see Nikhil dispatching a story to him until the next import. For a small team with Slack, the "here's my export" message is the notification.<br><br>
+  <strong>Conflict resolution requires a human.</strong> The merge tool surfaces conflicts — it doesn't auto-resolve them. For done_criteria conflicts, that's correct. For status conflicts (both claiming a story?), the rule is: claimed status wins over pending, done wins over in_progress.<br><br>
+  <strong>This is a bridge, not the destination.</strong> Tokq Alpha replaces this entirely with NATS. The export/import design is deliberately simple because it won't last long — it just needs to be good enough for teams who want to use synlynk before Tokq ships.
+</div>

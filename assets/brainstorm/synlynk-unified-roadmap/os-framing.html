@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synlynk as OS</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; padding: 24px; }
+h1 { font-size: 1.4rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+.subtitle { color: #64748b; font-size: 0.88rem; margin-bottom: 28px; }
+
+/* ── OS Stack diagram ── */
+.os-wrap { display: grid; grid-template-columns: 1.2fr 1fr; gap: 28px; margin-bottom: 28px; }
+
+.os-stack { display: flex; flex-direction: column; gap: 0; }
+.os-label { font-size: 0.68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
+
+.layer {
+  padding: 12px 16px;
+  border-left: 3px solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  position: relative;
+  transition: background .15s;
+}
+.layer:hover { background: #0d1520; }
+.layer-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+.layer-body h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 3px; }
+.layer-body p  { font-size: 0.72rem; color: #64748b; line-height: 1.45; }
+.layer-body .impl { font-size: 0.68rem; color: #334155; margin-top: 4px; font-family: 'Menlo', monospace; }
+
+.layer-apps     { border-color: #7c3aed; background: #14102033; }
+.layer-apps h3  { color: #a78bfa; }
+.layer-shell    { border-color: #0284c7; background: #0a1a2333; }
+.layer-shell h3 { color: #38bdf8; }
+.layer-sched    { border-color: #0891b2; background: #0a1e2233; }
+.layer-sched h3 { color: #22d3ee; }
+.layer-ipc      { border-color: #0d9488; background: #0a1e1a33; }
+.layer-ipc h3   { color: #2dd4bf; }
+.layer-fs       { border-color: #15803d; background: #0a1a1033; }
+.layer-fs h3    { color: #4ade80; }
+.layer-kernel   { border-color: #b45309; background: #1a100833; }
+.layer-kernel h3{ color: #fbbf24; }
+
+.layer-divider { height: 1px; background: #1e293b; margin: 0; }
+
+/* ── Competitor placement ── */
+.comp-panel { }
+.comp-panel .os-label { margin-bottom: 10px; }
+
+.comp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.comp-card {
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid #1e293b;
+}
+.comp-card h4 { font-size: 0.78rem; font-weight: 700; margin-bottom: 6px; }
+.comp-card p  { font-size: 0.7rem; color: #64748b; line-height: 1.45; }
+.comp-card .layers-used { font-size: 0.65rem; margin-top: 6px; padding-top: 6px; border-top: 1px solid #1e293b; color: #475569; }
+
+.card-sp { background: #100e1a; }
+.card-sp h4 { color: #a78bfa; }
+.card-gs { background: #1a0f08; }
+.card-gs h4 { color: #fb923c; }
+
+/* ── Implication box ── */
+.implication {
+  grid-column: 1 / -1;
+  background: #080e1a;
+  border: 1px solid #1e3a5f;
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.implication h3 { color: #22d3ee; font-size: 0.85rem; font-weight: 700; margin-bottom: 14px; letter-spacing: .04em; text-transform: uppercase; }
+.impl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.impl-item { }
+.impl-item h4 { font-size: 0.77rem; font-weight: 700; color: #7dd3fc; margin-bottom: 5px; }
+.impl-item p  { font-size: 0.7rem; color: #64748b; line-height: 1.5; }
+
+/* ── New roadmap framing ── */
+.roadmap-new {
+  margin-top: 0;
+  background: #080c14;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.roadmap-new h3 { color: #f8fafc; font-size: 0.85rem; font-weight: 700; margin-bottom: 14px; letter-spacing: .04em; text-transform: uppercase; }
+.rm-row { display: flex; gap: 0; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
+.rm-phase {
+  flex: 1;
+  padding: 10px 12px;
+  border-right: 1px solid #0f1117;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rm-phase:last-child { border-right: none; }
+.rm-phase .ver { font-size: 0.65rem; font-weight: 700; letter-spacing: .06em; color: #475569; text-transform: uppercase; }
+.rm-phase .name { font-size: 0.78rem; font-weight: 700; }
+.rm-phase .desc { font-size: 0.65rem; color: #64748b; line-height: 1.4; }
+.rm-phase .tag  { font-size: 0.6rem; font-weight: 600; letter-spacing: .05em; color: #0f172a; border-radius: 3px; padding: 1px 5px; width: fit-content; margin-top: 3px; }
+
+.phase-shipped { background: #0a1a10; }
+.phase-shipped .name { color: #4ade80; }
+.phase-shipped .tag  { background: #4ade80; }
+.phase-ipc    { background: #0a1a20; }
+.phase-ipc .name    { color: #22d3ee; }
+.phase-ipc .tag     { background: #22d3ee; }
+.phase-sched  { background: #0a181e; }
+.phase-sched .name  { color: #38bdf8; }
+.phase-sched .tag   { background: #38bdf8; }
+.phase-async  { background: #0a1410; }
+.phase-async .name  { color: #2dd4bf; }
+.phase-async .tag   { background: #2dd4bf; }
+.phase-eco    { background: #10100a; }
+.phase-eco .name    { color: #fbbf24; }
+.phase-eco .tag     { background: #fbbf24; }
+
+.vs-old {
+  font-size: 0.72rem;
+  color: #334155;
+  margin-top: 10px;
+  border-top: 1px solid #1e293b;
+  padding-top: 10px;
+}
+.vs-old strong { color: #475569; }
+</style>
+</head>
+<body>
+<h1>Synlynk as the OS for Multi-Agent Development</h1>
+<p class="subtitle">"OS" framing — what that means structurally, where competitors fit, and what it implies for the roadmap</p>
+
+<div class="os-wrap">
+
+  <!-- OS Stack -->
+  <div class="os-stack">
+    <div class="os-label">The OS Layer Stack</div>
+
+    <div class="layer layer-apps">
+      <div class="layer-icon">📦</div>
+      <div class="layer-body">
+        <h3>Applications</h3>
+        <p>Third-party tools and skills that run <em>on</em> Synlynk — SuperPowers, GStack personas, custom skill packages, MCP servers.</p>
+        <div class="impl">Not Synlynk. These are ecosystem.</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+
+    <div class="layer layer-shell">
+      <div class="layer-icon">⌨️</div>
+      <div class="layer-body">
+        <h3>Shell / Interface</h3>
+        <p>The CLI the developer types into. synlynk run, dispatch, review, status, team. The TUI review interface.</p>
+        <div class="impl">synlynk run · synlynk review · synlynk status</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+
+    <div class="layer layer-sched">
+      <div class="layer-icon">🧭</div>
+      <div class="layer-body">
+        <h3>Process Scheduler</h3>
+        <p>Routes work to the right agent, manages the Architect→Build→Verify pipeline, tracks job state, retries failures.</p>
+        <div class="impl">trio.json · capability.json · job state machine</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+
+    <div class="layer layer-ipc">
+      <div class="layer-icon">🔗</div>
+      <div class="layer-body">
+        <h3>IPC — Inter-Agent Communication</h3>
+        <p>Handoff context between agents, shared conventions layer, constraint propagation. How agents pass state to each other without talking directly.</p>
+        <div class="impl">conventions.md · handoff docs · constraint layer</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+
+    <div class="layer layer-fs">
+      <div class="layer-icon">🗄️</div>
+      <div class="layer-body">
+        <h3>Filesystem — Persistent State</h3>
+        <p>The durable, human-and-AI-readable project ledger. Survives session closes, tool switches, machine reboots. The only layer every agent shares.</p>
+        <div class="impl">project-docs/ · .synlynk/context.md · devlogs/</div>
+      </div>
+    </div>
+    <div class="layer-divider"></div>
+
+    <div class="layer layer-kernel">
+      <div class="layer-icon">⚙️</div>
+      <div class="layer-body">
+        <h3>Kernel — Process Lifecycle</h3>
+        <p>Spawns and wraps agent CLI subprocesses, propagates exit codes, logs telemetry, enforces budget limits, Flatline Sentinel loop detection.</p>
+        <div class="impl">exec_command() · telemetry.json · flatline sentinel · Budget Pulse</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Competitors + implications -->
+  <div class="comp-panel">
+    <div class="os-label">Where Competitors Operate</div>
+
+    <div class="comp-row">
+      <div class="comp-card card-sp">
+        <h4>SuperPowers</h4>
+        <p>A skills library that runs inside a single agent session. Adds structured workflows and sub-agent task plans.</p>
+        <div class="layers-used">Lives at: <strong>Applications layer</strong><br>Runs on the Shell. Has no Kernel, no FS, no IPC.</div>
+      </div>
+      <div class="comp-card card-gs">
+        <h4>GStack</h4>
+        <p>Persona framework for Claude Code. CEO→EM→QA pipeline with visual checks. A process scheduler with no persistent state.</p>
+        <div class="layers-used">Lives at: <strong>Shell + Scheduler</strong><br>No FS, no IPC, no Kernel primitives. Claude-only.</div>
+      </div>
+    </div>
+
+    <div style="background:#0a0f1a;border:1px solid #1e3a5f;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+      <div style="font-size:0.7rem;font-weight:700;color:#22d3ee;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">The Key Insight</div>
+      <p style="font-size:0.75rem;color:#94a3b8;line-height:1.55;">SuperPowers and GStack are <strong style="color:#e2e8f0">applications</strong>. Synlynk is the <strong style="color:#22d3ee">OS they run on</strong>. You don't compete with them — you make them better. A SuperPowers skill running inside a Synlynk-managed session gets persistent memory, cost tracking, and multi-agent routing for free.</p>
+    </div>
+
+    <div style="background:#0a0f1a;border:1px solid #1e2a1a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.7rem;font-weight:700;color:#4ade80;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">What the "OS" framing unlocks</div>
+      <div style="font-size:0.72rem;color:#64748b;line-height:1.6;">
+        <div style="margin-bottom:5px;">🚫 <strong style="color:#94a3b8">No more tier model</strong> — OSes don't have Solo/Team/Enterprise editions. They have <em>features that scale</em>.</div>
+        <div style="margin-bottom:5px;">🤝 <strong style="color:#94a3b8">Complements competitors</strong> — SuperPowers users are the best Synlynk prospects.</div>
+        <div style="margin-bottom:5px;">📐 <strong style="color:#94a3b8">Roadmap = OS primitives</strong> — Kernel → FS → IPC → Scheduler → Shell → Ecosystem.</div>
+        <div>🌐 <strong style="color:#94a3b8">Platform play</strong> — v1.0 isn't "stable Lite." It's the stable API other tools build on.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New roadmap implied by OS framing -->
+<div class="roadmap-new">
+  <h3>Roadmap Re-Framed as OS Layers (replaces Solo / Solo++ / Team / Enterprise)</h3>
+  <div class="rm-row">
+    <div class="rm-phase phase-shipped">
+      <div class="ver">v0.2–0.3 · Shipped</div>
+      <div class="name">Kernel + FS</div>
+      <div class="desc">exec, telemetry, flatline, budget pulse, project-docs ledger, enriched agent templates</div>
+      <div class="tag">DONE</div>
+    </div>
+    <div class="rm-phase phase-ipc">
+      <div class="ver">v0.4 · Next</div>
+      <div class="name">IPC Layer</div>
+      <div class="desc">conventions.md, constraint propagation, trio init, synlynk run (foreground pipeline), cold-start routing</div>
+      <div class="tag">TRIO BOOTSTRAP</div>
+    </div>
+    <div class="rm-phase phase-sched">
+      <div class="ver">v0.5</div>
+      <div class="name">Scheduler</div>
+      <div class="desc">capability.json, recency-weighted routing, score engine, domain inference, doctor + cost add</div>
+      <div class="tag">CAPABILITY ENGINE</div>
+    </div>
+    <div class="rm-phase phase-async">
+      <div class="ver">v0.6</div>
+      <div class="name">Async + Shell</div>
+      <div class="desc">daemon, synlynk dispatch, full A→B→V pipeline, TUI review, scheduled autonomy, queue</div>
+      <div class="tag">FULL PIPELINE</div>
+    </div>
+    <div class="rm-phase phase-eco">
+      <div class="ver">v1.0</div>
+      <div class="name">Platform API</div>
+      <div class="desc">stable CLI/schema contract, MCP server, standards distribution, pipx/brew, ecosystem SDK</div>
+      <div class="tag">STABLE OS</div>
+    </div>
+  </div>
+  <div class="vs-old"><strong>Replaces:</strong> Solo (v0.3–v0.5) → Solo+ (v0.5–v0.6) → Team (v0.6) → Enterprise (v1.0). That framing implied four markets. The OS framing implies one product with increasing capability — the right narrative for a platform.</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — VPS Deep-Dive</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --accent3: #ff6b6b;
+    --text: #e2e8f0;
+    --muted: #718096;
+    --green: #48bb78;
+    --yellow: #ecc94b;
+    --red: #fc8181;
+    --blue: #63b3ed;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; line-height: 1.6; }
+  h1 { font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 32px; }
+  h2 { font-size: 14px; font-weight: 600; color: var(--accent2); margin: 32px 0 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Summary banner */
+  .summary { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent2); border-radius: 8px; padding: 16px 20px; margin-bottom: 32px; font-size: 13px; }
+  .summary strong { color: var(--accent2); }
+
+  /* Main comparison table */
+  .table-wrap { overflow-x: auto; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { background: #111827; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; font-size: 10px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: rgba(108,99,255,0.05); }
+  tbody td { padding: 12px; vertical-align: top; }
+  .platform { font-weight: 700; font-size: 13px; }
+  .winner { color: var(--accent2); }
+  .skip { color: var(--muted); text-decoration: line-through; }
+  .caution { color: var(--yellow); }
+
+  /* Score badges */
+  .score { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .s5 { background: #1a4731; color: #48bb78; }
+  .s4 { background: #1a3340; color: #63b3ed; }
+  .s3 { background: #2a2a1a; color: #ecc94b; }
+  .s2 { background: #2a1a1a; color: #fc8181; }
+  .s1 { background: #1a1a1a; color: #718096; }
+
+  /* Rank column */
+  .rank { font-size: 18px; text-align: center; }
+
+  /* Recommendation card */
+  .rec { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .rec-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .rec-card.top { border-color: var(--accent2); }
+  .rec-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+  .rec-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .rec-title.top { color: var(--accent2); }
+  .rec-price { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 8px; }
+  .rec-bullets { font-size: 11px; color: var(--muted); }
+  .rec-bullets li { margin-bottom: 4px; list-style: none; padding-left: 0; }
+  .rec-bullets li::before { content: '→ '; color: var(--accent2); }
+
+  /* Ownership model */
+  .ownership { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .own-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .own-letter { font-size: 24px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .own-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .own-desc { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .own-vps { font-size: 11px; color: var(--accent2); }
+  .own-tradeoff { font-size: 11px; color: var(--yellow); margin-top: 6px; }
+
+  /* Key finding */
+  .finding { background: #0d1117; border: 1px solid var(--accent3); border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 12px; }
+  .finding strong { color: var(--accent3); }
+
+  tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-right: 4px; }
+  tag.ai { background: #1a1a3a; color: #a78bfa; }
+  tag.paas { background: #1a2a1a; color: #68d391; }
+  tag.vps { background: #2a1a1a; color: #fc8181; }
+  tag.skip { background: #1a1a1a; color: #718096; }
+</style>
+</head>
+<body>
+
+<h1>synlynk — VPS Deep-Dive</h1>
+<p class="subtitle">Relay hosting for v0.9.3 workgroup relay · WSS/443 · stateless · 4–20 devs</p>
+
+<div class="finding">
+  <strong>Key finding:</strong> There is no purpose-built "agentic relay" platform yet. "AI-native hosting" in 2025–2026 mostly means GPU inference hosting, not persistent-process agent coordination. <strong>Fly.io remains the best fit for stateless WSS relay hosting.</strong> Bedrock AgentCore and Azure Foundry are the closest to agentic infra — but are designed for agent session management, not relay routing.
+</div>
+
+<h2>Platform Comparison</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Platform</th>
+      <th>Type</th>
+      <th>Price / mo</th>
+      <th>WSS/443</th>
+      <th>Always-On</th>
+      <th>Geo</th>
+      <th>DevOps</th>
+      <th>Agentic Fit</th>
+      <th>Decision</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="rank">🥇</td>
+      <td class="platform winner">Fly.io</td>
+      <td><tag class="paas">PaaS</tag></td>
+      <td>~$3–5</td>
+      <td>✅</td>
+      <td>✅ <small>(pin)</small></td>
+      <td>35+ regions</td>
+      <td><span class="score s4">Low</span></td>
+      <td><span class="score s4">Relay-ready</span></td>
+      <td class="winner">✅ Recommend</td>
+    </tr>
+    <tr>
+      <td class="rank">🥈</td>
+      <td class="platform">Northflank</td>
+      <td><tag class="paas">PaaS</tag></td>
+      <td>~$4–8</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Multi (AWS/GCP)</td>
+      <td><span class="score s3">Med</span></td>
+      <td><span class="score s3">Team ops</span></td>
+      <td>If BYOC needed</td>
+    </tr>
+    <tr>
+      <td class="rank">🥉</td>
+      <td class="platform">Hetzner CX11</td>
+      <td><tag class="vps">VPS</tag></td>
+      <td>~€4.51</td>
+      <td>✅ <small>(DIY)</small></td>
+      <td>✅</td>
+      <td>EU + US</td>
+      <td><span class="score s2">Self-managed</span></td>
+      <td><span class="score s3">Budget pick</span></td>
+      <td>If budget-first</td>
+    </tr>
+    <tr>
+      <td class="rank">4</td>
+      <td class="platform">Railway</td>
+      <td><tag class="paas">PaaS</tag></td>
+      <td>~$5–10</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>US/EU only</td>
+      <td><span class="score s5">Very Low</span></td>
+      <td><span class="score s2">Generic</span></td>
+      <td>Simpler, fewer regions</td>
+    </tr>
+    <tr>
+      <td class="rank">5</td>
+      <td class="platform">Render</td>
+      <td><tag class="paas">PaaS</tag></td>
+      <td>~$7</td>
+      <td>✅</td>
+      <td>✅ <small>(paid)</small></td>
+      <td>US/EU</td>
+      <td><span class="score s5">Very Low</span></td>
+      <td><span class="score s2">Generic</span></td>
+      <td>Viable, not standout</td>
+    </tr>
+    <tr>
+      <td class="rank">6</td>
+      <td class="platform caution">AWS Bedrock AgentCore</td>
+      <td><tag class="ai">AI-Native</tag></td>
+      <td>Usage-based</td>
+      <td>✅ <small>(native)</small></td>
+      <td>✅</td>
+      <td>AWS regions</td>
+      <td><span class="score s3">Managed</span></td>
+      <td><span class="score s5">Agent-native</span></td>
+      <td>⚠️ Overkill + billing mismatch</td>
+    </tr>
+    <tr>
+      <td class="rank">7</td>
+      <td class="platform caution">Azure Foundry Agents</td>
+      <td><tag class="ai">AI-Native</tag></td>
+      <td>~$5–10 est.</td>
+      <td>⚠️ <small>(preview)</small></td>
+      <td>?</td>
+      <td>1 region (preview)</td>
+      <td><span class="score s4">Managed</span></td>
+      <td><span class="score s4">Agent sessions</span></td>
+      <td>⚠️ Preview only, single-region</td>
+    </tr>
+    <tr>
+      <td class="rank">8</td>
+      <td class="platform caution">Leapcell</td>
+      <td><tag class="paas">PaaS</tag></td>
+      <td>Opaque</td>
+      <td>✅</td>
+      <td>⚠️</td>
+      <td>Multi (unclear)</td>
+      <td><span class="score s4">Low</span></td>
+      <td><span class="score s2">Serverless-first</span></td>
+      <td>Persistent mode feels secondary</td>
+    </tr>
+    <tr>
+      <td class="rank">✗</td>
+      <td class="platform skip">Koyeb</td>
+      <td><tag class="skip">Acquired</tag></td>
+      <td>$29+ base</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Multi</td>
+      <td><span class="score s3">Med</span></td>
+      <td><span class="score s2">Shifting</span></td>
+      <td>❌ Acquired by Mistral — skip</td>
+    </tr>
+    <tr>
+      <td class="rank">✗</td>
+      <td class="platform skip">E2B / Modal</td>
+      <td><tag class="ai">AI-Native</tag></td>
+      <td>Usage-based</td>
+      <td>❌</td>
+      <td>❌</td>
+      <td>Limited</td>
+      <td><span class="score s3">Med</span></td>
+      <td><span class="score s3">Sandboxes</span></td>
+      <td>❌ Ephemeral sandboxes, not relay</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Top 3 Profiles</h2>
+<div class="rec">
+  <div class="rec-card top">
+    <div class="rec-label">🥇 Recommended</div>
+    <div class="rec-title top">Fly.io</div>
+    <div class="rec-price">$3–5 / mo · shared-cpu-1x · 512MB</div>
+    <ul class="rec-bullets">
+      <li>WSS on 443 — trivial config</li>
+      <li>Global Anycast, 35+ regions</li>
+      <li>pin <code>min_machines_running=1</code> to stay warm</li>
+      <li>Scale to zero → warm → global = one config</li>
+      <li>Best migration path: LAN → CF Tunnel → Fly.io (same URL)</li>
+      <li>Synlynk can publish a ready-made <code>fly.toml</code></li>
+    </ul>
+  </div>
+  <div class="rec-card">
+    <div class="rec-label">🥈 If BYOC/Team-Isolation Needed</div>
+    <div class="rec-title">Northflank</div>
+    <div class="rec-price">$4–8 / mo · per-second billing</div>
+    <ul class="rec-bullets">
+      <li>BYOC: run on your own AWS/GCP</li>
+      <li>Persistent containers + scheduled jobs on same platform</li>
+      <li>Team/org workspace model — good for community relay</li>
+      <li>More complex setup than Fly.io</li>
+      <li>Better fit for v1.1+ community server than v0.9.3 relay</li>
+    </ul>
+  </div>
+  <div class="rec-card">
+    <div class="rec-label">🥉 Budget Pick</div>
+    <div class="rec-title">Hetzner CX11</div>
+    <div class="rec-price">€4.51 / mo · 2 vCPU · 2GB RAM</div>
+    <ul class="rec-bullets">
+      <li>Massively overspecced for 512MB relay</li>
+      <li>You own nginx + Let's Encrypt + systemd</li>
+      <li>EU-centric (Nuremberg, Falkenstein, Helsinki, Ashburn)</li>
+      <li>Zero managed features — all DevOps on you</li>
+      <li>Right if: team has ops expertise + cost matters most</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Ownership Model — Which path for synlynk?</h2>
+<div class="ownership">
+  <div class="own-card">
+    <div class="own-letter">A</div>
+    <div class="own-title">Each team self-provisions</div>
+    <div class="own-desc">Every workgroup spins up their own relay. synlynk ships a <code>fly.toml</code> + one-command deploy. You never run infra.</div>
+    <div class="own-vps">→ Best VPS: Fly.io (user account, their $3–5/mo)</div>
+    <div class="own-tradeoff">⚠️ Fragmented: no network effect across teams, no "find a public relay"</div>
+  </div>
+  <div class="own-card">
+    <div class="own-letter">B</div>
+    <div class="own-title">synlynk hosts community relay</div>
+    <div class="own-desc">synlynk.com runs a shared relay. Teams register, get a namespace. Free tier; scale as community grows.</div>
+    <div class="own-vps">→ Best VPS: Northflank (team isolation) or Fly.io global (cost)</div>
+    <div class="own-tradeoff">⚠️ You run infra. Needs auth + namespace isolation. Best post-v1.0.</div>
+  </div>
+  <div class="own-card">
+    <div class="own-letter">C</div>
+    <div class="own-title">Hybrid — both options</div>
+    <div class="own-desc">v0.9.3: self-provision (ship fly.toml). v1.1: synlynk community relay as upgrade path. Teams start free, graduate to self-hosted.</div>
+    <div class="own-vps">→ v0.9.3: Fly.io self-host · v1.1+: synlynk Northflank/Fly.io</div>
+    <div class="own-tradeoff">✅ Natural graduation: LAN → CF Tunnel → self-VPS → community server</div>
+  </div>
+</div>
+
+<h2 style="margin-top:32px;">Migration Path (all modes, same protocol)</h2>
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;font-size:12px;">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="text-align:center;min-width:100px;">
+      <div style="background:#1a1d27;border:1px solid var(--border);padding:10px;border-radius:6px;margin-bottom:6px;">
+        <div style="font-size:18px;">🏠</div>
+        <div style="font-weight:700;color:var(--text);">LAN</div>
+        <div style="color:var(--muted);font-size:10px;">mDNS · self-signed · port 8443</div>
+      </div>
+      <div style="color:var(--muted);font-size:10px;">Day 1</div>
+    </div>
+    <div style="color:var(--accent);font-size:20px;">→</div>
+    <div style="text-align:center;min-width:120px;">
+      <div style="background:#1a1d27;border:1px solid var(--border);padding:10px;border-radius:6px;margin-bottom:6px;">
+        <div style="font-size:18px;">☁️</div>
+        <div style="font-weight:700;color:var(--text);">CF Tunnel</div>
+        <div style="color:var(--muted);font-size:10px;">outbound-only · free · WFH teams</div>
+      </div>
+      <div style="color:var(--muted);font-size:10px;">Hybrid teams</div>
+    </div>
+    <div style="color:var(--accent);font-size:20px;">→</div>
+    <div style="text-align:center;min-width:120px;">
+      <div style="background:#1a1d27;border:1px solid var(--accent2);padding:10px;border-radius:6px;margin-bottom:6px;">
+        <div style="font-size:18px;">🚀</div>
+        <div style="font-weight:700;color:var(--accent2);">Fly.io VPS</div>
+        <div style="color:var(--muted);font-size:10px;">$3–5/mo · always-on · WSS/443</div>
+      </div>
+      <div style="color:var(--accent2);font-size:10px;">v0.9.3 ✅</div>
+    </div>
+    <div style="color:var(--accent);font-size:20px;">→</div>
+    <div style="text-align:center;min-width:130px;">
+      <div style="background:#1a1d27;border:1px solid var(--border);padding:10px;border-radius:6px;margin-bottom:6px;">
+        <div style="font-size:18px;">🌐</div>
+        <div style="font-weight:700;color:var(--text);">Community Server</div>
+        <div style="color:var(--muted);font-size:10px;">synlynk-hosted · namespaced · v1.1</div>
+      </div>
+      <div style="color:var(--muted);font-size:10px;">v1.1+</div>
+    </div>
+  </div>
+  <div style="margin-top:16px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px;">
+    <strong style="color:var(--text);">Migration = change one URL.</strong> All modes use the same WSS protocol. A team moves from CF Tunnel to Fly.io by running <code>synlynk relay connect wss://relay.yourteam.fly.dev</code> — nothing else changes.
+  </div>
+</div>
+
+</body>
+</html>

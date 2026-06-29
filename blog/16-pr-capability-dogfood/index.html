@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog Post 16 — Capability Dogfood: Seeding the Routing Brain</h1>
+<h2>Broader Goal (End of Previous PR)</h2>
+<p>At the end of v0.7.0 (Static Scan Quality), synlynk gained the ability to enrich every AI session with a live <code>## Source Architecture</code> snapshot — function signatures, constants, import graph — generated without any AI calls. The routing engine existed (<code>dispatch_agent()</code> with <code>capability_scores</code> view), but the ledger was empty. Every dispatch was effectively random because no agent had ever been scored. The goal for this PR: feed the ledger real signal from real work, so routing becomes data-driven.</p>
+<h2>Strategic Shift: Two-Phase Dogfood</h2>
+<p>The original capability dogfood concept was vague — &quot;give agents real tasks.&quot; This PR sharpened it into two concrete phases:</p>
+<p><strong>Phase A — Backfill + Attest:</strong> 20 merged PRs represent real engineering work with known outcomes. Retrospectively scoring them gives the ledger a meaningful history across three agents (Claude, AGY, Codex) and three phases (bootstrap, build, scale) without waiting months for fresh dispatches. This is a one-time bootstrap, not an ongoing pattern.</p>
+<p><strong>Phase B — Live Dispatches:</strong> Run actual tasks against AGY and Codex via <code>synlynk dispatch</code>, capture output, and attest scores. This seeds the &quot;live&quot; side of the ledger and exercises the dispatch infrastructure end-to-end.</p>
+<p>The user stated plainly: &quot;Definition B is the path to autonomous operations — can't begin that without some data from A.&quot; So Phase A came first, Phase B followed, and Definition B (three-agent Autopilot) is deferred until ledger data is available.</p>
+<h2>What This PR Shipped</h2>
+<h3>Backfill Script (<code>bin/backfill_capability.py</code>)</h3>
+<p>Reads all merged PRs via <code>gh pr list --json number,title,mergedAt,files,reviews</code>, infers <code>engg_domain</code> from title prefix then file paths, infers <code>phase</code> from PR number (1–10 bootstrap, 11–25 build, 26+ scale), and inserts <code>stories</code> + <code>capability_ratings</code> rows with <code>signal_source='backfill'</code> and <code>quality=0.0</code>. Supports <code>--dry-run</code>.</p>
+<h3>Attestation Script (<code>bin/attest_capability.py</code>)</h3>
+<p>A static <code>ATTESTATIONS</code> dict maps each <code>story-pr{N}</code> to <code>{model, quality, note}</code>. Model versions follow the actual chronology: <code>claude-opus-4-5</code> for PRs 1–28, <code>claude-sonnet-4-5</code> for 29–42, <code>claude-sonnet-4-6</code> for 43–49. Quality scores range from 6.0 (version bump PRs) to 9.0 (E2E suite, Static Scan Quality). Running the script UPDATEs existing backfill rows in-place — 20 rows attested successfully.</p>
+<h3>Routing Fix: <code>--force-agent</code></h3>
+<p>A critical discovery during live dispatches: <code>dispatch_agent()</code> was routing every <code>synlynk dispatch agy</code> to <code>claude</code> because backfill gave Claude the highest scores for every coordinate. This defeated the purpose of running real AGY/Codex tasks. Fix: added <code>force_agent: bool = False</code> to <code>dispatch_agent()</code> and a <code>--force-agent</code> CLI flag that bypasses the <code>_best_agent_for_story()</code> override. Without this, capability dogfood is impossible — the routing brain immediately hijacks every dispatch to the highest-scored agent.</p>
+<h3>AGY Dispatch Fix: <code>prompt_via_arg</code></h3>
+<p>AGY's <code>-p</code> flag takes the prompt as a value (<code>agy -p &quot;...&quot;</code>) not via stdin. The original baseline had <code>non_interactive_flags: [&quot;--quiet&quot;]</code> which is wrong (AGY doesn't have <code>--quiet</code>). Fix: <code>non_interactive_flags: [&quot;-p&quot;]</code> with <code>prompt_via_arg: True</code> in the baseline. When this flag is set, <code>dispatch_agent()</code> builds:</p>
+<pre><code class="language-bash">PROMPT=$(cat /path/to/prompt.txt); agy -p &quot;$PROMPT&quot; &gt; log.txt 2&gt;&amp;1; echo $? &gt; log.txt.exit
+</code></pre>
+<p>instead of <code>agy &lt; prompt.txt</code>. This is the pattern needed for any CLI that takes prompts as arguments rather than stdin.</p>
+<h3>AGY Live Dispatch — Autopilot Gap Analysis</h3>
+<p>AGY was dispatched with <code>--force-agent</code> to produce <code>docs/proposals/autopilot-gap-analysis-agy.md</code> — a structured gap analysis of the Autopilot Initiative against v0.7.0. The task embedded the autopilot proposal and relevant context directly in the prompt (avoiding filesystem navigation issues in AGY's print mode). Exit 0, 125 lines of output covering:</p>
+<ul>
+<li><strong>Ownership Model</strong> — no <code>assigned_agent_id</code> in <code>state.db</code>; recommends Option A (DB integration) for long-term, Option B (flat-file <code>@mentions</code>) for rapid bridge</li>
+<li><strong>Human-in-the-Loop Thresholds</strong> — no entitlements policy file; recommends <code>.synlynk/entitlements.yaml</code></li>
+<li><strong>Agent Personas</strong> — no cryptographic identity; recommends Ed25519 keypairs per agent</li>
+<li><strong>Feedback Loops</strong> — no agent-to-agent messaging; recommends <code>agent_messages</code> table in <code>state.db</code></li>
+<li><strong>Cold Start</strong> — no bootstrap templates; recommends <code>synlynk init-autopilot</code> command</li>
+<li><strong>Recommended First Agent:</strong> Support Engineer — deterministic inputs/outputs, lowest blast radius</li>
+</ul>
+<p>Quality score 8.0 attested for <code>story-4adc797d</code> (gemini-2.5-flash).</p>
+<h3>Codex Dispatch — Confirmed TTY-Blocked</h3>
+<p>Codex requires an interactive terminal and cannot be dispatched headlessly. Error: <code>stdin is not a terminal</code>. Codex tasks will require <code>synlynk exec codex</code> (interactive session) followed by manual score attestation. The <code>story-99f6a867</code> Codex placeholder remains with a backfill score until an interactive session is run.</p>
+<h3>Capability Ledger in <code>synlynk status</code></h3>
+<p>Added a CAPABILITY LEDGER section to <code>cmd_status()</code> showing top-3 weighted scores. Every <code>synlynk status</code> call now surfaces live routing signal:</p>
+<pre><code> CAPABILITY LEDGER
+   Agent      Model                  Domain   Phase       Score  N
+   agy        gemini-2.5-flash       unknown  build       10.00  1
+   claude     claude-opus-4-8        unknown  build       10.00  3
+   ...
+</code></pre>
+<p>This section is covered by <code>test_status_shows_capability_ledger</code> (test count: 317).</p>
+<h2>What Was Achieved</h2>
+<p>The routing brain now has real data. 20 PRs of Claude history are attested with model-version precision. AGY has 3 scores across docs and unknown domains. The dispatch infrastructure (prompt file generation, shell command construction, <code>--force-agent</code> override) is proven end-to-end. <code>synlynk status</code> surfaces this signal on every invocation. The ledger is live.</p>
+<h2>New Goalpost</h2>
+<p>The ledger has enough signal to begin <strong>Definition B: three-agent Autopilot</strong>. The AGY gap analysis identified the five unresolved questions (ownership model, HITL thresholds, agent personas, feedback loops, cold start) that Definition B must answer through implementation. The Support Engineer agent — deterministic, low blast radius, infrastructure-ready — is the recommended first agent to build. The next PR will brainstorm and spec that agent.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

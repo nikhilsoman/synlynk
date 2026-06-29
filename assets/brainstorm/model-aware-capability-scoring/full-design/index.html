@@ -1,0 +1,127 @@
+<h2>Integrated Design</h2>
+<p class="subtitle">Full capability_ratings schema · Tokq Memory Unit anatomy · how they connect</p>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+
+  <!-- Left: Schema -->
+  <div>
+    <div class="label" style="color: #7dd3fc; margin-bottom: 0.75rem;">capability_ratings — full schema</div>
+    <div style="background: rgba(0,0,0,0.35); border-radius: 10px; padding: 1.1rem 1.2rem; font-family: monospace; font-size: 0.75rem; line-height: 2; color: #64748b; overflow: hidden;">
+
+      <div style="color: #475569; margin-bottom: 0.25rem;">-- Identity</div>
+      <div><span style="color: #7dd3fc;">story_id</span>           → stories(id)</div>
+      <div><span style="color: #7dd3fc;">agent</span>              TEXT  <span style="color: #334155;">-- "claude" | "gemini"</span></div>
+
+      <div style="color: #475569; margin-top: 0.6rem; margin-bottom: 0.25rem;">-- Model (builder side)</div>
+      <div><span style="color: #22c55e;">model_version</span>      TEXT  <span style="color: #334155;">-- effective / "unknown"</span></div>
+      <div><span style="color: #22c55e;">model_at_dispatch</span>  TEXT  <span style="color: #334155;">-- statusline probe</span></div>
+      <div><span style="color: #22c55e;">model_at_completion</span> TEXT  <span style="color: #334155;">-- synlynk-meta header</span></div>
+
+      <div style="color: #475569; margin-top: 0.6rem; margin-bottom: 0.25rem;">-- Domain coordinate</div>
+      <div><span style="color: #a78bfa;">engg_domain</span>        TEXT  <span style="color: #334155;">-- "backend" | "data"…</span></div>
+      <div><span style="color: #a78bfa;">org_domain</span>         TEXT  <span style="color: #334155;">-- primary routing key</span></div>
+      <div><span style="color: #a78bfa;">org_domain_tags</span>    JSON  <span style="color: #334155;">-- Tokq only</span></div>
+      <div><span style="color: #a78bfa;">industry</span>           TEXT  <span style="color: #334155;">-- workspace-inherited</span></div>
+      <div><span style="color: #a78bfa;">phase</span>              TEXT  <span style="color: #334155;">-- architect|build|verify</span></div>
+
+      <div style="color: #475569; margin-top: 0.6rem; margin-bottom: 0.25rem;">-- Quality signal</div>
+      <div><span style="color: #fbbf24;">signal_source</span>      TEXT  <span style="color: #334155;">-- human|verifier|auto</span></div>
+      <div><span style="color: #fbbf24;">quality</span>            REAL  <span style="color: #334155;">-- effective 0–10</span></div>
+      <div><span style="color: #fbbf24;">quality_auto</span>       REAL  <span style="color: #334155;">-- auto composite</span></div>
+      <div><span style="color: #fbbf24;">verifier_agent</span>     TEXT</div>
+      <div><span style="color: #fbbf24;">verifier_model</span>     TEXT  <span style="color: #334155;">-- who rated it matters</span></div>
+
+      <div style="color: #475569; margin-top: 0.6rem; margin-bottom: 0.25rem;">-- Auto signals (always captured)</div>
+      <div><span style="color: #94a3b8;">test_pass_rate</span>     REAL</div>
+      <div><span style="color: #94a3b8;">build_success</span>      BOOL</div>
+      <div><span style="color: #94a3b8;">dispatch_rework</span>    INT   <span style="color: #334155;">-- routing signal ⚡</span></div>
+      <div><span style="color: #94a3b8;">micro_rework</span>       INT   <span style="color: #334155;">-- noise, info only</span></div>
+      <div><span style="color: #94a3b8;">pr_review_cycles</span>   INT   <span style="color: #334155;">-- ground truth</span></div>
+      <div><span style="color: #94a3b8;">duration_vs_est</span>    REAL  <span style="color: #334155;">-- actual/estimated</span></div>
+      <div><span style="color: #94a3b8;">verified_by_ci</span>     BOOL</div>
+
+      <div style="color: #475569; margin-top: 0.6rem; margin-bottom: 0.25rem;">-- Provenance</div>
+      <div><span style="color: #34d399;">correct</span>            BOOL  DEFAULT 1</div>
+      <div><span style="color: #34d399;">note</span>               TEXT</div>
+      <div><span style="color: #34d399;">ed25519_sig</span>        TEXT  <span style="color: #334155;">-- signs story+model+quality+ts</span></div>
+      <div><span style="color: #34d399;">ts</span>                 TIMESTAMP</div>
+    </div>
+
+    <div style="margin-top: 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.9rem 1rem; font-size: 0.78rem; color: #64748b;">
+      <strong style="color: #94a3b8;">capability_scores view</strong> — same as Gemini's proposal: recency-weighted decay <code>(0.85^age)</code> over this ledger, partitioned by <code>(agent, model_version, engg_domain, org_domain, industry, phase)</code>. Routing queries this view.
+    </div>
+  </div>
+
+  <!-- Right: Tokq Memory Unit -->
+  <div>
+    <div class="label" style="color: #34d399; margin-bottom: 0.75rem;">Tokq Memory Unit — capability profile</div>
+
+    <div style="background: rgba(52,211,153,0.04); border: 1px solid rgba(52,211,153,0.2); border-radius: 10px; overflow: hidden;">
+
+      <div style="background: rgba(52,211,153,0.1); padding: 0.75rem 1.1rem; font-family: monospace; font-size: 0.8rem;">
+        <span style="color: #34d399;">tokq://</span><span style="color: #7dd3fc;">capability</span>/<span style="color: #a78bfa;">backend/monetization/ott</span>/<span style="color: #e2e8f0;">claude-opus-4-8</span>
+      </div>
+
+      <div style="padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.8rem;">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.55rem 0.75rem;">
+            <div style="color: #64748b; font-size: 0.72rem; margin-bottom: 0.2rem;">ADDRESS</div>
+            <div style="color: #94a3b8; font-size: 0.78rem;">engg · org · industry · model</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.55rem 0.75rem;">
+            <div style="color: #64748b; font-size: 0.72rem; margin-bottom: 0.2rem;">SCORE DISTRIBUTION</div>
+            <div style="color: #94a3b8; font-size: 0.78rem;">mean · stddev · p25 · p75</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.55rem 0.75rem;">
+            <div style="color: #64748b; font-size: 0.72rem; margin-bottom: 0.2rem;">TRUST SIGNALS</div>
+            <div style="color: #94a3b8; font-size: 0.78rem;">sample_count · signal_source mix · verifier_model quality</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.55rem 0.75rem;">
+            <div style="color: #64748b; font-size: 0.72rem; margin-bottom: 0.2rem;">DISCOVERY TAGS</div>
+            <div style="color: #94a3b8; font-size: 0.78rem;">org_domain_tags · industry aliases</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.65rem 0.75rem;">
+          <div style="color: #64748b; font-size: 0.72rem; margin-bottom: 0.3rem;">PROVENANCE CHAIN</div>
+          <div style="color: #94a3b8; font-size: 0.78rem; line-height: 1.6;">
+            creator Ed25519 pubkey · story_ids[] (git-verifiable) · time range · model_at_dispatch + model_at_completion per sample
+          </div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.65rem 0.75rem;">
+          <div style="color: #64748b; font-size: 0.72rem; margin-bottom: 0.3rem;">AUTO SIGNAL AGGREGATES</div>
+          <div style="color: #94a3b8; font-size: 0.78rem; line-height: 1.6;">
+            avg test_pass_rate · ci_pass_rate · avg dispatch_rework · avg pr_review_cycles
+          </div>
+        </div>
+
+        <!-- Valuation bar -->
+        <div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 6px; padding: 0.65rem 0.75rem;">
+          <div style="color: #fbbf24; font-size: 0.72rem; margin-bottom: 0.4rem;">MARKET VALUE SIGNALS</div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <span style="background: rgba(251,191,36,0.1); color: #fcd34d; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem;">sample_count: 47</span>
+            <span style="background: rgba(251,191,36,0.1); color: #fcd34d; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem;">human_override_rate: 12%</span>
+            <span style="background: rgba(251,191,36,0.1); color: #fcd34d; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem;">ci_pass_rate: 94%</span>
+            <span style="background: rgba(251,191,36,0.1); color: #fcd34d; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem;">verifier: claude-opus-4-8</span>
+          </div>
+          <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.4rem;">Subscribers see all signals. Cold-start teams pay gas to subscribe; score improves their routing immediately.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Inheritance -->
+    <div style="margin-top: 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.9rem 1rem;">
+      <div class="label" style="margin-bottom: 0.5rem;">Model inheritance — replacing the config file</div>
+      <p style="font-size: 0.78rem; color: #64748b; margin: 0;">Instead of hardcoded <code>model_inheritance.json</code> multipliers, Tokq publishes a <strong>model family registry</strong> — a public Memory Unit at <code>tokq://registry/model-families</code>. synlynk fetches it on upgrade. Contains family lineage + capability delta estimates per domain. Local fallback: neutral multiplier (1.0) until 3 real samples exist.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Split model note -->
+<div style="margin-top: 1.25rem; background: rgba(239,68,68,0.04); border: 1px solid rgba(239,68,68,0.15); border-radius: 8px; padding: 0.9rem 1.1rem; font-size: 0.8rem; color: #94a3b8;">
+  <strong style="color: #fca5a5;">Split-model story:</strong> if <code>model_at_dispatch ≠ model_at_completion</code>, the rating row records both and sets a <code>split_model = true</code> flag. Routing excludes split-model stories from score aggregation (ambiguous attribution). Tokq exposes them separately as "mixed-model execution" samples — lower confidence, lower value, but still informative.
+</div>

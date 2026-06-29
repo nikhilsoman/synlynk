@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Blog Post 28 — PR #72: Fix Grok Dispatch Prompt Flag</h1>
+<p><strong>Series:</strong> Building synlynk — the OS for multi-agent development<br>
+<strong>PR:</strong> #72 <code>fix/grok-dispatch-prompt-flag</code><br>
+<strong>Version:</strong> patch on v0.9.7 baseline<br>
+<strong>Date:</strong> 2026-06-27</p>
+<hr>
+<h2>Where We Were</h2>
+<p>v0.9.7 shipped Grok as a first-class fourth agent peer with full baseline registration, dispatch flags (<code>--always-approve</code>), and <code>extract_tokens</code> nested JSON support. Grok was treated as a <code>prompt_via_arg</code> agent — meaning it receives its prompt as a flag argument rather than via stdin. That flag was <code>-p</code> (short for <code>--single</code>), placed in <code>non_interactive_flags</code> alongside the agent's other CLI switches.</p>
+<h2>What Broke</h2>
+<p>Any attempt to dispatch a task to Grok produced:</p>
+<pre><code>error: a value is required for '--single &lt;PROMPT&gt;' but none was supplied
+</code></pre>
+<p>The root cause: the dispatch shell command builder appended <code>&quot;$PROMPT&quot;</code> at the end of the full flag list. For Grok, that list was <code>[&quot;-p&quot;, &quot;--always-approve&quot;, &quot;--output-format&quot;, &quot;json&quot;]</code>, producing:</p>
+<pre><code class="language-sh">grok -p --always-approve --output-format json &quot;$PROMPT&quot;
+</code></pre>
+<p>Grok's CLI parser sees <code>-p</code> / <code>--single</code> as a flag that requires an inline value and attempts to consume the next token (<code>--always-approve</code>) as that value. But <code>--always-approve</code> starts with <code>--</code>, so the parser rejects it as a flag value and leaves <code>--single</code> valueless. <code>$PROMPT</code> ends up in the positional slot, not as <code>--single</code>'s argument. The fix isn't to reorder the list — it's to separate the prompt-introducing flag from the non-interactive flags entirely.</p>
+<h2>What Shipped</h2>
+<h3><code>prompt_flag</code> key in <code>AGENT_CAPABILITY_BASELINES</code></h3>
+<p>A new optional key separates the &quot;prompt hand-off flag&quot; from the agent's other non-interactive switches:</p>
+<pre><code class="language-python">&quot;agy&quot;: {
+    &quot;cli&quot;: &quot;agy&quot;,
+    &quot;non_interactive_flags&quot;: [],   # was: [&quot;-p&quot;]
+    &quot;prompt_flag&quot;: &quot;-p&quot;,           # placed last, immediately before &quot;$PROMPT&quot;
+    &quot;prompt_via_arg&quot;: True,
+    ...
+},
+&quot;grok&quot;: {
+    &quot;cli&quot;: &quot;grok&quot;,
+    &quot;non_interactive_flags&quot;: [],   # was: [&quot;-p&quot;]
+    &quot;prompt_flag&quot;: &quot;--single&quot;,     # long form, placed last
+    &quot;prompt_via_arg&quot;: True,
+    &quot;dispatch_flags&quot;: [&quot;--always-approve&quot;],
+    ...
+},
+</code></pre>
+<h3>All four <code>prompt_via_arg</code> call sites updated</h3>
+<p>The shell command builder now appends <code>prompt_flag</code> as the final element before <code>&quot;$PROMPT&quot;</code>:</p>
+<pre><code class="language-sh">grok --always-approve --output-format json --single &quot;$PROMPT&quot;
+</code></pre>
+<p>The four sites fixed: <code>_run_agent_sync()</code>, <code>dispatch_agent()</code>, the daemon worker loop (line ~1700), and <code>cmd_consult()</code> (line ~3046).</p>
+<h3>Two new assertion tests</h3>
+<ul>
+<li><code>test_grok_dispatch_single_flag_placed_before_prompt</code> — asserts <code>--single</code> appears after <code>--always-approve</code> and directly before <code>&quot;$PROMPT&quot;</code> in the generated shell command.</li>
+<li><code>test_agy_dispatch_prompt_flag_placed_before_prompt</code> — same ordering contract for agy's <code>-p</code> flag.</li>
+<li><code>test_agent_capability_baselines_includes_grok</code> updated to assert <code>prompt_flag == &quot;--single&quot;</code> rather than <code>&quot;-p&quot; in non_interactive_flags</code>.</li>
+</ul>
+<p><strong>514 tests pass.</strong></p>
+<h2>What This Achieves</h2>
+<p>Grok task dispatch now works end-to-end. The <code>prompt_flag</code> key is a clean extension point — any future agent with a similar &quot;value-required flag&quot; pattern (e.g. <code>codex --message</code>) can use the same mechanism without touching dispatch logic.</p>
+<h2>Next Goalpost</h2>
+<p>The dispatch layer is now correct for all four agents. Next up: BS-7 brainstorm (skill pack interoperability + 4-round benchmark) scheduled for 2026-06-28/29, followed by the BS-5 website implementation sprint.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

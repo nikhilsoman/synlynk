@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — Homepage Design System (BS-5 Phase 2)</title>
+<style>
+:root{--bg:#0E0E0F;--bg-card:#111115;--blue:#5B8DEF;--purple:#A259F7;--teal:#2EC4A0;--orange:#D97757;--text:#E9E9EE;--muted:rgba(233,233,238,0.55);--border:rgba(255,255,255,0.07);--font:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:14px;font-size:11px;}
+.title{font-size:13px;font-weight:700;letter-spacing:-0.4px;text-align:center;margin-bottom:10px;}
+.layout{display:grid;grid-template-columns:180px 1fr;gap:12px;max-width:780px;margin:0 auto;}
+.col{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;}
+.sec{font-size:10px;padding:4px 6px;margin-bottom:4px;background:#0a0a0b;border-radius:4px;}
+.comp{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
+.cardx{background:#0a0a0b;border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:9px;}
+.macros{font-family:monospace;font-size:9px;background:#0a0a0b;padding:6px;border-radius:4px;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="title">BS-5 Phase 2 — Homepage Design System</div>
+
+<div class="layout">
+  <div class="col">
+    <div class="sec">Section 1: Hero</div>
+    <div class="sec">Section 2: Carousel</div>
+    <div class="sec">Section 3: How It Works</div>
+    <div class="sec">Section 4: Vision</div>
+    <div class="sec">Section 5: Waitlist</div>
+  </div>
+  <div class="col">
+    <div class="comp">
+      <div class="cardx">btn-primary</div>
+      <div class="cardx">btn-ghost</div>
+      <div class="cardx">install-bar</div>
+      <div class="cardx">hook-label</div>
+      <div class="cardx">agent-chip</div>
+      <div class="cardx">feature-card</div>
+      <div class="cardx">relief-card</div>
+      <div class="cardx">step-card</div>
+      <div class="cardx">terminal-chrome</div>
+    </div>
+    <div class="macros">
+      macros.relief(heading, body)<br>
+      macros.step(n, heading, body)<br>
+      macros.featureCard(icon, heading, body)
+    </div>
+  </div>
+</div>
+</body>
+</html>

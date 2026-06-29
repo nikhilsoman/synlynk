@@ -1,2191 +1,378 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Features | synlynk</title>
-    <link rel="stylesheet" href="/assets/css/main.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Features | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
 </head>
-<body class="">
-    <nav class="sticky-nav">
-        <div class="container nav-container">
-            <a href="/" class="wordmark">
-                <img src="/assets/img/logo/icon.svg" alt="Synlynk Icon" class="nav-icon">
-                <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
-            </a>
-            <div class="nav-links">
-                <a href="#how-it-works">How it works</a>
-                <a href="/features/">Features</a>
-                <a href="#install">Install</a>
-                <a href="/releases/">Releases</a>
-                <a href="/blog/" class="teal-link">Blog</a>
-                <a href="https://github.com/nikhilsoman/synlynk" class="github-btn">GitHub ↗</a>
-            </div>
-        </div>
-    </nav>
-
-    <main>
-        
-
-
-
-
-
-
-<div class="container features-page">
-
-  <header class="features-header">
-    <div class="section-label" style="color: var(--accent-teal)">Capabilities</div>
-    <h1>Features</h1>
-    <p>Everything synlynk provides across releases — from context injection to autonomous dispatch.</p>
-
-    <div class="view-toggle">
-      <button id="btn-os" class="active" onclick="setView('os')">OS Layer view</button>
-      <button id="btn-user" onclick="setView('user')">User-facing view</button>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
     </div>
-  </header>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
 
-  <div class="feature-matrix-wrapper">
-
+  <main>
     
-    <table class="feature-matrix" id="view-os">
+<section class='section-features-hero section-dark'>
+  <div class='features-hero-inner'>
+    <div class='hook-label'>CAPABILITIES</div>
+    <h1 class='features-headline'>Features</h1>
+    <p class='features-sub'>Everything synlynk provides across releases — from context injection to autonomous dispatch.</p>
+    <div class='features-toggle'>
+      <button class='toggle-btn active' data-view='layer'>OS Layer view</button>
+      <button class='toggle-btn' data-view='user'>User-facing view</button>
+    </div>
+  </div>
+</section>
+
+<section class='section-matrix section-light'>
+  <div class='matrix-inner'>
+    <table class='feature-matrix'>
       <thead>
         <tr>
-          <th class="feature-col">Feature</th>
-          
-            <th class="current-col">
-              <span class="release-label ">v0.9.x</span>
-              
-                <div class="release-actions">
-                  <a href="/releases/v0.9/" class="install-pill">↓ install</a>
-                  <a href="/releases/v0.9/" class="changelog-link">changelog →</a>
-                </div>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.8.x</span>
-              
-                <a href="/releases/v0.8/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.7.x</span>
-              
-                <a href="/releases/v0.7/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.6.x</span>
-              
-                <a href="/releases/v0.6/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.5.x</span>
-              
-                <a href="/releases/v0.5/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
+          <th class='col-feature'>Feature</th>
+          <th class='col-version current'>
+            <div class='version-label'>v0.9.x</div>
+            <a href='https://install.synlynk.com' class='btn-install'>↓ install</a>
+            <a href='/changelog/#v0.9' class='changelog-link'>changelog →</a>
+          </th>
+          <th class='col-version'><div class='version-label'>v0.8.x</div><a href='/changelog/#v0.8' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.7.x</div><a href='/changelog/#v0.7' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.6.x</div><a href='/changelog/#v0.6' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.5.x</div><a href='/changelog/#v0.5' class='changelog-link'>changelog →</a></th>
         </tr>
       </thead>
       <tbody>
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Kernel — Context Engine</td>
-          </tr>
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/context-injection/">
-                    Context injection
-                    
-                  </a>
-                  <span class="feature-subtitle">Reads project-docs/ into .synlynk/context.md before each exec</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/flatline-detection/">
-                    Flatline detection
-                    
-                  </a>
-                  <span class="feature-subtitle">Alerts and halts when the last 3 runs share identical command + non-zero exit</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/parametric-init/">
-                    Parametric init
-                    
-                  </a>
-                  <span class="feature-subtitle">Four --flags fill project-specific values into all generated files at init time</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/agent-discovery/">
-                    Agent discovery
-                    
-                  </a>
-                  <span class="feature-subtitle">init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/drift-detection/">
-                    Instruction drift detection
-                    
-                  </a>
-                  <span class="feature-subtitle">Fires INSTRUCTION_DRIFT sentinel when a tracked instruction file is edited outside synlynk</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Filesystem — State &amp; Telemetry</td>
-          </tr>
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/cost-tracking/">
-                    Cost tracking
-                    
-                  </a>
-                  <span class="feature-subtitle">Appends per-session token counts and $ cost to project-docs/costs.md</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/budget-enforcement/">
-                    Budget enforcement
-                    
-                  </a>
-                  <span class="feature-subtitle">Blocks exec when cumulative cost or request count exceeds configured limits</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/telemetry-log/">
-                    Telemetry log
-                    
-                  </a>
-                  <span class="feature-subtitle">Rolling 100-entry log of every exec — duration, exit code, cost, command</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/source-architecture/">
-                    Source architecture injection
-                    
-                  </a>
-                  <span class="feature-subtitle">## Source Architecture snapshot injected into every exec context from a passive git-HEAD cache</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">IPC — Agent Files &amp; Coordination</td>
-          </tr>
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/gh-cli-identity/">
-                    gh CLI identity
-                    
-                  </a>
-                  <span class="feature-subtitle">Resolves verified GitHub login as the canonical session actor for devlog attribution</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/polyglot-agent-files/">
-                    Polyglot agent files
-                    
-                  </a>
-                  <span class="feature-subtitle">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/agent-dispatch/">
-                    Background dispatch
-                    
-                  </a>
-                  <span class="feature-subtitle">Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task &quot;...&quot;</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/parallel-trio/">
-                    Parallel trio dispatch
-                    
-                  </a>
-                  <span class="feature-subtitle">synlynk run --trio dispatches one task to all functional agents simultaneously</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/instruction-reach/">
-                    Instruction reach
-                    
-                  </a>
-                  <span class="feature-subtitle">Extends synlynk context injection to Cursor, GitHub Copilot, and Windsurf</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Scheduler — Dispatch</td>
-          </tr>
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/capability-engine/">
-                    Capability engine
-                    
-                  </a>
-                  <span class="feature-subtitle">Routes tasks to the best agent based on a live SQLite ledger of quality scores</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/model-version-probing/">
-                    Model version probing
-                    
-                  </a>
-                  <span class="feature-subtitle">Records which model version ran each job — enabling split-model detection and honest routing</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/scoped-dispatch-context/">
-                    Scoped dispatch context
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">Task-level context slice replaces 7-day devlog dump in every agent dispatch</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/dispatch-quality/">
-                    Dispatch quality enhancements
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">## Relevant Files, ## How to Verify, and per-agent prompt framing in every dispatch</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/ed25519-signing/">
-                    Ed25519 capability signing
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">Every capability rating is signed with a local Ed25519 key — tamper-evident from day one</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/async-daemon/">
-                    Async daemon
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">Always-on process — agents pull context over HTTP without invoking the CLI</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-        
-      </tbody>
-    </table>
-
-    
-    <table class="feature-matrix" id="view-user" style="display:none">
-      <thead>
-        <tr>
-          <th class="feature-col">Feature</th>
-          
-            <th class="current-col">
-              <span class="release-label ">v0.9.x</span>
-              
-                <div class="release-actions">
-                  <a href="/releases/v0.9/" class="install-pill">↓ install</a>
-                  <a href="/releases/v0.9/" class="changelog-link">changelog →</a>
-                </div>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.8.x</span>
-              
-                <a href="/releases/v0.8/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.7.x</span>
-              
-                <a href="/releases/v0.7/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.6.x</span>
-              
-                <a href="/releases/v0.6/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
-            <th class="">
-              <span class="release-label muted">v0.5.x</span>
-              
-                <a href="/releases/v0.5/" class="changelog-link" style="font-size:10px">changelog →</a>
-              
-            </th>
-          
+        <!-- LAYER VIEW (OS Layer) -->
+        <tr class='group-row layer-view'><td colspan='6'>KERNEL — CONTEXT ENGINE</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Context injection</div><div class='feature-desc'>Reads project-docs/ into .synlynk/context.md before each exec</div><a class='feature-blog-link' href='/blog/02-pr1-v0.2.0-the-kernel/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
-      </thead>
-      <tbody>
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Context Management</td>
-          </tr>
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/context-injection/">
-                    Context injection
-                    
-                  </a>
-                  <span class="feature-subtitle">Reads project-docs/ into .synlynk/context.md before each exec</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/flatline-detection/">
-                    Flatline detection
-                    
-                  </a>
-                  <span class="feature-subtitle">Alerts and halts when the last 3 runs share identical command + non-zero exit</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/parametric-init/">
-                    Parametric init
-                    
-                  </a>
-                  <span class="feature-subtitle">Four --flags fill project-specific values into all generated files at init time</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/drift-detection/">
-                    Instruction drift detection
-                    
-                  </a>
-                  <span class="feature-subtitle">Fires INSTRUCTION_DRIFT sentinel when a tracked instruction file is edited outside synlynk</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/source-architecture/">
-                    Source architecture injection
-                    
-                  </a>
-                  <span class="feature-subtitle">## Source Architecture snapshot injected into every exec context from a passive git-HEAD cache</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Cost &amp; Visibility</td>
-          </tr>
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/cost-tracking/">
-                    Cost tracking
-                    
-                  </a>
-                  <span class="feature-subtitle">Appends per-session token counts and $ cost to project-docs/costs.md</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/budget-enforcement/">
-                    Budget enforcement
-                    
-                  </a>
-                  <span class="feature-subtitle">Blocks exec when cumulative cost or request count exceeds configured limits</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/telemetry-log/">
-                    Telemetry log
-                    
-                  </a>
-                  <span class="feature-subtitle">Rolling 100-entry log of every exec — duration, exit code, cost, command</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/model-version-probing/">
-                    Model version probing
-                    
-                  </a>
-                  <span class="feature-subtitle">Records which model version ran each job — enabling split-model detection and honest routing</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Agent Coordination</td>
-          </tr>
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/gh-cli-identity/">
-                    gh CLI identity
-                    
-                  </a>
-                  <span class="feature-subtitle">Resolves verified GitHub login as the canonical session actor for devlog attribution</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/polyglot-agent-files/">
-                    Polyglot agent files
-                    
-                  </a>
-                  <span class="feature-subtitle">Generates CLAUDE.md, GEMINI.md (AGY), and AGENTS.md from a single parameterised template</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/agent-discovery/">
-                    Agent discovery
-                    
-                  </a>
-                  <span class="feature-subtitle">init wizard scans for Claude, Gemini, Codex, and AGY — shows your workgroup at a glance</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/instruction-reach/">
-                    Instruction reach
-                    
-                  </a>
-                  <span class="feature-subtitle">Extends synlynk context injection to Cursor, GitHub Copilot, and Windsurf</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/ed25519-signing/">
-                    Ed25519 capability signing
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">Every capability rating is signed with a local Ed25519 key — tamper-evident from day one</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/async-daemon/">
-                    Async daemon
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">Always-on process — agents pull context over HTTP without invoking the CLI</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-        
-          <tr class="matrix-section-header">
-            <td colspan="6">Autonomy &amp; Dispatch</td>
-          </tr>
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/agent-dispatch/">
-                    Background dispatch
-                    
-                  </a>
-                  <span class="feature-subtitle">Fire-and-forget agent jobs from any shell — synlynk dispatch claude --task &quot;...&quot;</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/parallel-trio/">
-                    Parallel trio dispatch
-                    
-                  </a>
-                  <span class="feature-subtitle">synlynk run --trio dispatches one task to all functional agents simultaneously</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/capability-engine/">
-                    Capability engine
-                    
-                  </a>
-                  <span class="feature-subtitle">Routes tasks to the best agent based on a live SQLite ledger of quality scores</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/scoped-dispatch-context/">
-                    Scoped dispatch context
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">Task-level context slice replaces 7-day devlog dump in every agent dispatch</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-              <tr>
-                <td class="feature-name-cell">
-                  <a href="/features/dispatch-quality/">
-                    Dispatch quality enhancements
-                    <span class="badge-new">new</span>
-                  </a>
-                  <span class="feature-subtitle">## Relevant Files, ## How to Verify, and per-agent prompt framing in every dispatch</span>
-                </td>
-                
-                  <td class="current-col">
-                    
-                      <span class="check-yes">✓</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-                  <td class="">
-                    
-                      <span class="check-no">—</span>
-                    
-                  </td>
-                
-              </tr>
-            
-          
-            
-          
-            
-          
-        
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Multi-doc context</div><div class='feature-desc'>Merges memory.md + roadmap.md + todo.md into snapshot</div><a class='feature-blog-link' href='/blog/12-pr42-v0.6.0-job-control/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Per-job context scoping</div><div class='feature-desc'>Writes job context to .synlynk/contexts/&lt;job_id&gt;.md, not global</div><a class='feature-blog-link' href='/blog/23-fix-dispatch-context-scoping/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>KERNEL — DISPATCH ENGINE</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Background dispatch</div><div class='feature-desc'>Spawns agent CLIs as background jobs with PID tracking</div><a class='feature-blog-link' href='/blog/11-pr39-v0.4.0-hybrid-workgroup-bootstrap/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Parallel multi-agent dispatch</div><div class='feature-desc'>Multiple agents in parallel with story-level coordination</div><a class='feature-blog-link' href='/blog/11-pr39-v0.4.0-hybrid-workgroup-bootstrap/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Force-agent flag</div><div class='feature-desc'>--force-agent bypasses routing heuristics</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>context-mode flag</div><div class='feature-desc'>--context-mode solo|team|full controls context injection scope</div><a class='feature-blog-link' href='/blog/23-fix-dispatch-context-scoping/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>KERNEL — SENTINEL</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Flatline detection</div><div class='feature-desc'>Alerts when 3 consecutive runs share identical output + non-zero exit</div><a class='feature-blog-link' href='/blog/08-pr29-v0.3.1-sentinel-observability/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Success loop detection</div><div class='feature-desc'>Detects identical successful output (hallucination indicator)</div><a class='feature-blog-link' href='/blog/08-pr29-v0.3.1-sentinel-observability/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Quota exhausted pattern</div><div class='feature-desc'>Detects QUOTA_EXHAUSTED in agent output</div><a class='feature-blog-link' href='/blog/08-pr29-v0.3.1-sentinel-observability/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>VERIFY_SKIP compliance tag</div><div class='feature-desc'>Detects agents skipping verifications</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>COORDINATION — RELAY</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>SSE relay broker</div><div class='feature-desc'>synlynk relay start — live job stream across processes</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Budget pulse</div><div class='feature-desc'>Per-exec token+cost summary printed after each run</div><a class='feature-blog-link' href='/blog/12-pr42-v0.6.0-job-control/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row layer-view'><td colspan='6'>WORKSPACE</td></tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk init</div><div class='feature-desc'>Bootstrap state.db + project-docs/ + agent directive files</div><a class='feature-blog-link' href='/blog/02-pr1-v0.2.0-the-kernel/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts</div><a class='feature-blog-link' href='/blog/27-pr69-v0.9.8-synlynk-doctor/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk join</div><div class='feature-desc'>Scan existing repo + auto-detect teammates</div><a class='feature-blog-link' href='/blog/21-pr-v092-team-onboarding-consensus/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Team mode</div><div class='feature-desc'>Multi-user devlogs + @username attribution in memory.md</div><a class='feature-blog-link' href='/blog/21-pr-v092-team-onboarding-consensus/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <!-- USER-FACING VIEW (regrouped, same features) -->
+        <tr class='group-row user-view'><td colspan='6'>INSTALL &amp; SETUP</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk init</div><div class='feature-desc'>Bootstrap state.db + project-docs/ + agent directive files</div><a class='feature-blog-link' href='/blog/02-pr1-v0.2.0-the-kernel/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts</div><a class='feature-blog-link' href='/blog/27-pr69-v0.9.8-synlynk-doctor/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk join</div><div class='feature-desc'>Scan existing repo + auto-detect teammates</div><a class='feature-blog-link' href='/blog/21-pr-v092-team-onboarding-consensus/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row user-view'><td colspan='6'>EXEC &amp; DISPATCH</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Context injection</div><div class='feature-desc'>Reads project-docs/ into .synlynk/context.md before each exec</div><a class='feature-blog-link' href='/blog/02-pr1-v0.2.0-the-kernel/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Multi-doc context</div><div class='feature-desc'>Merges memory.md + roadmap.md + todo.md into snapshot</div><a class='feature-blog-link' href='/blog/12-pr42-v0.6.0-job-control/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Per-job context scoping</div><div class='feature-desc'>Writes job context to .synlynk/contexts/&lt;job_id&gt;.md, not global</div><a class='feature-blog-link' href='/blog/23-fix-dispatch-context-scoping/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Background dispatch</div><div class='feature-desc'>Spawns agent CLIs as background jobs with PID tracking</div><a class='feature-blog-link' href='/blog/11-pr39-v0.4.0-hybrid-workgroup-bootstrap/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Parallel multi-agent dispatch</div><div class='feature-desc'>Multiple agents in parallel with story-level coordination</div><a class='feature-blog-link' href='/blog/11-pr39-v0.4.0-hybrid-workgroup-bootstrap/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Force-agent flag</div><div class='feature-desc'>--force-agent bypasses routing heuristics</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>context-mode flag</div><div class='feature-desc'>--context-mode solo|team|full controls context injection scope</div><a class='feature-blog-link' href='/blog/23-fix-dispatch-context-scoping/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row user-view'><td colspan='6'>MONITORING</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Flatline detection</div><div class='feature-desc'>Alerts when 3 consecutive runs share identical output + non-zero exit</div><a class='feature-blog-link' href='/blog/08-pr29-v0.3.1-sentinel-observability/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Success loop detection</div><div class='feature-desc'>Detects identical successful output (hallucination indicator)</div><a class='feature-blog-link' href='/blog/08-pr29-v0.3.1-sentinel-observability/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Quota exhausted pattern</div><div class='feature-desc'>Detects QUOTA_EXHAUSTED in agent output</div><a class='feature-blog-link' href='/blog/08-pr29-v0.3.1-sentinel-observability/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>VERIFY_SKIP compliance tag</div><div class='feature-desc'>Detects agents skipping verifications</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+
+        <tr class='group-row user-view'><td colspan='6'>COORDINATION</td></tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>SSE relay broker</div><div class='feature-desc'>synlynk relay start — live job stream across processes</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Budget pulse</div><div class='feature-desc'>Per-exec token+cost summary printed after each run</div><a class='feature-blog-link' href='/blog/12-pr42-v0.6.0-job-control/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Team mode</div><div class='feature-desc'>Multi-user devlogs + @username attribution in memory.md</div><a class='feature-blog-link' href='/blog/21-pr-v092-team-onboarding-consensus/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
       </tbody>
     </table>
-
   </div>
+</section>
 
-  <div class="matrix-footer">
-    Older releases: <a href="/releases/">View full release history →</a>
-  </div>
+  </main>
 
-</div>
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
 
-<script>
-function setView(v) {
-  document.getElementById('view-os').style.display = v === 'os' ? '' : 'none';
-  document.getElementById('view-user').style.display = v === 'user' ? '' : 'none';
-  document.getElementById('btn-os').className = v === 'os' ? 'active' : '';
-  document.getElementById('btn-user').className = v === 'user' ? 'active' : '';
-}
-</script>
-
-    </main>
-
-    <footer class="site-footer">
-        <div class="container footer-container">
-            <div class="footer-left">
-                <div class="wordmark">
-                    <span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span>
-                </div>
-                <div class="version">v0.9.4</div>
-            </div>
-            <div class="footer-right">
-                <a href="https://github.com/nikhilsoman/synlynk">GitHub</a>
-                <a href="https://github.com/nikhilsoman/synlynk/discussions">Discussions</a>
-                <a href="https://github.com/nikhilsoman/synlynk/blob/main/CHANGELOG.md">Changelog</a>
-                <a href="/releases/">Releases</a>
-                <span class="license">MIT</span>
-            </div>
-        </div>
-    </footer>
-
-    <script src="/assets/js/copy.js"></script>
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
 </body>
 </html>

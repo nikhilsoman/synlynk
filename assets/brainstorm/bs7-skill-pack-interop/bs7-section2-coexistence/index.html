@@ -1,0 +1,112 @@
+<h2>Section 2 — Coexistence Theory (AB-11)</h2>
+<p class="subtitle">How synlynk:start/end blocks, Superpowers hooks, and GStack additions share instruction space without conflict</p>
+
+<div class="section">
+  <h3>The Instruction Surface Problem</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+    <div style="background:#1a0d0d;border:1px solid #5a2a2a;border-radius:8px;padding:14px">
+      <div class="label" style="color:#f85149">synlynk writes to</div>
+      <ul style="margin:8px 0 0;padding-left:16px;font-size:12px;line-height:1.8;color:#ccc">
+        <li><code>CLAUDE.md</code> (OS preamble)</li>
+        <li><code>GEMINI.md</code></li>
+        <li><code>AI_INSTRUCTIONS.md</code></li>
+        <li><code>.synlynk/context.md</code></li>
+        <li><code>.cursorrules</code></li>
+      </ul>
+    </div>
+    <div style="background:#0d1a0d;border:1px solid #2a5a2a;border-radius:8px;padding:14px">
+      <div class="label" style="color:#3fb950">Superpowers writes to</div>
+      <ul style="margin:8px 0 0;padding-left:16px;font-size:12px;line-height:1.8;color:#ccc">
+        <li><code>CLAUDE.md</code> (skill hooks)</li>
+        <li><code>settings.json</code></li>
+        <li><code>keybindings.json</code></li>
+        <li>slash command hooks</li>
+      </ul>
+    </div>
+    <div style="background:#0d0d2a;border:1px solid #2a2a6a;border-radius:8px;padding:14px">
+      <div class="label" style="color:#58a6ff">GStack writes to</div>
+      <ul style="margin:8px 0 0;padding-left:16px;font-size:12px;line-height:1.8;color:#ccc">
+        <li><code>CLAUDE.md</code> (quality rules)</li>
+        <li><code>.cursorrules</code></li>
+        <li>custom lint hooks</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:10px;padding:12px;background:#1a1a0a;border-left:3px solid #d29922;border-radius:4px;font-size:13px">
+    <strong style="color:#d29922">Overlap zone:</strong> <code>CLAUDE.md</code> and <code>.cursorrules</code> — all three write here. Without a priority contract, agents see contradictions.
+  </div>
+</div>
+
+<div class="section">
+  <h3>Conflict Taxonomy (AB-11)</h3>
+  <div style="margin-top:10px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#161b22;color:#8b949e">
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #30363d">Conflict Type</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #30363d">Example</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #30363d">Symptom</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #30363d">Resolution</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #21262d">
+          <td style="padding:10px 12px;color:#f85149;font-weight:600">Direct contradiction</td>
+          <td style="padding:10px 12px;color:#ccc">synlynk: "always run tests before commit" · GStack: "never block on tests in draft PRs"</td>
+          <td style="padding:10px 12px;color:#888">Agent skips tests randomly or asks for clarification every time</td>
+          <td style="padding:10px 12px;color:#3fb950">synlynk block = authoritative; skill pack rule = advisory</td>
+        </tr>
+        <tr style="border-bottom:1px solid #21262d">
+          <td style="padding:10px 12px;color:#d29922;font-weight:600">Scope bleed</td>
+          <td style="padding:10px 12px;color:#ccc">Superpowers TDD skill injected into a `synlynk exec agy` session not designed for TDD</td>
+          <td style="padding:10px 12px;color:#888">Token bloat; agent follows TDD steps for a 2-line config change</td>
+          <td style="padding:10px 12px;color:#3fb950">Context scoping: only inject skill hooks matching current story's role</td>
+        </tr>
+        <tr style="border-bottom:1px solid #21262d">
+          <td style="padding:10px 12px;color:#a78bfa;font-weight:600">Format collision</td>
+          <td style="padding:10px 12px;color:#ccc">GStack adds its own <code>## Code Quality</code> section; synlynk already has one</td>
+          <td style="padding:10px 12px;color:#888">Duplicate sections confuse agent; one is silently ignored</td>
+          <td style="padding:10px 12px;color:#3fb950">git-drift flags duplicate headings at commit time</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;color:#58a6ff;font-weight:600">Authority ambiguity</td>
+          <td style="padding:10px 12px;color:#ccc">Both synlynk and Superpowers claim "you MUST follow these rules"</td>
+          <td style="padding:10px 12px;color:#888">Agent paralysis or arbitrary priority selection</td>
+          <td style="padding:10px 12px;color:#3fb950">synlynk:start/end fencing declares OS-level authority explicitly</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>The Resolution Protocol</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+    <div style="background:#0a1a0a;border:1px solid #2ea043;border-radius:8px;padding:16px">
+      <div class="label" style="color:#3fb950">synlynk:start/end fencing</div>
+      <pre style="font-size:11px;color:#ccc;margin:8px 0 0;background:#0d1117;padding:10px;border-radius:4px;overflow:auto"><!-- synlynk:start -->
+# OS Layer Instructions
+[persistent memory, budget limits,
+ dispatch rules, flatline policy]
+<!-- synlynk:end -->
+
+# Skill Pack Zone
+[Superpowers / GStack rules go here
+ — advisory, not authoritative]</pre>
+      <p style="font-size:11px;color:#888;margin:8px 0 0">OS-level rules are fenced and treated as non-overridable by agents. Skill pack rules below the fence are advisory.</p>
+    </div>
+    <div style="background:#0a0a1a;border:1px solid #3a3a8a;border-radius:8px;padding:16px">
+      <div class="label" style="color:#a78bfa">git-drift enforcement</div>
+      <ul style="font-size:12px;color:#ccc;margin:8px 0 0;padding-left:16px;line-height:1.9">
+        <li>Pre-commit hook scans <code>CLAUDE.md</code></li>
+        <li>Detects missing <code>synlynk:start/end</code> fence</li>
+        <li>Flags duplicate section headings</li>
+        <li>Warns if skill pack rules above the fence</li>
+        <li>Compares against team manifest baseline</li>
+      </ul>
+      <p style="font-size:11px;color:#888;margin:8px 0 0">Runs on every commit — no drift accumulates silently over time.</p>
+    </div>
+  </div>
+</div>
+
+<p style="color:#888;font-size:13px;margin-top:16px">Does this coexistence model look right? Continuing in terminal ↓</p>
