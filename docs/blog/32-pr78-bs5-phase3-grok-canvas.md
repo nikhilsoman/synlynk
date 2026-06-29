@@ -16,7 +16,7 @@ None. Pure implementation of the Section 6 spec handed off from the design doc. 
 ## What This PR Shipped
 
 <figure class="brainstorm-visual">
-  <iframe src="/assets/brainstorm/bs5-diagram-impl/diagram-motherboard.html" title="Motherboard diagram design" loading="lazy" frameborder="0"></iframe>
+  <iframe src="/assets/brainstorm/bs5-diagram-impl/bs5-diagram-impl.html" title="Motherboard diagram design" loading="lazy" frameborder="0"></iframe>
   <figcaption>Motherboard diagram design</figcaption>
 </figure>
 

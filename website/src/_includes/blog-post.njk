@@ -3,36 +3,19 @@ layout: base.njk
 ---
 
 <article class="blog-post-page">
-  <!-- Hero Banner Area -->
-  {% set heroImage = blogHeroes[page.fileSlug] %}
-  {% if heroImage %}
-    <div class="blog-post-hero" style="background-image: url('/{{ heroImage }}')">
-      <div class="blog-post-hero-overlay"></div>
-      <div class="blog-post-hero-content">
-        <div class="blog-post-meta">
-          <a href="/blog/" class="blog-back-link">← Back to Blog</a>
-          <span class="blog-post-date">{{ date | dateFilter }}</span>
-          {% if pr %}
-            <span class="blog-post-pr">PR {{ pr }}</span>
-          {% endif %}
-        </div>
-        <h1 class="blog-post-title">{{ title }}</h1>
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-{{ (post or 0) % 4 }}">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">{{ date | dateFilter }}</span>
+        {% if pr %}
+          <span class="blog-post-pr">PR {{ pr }}</span>
+        {% endif %}
       </div>
+      <h1 class="blog-post-title">{{ title }}</h1>
     </div>
-  {% else %}
-    <div class="blog-post-hero-fallback fallback-grad-{{ (post or 0) % 4 }}">
-      <div class="blog-post-hero-content">
-        <div class="blog-post-meta">
-          <a href="/blog/" class="blog-back-link">← Back to Blog</a>
-          <span class="blog-post-date">{{ date | dateFilter }}</span>
-          {% if pr %}
-            <span class="blog-post-pr">PR {{ pr }}</span>
-          {% endif %}
-        </div>
-        <h1 class="blog-post-title">{{ title }}</h1>
-      </div>
-    </div>
-  {% endif %}
+  </div>
 
   <!-- Post Content Area -->
   <div class="blog-post-container">

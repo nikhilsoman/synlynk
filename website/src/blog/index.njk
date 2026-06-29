@@ -11,18 +11,11 @@ title: Blog
 
     <div class="blog-grid">
       {% for post in collections.posts %}
-        {% set heroImage = blogHeroes[post.fileSlug] %}
         <article class="blog-card">
           <a href="{{ post.url }}" class="blog-card-img-link">
-            {% if heroImage %}
-              <div class="blog-card-hero-wrap">
-                <img src="/{{ heroImage }}" alt="{{ post.data.title }}" class="blog-card-hero">
-              </div>
-            {% else %}
-              <div class="blog-card-hero-fallback fallback-grad-{{ (post.data.post or 0) % 4 }}">
-                <span class="fallback-post-num">#{{ post.data.post or '00' }}</span>
-              </div>
-            {% endif %}
+            <div class="blog-card-hero-fallback fallback-grad-{{ (post.data.post or 0) % 4 }}">
+              <span class="fallback-post-num">#{{ post.data.post or '00' }}</span>
+            </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">

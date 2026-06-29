@@ -266,6 +266,7 @@ footer a:hover {
 }
 
 .hero-byline {
+  text-align: center;
   font-size: clamp(22px, 2.2vw, 28px);
   font-weight: 400;
   color: var(--muted);
@@ -276,6 +277,7 @@ footer a:hover {
 }
 
 .hero-headline {
+  text-align: center;
   font-size: clamp(32px, 4.5vw, 52px);
   font-weight: 900;
   line-height: 1.08;
@@ -290,10 +292,11 @@ footer a:hover {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  display: inline-block;
+  display: inline;
 }
 
 .hero-sub {
+  text-align: center;
   font-size: 16px;
   color: var(--muted);
   max-width: 520px;
@@ -369,8 +372,8 @@ footer a:hover {
   border: 1px solid #222;
   border-radius: 10px;
   font-family: var(--mono);
-  font-size: 13px;
-  max-width: 400px;
+  font-size: 15px;
+  max-width: 520px;
   margin: 0 auto 28px;
   overflow: hidden;
   width: 100%;
@@ -378,7 +381,7 @@ footer a:hover {
 
 .install-cmd {
   flex: 1;
-  padding: 11px 16px;
+  padding: 13px 18px;
   color: #aaa;
   white-space: nowrap;
   overflow: hidden;
@@ -393,14 +396,14 @@ footer a:hover {
 }
 
 .copy-btn {
-  padding: 11px 14px;
+  padding: 13px 16px;
   background: transparent;
   border: none;
   border-left: 1px solid #222;
   color: #555;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   transition: all 0.2s;
   white-space: nowrap;
@@ -418,64 +421,57 @@ footer a:hover {
   color: var(--teal);
 }
 
-/* Agent Chips */
-.agent-logos {
+/* Hero Agent Logos */
+.hero-agent-logos {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 24px;
   justify-content: center;
-  font-size: 12px;
-  color: #444;
+  margin-top: 12px;
   margin-bottom: 28px;
-  flex-wrap: wrap;
 }
 
-.agent-logos span {
-  color: #555;
-  margin-right: 4px;
-}
-
-.agent-chip {
+.hero-agent-logo-icon {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid #222;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  background: #111;
-  transition: border-color 0.2s, background 0.2s;
+  justify-content: center;
+  transition: transform 0.2s, opacity 0.2s;
+  opacity: 0.85;
 }
 
-.chip-claude {
-  color: #D97757;
-  border-color: #3a1f10;
+.hero-agent-logo-icon:hover {
+  transform: scale(1.15);
+  opacity: 1;
 }
-.chip-claude svg {
+
+.hero-agent-logo-icon.claude {
+  color: #D97757;
+}
+.hero-agent-logo-icon.claude svg {
   fill: #D97757;
 }
-.chip-gemini {
+
+.hero-agent-logo-icon.gemini {
   color: #4285F4;
-  border-color: #0d1e35;
 }
-.chip-gemini svg {
+.hero-agent-logo-icon.gemini svg {
   fill: #4285F4;
 }
-.chip-grok {
-  color: #888;
-  border-color: #222;
+
+.hero-agent-logo-icon.grok {
+  color: #fff;
 }
-.chip-grok svg {
-  stroke: #888;
+.hero-agent-logo-icon.grok svg {
+  stroke: #fff;
 }
-.chip-codex {
+
+.hero-agent-logo-icon.codex {
   color: #aaa;
-  border-color: #222;
 }
-.chip-codex svg {
+.hero-agent-logo-icon.codex svg {
   stroke: #aaa;
 }
+
 
 /* Section 3: Relief */
 .section-relief {
@@ -498,6 +494,10 @@ footer a:hover {
   margin-bottom: 14px;
 }
 
+.section-light .section-label {
+  color: #2F6FE5;
+}
+
 .section-label.dark {
   color: var(--purple);
 }
@@ -510,12 +510,24 @@ footer a:hover {
   margin-bottom: 16px;
 }
 
+.section-light .section-title {
+  color: #0E0E0F;
+}
+
+.section-dark .section-title {
+  color: #fff;
+}
+
 .section-body {
   font-size: 16px;
   line-height: 1.7;
   color: #6e6e73;
   max-width: 600px;
   margin-bottom: 48px;
+}
+
+.section-light .section-body {
+  color: #3c3c43;
 }
 
 .relief-grid {
@@ -750,7 +762,8 @@ footer a:hover {
   text-align: center;
   font-size: 14px;
   color: var(--muted);
-  margin-bottom: 44px;
+  max-width: 600px;
+  margin: 0 auto 44px;
 }
 
 .carousel-container {
@@ -1088,11 +1101,13 @@ footer a:hover {
   text-align: center;
 }
 .section-waitlist .section-title {
+  text-align: center;
   margin-top: 10px;
   margin-bottom: 12px;
   color: #fff;
 }
 .section-waitlist .section-body {
+  text-align: center;
   margin: 0 auto;
   color: var(--muted);
 }

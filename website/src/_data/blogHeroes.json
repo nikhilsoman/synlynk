@@ -1,1 +1,27 @@
-{}
+{
+  "00-why-polyglot-harness": "assets/blog-heroes/00-why-polyglot-harness.png",
+  "01-the-project-that-built-synlynk": "assets/blog-heroes/01-the-project-that-built-synlynk.png",
+  "02-pr1-v0.2.0-the-kernel": "assets/blog-heroes/02-pr1-v0.2.0-the-kernel.png",
+  "05-pr26-v0.3.0-multi-agent-foundation": "assets/blog-heroes/05-pr26-v0.3.0-multi-agent-foundation.png",
+  "07-pr28-architecture-pivot": "assets/blog-heroes/07-pr28-architecture-pivot.png",
+  "08-pr29-v0.3.1-sentinel-observability": "assets/blog-heroes/08-pr29-v0.3.1-sentinel-observability.png",
+  "09-pr30-e2e-test-suite": "assets/blog-heroes/09-pr30-e2e-test-suite.png",
+  "10-brainstorm-hybrid-workgroup-imperatives": "assets/blog-heroes/10-brainstorm-hybrid-workgroup-imperatives.png",
+  "11-pr39-v0.4.0-hybrid-workgroup-bootstrap": "assets/blog-heroes/11-pr39-v0.4.0-hybrid-workgroup-bootstrap.png",
+  "12-pr42-v0.6.0-job-control": "assets/blog-heroes/12-pr42-v0.6.0-job-control.png",
+  "13-v0.4.1-instruction-reach": "assets/blog-heroes/13-v0.4.1-instruction-reach.png",
+  "14-v0.4.2-task-status-model": "assets/blog-heroes/14-v0.4.2-task-status-model.png",
+  "15-pr-v0.7.0-static-scan-quality": "assets/blog-heroes/15-pr-v0.7.0-static-scan-quality.png",
+  "18-pr52-v0.8.0-support-engineer-agent": "assets/blog-heroes/18-pr52-v0.8.0-support-engineer-agent.png",
+  "21-pr-v092-team-onboarding-consensus": "assets/blog-heroes/21-pr-v092-team-onboarding-consensus.png",
+  "22-pr56-57-58-v0.9.3-async-daemon": "assets/blog-heroes/22-pr56-57-58-v0.9.3-async-daemon.png",
+  "23-fix-dispatch-context-scoping": "assets/blog-heroes/23-fix-dispatch-context-scoping.png",
+  "24-pr31-v0.9.4-context-dispatch-relay": "assets/blog-heroes/24-pr31-v0.9.4-context-dispatch-relay.png",
+  "25-pr64-v0.9.7-grok-agent-support": "assets/blog-heroes/25-pr64-v0.9.7-grok-agent-support.png",
+  "27-pr69-v0.9.8-synlynk-doctor": "assets/blog-heroes/27-pr69-v0.9.8-synlynk-doctor.png",
+  "29-pr78-bs5-phase1-scaffold": "assets/blog-heroes/29-pr78-bs5-phase1-scaffold.png",
+  "30-pr78-bs5-phase2-agy-templates": "assets/blog-heroes/30-pr78-bs5-phase2-agy-templates.png",
+  "31-pr78-bs5-phase2-grok-carousel": "assets/blog-heroes/31-pr78-bs5-phase2-grok-carousel.png",
+  "33-pr78-bs5-phase3-agy-subpages": "assets/blog-heroes/33-pr78-bs5-phase3-agy-subpages.png",
+  "32-pr78-bs5-phase3-grok-canvas": "assets/blog-heroes/32-pr78-bs5-phase3-grok-canvas.png"
+}
