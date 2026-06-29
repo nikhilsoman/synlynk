@@ -101,10 +101,25 @@ Worktrees live in `.worktrees/` (gitignored). Create one per feature.
 - Add decisions to `project-docs/memory.md` with `[@agy]` attribution
 - Run `python -m pytest tests/ -q` before any commit — all 472 tests must pass
 
-**At session end:**
+**At session end** (only when the user signals they are done — NOT after individual tasks):
 - Append a summary entry to `project-docs/devlogs/nikhil.md`
 - Run `synlynk checkpoint`
 - Report `synlynk status` output in your closing message
+
+## Scope Discipline
+
+**Documentation tasks** (write a file, add a memory note, update a devlog entry):
+- Write the file. Done. No tests, no `story create`, no checkpoint, no status report.
+- "Make a note in project-docs" = append a bullet to `memory.md`. Not a story. Not a DB write.
+- "Register this in project docs" never implies running `synlynk story create` unless the user explicitly says "create a story".
+
+**`python -m pytest tests/ -q` runs only before committing code changes** — not for documentation, not for memory updates, not for strategy docs. A 472-test suite on a file write is never appropriate.
+
+**`synlynk story create` is for new work items only** — stories go in state.db when there is future implementation work to track. Documenting a decision that has already been made does not create a story.
+
+**Do not call internal Python functions directly** (`synlynk._import_todo_to_stories()`, `synlynk._generate_todo_md()`, etc.) or manipulate `state.db` via raw SQLite outside of the `synlynk` CLI. If the CLI doesn't expose what you need, surface that gap rather than bypassing it.
+
+**Concrete antipattern (2026-06-29 incident):** Asked to write one file and add a memory note, Agy made 30+ tool calls, ran the full test suite, called internal Python functions, issued raw SQLite DELETEs, and triggered a Claude Code permission gate — for a task that needed two Write operations. This is the failure mode to avoid.
 
 ## Blog Post Protocol
 

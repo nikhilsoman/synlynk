@@ -1,5 +1,36 @@
 # synlynk Memory
 
+## Per-Agent Instruction Fixes (post-BS-14 backlog — 2026-06-29)
+
+Changes to agent directive files pending outcome of BS-14 brainstorm. Do not apply until BS-14 spec is locked.
+
+| Agent | File | Fix needed | Incident |
+|---|---|---|---|
+| Agy | `GEMINI.md` | Scope Discipline section — session-end ceremony must not fire on single-prompt tasks; "note in project-docs" ≠ story create; tests only before code commits | TC-2: 30+ tool calls, 472 tests, raw SQLite for a 2-file doc task (2026-06-29) |
+| Agy | `GEMINI.md` | Headless dispatch contract — stdout must flush without PTY; verify `agy` supports unbuffered/pipe mode | TC-1: LIVE-1 6h silent hang, zero log output (2026-06-28) |
+| Grok | `.agents/grok.json` | Remove `--always-approve` from dispatch_flags — Claude Code flag, not a Grok flag; causes startup failure | TC-1: LIVE-1 network + flag error, job stuck open 6h (2026-06-28) |
+| Grok | `.agents/grok.json` | Grok CLI network dependency — `cli-chat-proxy.grok.com` must be reachable; add preflight connectivity check | TC-1: LIVE-1 `reqwest error stream` on API endpoint (2026-06-28) |
+| All | `synlynk doctor` | Add flag validation check: for each agent, verify dispatch_flags are accepted by the installed binary version | FIX-4 from #81 |
+| All | sentinel | Add `STALL_NO_OUTPUT` pattern: running job + zero log bytes after 30min → alert | FIX-3 from #81 |
+
+**Scope discipline fix already shipped:** `GEMINI.md` updated 2026-06-29 with Scope Discipline section. All other items blocked on BS-14.
+
+## synlynk as a Native Harness (decided 2026-06-29 — workgroup consensus: Claude + AGY + Codex + Nikhil)
+- **Shift to native execution:** synlynk will transition from wrapping vendor CLIs (like `claude`, `codex`, `grok`) to hosting its own agent runtime/harness. [@agy]
+- **API integration:** The new harness will directly integrate with LLM provider APIs (Vertex/Gemini, Anthropic Messages API, OpenAI-compatible APIs) to control System Instructions and tool-call loops directly.
+- **Granular sandboxing:** Replaces loose guest CLI safety flags with native path-specific read/write locks (configured in `config.json`) and interactive shell/PTY command approval gates.
+- **MCP Host support:** Rather than bloat core, an MCP (Model Context Protocol) Host will be built into the harness to connect to external search, browser, or database servers.
+- **Dual-mode transition:** Standard CLI wrapper modes are retained as a fallback. Native execution will roll out under `synlynk-agent` in v0.10.x/v1.0 as an opt-in, eventually replacing CLI wrappers as the primary execution model.
+- **Spec:** [synlynk-as-a-harness.md](file:///Users/nikhilsoman/dev/synlynk/docs/strategy/synlynk-as-a-harness.md)
+
+## Live Job Observatory Brainstorm (decided 2026-06-28)
+- **Need:** a read-only, htop/mtop-style live board for every running job across all repos, with near real-time refresh (~10s), repo/stage grouping, and cost/token/request visibility. [@nikhilsoman]
+- **Surface split:** ship both terminal and web versions, but keep one shared monitoring model underneath so the board state stays consistent across surfaces.
+- **Foundational fields:** originating agent, executing agent, and input context size are now first-class observability signals, not optional metadata.
+- **Interaction limit:** no inline action CTAs beyond opening the relevant terminal or web link from the top-level board. This is monitoring only, not control.
+- **Spec:** `docs/superpowers/specs/2026-06-28-bs13-live-job-observatory-design.md`
+- **Next:** terminal-first implementation plan; use the observability view as the seed for `synlynk viz` later.
+
 ## Roadmap Realignment (decided 2026-06-21 — workgroup consensus: Claude + AGY + Codex + Nikhil)
 - **Tiers are permanently off.** "Team edition" = networked collaboration features, not billing tiers. [@nikhilsoman]
 - **Agent archetypes:** Four types — Maintainers (schedule-triggered, self-healing) · Communicators (release-triggered, outward publishing) · Orchestrators (story/signal-triggered, work management) · SMEs (domain-tag/file-path-triggered, reactive expertise). Same archetype deployed at different levels (workgroup → team → enterprise → domain) behaves differently by scope.
@@ -51,6 +82,7 @@
 - **BS-6** — OKF alignment + `synlynk viz` three-view visualization (story-f5513a93). Sunday AM.
 - **BS-7** — Skill Pack Interop + Benchmarks + **AB-11 conflict taxonomy** (story-bs7-interop). Sunday AM/PM. Benchmark execution week of 2026-06-30.
 - **BS-8** ✅ Spec done (2026-06-27) — Harness Capability Awareness + Loop-Native Dispatch. `synlynk probe` + `dispatch_loop()` + stuck consult. Three stories: story-bs8-probe, story-bs8-loop, story-bs8-consult. Target v0.10.1. Spec: `docs/superpowers/specs/2026-06-27-bs8-harness-capability-awareness-loop-dispatch-design.md`
+- **BS-13** — Live Job Observatory / watch overlay for cross-repo running jobs. Near-real-time refresh, repo/stage grouping, cost/token/request telemetry, terminal + web surfaces, read-only board with open-link affordances only.
 - **BYOA** — Parked post-dev-preview (Ollama, OpenCode/OpenRouter, DeepSeek).
 
 ## State DB & Agentic PM (decided 2026-06-07)
