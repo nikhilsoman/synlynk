@@ -47,3 +47,5 @@ To display custom screenshots or architecture diagrams for a blog post:
 
 ### Gradient Fallbacks
 If a post does not have a mapped hero image in `blogHeroes.json`, the templates automatically render a premium color-shifting gradient containing the post's sequence number (e.g. `#30`).
+
+<!-- Deployment trigger: 2026-06-29 -->
