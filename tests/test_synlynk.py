@@ -60,6 +60,8 @@ def test_load_config_defaults(project_dir):
     assert config["budget"]["limit_usd"] == 10.0
     assert config["watch_interval_seconds"] == 30
     assert config["org"] is None
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 def test_load_config_missing_file(tmp_path, monkeypatch):
@@ -67,6 +69,8 @@ def test_load_config_missing_file(tmp_path, monkeypatch):
     config = synlynk.load_config()
     assert config["schema_version"] == 1
     assert config["budget"]["limit_usd"] == 10.0
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 def test_parse_costs_md(project_dir):
@@ -863,6 +867,10 @@ def test_load_config_has_new_defaults(tmp_path, monkeypatch):
     assert config["agent_slots"]["claude"] == "claude"
     assert config["agent_slots"]["agy"] == "agy"
     assert config["agent_slots"]["codex"] == "codex"
+    assert "stall_timeout_minutes" in config
+    assert "agents" in config
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 def test_build_templates_config_includes_owner_and_project_id(tmp_path, monkeypatch):
@@ -872,6 +880,8 @@ def test_build_templates_config_includes_owner_and_project_id(tmp_path, monkeypa
     assert config["owner"] == "Dialify"
     assert config["project_id"] == "PVT_abc"
     assert "agent_slots" in config
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 # Task 3: Repo scanning + maturity detection tests
@@ -4922,3 +4932,36 @@ def test_agy_dispatch_injects_pythonunbuffered(project_dir, monkeypatch):
     sl.dispatch_agent("agy", "echo test")
     assert "PYTHONUNBUFFERED" in captured_env
     assert captured_env["PYTHONUNBUFFERED"] == "1"
+
+
+def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
+    import signal, time, json, os
+    import synlynk as sl
+
+    job_id = "job-stall-test"
+    log_file = tmp_path / f"{job_id}.log"
+    log_file.write_bytes(b"")  # 0 bytes — stalled
+
+    started_at = time.time() - 7200  # 2h ago
+    job = {
+        "id": job_id, "agent": "agy", "status": "running",
+        "pid": 99999,  # non-existent PID
+        "started_at": started_at,
+        "log_file": str(log_file),
+    }
+
+    config = {"agents": {"agy": {"stall_timeout_minutes": 30}}, "stall_timeout_minutes": 30}
+    sentinel_path = tmp_path / "sentinel.md"
+
+    killed = []
+    def mock_kill(pid, sig):
+        killed.append((pid, sig))
+    monkeypatch.setattr(os, "kill", mock_kill)
+
+    result = sl._check_job_stall(job, config, str(sentinel_path))
+
+    assert result is True
+    assert job["status"] == "failed"
+    assert len(killed) > 0
+    assert "STALL_NO_OUTPUT" in sentinel_path.read_text()
+

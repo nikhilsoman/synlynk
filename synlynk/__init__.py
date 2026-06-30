@@ -646,6 +646,8 @@ def load_config() -> dict:
         "team": None,
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
+        "stall_timeout_minutes": 30,
+        "agents": {},
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -1909,6 +1911,57 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
     return None
 
 
+def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
+    """Returns True if job was stalled and killed."""
+    import signal as _signal
+    if job.get("status") != "running":
+        return False
+    log_file = job.get("log_file", "")
+    if not log_file or not os.path.exists(log_file):
+        return False
+    if os.path.getsize(log_file) > 0:
+        return False  # has output, not stalled
+
+    agent = job.get("agent", "")
+    global_timeout = config.get("stall_timeout_minutes", 30)
+    timeout = config.get("agents", {}).get(agent, {}).get("stall_timeout_minutes", global_timeout)
+
+    started_val = job.get("started_at")
+    if isinstance(started_val, str):
+        try:
+            import datetime as _dt
+            started_ts = _dt.datetime.strptime(started_val, "%Y-%m-%dT%H:%M:%S").timestamp()
+        except Exception:
+            started_ts = time.time()
+    elif isinstance(started_val, (int, float)):
+        started_ts = started_val
+    else:
+        started_ts = time.time()
+
+    elapsed_minutes = (time.time() - started_ts) / 60
+
+    if elapsed_minutes < timeout:
+        return False
+
+    pid = job.get("pid")
+    if pid:
+        try:
+            os.kill(pid, _signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    job["status"] = "failed"
+    job["exit_code"] = -1
+    job["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    _write_sentinel_alert(
+        "CRITICAL", "STALL_NO_OUTPUT",
+        f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. Process killed.",
+        sentinel_path,
+    )
+    return True
+
+
 def _reconcile_jobs() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
@@ -1918,8 +1971,13 @@ def _reconcile_jobs() -> None:
     jobs = _load_jobs()
     changed = False
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    config = load_config()
+    sentinel_path = ".synlynk/sentinel.md"
     for job in jobs:
         if job.get("status") not in ("running",):
+            continue
+        if _check_job_stall(job, config, sentinel_path):
+            changed = True
             continue
         pid = job.get("pid")
         if pid is None:
@@ -4463,6 +4521,9 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "agent_slots": _agent_slots,
             "team": None,
             "sync_endpoint": None,
+            "exec_timeout_minutes": 30,
+            "stall_timeout_minutes": 30,
+            "agents": {},
         }, indent=2),
     }
 
@@ -4822,10 +4883,10 @@ def _check_costs_freshness() -> None:
     if time.time() - os.path.getmtime(costs_file) > 3600:
         print("  ⚠ costs.md not updated this session — AI may have missed logging")
 
-def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
+def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path: Optional[str] = None) -> None:
     """Appends a structured alert line to .synlynk/sentinel.md."""
-    sentinel_file = ".synlynk/sentinel.md"
-    if not os.path.exists(".synlynk"):
+    sentinel_file = sentinel_path or ".synlynk/sentinel.md"
+    if not sentinel_path and not os.path.exists(".synlynk"):
         return
     existing = ""
     if os.path.exists(sentinel_file):
@@ -4835,6 +4896,10 @@ def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
         existing = "# Sentinel Alerts\n"
     ts = time.strftime('%Y-%m-%d %H:%M')
     line = f"- [{severity}] [{ts}] {code}: {message}\n"
+    if sentinel_path:
+        parent = os.path.dirname(sentinel_path)
+        if parent and not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
     with open(sentinel_file, "w") as f:
         f.write(existing + line)
 
