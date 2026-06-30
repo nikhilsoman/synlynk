@@ -1837,7 +1837,7 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
     assert "--dangerously-skip-permissions" in shell_cmd
 
 
-def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
+def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
 
@@ -1870,8 +1870,9 @@ def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    assert "--always-approve" in shell_cmd
+    assert "--always-approve" not in shell_cmd
     assert "--permission-mode bypassPermissions" not in shell_cmd
+    assert "--yes" in shell_cmd
     assert "--output-format json" in shell_cmd
 
 
@@ -1943,14 +1944,14 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
 
     sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    # --single must appear after --always-approve and directly before "$PROMPT"
+    # --single must appear after required Grok dispatch flags and directly before "$PROMPT"
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
     prompt_pos = shell_cmd.index('"$PROMPT"')
     assert single_pos < prompt_pos, "--single must come before $PROMPT"
-    # --always-approve must be before --single (so it's not consumed as --single's value)
-    always_approve_pos = shell_cmd.index("--always-approve")
-    assert always_approve_pos < single_pos, "--always-approve must come before --single"
+    yes_pos = shell_cmd.index("--yes")
+    assert yes_pos < single_pos, "--yes must come before --single"
+    assert "--always-approve" not in shell_cmd
 
 
 def test_agy_prompt_flag_split_from_non_interactive_flags():
@@ -4434,9 +4435,27 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    assert "--always-approve" in grok["dispatch_flags"]
+    assert "--always-approve" in grok["dispatch_flags"]["invalid_flags"]
+    assert "--always-approve" not in grok["dispatch_flags"]["valid_flags"]
+    assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
+
+
+def test_grok_baseline_excludes_always_approve():
+    from synlynk import AGENT_CAPABILITY_BASELINES
+    grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
+    flags = grok.get("dispatch_flags", {})
+    invalid = flags.get("invalid_flags", [])
+    assert "--always-approve" in invalid, "LIVE-1: --always-approve must be in invalid_flags"
+    assert "--always-approve" not in flags.get("valid_flags", [])
+
+
+def test_grok_baseline_has_network_deps():
+    from synlynk import AGENT_CAPABILITY_BASELINES
+    grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
+    endpoints = grok.get("network_deps", {}).get("required_endpoints", [])
+    assert any("cli-chat-proxy.grok.com" in e for e in endpoints)
 
 
 def test_agent_discovery_defaults_includes_grok():
@@ -4446,12 +4465,12 @@ def test_agent_discovery_defaults_includes_grok():
 
 
 def test_probe_grok_version(monkeypatch):
-    import synlynk, subprocess
-    fake = subprocess.CompletedProcess(
-        args=["grok", "-v"], returncode=0,
-        stdout="grok 0.2.67 (grok-composer-2.5-fast)", stderr=""
+    import synlynk
+    monkeypatch.setattr(
+        synlynk,
+        "_spawn_with_pty_fallback",
+        lambda *a, **kw: (None, b"grok 0.2.67 (grok-composer-2.5-fast)"),
     )
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: fake)
     result = synlynk._probe_model_version("grok", "grok")
     assert "grok" in result.lower()
 
@@ -4872,3 +4891,34 @@ def test_cmd_sync_no_manifest(tmp_path, monkeypatch, capsys):
     assert "no tracked" in out.lower() or "dry run" in out.lower()
 
 
+def test_agy_baseline_has_headless_contract():
+    from synlynk import AGENT_CAPABILITY_BASELINES
+    agy = AGENT_CAPABILITY_BASELINES.get("agy", {})
+    contract = agy.get("headless_contract", {})
+    assert contract.get("requires_pty") is False
+    assert contract.get("stdout_flush_method") == "unbuffered"
+    assert "PYTHONUNBUFFERED=1" in contract.get("env_vars_required", [])
+
+
+def test_agy_dispatch_injects_pythonunbuffered(project_dir, monkeypatch):
+    import os
+    import subprocess
+    import synlynk as sl
+    # Stub agy CLI that prints its environment
+    stub = project_dir / "agy"
+    stub.write_text("#!/bin/sh\nenv | grep PYTHONUNBUFFERED\n")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(project_dir) + ":" + os.environ["PATH"])
+    captured_env = {}
+    original_popen = subprocess.Popen
+    def mock_popen(cmd, **kwargs):
+        captured_env.update(kwargs.get("env", {}))
+        return original_popen(cmd, **kwargs)
+    monkeypatch.setattr(subprocess, "Popen", mock_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_probe_model_version", lambda agent, cli: "mock-model")
+
+    # call dispatch_agent for agy with a minimal task
+    sl.dispatch_agent("agy", "echo test")
+    assert "PYTHONUNBUFFERED" in captured_env
+    assert captured_env["PYTHONUNBUFFERED"] == "1"

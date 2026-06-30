@@ -242,7 +242,8 @@ def cmd_story_list() -> None:
 def _load_agent_config(name: str) -> dict:
     """Load .agents/<name>.json. Raises FileNotFoundError with clear message."""
     import json as _json
-    path = os.path.join(".agents", f"{name}.json")
+    candidates = [os.path.join(".agents", f"{name}.json"), os.path.join("agents", f"{name}.json")]
+    path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
         raise FileNotFoundError(f"No agent config found at {path}")
     with open(path) as f:
@@ -255,7 +256,8 @@ def _load_agent_profile(agent: str) -> dict:
     Returns {} when the file is absent or invalid.
     """
     import json as _json
-    path = os.path.join(".agents", f"{agent}.json")
+    candidates = [os.path.join(".agents", f"{agent}.json"), os.path.join("agents", f"{agent}.json")]
+    path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
         return {}
     try:
@@ -263,6 +265,22 @@ def _load_agent_profile(agent: str) -> dict:
             return _json.load(f)
     except (OSError, ValueError, TypeError):
         return {}
+
+
+def _dispatch_flags_for_agent(agent: str) -> list:
+    """Return the executable dispatch flags for an agent baseline.
+
+    Supports both the legacy list form and the structured mapping form.
+    """
+    baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    dispatch_flags = baselines.get("dispatch_flags", [])
+    if isinstance(dispatch_flags, dict):
+        ordered = []
+        for flag in dispatch_flags.get("required_flags", []) or []:
+            if flag not in ordered:
+                ordered.append(flag)
+        return ordered
+    return list(dispatch_flags or [])
 
 
 def cmd_score_add(story_id: str, rating: float, note: str = None,
@@ -479,15 +497,38 @@ AGENT_CAPABILITY_BASELINES = {
         "non_interactive_flags": [],
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": ["--prompt", "--non-interactive", "--model", "--output-format"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print"],
+            "required_flags": ["--non-interactive"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "unbuffered",
+            "env_vars_required": ["PYTHONUNBUFFERED=1"],
+            "non_interactive_flag": "--non-interactive",
+        },
+        "network_deps": {
+            "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
+            "optional_endpoints": [],
+        },
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
     "grok": {
         "cli": "grok",
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --always-approve --output-format json --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --yes --single "$PROMPT"
         "prompt_via_arg": True,
-        "dispatch_flags": ["--always-approve"],
+        "dispatch_flags": {
+            "valid_flags": ["--prompt", "--yes", "--model"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print"],
+            "required_flags": ["--yes"],
+        },
+        "network_deps": {
+            "required_endpoints": ["cli-chat-proxy.grok.com:443"],
+            "optional_endpoints": [],
+        },
         "roles": ["builder", "architect"],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
     },
@@ -641,6 +682,54 @@ def _save_jobs(jobs: list) -> None:
         json.dump(jobs, f, indent=2)
 
 
+def _spawn_with_pty_fallback(cmd, env, cwd):
+    """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            env=env, cwd=cwd)
+    try:
+        out, _ = proc.communicate(timeout=5)
+        if out:
+            return proc, out
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    # PTY fallback (POSIX only)
+    if sys.platform != "win32":
+        import pty
+        import select
+        master_fd, slave_fd = pty.openpty()
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                env=env,
+                cwd=cwd,
+                close_fds=True
+            )
+            os.close(slave_fd)
+            out_chunks = []
+            while True:
+                r, _, _ = select.select([master_fd], [], [], 5)
+                if not r:
+                    proc.kill()
+                    break
+                try:
+                    data = os.read(master_fd, 1024)
+                    if not data:
+                        break
+                    out_chunks.append(data)
+                except OSError:
+                    break
+            proc.wait(timeout=5)
+            return proc, b"".join(out_chunks)
+        finally:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+    return None, b""
+
+
 def _probe_model_version(agent_name: str, cli: str) -> str:
     """Tier 2: probe the agent's active model from its statusline before dispatch.
 
@@ -654,8 +743,16 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
     }
     cmd = probe_cmds.get(agent_name, [cli, "--version"])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-        text = (result.stdout or "") + (getattr(result, "stderr", "") or "")
+        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+        contract = baseline.get("headless_contract", {})
+        env = os.environ.copy()
+        for var in contract.get("env_vars_required", []):
+            if "=" in var:
+                k, v = var.split("=", 1)
+                env[k] = v
+
+        proc, out = _spawn_with_pty_fallback(cmd, env, os.getcwd())
+        text = out.decode("utf-8", errors="ignore") if out else ""
         patterns = [
             r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
             r"(agy-[\w.-]+)",
@@ -2621,8 +2718,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
-    dispatch_flags = baselines.get("dispatch_flags", [])
-    flags = flags + dispatch_flags
+    flags = flags + _dispatch_flags_for_agent(agent)
     profile = _load_agent_profile(agent)
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]
@@ -2706,12 +2802,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
+    contract = baselines.get("headless_contract", {})
+    env = os.environ.copy()
+    for var in contract.get("env_vars_required", []):
+        if "=" in var:
+            k, v = var.split("=", 1)
+            env[k] = v
+
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
         cwd=os.getcwd(),
+        env=env,
     )
 
     job = {
