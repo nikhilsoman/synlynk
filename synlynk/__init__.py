@@ -410,7 +410,7 @@ def _scan_command_palette(agent_name: str, harness_name: str, cli_version: str, 
         if not line:
             continue
 
-        flag_match = _re.match(r"^(--[\w-]+(?:=\S+)?)\s{2,}(.*)", line)
+        flag_match = _re.match(r"^(--[\w-]+(?:=\S+)?)(?:\s+\S+)?\s{2,}(.*)", line)
         if flag_match:
             cmd = flag_match.group(1).split("=")[0]
             desc = flag_match.group(2).strip()
@@ -633,6 +633,8 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
     if instr_file and os.path.exists(instr_file):
         body = _build_fence_body_from_record(agent_name, db_conn)
         _upsert_harness_fence(instr_file, installed_version, body)
+
+    _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
 
     db_conn.commit()
     return {"skipped": False, "version": installed_version, "status": compliance}

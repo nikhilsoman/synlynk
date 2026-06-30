@@ -119,6 +119,52 @@ def test_tc3_marks_unreachable_endpoint(monkeypatch):
     assert ("cli-chat-proxy.grok.com", 443) in result["unreachable"]
 
 
+def test_palette_scan_populates_commands(tmp_path, monkeypatch):
+    stub = _make_stub_cli(
+        tmp_path,
+        "agy",
+        version="1.0.0",
+        help_text="  --non-interactive  Run without prompts\n  --model MODEL  Model to use\n  config set  Set config value\n",
+    )
+    monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
+
+    import sqlite3
+    from synlynk import _migrate_db, _scan_command_palette
+
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+
+    _scan_command_palette("agy", "agy", "1.0.0", db)
+
+    rows = db.execute("SELECT command FROM harness_command_palette WHERE harness_name='agy'").fetchall()
+    commands = {r[0] for r in rows}
+    assert "--non-interactive" in commands
+    assert "--model" in commands
+
+
+def test_palette_marks_removed_commands(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk import _migrate_db, _scan_command_palette
+
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+
+    # First scan: --old-flag present
+    stub = _make_stub_cli(tmp_path, "agy", version="1.0.0", help_text="  --old-flag  Old\n")
+    monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
+    _scan_command_palette("agy", "agy", "1.0.0", db)
+
+    # Second scan: --old-flag removed in v2.0.0
+    stub.write_text("#!/bin/sh\necho '  --new-flag  New'\n")
+    stub.chmod(0o755)
+    _scan_command_palette("agy", "agy", "2.0.0", db)
+
+    row = db.execute(
+        "SELECT last_seen_version FROM harness_command_palette WHERE command='--old-flag' AND harness_name='agy'"
+    ).fetchone()
+    assert row and row[0] == "1.0.0"
+
+
 def test_fence_upsert_replaces_existing_fence(tmp_path):
     from synlynk import _upsert_harness_fence
     md = tmp_path / "GEMINI.md"
