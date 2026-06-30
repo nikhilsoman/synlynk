@@ -22,6 +22,50 @@ def test_agent_capability_baselines_exist():
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
 
 
+def test_bs14_schema_tables_exist(tmp_path):
+    import sqlite3
+    from synlynk import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    for t in [
+        "harness_baselines",
+        "harness_records",
+        "harness_verb_map",
+        "harness_command_palette",
+        "harness_version_history",
+    ]:
+        assert t in tables, f"Missing table: {t}"
+    conn.close()
+
+
+def test_bs14_schema_migration_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    _migrate_db(conn)
+    conn.close()
+
+
+def test_bs14_baseline_seeded_for_known_agents(tmp_path):
+    import sqlite3
+    from synlynk import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    rows = conn.execute("SELECT harness_name FROM harness_baselines").fetchall()
+    harnesses = {r[0] for r in rows}
+    for h in ["claude-cli", "agy", "grok", "codex"]:
+        assert h in harnesses, f"Missing baseline for harness: {h}"
+    conn.close()
+
+
 def test_jobs_file_constant():
     assert synlynk.JOBS_FILE == ".synlynk/jobs.json"
 

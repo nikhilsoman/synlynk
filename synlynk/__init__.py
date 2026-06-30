@@ -184,6 +184,75 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         conn.executescript(_DB_SCORES_VIEW)
     except _sqlite3.OperationalError:
         pass  # view already exists with same definition
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS harness_baselines (
+            harness_name TEXT NOT NULL,
+            cli_version TEXT NOT NULL DEFAULT 'any',
+            headless_contract TEXT NOT NULL DEFAULT '{}',
+            dispatch_flags TEXT NOT NULL DEFAULT '{}',
+            network_deps TEXT NOT NULL DEFAULT '{}',
+            baseline_source TEXT NOT NULL DEFAULT 'curated',
+            PRIMARY KEY (harness_name, cli_version)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_records (
+            agent_name TEXT PRIMARY KEY,
+            harness_name TEXT NOT NULL,
+            installed_version TEXT NOT NULL DEFAULT 'unknown',
+            compliance_status TEXT NOT NULL DEFAULT 'unknown',
+            active_contract TEXT NOT NULL DEFAULT '{}',
+            active_flags TEXT NOT NULL DEFAULT '{}',
+            last_probe_at TEXT,
+            capability_hash TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_verb_map (
+            synlynk_verb TEXT NOT NULL,
+            verb_category TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            agent_command TEXT,
+            supported TEXT NOT NULL DEFAULT 'none',
+            partial_notes TEXT,
+            min_cli_version TEXT,
+            PRIMARY KEY (synlynk_verb, agent_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_command_palette (
+            harness_name TEXT NOT NULL,
+            cli_version TEXT NOT NULL,
+            command TEXT NOT NULL,
+            command_type TEXT NOT NULL,
+            synlynk_verb TEXT,
+            help_text TEXT,
+            first_seen_version TEXT NOT NULL,
+            last_seen_version TEXT,
+            PRIMARY KEY (harness_name, cli_version, command)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_version_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name TEXT NOT NULL,
+            cli_version TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            prev_hash TEXT,
+            new_hash TEXT,
+            recorded_at TEXT NOT NULL
+        );
+    """)
+    import json as _json
+    _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
+    for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
+        _harness_name = _HARNESS_MAP.get(_agent_name, _agent_name)
+        conn.execute("""
+            INSERT OR IGNORE INTO harness_baselines
+                (harness_name, cli_version, headless_contract, dispatch_flags, network_deps, baseline_source)
+            VALUES (?, 'any', ?, ?, ?, 'curated')
+        """, (
+            _harness_name,
+            _json.dumps(_baseline.get("headless_contract", {})),
+            _json.dumps(_baseline.get("dispatch_flags", {})),
+            _json.dumps(_baseline.get("network_deps", {})),
+        ))
     conn.commit()
     # v0.9.2: token budget columns on stories
     for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
