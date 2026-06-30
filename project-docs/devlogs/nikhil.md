@@ -27,6 +27,44 @@
 
 ---
 
+## 2026-06-29 — Session: BS-5 Website Redesign Polish & Merge
+
+### Shipped
+
+**PR #78 — BS-5 Website Redesign (merged to main, 528 tests passing)**
+Finished Phase 3 and visual polish/review for synlynk.com:
+- Fixed navigation by removing duplicate "Install" CTA and restoring the GitHub anchor link.
+- Repositioned the 4 agent logos immediately above the CTA buttons, enlarged them, and removed box container borders and names.
+- Fixed layout centering and margins on the main tagline ("Dispatch, monitor...") and terminal carousel.
+- Widened the tagline hero install command container and increased font size to avoid layout clipping.
+- Restructured color theme contrast in light background sections: overrode `.section-light .section-title` to `#0E0E0F` and darkened body copy.
+- Wrote and ran a headless screenshot script to capture visual diagrams for all 25 blog posts, saving them under `assets/blog-heroes/` and populating `blogHeroes.json`.
+- Unlinked header/card preview thumbnail visual hero attachments on posts to keep them fallback gradient only, keeping visuals strictly inline.
+- Archived the legacy `site/` directory as `synlynk-website-v1-arch/` in the repository.
+
+### Next
+- BS-6: brainstorm — repo/workspace visualization: product view · logical view · infra view
+
+---
+
+## 2026-06-28 — Session: BS-13 Live Job Observatory Brainstorm
+
+### Started
+Scoped a new brainstorm for a cross-repo live job monitoring board.
+
+### Direction
+- Add a read-only `synlynk watch` experience with near real-time refresh, targeting about 10s cadence.
+- Group running jobs by repo and stage, and show cost, token, and request accumulation inline.
+- Ship both a terminal view and a web view, backed by the same underlying monitoring model.
+- Keep interaction limited to opening the relevant terminal or web link from the top-level board; no control CTAs.
+- Make job provenance explicit: originating agent, executing agent, and input context size are foundational fields.
+
+### Next
+- BS-13 brainstorming session and eventual feed into `synlynk viz`
+
+### Spec
+- `docs/superpowers/specs/2026-06-28-bs13-live-job-observatory-design.md`
+
 ## 2026-06-27 — Session: v0.9.8 Health Pulse + Lifecycle
 
 ### Shipped
@@ -715,4 +753,22 @@ implementation plan.
 
 ### Key decisions & implementation notes
 - Replaced the monkeypatch of `start()` with dummy lists tracking `stop` and `start` calls to explicitly assert call sequences.
+
+## 2026-06-29 — Session: BS-15 synlynk as a standalone harness
+
+### Completed
+- Specced the strategy and architecture for transitioning synlynk from a CLI wrapper of vendor harnesses to hosting its own native execution harness in [synlynk-as-a-harness.md](file:///Users/nikhilsoman/dev/synlynk/docs/strategy/synlynk-as-a-harness.md).
+- Noted this decision in [memory.md](file:///Users/nikhilsoman/dev/synlynk/project-docs/memory.md) with `@agy` attribution.
+- Created `story-2ebedf92` (BS-15: brainstorm — synlynk as a standalone harness) in state.db, which automatically updated the tasks list in [todo.md](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md).
+- Imported un-synced hand-written tasks (`BS-14`, `BS-12a`) into state.db using `_import_todo_to_stories()`.
+- Verified the code changes by running all 528 tests successfully.
+
+## 2026-06-30 — Session: BS-14 Sentinel Stall Implementation
+
+### Completed
+- **Feature**: Implemented per-job stall check logic `_check_job_stall` in `synlynk/__init__.py` using dynamic timeout configs overrideable per-agent.
+- **Feature**: Integrated `_check_job_stall` in `_reconcile_jobs` to terminate stalled jobs with zero output and write `STALL_NO_OUTPUT` sentinel alerts.
+- **TDD Test**: Added a regression test `test_reconcile_detects_stall_and_kills_process` to `tests/test_synlynk.py`.
+- **Config**: Added defaults for `stall_timeout_minutes` and `agents` config sections to `load_config()` and configuration templates.
+- **Verification**: Verified implementation against 485 tests, ensuring all tests passed.
 
