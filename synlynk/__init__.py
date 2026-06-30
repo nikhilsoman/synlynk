@@ -393,6 +393,143 @@ def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     return _hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+_re = re
+
+
+def _scan_command_palette(agent_name: str, harness_name: str, cli_version: str, db_conn) -> list:
+    """Parse --help output and populate harness_command_palette."""
+    try:
+        result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
+        help_text = (result.stdout or "") + (result.stderr or "")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+
+    found_commands = {}
+    for line in help_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        flag_match = _re.match(r"^(--[\w-]+(?:=\S+)?)\s{2,}(.*)", line)
+        if flag_match:
+            cmd = flag_match.group(1).split("=")[0]
+            desc = flag_match.group(2).strip()
+            found_commands[cmd] = {"type": "flag", "help": desc}
+            continue
+
+        sub_match = _re.match(r"^([\w][\w\s-]{1,30}?)\s{2,}(.*)", line)
+        if sub_match:
+            cmd = sub_match.group(1).strip()
+            desc = sub_match.group(2).strip()
+            if cmd and len(cmd.split()) <= 3 and not cmd.startswith("-"):
+                found_commands[cmd] = {"type": "subcommand", "help": desc}
+
+    prev_rows = db_conn.execute(
+        "SELECT command, cli_version FROM harness_command_palette WHERE harness_name=? AND last_seen_version IS NULL",
+        (harness_name,),
+    ).fetchall()
+    prev_commands = {row[0] for row in prev_rows}
+    prev_versions = {row[0]: row[1] for row in prev_rows}
+    removed = prev_commands - set(found_commands.keys())
+    for cmd in removed:
+        db_conn.execute(
+            """
+            UPDATE harness_command_palette
+            SET last_seen_version=?
+            WHERE harness_name=? AND command=? AND last_seen_version IS NULL
+            """,
+            (prev_versions.get(cmd, cli_version), harness_name, cmd),
+        )
+
+    for cmd, meta in found_commands.items():
+        db_conn.execute(
+            """
+            INSERT OR IGNORE INTO harness_command_palette
+                (harness_name, cli_version, command, command_type, help_text, first_seen_version)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (harness_name, cli_version, cmd, meta["type"], meta["help"], cli_version),
+        )
+
+    db_conn.commit()
+    return list(found_commands.keys())
+
+_FENCE_OPEN_PATTERN = _re.compile(
+    r"<!-- synlynk:harness v\S+ verified:\S+ -->.*?<!-- /synlynk:harness -->",
+    _re.DOTALL,
+)
+
+def _build_fence_content(harness_version: str, body: str) -> str:
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (
+        f"<!-- synlynk:harness v{harness_version} verified:{ts} -->\n"
+        f"# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        f"{body}\n"
+        f"<!-- /synlynk:harness -->"
+    )
+
+def _upsert_harness_fence(file_path: str, harness_version: str, body: str) -> None:
+    if not os.path.exists(file_path):
+        print(f"  warning: {file_path} not found — fence skipped. Run synlynk init to create it.", file=sys.stderr)
+        return
+
+    fence = _build_fence_content(harness_version, body)
+    with open(file_path, "r", encoding="utf-8") as f:
+        current = f.read()
+
+    if _FENCE_OPEN_PATTERN.search(current):
+        updated = _FENCE_OPEN_PATTERN.sub(fence, current, count=1)
+    else:
+        sep = "\n" if current.endswith("\n") else "\n\n"
+        updated = current + sep + fence + "\n"
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(updated)
+
+
+def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
+    import json as _j
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    contract = baseline.get("headless_contract", {})
+    flags_spec = baseline.get("dispatch_flags", {})
+    net_deps = baseline.get("network_deps", {})
+
+    if db_conn:
+        row = db_conn.execute(
+            "SELECT active_contract, active_flags FROM harness_records WHERE agent_name=?",
+            (agent_name,)
+        ).fetchone()
+        if row:
+            contract = _j.loads(row[0]) or contract
+            flags_spec = _j.loads(row[1]) or flags_spec
+
+    mode = "pty" if contract.get("requires_pty") else "pipe"
+    flush = contract.get("stdout_flush_method", "native")
+    ni_flag = contract.get("non_interactive_flag", "")
+    env_vars = contract.get("env_vars_required", [])
+    if isinstance(flags_spec, dict):
+        valid = " ".join(flags_spec.get("valid_flags", []))
+        invalid = " ".join(flags_spec.get("invalid_flags", []))
+    else:
+        valid = " ".join(flags_spec) if isinstance(flags_spec, list) else ""
+        invalid = ""
+    endpoints = "\n".join(f"- Required: {e}" for e in net_deps.get("required_endpoints", []))
+    env_line = f"- Stdout flush: unbuffered (set {' '.join(env_vars)})" if env_vars else f"- Stdout flush: {flush}"
+
+    return f"""## Headless Execution Contract
+- Execution mode: {mode}
+- Non-interactive flag: {ni_flag}
+{env_line}
+
+## Active Dispatch Flags
+- Valid: {valid}
+- Invalid (do not use): {invalid}
+
+## Network Dependencies
+{endpoints or '- None required'}"""
+
+
 def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
     import json as _json
     import socket as _sock
@@ -485,6 +622,17 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
                 now,
             ),
         )
+
+    _INSTRUCTION_FILES = {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "grok": "GROK.md",
+        "codex": "AGENTS.md",
+    }
+    instr_file = _INSTRUCTION_FILES.get(agent_name)
+    if instr_file and os.path.exists(instr_file):
+        body = _build_fence_body_from_record(agent_name, db_conn)
+        _upsert_harness_fence(instr_file, installed_version, body)
 
     db_conn.commit()
     return {"skipped": False, "version": installed_version, "status": compliance}
@@ -3218,6 +3366,45 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> 
                 baseline = {}
     if not baseline:
         baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+
+    import time as _time
+    _STALE_THRESHOLD = 3600  # 1hr
+
+    if db_conn:
+        try:
+            _row = db_conn.execute(
+                "SELECT installed_version, last_probe_at FROM harness_records WHERE agent_name=?",
+                (agent_name,),
+            ).fetchone()
+        except Exception:
+            _row = None
+        if _row:
+            _recorded_version, _last_probe_at = _row
+            _is_stale = True
+            if _last_probe_at:
+                try:
+                    _probe_ts = _time.mktime(_time.strptime(_last_probe_at, "%Y-%m-%dT%H:%M:%SZ"))
+                    _is_stale = (_time.time() - _probe_ts) > _STALE_THRESHOLD
+                except ValueError:
+                    _is_stale = True
+
+            if _is_stale:
+                try:
+                    _ver_result = subprocess.run(
+                        [agent_name, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=3,
+                    )
+                    _live_version = _ver_result.stdout.strip().split()[-1] if _ver_result.stdout.strip() else "unknown"
+                    if _live_version != _recorded_version:
+                        _write_sentinel_alert(
+                            "WARNING",
+                            "HARNESS_VERSION_DRIFT",
+                            f"Agent '{agent_name}' version changed: {_recorded_version} -> {_live_version}. Run synlynk probe to update.",
+                        )
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass
 
     flags_spec = baseline.get("dispatch_flags", {})
     if isinstance(flags_spec, dict):
