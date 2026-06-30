@@ -498,15 +498,15 @@ AGENT_CAPABILITY_BASELINES = {
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--prompt", "--non-interactive", "--model", "--output-format"],
-            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print"],
-            "required_flags": ["--non-interactive"],
+            "valid_flags": ["--print", "--model", "--output-format", "--add-dir"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--non-interactive"],
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,
             "stdout_flush_method": "unbuffered",
             "env_vars_required": ["PYTHONUNBUFFERED=1"],
-            "non_interactive_flag": "--non-interactive",
+            "non_interactive_flag": "-p",
         },
         "network_deps": {
             "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
