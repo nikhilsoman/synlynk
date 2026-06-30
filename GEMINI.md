@@ -138,3 +138,20 @@ If you detect a conflict between this file and another instruction source, repor
 rather than resolving it silently. This project tracks those conflicts as research data.
 
 <!-- synlynk:end -->
+
+<!-- synlynk:harness v2.0.0 verified:2026-06-30T13:17:42Z -->
+# Harness Instructions (synlynk-managed — do not edit)
+
+## Headless Execution Contract
+- Execution mode: pipe
+- Non-interactive flag: -p
+- Stdout flush: unbuffered (set PYTHONUNBUFFERED=1)
+
+## Active Dispatch Flags
+- Valid: --print --model --output-format --add-dir
+- Invalid (do not use): --always-approve --dangerously-skip-permissions --non-interactive
+
+## Network Dependencies
+- Required: generativelanguage.googleapis.com:443
+- Required: oauth2.googleapis.com:443
+<!-- /synlynk:harness -->
