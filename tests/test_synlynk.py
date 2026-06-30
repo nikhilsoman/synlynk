@@ -2623,11 +2623,13 @@ def test_cmd_jobs_watch_handles_render_errors(project_dir, monkeypatch, capsys):
     assert "render error: boom" in out.lower()
 
 
-def test_load_agent_profile_returns_empty_when_missing(project_dir):
-    """_load_agent_profile returns {} when .agents/<agent>.json does not exist."""
+def test_load_agent_profile_returns_defaults_when_missing(project_dir):
+    """_load_agent_profile returns default harness/model values when file is missing."""
     import synlynk as sl
     result = sl._load_agent_profile("claude")
-    assert result == {}
+    assert result["agent"] == "claude"
+    assert result["harness"] == "claude"
+    assert result["model"] == "unknown"
 
 
 def test_load_agent_profile_returns_dict_when_present(project_dir):
@@ -2640,6 +2642,24 @@ def test_load_agent_profile_returns_dict_when_present(project_dir):
     result = sl._load_agent_profile("claude")
     assert result["context_mode"] == "none"
     assert result["context_max_bytes"] == 500
+
+
+def test_agent_json_roundtrips_harness_and_model(tmp_path):
+    import json
+    from synlynk import _load_agent_profile
+
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    (agents_dir / "claude.json").write_text(json.dumps({
+        "agent": "claude",
+        "harness": "claude-cli",
+        "model": "claude-sonnet-4-6",
+        "dispatch_flags": ["--print", "--dangerously-skip-permissions"],
+    }))
+
+    profile = _load_agent_profile("claude", str(agents_dir))
+    assert profile["harness"] == "claude-cli"
+    assert profile["model"] == "claude-sonnet-4-6"
 
 
 def test_dispatch_agent_profile_overrides_context_mode(project_dir, monkeypatch):

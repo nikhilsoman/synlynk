@@ -1,0 +1,6 @@
+{
+  "agent": "codex",
+  "harness": "codex",
+  "model": "o4-mini",
+  "dispatch_flags": ["exec", "-", "-s", "workspace-write"]
+}
