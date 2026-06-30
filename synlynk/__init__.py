@@ -261,6 +261,34 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         except Exception:
             pass  # column already exists
     conn.commit()
+    _seed_verb_map(conn)
+
+
+def _seed_verb_map(db_conn):
+    db_conn.executemany("""
+        INSERT OR IGNORE INTO harness_verb_map
+            (synlynk_verb, verb_category, agent_name, agent_command, supported, partial_notes)
+        VALUES (?,?,?,?,?,?)
+    """, _VERB_MAP_SEED)
+    db_conn.commit()
+
+
+def _check_verb_support(verb: str, agent_name: str, db_conn) -> dict:
+    row = db_conn.execute(
+        "SELECT supported, partial_notes, agent_command FROM harness_verb_map WHERE synlynk_verb=? AND agent_name=?",
+        (verb, agent_name)
+    ).fetchone()
+    if not row:
+        return {"supported": "unknown", "block": False, "warn": False, "notes": None, "command": None}
+    supported, notes, cmd = row
+    return {
+        "supported": supported,
+        "block": supported == "none",
+        "warn": supported == "partial",
+        "notes": notes,
+        "command": cmd,
+    }
+
 
 
 def cmd_story_create(title: str, engg_domain: str = "unknown",
@@ -319,21 +347,26 @@ def _load_agent_config(name: str) -> dict:
         return _json.load(f)
 
 
-def _load_agent_profile(agent: str) -> dict:
-    """Load .agents/<agent>.json as a soft context-profile dict.
-
-    Returns {} when the file is absent or invalid.
-    """
+def _load_agent_profile(agent_name: str, agents_dir: str = ".agents") -> dict:
+    """Load an agent profile and normalize harness/model defaults."""
     import json as _json
-    candidates = [os.path.join(".agents", f"{agent}.json"), os.path.join("agents", f"{agent}.json")]
+
+    candidates = [
+        os.path.join(agents_dir, f"{agent_name}.json"),
+        os.path.join(".agents", f"{agent_name}.json"),
+        os.path.join("agents", f"{agent_name}.json"),
+    ]
     path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
-        return {}
+        return {"agent": agent_name, "harness": agent_name, "model": "unknown"}
     try:
         with open(path) as f:
-            return _json.load(f)
+            profile = _json.load(f)
     except (OSError, ValueError, TypeError):
-        return {}
+        return {"agent": agent_name, "harness": agent_name, "model": "unknown"}
+    profile.setdefault("harness", agent_name)
+    profile.setdefault("model", "unknown")
+    return profile
 
 
 def _dispatch_flags_for_agent(agent: str) -> list:
@@ -350,6 +383,123 @@ def _dispatch_flags_for_agent(agent: str) -> list:
                 ordered.append(flag)
         return ordered
     return list(dispatch_flags or [])
+
+
+def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
+    import hashlib as _hashlib
+    import json as _json
+
+    payload = _json.dumps({"contract": headless_contract, "flags": dispatch_flags}, sort_keys=True)
+    return _hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
+    import json as _json
+    import socket as _sock
+    import time as _time
+
+    harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
+    harness_name = harness_map.get(agent_name, agent_name)
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+
+    try:
+        result = subprocess.run([agent_name, "--version"], capture_output=True, text=True, timeout=5)
+        installed_version = result.stdout.strip().split()[-1] if result.stdout.strip() else "unknown"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        installed_version = "unavailable"
+
+    contract = baseline.get("headless_contract", {})
+    flags = baseline.get("dispatch_flags", {})
+    new_hash = _compute_capability_hash(contract, flags)
+
+    if fast_path_ok:
+        row = db_conn.execute(
+            "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+            (agent_name,),
+        ).fetchone()
+        if row and row[0] == installed_version and row[1] == new_hash:
+            return {"skipped": True, "version": installed_version, "status": "ok"}
+
+    network_ok = True
+    for endpoint in baseline.get("network_deps", {}).get("required_endpoints", []):
+        host, _, port_s = endpoint.rpartition(":")
+        try:
+            s = _sock.create_connection((host, int(port_s or 443)), timeout=2)
+            s.close()
+        except OSError:
+            network_ok = False
+
+    compliance = "ok" if network_ok else "degraded"
+
+    prev_row = db_conn.execute(
+        "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+        (agent_name,),
+    ).fetchone()
+
+    now = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+    event_type = None
+    if prev_row:
+        if prev_row[0] != installed_version:
+            event_type = "version_change"
+        elif prev_row[1] != new_hash:
+            event_type = "drift_detected"
+
+    db_conn.execute(
+        """
+        INSERT INTO harness_records
+            (agent_name, harness_name, installed_version, compliance_status, active_contract, active_flags, capability_hash, last_probe_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(agent_name) DO UPDATE SET
+            harness_name=excluded.harness_name,
+            installed_version=excluded.installed_version,
+            compliance_status=excluded.compliance_status,
+            active_contract=excluded.active_contract,
+            active_flags=excluded.active_flags,
+            capability_hash=excluded.capability_hash,
+            last_probe_at=excluded.last_probe_at
+        """,
+        (
+            agent_name,
+            harness_name,
+            installed_version,
+            compliance,
+            _json.dumps(contract),
+            _json.dumps(flags),
+            new_hash,
+            now,
+        ),
+    )
+
+    if event_type:
+        db_conn.execute(
+            """
+            INSERT INTO harness_version_history (agent_name, cli_version, event_type, prev_hash, new_hash, recorded_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                agent_name,
+                installed_version,
+                event_type,
+                prev_row[1] if prev_row else None,
+                new_hash,
+                now,
+            ),
+        )
+
+    db_conn.commit()
+    return {"skipped": False, "version": installed_version, "status": compliance}
+
+
+def cmd_probe(agent: str = None) -> None:
+    agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
+    db_conn = _get_db()
+    try:
+        for agent_name in agents:
+            result = _probe_agent(agent_name, db_conn)
+            status = "skipped (up to date)" if result["skipped"] else result["status"]
+            print(f"  probe [{agent_name}] {result['version']} → {status}")
+    finally:
+        db_conn.close()
 
 
 def cmd_score_add(story_id: str, rating: float, note: str = None,
@@ -602,6 +752,82 @@ AGENT_CAPABILITY_BASELINES = {
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
     },
 }
+
+_VERB_MAP_SEED = [
+    # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
+    ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
+    ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --prompt {task} --yes --model grok-3", "full", None),
+    ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
+    ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
+    ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --yes --prompt {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
+    ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
+    ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
+    ("dispatch.resume",   "dispatch",      "grok",   None, "none", None),
+    ("dispatch.resume",   "dispatch",      "codex",  None, "none", None),
+    ("dispatch.approve",  "dispatch",      "claude", "claude --allowedTools {tools}", "full", None),
+    ("dispatch.approve",  "dispatch",      "agy",    None, "none", None),
+    ("dispatch.approve",  "dispatch",      "grok",   None, "none", None),
+    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "approval-policy=none only"),
+    ("dispatch.model",    "dispatch",      "claude", "--model {model}", "full", None),
+    ("dispatch.model",    "dispatch",      "agy",    "--model {model}", "full", None),
+    ("dispatch.model",    "dispatch",      "grok",   "--model {model}", "full", None),
+    ("dispatch.model",    "dispatch",      "codex",  "--model {model}", "full", None),
+    ("dispatch.tools",    "dispatch",      "claude", "--allowedTools {tools}", "full", None),
+    ("dispatch.tools",    "dispatch",      "agy",    None, "partial", "No tool_list flag"),
+    ("dispatch.tools",    "dispatch",      "grok",   None, "none", None),
+    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "approval-policy only"),
+    ("dispatch.context",  "dispatch",      "claude", "claude --print {task}", "full", None),
+    ("dispatch.context",  "dispatch",      "agy",    "agy -p {task}", "full", None),
+    ("dispatch.context",  "dispatch",      "grok",   "grok --prompt {task}", "partial", "No explicit context file flag"),
+    ("dispatch.context",  "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
+    ("jobs",              "observability", "claude", None, "partial", "No native jobs subcommand"),
+    ("jobs",              "observability", "agy",    None, "none", None),
+    ("jobs",              "observability", "grok",   None, "none", None),
+    ("jobs",              "observability", "codex",  None, "none", None),
+    ("status",            "observability", "claude", None, "partial", None),
+    ("status",            "observability", "agy",    None, "none", None),
+    ("status",            "observability", "grok",   None, "none", None),
+    ("status",            "observability", "codex",  None, "none", None),
+    ("telemetry",         "observability", "claude", None, "none", None),
+    ("telemetry",         "observability", "agy",    None, "none", None),
+    ("telemetry",         "observability", "grok",   None, "none", None),
+    ("telemetry",         "observability", "codex",  None, "none", None),
+    ("costs",             "observability", "claude", None, "partial", "Token count via /cost"),
+    ("costs",             "observability", "agy",    None, "none", None),
+    ("costs",             "observability", "grok",   None, "none", None),
+    ("costs",             "observability", "codex",  None, "none", None),
+    ("probe",             "harness",       "claude", "claude --version", "full", None),
+    ("probe",             "harness",       "agy",    "agy --version", "full", None),
+    ("probe",             "harness",       "grok",   "grok --version", "full", None),
+    ("probe",             "harness",       "codex",  "codex --version", "full", None),
+    ("doctor",            "harness",       "claude", None, "full", None),
+    ("doctor",            "harness",       "agy",    None, "full", None),
+    ("doctor",            "harness",       "grok",   None, "full", None),
+    ("doctor",            "harness",       "codex",  None, "full", None),
+    ("story",             "pm",            "claude", None, "none", None),
+    ("story",             "pm",            "agy",    None, "none", None),
+    ("story",             "pm",            "grok",   None, "none", None),
+    ("story",             "pm",            "codex",  None, "none", None),
+    ("epic",              "pm",            "claude", None, "none", None),
+    ("epic",              "pm",            "agy",    None, "none", None),
+    ("epic",              "pm",            "grok",   None, "none", None),
+    ("epic",              "pm",            "codex",  None, "none", None),
+    ("decide",            "pm",            "claude", None, "none", None),
+    ("decide",            "pm",            "agy",    None, "none", None),
+    ("decide",            "pm",            "grok",   None, "none", None),
+    ("decide",            "pm",            "codex",  None, "none", None),
+    ("workspace",         "workspace",     "claude", None, "none", None),
+    ("workspace",         "workspace",     "agy",    None, "none", None),
+    ("workspace",         "workspace",     "grok",   None, "none", None),
+    ("workspace",         "workspace",     "codex",  None, "none", None),
+    ("upgrade",           "workspace",     "claude", None, "partial", "Via /upgrade slash command"),
+    ("upgrade",           "workspace",     "agy",    None, "partial", "Via agy update"),
+    ("upgrade",           "workspace",     "grok",   None, "partial", None),
+    ("upgrade",           "workspace",     "codex",  None, "partial", None),
+]
 
 RELAY_EVENT_TYPES = frozenset({
     "story_updated",
@@ -3191,7 +3417,12 @@ def cmd_agent_configure(agent_name: str) -> None:
     max_bytes_raw = _ask(existing.get("context_max_bytes", None),
                          "context_max_bytes (int, leave blank for no limit)")
 
-    profile = {"agent": agent_name, "context_mode": context_mode}
+    profile = {
+        "agent": agent_name,
+        "harness": existing.get("harness", agent_name),
+        "model": existing.get("model", "unknown"),
+        "context_mode": context_mode,
+    }
     if max_bytes_raw not in ("", None):
         try:
             profile["context_max_bytes"] = int(max_bytes_raw)
@@ -7233,6 +7464,12 @@ def main() -> None:
     scan_parser.add_argument("--status", action="store_true",
                              help="Show cache age, HEAD SHA, file and symbol counts")
 
+    probe_parser = subparsers.add_parser(
+        "probe", help="Probe agent harness capability and record compatibility"
+    )
+    probe_parser.add_argument("--agent", default=None,
+                              help="Probe a single agent instead of all known agents")
+
     subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
 
     exit_parser = subparsers.add_parser(
@@ -7581,6 +7818,8 @@ def main() -> None:
         cmd_decide(args.topic, panel=panel_members, record=args.record)
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
+    elif args.command == "probe":
+        cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
         sys.exit(cmd_doctor())
     elif args.command == "exit":
