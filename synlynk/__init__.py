@@ -2733,18 +2733,70 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
-def _preflight_dispatch(agent: str) -> Optional[str]:
-    """Pre-flight check before dispatch; returns an error string, or None."""
-    import shutil as _shutil
+def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> dict:
+    """
+    Fast preflight guard before every dispatch (~2s, no CLI spawn).
 
-    cli = AGENT_CAPABILITY_BASELINES.get(agent, {}).get("cli", agent)
-    if not _shutil.which(cli):
-        known = list(AGENT_CAPABILITY_BASELINES)
-        return (
-            f"agent '{agent}' not found on PATH (expected CLI: '{cli}')\n"
-            f"  Install the agent or choose from: {known}"
-        )
-    return None
+    Falls back to AGENT_CAPABILITY_BASELINES when harness_records are not yet
+    available (v0.10.1). Returns:
+    {"passed": bool, "sentinel": str|None, "reason": str|None}
+    """
+    import json as _json
+    import socket as _socket
+
+    baseline = {}
+    if db_conn:
+        try:
+            row = db_conn.execute(
+                "SELECT active_flags, active_contract FROM harness_records WHERE agent_name=?",
+                (agent_name,),
+            ).fetchone()
+        except Exception:
+            row = None
+        if row:
+            try:
+                baseline["dispatch_flags"] = _json.loads(row[0]) if row[0] else {}
+                baseline["headless_contract"] = _json.loads(row[1]) if row[1] else {}
+                baseline["network_deps"] = baseline["headless_contract"].get("network_deps", {})
+            except Exception:
+                baseline = {}
+    if not baseline:
+        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+
+    flags_spec = baseline.get("dispatch_flags", {})
+    if isinstance(flags_spec, dict):
+        invalid_flags = set(flags_spec.get("invalid_flags", []))
+    else:
+        invalid_flags = set()
+
+    for flag in dispatch_flags or []:
+        f = flag.split("=", 1)[0]
+        if f in invalid_flags:
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
+            }
+
+    required = baseline.get("network_deps", {}).get("required_endpoints", [])
+    for endpoint in required:
+        host, _, port_str = endpoint.rpartition(":")
+        if not host:
+            host = endpoint
+        port = int(port_str) if port_str.isdigit() else 443
+        try:
+            sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+            sock.settimeout(2.0)
+            sock.connect((host, port))
+            sock.close()
+        except (OSError, ConnectionRefusedError, _socket.timeout):
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
+            }
+
+    return {"passed": True, "sentinel": None, "reason": None}
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
@@ -2769,14 +2821,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in AGENT_CAPABILITY_BASELINES:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
 
-    preflight_err = _preflight_dispatch(agent)
-    if preflight_err:
-        raise ValueError(f"Pre-flight failed: {preflight_err}")
-
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
     flags = flags + _dispatch_flags_for_agent(agent)
+    preflight = None
+    try:
+        preflight = _preflight_dispatch(agent_name=agent, dispatch_flags=flags, db_conn=None)
+    except TypeError:
+        preflight = _preflight_dispatch(agent)
+    if isinstance(preflight, dict):
+        if not preflight.get("passed", False):
+            sentinel_path = os.path.join(".synlynk", "sentinel.md")
+            _write_sentinel_alert(
+                "CRITICAL",
+                preflight["sentinel"],
+                preflight["reason"],
+                sentinel_path,
+            )
+            raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight['reason']}")
+    elif preflight:
+        sentinel_path = os.path.join(".synlynk", "sentinel.md")
+        _write_sentinel_alert("CRITICAL", "HARNESS_PREFLIGHT_FAIL", str(preflight), sentinel_path)
+        raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight}")
+
     profile = _load_agent_profile(agent)
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]

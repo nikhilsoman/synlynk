@@ -2800,21 +2800,45 @@ def test_cmd_jobs_default_hides_completed(project_dir, capsys):
     assert "No active jobs" in out
 
 
-def test_preflight_dispatch_fails_for_missing_agent(project_dir, monkeypatch):
-    """_preflight_dispatch returns error string when agent CLI is not on PATH."""
-    import synlynk as sl
-    monkeypatch.setattr("shutil.which", lambda x: None)
-    err = sl._preflight_dispatch("claude")
-    assert err is not None
-    assert "not found" in err.lower() or "claude" in err
+def test_preflight_blocks_invalid_flag():
+    from synlynk import _preflight_dispatch
+    result = _preflight_dispatch(
+        agent_name="grok",
+        dispatch_flags=["--always-approve"],
+        db_conn=None,
+    )
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "--always-approve" in result["reason"]
 
 
-def test_preflight_dispatch_passes_for_known_agent(project_dir, monkeypatch):
-    """_preflight_dispatch returns None when agent CLI is found."""
-    import synlynk as sl
-    monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/claude")
-    err = sl._preflight_dispatch("claude")
-    assert err is None
+def test_preflight_blocks_unreachable_endpoint(monkeypatch):
+    import socket
+
+    def mock_connect(self, addr):
+        raise ConnectionRefusedError("unreachable")
+
+    monkeypatch.setattr(socket.socket, "connect", mock_connect)
+
+    from synlynk import _preflight_dispatch
+    result = _preflight_dispatch(
+        agent_name="grok",
+        dispatch_flags=["--yes"],
+        db_conn=None,
+    )
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "cli-chat-proxy.grok.com" in result["reason"]
+
+
+def test_preflight_passes_for_valid_claude_dispatch():
+    from synlynk import _preflight_dispatch
+    result = _preflight_dispatch(
+        agent_name="claude",
+        dispatch_flags=["--print", "--dangerously-skip-permissions"],
+        db_conn=None,
+    )
+    assert result["passed"] is True
 
 
 def test_dispatch_agent_records_in_daemon_jobs_table(project_dir, monkeypatch):
@@ -4964,4 +4988,3 @@ def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
     assert job["status"] == "failed"
     assert len(killed) > 0
     assert "STALL_NO_OUTPUT" in sentinel_path.read_text()
-
