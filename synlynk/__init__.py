@@ -3470,11 +3470,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
     flags = flags + _dispatch_flags_for_agent(agent)
-    preflight = None
-    try:
-        preflight = _preflight_dispatch(agent_name=agent, dispatch_flags=flags, db_conn=None)
-    except TypeError:
-        preflight = _preflight_dispatch(agent)
+    preflight = _preflight_dispatch(agent_name=agent, dispatch_flags=flags, db_conn=None)
     if isinstance(preflight, dict):
         if not preflight.get("passed", False):
             sentinel_path = os.path.join(".synlynk", "sentinel.md")
