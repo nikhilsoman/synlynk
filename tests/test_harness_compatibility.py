@@ -1,4 +1,3 @@
-import json
 import os
 import sqlite3
 
@@ -78,3 +77,43 @@ def test_probe_appends_history_on_version_change(tmp_path, monkeypatch):
     _probe_agent("agy", db, fast_path_ok=True)
     history = db.execute("SELECT event_type FROM harness_version_history WHERE agent_name='agy'").fetchall()
     assert any(r[0] == "version_change" for r in history)
+
+
+def test_tc1_detects_pipe_hang_and_records_pty_required(tmp_path, monkeypatch):
+    stub = tmp_path / "agy_stub"
+    stub.write_text("#!/bin/sh\nsleep 30\n")
+    stub.chmod(0o755)
+    import shutil
+
+    shutil.copy(str(stub), str(tmp_path / "agy"))
+    (tmp_path / "agy").chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
+
+    from synlynk import _run_tc1
+
+    result = _run_tc1("agy", timeout=1)
+    assert result["requires_pty"] is True
+    assert result["passed"] is False
+
+
+def test_tc2_flags_invalid_flag_as_noncompliant(tmp_path, monkeypatch):
+    _make_stub_cli(tmp_path, "grok", help_text="--yes  Approve\n--model  Model\n")
+    monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
+
+    from synlynk import _run_tc2
+
+    test_flags = {"valid_flags": ["--yes"], "invalid_flags": ["--always-approve"]}
+    result = _run_tc2("grok", test_flags)
+    assert "--always-approve" in result["failed_flags"]
+
+
+def test_tc3_marks_unreachable_endpoint(monkeypatch):
+    import socket
+
+    monkeypatch.setattr(socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(OSError("refused")))
+
+    from synlynk import _run_tc3
+
+    result = _run_tc3([("cli-chat-proxy.grok.com", 443)])
+    assert result["reachable"] == []
+    assert ("cli-chat-proxy.grok.com", 443) in result["unreachable"]

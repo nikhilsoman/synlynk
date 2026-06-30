@@ -490,6 +490,98 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
     return {"skipped": False, "version": installed_version, "status": compliance}
 
 
+def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
+    """TC-1: Headless stdout contract."""
+    import sys as _sys
+
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    contract = baseline.get("headless_contract", {})
+    if not contract:
+        return {"requires_pty": False, "passed": True, "stdout_method": "not_applicable"}
+
+    non_interactive_flag = contract.get("non_interactive_flag", "--version")
+    env = os.environ.copy()
+    for var in contract.get("env_vars_required", []):
+        if "=" in var:
+            key, value = var.split("=", 1)
+            env[key] = value
+
+    try:
+        proc = subprocess.Popen(
+            [agent_name, non_interactive_flag],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        proc.communicate(timeout=timeout)
+        return {"requires_pty": False, "passed": True, "stdout_method": "pipe"}
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        if _sys.platform == "win32":
+            return {"requires_pty": True, "passed": False, "stdout_method": "pty"}
+        return {"requires_pty": True, "passed": False, "stdout_method": "unavailable"}
+    except FileNotFoundError:
+        return {"requires_pty": False, "passed": False, "stdout_method": "not_found"}
+
+
+def _run_tc2(agent_name: str, flags_spec: dict) -> dict:
+    """TC-2: Flag compliance."""
+    if isinstance(flags_spec, dict):
+        invalid_flags = list(flags_spec.get("invalid_flags", []))
+        valid_flags = list(flags_spec.get("valid_flags", []))
+    else:
+        invalid_flags, valid_flags = [], []
+
+    failed = list(invalid_flags)
+    try:
+        result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
+        help_text = (result.stdout or "") + (result.stderr or "")
+        for flag in valid_flags:
+            flag_name = flag.lstrip("-")
+            if flag_name and flag_name not in help_text and flag not in help_text:
+                failed.append(flag)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return {"failed_flags": failed, "passed": len(failed) == 0}
+
+
+def _run_tc3(endpoints: list) -> dict:
+    """TC-3: Network reachability."""
+    import socket as _sock
+
+    reachable, unreachable = [], []
+    for host, port in endpoints or []:
+        try:
+            conn = _sock.create_connection((host, port), timeout=2)
+            conn.close()
+            reachable.append((host, port))
+        except OSError:
+            unreachable.append((host, port))
+    return {"reachable": reachable, "unreachable": unreachable, "passed": len(unreachable) == 0}
+
+
+def _run_tc4(agent_name: str, db_conn) -> dict:
+    """TC-4: Verb map validation."""
+    failed = []
+    rows = db_conn.execute(
+        """
+        SELECT synlynk_verb, agent_command, supported
+        FROM harness_verb_map
+        WHERE agent_name=?
+        """,
+        (agent_name,),
+    ).fetchall()
+    for verb, cmd_template, supported in rows:
+        if supported == "none" or not cmd_template:
+            continue
+        cmd = cmd_template.split()[0]
+        try:
+            subprocess.run([cmd, "--help"], capture_output=True, timeout=3)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            failed.append(verb)
+    return {"failed_verbs": failed, "passed": len(failed) == 0}
+
+
 def cmd_probe(agent: str = None) -> None:
     agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
     db_conn = _get_db()
@@ -1865,36 +1957,105 @@ HEALTH_CHECKS = [
 ]
 
 
-def cmd_doctor(checks: _List = None) -> int:
+def cmd_doctor(args=None, checks: _List = None) -> int:
     """Runs all registered health checks and prints a formatted report.
 
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
-    if checks is None:
-        checks = HEALTH_CHECKS
+    if checks is not None:
+        _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
 
-    _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+        results = [fn() for fn in checks]
+        failed = [r for r in results if r.status == "fail"]
+        warned = [r for r in results if r.status == "warn"]
 
-    results = [fn() for fn in checks]
-    failed = [r for r in results if r.status == "fail"]
-    warned = [r for r in results if r.status == "warn"]
+        print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
+        for r in results:
+            icon = _STATUS_ICON.get(r.status, "?")
+            print(f"  {icon}  {r.name}: {r.message}")
+            if r.fix and r.status != "ok":
+                print(f"     {_DIM}→ {r.fix}{_RESET}")
 
-    print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
-    for r in results:
-        icon = _STATUS_ICON.get(r.status, "?")
-        print(f"  {icon}  {r.name}: {r.message}")
-        if r.fix and r.status != "ok":
-            print(f"     {_DIM}→ {r.fix}{_RESET}")
+        print()
+        if failed:
+            print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
+        elif warned:
+            print(f"  {len(warned)} advisory warning(s). Everything should still work.")
+        else:
+            print(f"  {_GREEN}All checks passed.{_RESET}")
+        print()
+        return 1 if failed else 0
 
-    print()
-    if failed:
-        print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
-    elif warned:
-        print(f"  {len(warned)} advisory warning(s). Everything should still work.")
-    else:
-        print(f"  {_GREEN}All checks passed.{_RESET}")
-    print()
-    return 1 if failed else 0
+    agent_filter = getattr(args, "agent", None) if args is not None else None
+    db_conn = _get_db()
+    agents = [agent_filter] if agent_filter else list(AGENT_CAPABILITY_BASELINES.keys())
+    any_failed = False
+    try:
+        for agent in agents:
+            print(f"\n  doctor [{agent}]")
+            baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
+
+            tc1 = _run_tc1(agent)
+            tc2 = _run_tc2(agent, baseline.get("dispatch_flags", {}))
+            endpoints = []
+            for ep in baseline.get("network_deps", {}).get("required_endpoints", []):
+                host, _, port_s = ep.rpartition(":")
+                endpoints.append((host, int(port_s) if port_s.isdigit() else 443))
+            tc3 = _run_tc3(endpoints)
+            tc4 = _run_tc4(agent, db_conn)
+
+            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"]
+            if not all_passed:
+                any_failed = True
+            status = "ok" if all_passed else "degraded"
+            now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            capability_hash = _compute_capability_hash(baseline.get("headless_contract", {}), baseline.get("dispatch_flags", {}))
+
+            db_conn.execute(
+                """
+                INSERT INTO harness_records
+                    (agent_name, harness_name, installed_version, compliance_status,
+                     active_contract, active_flags, last_probe_at, capability_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(agent_name) DO UPDATE SET
+                    harness_name=excluded.harness_name,
+                    installed_version=excluded.installed_version,
+                    compliance_status=excluded.compliance_status,
+                    active_contract=excluded.active_contract,
+                    active_flags=excluded.active_flags,
+                    last_probe_at=excluded.last_probe_at,
+                    capability_hash=excluded.capability_hash
+                """,
+                (
+                    agent,
+                    baseline.get("cli", agent),
+                    "unknown",
+                    status,
+                    json.dumps(baseline.get("headless_contract", {})),
+                    json.dumps(baseline.get("dispatch_flags", {})),
+                    now,
+                    capability_hash,
+                ),
+            )
+            try:
+                db_conn.execute(
+                    """
+                    INSERT INTO harness_version_history (agent_name, cli_version, event_type, recorded_at)
+                    VALUES (?, ?, 'doctor_run', ?)
+                    """,
+                    (agent, "unknown", now),
+                )
+            except _sqlite3.IntegrityError:
+                pass
+            db_conn.commit()
+
+            print(f"    TC-1 stdout:  {'✓' if tc1['passed'] else '✗ requires_pty=' + str(tc1.get('requires_pty'))}")
+            print(f"    TC-2 flags:   {'✓' if tc2['passed'] else '✗ failed=' + str(tc2['failed_flags'])}")
+            print(f"    TC-3 network: {'✓' if tc3['passed'] else '✗ unreachable=' + str(tc3['unreachable'])}")
+            print(f"    TC-4 verbs:   {'✓' if tc4['passed'] else '✗ failed=' + str(tc4['failed_verbs'])}")
+    finally:
+        db_conn.close()
+    return 1 if any_failed else 0
 
 
 def _strip_synlynk_section(path: str, marker_style: str) -> bool:
