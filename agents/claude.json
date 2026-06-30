@@ -1,0 +1,6 @@
+{
+  "agent": "claude",
+  "harness": "claude-cli",
+  "model": "claude-sonnet-4-6",
+  "dispatch_flags": ["--print", "--dangerously-skip-permissions"]
+}

@@ -184,6 +184,75 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         conn.executescript(_DB_SCORES_VIEW)
     except _sqlite3.OperationalError:
         pass  # view already exists with same definition
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS harness_baselines (
+            harness_name TEXT NOT NULL,
+            cli_version TEXT NOT NULL DEFAULT 'any',
+            headless_contract TEXT NOT NULL DEFAULT '{}',
+            dispatch_flags TEXT NOT NULL DEFAULT '{}',
+            network_deps TEXT NOT NULL DEFAULT '{}',
+            baseline_source TEXT NOT NULL DEFAULT 'curated',
+            PRIMARY KEY (harness_name, cli_version)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_records (
+            agent_name TEXT PRIMARY KEY,
+            harness_name TEXT NOT NULL,
+            installed_version TEXT NOT NULL DEFAULT 'unknown',
+            compliance_status TEXT NOT NULL DEFAULT 'unknown',
+            active_contract TEXT NOT NULL DEFAULT '{}',
+            active_flags TEXT NOT NULL DEFAULT '{}',
+            last_probe_at TEXT,
+            capability_hash TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_verb_map (
+            synlynk_verb TEXT NOT NULL,
+            verb_category TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            agent_command TEXT,
+            supported TEXT NOT NULL DEFAULT 'none',
+            partial_notes TEXT,
+            min_cli_version TEXT,
+            PRIMARY KEY (synlynk_verb, agent_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_command_palette (
+            harness_name TEXT NOT NULL,
+            cli_version TEXT NOT NULL,
+            command TEXT NOT NULL,
+            command_type TEXT NOT NULL,
+            synlynk_verb TEXT,
+            help_text TEXT,
+            first_seen_version TEXT NOT NULL,
+            last_seen_version TEXT,
+            PRIMARY KEY (harness_name, cli_version, command)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_version_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name TEXT NOT NULL,
+            cli_version TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            prev_hash TEXT,
+            new_hash TEXT,
+            recorded_at TEXT NOT NULL
+        );
+    """)
+    import json as _json
+    _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
+    for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
+        _harness_name = _HARNESS_MAP.get(_agent_name, _agent_name)
+        conn.execute("""
+            INSERT OR IGNORE INTO harness_baselines
+                (harness_name, cli_version, headless_contract, dispatch_flags, network_deps, baseline_source)
+            VALUES (?, 'any', ?, ?, ?, 'curated')
+        """, (
+            _harness_name,
+            _json.dumps(_baseline.get("headless_contract", {})),
+            _json.dumps(_baseline.get("dispatch_flags", {})),
+            _json.dumps(_baseline.get("network_deps", {})),
+        ))
     conn.commit()
     # v0.9.2: token budget columns on stories
     for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
@@ -192,6 +261,34 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         except Exception:
             pass  # column already exists
     conn.commit()
+    _seed_verb_map(conn)
+
+
+def _seed_verb_map(db_conn):
+    db_conn.executemany("""
+        INSERT OR IGNORE INTO harness_verb_map
+            (synlynk_verb, verb_category, agent_name, agent_command, supported, partial_notes)
+        VALUES (?,?,?,?,?,?)
+    """, _VERB_MAP_SEED)
+    db_conn.commit()
+
+
+def _check_verb_support(verb: str, agent_name: str, db_conn) -> dict:
+    row = db_conn.execute(
+        "SELECT supported, partial_notes, agent_command FROM harness_verb_map WHERE synlynk_verb=? AND agent_name=?",
+        (verb, agent_name)
+    ).fetchone()
+    if not row:
+        return {"supported": "unknown", "block": False, "warn": False, "notes": None, "command": None}
+    supported, notes, cmd = row
+    return {
+        "supported": supported,
+        "block": supported == "none",
+        "warn": supported == "partial",
+        "notes": notes,
+        "command": cmd,
+    }
+
 
 
 def cmd_story_create(title: str, engg_domain: str = "unknown",
@@ -242,27 +339,409 @@ def cmd_story_list() -> None:
 def _load_agent_config(name: str) -> dict:
     """Load .agents/<name>.json. Raises FileNotFoundError with clear message."""
     import json as _json
-    path = os.path.join(".agents", f"{name}.json")
+    candidates = [os.path.join(".agents", f"{name}.json"), os.path.join("agents", f"{name}.json")]
+    path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
         raise FileNotFoundError(f"No agent config found at {path}")
     with open(path) as f:
         return _json.load(f)
 
 
-def _load_agent_profile(agent: str) -> dict:
-    """Load .agents/<agent>.json as a soft context-profile dict.
-
-    Returns {} when the file is absent or invalid.
-    """
+def _load_agent_profile(agent_name: str, agents_dir: str = ".agents") -> dict:
+    """Load an agent profile and normalize harness/model defaults."""
     import json as _json
-    path = os.path.join(".agents", f"{agent}.json")
+
+    candidates = [
+        os.path.join(agents_dir, f"{agent_name}.json"),
+        os.path.join(".agents", f"{agent_name}.json"),
+        os.path.join("agents", f"{agent_name}.json"),
+    ]
+    path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
-        return {}
+        return {"agent": agent_name, "harness": agent_name, "model": "unknown"}
     try:
         with open(path) as f:
-            return _json.load(f)
+            profile = _json.load(f)
     except (OSError, ValueError, TypeError):
-        return {}
+        return {"agent": agent_name, "harness": agent_name, "model": "unknown"}
+    profile.setdefault("harness", agent_name)
+    profile.setdefault("model", "unknown")
+    return profile
+
+
+def _dispatch_flags_for_agent(agent: str) -> list:
+    """Return the executable dispatch flags for an agent baseline.
+
+    Supports both the legacy list form and the structured mapping form.
+    """
+    baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    dispatch_flags = baselines.get("dispatch_flags", [])
+    if isinstance(dispatch_flags, dict):
+        ordered = []
+        for flag in dispatch_flags.get("required_flags", []) or []:
+            if flag not in ordered:
+                ordered.append(flag)
+        return ordered
+    return list(dispatch_flags or [])
+
+
+def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
+    import hashlib as _hashlib
+    import json as _json
+
+    payload = _json.dumps({"contract": headless_contract, "flags": dispatch_flags}, sort_keys=True)
+    return _hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+_re = re
+
+
+def _scan_command_palette(agent_name: str, harness_name: str, cli_version: str, db_conn) -> list:
+    """Parse --help output and populate harness_command_palette."""
+    try:
+        result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
+        help_text = (result.stdout or "") + (result.stderr or "")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+
+    found_commands = {}
+    for line in help_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        flag_match = _re.match(r"^(--[\w-]+(?:=\S+)?)(?:\s+\S+)?\s{2,}(.*)", line)
+        if flag_match:
+            cmd = flag_match.group(1).split("=")[0]
+            desc = flag_match.group(2).strip()
+            found_commands[cmd] = {"type": "flag", "help": desc}
+            continue
+
+        sub_match = _re.match(r"^([\w][\w\s-]{1,30}?)\s{2,}(.*)", line)
+        if sub_match:
+            cmd = sub_match.group(1).strip()
+            desc = sub_match.group(2).strip()
+            if cmd and len(cmd.split()) <= 3 and not cmd.startswith("-"):
+                found_commands[cmd] = {"type": "subcommand", "help": desc}
+
+    prev_rows = db_conn.execute(
+        "SELECT command, cli_version FROM harness_command_palette WHERE harness_name=? AND last_seen_version IS NULL",
+        (harness_name,),
+    ).fetchall()
+    prev_commands = {row[0] for row in prev_rows}
+    prev_versions = {row[0]: row[1] for row in prev_rows}
+    removed = prev_commands - set(found_commands.keys())
+    for cmd in removed:
+        db_conn.execute(
+            """
+            UPDATE harness_command_palette
+            SET last_seen_version=?
+            WHERE harness_name=? AND command=? AND last_seen_version IS NULL
+            """,
+            (prev_versions.get(cmd, cli_version), harness_name, cmd),
+        )
+
+    for cmd, meta in found_commands.items():
+        db_conn.execute(
+            """
+            INSERT OR IGNORE INTO harness_command_palette
+                (harness_name, cli_version, command, command_type, help_text, first_seen_version)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (harness_name, cli_version, cmd, meta["type"], meta["help"], cli_version),
+        )
+
+    db_conn.commit()
+    return list(found_commands.keys())
+
+_FENCE_OPEN_PATTERN = _re.compile(
+    r"<!-- synlynk:harness v\S+ verified:\S+ -->.*?<!-- /synlynk:harness -->",
+    _re.DOTALL,
+)
+
+def _build_fence_content(harness_version: str, body: str) -> str:
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (
+        f"<!-- synlynk:harness v{harness_version} verified:{ts} -->\n"
+        f"# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        f"{body}\n"
+        f"<!-- /synlynk:harness -->"
+    )
+
+def _upsert_harness_fence(file_path: str, harness_version: str, body: str) -> None:
+    if not os.path.exists(file_path):
+        print(f"  warning: {file_path} not found — fence skipped. Run synlynk init to create it.", file=sys.stderr)
+        return
+
+    fence = _build_fence_content(harness_version, body)
+    with open(file_path, "r", encoding="utf-8") as f:
+        current = f.read()
+
+    if _FENCE_OPEN_PATTERN.search(current):
+        updated = _FENCE_OPEN_PATTERN.sub(fence, current, count=1)
+    else:
+        sep = "\n" if current.endswith("\n") else "\n\n"
+        updated = current + sep + fence + "\n"
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(updated)
+
+
+def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
+    import json as _j
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    contract = baseline.get("headless_contract", {})
+    flags_spec = baseline.get("dispatch_flags", {})
+    net_deps = baseline.get("network_deps", {})
+
+    if db_conn:
+        row = db_conn.execute(
+            "SELECT active_contract, active_flags FROM harness_records WHERE agent_name=?",
+            (agent_name,)
+        ).fetchone()
+        if row:
+            contract = _j.loads(row[0]) or contract
+            flags_spec = _j.loads(row[1]) or flags_spec
+
+    mode = "pty" if contract.get("requires_pty") else "pipe"
+    flush = contract.get("stdout_flush_method", "native")
+    ni_flag = contract.get("non_interactive_flag", "")
+    env_vars = contract.get("env_vars_required", [])
+    if isinstance(flags_spec, dict):
+        valid = " ".join(flags_spec.get("valid_flags", []))
+        invalid = " ".join(flags_spec.get("invalid_flags", []))
+    else:
+        valid = " ".join(flags_spec) if isinstance(flags_spec, list) else ""
+        invalid = ""
+    endpoints = "\n".join(f"- Required: {e}" for e in net_deps.get("required_endpoints", []))
+    env_line = f"- Stdout flush: unbuffered (set {' '.join(env_vars)})" if env_vars else f"- Stdout flush: {flush}"
+
+    return f"""## Headless Execution Contract
+- Execution mode: {mode}
+- Non-interactive flag: {ni_flag}
+{env_line}
+
+## Active Dispatch Flags
+- Valid: {valid}
+- Invalid (do not use): {invalid}
+
+## Network Dependencies
+{endpoints or '- None required'}"""
+
+
+def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
+    import json as _json
+    import socket as _sock
+    import time as _time
+
+    harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
+    harness_name = harness_map.get(agent_name, agent_name)
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+
+    try:
+        result = subprocess.run([agent_name, "--version"], capture_output=True, text=True, timeout=5)
+        installed_version = result.stdout.strip().split()[-1] if result.stdout.strip() else "unknown"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        installed_version = "unavailable"
+
+    contract = baseline.get("headless_contract", {})
+    flags = baseline.get("dispatch_flags", {})
+    new_hash = _compute_capability_hash(contract, flags)
+
+    if fast_path_ok:
+        row = db_conn.execute(
+            "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+            (agent_name,),
+        ).fetchone()
+        if row and row[0] == installed_version and row[1] == new_hash:
+            return {"skipped": True, "version": installed_version, "status": "ok"}
+
+    network_ok = True
+    for endpoint in baseline.get("network_deps", {}).get("required_endpoints", []):
+        host, _, port_s = endpoint.rpartition(":")
+        try:
+            s = _sock.create_connection((host, int(port_s or 443)), timeout=2)
+            s.close()
+        except OSError:
+            network_ok = False
+
+    compliance = "ok" if network_ok else "degraded"
+
+    prev_row = db_conn.execute(
+        "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+        (agent_name,),
+    ).fetchone()
+
+    now = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+    event_type = None
+    if prev_row:
+        if prev_row[0] != installed_version:
+            event_type = "version_change"
+        elif prev_row[1] != new_hash:
+            event_type = "drift_detected"
+
+    db_conn.execute(
+        """
+        INSERT INTO harness_records
+            (agent_name, harness_name, installed_version, compliance_status, active_contract, active_flags, capability_hash, last_probe_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(agent_name) DO UPDATE SET
+            harness_name=excluded.harness_name,
+            installed_version=excluded.installed_version,
+            compliance_status=excluded.compliance_status,
+            active_contract=excluded.active_contract,
+            active_flags=excluded.active_flags,
+            capability_hash=excluded.capability_hash,
+            last_probe_at=excluded.last_probe_at
+        """,
+        (
+            agent_name,
+            harness_name,
+            installed_version,
+            compliance,
+            _json.dumps(contract),
+            _json.dumps(flags),
+            new_hash,
+            now,
+        ),
+    )
+
+    if event_type:
+        db_conn.execute(
+            """
+            INSERT INTO harness_version_history (agent_name, cli_version, event_type, prev_hash, new_hash, recorded_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                agent_name,
+                installed_version,
+                event_type,
+                prev_row[1] if prev_row else None,
+                new_hash,
+                now,
+            ),
+        )
+
+    _INSTRUCTION_FILES = {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "grok": "GROK.md",
+        "codex": "AGENTS.md",
+    }
+    instr_file = _INSTRUCTION_FILES.get(agent_name)
+    if instr_file and os.path.exists(instr_file):
+        body = _build_fence_body_from_record(agent_name, db_conn)
+        _upsert_harness_fence(instr_file, installed_version, body)
+
+    _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
+
+    db_conn.commit()
+    return {"skipped": False, "version": installed_version, "status": compliance}
+
+
+def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
+    """TC-1: Headless stdout contract."""
+    import sys as _sys
+
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    contract = baseline.get("headless_contract", {})
+    if not contract:
+        return {"requires_pty": False, "passed": True, "stdout_method": "not_applicable"}
+
+    non_interactive_flag = contract.get("non_interactive_flag", "--version")
+    env = os.environ.copy()
+    for var in contract.get("env_vars_required", []):
+        if "=" in var:
+            key, value = var.split("=", 1)
+            env[key] = value
+
+    try:
+        proc = subprocess.Popen(
+            [agent_name, non_interactive_flag],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        proc.communicate(timeout=timeout)
+        return {"requires_pty": False, "passed": True, "stdout_method": "pipe"}
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        if _sys.platform == "win32":
+            return {"requires_pty": True, "passed": False, "stdout_method": "pty"}
+        return {"requires_pty": True, "passed": False, "stdout_method": "unavailable"}
+    except FileNotFoundError:
+        return {"requires_pty": False, "passed": False, "stdout_method": "not_found"}
+
+
+def _run_tc2(agent_name: str, flags_spec: dict) -> dict:
+    """TC-2: Flag compliance."""
+    if isinstance(flags_spec, dict):
+        invalid_flags = list(flags_spec.get("invalid_flags", []))
+        valid_flags = list(flags_spec.get("valid_flags", []))
+    else:
+        invalid_flags, valid_flags = [], []
+
+    failed = list(invalid_flags)
+    try:
+        result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
+        help_text = (result.stdout or "") + (result.stderr or "")
+        for flag in valid_flags:
+            flag_name = flag.lstrip("-")
+            if flag_name and flag_name not in help_text and flag not in help_text:
+                failed.append(flag)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return {"failed_flags": failed, "passed": len(failed) == 0}
+
+
+def _run_tc3(endpoints: list) -> dict:
+    """TC-3: Network reachability."""
+    import socket as _sock
+
+    reachable, unreachable = [], []
+    for host, port in endpoints or []:
+        try:
+            conn = _sock.create_connection((host, port), timeout=2)
+            conn.close()
+            reachable.append((host, port))
+        except OSError:
+            unreachable.append((host, port))
+    return {"reachable": reachable, "unreachable": unreachable, "passed": len(unreachable) == 0}
+
+
+def _run_tc4(agent_name: str, db_conn) -> dict:
+    """TC-4: Verb map validation."""
+    failed = []
+    rows = db_conn.execute(
+        """
+        SELECT synlynk_verb, agent_command, supported
+        FROM harness_verb_map
+        WHERE agent_name=?
+        """,
+        (agent_name,),
+    ).fetchall()
+    for verb, cmd_template, supported in rows:
+        if supported == "none" or not cmd_template:
+            continue
+        cmd = cmd_template.split()[0]
+        try:
+            subprocess.run([cmd, "--help"], capture_output=True, timeout=3)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            failed.append(verb)
+    return {"failed_verbs": failed, "passed": len(failed) == 0}
+
+
+def cmd_probe(agent: str = None) -> None:
+    agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
+    db_conn = _get_db()
+    try:
+        for agent_name in agents:
+            result = _probe_agent(agent_name, db_conn)
+            status = "skipped (up to date)" if result["skipped"] else result["status"]
+            print(f"  probe [{agent_name}] {result['version']} → {status}")
+    finally:
+        db_conn.close()
 
 
 def cmd_score_add(story_id: str, rating: float, note: str = None,
@@ -479,19 +958,118 @@ AGENT_CAPABILITY_BASELINES = {
         "non_interactive_flags": [],
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": ["--print", "--model", "--output-format", "--add-dir"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--non-interactive"],
+            "required_flags": [],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "unbuffered",
+            "env_vars_required": ["PYTHONUNBUFFERED=1"],
+            "non_interactive_flag": "-p",
+        },
+        "network_deps": {
+            "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
+            "optional_endpoints": [],
+        },
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
     "grok": {
         "cli": "grok",
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --always-approve --output-format json --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --yes --single "$PROMPT"
         "prompt_via_arg": True,
-        "dispatch_flags": ["--always-approve"],
+        "dispatch_flags": {
+            "valid_flags": ["--prompt", "--yes", "--model"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print"],
+            "required_flags": ["--yes"],
+        },
+        "network_deps": {
+            "required_endpoints": ["cli-chat-proxy.grok.com:443"],
+            "optional_endpoints": [],
+        },
         "roles": ["builder", "architect"],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
     },
 }
+
+_VERB_MAP_SEED = [
+    # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
+    ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
+    ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --prompt {task} --yes --model grok-3", "full", None),
+    ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
+    ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
+    ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --yes --prompt {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
+    ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
+    ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
+    ("dispatch.resume",   "dispatch",      "grok",   None, "none", None),
+    ("dispatch.resume",   "dispatch",      "codex",  None, "none", None),
+    ("dispatch.approve",  "dispatch",      "claude", "claude --allowedTools {tools}", "full", None),
+    ("dispatch.approve",  "dispatch",      "agy",    None, "none", None),
+    ("dispatch.approve",  "dispatch",      "grok",   None, "none", None),
+    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "approval-policy=none only"),
+    ("dispatch.model",    "dispatch",      "claude", "--model {model}", "full", None),
+    ("dispatch.model",    "dispatch",      "agy",    "--model {model}", "full", None),
+    ("dispatch.model",    "dispatch",      "grok",   "--model {model}", "full", None),
+    ("dispatch.model",    "dispatch",      "codex",  "--model {model}", "full", None),
+    ("dispatch.tools",    "dispatch",      "claude", "--allowedTools {tools}", "full", None),
+    ("dispatch.tools",    "dispatch",      "agy",    None, "partial", "No tool_list flag"),
+    ("dispatch.tools",    "dispatch",      "grok",   None, "none", None),
+    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "approval-policy only"),
+    ("dispatch.context",  "dispatch",      "claude", "claude --print {task}", "full", None),
+    ("dispatch.context",  "dispatch",      "agy",    "agy -p {task}", "full", None),
+    ("dispatch.context",  "dispatch",      "grok",   "grok --prompt {task}", "partial", "No explicit context file flag"),
+    ("dispatch.context",  "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
+    ("jobs",              "observability", "claude", None, "partial", "No native jobs subcommand"),
+    ("jobs",              "observability", "agy",    None, "none", None),
+    ("jobs",              "observability", "grok",   None, "none", None),
+    ("jobs",              "observability", "codex",  None, "none", None),
+    ("status",            "observability", "claude", None, "partial", None),
+    ("status",            "observability", "agy",    None, "none", None),
+    ("status",            "observability", "grok",   None, "none", None),
+    ("status",            "observability", "codex",  None, "none", None),
+    ("telemetry",         "observability", "claude", None, "none", None),
+    ("telemetry",         "observability", "agy",    None, "none", None),
+    ("telemetry",         "observability", "grok",   None, "none", None),
+    ("telemetry",         "observability", "codex",  None, "none", None),
+    ("costs",             "observability", "claude", None, "partial", "Token count via /cost"),
+    ("costs",             "observability", "agy",    None, "none", None),
+    ("costs",             "observability", "grok",   None, "none", None),
+    ("costs",             "observability", "codex",  None, "none", None),
+    ("probe",             "harness",       "claude", "claude --version", "full", None),
+    ("probe",             "harness",       "agy",    "agy --version", "full", None),
+    ("probe",             "harness",       "grok",   "grok --version", "full", None),
+    ("probe",             "harness",       "codex",  "codex --version", "full", None),
+    ("doctor",            "harness",       "claude", None, "full", None),
+    ("doctor",            "harness",       "agy",    None, "full", None),
+    ("doctor",            "harness",       "grok",   None, "full", None),
+    ("doctor",            "harness",       "codex",  None, "full", None),
+    ("story",             "pm",            "claude", None, "none", None),
+    ("story",             "pm",            "agy",    None, "none", None),
+    ("story",             "pm",            "grok",   None, "none", None),
+    ("story",             "pm",            "codex",  None, "none", None),
+    ("epic",              "pm",            "claude", None, "none", None),
+    ("epic",              "pm",            "agy",    None, "none", None),
+    ("epic",              "pm",            "grok",   None, "none", None),
+    ("epic",              "pm",            "codex",  None, "none", None),
+    ("decide",            "pm",            "claude", None, "none", None),
+    ("decide",            "pm",            "agy",    None, "none", None),
+    ("decide",            "pm",            "grok",   None, "none", None),
+    ("decide",            "pm",            "codex",  None, "none", None),
+    ("workspace",         "workspace",     "claude", None, "none", None),
+    ("workspace",         "workspace",     "agy",    None, "none", None),
+    ("workspace",         "workspace",     "grok",   None, "none", None),
+    ("workspace",         "workspace",     "codex",  None, "none", None),
+    ("upgrade",           "workspace",     "claude", None, "partial", "Via /upgrade slash command"),
+    ("upgrade",           "workspace",     "agy",    None, "partial", "Via agy update"),
+    ("upgrade",           "workspace",     "grok",   None, "partial", None),
+    ("upgrade",           "workspace",     "codex",  None, "partial", None),
+]
 
 RELAY_EVENT_TYPES = frozenset({
     "story_updated",
@@ -605,6 +1183,8 @@ def load_config() -> dict:
         "team": None,
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
+        "stall_timeout_minutes": 30,
+        "agents": {},
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -641,6 +1221,54 @@ def _save_jobs(jobs: list) -> None:
         json.dump(jobs, f, indent=2)
 
 
+def _spawn_with_pty_fallback(cmd, env, cwd):
+    """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            env=env, cwd=cwd)
+    try:
+        out, _ = proc.communicate(timeout=5)
+        if out:
+            return proc, out
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    # PTY fallback (POSIX only)
+    if sys.platform != "win32":
+        import pty
+        import select
+        master_fd, slave_fd = pty.openpty()
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                env=env,
+                cwd=cwd,
+                close_fds=True
+            )
+            os.close(slave_fd)
+            out_chunks = []
+            while True:
+                r, _, _ = select.select([master_fd], [], [], 5)
+                if not r:
+                    proc.kill()
+                    break
+                try:
+                    data = os.read(master_fd, 1024)
+                    if not data:
+                        break
+                    out_chunks.append(data)
+                except OSError:
+                    break
+            proc.wait(timeout=5)
+            return proc, b"".join(out_chunks)
+        finally:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+    return None, b""
+
+
 def _probe_model_version(agent_name: str, cli: str) -> str:
     """Tier 2: probe the agent's active model from its statusline before dispatch.
 
@@ -654,8 +1282,16 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
     }
     cmd = probe_cmds.get(agent_name, [cli, "--version"])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-        text = (result.stdout or "") + (getattr(result, "stderr", "") or "")
+        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+        contract = baseline.get("headless_contract", {})
+        env = os.environ.copy()
+        for var in contract.get("env_vars_required", []):
+            if "=" in var:
+                k, v = var.split("=", 1)
+                env[k] = v
+
+        proc, out = _spawn_with_pty_fallback(cmd, env, os.getcwd())
+        text = out.decode("utf-8", errors="ignore") if out else ""
         patterns = [
             r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
             r"(agy-[\w.-]+)",
@@ -1471,36 +2107,105 @@ HEALTH_CHECKS = [
 ]
 
 
-def cmd_doctor(checks: _List = None) -> int:
+def cmd_doctor(args=None, checks: _List = None) -> int:
     """Runs all registered health checks and prints a formatted report.
 
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
-    if checks is None:
-        checks = HEALTH_CHECKS
+    if checks is not None:
+        _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
 
-    _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+        results = [fn() for fn in checks]
+        failed = [r for r in results if r.status == "fail"]
+        warned = [r for r in results if r.status == "warn"]
 
-    results = [fn() for fn in checks]
-    failed = [r for r in results if r.status == "fail"]
-    warned = [r for r in results if r.status == "warn"]
+        print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
+        for r in results:
+            icon = _STATUS_ICON.get(r.status, "?")
+            print(f"  {icon}  {r.name}: {r.message}")
+            if r.fix and r.status != "ok":
+                print(f"     {_DIM}→ {r.fix}{_RESET}")
 
-    print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
-    for r in results:
-        icon = _STATUS_ICON.get(r.status, "?")
-        print(f"  {icon}  {r.name}: {r.message}")
-        if r.fix and r.status != "ok":
-            print(f"     {_DIM}→ {r.fix}{_RESET}")
+        print()
+        if failed:
+            print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
+        elif warned:
+            print(f"  {len(warned)} advisory warning(s). Everything should still work.")
+        else:
+            print(f"  {_GREEN}All checks passed.{_RESET}")
+        print()
+        return 1 if failed else 0
 
-    print()
-    if failed:
-        print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
-    elif warned:
-        print(f"  {len(warned)} advisory warning(s). Everything should still work.")
-    else:
-        print(f"  {_GREEN}All checks passed.{_RESET}")
-    print()
-    return 1 if failed else 0
+    agent_filter = getattr(args, "agent", None) if args is not None else None
+    db_conn = _get_db()
+    agents = [agent_filter] if agent_filter else list(AGENT_CAPABILITY_BASELINES.keys())
+    any_failed = False
+    try:
+        for agent in agents:
+            print(f"\n  doctor [{agent}]")
+            baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
+
+            tc1 = _run_tc1(agent)
+            tc2 = _run_tc2(agent, baseline.get("dispatch_flags", {}))
+            endpoints = []
+            for ep in baseline.get("network_deps", {}).get("required_endpoints", []):
+                host, _, port_s = ep.rpartition(":")
+                endpoints.append((host, int(port_s) if port_s.isdigit() else 443))
+            tc3 = _run_tc3(endpoints)
+            tc4 = _run_tc4(agent, db_conn)
+
+            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"]
+            if not all_passed:
+                any_failed = True
+            status = "ok" if all_passed else "degraded"
+            now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            capability_hash = _compute_capability_hash(baseline.get("headless_contract", {}), baseline.get("dispatch_flags", {}))
+
+            db_conn.execute(
+                """
+                INSERT INTO harness_records
+                    (agent_name, harness_name, installed_version, compliance_status,
+                     active_contract, active_flags, last_probe_at, capability_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(agent_name) DO UPDATE SET
+                    harness_name=excluded.harness_name,
+                    installed_version=excluded.installed_version,
+                    compliance_status=excluded.compliance_status,
+                    active_contract=excluded.active_contract,
+                    active_flags=excluded.active_flags,
+                    last_probe_at=excluded.last_probe_at,
+                    capability_hash=excluded.capability_hash
+                """,
+                (
+                    agent,
+                    baseline.get("cli", agent),
+                    "unknown",
+                    status,
+                    json.dumps(baseline.get("headless_contract", {})),
+                    json.dumps(baseline.get("dispatch_flags", {})),
+                    now,
+                    capability_hash,
+                ),
+            )
+            try:
+                db_conn.execute(
+                    """
+                    INSERT INTO harness_version_history (agent_name, cli_version, event_type, recorded_at)
+                    VALUES (?, ?, 'doctor_run', ?)
+                    """,
+                    (agent, "unknown", now),
+                )
+            except _sqlite3.IntegrityError:
+                pass
+            db_conn.commit()
+
+            print(f"    TC-1 stdout:  {'✓' if tc1['passed'] else '✗ requires_pty=' + str(tc1.get('requires_pty'))}")
+            print(f"    TC-2 flags:   {'✓' if tc2['passed'] else '✗ failed=' + str(tc2['failed_flags'])}")
+            print(f"    TC-3 network: {'✓' if tc3['passed'] else '✗ unreachable=' + str(tc3['unreachable'])}")
+            print(f"    TC-4 verbs:   {'✓' if tc4['passed'] else '✗ failed=' + str(tc4['failed_verbs'])}")
+    finally:
+        db_conn.close()
+    return 1 if any_failed else 0
 
 
 def _strip_synlynk_section(path: str, marker_style: str) -> bool:
@@ -1812,6 +2517,57 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
     return None
 
 
+def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
+    """Returns True if job was stalled and killed."""
+    import signal as _signal
+    if job.get("status") != "running":
+        return False
+    log_file = job.get("log_file", "")
+    if not log_file or not os.path.exists(log_file):
+        return False
+    if os.path.getsize(log_file) > 0:
+        return False  # has output, not stalled
+
+    agent = job.get("agent", "")
+    global_timeout = config.get("stall_timeout_minutes", 30)
+    timeout = config.get("agents", {}).get(agent, {}).get("stall_timeout_minutes", global_timeout)
+
+    started_val = job.get("started_at")
+    if isinstance(started_val, str):
+        try:
+            import datetime as _dt
+            started_ts = _dt.datetime.strptime(started_val, "%Y-%m-%dT%H:%M:%S").timestamp()
+        except Exception:
+            started_ts = time.time()
+    elif isinstance(started_val, (int, float)):
+        started_ts = started_val
+    else:
+        started_ts = time.time()
+
+    elapsed_minutes = (time.time() - started_ts) / 60
+
+    if elapsed_minutes < timeout:
+        return False
+
+    pid = job.get("pid")
+    if pid:
+        try:
+            os.kill(pid, _signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    job["status"] = "failed"
+    job["exit_code"] = -1
+    job["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    _write_sentinel_alert(
+        "CRITICAL", "STALL_NO_OUTPUT",
+        f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. Process killed.",
+        sentinel_path,
+    )
+    return True
+
+
 def _reconcile_jobs() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
@@ -1821,8 +2577,13 @@ def _reconcile_jobs() -> None:
     jobs = _load_jobs()
     changed = False
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    config = load_config()
+    sentinel_path = ".synlynk/sentinel.md"
     for job in jobs:
         if job.get("status") not in ("running",):
+            continue
+        if _check_job_stall(job, config, sentinel_path):
+            changed = True
             continue
         pid = job.get("pid")
         if pid is None:
@@ -2578,18 +3339,109 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
-def _preflight_dispatch(agent: str) -> Optional[str]:
-    """Pre-flight check before dispatch; returns an error string, or None."""
-    import shutil as _shutil
+def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> dict:
+    """
+    Fast preflight guard before every dispatch (~2s, no CLI spawn).
 
-    cli = AGENT_CAPABILITY_BASELINES.get(agent, {}).get("cli", agent)
-    if not _shutil.which(cli):
-        known = list(AGENT_CAPABILITY_BASELINES)
-        return (
-            f"agent '{agent}' not found on PATH (expected CLI: '{cli}')\n"
-            f"  Install the agent or choose from: {known}"
-        )
-    return None
+    Falls back to AGENT_CAPABILITY_BASELINES when harness_records are not yet
+    available (v0.10.1). Returns:
+    {"passed": bool, "sentinel": str|None, "reason": str|None}
+    """
+    import json as _json
+    import socket as _socket
+
+    baseline = {}
+    if db_conn:
+        try:
+            row = db_conn.execute(
+                "SELECT active_flags, active_contract FROM harness_records WHERE agent_name=?",
+                (agent_name,),
+            ).fetchone()
+        except Exception:
+            row = None
+        if row:
+            try:
+                baseline["dispatch_flags"] = _json.loads(row[0]) if row[0] else {}
+                baseline["headless_contract"] = _json.loads(row[1]) if row[1] else {}
+                baseline["network_deps"] = baseline["headless_contract"].get("network_deps", {})
+            except Exception:
+                baseline = {}
+    if not baseline:
+        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+
+    import time as _time
+    _STALE_THRESHOLD = 3600  # 1hr
+
+    if db_conn:
+        try:
+            _row = db_conn.execute(
+                "SELECT installed_version, last_probe_at FROM harness_records WHERE agent_name=?",
+                (agent_name,),
+            ).fetchone()
+        except Exception:
+            _row = None
+        if _row:
+            _recorded_version, _last_probe_at = _row
+            _is_stale = True
+            if _last_probe_at:
+                try:
+                    _probe_ts = _time.mktime(_time.strptime(_last_probe_at, "%Y-%m-%dT%H:%M:%SZ"))
+                    _is_stale = (_time.time() - _probe_ts) > _STALE_THRESHOLD
+                except ValueError:
+                    _is_stale = True
+
+            if _is_stale:
+                try:
+                    _ver_result = subprocess.run(
+                        [agent_name, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=3,
+                    )
+                    _live_version = _ver_result.stdout.strip().split()[-1] if _ver_result.stdout.strip() else "unknown"
+                    if _live_version != _recorded_version:
+                        _write_sentinel_alert(
+                            "WARNING",
+                            "HARNESS_VERSION_DRIFT",
+                            f"Agent '{agent_name}' version changed: {_recorded_version} -> {_live_version}. Run synlynk probe to update.",
+                        )
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass
+
+    flags_spec = baseline.get("dispatch_flags", {})
+    if isinstance(flags_spec, dict):
+        invalid_flags = set(flags_spec.get("invalid_flags", []))
+    else:
+        invalid_flags = set()
+
+    for flag in dispatch_flags or []:
+        f = flag.split("=", 1)[0]
+        if f in invalid_flags:
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
+            }
+
+    required = baseline.get("network_deps", {}).get("required_endpoints", [])
+    for endpoint in required:
+        host, _, port_str = endpoint.rpartition(":")
+        if not host:
+            host = endpoint
+        port = int(port_str) if port_str.isdigit() else 443
+        try:
+            sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+            sock.settimeout(2.0)
+            sock.connect((host, port))
+            sock.close()
+        except (OSError, ConnectionRefusedError, _socket.timeout):
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
+            }
+
+    return {"passed": True, "sentinel": None, "reason": None}
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
@@ -2614,15 +3466,26 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in AGENT_CAPABILITY_BASELINES:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
 
-    preflight_err = _preflight_dispatch(agent)
-    if preflight_err:
-        raise ValueError(f"Pre-flight failed: {preflight_err}")
-
     baselines = AGENT_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
-    dispatch_flags = baselines.get("dispatch_flags", [])
-    flags = flags + dispatch_flags
+    flags = flags + _dispatch_flags_for_agent(agent)
+    preflight = _preflight_dispatch(agent_name=agent, dispatch_flags=flags, db_conn=None)
+    if isinstance(preflight, dict):
+        if not preflight.get("passed", False):
+            sentinel_path = os.path.join(".synlynk", "sentinel.md")
+            _write_sentinel_alert(
+                "CRITICAL",
+                preflight["sentinel"],
+                preflight["reason"],
+                sentinel_path,
+            )
+            raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight['reason']}")
+    elif preflight:
+        sentinel_path = os.path.join(".synlynk", "sentinel.md")
+        _write_sentinel_alert("CRITICAL", "HARNESS_PREFLIGHT_FAIL", str(preflight), sentinel_path)
+        raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight}")
+
     profile = _load_agent_profile(agent)
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]
@@ -2706,12 +3569,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
+    contract = baselines.get("headless_contract", {})
+    env = os.environ.copy()
+    for var in contract.get("env_vars_required", []):
+        if "=" in var:
+            k, v = var.split("=", 1)
+            env[k] = v
+
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
         cwd=os.getcwd(),
+        env=env,
     )
 
     job = {
@@ -2892,7 +3763,12 @@ def cmd_agent_configure(agent_name: str) -> None:
     max_bytes_raw = _ask(existing.get("context_max_bytes", None),
                          "context_max_bytes (int, leave blank for no limit)")
 
-    profile = {"agent": agent_name, "context_mode": context_mode}
+    profile = {
+        "agent": agent_name,
+        "harness": existing.get("harness", agent_name),
+        "model": existing.get("model", "unknown"),
+        "context_mode": context_mode,
+    }
     if max_bytes_raw not in ("", None):
         try:
             profile["context_max_bytes"] = int(max_bytes_raw)
@@ -4359,6 +5235,9 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "agent_slots": _agent_slots,
             "team": None,
             "sync_endpoint": None,
+            "exec_timeout_minutes": 30,
+            "stall_timeout_minutes": 30,
+            "agents": {},
         }, indent=2),
     }
 
@@ -4718,10 +5597,10 @@ def _check_costs_freshness() -> None:
     if time.time() - os.path.getmtime(costs_file) > 3600:
         print("  ⚠ costs.md not updated this session — AI may have missed logging")
 
-def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
+def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path: Optional[str] = None) -> None:
     """Appends a structured alert line to .synlynk/sentinel.md."""
-    sentinel_file = ".synlynk/sentinel.md"
-    if not os.path.exists(".synlynk"):
+    sentinel_file = sentinel_path or ".synlynk/sentinel.md"
+    if not sentinel_path and not os.path.exists(".synlynk"):
         return
     existing = ""
     if os.path.exists(sentinel_file):
@@ -4731,6 +5610,10 @@ def _write_sentinel_alert(severity: str, code: str, message: str) -> None:
         existing = "# Sentinel Alerts\n"
     ts = time.strftime('%Y-%m-%d %H:%M')
     line = f"- [{severity}] [{ts}] {code}: {message}\n"
+    if sentinel_path:
+        parent = os.path.dirname(sentinel_path)
+        if parent and not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
     with open(sentinel_file, "w") as f:
         f.write(existing + line)
 
@@ -6927,6 +7810,12 @@ def main() -> None:
     scan_parser.add_argument("--status", action="store_true",
                              help="Show cache age, HEAD SHA, file and symbol counts")
 
+    probe_parser = subparsers.add_parser(
+        "probe", help="Probe agent harness capability and record compatibility"
+    )
+    probe_parser.add_argument("--agent", default=None,
+                              help="Probe a single agent instead of all known agents")
+
     subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
 
     exit_parser = subparsers.add_parser(
@@ -7275,6 +8164,8 @@ def main() -> None:
         cmd_decide(args.topic, panel=panel_members, record=args.record)
     elif args.command == "scan":
         cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
+    elif args.command == "probe":
+        cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
         sys.exit(cmd_doctor())
     elif args.command == "exit":

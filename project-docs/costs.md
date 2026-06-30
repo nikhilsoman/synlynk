@@ -12,7 +12,7 @@
 | Medium (~150K tokens) | 12 | ~$0.65–1.50 | ~$12.00 |
 | Heavy (~400K tokens) | 8 | ~$1.75–3.00 | ~$18.00 |
 | Very Heavy / Subagent (~800K tokens) | 7 | ~$3.50–6.00 | ~$28.00 |
-| **Total** | **37** | | **~$61.50** |
+| **Total** | **38** | | **~$62.00** |
 
 ---
 
@@ -49,3 +49,4 @@
 | 2026-06-28 | agy | ~1 | ~50K / ~5K | ~$0.25 | BS-5 website redesign (Phase 2): tagline hero, relief, how it works, feature spotlight templates, macros, and CSS design system |
 | 2026-06-28 | agy | ~10 | ~15K / ~2K | ~$0.08 | BS-5 docs sidebar scroll-spy implementation with IntersectionObserver |
 
+| 2026-06-30 | nikhil | ~10 | ~30K / ~15K | ~$0.50 | Implement story-bs14-sentinel-stall (per-job stall check inside _reconcile_jobs with config default) and added TDD test |

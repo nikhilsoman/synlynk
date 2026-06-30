@@ -1,0 +1,9 @@
+{
+  "agent": "grok",
+  "harness": "grok",
+  "model": "grok-3",
+  "dispatch_flags": ["--yes", "--model", "grok-3"],
+  "network_deps": {
+    "required_endpoints": ["cli-chat-proxy.grok.com:443"]
+  }
+}

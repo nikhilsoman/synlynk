@@ -22,6 +22,50 @@ def test_agent_capability_baselines_exist():
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
 
 
+def test_bs14_schema_tables_exist(tmp_path):
+    import sqlite3
+    from synlynk import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    for t in [
+        "harness_baselines",
+        "harness_records",
+        "harness_verb_map",
+        "harness_command_palette",
+        "harness_version_history",
+    ]:
+        assert t in tables, f"Missing table: {t}"
+    conn.close()
+
+
+def test_bs14_schema_migration_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    _migrate_db(conn)
+    conn.close()
+
+
+def test_bs14_baseline_seeded_for_known_agents(tmp_path):
+    import sqlite3
+    from synlynk import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    rows = conn.execute("SELECT harness_name FROM harness_baselines").fetchall()
+    harnesses = {r[0] for r in rows}
+    for h in ["claude-cli", "agy", "grok", "codex"]:
+        assert h in harnesses, f"Missing baseline for harness: {h}"
+    conn.close()
+
+
 def test_jobs_file_constant():
     assert synlynk.JOBS_FILE == ".synlynk/jobs.json"
 
@@ -60,6 +104,8 @@ def test_load_config_defaults(project_dir):
     assert config["budget"]["limit_usd"] == 10.0
     assert config["watch_interval_seconds"] == 30
     assert config["org"] is None
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 def test_load_config_missing_file(tmp_path, monkeypatch):
@@ -67,6 +113,8 @@ def test_load_config_missing_file(tmp_path, monkeypatch):
     config = synlynk.load_config()
     assert config["schema_version"] == 1
     assert config["budget"]["limit_usd"] == 10.0
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 def test_parse_costs_md(project_dir):
@@ -863,6 +911,10 @@ def test_load_config_has_new_defaults(tmp_path, monkeypatch):
     assert config["agent_slots"]["claude"] == "claude"
     assert config["agent_slots"]["agy"] == "agy"
     assert config["agent_slots"]["codex"] == "codex"
+    assert "stall_timeout_minutes" in config
+    assert "agents" in config
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 def test_build_templates_config_includes_owner_and_project_id(tmp_path, monkeypatch):
@@ -872,6 +924,8 @@ def test_build_templates_config_includes_owner_and_project_id(tmp_path, monkeypa
     assert config["owner"] == "Dialify"
     assert config["project_id"] == "PVT_abc"
     assert "agent_slots" in config
+    assert config["stall_timeout_minutes"] == 30
+    assert config["agents"] == {}
 
 
 # Task 3: Repo scanning + maturity detection tests
@@ -1805,7 +1859,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
         launched.append(cmd)
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     job = sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     assert job["agent"] == "claude"
     assert job["pid"] == 12345
@@ -1828,7 +1882,7 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
 
@@ -1837,7 +1891,7 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
     assert "--dangerously-skip-permissions" in shell_cmd
 
 
-def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
+def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
 
@@ -1861,7 +1915,7 @@ def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
 
@@ -1870,8 +1924,9 @@ def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    assert "--always-approve" in shell_cmd
+    assert "--always-approve" not in shell_cmd
     assert "--permission-mode bypassPermissions" not in shell_cmd
+    assert "--yes" in shell_cmd
     assert "--output-format json" in shell_cmd
 
 
@@ -1899,7 +1954,7 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"always_approve_unsupported": True})
@@ -1937,20 +1992,20 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
 
     sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    # --single must appear after --always-approve and directly before "$PROMPT"
+    # --single must appear after required Grok dispatch flags and directly before "$PROMPT"
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
     prompt_pos = shell_cmd.index('"$PROMPT"')
     assert single_pos < prompt_pos, "--single must come before $PROMPT"
-    # --always-approve must be before --single (so it's not consumed as --single's value)
-    always_approve_pos = shell_cmd.index("--always-approve")
-    assert always_approve_pos < single_pos, "--always-approve must come before --single"
+    yes_pos = shell_cmd.index("--yes")
+    assert yes_pos < single_pos, "--yes must come before --single"
+    assert "--always-approve" not in shell_cmd
 
 
 def test_agy_prompt_flag_split_from_non_interactive_flags():
@@ -2001,7 +2056,7 @@ def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
 
@@ -2047,7 +2102,7 @@ def test_dispatch_agent_writes_prompt_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 99
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     job = sl.dispatch_agent("agy", "write tests")
     assert os.path.exists(job["prompt_file"])
     content = open(job["prompt_file"]).read()
@@ -2065,7 +2120,7 @@ def test_dispatch_agent_appends_to_existing_jobs(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     sl.dispatch_agent("claude", "task one")
     sl.dispatch_agent("claude", "task two")
     assert len(sl._load_jobs()) == 2
@@ -2077,7 +2132,7 @@ def test_dispatch_agent_injects_relevant_files(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     # Write scan cache with a backend file
     meta = {"head_sha": "abc123", "skeleton": [
         {"file": "backend/auth.py", "symbols": ["login", "logout"], "language": "python"}
@@ -2099,7 +2154,7 @@ def test_dispatch_agent_no_relevant_files_without_scan(project_dir, monkeypatch)
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     story_id = sl.cmd_story_create("Fix thing", engg_domain="backend")
     # Mock _git_head_sha to avoid subprocess.run call
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
@@ -2131,7 +2186,7 @@ def test_dispatch_agent_context_mode_none(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     job = sl.dispatch_agent("claude", "do the thing", context_mode="none")
     prompt = open(job["prompt_file"]).read()
     assert "synlynk Context Snapshot" not in prompt
@@ -2144,7 +2199,7 @@ def test_dispatch_agent_context_mode_task_default(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     story_id = sl.cmd_story_create("Implement OAuth", engg_domain="backend")
     job = sl.dispatch_agent("claude", "implement oauth", story_id=story_id)
@@ -2158,7 +2213,7 @@ def test_dispatch_agent_context_mode_full(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     job = sl.dispatch_agent("claude", "do big thing", context_mode="full")
     prompt = open(job["prompt_file"]).read()
@@ -2172,7 +2227,7 @@ def test_dispatch_agent_explicit_context_mode_beats_profile(project_dir, monkeyp
         pid = 1
 
     monkeypatch.setattr(sl.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "synlynk Context Snapshot\nshould not appear")
     os.makedirs(".agents", exist_ok=True)
@@ -2190,7 +2245,7 @@ def test_dispatch_agent_context_size_warning(project_dir, monkeypatch, capsys):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
     # Patch generate_context to return an oversized string
     big_context = "x" * (82 * 1024)  # 82KB — over 80KB soft limit
@@ -2207,7 +2262,7 @@ def test_dispatch_agent_context_max_bytes_logs_utf8_truncation(project_dir, monk
         pid = 1
 
     monkeypatch.setattr(sl.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "€" * 100)
     os.makedirs(".agents", exist_ok=True)
@@ -2239,7 +2294,7 @@ def test_dispatch_agent_does_not_read_context_file_for_none_mode(project_dir, mo
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     # Ensure context.md does not exist
     ctx = project_dir / ".synlynk" / "context.md"
     if ctx.exists():
@@ -2255,7 +2310,7 @@ def test_dispatch_agent_writes_per_job_context_file(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
 
     story_id = sl.cmd_story_create("Fix login timeout", engg_domain="backend")
@@ -2274,7 +2329,7 @@ def test_dispatch_agent_concurrent_jobs_use_separate_context_files(project_dir, 
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_check_scan_cache", lambda: None)
 
     story_a = sl.cmd_story_create("Story A", engg_domain="backend")
@@ -2524,7 +2579,7 @@ def test_dispatch_agent_injects_verify_contract(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     story_id = sl.cmd_story_create("Fix auth timeout", engg_domain="backend")
     job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2538,7 +2593,7 @@ def test_dispatch_agent_no_verify_without_tests_dir(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     story_id = sl.cmd_story_create("Fix thing")
     job = sl.dispatch_agent("claude", "fix it", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2568,11 +2623,13 @@ def test_cmd_jobs_watch_handles_render_errors(project_dir, monkeypatch, capsys):
     assert "render error: boom" in out.lower()
 
 
-def test_load_agent_profile_returns_empty_when_missing(project_dir):
-    """_load_agent_profile returns {} when .agents/<agent>.json does not exist."""
+def test_load_agent_profile_returns_defaults_when_missing(project_dir):
+    """_load_agent_profile returns default harness/model values when file is missing."""
     import synlynk as sl
     result = sl._load_agent_profile("claude")
-    assert result == {}
+    assert result["agent"] == "claude"
+    assert result["harness"] == "claude"
+    assert result["model"] == "unknown"
 
 
 def test_load_agent_profile_returns_dict_when_present(project_dir):
@@ -2587,13 +2644,31 @@ def test_load_agent_profile_returns_dict_when_present(project_dir):
     assert result["context_max_bytes"] == 500
 
 
+def test_agent_json_roundtrips_harness_and_model(tmp_path):
+    import json
+    from synlynk import _load_agent_profile
+
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    (agents_dir / "claude.json").write_text(json.dumps({
+        "agent": "claude",
+        "harness": "claude-cli",
+        "model": "claude-sonnet-4-6",
+        "dispatch_flags": ["--print", "--dangerously-skip-permissions"],
+    }))
+
+    profile = _load_agent_profile("claude", str(agents_dir))
+    assert profile["harness"] == "claude-cli"
+    assert profile["model"] == "claude-sonnet-4-6"
+
+
 def test_dispatch_agent_profile_overrides_context_mode(project_dir, monkeypatch):
     """Profile context_mode='none' overrides default 'task'."""
     import synlynk as sl, json
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "PROFILE_CONTEXT_MARKER")
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
@@ -2610,7 +2685,7 @@ def test_dispatch_agent_profile_context_max_bytes_truncates(project_dir, monkeyp
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     os.makedirs(".agents", exist_ok=True)
     (project_dir / ".agents" / "claude.json").write_text(
         json.dumps({"agent": "claude", "context_mode": "full", "context_max_bytes": 50})
@@ -2674,7 +2749,7 @@ def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     story_id = sl.cmd_story_create("Fix login")
     job = sl.dispatch_agent("claude", "fix the login bug", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2688,7 +2763,7 @@ def test_dispatch_agent_codex_prompt_format(project_dir, monkeypatch):
     class FakeProc:
         pid = 1
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     story_id = sl.cmd_story_create("Add tests")
     job = sl.dispatch_agent("codex", "add tests for auth module", story_id=story_id)
     prompt = open(job["prompt_file"]).read()
@@ -2710,7 +2785,7 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
         captured["cmd"] = cmd
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
@@ -2789,21 +2864,45 @@ def test_cmd_jobs_default_hides_completed(project_dir, capsys):
     assert "No active jobs" in out
 
 
-def test_preflight_dispatch_fails_for_missing_agent(project_dir, monkeypatch):
-    """_preflight_dispatch returns error string when agent CLI is not on PATH."""
-    import synlynk as sl
-    monkeypatch.setattr("shutil.which", lambda x: None)
-    err = sl._preflight_dispatch("claude")
-    assert err is not None
-    assert "not found" in err.lower() or "claude" in err
+def test_preflight_blocks_invalid_flag():
+    from synlynk import _preflight_dispatch
+    result = _preflight_dispatch(
+        agent_name="grok",
+        dispatch_flags=["--always-approve"],
+        db_conn=None,
+    )
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "--always-approve" in result["reason"]
 
 
-def test_preflight_dispatch_passes_for_known_agent(project_dir, monkeypatch):
-    """_preflight_dispatch returns None when agent CLI is found."""
-    import synlynk as sl
-    monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/claude")
-    err = sl._preflight_dispatch("claude")
-    assert err is None
+def test_preflight_blocks_unreachable_endpoint(monkeypatch):
+    import socket
+
+    def mock_connect(self, addr):
+        raise ConnectionRefusedError("unreachable")
+
+    monkeypatch.setattr(socket.socket, "connect", mock_connect)
+
+    from synlynk import _preflight_dispatch
+    result = _preflight_dispatch(
+        agent_name="grok",
+        dispatch_flags=["--yes"],
+        db_conn=None,
+    )
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "cli-chat-proxy.grok.com" in result["reason"]
+
+
+def test_preflight_passes_for_valid_claude_dispatch():
+    from synlynk import _preflight_dispatch
+    result = _preflight_dispatch(
+        agent_name="claude",
+        dispatch_flags=["--print", "--dangerously-skip-permissions"],
+        db_conn=None,
+    )
+    assert result["passed"] is True
 
 
 def test_dispatch_agent_records_in_daemon_jobs_table(project_dir, monkeypatch):
@@ -2814,7 +2913,7 @@ def test_dispatch_agent_records_in_daemon_jobs_table(project_dir, monkeypatch):
         pid = 42
 
     monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent: None, raising=False)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None}, raising=False)
     job = sl.dispatch_agent("claude", "test task")
     conn = sl._get_db()
     row = conn.execute(
@@ -4434,9 +4533,27 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    assert "--always-approve" in grok["dispatch_flags"]
+    assert "--always-approve" in grok["dispatch_flags"]["invalid_flags"]
+    assert "--always-approve" not in grok["dispatch_flags"]["valid_flags"]
+    assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
+
+
+def test_grok_baseline_excludes_always_approve():
+    from synlynk import AGENT_CAPABILITY_BASELINES
+    grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
+    flags = grok.get("dispatch_flags", {})
+    invalid = flags.get("invalid_flags", [])
+    assert "--always-approve" in invalid, "LIVE-1: --always-approve must be in invalid_flags"
+    assert "--always-approve" not in flags.get("valid_flags", [])
+
+
+def test_grok_baseline_has_network_deps():
+    from synlynk import AGENT_CAPABILITY_BASELINES
+    grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
+    endpoints = grok.get("network_deps", {}).get("required_endpoints", [])
+    assert any("cli-chat-proxy.grok.com" in e for e in endpoints)
 
 
 def test_agent_discovery_defaults_includes_grok():
@@ -4446,12 +4563,12 @@ def test_agent_discovery_defaults_includes_grok():
 
 
 def test_probe_grok_version(monkeypatch):
-    import synlynk, subprocess
-    fake = subprocess.CompletedProcess(
-        args=["grok", "-v"], returncode=0,
-        stdout="grok 0.2.67 (grok-composer-2.5-fast)", stderr=""
+    import synlynk
+    monkeypatch.setattr(
+        synlynk,
+        "_spawn_with_pty_fallback",
+        lambda *a, **kw: (None, b"grok 0.2.67 (grok-composer-2.5-fast)"),
     )
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: fake)
     result = synlynk._probe_model_version("grok", "grok")
     assert "grok" in result.lower()
 
@@ -4872,3 +4989,66 @@ def test_cmd_sync_no_manifest(tmp_path, monkeypatch, capsys):
     assert "no tracked" in out.lower() or "dry run" in out.lower()
 
 
+def test_agy_baseline_has_headless_contract():
+    from synlynk import AGENT_CAPABILITY_BASELINES
+    agy = AGENT_CAPABILITY_BASELINES.get("agy", {})
+    contract = agy.get("headless_contract", {})
+    assert contract.get("requires_pty") is False
+    assert contract.get("stdout_flush_method") == "unbuffered"
+    assert "PYTHONUNBUFFERED=1" in contract.get("env_vars_required", [])
+
+
+def test_agy_dispatch_injects_pythonunbuffered(project_dir, monkeypatch):
+    import os
+    import subprocess
+    import synlynk as sl
+    # Stub agy CLI that prints its environment
+    stub = project_dir / "agy"
+    stub.write_text("#!/bin/sh\nenv | grep PYTHONUNBUFFERED\n")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(project_dir) + ":" + os.environ["PATH"])
+    captured_env = {}
+    original_popen = subprocess.Popen
+    def mock_popen(cmd, **kwargs):
+        captured_env.update(kwargs.get("env", {}))
+        return original_popen(cmd, **kwargs)
+    monkeypatch.setattr(subprocess, "Popen", mock_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda agent, cli: "mock-model")
+
+    # call dispatch_agent for agy with a minimal task
+    sl.dispatch_agent("agy", "echo test")
+    assert "PYTHONUNBUFFERED" in captured_env
+    assert captured_env["PYTHONUNBUFFERED"] == "1"
+
+
+def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
+    import signal, time, json, os
+    import synlynk as sl
+
+    job_id = "job-stall-test"
+    log_file = tmp_path / f"{job_id}.log"
+    log_file.write_bytes(b"")  # 0 bytes — stalled
+
+    started_at = time.time() - 7200  # 2h ago
+    job = {
+        "id": job_id, "agent": "agy", "status": "running",
+        "pid": 99999,  # non-existent PID
+        "started_at": started_at,
+        "log_file": str(log_file),
+    }
+
+    config = {"agents": {"agy": {"stall_timeout_minutes": 30}}, "stall_timeout_minutes": 30}
+    sentinel_path = tmp_path / "sentinel.md"
+
+    killed = []
+    def mock_kill(pid, sig):
+        killed.append((pid, sig))
+    monkeypatch.setattr(os, "kill", mock_kill)
+
+    result = sl._check_job_stall(job, config, str(sentinel_path))
+
+    assert result is True
+    assert job["status"] == "failed"
+    assert len(killed) > 0
+    assert "STALL_NO_OUTPUT" in sentinel_path.read_text()
