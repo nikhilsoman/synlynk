@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-16 v2: Ecosystem Status + Capacity</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 2rem; font-size: 13px; }
+  h2 { color: #7c3aed; font-size: 1.1rem; margin-bottom: 0.25rem; }
+  .subtitle { color: #64748b; font-size: 0.8rem; margin-bottom: 1.5rem; }
+  h3 { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+  .terminal { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1.25rem; font-size: 11.5px; line-height: 1.9; }
+  .terminal .head { color: #7c3aed; font-weight: bold; }
+  .terminal .sep { color: #1e293b; }
+  .terminal .ok { color: #10b981; }
+  .terminal .warn { color: #f59e0b; }
+  .terminal .crit { color: #ef4444; }
+  .terminal .dim { color: #475569; }
+  .terminal .ref { color: #3b82f6; }
+  .terminal .gold { color: #f59e0b; }
+  .terminal .cyan { color: #06b6d4; }
+  .terminal .pulse { color: #a78bfa; }
+  .terminal .agent { display: inline-block; width: 9rem; }
+  .terminal .label { display: inline-block; width: 8rem; }
+  .bar { display: inline-block; height: 7px; background: #1e293b; border-radius: 2px; vertical-align: middle; width: 72px; position: relative; }
+  .bar-fill { height: 100%; border-radius: 2px; position: absolute; left: 0; top: 0; }
+  .bar-100 { background: #10b981; width: 100%; }
+  .bar-94  { background: #10b981; width: 94%; }
+  .bar-78  { background: #f59e0b; width: 78%; }
+  .bar-61  { background: #ef4444; width: 61%; }
+
+  /* capacity bars — sized to show relative window */
+  .cap-bar { display: inline-block; height: 10px; border-radius: 2px; vertical-align: middle; }
+  .cap-1m   { background: #06b6d4; width: 100px; }
+  .cap-200k { background: #7c3aed; width: 20px; }
+  .cap-128k { background: #10b981; width: 13px; }
+  .cap-131k { background: #f59e0b; width: 13px; }
+
+  /* dispatch mode cards */
+  .modes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+  .mode-card { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; }
+  .mode-card h4 { font-size: 0.8rem; margin-bottom: 0.4rem; }
+  .mode-card p { font-size: 11px; color: #64748b; line-height: 1.6; }
+  .mode-card ul { list-style: none; font-size: 10.5px; margin-top: 0.5rem; }
+  .mode-card ul li { color: #94a3b8; padding: 0.1rem 0; }
+  .mode-card ul li::before { content: "→ "; color: #475569; }
+  .mode-eco     { border-top: 2px solid #10b981; }
+  .mode-grind   { border-top: 2px solid #7c3aed; }
+  .mode-perf    { border-top: 2px solid #f59e0b; }
+  .mode-eco h4  { color: #10b981; }
+  .mode-grind h4 { color: #a78bfa; }
+  .mode-perf h4  { color: #f59e0b; }
+
+  /* tiers */
+  .tiers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  .tier { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 0.9rem; }
+  .tier h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.4rem; }
+  .tier p { font-size: 10.5px; color: #64748b; line-height: 1.5; margin-bottom: 0.4rem; }
+  .tier ul { list-style: none; font-size: 10.5px; }
+  .tier ul li { color: #94a3b8; padding: 0.1rem 0; }
+  .tier ul li::before { content: "· "; color: #475569; }
+  .tier-1 { border-top: 2px solid #10b981; } .tier-1 h4 { color: #10b981; }
+  .tier-2 { border-top: 2px solid #7c3aed; } .tier-2 h4 { color: #a78bfa; }
+  .tier-3 { border-top: 2px solid #f59e0b; } .tier-3 h4 { color: #f59e0b; }
+
+  .note { background: #0a1a0a; border: 1px solid #166534; border-radius: 6px; padding: 0.75rem 1rem; font-size: 11px; color: #86efac; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+
+<h2>BS-16: Ecosystem Status + Capacity Layer</h2>
+<p class="subtitle">Availability · adherence · completion · context capacity · dispatch modes</p>
+
+<!-- CAPACITY IMPLEMENTATION TIERS -->
+<h3>Capacity layer — three tiers</h3>
+<div class="tiers">
+  <div class="tier tier-1">
+    <h4>Tier 1 — Static (v1, in scope)</h4>
+    <p>Curated context window from <code>AGENT_CAPABILITY_BASELINES</code>. Pre-dispatch check: estimated task tokens vs. agent window.</p>
+    <ul>
+      <li>Window size in status</li>
+      <li>Dispatch preflight gates on fit</li>
+      <li>No external calls needed</li>
+    </ul>
+  </div>
+  <div class="tier tier-2">
+    <h4>Tier 2 — Plan-aware (v2)</h4>
+    <p>User declares plan tier per agent in <code>.agents/&lt;agent&gt;.json</code>. Pro/free/enterprise limits differ significantly.</p>
+    <ul>
+      <li><code>agy: pro</code> → 1M tokens</li>
+      <li><code>agy: free</code> → 32K tokens</li>
+      <li>Status shows configured limit</li>
+    </ul>
+  </div>
+  <div class="tier tier-3">
+    <h4>Tier 3 — Dynamic / Aggregator superpower</h4>
+    <p>Detect variable limits: off-peak expansion, regional burst, rate limit headroom. Notify user. Schedule eco-mode jobs into expanded windows.</p>
+    <ul>
+      <li>HTTP response header scraping</li>
+      <li>Rate limit header watch</li>
+      <li>Surge window notification</li>
+      <li>Eco mode scheduling</li>
+    </ul>
+  </div>
+</div>
+
+<!-- STATUS MOCKUP + DISPATCH MODES -->
+<div class="grid2">
+  <div>
+    <h3>synlynk status — with capacity section</h3>
+    <div class="terminal">
+<span class="head">SYNLYNK ECOSYSTEM STATUS</span>  <span class="dim">2026-07-01 14:23</span>
+<span class="sep">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+
+<span class="dim">FLEET</span>
+  <span class="ok">3/4</span> agents attached   Active jobs: <span class="warn">2</span>
+  Dispatch mode: <span class="pulse">daily-grind</span>   Last probe: <span class="ok">4m ago</span>
+
+<span class="dim">AGENT SCORE</span>
+            <span class="dim">ATTACH  ADHERE  COMPLETE</span>
+  <span class="ref agent">claude [ref]</span> <span class="ok">100%</span>   <span class="dim">—</span>       <span class="ok">99%</span>
+  <span class="agent">codex      </span> <span class="ok">94%</span>    <span class="ok">87%</span>     <span class="ok">92%</span>
+  <span class="agent">grok       </span> <span class="warn">78%</span>    <span class="warn">71%</span>     <span class="warn">81%</span>
+  <span class="agent">agy        </span> <span class="crit">61%</span>    <span class="crit">43%</span>     <span class="crit">67%</span>
+
+<span class="sep">────────────────────────────────────────────</span>
+<span class="dim">CAPACITY</span>                 <span class="dim">window    plan   </span>
+  <span class="agent">agy        </span> <span class="cap-bar cap-1m"></span>  <span class="cyan">1,000K</span>  <span class="dim">pro  </span>
+  <span class="agent">claude     </span> <span class="cap-bar cap-200k"></span>   <span class="ok"> 200K</span>  <span class="dim">max  </span>
+  <span class="agent">codex      </span> <span class="cap-bar cap-128k"></span>   <span class="ok"> 128K</span>  <span class="dim">plus </span>
+  <span class="agent">grok       </span> <span class="cap-bar cap-131k"></span>   <span class="warn"> 131K</span>  <span class="dim">?    </span>
+
+  Total fleet capacity: <span class="cyan">1,459K tokens</span>
+  Largest single window: <span class="cyan">agy 1M</span> <span class="dim">(tasks &gt;200K → agy only)</span>
+
+<span class="sep">────────────────────────────────────────────</span>
+<span class="dim">HARNESS COMPAT  (from: claude)</span>
+  <span class="label">→ claude </span><span class="bar"><span class="bar-fill bar-100"></span></span> <span class="ok">100%</span>
+  <span class="label">→ codex  </span><span class="bar"><span class="bar-fill bar-94"></span></span>  <span class="ok">94%</span>
+  <span class="label">→ grok   </span><span class="bar"><span class="bar-fill bar-78"></span></span>  <span class="warn">78%</span>  network degraded
+  <span class="label">→ agy    </span><span class="bar"><span class="bar-fill bar-61"></span></span>  <span class="crit">61%</span>  headless unreliable
+
+<span class="sep">────────────────────────────────────────────</span>
+<span class="dim">SENTINELS</span>  <span class="ok">none active</span>
+<span class="gold">⚡ agy off-peak window opens in ~2h — 2× rate limit</span>
+    </div>
+  </div>
+
+  <div>
+    <h3>Dispatch modes — capacity-informed routing</h3>
+    <div class="modes" style="grid-template-columns:1fr;gap:0.75rem">
+      <div class="mode-card mode-eco">
+        <h4>eco mode</h4>
+        <p>Queue work for next expanded-capacity or off-peak window. Minimise token cost, maximise context headroom.</p>
+        <ul>
+          <li>Holds jobs until surge window detected</li>
+          <li>Prefers large-window agents (agy 1M)</li>
+          <li>Notifies user when window opens</li>
+          <li>Best for: large tasks, non-urgent, cost-sensitive</li>
+        </ul>
+      </div>
+      <div class="mode-card mode-grind">
+        <h4>daily-grind mode  <span style="font-size:9px;color:#64748b">(default)</span></h4>
+        <p>Dispatch to configured default agent immediately. No optimisation. Predictable.</p>
+        <ul>
+          <li>Uses per-story agent assignment</li>
+          <li>Preflight gates on capacity fit</li>
+          <li>Escalates to larger window if task won't fit</li>
+          <li>Best for: routine work, known task sizes</li>
+        </ul>
+      </div>
+      <div class="mode-card mode-perf">
+        <h4>perf mode</h4>
+        <p>Dispatch now to best available agent by capability + capacity score. Ignore cost, minimise latency.</p>
+        <ul>
+          <li>Routes to highest compat + largest window</li>
+          <li>Parallel dispatch where independent</li>
+          <li>No queue — fires immediately</li>
+          <li>Best for: sprint crunch, blocking work</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem">
+      <h3>Pre-dispatch capacity check (new preflight gate)</h3>
+      <div class="terminal" style="font-size:11px;line-height:1.7">
+<span class="dim"># _preflight_dispatch() — new capacity check</span>
+task_tokens = <span class="cyan">estimate_token_count(prompt)</span>
+agent_window = <span class="cyan">get_window(agent, plan_tier)</span>
+
+if task_tokens > agent_window:
+  <span class="crit">→ CAPACITY_EXCEEDED sentinel</span>
+  <span class="dim">  suggest: larger-window agent</span>
+  <span class="dim">  suggest: split task into subtasks</span>
+  <span class="dim">  suggest: switch to eco mode</span>
+
+elif task_tokens > agent_window * 0.8:
+  <span class="warn">→ WARNING: context pressure</span>
+  <span class="dim">  dispatch continues</span>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:1rem">
+      <strong>Aggregator superpower (Tier 3):</strong> synlynk watches rate-limit response headers during dispatch. When Grok returns <code>X-RateLimit-Remaining: 5000</code> vs. the baseline 1000 — that's a surge window. synlynk notifies the user and, in eco mode, drains the queue into it. No other tool does this.
+    </div>
+  </div>
+</div>
+
+<p style="color:#475569;font-size:11px;text-align:center">Does this capture the full picture? Continuing in terminal to confirm scope before writing the spec.</p>
+
+</body>
+</html>

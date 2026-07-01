@@ -1,0 +1,44 @@
+<h2>Three approaches to capability availability</h2>
+<p class="subtitle">How should the status system be structured?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Probe-centric (recommended)</h3>
+      <p>Enhance <code>synlynk probe</code> to produce a full availability snapshot: attach check → version currency → TC-1–4 compliance → verb availability → harness compat baseline. Results land in <code>state.db</code>. <code>synlynk status</code> reads from there — no live checks at status time. Telemetry from real dispatches enriches the harness compat scores over time.</p>
+      <div class="pros-cons" style="margin-top:0.75rem">
+        <div class="pros"><h4>Pros</h4><ul><li>One command refreshes everything</li><li>Status is always instant (DB read)</li><li>Telemetry enriches compat scores over time</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Probe must be run to get fresh data</li><li>Harness compat baseline is static until probe runs</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Separate <code>synlynk compat</code> command</h3>
+      <p>Probe stays lightweight (version + TC checks). A new <code>synlynk compat</code> command owns the matrix: fires synthetic dispatch tests from each harness, measures output fidelity, writes a harness×target matrix to state.db. Status reads from both.</p>
+      <div class="pros-cons" style="margin-top:0.75rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean separation of concerns</li><li>Compat runs independently on demand</li><li>Synthetic tests catch runtime divergence</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Requires all target agents installed to run</li><li>Synthetic dispatch tests are expensive (~30s+ per agent)</li><li>Two commands to remember</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Telemetry-derived (passive)</h3>
+      <p>No active checks. Derive everything from actual dispatch telemetry: attach rate = dispatches in last 24h with exit 0 / total; compat = success rate by verb category per agent; harness experience = job duration + output byte count variance from baseline. Purely passive — no extra work, no synthetic runs.</p>
+      <div class="pros-cons" style="margin-top:0.75rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero overhead — uses existing data</li><li>Reflects actual usage, not synthetic conditions</li><li>Gets more accurate over time automatically</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>No signal on day 1 (cold start)</li><li>Can't distinguish "agent is broken" from "no one dispatched to it recently"</li><li>Lags real breakage by hours/days</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem">Let me know which resonates — or if you want a hybrid. Continuing in terminal.</p>
