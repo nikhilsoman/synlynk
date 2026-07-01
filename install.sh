@@ -10,7 +10,7 @@
 
 set -e
 
-VERSION="0.9.8"
+VERSION=$(python3 -c "import re, pathlib; m = re.search(r'VERSION = \"([^\"]+)\"', pathlib.Path('synlynk/__init__.py').read_text()); print(m.group(1) if m else '0.0.0')")
 INSTALL_DIR="$HOME/.synlynk/bin"
 LIB_DIR="$HOME/.synlynk/lib"
 BINARY_PATH="$INSTALL_DIR/synlynk"

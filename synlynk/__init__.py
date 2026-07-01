@@ -9316,9 +9316,32 @@ _INSTALL_SCRIPT_URL = (
 )
 
 
+def _detect_install_type() -> str:
+    """Returns 'pipx', 'pip', 'script', or 'unknown'."""
+    try:
+        import importlib.metadata as _meta
+
+        loc = str(_meta.distribution("synlynk").locate_file(""))
+        if "pipx" in loc:
+            return "pipx"
+        return "pip"
+    except Exception:
+        pass
+    if os.path.exists(os.path.expanduser("~/.synlynk/bin/synlynk")):
+        return "script"
+    return "unknown"
+
+
 def _run_upgrade(latest: str) -> None:
-    """Download install.sh and run it. Falls back to printing the curl command."""
-    print(f"  ✦ New version available: v{latest} — upgrading from v{VERSION}...")
+    print(f"  ✦ New version available: v{latest} — upgrading from v{VERSION}")
+    install_type = _detect_install_type()
+    if install_type == "pipx":
+        result = subprocess.run(["pipx", "upgrade", "synlynk"], text=True)
+        if result.returncode == 0:
+            print(f"  ✓ Upgraded to v{latest} via pipx")
+        else:
+            print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
+        return
     try:
         req = urllib.request.Request(
             _INSTALL_SCRIPT_URL, headers={"User-Agent": f"synlynk/{VERSION}"}
@@ -9327,7 +9350,8 @@ def _run_upgrade(latest: str) -> None:
             script = resp.read().decode()
         result = subprocess.run(["bash", "-c", script], text=True)
         if result.returncode == 0:
-            print(f"  ✓ Upgraded to v{latest}. Restart your shell or run: source ~/.zshrc")
+            print(f"  ✓ Upgraded to v{latest}")
+            print("  Restart your shell or run: source ~/.zshrc")
         else:
             print(f"  ⚠ Install script exited {result.returncode} — run manually:")
             print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
