@@ -14,6 +14,350 @@ import sqlite3 as _sqlite3
 
 VERSION = "0.10.0"
 
+CYCLE_NAMES = ["dream", "design", "plan", "build", "ship", "sustain"]
+
+CYCLE_COLORS = {
+    "dream":   "#a78bfa",
+    "design":  "#60a5fa",
+    "plan":    "#34d399",
+    "build":   "#fbbf24",
+    "ship":    "#f87171",
+    "sustain": "#94a3b8",
+}
+
+CYCLE_DESCRIPTIONS = {
+    "dream":   "What's worth building\nIdeate, assess, identify opportunities\n",
+    "design":  "Brainstorm -> spec -> UX\nTurn ideas into a concrete brief\n",
+    "plan":    "Implementation plan, story breakdown, agent wave schedule\n",
+    "build":   "Dispatch agents, run jobs, iterate on diffs\n",
+    "ship":    "Cut release, changelog, publish\n",
+    "sustain": "Monitor, patch, community, docs, support\n",
+}
+
+CYCLE_DEFAULT_AGENTS = {
+    "dream":   ["claude"],
+    "design":  ["claude"],
+    "plan":    ["claude"],
+    "build":   ["agy", "codex", "grok"],
+    "ship":    ["claude"],
+    "sustain": ["claude", "agy", "codex", "grok"],
+}
+
+CORE_TEMPLATE_IDS = {"arch-review", "product-assessment", "lifecycle-setup"}
+
+LAUNCH_TASK_TEMPLATES = [
+    # ── Core templates (always shown) ───────────────────────────────────────
+    {
+        "id": "arch-review",
+        "title": "Workspace architecture review",
+        "description": "Analyse structure, patterns, tech debt. Claude writes findings to memory.md.",
+        "cycle": "dream",
+        "agent": "claude",
+        "context_mode": "full",
+        "prompt_template": (
+            "Review the architecture of {workspace} ({stack}, {topology} repo). "
+            "Identify: structural patterns in use, top 5 tech debt hotspots (name files "
+            "and functions), component coupling risks, and 3 concrete improvement "
+            "opportunities with effort estimates. Write your findings as a new section "
+            'in .synlynk/project-docs/memory.md under "## Architecture Review {date}". '
+            "Be specific — no generic advice."
+        ),
+        "est_hours": 2,
+        "r_tokens": 80000,
+        "w_tokens": 8000,
+        "tool_calls": 12,
+        "trigger_condition": None,
+    },
+    {
+        "id": "product-assessment",
+        "title": "Product + opportunity assessment",
+        "description": "Scope, features, market fit, growth levers. 1-page brief to memory.md.",
+        "cycle": "dream",
+        "agent": "claude",
+        "context_mode": "full",
+        "prompt_template": (
+            "Assess the product potential of {workspace}. Cover: what problem it solves, "
+            "current feature set vs. gaps, market positioning, top 3 growth levers, and "
+            "1 concrete opportunity to pursue in the next sprint. Write a 1-page brief to "
+            '.synlynk/project-docs/memory.md under "## Product Assessment {date}".'
+        ),
+        "est_hours": 1,
+        "r_tokens": 40000,
+        "w_tokens": 6000,
+        "tool_calls": 8,
+        "trigger_condition": None,
+    },
+    {
+        "id": "lifecycle-setup",
+        "title": "Set up 6-cycle workflow for this repo",
+        "description": "Initialise lifecycle tracking in state.db. Label open stories by cycle.",
+        "cycle": "plan",
+        "agent": "claude",
+        "context_mode": "task",
+        "prompt_template": (
+            "Set up the 6-cycle SDLC workflow for {workspace}. "
+            "Run `synlynk story list` to see existing stories. "
+            "For each story, assign a cycle phase (dream/design/plan/build/ship/sustain) "
+            "based on its title and update it with `synlynk story update`. "
+            "Then write a short SDLC setup note in "
+            '.synlynk/project-docs/memory.md under "## Lifecycle Setup {date}" '
+            "explaining which stories belong to which cycle and why."
+        ),
+        "est_hours": 0.5,
+        "r_tokens": 15000,
+        "w_tokens": 3000,
+        "tool_calls": 6,
+        "trigger_condition": None,
+    },
+    # ── Scan-triggered templates ─────────────────────────────────────────────
+    {
+        "id": "add-tests",
+        "title": "Add test coverage",
+        "description": "Bootstrap a test suite for the most critical untested modules.",
+        "cycle": "plan",
+        "agent": "agy",
+        "context_mode": "full",
+        "prompt_template": (
+            "The {workspace} repo has low test coverage (test_ratio < 0.1). "
+            "Identify the 3 most critical untested modules in {repo_name}. "
+            "For each, write a test file with at least 5 meaningful tests covering "
+            "happy path, edge cases, and error handling. Commit each test file "
+            "with a message like 'test: add coverage for <module>'. "
+            "Do not mock the database or filesystem unless unavoidable."
+        ),
+        "est_hours": 3,
+        "r_tokens": 60000,
+        "w_tokens": 20000,
+        "tool_calls": 30,
+        "trigger_condition": lambda scan: scan.get("test_ratio", 1.0) < 0.1,
+    },
+    {
+        "id": "setup-ci",
+        "title": "Set up CI/CD pipeline",
+        "description": "Create a GitHub Actions workflow for tests and linting.",
+        "cycle": "plan",
+        "agent": "codex",
+        "context_mode": "task",
+        "prompt_template": (
+            "Set up CI/CD for {workspace} ({stack}). "
+            "Create .github/workflows/ci.yml that: runs tests on every push to main "
+            "and on PRs, runs a linter if one is configured, and fails fast on error. "
+            "Use the appropriate test runner for the stack ({stack}). "
+            "Commit the workflow file with a message: 'ci: add GitHub Actions workflow'."
+        ),
+        "est_hours": 1,
+        "r_tokens": 20000,
+        "w_tokens": 5000,
+        "tool_calls": 10,
+        "trigger_condition": lambda scan: not scan.get("has_ci", False),
+    },
+    {
+        "id": "docs-audit",
+        "title": "Documentation audit + gap fill",
+        "description": "Audit docs coverage and write missing sections.",
+        "cycle": "design",
+        "agent": "agy",
+        "context_mode": "full",
+        "prompt_template": (
+            "Audit the documentation for {workspace}. "
+            "Check: README completeness, API/function docstrings, architecture docs, "
+            "contributing guide, and changelog. "
+            "For each gap: write the missing content inline (do not use placeholders). "
+            "Commit each doc file separately with a message like 'docs: add <section>'."
+        ),
+        "est_hours": 2,
+        "r_tokens": 50000,
+        "w_tokens": 15000,
+        "tool_calls": 20,
+        "trigger_condition": lambda scan: (
+            not scan.get("has_docs", False) or scan.get("readme_word_count", 999) < 200
+        ),
+    },
+    {
+        "id": "security-scan",
+        "title": "Dependency security scan",
+        "description": "Check for known CVEs and outdated dependencies.",
+        "cycle": "dream",
+        "agent": "claude",
+        "context_mode": "task",
+        "prompt_template": (
+            "Run a dependency security audit for {workspace} ({stack}). "
+            "Use `pip-audit` (Python), `npm audit` (Node), or `bundle audit` (Ruby) "
+            "depending on the stack. List all HIGH and CRITICAL vulnerabilities found. "
+            "For each: state the package, CVE, severity, and recommended fix. "
+            'Write findings to .synlynk/project-docs/memory.md under "## Security Audit {date}". '
+            "If no vulnerabilities: confirm that explicitly."
+        ),
+        "est_hours": 1,
+        "r_tokens": 25000,
+        "w_tokens": 4000,
+        "tool_calls": 8,
+        "trigger_condition": lambda scan: any(
+            lbl in scan.get("repos", [{}])[0].get("stack_labels", [])
+            for lbl in ["python", "node", "ruby"]
+        ),
+    },
+    {
+        "id": "perf-baseline",
+        "title": "Performance baseline + profiling plan",
+        "description": "Identify hot paths and draft a performance improvement plan.",
+        "cycle": "dream",
+        "agent": "claude",
+        "context_mode": "full",
+        "prompt_template": (
+            "Profile the performance of {workspace} ({stack}). "
+            "Identify: the 3 slowest request paths or CLI operations, any N+1 query patterns, "
+            "memory allocation hot spots, and opportunities for caching. "
+            "Write a performance improvement plan to "
+            '.synlynk/project-docs/memory.md under "## Performance Baseline {date}" '
+            "with specific file + line references."
+        ),
+        "est_hours": 2,
+        "r_tokens": 70000,
+        "w_tokens": 8000,
+        "tool_calls": 15,
+        "trigger_condition": lambda scan: any(
+            lbl in scan.get("repos", [{}])[0].get("stack_labels", [])
+            for lbl in ["next", "fastapi", "django", "express", "flask"]
+        ),
+    },
+    {
+        "id": "cross-repo-map",
+        "title": "Cross-repo dependency map",
+        "description": "Map inter-repo dependencies for the multi-repo workspace.",
+        "cycle": "dream",
+        "agent": "claude",
+        "context_mode": "full",
+        "prompt_template": (
+            "Map the inter-repo dependencies of {workspace} ({topology} workspace). "
+            "For each repo pair: identify shared interfaces, shared types/schemas, "
+            "shared infra, and any circular dependencies. "
+            "Write a dependency map to "
+            '.synlynk/project-docs/memory.md under "## Cross-Repo Map {date}" '
+            "using a table: Repo A → Repo B → Dependency type → Notes."
+        ),
+        "est_hours": 1,
+        "r_tokens": 40000,
+        "w_tokens": 6000,
+        "tool_calls": 10,
+        "trigger_condition": lambda scan: scan.get("topology") in ("mono", "multi", "monorepo"),
+    },
+    {
+        "id": "type-safety",
+        "title": "Add type annotations to public API",
+        "description": "Annotate public functions and classes to improve tooling and safety.",
+        "cycle": "design",
+        "agent": "codex",
+        "context_mode": "full",
+        "prompt_template": (
+            "Add type annotations to the public API of {workspace} ({stack}). "
+            "Target: all functions and methods that are exported or called from tests. "
+            "Use Python type hints (PEP 484). Do not annotate private (_-prefixed) helpers "
+            "unless they are called by public functions. "
+            "Commit each annotated file separately with 'refactor: add type hints to <module>'."
+        ),
+        "est_hours": 3,
+        "r_tokens": 120000,
+        "w_tokens": 30000,
+        "tool_calls": 45,
+        "trigger_condition": lambda scan: (
+            any(lbl == "python" for lbl in
+                scan.get("repos", [{}])[0].get("stack_labels", []))
+            and not scan.get("has_type_hints", False)
+        ),
+    },
+    {
+        "id": "a11y-audit",
+        "title": "Accessibility audit",
+        "description": "Audit the frontend for WCAG 2.1 AA compliance gaps.",
+        "cycle": "design",
+        "agent": "agy",
+        "context_mode": "full",
+        "prompt_template": (
+            "Audit {workspace} ({stack}) for accessibility issues (WCAG 2.1 AA). "
+            "Check: missing alt text, keyboard navigation, ARIA roles, colour contrast, "
+            "and form labels. List each issue with: component file, line number, "
+            "WCAG criterion, and fix. "
+            'Write findings to .synlynk/project-docs/memory.md under "## A11y Audit {date}". '
+            "Fix the top 5 most critical issues and commit each fix separately."
+        ),
+        "est_hours": 2,
+        "r_tokens": 60000,
+        "w_tokens": 15000,
+        "tool_calls": 25,
+        "trigger_condition": lambda scan: any(
+            lbl in scan.get("repos", [{}])[0].get("stack_labels", [])
+            for lbl in ["react", "next", "vue", "svelte", "angular"]
+        ),
+    },
+    {
+        "id": "db-schema-review",
+        "title": "Database schema review",
+        "description": "Review schema design for correctness, indexes, and N+1 risks.",
+        "cycle": "dream",
+        "agent": "claude",
+        "context_mode": "full",
+        "prompt_template": (
+            "Review the database schema for {workspace} ({stack}). "
+            "Identify: missing indexes, nullable columns that should be NOT NULL, "
+            "foreign keys without cascades, N+1 query risks, and migration gaps. "
+            "Write a schema review to "
+            '.synlynk/project-docs/memory.md under "## Schema Review {date}" '
+            "with a table: Issue → Table/Column → Severity → Fix."
+        ),
+        "est_hours": 1,
+        "r_tokens": 40000,
+        "w_tokens": 6000,
+        "tool_calls": 10,
+        "trigger_condition": lambda scan: scan.get("has_orm", False),
+    },
+]
+
+
+def _template_matches(template: dict, scan: dict) -> bool:
+    """Returns True if the template's trigger condition is met by scan."""
+    condition = template.get("trigger_condition")
+    if condition is None:
+        return True
+    try:
+        return bool(condition(scan))
+    except Exception:
+        return False
+
+
+def _select_launch_tasks(scan: dict) -> list:
+    """Returns ordered list of 3-5 matching templates (core first, bonus sorted by specificity)."""
+    eligible = [t for t in LAUNCH_TASK_TEMPLATES if _template_matches(t, scan)]
+    core = [t for t in eligible if t["id"] in CORE_TEMPLATE_IDS]
+    bonus = [t for t in eligible if t["id"] not in CORE_TEMPLATE_IDS]
+    return (core + bonus)[:5]
+
+
+def _render_prompt(template: dict, scan: dict) -> str:
+    """Substitutes {variables} in prompt_template from scan data. Missing vars become ''."""
+    import datetime as _datetime
+    import re as _re
+
+    repos = scan.get("repos", [])
+    primary = repos[0] if repos else {}
+    variables = {
+        "workspace": scan.get("workspace_name", ""),
+        "stack": ", ".join(primary.get("stack_labels", [])) or "unknown",
+        "repo_name": primary.get("name", ""),
+        "topology": scan.get("topology", "single"),
+        "test_count": str(scan.get("test_ratio", 0)),
+        "date": _datetime.date.today().isoformat(),
+        "agent": template.get("agent", "claude"),
+    }
+    text = template.get("prompt_template", "")
+
+    def _replace(match):
+        key = match.group(1)
+        return variables.get(key, "")
+
+    return _re.sub(r"\{(\w+)\}", _replace, text)
+
+
 TASK_STATUSES = {
     "[ ]": "active",
     "[x]": "done",
@@ -288,6 +632,23 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
     """)
+    # Idempotent cycle rename: old names -> new names (no-ops if tables/columns absent)
+    for sql in [
+        "UPDATE cycle_capability SET cycle = 'design'  WHERE cycle = 'plan'",
+        "UPDATE cycle_capability SET cycle = 'plan'    WHERE cycle = 'work'",
+        "UPDATE cycle_capability SET cycle = 'build'   WHERE cycle = 'ship'",
+        "UPDATE cycle_capability SET cycle = 'ship'    WHERE cycle = 'maintain'",
+        "UPDATE cycle_capability SET cycle = 'sustain' WHERE cycle = 'engage'",
+        "UPDATE harness_verb_map  SET cycle = 'design'  WHERE cycle = 'plan'",
+        "UPDATE harness_verb_map  SET cycle = 'plan'    WHERE cycle = 'work'",
+        "UPDATE harness_verb_map  SET cycle = 'build'   WHERE cycle = 'ship'",
+        "UPDATE harness_verb_map  SET cycle = 'ship'    WHERE cycle = 'maintain'",
+        "UPDATE harness_verb_map  SET cycle = 'sustain' WHERE cycle = 'engage'",
+    ]:
+        try:
+            conn.execute(sql)
+        except _sqlite3.OperationalError:
+            pass  # table or column absent — migration is a no-op
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
@@ -1722,6 +2083,7 @@ def load_config() -> dict:
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
+        "auto_launch_after_wizard": True,
         "org": None,
         "owner": None,
         "repo": None,
@@ -3844,6 +4206,88 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
         else:
             workspace_name = os.path.basename(os.getcwd()) or "workspace"
 
+    # ── BS-19 launch task trigger fields ─────────────────────────────────────
+    primary_root = normalized_roots[0] if normalized_roots else os.getcwd()
+
+    # test_ratio: test files / total source files (0.0 if no source files)
+    def _count_files(root, patterns):
+        import fnmatch as _fnmatch
+        count = 0
+        for dirpath, _, filenames in os.walk(root):
+            if any(p in dirpath for p in (".git", "__pycache__", "node_modules", ".venv", "venv")):
+                continue
+            for fn in filenames:
+                if any(_fnmatch.fnmatch(fn, p) for p in patterns):
+                    count += 1
+        return count
+
+    src_count = _count_files(primary_root, ["*.py", "*.ts", "*.tsx", "*.js", "*.jsx", "*.rb", "*.go"])
+    test_count_files = _count_files(primary_root, ["test_*.py", "*_test.py", "*.test.ts",
+                                                    "*.test.tsx", "*.test.js", "*.spec.ts", "*.spec.js"])
+    test_ratio = test_count_files / src_count if src_count > 0 else 0.0
+
+    # readme_word_count
+    readme_path = os.path.join(primary_root, "README.md")
+    readme_word_count = 0
+    if os.path.exists(readme_path):
+        try:
+            readme_word_count = len(open(readme_path).read().split())
+        except OSError:
+            pass
+
+    # has_ci
+    has_ci = (
+        os.path.isdir(os.path.join(primary_root, ".github", "workflows"))
+        or os.path.exists(os.path.join(primary_root, ".gitlab-ci.yml"))
+        or os.path.isdir(os.path.join(primary_root, ".circleci"))
+    )
+
+    # has_docs: docs/ dir with at least one .md file
+    docs_dir = os.path.join(primary_root, "docs")
+    has_docs = False
+    if os.path.isdir(docs_dir):
+        for fn in os.listdir(docs_dir):
+            if fn.endswith(".md"):
+                has_docs = True
+                break
+
+    # has_type_hints: Python repo + any .pyi files or >30% of .py files have annotations
+    has_type_hints = False
+    py_files_with_hints = 0
+    py_files_total = 0
+    for dirpath, _, filenames in os.walk(primary_root):
+        if any(p in dirpath for p in (".git", "__pycache__", "node_modules", ".venv", "venv")):
+            continue
+        for fn in filenames:
+            if fn.endswith(".pyi"):
+                has_type_hints = True
+            elif fn.endswith(".py"):
+                py_files_total += 1
+                try:
+                    content = open(os.path.join(dirpath, fn)).read(1000)
+                    if ("from __future__ import annotations" in content or
+                            re.search(r"def \w+\([^)]*: \w|-> \w", content)):
+                        py_files_with_hints += 1
+                except OSError:
+                    pass
+    if py_files_total > 0 and not has_type_hints:
+        has_type_hints = (py_files_with_hints / py_files_total) > 0.3
+
+    # has_orm
+    orm_markers = ("sqlalchemy", "from django.db", "import prisma", "activerecord", "ActiveRecord")
+    has_orm = False
+    for dep_file in ("requirements.txt", "requirements-dev.txt", "pyproject.toml",
+                     "Gemfile", "package.json", "go.mod"):
+        dep_path = os.path.join(primary_root, dep_file)
+        if os.path.exists(dep_path):
+            try:
+                content = open(dep_path).read()
+                if any(m in content for m in orm_markers):
+                    has_orm = True
+                    break
+            except OSError:
+                pass
+
     return {
         "workspace_name": workspace_name,
         "topology": topology,
@@ -3853,6 +4297,12 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
         "skills": skills,
         "home_harness": home_harness,
         "scanned_at": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "test_ratio": test_ratio,
+        "readme_word_count": readme_word_count,
+        "has_ci": has_ci,
+        "has_docs": has_docs,
+        "has_type_hints": has_type_hints,
+        "has_orm": has_orm,
     }
 
 
@@ -5437,6 +5887,71 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
                          "duration_s": round(duration, 1)})
     update_costs(cli, 0, 0, duration)
     print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
+
+
+def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
+    """FTUE task picker TUI - Screen 1 -> Screen 2 -> dispatch
+    - dry_run: print selected tasks without TUI or dispatch
+    - list_mode: print full template pool with trigger conditions
+    """
+    if list_mode:
+        print(f"\n  {_BOLD}synlynk launch - task template pool ({len(LAUNCH_TASK_TEMPLATES)} templates){_RESET}\n")
+        for t in LAUNCH_TASK_TEMPLATES:
+            cond = t.get("trigger_condition")
+            cond_str = "always" if cond is None else "(scan condition)"
+            marker = "●" if t["id"] in CORE_TEMPLATE_IDS else "○"
+            print(f"  {marker} {t['id']:<24}  {t['cycle']:<8}  {t['agent']:<8}  {cond_str}")
+        print()
+        return
+
+    try:
+        scan = run_workspace_scan()
+    except Exception:
+        scan = {
+            "workspace_name": os.path.basename(os.getcwd()) or "workspace",
+            "topology": "single",
+            "repos": [{"name": os.path.basename(os.getcwd()), "stack_labels": []}],
+            "harnesses": [], "agents": [], "skills": [],
+            "test_ratio": 1.0, "readme_word_count": 0,
+            "has_ci": False, "has_docs": False,
+            "has_type_hints": False, "has_orm": False,
+        }
+
+    tasks = _select_launch_tasks(scan)
+
+    if dry_run:
+        print(f"\n  {_BOLD}synlynk launch - dry run{_RESET}  "
+              f"{_DIM}workspace: {scan.get('workspace_name', 'unknown')}{_RESET}\n")
+        for i, t in enumerate(tasks, 1):
+            est = t.get("est_hours", 1)
+            est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
+            print(f"  [{i}] {t['id']:<24} {t['cycle']:<8}  {t['agent']:<8}  {est_str}")
+        print()
+        return
+
+    while True:
+        chosen = _launch_screen_tasks(tasks, scan)
+        if chosen is None:
+            return
+
+        confirmed, prompt = _launch_screen_preview(chosen, scan)
+        if not confirmed:
+            continue
+
+        try:
+            job = dispatch_agent(
+                agent=chosen["agent"],
+                task=prompt,
+                story_id=None,
+                force_agent=True,
+                context_mode=chosen.get("context_mode", "full"),
+            )
+            job_id = job.get("job_id", "unknown") if isinstance(job, dict) else "dispatched"
+            print(f"\n  {_GREEN}▶{_RESET} [{job_id}] {chosen['agent']} dispatched\n"
+                  f"  {_DIM}Log: synlynk logs --job {job_id}{_RESET}\n")
+        except Exception as exc:
+            print(f"\n  {_YELLOW}⚠ Dispatch failed: {exc}{_RESET}\n")
+        return
 
 
 def cmd_run_trio(task: str, story_id: str = None) -> None:
@@ -9020,7 +9535,7 @@ def _wiz_screen_roles(scan: dict) -> dict:
     return roles
 
 
-def _wiz_screen_launch(workspace: dict, scan: dict) -> None:
+def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -> None:
     """Screen 6 — launch cheat sheet. Final screen."""
     _wiz_clear()
     _wiz_header(step=6, total=6)
@@ -9040,8 +9555,190 @@ def _wiz_screen_launch(workspace: dict, scan: dict) -> None:
         suffix = f" {arg}" if arg else ""
         print(f"  {_CYAN}{cmd}{suffix}{_RESET}  {_DIM}{desc}{_RESET}")
     print(f"\n  {_DIM}{'─' * 52}{_RESET}")
-    _wiz_prompt("done · run `synlynk help` for all commands")
+    _wiz_prompt("done · run `synlynk launch` to pick your first task")
     _wiz_read_key()
+    if auto_launch:
+        cmd_launch_ftue()
+
+
+def _launch_screen_cycles() -> None:
+    """Screen 3 — cycles explainer. Any key returns to Screen 1."""
+    _wiz_clear()
+    cycle_ansi = {
+        "Dream":   "\033[38;5;141m",
+        "Design":  "\033[38;5;117m",
+        "Plan":    "\033[38;5;120m",
+        "Build":   "\033[38;5;221m",
+        "Ship":    "\033[38;5;210m",
+        "Sustain": "\033[38;5;246m",
+    }
+    print(f"\n  {_BOLD}{_CYAN}◆ The 6 cycles — your multi-agent SDLC{_RESET}\n")
+    cycle_agents = {
+        "Dream":   "→ claude",
+        "Design":  "→ claude",
+        "Plan":    "→ claude",
+        "Build":   "→ agy · codex · grok",
+        "Ship":    "→ claude",
+        "Sustain": "→ all agents",
+    }
+    for name, desc in [
+        ("Dream",   "What's worth building? Ideate, assess, identify opportunities."),
+        ("Design",  "Brainstorm → spec → UX. Turn ideas into a concrete brief."),
+        ("Plan",    "Implementation plan, story breakdown, agent wave schedule."),
+        ("Build",   "Dispatch agents, run jobs, iterate on diffs."),
+        ("Ship",    "Cut release, changelog, publish."),
+        ("Sustain", "Monitor, patch, community, docs, support."),
+    ]:
+        color = cycle_ansi.get(name, "")
+        agents = cycle_agents.get(name, "")
+        print(f"  {color}{_BOLD}{name:<8}{_RESET}  {_DIM}{desc}  {agents}{_RESET}")
+    print(f"\n  {_DIM}Tasks in synlynk launch are tagged to the cycle they open.")
+    print(f"  Any cycle can dispatch any agent.{_RESET}\n")
+    print(f"  {_DIM}[any key] back to tasks{_RESET}\n")
+    _wiz_read_key()
+
+
+def _launch_screen_preview(task: dict, scan: dict) -> tuple:
+    """Screen 2 — dispatch preview.
+    Returns (confirmed: bool, prompt: str).
+    [enter/space] → (True, prompt); [e] → edit prompt inline; [esc/q] → (False, prompt)
+    """
+    prompt = _render_prompt(task, scan)
+
+    while True:
+        _wiz_clear()
+        cycle = task.get("cycle", "dream")
+        agent = task.get("agent", "claude")
+        est = task.get("est_hours", 1)
+        est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
+        r = task.get("r_tokens", 0)
+        w = task.get("w_tokens", 0)
+        t = task.get("tool_calls", 0)
+        r_str = f"{r // 1000}K" if r >= 1000 else str(r)
+        w_str = f"{w // 1000}K" if w >= 1000 else str(w)
+
+        cycle_ansi = {
+            "dream":   "\033[38;5;141m",
+            "design":  "\033[38;5;117m",
+            "plan":    "\033[38;5;120m",
+            "build":   "\033[38;5;221m",
+            "ship":    "\033[38;5;210m",
+            "sustain": "\033[38;5;246m",
+        }
+        cycle_color = cycle_ansi.get(cycle, "")
+
+        print(f"\n  {_BOLD}{_CYAN}◆ Dispatch preview{_RESET}\n")
+        print(f"  {_DIM}{'agent':<8}{_RESET}{agent}")
+        print(f"  {_DIM}{'cycle':<8}{_RESET}{cycle_color}{cycle.capitalize()}{_RESET}")
+        print(f"  {_DIM}{'mode':<8}{_RESET}{task.get('context_mode', 'full')} context")
+        print(f"  {_DIM}{'est.':<8}{_RESET}{est_str}  │  "
+              f"\033[38;5;117mR\033[0m {r_str} · "
+              f"\033[38;5;120mW\033[0m {w_str} · "
+              f"\033[38;5;221mT\033[0m {t}\n")
+        print(f"  {_DIM}task prompt:{_RESET}")
+
+        # Wrap prompt at 56 chars for the box
+        words = prompt.split()
+        lines = []
+        current = ""
+        for word in words:
+            if len(current) + len(word) + 1 > 56:
+                lines.append(current)
+                current = word
+            else:
+                current = f"{current} {word}".strip()
+        if current:
+            lines.append(current)
+
+        print(f"  ┌{'─' * 58}┐")
+        for line in lines:
+            print(f"  │ {line:<56} │")
+        print(f"  └{'─' * 58}┘\n")
+        print(f"  {_DIM}[enter] dispatch now   [e] edit prompt   [esc] back to tasks{_RESET}\n")
+
+        key = _wiz_read_key()
+
+        if key in ("\r", "\n", " "):
+            return True, prompt
+        if key in ("\x1b", "q"):
+            return False, prompt
+        if key in ("e", "E"):
+            print(f"\n  Edit prompt (press Enter to confirm):\n  > ", end="", flush=True)
+            try:
+                edited = input().strip()
+                if edited:
+                    prompt = edited
+            except (EOFError, KeyboardInterrupt):
+                pass
+            continue
+        # any other key — redraw
+
+
+def _launch_screen_tasks(tasks: list, scan: dict):
+    """Screen 1 — task selection TUI. Returns chosen template dict or None if user skips."""
+    while True:
+        _wiz_clear()
+        ws_name = scan.get("workspace_name", "workspace")
+        repos = scan.get("repos", [])
+        primary = repos[0] if repos else {}
+        stack = ", ".join(primary.get("stack_labels", [])) or "unknown"
+        topology = scan.get("topology", "single")
+        harnesses = scan.get("harnesses", [])
+        agent_names = ", ".join(h["name"] for h in harnesses) or "none"
+
+        print(f"\n  {_BOLD}{_CYAN}◆ synlynk launch{_RESET}")
+        print(f"  {_DIM}{ws_name} · {stack} · {topology} repo · {agent_names}{_RESET}\n")
+        print(f"  Where do you want to start?\n")
+
+        cycle_ansi = {
+            "dream":   "\033[38;5;141m",
+            "design":  "\033[38;5;117m",
+            "plan":    "\033[38;5;120m",
+            "build":   "\033[38;5;221m",
+            "ship":    "\033[38;5;210m",
+            "sustain": "\033[38;5;246m",
+        }
+
+        for i, task in enumerate(tasks, 1):
+            cycle = task.get("cycle", "dream")
+            cycle_color = cycle_ansi.get(cycle, "")
+            cycle_tag = f"{cycle_color}[{cycle.capitalize()}]{_RESET}"
+            num_color = cycle_ansi.get(cycle, _CYAN)
+            print(f"  {num_color}[{i}]{_RESET} {_BOLD}{task['title']}{_RESET}  {cycle_tag}")
+            if task.get("trigger_condition") is not None:
+                print(f"     {_YELLOW}⚡ scan found: {task['description']}{_RESET}")
+            else:
+                print(f"     {_DIM}{task['description']}{_RESET}")
+            est = task.get("est_hours", 1)
+            est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
+            r = task.get("r_tokens", 0)
+            w = task.get("w_tokens", 0)
+            t = task.get("tool_calls", 0)
+            r_str = f"{r // 1000}K" if r >= 1000 else str(r)
+            w_str = f"{w // 1000}K" if w >= 1000 else str(w)
+            print(f"     {_DIM}{est_str}  │  "
+                  f"\033[38;5;117mR\033[0m {r_str} · "
+                  f"\033[38;5;120mW\033[0m {w_str} · "
+                  f"\033[38;5;221mT\033[0m {t}{_RESET}")
+            print()
+
+        print(f"  {_DIM}{'─' * 52}{_RESET}")
+        print(f"  {_DIM}\033[38;5;117mR\033[0m{_DIM} read · "
+              f"\033[38;5;120mW\033[0m{_DIM} write · "
+              f"\033[38;5;221mT\033[0m{_DIM} tool calls · estimates based on task template{_RESET}")
+        valid_keys = "".join(str(i) for i in range(1, len(tasks) + 1))
+        print(f"  {_DIM}[{valid_keys}] pick   [?] cycles   [s] skip{_RESET}\n")
+
+        key = _wiz_read_key()
+
+        if key in ("s", "q", "\x03"):
+            return None
+        if key == "?":
+            _launch_screen_cycles()
+            continue
+        if key.isdigit() and 1 <= int(key) <= len(tasks):
+            return tasks[int(key) - 1]
+        # invalid key — redraw
 
 
 def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
@@ -9108,7 +9805,9 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
     workspace["agent_roles"] = roles
 
     # ── Screen 6: Launch cheat sheet ─────────────────────────────────────
-    _wiz_screen_launch(workspace, scan)
+    cfg = load_config()
+    _wiz_screen_launch(workspace, scan,
+                       auto_launch=cfg.get("auto_launch_after_wizard", True))
 
     # ── Commit-on-complete: write all state ───────────────────────────────
     if not dry_run:
@@ -9681,11 +10380,18 @@ def main() -> None:
     shell_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID to label the shell session")
 
-    launch_parser = subparsers.add_parser(
-        "launch", help="Launch an agent CLI interactively with pre-loaded context")
-    launch_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
-    launch_parser.add_argument("--story", default=None, dest="story_id",
+    open_parser = subparsers.add_parser(
+        "open", help="Open an agent CLI interactively with pre-loaded context")
+    open_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
+    open_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
+
+    launch_parser = subparsers.add_parser(
+        "launch", help="Pick your first task and dispatch it (FTUE task picker)")
+    launch_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+        help="Print selected tasks without TUI or dispatching")
+    launch_parser.add_argument("--list", action="store_true", dest="list_mode",
+        help="Print full template pool with trigger conditions")
 
     run_parser = subparsers.add_parser(
         "run", help="Convenience wrappers for common dispatch patterns")
@@ -9839,8 +10545,13 @@ def main() -> None:
         cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
     elif args.command == "shell":
         cmd_shell(story_id=getattr(args, "story_id", None))
-    elif args.command == "launch":
+    elif args.command == "open":
         cmd_launch(args.agent, story_id=getattr(args, "story_id", None))
+    elif args.command == "launch":
+        cmd_launch_ftue(
+            dry_run=getattr(args, "dry_run", False),
+            list_mode=getattr(args, "list_mode", False),
+        )
     elif args.command == "run":
         action = getattr(args, "run_action", None)
         if action == "--trio":
