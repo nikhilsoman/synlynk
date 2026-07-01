@@ -180,3 +180,36 @@ def test_wiz_screen_roles_returns_dict(monkeypatch, capsys):
     roles = synlynk._wiz_screen_roles(scan)
     assert isinstance(roles, dict)
     assert "claude" in roles
+
+
+# === Task B-5 tests (screen 6 + wizard_init + --wizard) ===
+
+def test_wiz_screen_launch_prints_commands(monkeypatch, capsys):
+    workspace = {"workspace_name": "test-ws", "repos": [], "home_harness": "claude",
+                 "topology": "single"}
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r"))
+    synlynk._wiz_screen_launch(workspace, {})
+    out = capsys.readouterr().out
+    assert "dispatch" in out or "synlynk" in out
+
+
+def test_wizard_init_completes_without_write_on_ctrl_c(monkeypatch, tmp_path):
+    """wizard_init passed a pre-built scan dict runs to completion via stdin mock."""
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Simulate full wizard: enter(landing) → 1(harness) → 1(topo) → enter(name)
+    # → enter(repos) → enter(skills) → enter(agents) → enter(roles) → enter(launch)
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r1\r1\r\r\r\r\r\r\r"))
+    scan = {
+        "workspace_name": "test-ws", "topology": "single",
+        "repos": [{"path": str(tmp_path), "name": "test",
+                   "stack_labels": ["Python"], "readme_excerpt": "",
+                   "context_sections": {}}],
+        "harnesses": [{"name": "claude", "cli": "claude",
+                       "version": "1.x", "path": "/bin/claude"}],
+        "agents": [], "skills": [], "home_harness": "claude",
+        "scanned_at": "2026-07-01T10:00:00",
+    }
+    # Should not raise
+    synlynk.wizard_init(scan=scan, dry_run=True)

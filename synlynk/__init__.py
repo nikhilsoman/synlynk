@@ -8361,6 +8361,120 @@ def _wiz_screen_roles(scan: dict) -> dict:
     return roles
 
 
+def _wiz_screen_launch(workspace: dict, scan: dict) -> None:
+    """Screen 6 — launch cheat sheet. Final screen."""
+    _wiz_clear()
+    _wiz_header(step=6, total=6)
+    ws_name = workspace.get("workspace_name", "workspace")
+    home_h = workspace.get("home_harness") or scan.get("home_harness") or "claude"
+    print(f"  {_BOLD}{_GREEN}You're set up.{_RESET}  "
+          f"{_DIM}workspace: {ws_name}{_RESET}\n")
+    print(f"  {_DIM}{'─' * 52}{_RESET}\n")
+    cmds = [
+        (f"synlynk dispatch {home_h}", f'"ask {home_h} something"', "dispatch a task"),
+        ("synlynk scan --refresh", "", "re-scan all repos"),
+        ("synlynk status", "", "platform health + agent availability"),
+        ("synlynk jobs", "", "list running/recent jobs"),
+        ("synlynk help", "", "full command reference"),
+    ]
+    for cmd, arg, desc in cmds:
+        suffix = f" {arg}" if arg else ""
+        print(f"  {_CYAN}{cmd}{suffix}{_RESET}  {_DIM}{desc}{_RESET}")
+    print(f"\n  {_DIM}{'─' * 52}{_RESET}")
+    _wiz_prompt("done · run `synlynk help` for all commands")
+    _wiz_read_key()
+
+
+def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
+    """Run the FTUE wizard. All state is held in memory until Screen 6.
+
+    scan: pre-built ScanResult dict (used by tests and when called from init()).
+          If None, runs run_workspace_scan() automatically (Phase 0).
+    dry_run: if True, skip writing workspace config + context.md at the end.
+    """
+    # ── Phase 0: silent scan (skipped if scan provided) ───────────────────
+    if scan is None:
+        print(f"\n  {_CYAN}›{_RESET} scanning your environment...")
+        try:
+            scan = run_workspace_scan()
+            repo_names = ", ".join(r["name"] for r in scan["repos"])
+            harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
+            stacks = sorted({l for r in scan["repos"] for l in r["stack_labels"]})
+            print(f"  repos found: {len(scan['repos'])}  ·  "
+                  f"harnesses: {harness_names}  ·  "
+                  f"stacks: {', '.join(stacks) or 'unknown'}\n")
+        except Exception as e:
+            print(f"  {_YELLOW}⚠ Scan failed: {e}. Continuing with empty scan.{_RESET}")
+            scan = {"workspace_name": "my-workspace", "topology": "single",
+                    "repos": [], "harnesses": [], "agents": [], "skills": [],
+                    "home_harness": None, "scanned_at": ""}
+
+    # ── Landing ────────────────────────────────────────────────────────────
+    _wiz_screen_landing()
+
+    # ── Screen 1: Home harness ─────────────────────────────────────────────
+    home_harness = _wiz_screen_harness(scan)
+
+    # ── Screen 2: Topology ────────────────────────────────────────────────
+    topology = _wiz_screen_topology(scan)
+
+    # ── Screens 2ab + 2c (multi-repo sub-flow) ────────────────────────────
+    if topology == "multi":
+        while True:
+            workspace_pick = _wiz_screen_workspace_name_pick(scan)
+            workspace = {
+                "workspace_name": workspace_pick["workspace_name"],
+                "repos": workspace_pick["repos"],
+                "topology": "multi",
+                "home_harness": home_harness,
+            }
+            if _wiz_screen_workspace_confirm(workspace):
+                break
+    else:
+        workspace = {
+            "workspace_name": scan.get("workspace_name", "my-workspace"),
+            "repos": scan.get("repos", []),
+            "topology": topology,
+            "home_harness": home_harness,
+        }
+
+    # ── Screen 3: Skills ──────────────────────────────────────────────────
+    _wiz_screen_skills(scan)
+
+    # ── Screen 4: Agents ─────────────────────────────────────────────────
+    _wiz_screen_agents(scan)
+
+    # ── Screen 5: Roles ───────────────────────────────────────────────────
+    roles = _wiz_screen_roles(scan)
+    workspace["agent_roles"] = roles
+
+    # ── Screen 6: Launch cheat sheet ─────────────────────────────────────
+    _wiz_screen_launch(workspace, scan)
+
+    # ── Commit-on-complete: write all state ───────────────────────────────
+    if not dry_run:
+        ws_name = workspace["workspace_name"]
+        config_path = write_workspace_config(workspace, ws_name)
+        generate_structured_context({**scan, **workspace})
+        print(f"\n  {_GREEN}✓{_RESET} workspace config → {config_path}")
+
+        # Write role blocks into agent directive files
+        for agent_name, role_desc in roles.items():
+            fname_map = {"claude": "CLAUDE.md", "agy": "GEMINI.md",
+                         "grok": "GROK.md", "codex": "AGENTS.md"}
+            fname = fname_map.get(agent_name)
+            if fname and os.path.exists(fname):
+                try:
+                    _upsert_harness_fence(
+                        fname,
+                        harness_version="wizard",
+                        body=f"## Your Role\n{role_desc}\n",
+                    )
+                    print(f"  {_GREEN}✓{_RESET} wrote role to {fname}")
+                except Exception:
+                    pass
+
+
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo") -> None:
@@ -8698,6 +8812,8 @@ def main() -> None:
     init_parser.add_argument("--docs-dir", default=None, dest="docs_dir",
                              help="Directory for project docs (default: project-docs). "
                                   "Use '.' for repos that keep docs at the repo root.")
+    init_parser.add_argument("--wizard", action="store_true",
+                             help="Run the FTUE guided setup wizard")
 
     subparsers.add_parser("upgrade", help="Check for and apply updates")
 
@@ -8946,13 +9062,16 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "init":
-        agents = [a.strip() for a in args.agents.split(",") if a.strip()]
-        if getattr(args, "docs_dir", None):
-            # Write docs_dir to config before init() runs so _docs_dir() picks it up
-            os.makedirs(".synlynk", exist_ok=True)
-            _update_config({"project_docs_dir": args.docs_dir})
-        init(force=args.force, agents=agents, mode=args.mode,
-             org=args.org, repo=args.repo, project_id=args.project_id)
+        if getattr(args, "wizard", False):
+            wizard_init()
+        else:
+            agents = [a.strip() for a in args.agents.split(",") if a.strip()]
+            if getattr(args, "docs_dir", None):
+                # Write docs_dir to config before init() runs so _docs_dir() picks it up
+                os.makedirs(".synlynk", exist_ok=True)
+                _update_config({"project_docs_dir": args.docs_dir})
+            init(force=args.force, agents=agents, mode=args.mode,
+                 org=args.org, repo=args.repo, project_id=args.project_id)
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
