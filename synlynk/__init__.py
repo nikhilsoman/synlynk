@@ -979,12 +979,12 @@ AGENT_CAPABILITY_BASELINES = {
     "grok": {
         "cli": "grok",
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --yes --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--prompt", "--yes", "--model"],
-            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print"],
-            "required_flags": ["--yes"],
+            "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
+            "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
+            "required_flags": ["--always-approve"],
         },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
@@ -999,11 +999,11 @@ _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
-    ("dispatch.task",     "dispatch",      "grok",   "grok --prompt {task} --yes --model grok-3", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --always-approve --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
-    ("dispatch.headless", "dispatch",      "grok",   "grok --yes --prompt {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --always-approve --single {task}", "partial", "Network dep required"),
     ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
     ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
@@ -1281,6 +1281,22 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
         "grok":   [cli, "-v"],
     }
     cmd = probe_cmds.get(agent_name, [cli, "--version"])
+    patterns = [
+        r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
+        r"(agy-[\w.-]+)",
+        r"(gemini-[\w.-]+)",
+        r"(gpt-[\d.]+-[\w.-]+)",
+        r"(codex-[\w-]+)",
+        r"(grok-[\w.-]+)",
+    ]
+
+    def _extract_version(text: str) -> str:
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                return m.group(1).lower()
+        return "unknown"
+
     try:
         baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
         contract = baseline.get("headless_contract", {})
@@ -1290,20 +1306,37 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
                 k, v = var.split("=", 1)
                 env[k] = v
 
-        proc, out = _spawn_with_pty_fallback(cmd, env, os.getcwd())
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            env=env,
+            cwd=os.getcwd(),
+        )
+        text = "\n".join(
+            part for part in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+            if part
+        )
+        version = _extract_version(text)
+        if version != "unknown":
+            return version
+    except Exception:
+        pass
+
+    try:
+        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+        contract = baseline.get("headless_contract", {})
+        env = os.environ.copy()
+        for var in contract.get("env_vars_required", []):
+            if "=" in var:
+                k, v = var.split("=", 1)
+                env[k] = v
+        _proc, out = _spawn_with_pty_fallback(cmd, env, os.getcwd())
         text = out.decode("utf-8", errors="ignore") if out else ""
-        patterns = [
-            r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
-            r"(agy-[\w.-]+)",
-            r"(gemini-[\w.-]+)",
-            r"(gpt-[\d.]+-[\w.-]+)",
-            r"(codex-[\w-]+)",
-            r"(grok-[\w.-]+)",
-        ]
-        for pat in patterns:
-            m = re.search(pat, text, re.IGNORECASE)
-            if m:
-                return m.group(1).lower()
+        version = _extract_version(text)
+        if version != "unknown":
+            return version
     except Exception:
         pass
     return "unknown"
@@ -2944,6 +2977,125 @@ def _infer_industry(root: str = ".") -> str:
             except Exception:
                 pass
     return "unknown"
+
+
+_STACK_FINGERPRINTS = [
+    ("pyproject.toml", "Python"),
+    ("setup.py", "Python"),
+    ("Cargo.toml", "Rust"),
+    ("go.mod", "Go"),
+    ("next.config.js", "Next.js"),
+    ("next.config.ts", "Next.js"),
+    ("next.config.mjs", "Next.js"),
+    ("Pulumi.yaml", "Pulumi"),
+    ("Pulumi.yml", "Pulumi"),
+    ("Dockerfile", "Docker"),
+    ("docker-compose.yml", "Docker"),
+    ("docker-compose.yaml", "Docker"),
+]
+
+_STACK_EXT_MAP = {
+    ".go": "Go",
+    ".rs": "Rust",
+}
+
+
+def find_git_roots(search_dirs: list, max_depth: int = 2, exclude_names: set = None) -> list:
+    """Return absolute paths of directories containing a .git entry.
+
+    Search is breadth-first from each search directory and stops at max_depth.
+    """
+    exclude_names = set(exclude_names or {"node_modules", "__pycache__", ".venv", "venv"})
+    found = []
+    seen = set()
+    queue = []
+
+    for base in search_dirs or []:
+        if not base:
+            continue
+        abs_base = os.path.abspath(os.path.expanduser(base))
+        if os.path.isdir(abs_base):
+            queue.append((abs_base, 0))
+
+    while queue:
+        current, depth = queue.pop(0)
+        if current in seen:
+            continue
+        seen.add(current)
+        name = os.path.basename(current)
+        if depth > 0 and (name.startswith(".") or name in exclude_names):
+            continue
+
+        if os.path.isdir(os.path.join(current, ".git")):
+            if current not in found:
+                found.append(current)
+
+        if depth >= max_depth:
+            continue
+
+        try:
+            entries = sorted(os.listdir(current))
+        except OSError:
+            continue
+
+        for entry in entries:
+            if entry.startswith(".") or entry in exclude_names:
+                continue
+            child = os.path.join(current, entry)
+            if os.path.isdir(child):
+                queue.append((child, depth + 1))
+
+    return found
+
+
+def fingerprint_stack(repo_path: str) -> list:
+    """Return a deduplicated list of stack labels for a repository path."""
+    labels = []
+    seen = set()
+
+    def _add(label: str) -> None:
+        if label not in seen:
+            seen.add(label)
+            labels.append(label)
+
+    if not repo_path or not os.path.isdir(repo_path):
+        return labels
+
+    for filename, label in _STACK_FINGERPRINTS:
+        if os.path.exists(os.path.join(repo_path, filename)):
+            _add(label)
+
+    has_pkg = os.path.exists(os.path.join(repo_path, "package.json"))
+    has_ts = any(
+        os.path.exists(os.path.join(repo_path, candidate))
+        for candidate in ("tsconfig.json", "tsconfig.base.json", "tsconfig.app.json")
+    )
+    if has_pkg and has_ts:
+        _add("TypeScript")
+    elif has_pkg:
+        _add("JavaScript")
+
+    if os.path.isdir(os.path.join(repo_path, ".github", "workflows")):
+        _add("CI/CD")
+
+    if os.path.isdir(os.path.join(repo_path, "migrations")):
+        _add("SQL")
+    else:
+        try:
+            if any(fname.endswith(".sql") for fname in os.listdir(repo_path)):
+                _add("SQL")
+        except OSError:
+            pass
+
+    try:
+        for entry in os.listdir(repo_path):
+            ext = os.path.splitext(entry)[1]
+            if ext in _STACK_EXT_MAP:
+                _add(_STACK_EXT_MAP[ext])
+    except OSError:
+        pass
+
+    return labels
 
 
 def _extract_synlynk_section(content: str, marker_style: str = "html") -> Optional[str]:
@@ -5675,7 +5827,7 @@ def extract_model_version(output_text: str, agent: str = None) -> str:
     if agent:
         profile = _load_agent_profile(agent)
         model = profile.get("model")
-        if model:
+        if model and model != "unknown":
             return model
 
     # Tier 3: config default
