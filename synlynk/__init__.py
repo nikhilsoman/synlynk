@@ -14,6 +14,35 @@ import sqlite3 as _sqlite3
 
 VERSION = "0.10.0"
 
+CYCLE_NAMES = ["dream", "design", "plan", "build", "ship", "sustain"]
+
+CYCLE_COLORS = {
+    "dream":   "#a78bfa",
+    "design":  "#60a5fa",
+    "plan":    "#34d399",
+    "build":   "#fbbf24",
+    "ship":    "#f87171",
+    "sustain": "#94a3b8",
+}
+
+CYCLE_DESCRIPTIONS = {
+    "dream":   "What's worth building\nIdeate, assess, identify opportunities\n",
+    "design":  "Brainstorm -> spec -> UX\nTurn ideas into a concrete brief\n",
+    "plan":    "Implementation plan, story breakdown, agent wave schedule\n",
+    "build":   "Dispatch agents, run jobs, iterate on diffs\n",
+    "ship":    "Cut release, changelog, publish\n",
+    "sustain": "Monitor, patch, community, docs, support\n",
+}
+
+CYCLE_DEFAULT_AGENTS = {
+    "dream":   ["claude"],
+    "design":  ["claude"],
+    "plan":    ["claude"],
+    "build":   ["agy", "codex", "grok"],
+    "ship":    ["claude"],
+    "sustain": ["claude", "agy", "codex", "grok"],
+}
+
 TASK_STATUSES = {
     "[ ]": "active",
     "[x]": "done",
@@ -288,6 +317,23 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
     """)
+    # Idempotent cycle rename: old names -> new names (no-ops if tables/columns absent)
+    for sql in [
+        "UPDATE cycle_capability SET cycle = 'design'  WHERE cycle = 'plan'",
+        "UPDATE cycle_capability SET cycle = 'plan'    WHERE cycle = 'work'",
+        "UPDATE cycle_capability SET cycle = 'build'   WHERE cycle = 'ship'",
+        "UPDATE cycle_capability SET cycle = 'ship'    WHERE cycle = 'maintain'",
+        "UPDATE cycle_capability SET cycle = 'sustain' WHERE cycle = 'engage'",
+        "UPDATE harness_verb_map  SET cycle = 'design'  WHERE cycle = 'plan'",
+        "UPDATE harness_verb_map  SET cycle = 'plan'    WHERE cycle = 'work'",
+        "UPDATE harness_verb_map  SET cycle = 'build'   WHERE cycle = 'ship'",
+        "UPDATE harness_verb_map  SET cycle = 'ship'    WHERE cycle = 'maintain'",
+        "UPDATE harness_verb_map  SET cycle = 'sustain' WHERE cycle = 'engage'",
+    ]:
+        try:
+            conn.execute(sql)
+        except _sqlite3.OperationalError:
+            pass  # table or column absent — migration is a no-op
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
@@ -3844,6 +3890,87 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
         else:
             workspace_name = os.path.basename(os.getcwd()) or "workspace"
 
+    # ── BS-19 launch task trigger fields ─────────────────────────────────────
+    primary_root = normalized_roots[0] if normalized_roots else os.getcwd()
+
+    # test_ratio: test files / total source files (0.0 if no source files)
+    def _count_files(root, patterns):
+        import fnmatch as _fnmatch
+        count = 0
+        for dirpath, _, filenames in os.walk(root):
+            if any(p in dirpath for p in (".git", "__pycache__", "node_modules", ".venv", "venv")):
+                continue
+            for fn in filenames:
+                if any(_fnmatch.fnmatch(fn, p) for p in patterns):
+                    count += 1
+        return count
+
+    src_count = _count_files(primary_root, ["*.py", "*.ts", "*.tsx", "*.js", "*.jsx", "*.rb", "*.go"])
+    test_count_files = _count_files(primary_root, ["test_*.py", "*_test.py", "*.test.ts",
+                                                    "*.test.tsx", "*.test.js", "*.spec.ts", "*.spec.js"])
+    test_ratio = test_count_files / src_count if src_count > 0 else 0.0
+
+    # readme_word_count
+    readme_path = os.path.join(primary_root, "README.md")
+    readme_word_count = 0
+    if os.path.exists(readme_path):
+        try:
+            readme_word_count = len(open(readme_path).read().split())
+        except OSError:
+            pass
+
+    # has_ci
+    has_ci = (
+        os.path.isdir(os.path.join(primary_root, ".github", "workflows"))
+        or os.path.exists(os.path.join(primary_root, ".gitlab-ci.yml"))
+        or os.path.isdir(os.path.join(primary_root, ".circleci"))
+    )
+
+    # has_docs: docs/ dir with at least one .md file
+    docs_dir = os.path.join(primary_root, "docs")
+    has_docs = False
+    if os.path.isdir(docs_dir):
+        for fn in os.listdir(docs_dir):
+            if fn.endswith(".md"):
+                has_docs = True
+                break
+
+    # has_type_hints: Python repo + any .pyi files or >30% of .py files have annotations
+    has_type_hints = False
+    py_files_with_hints = 0
+    py_files_total = 0
+    for dirpath, _, filenames in os.walk(primary_root):
+        if any(p in dirpath for p in (".git", "__pycache__", "node_modules", ".venv", "venv")):
+            continue
+        for fn in filenames:
+            if fn.endswith(".pyi"):
+                has_type_hints = True
+            elif fn.endswith(".py"):
+                py_files_total += 1
+                try:
+                    content = open(os.path.join(dirpath, fn)).read(1000)
+                    if "from __future__ import annotations" in content or ": " in content:
+                        py_files_with_hints += 1
+                except OSError:
+                    pass
+    if py_files_total > 0 and not has_type_hints:
+        has_type_hints = (py_files_with_hints / py_files_total) > 0.3
+
+    # has_orm
+    orm_markers = ("sqlalchemy", "from django.db", "import prisma", "activerecord", "ActiveRecord")
+    has_orm = False
+    for dep_file in ("requirements.txt", "requirements-dev.txt", "pyproject.toml",
+                     "Gemfile", "package.json", "go.mod"):
+        dep_path = os.path.join(primary_root, dep_file)
+        if os.path.exists(dep_path):
+            try:
+                content = open(dep_path).read()
+                if any(m in content for m in orm_markers):
+                    has_orm = True
+                    break
+            except OSError:
+                pass
+
     return {
         "workspace_name": workspace_name,
         "topology": topology,
@@ -3853,6 +3980,12 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
         "skills": skills,
         "home_harness": home_harness,
         "scanned_at": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "test_ratio": test_ratio,
+        "readme_word_count": readme_word_count,
+        "has_ci": has_ci,
+        "has_docs": has_docs,
+        "has_type_hints": has_type_hints,
+        "has_orm": has_orm,
     }
 
 
