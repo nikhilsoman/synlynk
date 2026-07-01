@@ -1564,6 +1564,72 @@ def cmd_probe(agent: str = None) -> None:
         db_conn.close()
 
 
+def _fence_exists(file_path: str) -> bool:
+    """Returns True if file_path contains a synlynk harness fence."""
+    try:
+        with open(file_path) as f:
+            return "<!-- synlynk:harness" in f.read()
+    except IOError:
+        return False
+
+
+def cmd_roles(fix: bool = False) -> None:
+    """Print current agent role table from config.
+
+    With --fix, regenerate role fences.
+    """
+    _DIRECTIVE_MAP = {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "grok": "GROK.md",
+        "codex": "AGENTS.md",
+    }
+    cfg = load_config()
+    roles = cfg.get("roles", {})
+
+    print(f"\n  {_BOLD}synlynk roles{_RESET}\n")
+    print(f"  {'agent':<10}  {'roles':<40}  {'directive file':<12}  fence")
+    print(f"  {'─' * 10}  {'─' * 40}  {'─' * 12}  {'─' * 10}")
+
+    for agent, role_list in roles.items():
+        fname = _DIRECTIVE_MAP.get(agent, f"{agent}.md")
+        roles_str = ", ".join(role_list) if isinstance(role_list, list) else str(role_list)
+        file_exists = os.path.exists(fname)
+        fence_present = False
+        if file_exists:
+            try:
+                with open(fname) as f:
+                    fence_present = "<!-- synlynk:harness" in f.read()
+            except IOError:
+                pass
+        file_status = fname if file_exists else f"{fname} (missing)"
+        fence_status = f"{_GREEN}✓{_RESET}" if fence_present else f"{_YELLOW}missing{_RESET}"
+        print(f"  {agent:<10}  {roles_str:<40}  {file_status:<12}  {fence_status}")
+
+        if fix and file_exists and not fence_present:
+            roles_line = ", ".join(role_list) if isinstance(role_list, list) else str(role_list)
+            try:
+                _upsert_harness_fence(
+                    fname,
+                    harness_version="roles",
+                    body=f"## Your Role\n{roles_line}\n",
+                )
+                print(f"    {_GREEN}✓{_RESET} wrote role fence to {fname}")
+            except Exception as exc:
+                print(f"    {_YELLOW}⚠{_RESET} could not write {fname}: {exc}")
+
+    print()
+    if not fix:
+        missing = [
+            _DIRECTIVE_MAP.get(a, f"{a}.md")
+            for a, _ in roles.items()
+            if os.path.exists(_DIRECTIVE_MAP.get(a, f"{a}.md"))
+            and not _fence_exists(_DIRECTIVE_MAP.get(a, f"{a}.md"))
+        ]
+        if missing:
+            print(f"  {_DIM}Run `synlynk roles --fix` to write missing role fences{_RESET}\n")
+
+
 def cmd_score_add(story_id: str, rating: float, note: str = None,
                   rework: bool = False) -> None:
     """Add a human quality rating for a story. Inserts a new 'human' row."""
@@ -2095,6 +2161,12 @@ def load_config() -> dict:
         "exec_timeout_minutes": 30,
         "stall_timeout_minutes": 30,
         "agents": {},
+        "roles": {
+            "claude": ["pm", "review", "deploy"],
+            "agy": ["implement", "test", "css", "templates", "content"],
+            "grok": ["implement", "test", "canvas", "js", "infra"],
+            "codex": ["implement", "test", "refactor"],
+        },
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -3146,6 +3218,24 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             print(f"    TC-2 flags:   {'✓' if tc2['passed'] else '✗ failed=' + str(tc2['failed_flags'])}")
             print(f"    TC-3 network: {'✓' if tc3['passed'] else '✗ unreachable=' + str(tc3['unreachable'])}")
             print(f"    TC-4 verbs:   {'✓' if tc4['passed'] else '✗ failed=' + str(tc4['failed_verbs'])}")
+
+        # Roles fence check
+        _DIRECTIVE_MAP = {
+            "claude": "CLAUDE.md",
+            "agy": "GEMINI.md",
+            "grok": "GROK.md",
+            "codex": "AGENTS.md",
+        }
+        cfg_roles = load_config().get("roles", {})
+        roles_issues = []
+        for agent_name in cfg_roles:
+            fname = _DIRECTIVE_MAP.get(agent_name, f"{agent_name}.md")
+            if os.path.exists(fname) and not _fence_exists(fname):
+                roles_issues.append(fname)
+        if roles_issues:
+            for fname in roles_issues:
+                print(f"  {_YELLOW}⚠{_RESET}  roles: {fname} is missing role fence "
+                      f"{_DIM}— run `synlynk roles --fix` to regenerate{_RESET}")
     finally:
         db_conn.close()
     return 1 if any_failed else 0
@@ -10458,6 +10548,12 @@ def main() -> None:
     )
     instr_ack_parser.add_argument("file", help="File to acknowledge drift for")
 
+    roles_parser = subparsers.add_parser(
+        "roles", help="Show agent role table and directive file fence status")
+    roles_parser.add_argument(
+        "--fix", action="store_true",
+        help="Write missing role fences into agent directive files")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -10632,6 +10728,8 @@ def main() -> None:
         cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
         sys.exit(cmd_doctor())
+    elif args.command == "roles":
+        cmd_roles(fix=getattr(args, "fix", False))
     elif args.command == "exit":
         sys.exit(cmd_exit(dry_run=not args.confirm, remove_docs=args.remove_docs))
     elif args.command == "repair":
