@@ -7597,6 +7597,140 @@ class SynlynkDaemon(WatchDaemon):
             _dispatch_ready_jobs(max_parallel=max_parallel)
 
 
+# ── Wizard TUI primitives (BS-17 Plan B Tasks B-1 / B-2) ────────────────────
+# Inserted before init() per plan. Pure stdlib TUI for FTUE.
+
+_WIZ_SYNAPTIC_BLURB = (
+    "In the brain, a synaptic link is the tiny gap where one neuron passes\n"
+    "  its signal to the next. Alone, neurons are just cells. Connected, they\n"
+    "  produce thought. Your AI tools are the same — powerful in isolation,\n"
+    "  transformative when they share a signal. synlynk is the gap that makes\n"
+    "  them think together."
+)
+
+_WIZ_PRODUCT_BLURB = (
+    "You already have great AI tools. The problem is they don't know about\n"
+    "  each other — or your project. synlynk fixes that: it injects shared\n"
+    "  context before every dispatch, routes tasks to the right agent, and\n"
+    "  keeps score on what's working. Your fleet, finally coordinated."
+)
+
+
+def _wiz_clear() -> None:
+    """Clear the terminal screen."""
+    os.system("clear" if os.name != "nt" else "cls")
+
+
+def _wiz_read_key() -> str:
+    """Read a single keypress without requiring Enter.
+
+    Falls back to input()[0] when stdin is not a TTY (e.g. tests, pipes).
+    """
+    if not sys.stdin.isatty():
+        line = sys.stdin.readline()
+        return line[0] if line else "\r"
+    try:
+        import tty as _tty
+        import termios as _termios
+        fd = sys.stdin.fileno()
+        old = _termios.tcgetattr(fd)
+        try:
+            _tty.setraw(fd)
+            return sys.stdin.read(1)
+        finally:
+            _termios.tcsetattr(fd, _termios.TCSADRAIN, old)
+    except (ImportError, Exception):
+        # Windows or no termios — fall back to Enter-terminated input
+        line = input()
+        return line[0] if line else "\r"
+
+
+def _wiz_header(step: int, total: int, sub_active: bool = False) -> None:
+    """Print the wizard progress header.
+
+    Active step shown as a wider pill. Sub-active steps use teal colour.
+    """
+    _TEAL = "\033[36m"
+    dots = []
+    for i in range(1, total + 1):
+        if i < step:
+            dots.append(f"{_CYAN}●{_RESET}")
+        elif i == step:
+            color = _TEAL if sub_active else _CYAN
+            dots.append(f"{color}━━{_RESET}")
+        else:
+            dots.append(f"{_DIM}·{_RESET}")
+    dot_str = "  ".join(dots)
+    sub_note = " (multi-repo)" if sub_active else ""
+    print(f"\n  step {_CYAN}{step}{_RESET}/{total}{sub_note}   {dot_str}\n")
+
+
+def _wiz_prompt(hint: str, color: str = None) -> None:
+    """Print the bottom prompt line."""
+    c = color or _CYAN
+    print(f"\n  {c}›{_RESET} {_DIM}{hint}{_RESET}")
+
+
+def _wiz_screen_landing() -> None:
+    """Landing screen — brand intro + synaptic link explainer. Waits for Enter."""
+    _wiz_clear()
+    print(f"\n  {_BOLD}{_CYAN}syn{_RESET}{_CYAN}l{_RESET}{_DIM}y{_RESET}"
+          f"{_CYAN}n{_RESET}k  {_DIM}·  synaptic link for AI development{_RESET}\n")
+    print(f"  {_DIM}{'─' * 52}{_RESET}")
+    print(f"\n  {_BOLD}What is a synaptic link?{_RESET}")
+    print(f"  {_DIM}{_WIZ_SYNAPTIC_BLURB}{_RESET}\n")
+    print(f"  {_WIZ_PRODUCT_BLURB}\n")
+    print(f"  {_DIM}{'─' * 52}{_RESET}")
+    print(f"\n  {_GREEN}✦ One brain{_RESET}  {_DIM}Every agent works from the same project memory.{_RESET}")
+    print(f"  {_GREEN}✦ 4× efficiency{_RESET}  {_DIM}Headless dispatch — no wasted tokens on chat.{_RESET}")
+    print(f"  {_GREEN}✦ Always watching{_RESET}  {_DIM}Costs, drift, and jobs tracked automatically.{_RESET}")
+    _wiz_prompt("press enter to start setup — takes about 2 minutes")
+    _wiz_read_key()
+
+
+def _wiz_screen_harness(scan: dict) -> str:
+    """Screen 1 — choose home harness. Returns chosen harness name."""
+    _wiz_clear()
+    _wiz_header(step=1, total=6)
+    print(f"  {_BOLD}Choose your home harness{_RESET}\n")
+    print(f"  {_DIM}Your home harness is the AI CLI synlynk treats as primary —{_RESET}")
+    print(f"  {_DIM}where it orchestrates jobs, reads costs, and runs health checks.{_RESET}")
+    print(f"  {_DIM}You can dispatch to any agent regardless of this choice.{_RESET}\n")
+
+    harnesses = scan.get("harnesses", [])
+    home = scan.get("home_harness")
+
+    if not harnesses:
+        print(f"  {_YELLOW}⚠ No harnesses found on PATH.{_RESET}")
+        print(f"  {_DIM}Install claude, gemini, or codex then re-run `synlynk scan`.{_RESET}")
+        _wiz_prompt("press enter to continue with no home harness")
+        _wiz_read_key()
+        return ""
+
+    print(f"  {_DIM}scan found:{_RESET}")
+    for h in harnesses:
+        marker = f"{_GREEN}●{_RESET}" if h["name"] == home else f"{_DIM}○{_RESET}"
+        print(f"    {marker} {h['name']:12} {_DIM}{h['version']}  {h['path']}{_RESET}")
+    print()
+
+    for i, h in enumerate(harnesses, 1):
+        default_note = "  (default)" if h["name"] == home else ""
+        print(f"  {_CYAN}[{i}]{_RESET} {h['name']}{_DIM}{default_note}{_RESET}")
+
+    _wiz_prompt("enter number to select · enter to use default")
+    key = _wiz_read_key()
+
+    if key in ("\r", "\n", ""):
+        return home or (harnesses[0]["name"] if harnesses else "")
+    try:
+        idx = int(key) - 1
+        if 0 <= idx < len(harnesses):
+            return harnesses[idx]["name"]
+    except ValueError:
+        pass
+    return home or (harnesses[0]["name"] if harnesses else "")
+
+
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo") -> None:
