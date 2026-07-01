@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — screen 2ab combined</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #080b12; color: #e2e8f0; font-family: 'Inter', sans-serif; padding: 2rem; font-size: 12px; line-height: 1.6; }
+.page-label { color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1.25rem; }
+
+.two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+/* ── WIZARD CARD ── */
+.wizard-card {
+  background: #0d1117; border: 1px solid #1e293b; border-radius: 14px;
+  overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.wiz-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1.2rem; border-bottom: 1px solid #131b27; background: #0a0e17;
+}
+.wiz-step-label { font-size: 11px; color: #334155; font-family: 'JetBrains Mono', monospace; }
+.wiz-step-label em { color: #A259F7; font-style: normal; }
+.step-dots { display: flex; align-items: center; gap: 0.3rem; }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: #1e293b; }
+.dot.done { background: #3b1f7a; }
+.dot.active { background: #A259F7; width: 16px; border-radius: 2px; }
+.dot.sub-active { background: #2EC4A0; width: 10px; border-radius: 2px; }
+.wiz-progress { height: 2px; background: #0f1520; }
+.wiz-progress-fill { height: 100%; background: linear-gradient(90deg, #A259F7 0%, #5B8DEF 60%, #2EC4A0 100%); }
+.wiz-body { padding: 1.3rem 1.6rem 1.1rem; }
+
+/* step hero */
+.step-hero { display: flex; align-items: flex-start; gap: 0.9rem; margin-bottom: 0.9rem; }
+.step-icon {
+  width: 42px; height: 42px; border-radius: 11px; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.2rem;
+}
+.icon-multi { background: #0a1525; border: 1px solid #1e3f6e; }
+.step-text h3 { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.15rem; }
+.step-text .why { font-size: 11px; color: #64748b; line-height: 1.6; }
+.step-text .why strong { color: #94a3b8; }
+
+/* name row */
+.name-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: #080d14; border: 1px solid #1e3a5f; border-radius: 8px;
+  padding: 0.55rem 0.85rem; margin-bottom: 0.65rem;
+}
+.name-row-label { font-size: 9.5px; color: #475569; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
+.name-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; flex: 1; }
+.name-chip {
+  background: #130a2a; border: 1px solid #A259F7; border-radius: 5px;
+  padding: 0.15rem 0.5rem; color: #c4b5fd; font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace; cursor: pointer;
+}
+.name-chip.dim { background: #0a0d14; border-color: #1e293b; color: #334155; }
+.name-val { color: #e2e8f0; font-family: 'JetBrains Mono', monospace; font-size: 11px; flex: 1; }
+.name-path { font-size: 9.5px; color: #1e3a5f; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+
+/* divider */
+.sub-label {
+  font-size: 9.5px; color: #334155; text-transform: uppercase;
+  letter-spacing: 0.08em; margin: 0.55rem 0 0.4rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* repo picker */
+.repo-picker { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.65rem; }
+.repo-item {
+  display: flex; align-items: flex-start; gap: 0.65rem;
+  background: #090d14; border: 1px solid #1a2540; border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+}
+.repo-item.checked { border-color: #0d4a3a; background: #080f0c; }
+.repo-check {
+  width: 14px; height: 14px; border: 1px solid #1e293b; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  margin-top: 0.2rem; font-size: 8px; color: transparent;
+}
+.repo-item.checked .repo-check { background: #0d4a3a; border-color: #2EC4A0; color: #2EC4A0; }
+.repo-meta { flex: 1; min-width: 0; }
+.repo-name {
+  font-size: 11.5px; font-weight: 500; color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.repo-path { font-size: 9.5px; color: #334155; font-family: 'JetBrains Mono', monospace; }
+.repo-stack { font-size: 10px; color: #475569; margin-top: 0.1rem; }
+.pill { font-size: 9px; padding: 0.07rem 0.38rem; border-radius: 3px; font-weight: 500; }
+.pill-teal   { background: #0a2e20; color: #2EC4A0; }
+.pill-purple { background: #2e1065; color: #c4b5fd; }
+.repo-add {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem;
+  border: 1px dashed #1e293b; border-radius: 8px; color: #334155;
+  font-size: 10.5px; cursor: pointer;
+}
+.repo-add:hover { border-color: #2d3f6e; color: #475569; }
+.repo-add span { color: #1e3a5f; font-size: 13px; }
+
+/* prompt */
+.wiz-prompt {
+  display: flex; align-items: center; gap: 0.55rem;
+  border-top: 1px solid #0f1826; padding: 0.55rem 0; margin-top: 0.1rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+}
+.prompt-arrow { color: #A259F7; }
+.prompt-hint  { color: #1e3a5f; }
+.cursor {
+  display: inline-block; width: 6px; height: 12px; background: #A259F7;
+  vertical-align: middle; animation: blink 1s step-end infinite; border-radius: 1px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* confirm card */
+.confirm-card {
+  background: #0d1117; border: 1px solid #1e293b; border-radius: 14px;
+  overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.confirm-body { padding: 1.3rem 1.6rem 1.1rem; }
+.ws-tree { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 2; }
+.t-root  { color: #2EC4A0; font-weight: 600; }
+.t-file  { color: #475569; }
+.t-repo  { color: #94a3b8; }
+.t-check { color: #4ade80; font-size: 9px; }
+.t-dim   { color: #1e293b; }
+.ws-preview {
+  background: #080d14; border: 1px solid #0d4a3a; border-radius: 8px;
+  padding: 0.65rem 0.9rem; margin-bottom: 0.75rem;
+}
+.ws-preview-label { font-size: 9.5px; color: #2EC4A0; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.4rem; font-family: 'JetBrains Mono', monospace; }
+.fact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.65rem; }
+.fact {
+  background: #080d14; border: 1px solid #1a2540; border-radius: 7px; padding: 0.5rem 0.7rem;
+}
+.fact-label { font-size: 9.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.15rem; }
+.fact-val { font-size: 11px; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+.fact-sub { font-size: 9.5px; color: #334155; }
+.choice {
+  display: flex; align-items: flex-start; gap: 0.7rem;
+  background: #090d14; border: 1px solid #1a2540; border-radius: 9px;
+  padding: 0.55rem 0.85rem; margin-bottom: 0.4rem;
+}
+.choice.teal { border-color: #0d4a3a; background: #080f0c; }
+.choice-key {
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+  color: #475569; border: 1px solid #1e293b; border-radius: 3px;
+  padding: 0.05rem 0.35rem; flex-shrink: 0; margin-top: 0.1rem;
+}
+.choice.teal .choice-key { color: #2EC4A0; border-color: #0d4a3a; }
+.choice-title { font-size: 11.5px; font-weight: 500; color: #e2e8f0; display: flex; align-items: center; gap: 0.4rem; }
+.choice-desc  { font-size: 10.5px; color: #475569; margin-top: 0.1rem; }
+</style>
+</head>
+<body>
+
+<div class="page-label">Screen 2ab — combined name + pick (multi-repo path) · Screen 2c — confirm</div>
+
+<div class="two-up">
+
+  <!-- ── SCREEN 2ab: NAME + PICK ── -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.45rem">
+        <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>2ab</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot sub-active"></div>
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:22%"></div></div>
+    <div class="wiz-body">
+
+      <div class="step-hero">
+        <div class="step-icon icon-multi">🌐</div>
+        <div class="step-text">
+          <h3>Name &amp; assemble your workspace</h3>
+          <div class="why">All selected repos share one <strong>state.db, agent fleet, and budget</strong>. synlynk found these git roots nearby — include everything your agents need to see together.</div>
+        </div>
+      </div>
+
+      <!-- NAME ROW — compact, inline -->
+      <div class="name-row">
+        <span class="name-row-label">name</span>
+        <div class="name-chips">
+          <span class="name-chip">dev-workspace</span>
+          <span class="name-chip dim">nikhil-dev</span>
+          <span class="name-chip dim">main-stack</span>
+        </div>
+        <span class="name-path">~/.synlynk/workspaces/dev-workspace/</span>
+      </div>
+
+      <!-- REPO PICKER -->
+      <div class="sub-label">repos to include</div>
+      <div class="repo-picker">
+        <div class="repo-item checked">
+          <div class="repo-check">✓</div>
+          <div class="repo-meta">
+            <div class="repo-name">synlynk <span class="pill pill-teal">current</span></div>
+            <div class="repo-path">~/dev/synlynk</div>
+            <div class="repo-stack">Python · SQLite · CLI</div>
+          </div>
+        </div>
+        <div class="repo-item checked">
+          <div class="repo-check">✓</div>
+          <div class="repo-meta">
+            <div class="repo-name">rxcc</div>
+            <div class="repo-path">~/dev/rxcc</div>
+            <div class="repo-stack">TypeScript · Next.js · AWS</div>
+          </div>
+        </div>
+        <div class="repo-item checked">
+          <div class="repo-check">✓</div>
+          <div class="repo-meta">
+            <div class="repo-name">playblazer-ng</div>
+            <div class="repo-path">~/dev/playblazer-ng</div>
+            <div class="repo-stack">TypeScript · React · Pulumi</div>
+          </div>
+        </div>
+        <div class="repo-item">
+          <div class="repo-check"></div>
+          <div class="repo-meta">
+            <div class="repo-name" style="color:#334155">dotfiles</div>
+            <div class="repo-path">~/dotfiles</div>
+            <div class="repo-stack">shell · zsh</div>
+          </div>
+        </div>
+        <div class="repo-add">
+          <span>+</span><span>add repo from another path…</span>
+        </div>
+      </div>
+
+      <div class="wiz-prompt">
+        <span class="prompt-arrow">›</span>
+        <span class="prompt-hint">tab to edit name · space to toggle repos · enter to continue</span>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 2c: CONFIRM ── -->
+  <div class="confirm-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.45rem">
+        <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>2c</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div>
+        <div class="dot done"></div>
+        <div class="dot sub-active"></div>
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:32%"></div></div>
+    <div class="confirm-body">
+
+      <div class="step-hero">
+        <div class="step-icon" style="background:#080f0c;border:1px solid #0d4a3a;width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">✅</div>
+        <div class="step-text">
+          <h3>Here's your workspace</h3>
+          <div class="why">One shared brain for three repos. <strong>Context, jobs, costs and agents roll up together.</strong> You can always add or remove repos later with <code style="color:#2EC4A0;font-size:10px">synlynk scan --add</code>.</div>
+        </div>
+      </div>
+
+      <div class="ws-preview">
+        <div class="ws-preview-label">workspace structure</div>
+        <div class="ws-tree">
+          <div><span class="t-root">dev-workspace/</span></div>
+          <div style="padding-left:1rem"><span class="t-file">├─ state.db</span> <span class="t-dim">shared · 3 repos</span></div>
+          <div style="padding-left:1rem"><span class="t-file">├─ config.json</span></div>
+          <div style="padding-left:1rem"><span style="color:#475569">└─ repos</span></div>
+          <div style="padding-left:2rem"><span class="t-check">✓</span> <span class="t-repo">synlynk</span> <span class="t-dim">~/dev/synlynk</span></div>
+          <div style="padding-left:2rem"><span class="t-check">✓</span> <span class="t-repo">rxcc</span> <span class="t-dim">~/dev/rxcc</span></div>
+          <div style="padding-left:2rem"><span class="t-check">✓</span> <span class="t-repo">playblazer-ng</span> <span class="t-dim">~/dev/playblazer-ng</span></div>
+        </div>
+      </div>
+
+      <div class="fact-row">
+        <div class="fact">
+          <div class="fact-label">scan covers</div>
+          <div class="fact-val">all 3 repos</div>
+          <div class="fact-sub">context.md includes all stacks</div>
+        </div>
+        <div class="fact">
+          <div class="fact-label">add more later</div>
+          <div class="fact-val">synlynk scan --add</div>
+          <div class="fact-sub">~/dev/new-repo</div>
+        </div>
+        <div class="fact">
+          <div class="fact-label">state lives at</div>
+          <div class="fact-val" style="font-size:9.5px">~/.synlynk/workspaces/</div>
+          <div class="fact-sub">dev-workspace/state.db</div>
+        </div>
+        <div class="fact">
+          <div class="fact-label">remove a repo</div>
+          <div class="fact-val">synlynk scan --remove</div>
+          <div class="fact-sub">non-destructive</div>
+        </div>
+      </div>
+
+      <div class="choice teal">
+        <span class="choice-key">↵</span>
+        <div>
+          <div class="choice-title">Create workspace <span class="pill pill-teal" style="font-size:9.5px;padding:0.1rem 0.45rem;background:#0a2e20;color:#2EC4A0;border-radius:3px">dev-workspace · 3 repos</span></div>
+          <div class="choice-desc">Continues to screen 3 — skills &amp; plugins.</div>
+        </div>
+      </div>
+      <div class="choice" style="margin-top:0.35rem">
+        <span class="choice-key">e</span>
+        <div>
+          <div class="choice-title" style="color:#94a3b8">Edit — go back to 2ab</div>
+        </div>
+      </div>
+
+      <div class="wiz-prompt">
+        <span class="prompt-arrow">›</span>
+        <span style="color:#2EC4A0;font-family:'JetBrains Mono',monospace">enter to create · e to edit</span>
+        <span class="cursor" style="background:#2EC4A0"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

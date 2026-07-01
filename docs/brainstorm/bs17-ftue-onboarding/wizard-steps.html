@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-17: Wizard Step Sequence</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f1117; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 2rem; font-size: 12px; line-height: 1.6; }
+h2 { color: #7c3aed; font-size: 1.1rem; margin-bottom: 0.25rem; }
+.subtitle { color: #64748b; font-size: 0.8rem; margin-bottom: 1.75rem; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+.option { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 10px; padding: 1.1rem; cursor: pointer; transition: border-color 0.15s; }
+.option:hover { border-color: #7c3aed; }
+.option.selected { border-color: #7c3aed; box-shadow: 0 0 0 1px #7c3aed; }
+.option h3 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.85rem; }
+.option.a h3 { color: #a78bfa; }
+.option.b h3 { color: #38bdf8; }
+
+.steps { list-style: none; }
+.steps li { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.35rem 0; border-bottom: 1px solid #0f1117; }
+.steps li:last-child { border-bottom: none; }
+.step-num { color: #475569; font-size: 10px; min-width: 1.2rem; padding-top: 0.1rem; }
+.step-body { flex: 1; }
+.step-title { color: #e2e8f0; font-size: 11.5px; }
+.step-detail { color: #475569; font-size: 10.5px; margin-top: 0.1rem; }
+.step-auto { display: inline-block; font-size: 9.5px; background: #0f2010; color: #4ade80; padding: 0.05rem 0.4rem; border-radius: 3px; margin-left: 0.4rem; vertical-align: middle; }
+.step-prompt { display: inline-block; font-size: 9.5px; background: #1a1230; color: #a78bfa; padding: 0.05rem 0.4rem; border-radius: 3px; margin-left: 0.4rem; vertical-align: middle; }
+.step-scan { display: inline-block; font-size: 9.5px; background: #0c2a3f; color: #38bdf8; padding: 0.05rem 0.4rem; border-radius: 3px; margin-left: 0.4rem; vertical-align: middle; }
+
+.terminal { background: #020408; border: 1px solid #1e293b; border-radius: 6px; padding: 0.85rem 1rem; font-size: 11px; line-height: 1.9; margin-top: 0.85rem; }
+.ok  { color: #10b981; }
+.dim { color: #475569; }
+.hi  { color: #e2e8f0; }
+.pu  { color: #a78bfa; }
+.cy  { color: #38bdf8; }
+.yw  { color: #fbbf24; }
+.prompt { color: #7c3aed; }
+.cursor { display: inline-block; width: 7px; height: 13px; background: #7c3aed; vertical-align: middle; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.rec { display: inline-block; margin-top: 0.85rem; font-size: 10px; background: #1a2035; color: #7dd3fc; padding: 0.2rem 0.6rem; border-radius: 3px; }
+
+.legend { display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 10.5px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<h2>Wizard step sequence — which order?</h2>
+<p class="subtitle">Same steps, two orderings. Auto = detected silently. Prompt = user confirms/overrides. Scan = spawns synlynk scan inline.</p>
+
+<div class="legend">
+  <div class="legend-item"><span style="background:#0f2010;color:#4ade80;padding:0.05rem 0.4rem;border-radius:3px;font-size:9.5px">auto</span> detected silently, shown for confirmation</div>
+  <div class="legend-item"><span style="background:#1a1230;color:#a78bfa;padding:0.05rem 0.4rem;border-radius:3px;font-size:9.5px">prompt</span> user must confirm or type</div>
+  <div class="legend-item"><span style="background:#0c2a3f;color:#38bdf8;padding:0.05rem 0.4rem;border-radius:3px;font-size:9.5px">scan</span> spawns synlynk scan subprocess</div>
+</div>
+
+<div class="split">
+
+  <div class="option a" data-choice="a" onclick="toggleSelect(this)">
+    <h3>A — Detect first, configure second</h3>
+    <ul class="steps">
+      <li><span class="step-num">1</span><div class="step-body"><div class="step-title">Home harness detection<span class="step-auto">auto</span></div><div class="step-detail">Inspect $TERM_PROGRAM, $CLAUDE_TRACE, process parent. Show detected harness, ask to confirm.</div></div></li>
+      <li><span class="step-num">2</span><div class="step-body"><div class="step-title">Agent discovery<span class="step-auto">auto</span></div><div class="step-detail">which claude / codex / agy / grok — show found/not-found list, ask to confirm.</div></div></li>
+      <li><span class="step-num">3</span><div class="step-body"><div class="step-title">Workspace name<span class="step-prompt">prompt</span></div><div class="step-detail">Infer from git remote or dir name, user confirms or types.</div></div></li>
+      <li><span class="step-num">4</span><div class="step-body"><div class="step-title">Agent roles<span class="step-prompt">prompt</span></div><div class="step-detail">Show default role table (Claude=PM, Agy=impl, Codex=impl, Grok=impl). Accept or customise.</div></div></li>
+      <li><span class="step-num">5</span><div class="step-body"><div class="step-title">Write config + directive files<span class="step-auto">auto</span></div><div class="step-detail">.synlynk/config.json, CLAUDE.md ##Your Role, GEMINI.md, AGENTS.md written.</div></div></li>
+      <li><span class="step-num">6</span><div class="step-body"><div class="step-title">Run synlynk scan?<span class="step-prompt">prompt</span></div><div class="step-detail">Offer to scan repo now. Y runs it inline. N prints reminder to run manually.</div></div></li>
+      <li><span class="step-num">7</span><div class="step-body"><div class="step-title">First dispatch cheat sheet<span class="step-auto">auto</span></div><div class="step-detail">Print 5-line quickstart: synlynk dispatch, synlynk probe, synlynk status.</div></div></li>
+    </ul>
+
+    <div class="terminal">
+<span class="ok">✓</span> <span class="dim">synlynk v0.10.0 — setup wizard</span><br>
+<br>
+<span class="dim">Harness detected:</span> <span class="cy">Claude Code</span><br>
+<span class="prompt">›</span> <span class="dim">Confirm? [Y/n]</span> <span class="hi">Y</span><br>
+<br>
+<span class="dim">Agents found:</span> <span class="ok">claude</span> <span class="ok">codex</span> <span class="yw">agy✗</span> <span class="yw">grok✗</span><br>
+<span class="prompt">›</span> <span class="dim">Continue with claude, codex? [Y/n]</span> <span class="cursor"></span>
+    </div>
+  </div>
+
+  <div class="option b" data-choice="b" onclick="toggleSelect(this)">
+    <h3>B — Name first, discover second</h3>
+    <ul class="steps">
+      <li><span class="step-num">1</span><div class="step-body"><div class="step-title">Workspace name<span class="step-prompt">prompt</span></div><div class="step-detail">First thing asked — grounds the session in context. Infer + confirm.</div></div></li>
+      <li><span class="step-num">2</span><div class="step-body"><div class="step-title">Repo topology<span class="step-scan">scan</span></div><div class="step-detail">Single / mono / multi — detected from directory structure. User confirms.</div></div></li>
+      <li><span class="step-num">3</span><div class="step-body"><div class="step-title">Home harness detection<span class="step-auto">auto</span></div><div class="step-detail">Show detected harness, confirm.</div></div></li>
+      <li><span class="step-num">4</span><div class="step-body"><div class="step-title">Agent discovery<span class="step-auto">auto</span></div><div class="step-detail">which claude / codex / agy / grok — show found/not-found, confirm.</div></div></li>
+      <li><span class="step-num">5</span><div class="step-body"><div class="step-title">Agent roles<span class="step-prompt">prompt</span></div><div class="step-detail">Default role table shown, accept or customise.</div></div></li>
+      <li><span class="step-num">6</span><div class="step-body"><div class="step-title">Write config + directive files<span class="step-auto">auto</span></div><div class="step-detail">.synlynk/config.json, directive files written.</div></div></li>
+      <li><span class="step-num">7</span><div class="step-body"><div class="step-title">Full repo scan<span class="step-scan">scan</span></div><div class="step-detail">Runs synlynk scan inline — stack fingerprint, context.md built, workspace registered in state.db.</div></div></li>
+      <li><span class="step-num">8</span><div class="step-body"><div class="step-title">First dispatch cheat sheet<span class="step-auto">auto</span></div><div class="step-detail">Print quickstart.</div></div></li>
+    </ul>
+
+    <div class="terminal">
+<span class="ok">✓</span> <span class="dim">synlynk v0.10.0 — setup wizard</span><br>
+<br>
+<span class="dim">Workspace name</span> <span class="dim">(detected: synlynk)</span><br>
+<span class="prompt">›</span> <span class="hi">synlynk</span><br>
+<br>
+<span class="dim">Repo type:</span> <span class="cy">single</span> <span class="dim">(1 git root)</span><br>
+<span class="prompt">›</span> <span class="dim">Confirm? [Y/n]</span> <span class="cursor"></span>
+    </div>
+    <span class="rec">recommended</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-16: Ecosystem Status Design</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 2rem; font-size: 13px; }
+  h2 { color: #7c3aed; font-size: 1.1rem; margin-bottom: 0.25rem; }
+  .subtitle { color: #64748b; font-size: 0.8rem; margin-bottom: 2rem; }
+  h3 { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+
+  /* STATUS OUTPUT MOCKUP */
+  .terminal { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1.25rem; font-size: 11.5px; line-height: 1.8; }
+  .terminal .ts { color: #475569; }
+  .terminal .head { color: #7c3aed; font-weight: bold; }
+  .terminal .sep { color: #1e293b; }
+  .terminal .ok { color: #10b981; }
+  .terminal .warn { color: #f59e0b; }
+  .terminal .crit { color: #ef4444; }
+  .terminal .dim { color: #475569; }
+  .terminal .ref { color: #3b82f6; }
+  .terminal .label { color: #94a3b8; display: inline-block; width: 8rem; }
+  .terminal .agent { display: inline-block; width: 9rem; }
+  .bar { display: inline-block; height: 8px; background: #1e293b; border-radius: 2px; vertical-align: middle; width: 80px; position: relative; }
+  .bar-fill { height: 100%; border-radius: 2px; position: absolute; left: 0; top: 0; }
+  .bar-100 { background: #10b981; width: 100%; }
+  .bar-94  { background: #10b981; width: 94%; }
+  .bar-78  { background: #f59e0b; width: 78%; }
+  .bar-61  { background: #ef4444; width: 61%; }
+  .bar-87  { background: #10b981; width: 87%; }
+  .bar-71  { background: #f59e0b; width: 71%; }
+  .bar-43  { background: #ef4444; width: 43%; }
+  .bar-99  { background: #10b981; width: 99%; }
+  .bar-92  { background: #10b981; width: 92%; }
+  .bar-81  { background: #f59e0b; width: 81%; }
+  .bar-67  { background: #ef4444; width: 67%; }
+
+  /* DATA MODEL */
+  .model { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1.25rem; }
+  .model table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .model th { color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding: 0.3rem 0.5rem; text-align: left; border-bottom: 1px solid #1e293b; }
+  .model td { padding: 0.3rem 0.5rem; color: #94a3b8; vertical-align: top; }
+  .model tr:nth-child(even) td { background: #0f1117; }
+  .model .field { color: #e2e8f0; font-weight: 500; }
+  .model .source-probe { color: #7c3aed; font-size: 10px; }
+  .model .source-tel { color: #06b6d4; font-size: 10px; }
+  .model .source-both { color: #10b981; font-size: 10px; }
+
+  /* FLOW */
+  .flow { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .box { background: #1e293b; border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 11px; color: #e2e8f0; }
+  .box.probe { border-left: 3px solid #7c3aed; }
+  .box.tel { border-left: 3px solid #06b6d4; }
+  .box.db { border-left: 3px solid #10b981; background: #0a1f0f; }
+  .box.status { border-left: 3px solid #f59e0b; }
+  .arrow { color: #475569; font-size: 1.1rem; }
+
+  /* ROLE CARDS */
+  .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  .role-card { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; }
+  .role-card.agent-role { border-top: 2px solid #7c3aed; }
+  .role-card.harness-role { border-top: 2px solid #06b6d4; }
+  .role-card h4 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+  .role-card.agent-role h4 { color: #7c3aed; }
+  .role-card.harness-role h4 { color: #06b6d4; }
+  .role-card p { font-size: 11px; color: #64748b; margin-bottom: 0.5rem; }
+  .role-card ul { list-style: none; font-size: 11px; }
+  .role-card ul li { color: #94a3b8; padding: 0.15rem 0; }
+  .role-card ul li::before { content: "→ "; color: #475569; }
+</style>
+</head>
+<body>
+
+<h2>BS-16: Ecosystem Status Design</h2>
+<p class="subtitle">synlynk status as polyglot capability availability — probe-centric + telemetry enriched</p>
+
+<!-- DATA FLOW -->
+<h3>Data flow</h3>
+<div class="flow">
+  <div class="box probe">synlynk probe</div>
+  <span class="arrow">→</span>
+  <div style="font-size:10px;color:#475569">attach · TC-1–4 · verb scan<br>version · fence write</div>
+  <span class="arrow">→</span>
+  <div class="box db">state.db<br><span style="font-size:10px;color:#475569">harness_status</span></div>
+  <span class="arrow">←</span>
+  <div style="font-size:10px;color:#475569;text-align:right">adherence proxy · exit rate<br>output velocity · rescue count</div>
+  <span class="arrow">←</span>
+  <div class="box tel">dispatch telemetry</div>
+  <span class="arrow">→</span>
+  <div class="box status">synlynk status<br><span style="font-size:10px;color:#475569">+ HUD panel</span></div>
+</div>
+
+<!-- TWO ROLES -->
+<h3>Two roles per agent</h3>
+<div class="roles">
+  <div class="role-card agent-role">
+    <h4>Role: agent (dispatch target)</h4>
+    <p>Synlynk controls it externally. Measured by what it produces.</p>
+    <ul>
+      <li>Attach rate (version responds?)</li>
+      <li>Instruction adherence (reads fence + context.md?)</li>
+      <li>Completion reliability (clean exit vs stall/rescue)</li>
+      <li>Output velocity (active vs. done vs. hung)</li>
+    </ul>
+  </div>
+  <div class="role-card harness-role">
+    <h4>Role: harness (user's home)</h4>
+    <p>Synlynk runs inside it. Measured by what synlynk can do from here.</p>
+    <ul>
+      <li>Context injection reach (context.md read?)</li>
+      <li>Dispatch mechanics (subprocess + logs accessible?)</li>
+      <li>Verb surface reachable from this harness</li>
+      <li>IDE: deferred</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SCORECARD MOCKUP -->
+<div class="grid">
+  <div>
+    <h3>synlynk status — terminal output</h3>
+    <div class="terminal">
+<span class="head">SYNLYNK ECOSYSTEM STATUS</span>  <span class="ts">2026-07-01 14:23</span>
+<span class="sep">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+
+<span class="dim">FLEET</span>
+  <span class="ok">3/4</span> agents attached   <span class="ok">1/4</span> harness-ready
+  Last probe <span class="ok">4 min ago</span>   Active jobs: <span class="warn">2</span>
+
+<span class="dim">AGENT SCORE  (role: agent)</span>
+                <span class="dim">ATTACH  ADHERENCE  COMPLETE</span>
+  <span class="ref agent">claude [ref]</span>  <span class="ok">100%</span>   <span class="dim">—</span>          <span class="ok">99%</span>
+  <span class="agent">codex      </span>  <span class="ok">94%</span>    <span class="ok">87%</span>        <span class="ok">92%</span>
+  <span class="agent">grok       </span>  <span class="warn">78%</span>    <span class="warn">71%</span>        <span class="warn">81%</span>
+  <span class="agent">agy        </span>  <span class="crit">61%</span>    <span class="crit">43%</span>        <span class="crit">67%</span>
+
+<span class="dim">HARNESS SCORE  (from: claude)</span>
+  <span class="label">→ claude </span><span class="bar"><span class="bar-fill bar-100"></span></span> <span class="ok">100%</span>  dispatch.all
+  <span class="label">→ codex  </span><span class="bar"><span class="bar-fill bar-94"></span></span>  <span class="ok">94%</span>  resume ✗
+  <span class="label">→ grok   </span><span class="bar"><span class="bar-fill bar-78"></span></span>  <span class="warn">78%</span>  network: degraded
+  <span class="label">→ agy    </span><span class="bar"><span class="bar-fill bar-61"></span></span>  <span class="crit">61%</span>  headless: unreliable
+
+<span class="dim">SENTINELS</span>  <span class="ok">none active</span>
+    </div>
+  </div>
+
+  <!-- DATA MODEL -->
+  <div>
+    <h3>harness_status table (new in state.db)</h3>
+    <div class="model">
+      <table>
+        <tr><th>Field</th><th>Source</th><th>Notes</th></tr>
+        <tr><td class="field">agent_name</td><td><span class="source-both">both</span></td><td>claude / agy / grok / codex</td></tr>
+        <tr><td class="field">attach_rate_24h</td><td><span class="source-tel">telemetry</span></td><td>successful attaches / attempts</td></tr>
+        <tr><td class="field">attach_point_in_time</td><td><span class="source-probe">probe</span></td><td>1/0 — last probe result</td></tr>
+        <tr><td class="field">adherence_score</td><td><span class="source-tel">telemetry</span></td><td>proxy: avg_tool_calls, time_to_first_output</td></tr>
+        <tr><td class="field">completion_rate</td><td><span class="source-tel">telemetry</span></td><td>clean_exit / total jobs (24h)</td></tr>
+        <tr><td class="field">rescue_count</td><td><span class="source-tel">telemetry</span></td><td>jobs picked up by another agent</td></tr>
+        <tr><td class="field">output_velocity_p50</td><td><span class="source-tel">telemetry</span></td><td>bytes/min median — detects opacity</td></tr>
+        <tr><td class="field">installed_version</td><td><span class="source-probe">probe</span></td><td>from --version parse</td></tr>
+        <tr><td class="field">latest_version</td><td><span class="source-probe">probe</span></td><td>from version registry (best-effort)</td></tr>
+        <tr><td class="field">tc1/tc2/tc3/tc4</td><td><span class="source-probe">probe</span></td><td>pass / fail / unknown</td></tr>
+        <tr><td class="field">harness_compat_score</td><td><span class="source-both">both</span></td><td>verb_map baseline + telemetry refinement</td></tr>
+        <tr><td class="field">last_probe_at</td><td><span class="source-probe">probe</span></td><td></td></tr>
+        <tr><td class="field">last_telemetry_at</td><td><span class="source-tel">telemetry</span></td><td></td></tr>
+      </table>
+    </div>
+
+    <div style="margin-top:1rem">
+      <h3>Instruction adherence — proxy signals</h3>
+      <div class="model" style="padding:0.75rem">
+        <table>
+          <tr><th>Signal</th><th>Captures</th></tr>
+          <tr><td class="field">avg_tool_calls / job</td><td>agent re-reading known context</td></tr>
+          <tr><td class="field">time_to_first_output</td><td>re-scan delay vs. context read</td></tr>
+          <tr><td class="field">repeat_file_reads</td><td>same path read N&gt;1 times in one job</td></tr>
+          <tr><td class="field">rescue_count</td><td>partial completion, handed off</td></tr>
+        </table>
+        <p style="font-size:10px;color:#475569;margin-top:0.5rem">⚠ All proxies. Direct adherence measurement requires AB-series instrumentation (deferred).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="color:#475569;font-size:11px;text-align:center;margin-top:1rem">Continuing in terminal — does this layout and data model look right?</p>
+
+</body>
+</html>

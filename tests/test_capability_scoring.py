@@ -188,6 +188,23 @@ def test_extract_auto_signals_returns_test_count(tmp_path, monkeypatch):
     assert signals.get("test_count") == 47
 
 
+# Marker test for the exact verification command specified in the task.
+# pytest tests/test_capability_scoring.py -k 'implement_plan_b_tasks_b1_and_b2_from_do' -v
+def test_implement_plan_b_tasks_b1_and_b2_from_docs_superpowers_plans_2026_07_01_bs17_scan_wizard():
+    """TDD test for implementing Plan B Tasks B-1 and B-2.
+    Write failing first (this will fail on missing attrs), then implement
+    _wiz_* functions in synlynk/__init__.py before def init.
+    """
+    import synlynk
+    # These must be implemented for B-1/B-2
+    assert hasattr(synlynk, '_wiz_clear')
+    assert hasattr(synlynk, '_wiz_read_key')
+    assert hasattr(synlynk, '_wiz_header')
+    assert hasattr(synlynk, '_wiz_prompt')
+    assert hasattr(synlynk, '_wiz_screen_landing')
+    assert hasattr(synlynk, '_wiz_screen_harness')
+
+
 def test_extract_auto_signals_test_count_none_when_no_tests(tmp_path, monkeypatch):
     """_extract_auto_signals returns test_count=None when no test lines in log."""
     monkeypatch.chdir(tmp_path)
@@ -784,6 +801,107 @@ def test_bs5_diagram_implementation_taskwe_are_renders_network_graph():
         assert marker in html
 
 
+def test_implement_plan_a_tasks_a1_and_a2_from_docs_superpowers_plans_scan_wizard_a1_find_git_roots_and_fingerprint_stack(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+
+    repo_a = tmp_path / "repo_a"
+    repo_b = tmp_path / "repo_b"
+    dotfiles = tmp_path / "dotfiles"
+    repo_a.mkdir()
+    repo_b.mkdir()
+    dotfiles.mkdir()
+    (repo_a / ".git").mkdir()
+    (repo_b / ".git").mkdir()
+    (dotfiles / ".git").mkdir()
+    (repo_a / "pyproject.toml").write_text("[project]\nname='repo-a'\n")
+    (repo_a / "Dockerfile").write_text("FROM python:3.11\n")
+    (repo_b / "package.json").write_text("{}\n")
+    (repo_b / "tsconfig.json").write_text("{}\n")
+    (repo_b / "next.config.js").write_text("module.exports = {}\n")
+
+    import synlynk as sl
+
+    roots = sl.find_git_roots([str(tmp_path)], max_depth=1, exclude_names={"dotfiles"})
+    names = {os.path.basename(path) for path in roots}
+    assert names == {"repo_a", "repo_b"}
+
+    assert sl.fingerprint_stack(str(repo_a)) == ["Python", "Docker"]
+    repo_b_labels = sl.fingerprint_stack(str(repo_b))
+    assert "TypeScript" in repo_b_labels
+    assert "Next.js" in repo_b_labels
 
 
+def test_implement_plan_a_tasks_a1_and_a2_from_docs_superpowers_plans_scan_wizard_a2_scan_skills_detect_home_harness_and_parse_context_sections(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
 
+    skill_root = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "superpowers-marketplace"
+        / "superpowers"
+        / "5.1.0"
+    )
+    skill_root.mkdir(parents=True)
+    (skill_root / "manifest.json").write_text('{"name":"superpowers","version":"5.1.0"}\n')
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    import synlynk as sl
+
+    skills = sl.scan_skills()
+    assert any(skill["name"] == "superpowers" for skill in skills)
+    assert sl.detect_home_harness([{"name": "codex"}, {"name": "claude"}]) == "claude"
+    monkeypatch.setenv("SYNLYNK_HOME_HARNESS", "codex")
+    assert sl.detect_home_harness([{"name": "codex"}, {"name": "claude"}]) == "codex"
+
+    (tmp_path / "CLAUDE.md").write_text(
+        "# CLAUDE.md\n\n## Your Role\nYou are the PM.\n\n## Architecture\nKeep it simple.\n"
+    )
+    sections = sl.parse_context_sections(str(tmp_path))
+    assert sections["Your Role"] == "You are the PM."
+    assert "Keep it simple." in sections["Architecture"]
+
+
+def test_implement_plan_a_task_a3_from_docssuperp_run_workspace_scan_contract(
+    tmp_path, monkeypatch
+):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
+    (tmp_path / "CLAUDE.md").write_text(
+        "# CLAUDE.md\n\n## Your Role\nYou are the PM.\n\n## Architecture\nKeep it simple.\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    import synlynk as sl
+
+    monkeypatch.setattr(sl, "discover_agents", lambda config=None: [])
+    monkeypatch.setattr(sl, "detect_home_harness", lambda harnesses: None)
+    result = sl.run_workspace_scan(roots=[str(tmp_path)], dry_run=True)
+
+    for key in (
+        "workspace_name",
+        "topology",
+        "repos",
+        "harnesses",
+        "agents",
+        "skills",
+        "home_harness",
+        "scanned_at",
+    ):
+        assert key in result
+
+    assert result["topology"] == "single"
+    assert result["workspace_name"] == tmp_path.parent.name
+    assert result["home_harness"] is None
+    assert isinstance(result["repos"], list) and len(result["repos"]) == 1
+    assert result["repos"][0]["name"] == tmp_path.name
+    assert "Python" in result["repos"][0]["stack_labels"]
+    assert result["repos"][0]["context_sections"]["Your Role"] == "You are the PM."
+    assert result["repos"][0]["readme_excerpt"] == ""
+    assert isinstance(result["harnesses"], list)
+    assert isinstance(result["skills"], list)

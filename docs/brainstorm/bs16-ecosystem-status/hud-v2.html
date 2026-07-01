@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-16: HUD v2 — compact cards</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #080a10; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; padding: 1.5rem; font-size: 12px; }
+
+/* HEADER */
+.hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.6rem; border-bottom:1px solid #1a1f2e; }
+.hud-title { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.15em; color:#475569; }
+.hud-title span { color:#7c3aed; font-weight:bold; }
+.hud-meta { font-size:10px; color:#334155; }
+.dispatch-mode { display:flex; align-items:center; gap:0.4rem; background:#0f1520; border:1px solid #1e3a5f; border-radius:20px; padding:0.25rem 0.65rem; font-size:10px; color:#60a5fa; }
+.mode-dot { width:6px; height:6px; border-radius:50%; background:#3b82f6; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* EFFICIENCY BANNER */
+.eff-banner { background:linear-gradient(135deg,#0f1a0f,#0a1520); border:1px solid #166534; border-radius:10px; padding:0.85rem 1.25rem; margin-bottom:1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
+.eff-main { display:flex; align-items:baseline; gap:0.5rem; }
+.eff-val  { font-size:1.8rem; font-weight:bold; color:#10b981; line-height:1; }
+.eff-unit { font-size:0.72rem; color:#4ade80; text-transform:uppercase; letter-spacing:0.08em; }
+.eff-sub  { font-size:10px; color:#475569; margin-top:2px; }
+.eff-stats { display:flex; gap:1.75rem; }
+.eff-stat .v { font-size:1rem; font-weight:bold; color:#e2e8f0; }
+.eff-stat .l { font-size:10px; color:#475569; }
+.eff-note { font-size:10.5px; color:#86efac; max-width:260px; line-height:1.5; border-left:2px solid #166534; padding-left:0.75rem; }
+.eff-note strong { color:#4ade80; }
+
+/* AGENT CARDS — horizontal scroll row */
+.agent-row-label { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.1em; color:#334155; margin-bottom:0.5rem; }
+.agent-row { display:flex; gap:0.75rem; overflow-x:auto; padding-bottom:0.5rem; margin-bottom:1.25rem; }
+.agent-row::-webkit-scrollbar { height:3px; }
+.agent-row::-webkit-scrollbar-track { background:#0c0e16; }
+.agent-row::-webkit-scrollbar-thumb { background:#1e293b; border-radius:2px; }
+
+.agent-card {
+  flex: 0 0 190px;
+  background:#0c0e16; border:1px solid #1a1f2e; border-radius:10px;
+  padding:0.75rem; position:relative;
+}
+.agent-card.ref     { border-color:#1d3a5f; }
+.agent-card.degraded{ border-color:#451a03; }
+.agent-card.local   { border-color:#1a2e1a; border-style:dashed; }
+
+/* top row: icon + name + dot */
+.card-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+.agent-icon { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.icon-claude { background:#1a1030; color:#a78bfa; }
+.icon-agy    { background:#0a1a10; color:#34d399; }
+.icon-codex  { background:#0a0f1a; color:#60a5fa; }
+.icon-grok   { background:#1a1000; color:#fbbf24; }
+.icon-local  { background:#0a1a0a; color:#4ade80; }
+.card-nameblock { flex:1; min-width:0; }
+.agent-name { font-size:0.78rem; font-weight:bold; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.agent-ver  { font-size:9px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ref-badge  { font-size:8px; color:#3b82f6; background:#0f1f3f; border-radius:3px; padding:1px 4px; }
+.status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.status-dot.up   { background:#10b981; box-shadow:0 0 5px #10b981; }
+.status-dot.deg  { background:#f59e0b; box-shadow:0 0 5px #f59e0b; }
+.status-dot.down { background:#ef4444; box-shadow:0 0 5px #ef4444; }
+
+/* ctx window text label */
+.ctx-label { font-size:9.5px; color:#334155; margin-bottom:0.5rem; }
+.ctx-label span { color:#64748b; }
+
+/* attach row */
+.attach-row { display:flex; align-items:center; gap:0.4rem; margin-bottom:0.5rem; }
+.attach-label { font-size:9px; color:#475569; width:36px; flex-shrink:0; }
+.attach-pct   { font-size:10px; font-weight:bold; width:30px; text-align:right; flex-shrink:0; }
+.attach-spark { flex:1; height:16px; }
+
+/* budget bars — task-level read/write/tool */
+.budgets { display:flex; flex-direction:column; gap:3px; margin-bottom:0.5rem; }
+.budget-row { display:flex; align-items:center; gap:0.35rem; }
+.budget-icon { font-size:9px; color:#475569; width:10px; flex-shrink:0; text-align:center; }
+.budget-bar-wrap { flex:1; background:#1a1f2e; border-radius:2px; height:4px; }
+.budget-bar { height:100%; border-radius:2px; }
+.budget-val { font-size:8.5px; width:28px; text-align:right; flex-shrink:0; }
+.b-read  .budget-bar { background:#7c3aed; } .b-read  .budget-val { color:#a78bfa; }
+.b-write .budget-bar { background:#06b6d4; } .b-write .budget-val { color:#06b6d4; }
+.b-tool  .budget-bar { background:#d97706; } .b-tool  .budget-val { color:#d97706; }
+
+/* completion + adherence row — text only, compact */
+.scores-row { display:flex; gap:0.35rem; }
+.score-chip { flex:1; background:#0f1117; border:1px solid #1a1f2e; border-radius:5px; padding:3px 5px; text-align:center; }
+.score-chip .sv { font-size:10px; font-weight:bold; display:block; }
+.score-chip .sl { font-size:8px; color:#475569; display:block; }
+
+/* MATRIX */
+.matrix-section { margin-bottom:1.25rem; }
+.matrix-grid { display:grid; grid-template-columns:70px repeat(5,1fr); gap:3px; }
+.mc { background:#0c0e16; border-radius:5px; padding:0.4rem 0.3rem; text-align:center; font-size:10px; }
+.mh { background:transparent; color:#334155; font-size:9px; display:flex; align-items:center; justify-content:center; }
+.mf { background:transparent; color:#475569; font-size:9px; display:flex; align-items:center; }
+.c100 { background:#091a0d; border:1px solid #166534; }
+.c90  { background:#0a1a10; border:1px solid #14532d; }
+.c78  { background:#1a1400; border:1px solid #78350f; }
+.c61  { background:#1a0a00; border:1px solid #7c2d12; }
+.cself{ background:#0f1117; border:1px solid #1e293b; }
+.cv { display:block; font-size:10.5px; font-weight:bold; margin-bottom:1px; }
+.cn { display:block; font-size:8.5px; color:#475569; line-height:1.2; }
+.c100 .cv{color:#10b981;} .c90 .cv{color:#34d399;} .c78 .cv{color:#f59e0b;} .c61 .cv{color:#ef4444;} .cself .cv{color:#334155;}
+
+/* BOTTOM */
+.bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; }
+.panel { background:#0c0e16; border:1px solid #1a1f2e; border-radius:8px; padding:0.75rem; }
+.panel h4 { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#334155; margin-bottom:0.5rem; }
+.sentinel-ok { color:#1e4620; font-size:11px; }
+.eco-alert { background:#0a1a10; border:1px solid #166534; border-radius:5px; padding:0.5rem 0.65rem; font-size:10.5px; color:#4ade80; display:flex; align-items:flex-start; gap:0.4rem; }
+
+/* local agent placeholder */
+.add-agent { flex:0 0 190px; background:#0c0e16; border:1px dashed #1a2e1a; border-radius:10px; padding:0.75rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.4rem; color:#1e4620; cursor:pointer; min-height:180px; }
+.add-agent:hover { border-color:#166534; color:#4ade80; }
+.add-agent .plus { font-size:1.5rem; }
+.add-agent .label { font-size:10px; text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="hud-header">
+  <div>
+    <div class="hud-title"><span>synlynk</span> ecosystem status</div>
+    <div class="hud-meta">2026-07-01 · 14:23 · workspace: synlynk · 3/4 attached</div>
+  </div>
+  <div class="dispatch-mode"><div class="mode-dot"></div>daily-grind</div>
+</div>
+
+<!-- EFFICIENCY BANNER -->
+<div class="eff-banner">
+  <div>
+    <div class="eff-main">
+      <span class="eff-val">4.2×</span>
+      <div>
+        <div class="eff-unit">headless efficiency</div>
+        <div class="eff-sub">tokens doing work vs. interactive</div>
+      </div>
+    </div>
+  </div>
+  <div class="eff-stats">
+    <div class="eff-stat"><div class="v" style="color:#10b981">847K</div><div class="l">tokens saved<br>this session</div></div>
+    <div class="eff-stat"><div class="v" style="color:#a78bfa">23</div><div class="l">headless<br>dispatches</div></div>
+    <div class="eff-stat"><div class="v" style="color:#06b6d4">$0.34</div><div class="l">saved vs.<br>interactive</div></div>
+  </div>
+  <div class="eff-note"><strong>Every headless dispatch starts clean.</strong> No conversation history — every token goes to the task. This is why synlynk users get more done per dollar.</div>
+</div>
+
+<!-- AGENT CARDS -->
+<div class="agent-row-label">agents — scroll for more →</div>
+<div class="agent-row">
+
+  <!-- claude -->
+  <div class="agent-card ref">
+    <div class="card-top">
+      <div class="agent-icon icon-claude">◈</div>
+      <div class="card-nameblock">
+        <div class="agent-name">claude <span class="ref-badge">ref</span></div>
+        <div class="agent-ver">sonnet-4-6 · max · v1.2.3</div>
+      </div>
+      <div class="status-dot up"></div>
+    </div>
+    <div class="ctx-label">ctx window: <span>200K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#10b981">100%</span>
+      <svg class="attach-spark" viewBox="0 0 60 16"><polyline points="0,12 8,9 16,11 24,7 32,5 40,6 48,3 56,4 60,2" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.9"/><circle cx="60" cy="2" r="2" fill="#10b981"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"> <span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:75%"></div></div><span class="budget-val">750K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div><span class="budget-val">32K</span></div>
+      <div class="budget-row b-tool"> <span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:80%"></div></div><span class="budget-val">~200</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#10b981">99%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#334155">ref</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <!-- agy -->
+  <div class="agent-card degraded">
+    <div class="card-top">
+      <div class="agent-icon icon-agy">◇</div>
+      <div class="card-nameblock">
+        <div class="agent-name">agy</div>
+        <div class="agent-ver">gemini-2.0-flash · pro · v3.2.0</div>
+      </div>
+      <div class="status-dot deg"></div>
+    </div>
+    <div class="ctx-label">ctx window: <span>1,000K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#ef4444">61%</span>
+      <svg class="attach-spark" viewBox="0 0 60 16"><polyline points="0,3 8,6 16,2 24,10 32,5 40,12 48,7 56,13 60,11" fill="none" stroke="#ef4444" stroke-width="1.5" opacity="0.9"/><circle cx="60" cy="11" r="2" fill="#ef4444"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"> <span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:90%"></div></div><span class="budget-val">900K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:25%"></div></div><span class="budget-val">8K</span></div>
+      <div class="budget-row b-tool"> <span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div><span class="budget-val">~500</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#ef4444">67%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#ef4444">43%</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <!-- codex -->
+  <div class="agent-card">
+    <div class="card-top">
+      <div class="agent-icon icon-codex">⬡</div>
+      <div class="card-nameblock">
+        <div class="agent-name">codex</div>
+        <div class="agent-ver">gpt-4o · plus · v1.1.0</div>
+      </div>
+      <div class="status-dot up"></div>
+    </div>
+    <div class="ctx-label">ctx window: <span>128K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#10b981">94%</span>
+      <svg class="attach-spark" viewBox="0 0 60 16"><polyline points="0,10 8,7 16,8 24,5 32,6 40,3 48,4 56,3 60,2" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.9"/><circle cx="60" cy="2" r="2" fill="#10b981"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"> <span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:55%"></div></div><span class="budget-val">110K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div><span class="budget-val">16K</span></div>
+      <div class="budget-row b-tool"> <span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div><span class="budget-val">~128</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#10b981">92%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#10b981">87%</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <!-- grok -->
+  <div class="agent-card">
+    <div class="card-top">
+      <div class="agent-icon icon-grok">✦</div>
+      <div class="card-nameblock">
+        <div class="agent-name">grok</div>
+        <div class="agent-ver">grok-3 · ? · v2.0.1</div>
+      </div>
+      <div class="status-dot deg"></div>
+    </div>
+    <div class="ctx-label">ctx window: <span>131K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#f59e0b">78%</span>
+      <svg class="attach-spark" viewBox="0 0 60 16"><polyline points="0,4 8,3 16,2 24,5 32,3 40,7 48,5 56,10 60,9" fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.9"/><circle cx="60" cy="9" r="2" fill="#f59e0b"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"> <span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:55%"></div></div><span class="budget-val">115K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div><span class="budget-val">16K</span></div>
+      <div class="budget-row b-tool"> <span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:40%"></div></div><span class="budget-val">~100</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#f59e0b">81%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#f59e0b">71%</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <!-- local agent placeholder -->
+  <div class="add-agent">
+    <span class="plus">+</span>
+    <span class="label">local agent<br>(ollama / lm-studio)</span>
+  </div>
+
+</div>
+
+<!-- HARNESS COMPAT MATRIX -->
+<div class="matrix-section">
+  <div class="agent-row-label" style="margin-bottom:0.5rem">harness compatibility — from (row) dispatching to (column)</div>
+  <div class="matrix-grid">
+    <div class="mh" style="font-size:8.5px;color:#1e293b">FROM↓ TO→</div>
+    <div class="mh">◈ claude</div>
+    <div class="mh">◇ agy</div>
+    <div class="mh">⬡ codex</div>
+    <div class="mh">✦ grok</div>
+    <div class="mh">⬜ local</div>
+
+    <div class="mf">◈ claude</div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">home</span></div>
+    <div class="mc c61"><span class="cv">61%</span><span class="cn">headless unreliable</span></div>
+    <div class="mc c90"><span class="cv">94%</span><span class="cn">resume ✗</span></div>
+    <div class="mc c78"><span class="cv">78%</span><span class="cn">network dep</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">not configured</span></div>
+
+    <div class="mf">◇ agy</div>
+    <div class="mc c90"><span class="cv">91%</span><span class="cn">fence respected</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">home</span></div>
+    <div class="mc c78"><span class="cv">72%</span><span class="cn">sandbox limits</span></div>
+    <div class="mc c61"><span class="cv">64%</span><span class="cn">flag drift</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">not configured</span></div>
+
+    <div class="mf">⬡ codex</div>
+    <div class="mc c90"><span class="cv">95%</span><span class="cn">full dispatch</span></div>
+    <div class="mc c78"><span class="cv">74%</span><span class="cn">output truncation</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">home</span></div>
+    <div class="mc c78"><span class="cv">79%</span><span class="cn">network dep</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">not configured</span></div>
+
+    <div class="mf">✦ grok</div>
+    <div class="mc c90"><span class="cv">88%</span><span class="cn">partial tools</span></div>
+    <div class="mc c61"><span class="cv">58%</span><span class="cn">PTY required</span></div>
+    <div class="mc c78"><span class="cv">76%</span><span class="cn">approval policy</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">home</span></div>
+    <div class="mc cself"><span class="cv">—</span><span class="cn">not configured</span></div>
+  </div>
+</div>
+
+<!-- BOTTOM -->
+<div class="bottom-row">
+  <div class="panel">
+    <h4>Sentinels</h4>
+    <div class="sentinel-ok">✓ none active</div>
+  </div>
+  <div class="panel">
+    <h4>Capacity window</h4>
+    <div class="eco-alert">
+      <span style="font-size:13px">⚡</span>
+      <span>agy off-peak in ~2h — output may expand to 32K. 4 queued tasks eligible for eco dispatch.</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

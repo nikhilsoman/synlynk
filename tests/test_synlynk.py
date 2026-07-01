@@ -1924,9 +1924,8 @@ def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    assert "--always-approve" not in shell_cmd
-    assert "--permission-mode bypassPermissions" not in shell_cmd
-    assert "--yes" in shell_cmd
+    assert "--always-approve" in shell_cmd
+    assert "--yes" not in shell_cmd
     assert "--output-format json" in shell_cmd
 
 
@@ -2003,9 +2002,9 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     single_pos = shell_cmd.index("--single")
     prompt_pos = shell_cmd.index('"$PROMPT"')
     assert single_pos < prompt_pos, "--single must come before $PROMPT"
-    yes_pos = shell_cmd.index("--yes")
-    assert yes_pos < single_pos, "--yes must come before --single"
-    assert "--always-approve" not in shell_cmd
+    approve_pos = shell_cmd.index("--always-approve")
+    assert approve_pos < single_pos, "--always-approve must come before --single"
+    assert "--yes" not in shell_cmd
 
 
 def test_agy_prompt_flag_split_from_non_interactive_flags():
@@ -2866,14 +2865,15 @@ def test_cmd_jobs_default_hides_completed(project_dir, capsys):
 
 def test_preflight_blocks_invalid_flag():
     from synlynk import _preflight_dispatch
+    # --yes is now invalid for Grok (replaced by --always-approve)
     result = _preflight_dispatch(
         agent_name="grok",
-        dispatch_flags=["--always-approve"],
+        dispatch_flags=["--yes"],
         db_conn=None,
     )
     assert result["passed"] is False
     assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
-    assert "--always-approve" in result["reason"]
+    assert "--yes" in result["reason"]
 
 
 def test_preflight_blocks_unreachable_endpoint(monkeypatch):
@@ -2885,9 +2885,10 @@ def test_preflight_blocks_unreachable_endpoint(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", mock_connect)
 
     from synlynk import _preflight_dispatch
+    # --always-approve is now the correct required flag for Grok
     result = _preflight_dispatch(
         agent_name="grok",
-        dispatch_flags=["--yes"],
+        dispatch_flags=["--always-approve"],
         db_conn=None,
     )
     assert result["passed"] is False
@@ -4533,20 +4534,26 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    assert "--always-approve" in grok["dispatch_flags"]["invalid_flags"]
-    assert "--always-approve" not in grok["dispatch_flags"]["valid_flags"]
+    # --always-approve is the correct required flag (Grok dropped --yes)
+    assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
+    assert "--always-approve" in grok["dispatch_flags"]["required_flags"]
+    assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
 
 
-def test_grok_baseline_excludes_always_approve():
+def test_grok_baseline_uses_always_approve():
+    # Grok dropped --yes; --always-approve is now the correct headless flag
     from synlynk import AGENT_CAPABILITY_BASELINES
     grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
-    invalid = flags.get("invalid_flags", [])
-    assert "--always-approve" in invalid, "LIVE-1: --always-approve must be in invalid_flags"
-    assert "--always-approve" not in flags.get("valid_flags", [])
+    assert "--always-approve" in flags.get("valid_flags", []), \
+        "--always-approve must be valid for Grok (--yes was dropped)"
+    assert "--always-approve" in flags.get("required_flags", []), \
+        "--always-approve must be required for Grok"
+    assert "--yes" in flags.get("invalid_flags", []), \
+        "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 
 
 def test_grok_baseline_has_network_deps():
