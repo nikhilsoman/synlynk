@@ -198,6 +198,7 @@ def test_wizard_init_completes_without_write_on_ctrl_c(monkeypatch, tmp_path):
     (tmp_path / ".synlynk").mkdir()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", lambda **kw: None)
     # Simulate full wizard: enter(landing) → 1(harness) → 1(topo) → enter(name)
     # → enter(repos) → enter(skills) → enter(agents) → enter(roles) → enter(launch)
     monkeypatch.setattr("sys.stdin", io.StringIO("\r1\r1\r\r\r\r\r\r\r"))
@@ -225,6 +226,7 @@ def test_wizard_single_repo_full_flow(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", lambda **kw: None)
     # Keys: landing=\r, harness=\r(default), topo=1(single),
     #       skills=\r, agents=\r, roles=\r, launch=\r
     monkeypatch.setattr("sys.stdin", io.StringIO("\r\r1\r\r\r\r"))
@@ -252,6 +254,7 @@ def test_wizard_ctrl_c_leaves_no_state(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", lambda **kw: None)
 
     call_count = {"n": 0}
     original = synlynk._wiz_screen_landing
@@ -278,6 +281,7 @@ def test_wizard_multi_repo_flow(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", lambda **kw: None)
     # Keys: landing=\n, harness=\n, topo=3(multi), name=\n, repos=\n, confirm=\n,
     #       skills=\n, agents=\n, roles=\n, launch=\n
     monkeypatch.setattr("sys.stdin", io.StringIO("\n\n3\n\n\n\n\n\n\n\n"))
@@ -302,8 +306,12 @@ def test_wizard_multi_repo_flow(tmp_path, monkeypatch, capsys):
 
 def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
     import subprocess as sp
+    import json
     (tmp_path / '.git').mkdir()
     (tmp_path / '.synlynk').mkdir()
+    (tmp_path / '.synlynk' / 'config.json').write_text(
+        json.dumps({"auto_launch_after_wizard": False})
+    )
     stdin_seq = '\r\r1\r\r\r\r'
     env = os.environ.copy()
     env['HOME'] = str(tmp_path)

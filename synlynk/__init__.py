@@ -2083,6 +2083,7 @@ def load_config() -> dict:
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
+        "auto_launch_after_wizard": True,
         "org": None,
         "owner": None,
         "repo": None,
@@ -5887,6 +5888,71 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
     print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
 
 
+def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
+    """FTUE task picker TUI - Screen 1 -> Screen 2 -> dispatch
+    - dry_run: print selected tasks without TUI or dispatch
+    - list_mode: print full template pool with trigger conditions
+    """
+    if list_mode:
+        print(f"\n  {_BOLD}synlynk launch - task template pool ({len(LAUNCH_TASK_TEMPLATES)} templates){_RESET}\n")
+        for t in LAUNCH_TASK_TEMPLATES:
+            cond = t.get("trigger_condition")
+            cond_str = "always" if cond is None else "(scan condition)"
+            marker = "●" if t["id"] in CORE_TEMPLATE_IDS else "○"
+            print(f"  {marker} {t['id']:<24}  {t['cycle']:<8}  {t['agent']:<8}  {cond_str}")
+        print()
+        return
+
+    try:
+        scan = run_workspace_scan()
+    except Exception:
+        scan = {
+            "workspace_name": os.path.basename(os.getcwd()) or "workspace",
+            "topology": "single",
+            "repos": [{"name": os.path.basename(os.getcwd()), "stack_labels": []}],
+            "harnesses": [], "agents": [], "skills": [],
+            "test_ratio": 1.0, "readme_word_count": 0,
+            "has_ci": False, "has_docs": False,
+            "has_type_hints": False, "has_orm": False,
+        }
+
+    tasks = _select_launch_tasks(scan)
+
+    if dry_run:
+        print(f"\n  {_BOLD}synlynk launch - dry run{_RESET}  "
+              f"{_DIM}workspace: {scan.get('workspace_name', 'unknown')}{_RESET}\n")
+        for i, t in enumerate(tasks, 1):
+            est = t.get("est_hours", 1)
+            est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
+            print(f"  [{i}] {t['id']:<24} {t['cycle']:<8}  {t['agent']:<8}  {est_str}")
+        print()
+        return
+
+    while True:
+        chosen = _launch_screen_tasks(tasks, scan)
+        if chosen is None:
+            return
+
+        confirmed, prompt = _launch_screen_preview(chosen, scan)
+        if not confirmed:
+            continue
+
+        try:
+            job = dispatch_agent(
+                agent=chosen["agent"],
+                task=prompt,
+                story_id=None,
+                force_agent=True,
+                context_mode=chosen.get("context_mode", "full"),
+            )
+            job_id = job.get("job_id", "unknown") if isinstance(job, dict) else "dispatched"
+            print(f"\n  {_GREEN}▶{_RESET} [{job_id}] {chosen['agent']} dispatched\n"
+                  f"  {_DIM}Log: synlynk logs --job {job_id}{_RESET}\n")
+        except Exception as exc:
+            print(f"\n  {_YELLOW}⚠ Dispatch failed: {exc}{_RESET}\n")
+        return
+
+
 def cmd_run_trio(task: str, story_id: str = None) -> None:
     """Dispatches all functional agents in parallel — one job per agent.
 
@@ -9468,7 +9534,7 @@ def _wiz_screen_roles(scan: dict) -> dict:
     return roles
 
 
-def _wiz_screen_launch(workspace: dict, scan: dict) -> None:
+def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -> None:
     """Screen 6 — launch cheat sheet. Final screen."""
     _wiz_clear()
     _wiz_header(step=6, total=6)
@@ -9488,8 +9554,10 @@ def _wiz_screen_launch(workspace: dict, scan: dict) -> None:
         suffix = f" {arg}" if arg else ""
         print(f"  {_CYAN}{cmd}{suffix}{_RESET}  {_DIM}{desc}{_RESET}")
     print(f"\n  {_DIM}{'─' * 52}{_RESET}")
-    _wiz_prompt("done · run `synlynk help` for all commands")
+    _wiz_prompt("done · run `synlynk launch` to pick your first task")
     _wiz_read_key()
+    if auto_launch:
+        cmd_launch_ftue()
 
 
 def _launch_screen_cycles() -> None:
@@ -9736,7 +9804,9 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
     workspace["agent_roles"] = roles
 
     # ── Screen 6: Launch cheat sheet ─────────────────────────────────────
-    _wiz_screen_launch(workspace, scan)
+    cfg = load_config()
+    _wiz_screen_launch(workspace, scan,
+                       auto_launch=cfg.get("auto_launch_after_wizard", True))
 
     # ── Commit-on-complete: write all state ───────────────────────────────
     if not dry_run:
@@ -10309,11 +10379,18 @@ def main() -> None:
     shell_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID to label the shell session")
 
-    launch_parser = subparsers.add_parser(
-        "launch", help="Launch an agent CLI interactively with pre-loaded context")
-    launch_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
-    launch_parser.add_argument("--story", default=None, dest="story_id",
+    open_parser = subparsers.add_parser(
+        "open", help="Open an agent CLI interactively with pre-loaded context")
+    open_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
+    open_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
+
+    launch_parser = subparsers.add_parser(
+        "launch", help="Pick your first task and dispatch it (FTUE task picker)")
+    launch_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+        help="Print selected tasks without TUI or dispatching")
+    launch_parser.add_argument("--list", action="store_true", dest="list_mode",
+        help="Print full template pool with trigger conditions")
 
     run_parser = subparsers.add_parser(
         "run", help="Convenience wrappers for common dispatch patterns")
@@ -10467,8 +10544,13 @@ def main() -> None:
         cmd_logs(args.job_id, tail=getattr(args, "tail", 50))
     elif args.command == "shell":
         cmd_shell(story_id=getattr(args, "story_id", None))
-    elif args.command == "launch":
+    elif args.command == "open":
         cmd_launch(args.agent, story_id=getattr(args, "story_id", None))
+    elif args.command == "launch":
+        cmd_launch_ftue(
+            dry_run=getattr(args, "dry_run", False),
+            list_mode=getattr(args, "list_mode", False),
+        )
     elif args.command == "run":
         action = getattr(args, "run_action", None)
         if action == "--trio":

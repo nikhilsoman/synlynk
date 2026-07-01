@@ -64,6 +64,68 @@ def test_launch_task_templates_core_ids():
         assert core_id in ids
 
 
+def test_auto_launch_config_default_true(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config = synlynk.load_config()
+    assert config.get("auto_launch_after_wizard") is True
+
+
+def test_cmd_launch_dry_run_prints_tasks_no_dispatch(monkeypatch, capsys, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    called = []
+    monkeypatch.setattr(synlynk, "dispatch_agent", lambda *a, **kw: called.append(a))
+    synlynk.cmd_launch_ftue(dry_run=True, list_mode=False)
+    out = capsys.readouterr().out
+    assert "arch-review" in out or "architecture" in out.lower()
+    assert not called
+
+
+def test_cmd_launch_list_prints_all_12_templates(monkeypatch, capsys, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    synlynk.cmd_launch_ftue(dry_run=False, list_mode=True)
+    out = capsys.readouterr().out
+    for tmpl in synlynk.LAUNCH_TASK_TEMPLATES:
+        assert tmpl["id"] in out
+
+
+def test_wizard_calls_cmd_launch_when_auto_launch_true(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    called = []
+
+    def fake_cmd_launch_ftue(**kwargs):
+        called.append(kwargs)
+
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", fake_cmd_launch_ftue)
+    monkeypatch.setattr(synlynk, "_wiz_read_key", lambda: "\r")
+
+    scan = {
+        "workspace_name": "test-ws", "topology": "single",
+        "repos": [{"name": "r", "stack_labels": []}],
+        "harnesses": [], "agents": [], "skills": [], "home_harness": "claude",
+        "scanned_at": "", "test_ratio": 1.0, "readme_word_count": 0,
+        "has_ci": False, "has_docs": False, "has_type_hints": False, "has_orm": False,
+    }
+    synlynk._wiz_screen_launch(
+        workspace={"workspace_name": "test-ws", "home_harness": "claude"},
+        scan=scan,
+        auto_launch=True,
+    )
+    assert called, "cmd_launch_ftue should have been called"
+
+
+def test_wizard_skips_cmd_launch_when_auto_launch_false(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    called = []
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", lambda **kw: called.append(kw))
+    monkeypatch.setattr(synlynk, "_wiz_read_key", lambda: "\r")
+    synlynk._wiz_screen_launch(
+        workspace={"workspace_name": "test-ws", "home_harness": "claude"},
+        scan={"workspace_name": "test-ws", "home_harness": "claude"},
+        auto_launch=False,
+    )
+    assert not called
+
+
 def _minimal_scan(**kwargs):
     """Returns a scan dict with sensible defaults for testing."""
     base = {
