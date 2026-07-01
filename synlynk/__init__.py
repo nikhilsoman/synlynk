@@ -462,6 +462,267 @@ def _dr_sync(relative_path: str) -> None:
         pass
 
 
+def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
+    """Parse flat files in docs_dir -> state.db. Prints import summary."""
+    conn = _get_db()
+    counts = {}
+
+    memory_path = os.path.join(docs_dir, "memory.md")
+    if os.path.exists(memory_path):
+        with open(memory_path) as f:
+            sections = _parse_memory_md(f.read())
+        counts["memory_entries"] = len(sections)
+        if not dry_run:
+            for s in sections:
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO memory_entries (section, body, author) VALUES (?,?,?)",
+                        (s["section"], s["body"], s["author"]),
+                    )
+                except Exception as e:
+                    print(f"  ⚠ memory.md section skipped: {e}")
+
+    roadmap_path = os.path.join(docs_dir, "roadmap.md")
+    if os.path.exists(roadmap_path):
+        with open(roadmap_path) as f:
+            arcs, phases = _parse_roadmap_md(f.read())
+        counts["roadmap_arcs"] = len(arcs)
+        counts["roadmap_phases"] = len(phases)
+        if not dry_run:
+            for a in arcs:
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO roadmap_arcs (version, title, status) VALUES (?,?,?)",
+                        (a["version"], a["title"], a["status"]),
+                    )
+                except Exception as e:
+                    print(f"  ⚠ roadmap arc skipped: {e}")
+            for p in phases:
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO roadmap_phases "
+                        "(arc_version, phase_title, status, priority) VALUES (?,?,?,?)",
+                        (p["arc_version"], p["phase_title"], p["status"], p["priority"]),
+                    )
+                except Exception as e:
+                    print(f"  ⚠ roadmap phase skipped: {e}")
+
+    costs_path = os.path.join(docs_dir, "costs.md")
+    if os.path.exists(costs_path):
+        with open(costs_path) as f:
+            rows = _parse_costs_md(f.read())
+        counts["cost_entries"] = len(rows)
+        if not dry_run:
+            for r in rows:
+                try:
+                    conn.execute(
+                        """INSERT INTO cost_entries
+                           (session_date, agent, model, input_tokens, output_tokens,
+                            cache_read_tokens, total_cost_usd, notes)
+                           VALUES (?,?,?,?,?,?,?,?)""",
+                        (
+                            r["session_date"],
+                            r["agent"],
+                            r["model"],
+                            r["input_tokens"],
+                            r["output_tokens"],
+                            r["cache_read_tokens"],
+                            r["total_cost_usd"],
+                            r["notes"],
+                        ),
+                    )
+                except Exception as e:
+                    print(f"  ⚠ cost row skipped: {e}")
+
+    devlogs_dir = os.path.join(docs_dir, "devlogs")
+    devlog_count = 0
+    if os.path.isdir(devlogs_dir):
+        for fname in sorted(os.listdir(devlogs_dir)):
+            if not fname.endswith(".md") or fname == "README.md":
+                continue
+            author = fname[:-3]
+            with open(os.path.join(devlogs_dir, fname)) as f:
+                entries = _parse_devlog_file(f.read(), author)
+            devlog_count += len(entries)
+            if not dry_run:
+                for e in entries:
+                    try:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO devlog_entries "
+                            "(author, entry_date, session_title, body) VALUES (?,?,?,?)",
+                            (e["author"], e["entry_date"], e["session_title"], e["body"]),
+                        )
+                    except Exception as ex:
+                        print(f"  ⚠ devlog entry skipped ({fname}): {ex}")
+    counts["devlog_entries"] = devlog_count
+
+    todo_path = os.path.join(docs_dir, "todo.md")
+    todo_sync_count = 0
+    if os.path.exists(todo_path):
+        with open(todo_path) as f:
+            meta_rows = _parse_todo_metadata(f.read())
+        todo_sync_count = len(meta_rows)
+        if not dry_run:
+            for m in meta_rows:
+                try:
+                    if m["gh_issue"]:
+                        conn.execute(
+                            "UPDATE stories SET gh_issue=? WHERE story_id=?",
+                            (m["gh_issue"], m["story_id"]),
+                        )
+                except Exception:
+                    pass
+    counts["todo_metadata"] = todo_sync_count
+
+    conn.commit()
+    conn.close()
+
+    prefix = "Would import" if dry_run else "Imported"
+    if "memory_entries" in counts:
+        print(f"  {prefix}: memory.md     → {counts['memory_entries']} sections → memory_entries")
+    if "roadmap_arcs" in counts:
+        print(
+            f"  {prefix}: roadmap.md    → {counts['roadmap_arcs']} arcs, "
+            f"{counts['roadmap_phases']} phases → roadmap_arcs + roadmap_phases"
+        )
+    if "cost_entries" in counts:
+        print(f"  {prefix}: costs.md      → {counts['cost_entries']} rows → cost_entries")
+    if "devlog_entries" in counts:
+        print(f"  {prefix}: devlogs/      → {counts['devlog_entries']} entries → devlog_entries")
+    if counts.get("todo_metadata", 0):
+        print(f"  {prefix}: todo.md       → {counts['todo_metadata']} stories with metadata synced")
+    if dry_run:
+        print("\n  No files moved. No git changes.")
+
+
+def _migrate_dr_mirror(backup_dir: str) -> None:
+    """Mirror backup_dir -> dr_sync_path/project-docs/ if configured."""
+    import shutil as _shutil
+
+    try:
+        cfg_path = os.path.join(".synlynk", "config.json")
+        if not os.path.exists(cfg_path):
+            return
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+        dr_path = cfg.get("dr_sync_path")
+        if not dr_path:
+            return
+        dr_path = os.path.expanduser(str(dr_path))
+        if not os.path.isdir(dr_path):
+            return
+        dst = os.path.join(dr_path, "project-docs")
+        if os.path.exists(dst):
+            _shutil.rmtree(dst)
+        _shutil.copytree(backup_dir, dst)
+        print(f"  ✓ DR mirror written to {dst}")
+    except Exception as e:
+        print(f"  ⚠ DR mirror failed (continuing): {e}")
+
+
+def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = False) -> None:
+    """Migrate project-docs/ -> .synlynk/project-docs/ and state.db."""
+    import shutil as _shutil
+
+    if setup_dr:
+        path = input(
+            "DR sync folder path "
+            "(e.g. ~/Library/Mobile Documents/com~apple~CloudDocs/synlynk): "
+        ).strip()
+        path = os.path.expanduser(path)
+        if not os.path.isdir(path):
+            print(f"  ✗ Path not found: {path}")
+            return
+        cfg_path = os.path.join(".synlynk", "config.json")
+        cfg = {}
+        if os.path.exists(cfg_path):
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+        cfg["dr_sync_path"] = path
+        with open(cfg_path, "w") as f:
+            json.dump(cfg, f, indent=2)
+        print(f"  ✓ DR sync path set: {path}")
+        return
+
+    sentinel = os.path.join(".synlynk", ".synlynk_migrated")
+
+    if recover:
+        backup_dir = _synlynk_project_docs_dir()
+        if not os.path.isdir(backup_dir):
+            print("  ✗ No backup at .synlynk/project-docs/ — cannot recover")
+            return
+        print("  ▶ Re-importing from .synlynk/project-docs/ ...")
+        _migrate_import(backup_dir)
+        print("  ✓ Recovery complete")
+        return
+
+    if os.path.exists(sentinel):
+        print("  Already migrated. Use --recover to re-import from backup.")
+        return
+
+    docs_dir = _docs_dir()
+    if not os.path.isdir(docs_dir):
+        print(f"  ✗ {docs_dir}/ not found — nothing to migrate")
+        return
+
+    if dry_run:
+        print("  DRY RUN — no files written, no git changes\n")
+        _migrate_import(docs_dir, dry_run=True)
+        return
+
+    print("  ▶ Importing flat files → state.db ...")
+    _migrate_import(docs_dir)
+
+    backup_dir = _synlynk_project_docs_dir()
+    print(f"  ▶ Copying {docs_dir}/ → {backup_dir}/ ...")
+    if os.path.exists(backup_dir):
+        _shutil.rmtree(backup_dir)
+    _shutil.copytree(docs_dir, backup_dir)
+
+    _migrate_dr_mirror(backup_dir)
+
+    try:
+        subprocess.run(
+            ["git", "rm", "--cached", "-r", "--quiet", docs_dir],
+            check=True,
+            stderr=subprocess.DEVNULL,
+        )
+        print(f"  ✓ git rm --cached {docs_dir}/")
+    except subprocess.CalledProcessError:
+        print("  ⚠ git rm --cached failed (may not be tracked) — continuing")
+
+    gitignore = ".gitignore"
+    entry = f"{docs_dir}/\n"
+    already = False
+    if os.path.exists(gitignore):
+        with open(gitignore) as f:
+            already = any(docs_dir in line for line in f)
+    if not already:
+        with open(gitignore, "a") as f:
+            f.write(entry)
+        print(f"  ✓ Added {docs_dir}/ to .gitignore")
+
+    with open(sentinel, "w") as f:
+        f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    print("  ✓ Sentinel written")
+
+    try:
+        subprocess.run(["git", "add", ".gitignore", sentinel], check=True)
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "-m",
+                "chore: synlynk migrate — project-docs moved to .synlynk, "
+                "state.db is now source of truth",
+            ],
+            check=True,
+        )
+        print("  ✓ Committed")
+    except subprocess.CalledProcessError as e:
+        print(f"  ⚠ Git commit failed (continuing): {e}")
+
+
 def _seed_verb_map(db_conn):
     db_conn.executemany("""
         INSERT OR IGNORE INTO harness_verb_map
@@ -6898,12 +7159,18 @@ def _write_last_devlog_section(out, filepath: str) -> None:
 
 
 def _generate_todo_md() -> None:
-    """Writes project-docs/todo.md as a generated view of the stories table."""
-    docs_dir = _docs_dir()
-    if not os.path.exists(docs_dir):
-        return
+    """Writes todo.md as a generated view of stories.
+    Post-migration: writes to .synlynk/project-docs/todo.md.
+    Pre-migration: writes to project-docs/todo.md."""
+    if _is_migrated():
+        todo_path = os.path.join(_synlynk_project_docs_dir(), "todo.md")
+        os.makedirs(os.path.dirname(todo_path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        todo_path = os.path.join(docs_dir, "todo.md")
 
-    todo_path = os.path.join(docs_dir, "todo.md")
     conn = _get_db()
     rows = conn.execute(
         "SELECT story_id, title, engg_domain, status FROM stories ORDER BY created_at ASC"
@@ -6926,6 +7193,9 @@ def _generate_todo_md() -> None:
 
     with open(todo_path, "w") as f:
         f.writelines(lines)
+
+    if _is_migrated():
+        _dr_sync("todo.md")
 
 
 def _import_todo_to_stories() -> int:
@@ -9051,6 +9321,16 @@ def main() -> None:
     scan_parser.add_argument("--workspace", default=None, dest="workspace_name",
                              help="Workspace name (default: inferred from parent dir)")
 
+    migrate_parser = subparsers.add_parser(
+        "migrate", help="Migrate project-docs markdown into state.db and .synlynk/project-docs"
+    )
+    migrate_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                                help="Preview migration without writing")
+    migrate_parser.add_argument("--recover", action="store_true",
+                                help="Re-import from .synlynk/project-docs")
+    migrate_parser.add_argument("--setup-dr", action="store_true", dest="setup_dr",
+                                help="Configure a DR sync path for mirroring")
+
     probe_parser = subparsers.add_parser(
         "probe", help="Probe agent harness capability and record compatibility"
     )
@@ -9415,6 +9695,12 @@ def main() -> None:
             remove_path=getattr(args, "remove_path", None),
             dry_run=getattr(args, "dry_run", False),
             workspace_name=getattr(args, "workspace_name", None),
+        )
+    elif args.command == "migrate":
+        cmd_migrate(
+            dry_run=getattr(args, "dry_run", False),
+            recover=getattr(args, "recover", False),
+            setup_dr=getattr(args, "setup_dr", False),
         )
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))

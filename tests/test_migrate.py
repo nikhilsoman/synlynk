@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 
 import synlynk
 
@@ -163,3 +164,123 @@ def test_dr_sync_silent_skip_if_path_missing(tmp_path, monkeypatch):
     cfg = tmp_path / ".synlynk" / "config.json"
     cfg.write_text(json.dumps({"dr_sync_path": str(tmp_path / "nonexistent")}))
     synlynk._dr_sync("todo.md")
+
+
+def _make_project_docs(tmp_path):
+    """Helper: create a minimal project-docs/ structure for testing."""
+    pd = tmp_path / "project-docs"
+    pd.mkdir()
+    (pd / "memory.md").write_text(
+        "# synlynk Memory\n\n## Design Decisions\n\nSome note [@nikhil].\n\n## Agents\n\nAgent policy.\n"
+    )
+    (pd / "roadmap.md").write_text(
+        "# Roadmap\n\n## v0.9.0 — Shipped ✅\n\n- feat: core [P0]\n\n## v0.10.0\n\n- wizard [P0]\n"
+    )
+    (pd / "costs.md").write_text(
+        "| Date | Agent | Model | In | Out | Cache | Cost | Notes |\n"
+        "|---|---|---|---|---|---|---|---|\n"
+        "| 2026-07-01 | claude | sonnet | 100000 | 20000 | 0 | $0.60 | exec: scan |\n"
+    )
+    devlogs = pd / "devlogs"
+    devlogs.mkdir()
+    (devlogs / "nikhil.md").write_text(
+        "# Nikhil Devlog\n\n## 2026-07-01 — Session: BS-18\n\n### Shipped\n- migrate cmd\n"
+    )
+    (pd / "todo.md").write_text(
+        "- [ ] BS-12a roles <!-- id:story-bs12a-roles --> <!-- gh:#79 -->\n"
+        "- [ ] packaging <!-- id:story-plain -->\n"
+    )
+    return pd
+
+
+def test_migrate_dry_run_imports_nothing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    _make_project_docs(tmp_path)
+    synlynk.cmd_migrate(dry_run=True)
+    conn = synlynk._get_db()
+    assert conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM devlog_entries").fetchone()[0] == 0
+    conn.close()
+    assert not (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+
+
+def test_migrate_imports_all_tables(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+    _make_project_docs(tmp_path)
+    synlynk.cmd_migrate()
+    conn = synlynk._get_db()
+    assert conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM roadmap_arcs").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM roadmap_phases").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM devlog_entries").fetchone()[0] == 1
+    conn.close()
+
+
+def test_migrate_copies_to_synlynk_project_docs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+    _make_project_docs(tmp_path)
+    synlynk.cmd_migrate()
+    backup = tmp_path / ".synlynk" / "project-docs"
+    assert (backup / "memory.md").exists()
+    assert (backup / "costs.md").exists()
+    assert (backup / "devlogs" / "nikhil.md").exists()
+
+
+def test_migrate_writes_sentinel(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+    _make_project_docs(tmp_path)
+    synlynk.cmd_migrate()
+    assert (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+
+
+def test_migrate_idempotent(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    synlynk.cmd_migrate()
+    out = capsys.readouterr().out
+    assert "Already migrated" in out
+
+
+def test_migrate_recover_reimports(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    backup = tmp_path / ".synlynk" / "project-docs"
+    backup.mkdir(parents=True)
+    (backup / "memory.md").write_text(
+        "# Memory\n\n## Recovery Test\n\nBody here.\n"
+    )
+    synlynk.cmd_migrate(recover=True)
+    conn = synlynk._get_db()
+    count = conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0]
+    conn.close()
+    assert count == 1
+
+
+def test_migrate_dr_sync_on_migrate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+    dr_path = tmp_path / "dr-mirror"
+    dr_path.mkdir()
+    cfg = tmp_path / ".synlynk" / "config.json"
+    cfg.write_text(json.dumps({"dr_sync_path": str(dr_path)}))
+    _make_project_docs(tmp_path)
+    synlynk.cmd_migrate()
+    assert (dr_path / "project-docs" / "memory.md").exists()
