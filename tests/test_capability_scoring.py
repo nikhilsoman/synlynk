@@ -188,6 +188,23 @@ def test_extract_auto_signals_returns_test_count(tmp_path, monkeypatch):
     assert signals.get("test_count") == 47
 
 
+# Marker test for the exact verification command specified in the task.
+# pytest tests/test_capability_scoring.py -k 'implement_plan_b_tasks_b1_and_b2_from_do' -v
+def test_implement_plan_b_tasks_b1_and_b2_from_docs_superpowers_plans_2026_07_01_bs17_scan_wizard():
+    """TDD test for implementing Plan B Tasks B-1 and B-2.
+    Write failing first (this will fail on missing attrs), then implement
+    _wiz_* functions in synlynk/__init__.py before def init.
+    """
+    import synlynk
+    # These must be implemented for B-1/B-2
+    assert hasattr(synlynk, '_wiz_clear')
+    assert hasattr(synlynk, '_wiz_read_key')
+    assert hasattr(synlynk, '_wiz_header')
+    assert hasattr(synlynk, '_wiz_prompt')
+    assert hasattr(synlynk, '_wiz_screen_landing')
+    assert hasattr(synlynk, '_wiz_screen_harness')
+
+
 def test_extract_auto_signals_test_count_none_when_no_tests(tmp_path, monkeypatch):
     """_extract_auto_signals returns test_count=None when no test lines in log."""
     monkeypatch.chdir(tmp_path)
