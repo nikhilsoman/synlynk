@@ -284,3 +284,115 @@ def test_migrate_dr_sync_on_migrate(tmp_path, monkeypatch):
     _make_project_docs(tmp_path)
     synlynk.cmd_migrate()
     assert (dr_path / "project-docs" / "memory.md").exists()
+
+
+def _setup_migrated(tmp_path, monkeypatch):
+    """Helper: set up a migrated environment."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    backup = tmp_path / ".synlynk" / "project-docs"
+    backup.mkdir(parents=True, exist_ok=True)
+    (backup / "devlogs").mkdir(exist_ok=True)
+    return backup
+
+
+def test_write_through_todo_goes_to_synlynk_path(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    synlynk._generate_todo_md()
+    assert (backup / "todo.md").exists()
+    # old path must NOT be written
+    assert not (tmp_path / "project-docs" / "todo.md").exists()
+
+
+def test_write_through_noop_before_migration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    # No sentinel — _generate_todo_md should write to project-docs/ (old path)
+    # but since project-docs/ doesn't exist either, it just returns silently
+    synlynk._generate_todo_md()  # must not raise
+    assert not (tmp_path / ".synlynk" / "project-docs" / "todo.md").exists()
+
+
+def test_cmd_memory_add_writes_to_db_and_flat_file(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    synlynk.cmd_memory_add("Test Section", "Some body text", author="nikhil")
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT section, body, author FROM memory_entries").fetchone()
+    conn.close()
+    assert row[0] == "Test Section"
+    assert row[2] == "nikhil"
+    assert (backup / "memory.md").exists()
+    content = (backup / "memory.md").read_text()
+    assert "Test Section" in content
+
+
+def test_cmd_memory_add_updates_existing_section(tmp_path, monkeypatch):
+    _setup_migrated(tmp_path, monkeypatch)
+    synlynk.cmd_memory_add("My Section", "Original body")
+    synlynk.cmd_memory_add("My Section", "Updated body")
+    conn = synlynk._get_db()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM memory_entries WHERE section='My Section'"
+    ).fetchone()[0]
+    conn.close()
+    assert count == 1
+
+
+def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    synlynk.cmd_devlog_append(
+        author="nikhil",
+        entry_date="2026-07-01",
+        body="### Shipped\n- migrate cmd\n",
+        session_title="BS-18"
+    )
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT author, session_title FROM devlog_entries").fetchone()
+    conn.close()
+    assert row[0] == "nikhil"
+    assert row[1] == "BS-18"
+    devlog_file = backup / "devlogs" / "nikhil.md"
+    assert devlog_file.exists()
+    assert "BS-18" in devlog_file.read_text()
+
+
+def test_update_costs_writes_to_db_and_flat_file_post_migration(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    (backup / "costs.md").write_text("| Date | Agent | In | Out | Cost | Notes |\n")
+    synlynk.update_costs("scan", 50000, 10000, 12.5)
+    conn = synlynk._get_db()
+    count = conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0]
+    conn.close()
+    assert count == 1
+    content = (backup / "costs.md").read_text()
+    assert "scan" in content
+
+
+def test_generate_context_uses_db_when_migrated(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    conn = synlynk._get_db()
+    # Seed a story
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES ('s1','Do the thing','open')"
+    )
+    # Seed a devlog entry
+    conn.execute(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES ('nikhil','2026-07-01','Shipped it.')"
+    )
+    conn.commit()
+    conn.close()
+    ctx = synlynk.generate_context(out_path=str(tmp_path / "ctx.md"))
+    assert "Do the thing" in ctx
+    assert "nikhil" in ctx
+
+
+def test_generate_context_uses_files_when_not_migrated(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    # No sentinel — should use flat-file path (returns empty since no docs_dir)
+    ctx = synlynk.generate_context(out_path=str(tmp_path / "ctx.md"))
+    assert isinstance(ctx, str)  # doesn't crash, returns string

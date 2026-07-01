@@ -6786,19 +6786,39 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
 
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
-    """Appends a cost row to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
-    _check_upstream_divergence()
-    costs_file = os.path.join(_docs_dir(), "costs.md")
-    if not os.path.exists(costs_file):
-        return
+    """Appends a cost row. Post-migration: writes to state.db + .synlynk/project-docs/costs.md.
+    Pre-migration: writes to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
     est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
     user = get_username()
     entry = (f"| {ts} | {user} | 1 | {in_tokens}/{out_tokens} "
              f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
-    with open(costs_file, "a") as f:
-        f.write(entry)
+
+    if _is_migrated():
+        conn = _get_db()
+        try:
+            conn.execute(
+                """INSERT INTO cost_entries
+                   (session_date, agent, input_tokens, output_tokens, total_cost_usd, notes)
+                   VALUES (?,?,?,?,?,?)""",
+                (ts, user, in_tokens, out_tokens, est_cost, f"exec: {short_cmd}")
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        costs_file = os.path.join(_synlynk_project_docs_dir(), "costs.md")
+        os.makedirs(os.path.dirname(costs_file), exist_ok=True)
+        with open(costs_file, "a") as f:
+            f.write(entry)
+        _dr_sync("costs.md")
+    else:
+        _check_upstream_divergence()
+        costs_file = os.path.join(_docs_dir(), "costs.md")
+        if not os.path.exists(costs_file):
+            return
+        with open(costs_file, "a") as f:
+            f.write(entry)
 
 
 def _is_interactive(cmd_args: list) -> bool:
@@ -7198,6 +7218,81 @@ def _generate_todo_md() -> None:
         _dr_sync("todo.md")
 
 
+def _write_memory_md() -> None:
+    """Regenerate .synlynk/project-docs/memory.md from memory_entries table."""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT section, body FROM memory_entries ORDER BY id"
+    ).fetchall()
+    conn.close()
+    lines = ["# synlynk Memory\n\n"]
+    for section, body in rows:
+        lines.append(f"## {section}\n\n{body}\n\n")
+    path = os.path.join(_synlynk_project_docs_dir(), "memory.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.writelines(lines)
+
+
+def cmd_memory_add(section: str, body: str, author: str = None) -> None:
+    """Add or update a memory entry. Writes through to flat file if migrated."""
+    conn = _get_db()
+    existing = conn.execute(
+        "SELECT id FROM memory_entries WHERE section=?", (section,)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE memory_entries SET body=?, author=?, updated_at=datetime('now') WHERE section=?",
+            (body, author, section)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO memory_entries (section, body, author) VALUES (?,?,?)",
+            (section, body, author)
+        )
+    conn.commit()
+    conn.close()
+    if _is_migrated():
+        _write_memory_md()
+        _dr_sync("memory.md")
+
+
+def _write_devlog_file(author: str) -> None:
+    """Regenerate .synlynk/project-docs/devlogs/<author>.md from devlog_entries."""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT entry_date, session_title, body FROM devlog_entries "
+        "WHERE author=? ORDER BY entry_date ASC",
+        (author,)
+    ).fetchall()
+    conn.close()
+    lines = [f"# {author} Devlog\n\n"]
+    for entry_date, session_title, body in rows:
+        header = f"## {entry_date}"
+        if session_title:
+            header += f" — {session_title}"
+        lines.append(f"{header}\n\n{body}\n\n")
+    devlog_dir = os.path.join(_synlynk_project_docs_dir(), "devlogs")
+    os.makedirs(devlog_dir, exist_ok=True)
+    with open(os.path.join(devlog_dir, f"{author}.md"), "w") as f:
+        f.writelines(lines)
+
+
+def cmd_devlog_append(author: str, entry_date: str, body: str,
+                      session_title: str = None) -> None:
+    """Append a devlog entry to DB and write through to flat file if migrated."""
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO devlog_entries (author, entry_date, session_title, body) VALUES (?,?,?,?)",
+        (author, entry_date, session_title, body)
+    )
+    conn.commit()
+    conn.close()
+    if _is_migrated():
+        _write_devlog_file(author)
+        _dr_sync(f"devlogs/{author}.md")
+
+
 def _import_todo_to_stories() -> int:
     """Reads '- [ ]' lines from todo.md and inserts missing story rows."""
     import hashlib as _hashlib
@@ -7315,6 +7410,99 @@ def _generate_task_context(story_id: str, out_path: str = None) -> str:
     return context_text
 
 
+def _generate_context_from_db(out_path: str = None) -> str:
+    """Build context.md from state.db (post-migration path)."""
+    context_file = out_path if out_path else ".synlynk/context.md"
+    os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
+    username = get_username()
+    mode = get_mode()
+
+    conn = _get_db()
+    top_story = conn.execute(
+        "SELECT title FROM stories WHERE status='open' ORDER BY created_at ASC LIMIT 1"
+    ).fetchone()
+    recent_devlogs = conn.execute(
+        "SELECT author, entry_date, session_title, body FROM devlog_entries "
+        "ORDER BY entry_date DESC, id DESC LIMIT 5"
+    ).fetchall()
+    memory_sections = conn.execute(
+        "SELECT section, body FROM memory_entries ORDER BY updated_at DESC LIMIT 5"
+    ).fetchall()
+    conn.close()
+
+    with open(context_file, "w") as out:
+        out.write("# synlynk Context Snapshot\n\n")
+        out.write(
+            f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} "
+            f"| User: @{username} | Mode: {mode}\n\n"
+        )
+        if top_story:
+            out.write("## Next Task\n")
+            out.write(f"- {top_story[0]}\n\n---\n\n")
+        if recent_devlogs:
+            out.write("## Recent Activity\n")
+            for author, entry_date, session_title, body in recent_devlogs:
+                title_part = f" — {session_title}" if session_title else ""
+                out.write(f"\n### @{author} · {entry_date}{title_part}\n")
+                out.write(body[:500])
+                if len(body) > 500:
+                    out.write("\n...(truncated)")
+                out.write("\n")
+            out.write("\n---\n\n")
+        if memory_sections:
+            out.write("## Project Memory\n")
+            for section, body in memory_sections:
+                out.write(f"\n### {section}\n{body[:300]}\n")
+
+    with open(context_file) as f:
+        return f.read()
+
+
+def _generate_context_from_db(out_path: str = None) -> str:
+    """Build context.md from state.db (post-migration path)."""
+    context_file = out_path if out_path else ".synlynk/context.md"
+    os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
+    username = get_username()
+    mode = get_mode()
+    conn = _get_db()
+    top_story = conn.execute(
+        "SELECT title FROM stories WHERE status='open' ORDER BY created_at ASC LIMIT 1"
+    ).fetchone()
+    recent_devlogs = conn.execute(
+        "SELECT author, entry_date, session_title, body FROM devlog_entries "
+        "ORDER BY entry_date DESC, id DESC LIMIT 5"
+    ).fetchall()
+    memory_sections = conn.execute(
+        "SELECT section, body FROM memory_entries ORDER BY updated_at DESC LIMIT 5"
+    ).fetchall()
+    conn.close()
+    with open(context_file, "w") as out:
+        out.write("# synlynk Context Snapshot\n\n")
+        out.write(
+            f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} "
+            f"| User: @{username} | Mode: {mode}\n\n"
+        )
+        if top_story:
+            out.write("## Next Task\n")
+            out.write(f"- {top_story[0]}\n\n---\n\n")
+        if recent_devlogs:
+            out.write("## Recent Activity\n")
+            for author, entry_date, session_title, body in recent_devlogs:
+                title_part = f" — {session_title}" if session_title else ""
+                out.write(f"\n### @{author} · {entry_date}{title_part}\n")
+                out.write(body[:500])
+                if len(body) > 500:
+                    out.write("\n...(truncated)")
+                out.write("\n")
+            out.write("\n---\n\n")
+        if memory_sections:
+            out.write("## Project Memory\n")
+            for section, body in memory_sections:
+                out.write(f"\n### {section}\n{body[:300]}\n")
+    with open(context_file) as f:
+        return f.read()
+
+
 def generate_context(scope: str = "full", out_path: str = None) -> str:
     """Aggregates project-docs into .synlynk/context.md (active items only).
 
@@ -7324,6 +7512,9 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
     out_path: when set, write to this path instead of .synlynk/context.md.
     Passed through to _generate_task_context for per-job isolation in dispatch.
     """
+    if _is_migrated():
+        return _generate_context_from_db(out_path=out_path)
+
     docs_dir = _docs_dir()
     context_file = out_path if out_path else ".synlynk/context.md"
     sentinel_file = ".synlynk/sentinel.md"
