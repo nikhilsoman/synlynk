@@ -3193,6 +3193,121 @@ def parse_context_sections(repo_path: str) -> dict:
     return sections
 
 
+_MONOREPO_MARKERS = ("packages", "apps", "services", "modules", "libs")
+
+
+def run_workspace_scan(roots: list = None, workspace_name: str = None,
+                       dry_run: bool = False) -> dict:
+    """Scan a workspace and return the contract payload used by init --wizard.
+
+    roots: explicit list of repo paths. If omitted, discover git roots from
+           common workspace locations plus the current directory.
+    dry_run: accepted for contract parity; this implementation only returns
+             the scan payload and does not write to disk.
+    """
+    import shutil as _shutil
+    import time as _time
+
+    if roots is None:
+        search_dirs = [
+            os.path.expanduser("~/dev"),
+            os.path.expanduser("~/projects"),
+            os.getcwd(),
+        ]
+        roots = find_git_roots(search_dirs, max_depth=2)
+
+    normalized_roots = []
+    seen_roots = set()
+    for root in roots or []:
+        if not root:
+            continue
+        abs_root = os.path.abspath(os.path.expanduser(root))
+        if abs_root in seen_roots or not os.path.isdir(abs_root):
+            continue
+        seen_roots.add(abs_root)
+        normalized_roots.append(abs_root)
+
+    repos = []
+    for repo_path in normalized_roots:
+        readme_excerpt = ""
+        readme_path = os.path.join(repo_path, "README.md")
+        if os.path.exists(readme_path):
+            try:
+                with open(readme_path) as fh:
+                    readme_excerpt = fh.read(200)
+            except OSError:
+                readme_excerpt = ""
+
+        repos.append({
+            "path": repo_path,
+            "name": os.path.basename(repo_path),
+            "stack_labels": fingerprint_stack(repo_path),
+            "readme_excerpt": readme_excerpt,
+            "context_sections": parse_context_sections(repo_path),
+        })
+
+    if len(repos) > 1:
+        topology = "multi"
+    elif repos and any(
+        os.path.isdir(os.path.join(repos[0]["path"], marker))
+        for marker in _MONOREPO_MARKERS
+    ):
+        topology = "monorepo"
+    else:
+        topology = "single"
+
+    harnesses = []
+    for name in ("claude", "agy", "codex", "grok", "gemini", "aider"):
+        cli_path = _shutil.which(name)
+        if not cli_path:
+            continue
+        version = "unknown"
+        try:
+            proc = subprocess.run(
+                [name, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            output = (proc.stdout or proc.stderr or "").strip().splitlines()
+            if output:
+                version = output[0]
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+        harnesses.append({
+            "name": name,
+            "cli": name,
+            "version": version,
+            "path": cli_path,
+        })
+
+    try:
+        agents = discover_agents()
+    except Exception:
+        agents = []
+
+    skills = scan_skills()
+    home_harness = detect_home_harness(harnesses)
+
+    if workspace_name is None:
+        if normalized_roots:
+            parent = os.path.basename(os.path.dirname(normalized_roots[0]))
+            workspace_name = parent if parent and parent not in (os.sep, "~") else repos[0]["name"]
+        else:
+            workspace_name = os.path.basename(os.getcwd()) or "workspace"
+
+    return {
+        "workspace_name": workspace_name,
+        "topology": topology,
+        "repos": repos,
+        "harnesses": harnesses,
+        "agents": agents,
+        "skills": skills,
+        "home_harness": home_harness,
+        "scanned_at": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+
 def _extract_synlynk_section(content: str, marker_style: str = "html") -> Optional[str]:
     """Return the text inside synlynk markers, or the whole content for marker_style='none'."""
     if marker_style == "none":

@@ -867,4 +867,41 @@ def test_implement_plan_a_tasks_a1_and_a2_from_docs_superpowers_plans_scan_wizar
     assert "Keep it simple." in sections["Architecture"]
 
 
+def test_implement_plan_a_task_a3_from_docssuperp_run_workspace_scan_contract(
+    tmp_path, monkeypatch
+):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
+    (tmp_path / "CLAUDE.md").write_text(
+        "# CLAUDE.md\n\n## Your Role\nYou are the PM.\n\n## Architecture\nKeep it simple.\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    import synlynk as sl
 
+    monkeypatch.setattr(sl, "discover_agents", lambda config=None: [])
+    monkeypatch.setattr(sl, "detect_home_harness", lambda harnesses: None)
+    result = sl.run_workspace_scan(roots=[str(tmp_path)], dry_run=True)
+
+    for key in (
+        "workspace_name",
+        "topology",
+        "repos",
+        "harnesses",
+        "agents",
+        "skills",
+        "home_harness",
+        "scanned_at",
+    ):
+        assert key in result
+
+    assert result["topology"] == "single"
+    assert result["workspace_name"] == tmp_path.parent.name
+    assert result["home_harness"] is None
+    assert isinstance(result["repos"], list) and len(result["repos"]) == 1
+    assert result["repos"][0]["name"] == tmp_path.name
+    assert "Python" in result["repos"][0]["stack_labels"]
+    assert result["repos"][0]["context_sections"]["Your Role"] == "You are the PM."
+    assert result["repos"][0]["readme_excerpt"] == ""
+    assert isinstance(result["harnesses"], list)
+    assert isinstance(result["skills"], list)
