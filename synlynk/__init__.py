@@ -979,12 +979,12 @@ AGENT_CAPABILITY_BASELINES = {
     "grok": {
         "cli": "grok",
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --yes --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
-            "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--always-approve"],
+            "valid_flags": ["--yes", "--output-format", "--model", "--single"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print", "--non-interactive"],
+            "required_flags": ["--yes"],
         },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
@@ -999,11 +999,11 @@ _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
-    ("dispatch.task",     "dispatch",      "grok",   "grok --always-approve --single {task}", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --yes --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
-    ("dispatch.headless", "dispatch",      "grok",   "grok --always-approve --single {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --yes --single {task}", "partial", "Network dep required"),
     ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
     ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
@@ -3707,7 +3707,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # Agent takes prompt as a flag value, not stdin.
         # prompt_flag ("--single", "-p") is placed last so it immediately precedes "$PROMPT",
         # preventing other flags from being consumed as the prompt value.
-        # e.g. grok --always-approve --output-format json --single "$PROMPT"
+        # e.g. grok --yes --output-format json --single "$PROMPT"
         if prompt_flag:
             cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
         else:

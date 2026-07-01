@@ -784,6 +784,37 @@ def test_bs5_diagram_implementation_taskwe_are_renders_network_graph():
         assert marker in html
 
 
+def test_implement_plan_a_tasks_a1_and_a2_from_docs_superpowers_plans_scan_wizard_a1_find_git_roots_and_fingerprint_stack(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+
+    repo_a = tmp_path / "repo_a"
+    repo_b = tmp_path / "repo_b"
+    dotfiles = tmp_path / "dotfiles"
+    repo_a.mkdir()
+    repo_b.mkdir()
+    dotfiles.mkdir()
+    (repo_a / ".git").mkdir()
+    (repo_b / ".git").mkdir()
+    (dotfiles / ".git").mkdir()
+    (repo_a / "pyproject.toml").write_text("[project]\nname='repo-a'\n")
+    (repo_a / "Dockerfile").write_text("FROM python:3.11\n")
+    (repo_b / "package.json").write_text("{}\n")
+    (repo_b / "tsconfig.json").write_text("{}\n")
+    (repo_b / "next.config.js").write_text("module.exports = {}\n")
+
+    import synlynk as sl
+
+    roots = sl.find_git_roots([str(tmp_path)], max_depth=1, exclude_names={"dotfiles"})
+    names = {os.path.basename(path) for path in roots}
+    assert names == {"repo_a", "repo_b"}
+
+    assert sl.fingerprint_stack(str(repo_a)) == ["Python", "Docker"]
+    repo_b_labels = sl.fingerprint_stack(str(repo_b))
+    assert "TypeScript" in repo_b_labels
+    assert "Next.js" in repo_b_labels
+
 
 
 
