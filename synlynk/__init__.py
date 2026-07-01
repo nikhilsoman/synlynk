@@ -831,13 +831,24 @@ def cmd_pr_check() -> None:
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
 
 
-def cmd_scan(deep: bool = False, status: bool = False) -> None:
-    """synlynk scan [--deep] [--status]
+def cmd_scan(deep: bool = False, status: bool = False,
+             refresh: bool = False, add_path: str = None,
+             remove_path: str = None, dry_run: bool = False,
+             workspace_name: str = None) -> None:
+    """synlynk scan — workspace environment scan + context generation.
 
-    No flags: force-refresh skeleton (even if HEAD unchanged).
-    --deep:   full tree walk → state.db + project-docs/source-map.md.
-    --status: show cache age, HEAD SHA, file/symbol counts.
+    No flags: first-time workspace scan (discover topology, harnesses,
+              agents, skills; write workspace config + context.md).
+    --refresh: re-run scan on existing workspace.
+    --add <path>: add a repo to the current workspace config.
+    --remove <path>: remove a repo from the current workspace config.
+    --dry-run: print what would change; write nothing.
+    --deep: (original) full source-tree walk → state.db + source-map.md.
+    --status: (original) show skeleton cache status.
     """
+    import json as _json
+
+    # ── Preserved: --status ───────────────────────────────────────────────
     if status:
         meta = _load_scan_meta()
         if not meta:
@@ -853,12 +864,12 @@ def cmd_scan(deep: bool = False, status: bool = False) -> None:
             tf = deep_meta.get("total_files", "?")
             ts = deep_meta.get("total_symbols", "?")
             da = deep_meta.get("scanned_at", "unknown")
-            print(f"  source-map:  {tf} files · {ts} symbols · project-docs/source-map.md · {da}")
+            print(f"  source-map:  {tf} files · {ts} symbols · {da}")
         else:
-            print("  source-map:  not yet generated — run `synlynk scan --deep`")
-        print("  Next refresh: on next commit (HEAD change)")
+            print("  source-map:  not generated — run `synlynk scan --deep`")
         return
 
+    # ── Preserved: --deep ─────────────────────────────────────────────────
     if deep:
         print(f"  {_GREEN}▶{_RESET} Deep scanning source tree...")
         skeleton, total_files, total_syms = _scan_full_repo()
@@ -867,15 +878,80 @@ def cmd_scan(deep: bool = False, status: bool = False) -> None:
         print(f"  {_CYAN}→{_RESET} project-docs/source-map.md updated")
         return
 
-    # No flags: force-refresh skeleton (ignore HEAD comparison)
-    head_sha = _git_head_sha()
-    if head_sha is None:
-        print("  ⚠ Not in a git repository — scan requires git")
+    # ── --remove ──────────────────────────────────────────────────────────
+    if remove_path:
+        abs_remove = os.path.abspath(remove_path)
+        ws_dir = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name or 'default'}")
+        cfg_path = os.path.join(ws_dir, "config.json")
+        if not os.path.exists(cfg_path):
+            print(f"  ⚠ No workspace config found at {cfg_path}")
+            return
+        cfg = _json.loads(open(cfg_path).read())
+        before = len(cfg.get("repos", []))
+        cfg["repos"] = [r for r in cfg.get("repos", [])
+                        if os.path.abspath(r["path"]) != abs_remove]
+        after = len(cfg["repos"])
+        if dry_run:
+            print(f"  [dry-run] would remove {os.path.basename(abs_remove)} from workspace")
+            return
+        open(cfg_path, "w").write(_json.dumps(cfg, indent=2))
+        print(f"  {_GREEN}✓{_RESET} Removed {before - after} repo(s) from workspace")
         return
-    skeleton = _scan_source_skeleton()
-    _save_scan_meta(head_sha, skeleton)
-    sha_short = head_sha[:7]
-    print(f"  {_GREEN}✓{_RESET} Skeleton refreshed · {len(skeleton)} files · HEAD {sha_short}")
+
+    # ── --add ─────────────────────────────────────────────────────────────
+    if add_path:
+        abs_add = os.path.abspath(add_path)
+        if not os.path.isdir(os.path.join(abs_add, ".git")):
+            print(f"  ⚠ {abs_add} is not a git repository")
+            return
+        ws_dir = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name or 'default'}")
+        cfg_path = os.path.join(ws_dir, "config.json")
+        if not os.path.exists(cfg_path):
+            print(f"  ⚠ No workspace config at {cfg_path} — run `synlynk scan` first")
+            return
+        cfg = _json.loads(open(cfg_path).read())
+        existing_paths = {os.path.abspath(r["path"]) for r in cfg.get("repos", [])}
+        if abs_add in existing_paths:
+            print(f"  {_YELLOW}⚠{_RESET} {os.path.basename(abs_add)} already in workspace")
+            return
+        new_entry = {
+            "path": abs_add,
+            "name": os.path.basename(abs_add),
+            "stack_labels": fingerprint_stack(abs_add),
+        }
+        if dry_run:
+            print(f"  [dry-run] would add {new_entry['name']} "
+                  f"({', '.join(new_entry['stack_labels'])}) to workspace")
+            return
+        cfg["repos"].append(new_entry)
+        open(cfg_path, "w").write(_json.dumps(cfg, indent=2))
+        print(f"  {_GREEN}✓{_RESET} Added {new_entry['name']} to workspace")
+        return
+
+    # ── Default / --refresh: full workspace scan ──────────────────────────
+    print(f"  {_CYAN}›{_RESET} scanning your environment...")
+    scan = run_workspace_scan(workspace_name=workspace_name, dry_run=dry_run)
+
+    # Print scan summary
+    repo_names = ", ".join(r["name"] for r in scan["repos"])
+    harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
+    stacks = sorted({lbl for r in scan["repos"] for lbl in r["stack_labels"]})
+    print(f"  repos found: {len(scan['repos'])}  ·  "
+          f"harnesses: {harness_names}  ·  "
+          f"stacks: {', '.join(stacks) or 'unknown'}")
+
+    if not dry_run:
+        config_path = write_workspace_config(scan, scan["workspace_name"])
+        generate_structured_context(scan)
+        print(f"  {_GREEN}✓{_RESET} workspace: {scan['workspace_name']}")
+        print(f"  {_GREEN}✓{_RESET} repos: {repo_names}")
+        if scan["skills"]:
+            skill_names = ", ".join(s["name"] for s in scan["skills"])
+            print(f"  {_GREEN}✓{_RESET} skills: {skill_names}")
+        print(f"\n  next: synlynk dispatch {scan['home_harness'] or 'claude'} "
+              f'"what\'s the current task?"')
+    else:
+        print("  [dry-run] no files written")
 
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:
@@ -979,12 +1055,12 @@ AGENT_CAPABILITY_BASELINES = {
     "grok": {
         "cli": "grok",
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --yes --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--yes", "--output-format", "--model", "--single"],
-            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--yes"],
+            "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
+            "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
+            "required_flags": ["--always-approve"],
         },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
@@ -999,7 +1075,7 @@ _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
-    ("dispatch.task",     "dispatch",      "grok",   "grok --yes --single {task}", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --always-approve --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
@@ -8392,11 +8468,22 @@ def main() -> None:
         help="Write the Decision record to project-docs/decisions/"
     )
 
-    scan_parser = subparsers.add_parser("scan", help="Scan source tree and update architecture context")
+    scan_parser = subparsers.add_parser(
+        "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
     scan_parser.add_argument("--deep", action="store_true",
-                             help="Full tree walk: populate state.db and write project-docs/source-map.md")
+                             help="Full source-tree walk: populate state.db + source-map.md")
     scan_parser.add_argument("--status", action="store_true",
-                             help="Show cache age, HEAD SHA, file and symbol counts")
+                             help="Show source-skeleton cache status")
+    scan_parser.add_argument("--refresh", action="store_true",
+                             help="Re-run workspace scan on existing workspace")
+    scan_parser.add_argument("--add", default=None, dest="add_path", metavar="PATH",
+                             help="Add a repo path to the current workspace")
+    scan_parser.add_argument("--remove", default=None, dest="remove_path", metavar="PATH",
+                             help="Remove a repo path from the current workspace")
+    scan_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                             help="Preview changes without writing")
+    scan_parser.add_argument("--workspace", default=None, dest="workspace_name",
+                             help="Workspace name (default: inferred from parent dir)")
 
     probe_parser = subparsers.add_parser(
         "probe", help="Probe agent harness capability and record compatibility"
@@ -8751,7 +8838,15 @@ def main() -> None:
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
         cmd_decide(args.topic, panel=panel_members, record=args.record)
     elif args.command == "scan":
-        cmd_scan(deep=getattr(args, "deep", False), status=getattr(args, "status", False))
+        cmd_scan(
+            deep=getattr(args, "deep", False),
+            status=getattr(args, "status", False),
+            refresh=getattr(args, "refresh", False),
+            add_path=getattr(args, "add_path", None),
+            remove_path=getattr(args, "remove_path", None),
+            dry_run=getattr(args, "dry_run", False),
+            workspace_name=getattr(args, "workspace_name", None),
+        )
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":

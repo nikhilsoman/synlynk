@@ -52,3 +52,46 @@ def test_generate_structured_context_has_sections(tmp_path, monkeypatch):
     assert "testrepo" in result
     assert "Python" in result
     assert os.path.exists(out_path)
+
+
+def test_cmd_scan_no_flags_runs_workspace_scan(tmp_path, monkeypatch, capsys):
+    """synlynk scan (no flags) runs workspace scan and prints summary."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    synlynk.cmd_scan()
+    captured = capsys.readouterr()
+    assert "workspace" in captured.out.lower() or "scan" in captured.out.lower()
+
+
+def test_cmd_scan_dry_run_no_writes(tmp_path, monkeypatch):
+    """--dry-run does not write config.json."""
+    (tmp_path / ".git").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    synlynk.cmd_scan(dry_run=True)
+    ws_dir = tmp_path / ".synlynk" / "workspaces"
+    assert not ws_dir.exists()
+
+
+def test_cmd_scan_add_appends_repo(tmp_path, monkeypatch, capsys):
+    """--add <path> appends a repo to existing workspace config."""
+    ws_dir = tmp_path / ".synlynk" / "workspaces" / "test-ws"
+    ws_dir.mkdir(parents=True)
+    import json
+    config = {"workspace_name": "test-ws", "topology": "single",
+              "home_harness": "claude", "repos": [], "agent_roles": {},
+              "created_at": "", "last_scanned_at": ""}
+    (ws_dir / "config.json").write_text(json.dumps(config))
+    (tmp_path / "newrepo").mkdir()
+    (tmp_path / "newrepo" / ".git").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    synlynk.cmd_scan(add_path=str(tmp_path / "newrepo"),
+                     workspace_name="test-ws")
+    data = json.loads((ws_dir / "config.json").read_text())
+    assert any(r["name"] == "newrepo" for r in data["repos"])
