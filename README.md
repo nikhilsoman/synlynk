@@ -5,9 +5,16 @@
 <p align="center"><strong>Keep your AI tools in sync with your project.</strong></p>
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
+<p align="center">
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-623%20passing-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.9.8-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
+</p>
+
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects scoped project context into every agent dispatch, routes tasks to the best available agent using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.9.4:** Context / Dispatch / Relay — SQLite-primary task state with generated `todo.md`, per-agent context profiles (`.agents/<agent>.json`), `synlynk jobs` reads live SQLite with `--watch`, pre-flight dispatch gate, HTTP SSE relay broker (`synlynk relay start/broadcast`), and VERIFY_SKIP sentinel pattern. 472 tests.
+**v0.10.0:** FTUE onboarding with terminal-based Scan + Wizard, `state.db` centralized SQLite primary source of truth, one-shot project migration, direct `pipx` packaging, and updated capability tracking. 623 tests passing.
 
 ## Documentation
 
@@ -19,62 +26,87 @@ synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one
 
 ## Install
 
+**Recommended Method (via pipx):**
+```bash
+pipx install git+https://github.com/nikhilsoman/synlynk
+```
+
+**Alternative Method (via shell script):**
 ```bash
 curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
 ```
 
-Or run directly without installing:
-
+**Run directly without installing:**
 ```bash
 python3 bin/synlynk.py <command>
 ```
 
-**Requirements:** Python 3.8+, stdlib only — no dependencies.
+**Requirements:** Python 3.9+, stdlib only — no dependencies.
 
 ## Quick start
 
-```bash
-# Initialize synlynk — discovers your agents, writes informed project-docs/
-synlynk init
+Get up and running in 60 seconds:
 
-# Run an AI CLI with context automatically injected
-synlynk exec claude
-synlynk exec gemini
+1. **Install synlynk globally:**
+   ```bash
+   pipx install git+https://github.com/nikhilsoman/synlynk
+   ```
 
-# Dispatch an agent job to run in the background
-synlynk dispatch claude --task "refactor auth module"
+2. **Initialize your project:**
+   Runs the interactive FTUE wizard to discover installed AI agent CLI tools, configure workspace topology, and bootstrap project state.
+   ```bash
+   synlynk init --wizard
+   ```
 
-# Check running jobs
-synlynk jobs
+3. **Analyze repository structure:**
+   Scans the codebase to build and update the static source map.
+   ```bash
+   synlynk scan
+   ```
 
-# Tail a job's output
-synlynk logs --job <job-id>
+4. **Migrate existing flat-file projects (optional):**
+   If you have a project created using an older version of synlynk, migrate its `project-docs/` markdown files to `state.db`.
+   ```bash
+   synlynk migrate
+   ```
 
-# Archive completed tasks and refresh context
-synlynk checkpoint
+5. **Dispatch a task to an agent in the background:**
+   ```bash
+   synlynk dispatch claude --task "refactor auth module"
+   ```
 
-# Show project state
-synlynk status
-```
+6. **Check running jobs:**
+   ```bash
+   synlynk jobs
+   ```
+
+7. **Tail a job's output:**
+   ```bash
+   synlynk logs --job <job-id>
+   ```
 
 ## How it works
 
-`synlynk exec <cmd>` does four things before handing off to your AI tool:
+At the core of synlynk is a dual-storage model designed for agent speed and Git reliability:
 
-1. Reads `project-docs/memory.md`, `roadmap.md`, and `todo.md`
-2. Writes a compacted snapshot to `.synlynk/context.md` — active tasks only, no completed items
-3. Checks cumulative spend and request count against limits in `.synlynk/config.json`
-4. After the session ends: detects flatline loops (3 consecutive failures of the same command) and writes alerts to `sentinel.md`
+- **`state.db` is the permanent source of truth** for all project state, including stories, roadmaps, memories, devlogs, and costs.
+- **`project-docs/` flat files are write-through backups.** Every write to `state.db` automatically updates the corresponding markdown files in `project-docs/` (e.g., `todo.md`, `roadmap.md`, `memory.md`, `costs.md`). This ensures a human-readable, Git-trackable record of project state.
+- **`generate_context()` resolves state dynamically.** Once a project is migrated, it reads directly from the SQLite database to compile the current active context. For non-migrated repositories, it falls back to reading raw flat files.
+- **`synlynk exec <cmd>` manages context injection.** Before handing off to your AI tool, it compiles the active tasks and decisions, writes a compacted snapshot to `.synlynk/context.md` (active tasks only, no completed items), and checks cumulative spend limits in `.synlynk/config.json`. After the session ends, it detects flatline loops (3 consecutive failures of the same command) and writes alerts to `sentinel.md`.
 
-The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` at session start and to log costs manually to `project-docs/costs.md`. synlynk does not capture token usage automatically — cost tracking depends on the AI agent following the session protocol.
+The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/context.md` at session start. Cost tracking is fully automated: `state.db` records costs to the `cost_entries` table, which are written through to `project-docs/costs.md`.
 
 ## Commands
 
 | Command | Description |
 | --- | --- |
-| `synlynk init [--force]` | 6-step wizard: scans repo, discovers agents (Magic Moment 1), bootstraps `project-docs/`, offers LLM enrichment |
+| `synlynk init [--force] [--wizard]` | Runs the FTUE typeform-style TUI wizard (8 screens) to discover agents, configure workspace topology, and bootstrap project state. |
 | `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
-| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch an agent job to run in the background (Magic Moment 2) |
+| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch an agent job to run in the background |
+| `synlynk scan [--refresh] [--add path] [--remove path] [--dry-run] [--deep] [--status]` | Re-runnable repository analysis that scans the source tree and updates the source architecture context |
+| `synlynk migrate [--dry-run] [--recover] [--setup-dr]` | One-shot import to migrate existing flat-file `project-docs/` to `state.db` |
+| `synlynk memory add <section> <body>` | Add a memory/convention entry to `state.db` with write-through to the flat file |
+| `synlynk devlog append <author> <date> <body>` | Append a devlog entry to `state.db` with write-through to the flat file |
 | `synlynk agent configure <name>` | Write `.agents/<name>.json` context profile interactively |
 | `synlynk relay start [--port N]` | Start HTTP SSE relay broker in foreground (port 27472) |
 | `synlynk relay broadcast <body> [--kind motd\|wellness\|message\|joke\|custom]` | Publish a broadcast event to the relay |
@@ -87,7 +119,6 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 | `synlynk checkpoint` | Archive completed `[x]` tasks to devlog, refresh context, emit telemetry |
 | `synlynk status [--json]` | Dashboard: active tasks, budget, sentinel alerts, watcher state |
 | `synlynk sentinel list\|clear [--severity] [--code]` | View or dismiss sentinel alerts |
-| `synlynk scan [--deep] [--status]` | Scan source tree and inject `## Source Architecture` into context; `--deep` writes `state.db` + `project-docs/source-map.md`; `--status` shows cache age and counts |
 | `synlynk identity init` | Create `~/.synlynk/identity.key` (Ed25519) and print public key |
 | `synlynk upgrade` | Check GitHub releases for a newer version |
 | `synlynk --version` | Print current version |
@@ -99,6 +130,7 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `context.md` a
 | Flag | Default | Description |
 |---|---|---|
 | `--force` | off | Overwrite existing template files |
+| `--wizard` | off | Run the TUI onboarding wizard (8 screens) |
 | `--agents claude,agy,codex` | all three | Comma-separated list of agents to generate instruction files for. `claude` → CLAUDE.md, `agy` → GEMINI.md, `codex` → AGENTS.md |
 | `--mode solo\|team` | `solo` | Written to `project-docs/.synlynk_config.json`. Controls whether teammate devlogs appear in context |
 | `--org <org>` | none | GitHub org name, stored in `.synlynk/config.json` |
@@ -116,23 +148,28 @@ synlynk init --org acmecorp --repo api-server \
 
 ## Project layout
 
-```
-project-docs/
-  roadmap.md        # Feature priorities and status
-  todo.md           # Active tasks ([ ] / [x] checkboxes with <!-- id: N --> comments)
-  memory.md         # Persistent decisions and conventions
-  costs.md          # Per-session cost log (maintained by the AI agent)
-  devlogs/          # Per-user session notes (appended by checkpoint)
+### Post-Migration Layout
+Once a project is migrated, all state is centralized in the `.synlynk/` directory:
 
+```
 .synlynk/
+  state.db          # SQLite database (Source of truth for all project state)
+  project-docs/     # Write-through backups (auto-updated on every DB write)
+    roadmap.md      # Feature priorities and status
+    todo.md         # Active tasks ([ ] / [x] checkboxes with <!-- id: N --> comments)
+    memory.md       # Persistent decisions and conventions
+    costs.md        # Per-session cost log (maintained by the AI agent)
+    devlogs/        # Per-user session notes
   context.md        # Auto-generated snapshot (overwritten each exec/watch cycle)
-  config.json       # Budget limits and settings
+  config.json       # Budget limits, DR sync path, and settings
   telemetry.json    # Rolling log of last 100 exec/checkpoint/watch events
-  state             # Current state: watching | active | stopped
   sentinel.md       # Flatline alerts
+  state             # Current state: watching | active | stopped
   watch.pid         # Watcher daemon PID (present only while running)
   watch.log         # Watcher daemon stdout/stderr
 ```
+
+> **Note:** Before migration, the `project-docs/` folder lives at the repository root (`/project-docs/`). Running `synlynk migrate` relocates it under `.synlynk/project-docs/` and registers the SQLite `state.db` as the primary source of truth.
 
 ## Configuration
 
@@ -164,7 +201,7 @@ At session end: append a devlog entry and run `synlynk checkpoint`.
 
 ## Budget tracking
 
-synlynk warns at 80% of configured cost and request limits. Spend is read from `project-docs/costs.md`, which the AI agent is expected to update after each significant operation. The `exec` telemetry records duration and exit code but does not capture token counts automatically.
+synlynk warns at 80% of configured cost and request limits. Spend is recorded automatically in the `cost_entries` table of `state.db` (written through from every exec event) and the manual `project-docs/costs.md` markdown ledger is maintained as a write-through backup, ensuring a Git-trackable record of cumulative spend and request counts.
 
 ## Contributing
 
@@ -193,7 +230,7 @@ synlynk's goal is to become the OS for multi-agent development — the substrate
 | **v0.9.2** | Team Onboarding + Consensus — `synlynk join`, `synlynk team status`, `synlynk decide`, pull-before-write arbitration, token budgets on stories | ✅ Shipped | Jun 2026 |
 | v0.9.3 | Async Daemon — `synlynk daemon`, launchd/systemd, job queue, HTTP context server localhost:27471 | ✅ Shipped | Jun 2026 |
 | **v0.9.4** | Context / Dispatch / Relay — SQLite task canon, agent profiles, `synlynk jobs` SQLite, HTTP SSE relay, VERIFY_SKIP sentinel | ✅ Shipped | Jun 2026 |
-| v0.10.0 | Multi-Repo Workspace — `synlynk workspace init/join`, cross-repo epics | Planned | Aug 2026 |
+| **v0.10.0** | FTUE Scan + Wizard + state.db Migration + Packaging + README | ⚠️ In progress (Shipped when PR merges) | Jul 2026 |
 | v1.0.0 | Community Layer — signed capability ledger, pipx/Homebrew, synlynk.com public launch | Planned | Sep 2026 |
 
 **We're looking for community input on what to build next.** See the [Discussions](../../discussions) tab to vote on feature direction and share use cases.
