@@ -35,3 +35,29 @@
 - T5: Sentinel VERIFY_SKIP pattern + _extract_compliance_tags [backend]
 - dispatch: write job context to .synlynk/contexts/<job_id>.md not global context.md [dispatch]
 - BS-5: brainstorm — standalone synlynk website (design-first, beyond functional) [web]
+
+## 2026-07-01
+### BS-17 FTUE Scan + Wizard — Wave 1–4 complete (mid-session checkpoint)
+Wave execution per plan `docs/superpowers/plans/2026-07-01-bs17-scan-wizard.md`.
+
+**Completed tasks:**
+- A-1: `find_git_roots` + `fingerprint_stack` (Codex)
+- A-2: `scan_skills` + `detect_home_harness` + `parse_context_sections` (Codex)
+- A-3: `run_workspace_scan` interface contract (Codex) — 8-key ScanResult dict
+- A-4: `write_workspace_config` + `generate_structured_context` (Codex)
+- A-5: Extended `cmd_scan()` with `--refresh/--add/--remove/--dry-run/--workspace` + scan subparser (Codex)
+- A-6: End-to-end smoke test for `synlynk scan --dry-run` (Codex)
+- B-1+B-2: TUI primitives + landing + harness screens (Grok)
+- B-3: Topology picker + workspace 2ab/2c multi-repo sub-flow (Grok)
+- B-4: Skills, agents, roles screens (Grok)
+- B-5: `_wiz_screen_launch` + `wizard_init` orchestrator + `--wizard` flag (Grok)
+
+**In progress (Wave 5):**
+- B-6: Wizard subprocess smoke test (Grok, job-1b3a6fa8)
+- C-1+C-2: Integration tests for scan + wizard (Agy, job-7b8582ef)
+
+**Test count progression:** 551 → 562 (A-1–A-3) → 567 (A-4+A-5) → 572 (B-3 merge) → 573 (A-6) → 579 (B-4+B-5)
+
+**Key fix applied 3x:** Grok dispatch `--yes` → `--always-approve` (agents keep reverting it when rewriting `_VERB_MAP_SEED`/`AGENT_CAPABILITY_BASELINES`).
+
+⚠️ **Compaction watch:** After Wave 5 gate, dispatch Wave 6 (Agy C-3 blog post), then open PR.
