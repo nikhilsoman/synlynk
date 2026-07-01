@@ -11,6 +11,31 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.10.0] - 2026-07-01
+
+**Release pitch:** synlynk now ships as a proper Python package, walks you through first-time setup with a terminal wizard, and keeps all project state in SQLite so agents stop fighting over markdown files.
+
+### Added
+- **`synlynk init --wizard`** — FTUE typeform-style TUI wizard (6 screens: home harness detection, workspace topology, skills scan, agent fleet, role assignment, launch cheat sheet). Mandatory Phase 0 silent scan; writes workspace config, state.db, and role blocks into each agent's directive file. Ctrl-C before completion leaves no state.
+- **`synlynk scan`** — re-runnable repo analysis: detects topology (single/mono/multi), fingerprints stack per repo/package via 14 file-presence heuristics, parses CLAUDE.md/GEMINI.md/AGENTS.md, maps to workspace in state.db, regenerates structured context.md. Flags: `--refresh`, `--add <path>`, `--remove <path>`, `--dry-run`.
+- **`synlynk migrate`** — one-shot atomic import of `project-docs/` markdown into state.db (8 steps: import → copy to `.synlynk/project-docs/` → `git rm` → `.gitignore` → sentinel → commit). After migration, every DB write immediately mirrors to `.synlynk/project-docs/` as a local backup (write-through). Flags: `--dry-run`, `--recover` (re-import from backup after DB loss), `--setup-dr` (configure cloud-synced DR folder).
+- **`synlynk memory add`** / **`synlynk devlog append`** — write memory entries and devlog sessions to state.db with immediate flat-file write-through.
+- **5 new state.db tables**: `memory_entries`, `roadmap_arcs`, `roadmap_phases`, `cost_entries`, `devlog_entries`; `gh_issue` column on `stories`.
+- **DR sync** — configurable `dr_sync_path` in `.synlynk/config.json`; every write-through copy is also synced to a cloud-synced local folder (iCloud/GDrive/OneDrive). No OAuth, no new deps.
+- **pipx packaging** — `pyproject.toml` with `[project.scripts]` entry point; VERSION is the single source of truth in `synlynk/__init__.py` (pyproject.toml reads it via dynamic attr). Install via `pipx install git+https://github.com/nikhilsoman/synlynk`.
+- **`_detect_install_type()`** — detects pipx vs pip vs script install; `synlynk upgrade` routes to `pipx upgrade synlynk` when installed via pipx.
+
+### Changed
+- **`generate_context()`** routes to `_generate_context_from_db()` when `.synlynk/.synlynk_migrated` sentinel is present; reads from state.db (top story, recent devlog entries, recent memory sections).
+- **`install.sh`** derives VERSION dynamically from `synlynk/__init__.py` instead of hardcoding.
+- **Python requirement** raised from 3.8+ to 3.9+.
+- README fully overhauled: pipx install, badge strip, wizard-first 60-second quickstart, state.db architecture, 5 new commands documented, corrected roadmap.
+
+### Tests
+- 623 tests (up from 588 at v0.9.8); 28 new migrate tests including full E2E round-trip; 7 packaging tests.
+
+---
+
 ## [0.9.8] - 2026-06-27
 
 ### Added
