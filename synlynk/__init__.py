@@ -1079,7 +1079,7 @@ _VERB_MAP_SEED = [
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
-    ("dispatch.headless", "dispatch",      "grok",   "grok --yes --single {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --always-approve --single {task}", "partial", "Network dep required"),
     ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
     ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
