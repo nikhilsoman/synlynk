@@ -44,3 +44,21 @@ def test_scan_returns_readme_word_count(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = synlynk.run_workspace_scan(roots=[str(tmp_path)], workspace_name="test")
     assert result["readme_word_count"] >= 9
+
+
+def test_launch_task_templates_count():
+    assert len(synlynk.LAUNCH_TASK_TEMPLATES) == 12
+
+
+def test_launch_task_templates_have_required_fields():
+    required = {"id", "title", "description", "cycle", "agent", "context_mode",
+                "prompt_template", "est_hours", "r_tokens", "w_tokens", "tool_calls"}
+    for t in synlynk.LAUNCH_TASK_TEMPLATES:
+        missing = required - set(t.keys())
+        assert not missing, f"Template '{t.get('id')}' missing fields: {missing}"
+
+
+def test_launch_task_templates_core_ids():
+    ids = {t["id"] for t in synlynk.LAUNCH_TASK_TEMPLATES}
+    for core_id in ("arch-review", "product-assessment", "lifecycle-setup"):
+        assert core_id in ids
