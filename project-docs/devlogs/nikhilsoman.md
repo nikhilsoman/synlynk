@@ -3,6 +3,7 @@
 ### Shipped
 - feat(BS-17): `synlynk scan` + `synlynk init --wizard` FTUE onboarding — PR #89 merged [cli]
 - feat(BS-18): `synlynk migrate` — state.db source of truth — PR #90 merged [cli]
+- feat(BS-19): `synlynk launch` FTUE task picker + 6-cycle SDLC rename — PR #94 merged [cli]
 - chore(packaging): VERSION single source of truth + pipx-aware upgrade — PR #91 merged [packaging]
 - docs(readme): v0.10.0 overhaul — PR #92 merged [docs]
 - release: **v0.10.0 cut** — gh release create v0.10.0 [release]
