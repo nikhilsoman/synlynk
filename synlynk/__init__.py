@@ -313,6 +313,51 @@ LAUNCH_TASK_TEMPLATES = [
     },
 ]
 
+
+def _template_matches(template: dict, scan: dict) -> bool:
+    """Returns True if the template's trigger condition is met by scan."""
+    condition = template.get("trigger_condition")
+    if condition is None:
+        return True
+    try:
+        return bool(condition(scan))
+    except Exception:
+        return False
+
+
+def _select_launch_tasks(scan: dict) -> list:
+    """Returns ordered list of 3-5 matching templates (core first, bonus sorted by specificity)."""
+    eligible = [t for t in LAUNCH_TASK_TEMPLATES if _template_matches(t, scan)]
+    core = [t for t in eligible if t["id"] in CORE_TEMPLATE_IDS]
+    bonus = [t for t in eligible if t["id"] not in CORE_TEMPLATE_IDS]
+    return (core + bonus)[:5]
+
+
+def _render_prompt(template: dict, scan: dict) -> str:
+    """Substitutes {variables} in prompt_template from scan data. Missing vars become ''."""
+    import datetime as _datetime
+    import re as _re
+
+    repos = scan.get("repos", [])
+    primary = repos[0] if repos else {}
+    variables = {
+        "workspace": scan.get("workspace_name", ""),
+        "stack": ", ".join(primary.get("stack_labels", [])) or "unknown",
+        "repo_name": primary.get("name", ""),
+        "topology": scan.get("topology", "single"),
+        "test_count": str(scan.get("test_ratio", 0)),
+        "date": _datetime.date.today().isoformat(),
+        "agent": template.get("agent", "claude"),
+    }
+    text = template.get("prompt_template", "")
+
+    def _replace(match):
+        key = match.group(1)
+        return variables.get(key, "")
+
+    return _re.sub(r"\{(\w+)\}", _replace, text)
+
+
 TASK_STATUSES = {
     "[ ]": "active",
     "[x]": "done",

@@ -62,3 +62,110 @@ def test_launch_task_templates_core_ids():
     ids = {t["id"] for t in synlynk.LAUNCH_TASK_TEMPLATES}
     for core_id in ("arch-review", "product-assessment", "lifecycle-setup"):
         assert core_id in ids
+
+
+def _minimal_scan(**kwargs):
+    """Returns a scan dict with sensible defaults for testing."""
+    base = {
+        "workspace_name": "test-ws",
+        "topology": "single",
+        "repos": [{"name": "test-repo", "stack_labels": ["python"]}],
+        "test_ratio": 0.5,
+        "readme_word_count": 500,
+        "has_ci": True,
+        "has_docs": True,
+        "has_type_hints": True,
+        "has_orm": False,
+    }
+    base.update(kwargs)
+    return base
+
+
+def test_template_matches_core_always_eligible():
+    scan = _minimal_scan()
+    for t in synlynk.LAUNCH_TASK_TEMPLATES:
+        if t["id"] in synlynk.CORE_TEMPLATE_IDS:
+            assert synlynk._template_matches(t, scan), f"Core template '{t['id']}' should always match"
+
+
+def test_template_matches_add_tests_triggered():
+    scan = _minimal_scan(test_ratio=0.05)
+    tmpl = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "add-tests")
+    assert synlynk._template_matches(tmpl, scan)
+
+
+def test_template_matches_add_tests_not_triggered():
+    scan = _minimal_scan(test_ratio=0.5)
+    tmpl = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "add-tests")
+    assert not synlynk._template_matches(tmpl, scan)
+
+
+def test_template_matches_setup_ci_triggered():
+    scan = _minimal_scan(has_ci=False)
+    tmpl = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "setup-ci")
+    assert synlynk._template_matches(tmpl, scan)
+
+
+def test_template_matches_type_safety_python_only():
+    scan = _minimal_scan(has_type_hints=False,
+                         repos=[{"name": "r", "stack_labels": ["node"]}])
+    tmpl = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "type-safety")
+    assert not synlynk._template_matches(tmpl, scan)
+
+
+def test_select_tasks_returns_max_5():
+    scan = _minimal_scan(
+        test_ratio=0.0, has_ci=False, has_docs=False, readme_word_count=10,
+        topology="multi", has_orm=True, has_type_hints=False,
+        repos=[{"name": "r", "stack_labels": ["python", "react", "django", "next"]}]
+    )
+    tasks = synlynk._select_launch_tasks(scan)
+    assert len(tasks) <= 5
+
+
+def test_select_tasks_core_always_first():
+    scan = _minimal_scan(test_ratio=0.0)
+    tasks = synlynk._select_launch_tasks(scan)
+    core_ids = synlynk.CORE_TEMPLATE_IDS
+    core_positions = [i for i, t in enumerate(tasks) if t["id"] in core_ids]
+    non_core_positions = [i for i, t in enumerate(tasks) if t["id"] not in core_ids]
+    if core_positions and non_core_positions:
+        assert max(core_positions) < min(non_core_positions)
+
+
+def test_select_tasks_empty_scan_returns_core_3():
+    scan = {
+        "workspace_name": "x", "topology": "single",
+        "repos": [{"name": "r", "stack_labels": []}],
+        "test_ratio": 1.0, "readme_word_count": 999, "has_ci": True,
+        "has_docs": True, "has_type_hints": True, "has_orm": False,
+    }
+    tasks = synlynk._select_launch_tasks(scan)
+    assert len(tasks) == 3
+    assert {t["id"] for t in tasks} == synlynk.CORE_TEMPLATE_IDS
+
+
+def test_render_prompt_substitutes_all_variables():
+    template = {
+        "prompt_template": "Review {workspace} ({stack}) topology={topology} date={date} repo={repo_name}",
+        "agent": "claude",
+    }
+    scan = {
+        "workspace_name": "myws",
+        "repos": [{"name": "myrepo", "stack_labels": ["python", "fastapi"]}],
+        "topology": "single",
+    }
+    result = synlynk._render_prompt(template, scan)
+    assert "myws" in result
+    assert "python, fastapi" in result
+    assert "single" in result
+    assert "{workspace}" not in result
+    assert "{date}" not in result
+    assert "myrepo" in result
+
+
+def test_render_prompt_missing_variable_uses_empty_string():
+    template = {"prompt_template": "Hello {unknown_var} world", "agent": "claude"}
+    result = synlynk._render_prompt(template, {})
+    assert "{unknown_var}" not in result
+    assert "Hello" in result
