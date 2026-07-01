@@ -3308,6 +3308,98 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
     }
 
 
+def write_workspace_config(scan_result: dict, workspace_name: str) -> str:
+    """Write workspace config to ~/.synlynk/workspaces/<name>/config.json.
+
+    Returns the path written.
+    """
+    import json as _json
+    ws_dir = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name}")
+    os.makedirs(ws_dir, exist_ok=True)
+    config = {
+        "workspace_name": workspace_name,
+        "topology": scan_result.get("topology", "single"),
+        "home_harness": scan_result.get("home_harness"),
+        "repos": [
+            {
+                "path": r["path"],
+                "name": r["name"],
+                "stack_labels": r["stack_labels"],
+            }
+            for r in scan_result.get("repos", [])
+        ],
+        "agent_roles": {},  # populated by wizard Screen 5
+        "created_at": scan_result.get("scanned_at", ""),
+        "last_scanned_at": scan_result.get("scanned_at", ""),
+    }
+    config_path = os.path.join(ws_dir, "config.json")
+    open(config_path, "w").write(_json.dumps(config, indent=2))
+    return config_path
+
+
+def generate_structured_context(scan_result: dict,
+                                 out_path: str = None) -> str:
+    """Write structured context.md from a ScanResult dict.
+
+    This replaces generate_context() when a workspace scan has been run.
+    Falls back to generate_context() if scan_result is None.
+    """
+    context_file = out_path or ".synlynk/context.md"
+    os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
+
+    lines = []
+    ws_name = scan_result.get("workspace_name", "workspace")
+    lines.append(f"# synlynk context — {ws_name}")
+    lines.append(f"generated: {scan_result.get('scanned_at', '')}")
+    lines.append("")
+    lines.append("## workspace")
+    lines.append(f"name: {ws_name}")
+    home_h = scan_result.get("home_harness") or "none"
+    lines.append(f"home harness: {home_h}")
+    repo_list = scan_result.get("repos", [])
+    lines.append(f"repos: {len(repo_list)}")
+    lines.append("")
+
+    if repo_list:
+        lines.append("## repos")
+        for repo in repo_list:
+            lines.append(f"### {repo['name']}")
+            lines.append(f"path: {repo['path']}")
+            stack = ", ".join(repo.get("stack_labels", [])) or "unknown"
+            lines.append(f"stack: {stack}")
+            excerpt = (repo.get("readme_excerpt") or "").replace("\n", " ").strip()
+            if excerpt:
+                lines.append(f"readme: {excerpt[:200]}")
+            for title, content in (repo.get("context_sections") or {}).items():
+                lines.append(f"\n### {title} (from {repo['name']})")
+                lines.append(content[:300])
+            lines.append("")
+
+    harnesses = scan_result.get("harnesses", [])
+    agents = scan_result.get("agents", [])
+    if harnesses or agents:
+        lines.append("## agent fleet")
+        for h in harnesses:
+            lines.append(f"{h['name']}: {h['version']} — {h['path']}")
+        lines.append("")
+
+    skills = scan_result.get("skills", [])
+    if skills:
+        lines.append("## skills")
+        for s in skills:
+            lines.append(f"{s['name']}: {s['version']} — {s['path']}")
+        lines.append("")
+
+    content = "\n".join(lines)
+    try:
+        open(context_file, "w").write(content)
+        print(f"  ✓ context.md updated ({len(content)} chars) → {context_file}")
+    except OSError as e:
+        print(f"  ⚠ Could not write context.md: {e}")
+
+    return content
+
+
 def _extract_synlynk_section(content: str, marker_style: str = "html") -> Optional[str]:
     """Return the text inside synlynk markers, or the whole content for marker_style='none'."""
     if marker_style == "none":
