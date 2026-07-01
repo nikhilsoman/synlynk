@@ -4265,7 +4265,8 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
                 py_files_total += 1
                 try:
                     content = open(os.path.join(dirpath, fn)).read(1000)
-                    if "from __future__ import annotations" in content or ": " in content:
+                    if ("from __future__ import annotations" in content or
+                            re.search(r"def \w+\([^)]*: \w|-> \w", content)):
                         py_files_with_hints += 1
                 except OSError:
                     pass
