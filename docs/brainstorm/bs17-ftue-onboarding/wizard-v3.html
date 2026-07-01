@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — setup wizard v3</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #080b12;
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+  padding: 2rem;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── PAGE HEADER ── */
+.page-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; }
+.page-title { color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+.section-label { color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin: 1.75rem 0 0.65rem; }
+
+/* ── SYNLYNK LOCKUP (real glyph + wordmark) ── */
+.sl-lockup { display: flex; align-items: center; gap: 0.55rem; }
+.sl-wordmark {
+  font-family: 'Courier New', monospace;
+  font-weight: 500; font-size: 1rem;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.sl-wordmark .syn { color: #e2e8f0; }
+.sl-wordmark .l   { color: #5B8DEF; }
+.sl-wordmark .y   { color: #A259F7; }
+.sl-wordmark .n   { color: #2EC4A0; }
+.sl-wordmark .k   { color: #e2e8f0; }
+
+/* ── WIZARD CARD ── */
+.wizard-card {
+  background: #0d1117;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  overflow: hidden;
+  max-width: 580px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(162,89,247,0.06);
+  margin-bottom: 2rem;
+}
+
+/* ── WIZARD HEADER ── */
+.wiz-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid #131b27;
+  background: #0a0e17;
+}
+.wiz-step-label { font-size: 11px; color: #334155; font-family: 'JetBrains Mono', monospace; }
+.wiz-step-label em { color: #A259F7; font-style: normal; }
+
+/* ── STEP DOTS ── */
+.step-dots { display: flex; align-items: center; gap: 0.35rem; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #1e293b; transition: all 0.2s; }
+.dot.done   { background: #3b1f7a; }
+.dot.active { background: #A259F7; width: 20px; border-radius: 3px; }
+
+/* ── PROGRESS BAR ── */
+.wiz-progress { height: 2px; background: #0f1520; }
+.wiz-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #A259F7 0%, #5B8DEF 60%, #2EC4A0 100%);
+  transition: width 0.4s ease;
+}
+
+/* ── BODY ── */
+.wiz-body { padding: 1.4rem 1.65rem 1.2rem; }
+
+/* ── STEP ICON + TITLE ── */
+.step-hero { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.step-icon {
+  width: 46px; height: 46px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.35rem;
+}
+.step-icon.harness  { background: #130a2a; border: 1px solid #3b1f7a; }
+.step-icon.topology { background: #0a1525; border: 1px solid #1e3f6e; }
+.step-icon.skills   { background: #0a1a10; border: 1px solid #145232; }
+.step-icon.agents   { background: #0f1525; border: 1px solid #1e3a5f; }
+.step-icon.roles    { background: #1a150a; border: 1px solid #5c3a0a; }
+.step-icon.launch   { background: #0a1a15; border: 1px solid #0d4a3a; }
+
+.step-text h3 { font-size: 1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.2rem; }
+.step-text .why { font-size: 11.5px; color: #64748b; line-height: 1.65; }
+.step-text .why strong { color: #94a3b8; }
+
+/* ── SCAN BOX ── */
+.scan-box {
+  background: #080d14; border: 1px solid #1e3a5f;
+  border-radius: 10px; padding: 0.7rem 0.95rem; margin-bottom: 1rem;
+}
+.scan-box-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
+.scan-badge {
+  font-size: 9.5px; font-family: 'JetBrains Mono', monospace;
+  color: #38bdf8; background: #0c2a3f;
+  padding: 0.1rem 0.5rem; border-radius: 3px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.scan-pulse { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.scan-row { display: flex; align-items: center; gap: 0.55rem; padding: 0.18rem 0; font-size: 10.5px; }
+.scan-key { color: #475569; min-width: 7rem; font-family: 'JetBrains Mono', monospace; }
+.scan-val { color: #7dd3fc; font-family: 'JetBrains Mono', monospace; }
+.val-ok   { color: #4ade80; }
+.val-warn { color: #fbbf24; }
+.val-na   { color: #334155; }
+
+/* ── CHOICES ── */
+.choices { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.85rem; }
+.choice {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: #090d14; border: 1px solid #1a2540;
+  border-radius: 10px; padding: 0.65rem 0.9rem;
+  cursor: pointer; transition: all 0.15s;
+}
+.choice:hover { border-color: #2d3f6e; }
+.choice.active { border-color: #5b21b6; background: #100828; box-shadow: 0 0 0 1px rgba(162,89,247,0.18); }
+.choice-key {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: #475569; border: 1px solid #1e293b;
+  border-radius: 4px; padding: 0.1rem 0.4rem;
+  min-width: 1.4rem; text-align: center; flex-shrink: 0; margin-top: 0.15rem;
+}
+.choice.active .choice-key { color: #A259F7; border-color: #5b21b6; }
+.choice-icon-wrap { flex-shrink: 0; margin-top: 0.05rem; }
+.choice-body { flex: 1; }
+.choice-title { font-size: 12.5px; font-weight: 500; color: #e2e8f0; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.choice-desc  { font-size: 11px; color: #475569; margin-top: 0.2rem; }
+
+.pill { font-size: 9.5px; padding: 0.1rem 0.45rem; border-radius: 4px; font-weight: 500; }
+.pill-green  { background: #052e16; color: #4ade80; }
+.pill-purple { background: #2e1065; color: #c4b5fd; }
+.pill-blue   { background: #0c2a3f; color: #7dd3fc; }
+.pill-amber  { background: #2a1700; color: #fbbf24; }
+
+/* ── PROMPT ── */
+.wiz-prompt {
+  display: flex; align-items: center; gap: 0.6rem;
+  border-top: 1px solid #0f1826; padding: 0.6rem 0; margin-top: 0.2rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+}
+.prompt-arrow { color: #A259F7; font-size: 14px; }
+.prompt-hint  { color: #1e3a5f; }
+.cursor { display: inline-block; width: 7px; height: 13px; background: #A259F7; vertical-align: middle; animation: blink 1s step-end infinite; border-radius: 1px; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ── SCAN FULL SCREEN ── */
+.scan-full {
+  background: #0d1117; border: 1px solid #1e293b;
+  border-radius: 16px; overflow: hidden; max-width: 580px;
+  margin-bottom: 2rem; box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+.scan-top {
+  background: #0a0e17; padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid #131b27;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.scan-body { padding: 1.65rem; }
+.scan-headline { font-size: 1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.2rem; }
+.scan-sub { font-size: 11.5px; color: #475569; margin-bottom: 1.4rem; }
+.scan-items { display: flex; flex-direction: column; gap: 0.3rem; }
+.scan-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.28rem 0; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; }
+.si-icon { width: 18px; font-size: 11px; }
+.si-done { color: #2EC4A0; }
+.si-spin { color: #A259F7; animation: rotate 1.2s linear infinite; display: inline-block; }
+.si-wait { color: #1e293b; }
+@keyframes rotate { to { transform: rotate(360deg); } }
+.si-label { color: #94a3b8; min-width: 11rem; }
+.si-val { color: #64748b; font-size: 10.5px; }
+.si-val.found   { color: #4ade80; }
+.si-val.partial { color: #fbbf24; }
+.si-val.running { color: #A259F7; }
+
+/* ── TWO-UP GRID ── */
+.two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1rem; }
+.two-up .wizard-card { max-width: 100%; margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ PAGE HEADER ══════════ -->
+<div class="page-header">
+  <!-- Real S-glyph -->
+  <svg width="26" height="26" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/>
+    <circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/>
+  </svg>
+  <div class="sl-wordmark"><span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span></div>
+  <div class="page-title" style="margin-left:0.25rem">setup wizard — mockups</div>
+</div>
+
+<!-- ══════════ PHASE 0: SCAN ══════════ -->
+<div class="section-label">Phase 0 — mandatory scan (no interaction)</div>
+<div class="scan-full">
+  <div class="scan-top">
+    <div class="sl-lockup">
+      <svg width="20" height="20" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+        <circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/>
+        <circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/>
+      </svg>
+      <div class="sl-wordmark" style="font-size:0.85rem"><span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span></div>
+    </div>
+    <span style="font-size:11px;color:#334155;font-family:'JetBrains Mono',monospace">scanning your environment…</span>
+  </div>
+  <div class="scan-body">
+    <div class="scan-headline">Getting to know your setup</div>
+    <div class="scan-sub">Everything synlynk discovers here makes the rest of setup instant and accurate. Runs once — no interaction needed.</div>
+    <div class="scan-items">
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">git topology</span><span class="si-val found">single repo</span></div>
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">tech stack</span><span class="si-val found">Python · SQLite · CLI</span></div>
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">AI CLIs installed</span><span class="si-val found">claude v1.2.3 · codex v1.1.0</span></div>
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">home harness</span><span class="si-val found">Claude Code (running now)</span></div>
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">skill packs</span><span class="si-val found">superpowers v5.1.0 · 14 skills</span></div>
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">sibling repos</span><span class="si-val partial">rxcc · playblazer-ng (~/dev/)</span></div>
+      <div class="scan-item"><span class="si-icon si-done">✓</span><span class="si-label">workspace name</span><span class="si-val found">synlynk (from git remote)</span></div>
+      <div class="scan-item"><span class="si-icon"><span class="si-spin">◌</span></span><span class="si-label">existing config files</span><span class="si-val running">reading CLAUDE.md…</span></div>
+      <div class="scan-item"><span class="si-icon si-wait">·</span><span class="si-label">agent versions</span><span class="si-val" style="color:#1e293b">waiting…</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREENS 1 + 2 ══════════ -->
+<div class="section-label">Screens 1–2 — home harness · repo topology + workspace</div>
+<div class="two-up">
+
+  <!-- SCREEN 1 -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>1</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:8%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <div class="step-icon harness">🏠</div>
+        <div class="step-text">
+          <h3>Where do you live?</h3>
+          <div class="why">Your <strong>home harness</strong> is the AI CLI you work inside every day. synlynk writes its instruction files, dispatch flags, and role configs to match exactly. <strong>Pick wrong and dispatches land in the wrong format.</strong></div>
+        </div>
+      </div>
+      <div class="scan-box">
+        <div class="scan-box-header"><div class="scan-pulse"></div><span class="scan-badge">scan found</span></div>
+        <div class="scan-row">
+          <svg width="13" height="13" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+          <span class="scan-key">claude code</span><span class="scan-val val-ok">v1.2.3 · running now</span>
+        </div>
+        <div class="scan-row"><span style="color:#5B8DEF;font-size:12px;width:13px">&#9654;</span><span class="scan-key">codex</span><span class="scan-val">v1.1.0 · installed</span></div>
+        <div class="scan-row"><span style="color:#334155;font-size:12px;width:13px">·</span><span class="scan-key">agy</span><span class="scan-val val-na">not found</span></div>
+        <div class="scan-row"><span style="color:#334155;font-size:12px;width:13px">$</span><span class="scan-key">zsh terminal</span><span class="scan-val" style="color:#475569">parent process</span></div>
+      </div>
+      <div class="choices">
+        <div class="choice active">
+          <span class="choice-key">1</span>
+          <div class="choice-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+          </div>
+          <div class="choice-body">
+            <div class="choice-title">Claude Code <span class="pill pill-green">running now</span><span class="pill pill-purple">recommended</span></div>
+            <div class="choice-desc">Writes CLAUDE.md ##Your Role, tunes dispatch flags for Claude Code.</div>
+          </div>
+        </div>
+        <div class="choice">
+          <span class="choice-key">2</span>
+          <div class="choice-icon-wrap"><span style="color:#5B8DEF;font-size:16px;font-family:'JetBrains Mono',monospace">&gt;_</span></div>
+          <div class="choice-body">
+            <div class="choice-title">Codex <span class="pill pill-blue">installed</span></div>
+            <div class="choice-desc">Writes AGENTS.md, Codex-compatible dispatch format.</div>
+          </div>
+        </div>
+        <div class="choice">
+          <span class="choice-key">3</span>
+          <div class="choice-icon-wrap"><span style="color:#475569;font-size:16px;font-family:'JetBrains Mono',monospace">$</span></div>
+          <div class="choice-body">
+            <div class="choice-title">Plain terminal</div>
+            <div class="choice-desc">Minimal config — no harness-specific directive files.</div>
+          </div>
+        </div>
+      </div>
+      <div class="wiz-prompt"><span class="prompt-arrow">›</span><span class="prompt-hint">type 1 · 2 · 3 and press enter</span><span class="cursor"></span></div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2 -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>2</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:25%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <div class="step-icon topology">🗂️</div>
+        <div class="step-text">
+          <h3>Shape of your project</h3>
+          <div class="why">A <strong>Workspace</strong> is synlynk's home — one shared state, one agent fleet, one budget. It scopes everything synlynk knows to exactly your project. <strong>Get this right and context is always clean.</strong></div>
+        </div>
+      </div>
+      <div class="scan-box">
+        <div class="scan-box-header"><div class="scan-pulse"></div><span class="scan-badge">scan found</span></div>
+        <div class="scan-row"><span style="width:13px">📁</span><span class="scan-key">git root</span><span class="scan-val">~/dev/synlynk</span></div>
+        <div class="scan-row"><span style="width:13px">📦</span><span class="scan-key">packages</span><span class="scan-val val-na">none detected</span></div>
+        <div class="scan-row"><span style="width:13px">🔗</span><span class="scan-key">sibling repos</span><span class="scan-val val-warn">rxcc · playblazer-ng</span></div>
+        <div class="scan-row"><span style="width:13px">✨</span><span class="scan-key">name (inferred)</span><span class="scan-val val-ok">synlynk</span></div>
+      </div>
+      <div class="choices">
+        <div class="choice active">
+          <span class="choice-key">1</span>
+          <div class="choice-icon-wrap" style="font-size:1.1rem">📁</div>
+          <div class="choice-body">
+            <div class="choice-title">Single repo <span class="pill pill-purple">recommended</span></div>
+            <div class="choice-desc">Workspace: <span style="color:#2EC4A0;font-family:'JetBrains Mono',monospace">synlynk</span> → ~/.synlynk/workspaces/synlynk/</div>
+          </div>
+        </div>
+        <div class="choice">
+          <span class="choice-key">2</span>
+          <div class="choice-icon-wrap" style="font-size:1.1rem">📦</div>
+          <div class="choice-body">
+            <div class="choice-title">Monorepo</div>
+            <div class="choice-desc">Multiple packages under one git root. synlynk scans each sub-package separately.</div>
+          </div>
+        </div>
+        <div class="choice">
+          <span class="choice-key">3</span>
+          <div class="choice-icon-wrap" style="font-size:1.1rem">🌐</div>
+          <div class="choice-body">
+            <div class="choice-title">Multi-repo <span class="pill pill-amber">rxcc · playblazer-ng nearby</span></div>
+            <div class="choice-desc">Group repos into one workspace. You'll name it and pick which to include.</div>
+          </div>
+        </div>
+      </div>
+      <div class="wiz-prompt"><span class="prompt-arrow">›</span><span class="prompt-hint">1 · 2 · 3  or type a custom workspace name</span><span class="cursor"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREENS 3 + 4 ══════════ -->
+<div class="section-label">Screens 3–4 — skills &amp; plugins · agent fleet</div>
+<div class="two-up">
+
+  <!-- SCREEN 3: SKILLS -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>3</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div><div class="dot done"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:42%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <div class="step-icon skills">🧩</div>
+        <div class="step-text">
+          <h3>Skills &amp; plugins detected</h3>
+          <div class="why">Skill packs give agents <strong>domain expertise</strong>. synlynk gives them <strong>project context + coordination</strong>. They're additive — synlynk injects context <em>before</em> a skill runs. Your existing skills stay exactly as they are.</div>
+        </div>
+      </div>
+      <div class="scan-box">
+        <div class="scan-box-header"><div class="scan-pulse"></div><span class="scan-badge">scan found</span></div>
+        <div class="scan-row"><span style="width:13px">⚡</span><span class="scan-key">superpowers</span><span class="scan-val val-ok">v5.1.0 · 14 skills</span></div>
+        <div class="scan-row"><span style="width:13px">🔩</span><span class="scan-key">gstack</span><span class="scan-val val-na">not installed</span></div>
+        <div class="scan-row"><span style="width:13px">✅</span><span class="scan-key">conflicts</span><span class="scan-val val-ok">none</span></div>
+        <div class="scan-row"><span style="width:13px">📝</span><span class="scan-key">CLAUDE.md</span><span class="scan-val val-warn">exists · no ##Your Role</span></div>
+      </div>
+      <div class="choices">
+        <div class="choice active">
+          <span class="choice-key">↵</span>
+          <div class="choice-icon-wrap" style="font-size:1.1rem">✅</div>
+          <div class="choice-body">
+            <div class="choice-title">Keep Superpowers as-is <span class="pill pill-purple">recommended</span></div>
+            <div class="choice-desc">synlynk injects context before skills run. Your 14 skills stay untouched.</div>
+          </div>
+        </div>
+      </div>
+      <div class="wiz-prompt"><span class="prompt-arrow">›</span><span class="prompt-hint">press enter to continue</span><span class="cursor"></span></div>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: AGENTS with custom robot SVG -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>4</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:58%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <!-- Custom friendly robot SVG — no Apple brand -->
+        <div class="step-icon agents">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- antenna -->
+            <line x1="16" y1="4" x2="16" y2="8" stroke="#5B8DEF" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="16" cy="3" r="2" fill="#A259F7"/>
+            <!-- head -->
+            <rect x="5" y="8" width="22" height="16" rx="5" fill="#0f1a2e" stroke="#5B8DEF" stroke-width="1.5"/>
+            <!-- eyes -->
+            <circle cx="11" cy="15" r="2.8" fill="#0a0f1a" stroke="#2EC4A0" stroke-width="1.2"/>
+            <circle cx="21" cy="15" r="2.8" fill="#0a0f1a" stroke="#2EC4A0" stroke-width="1.2"/>
+            <circle cx="11" cy="15" r="1.2" fill="#2EC4A0" opacity="0.9"/>
+            <circle cx="21" cy="15" r="1.2" fill="#2EC4A0" opacity="0.9"/>
+            <!-- smile -->
+            <path d="M11 20 Q16 23 21 20" fill="none" stroke="#5B8DEF" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- ear nubs -->
+            <rect x="2" y="13" width="3" height="5" rx="1.5" fill="#1e3a5f"/>
+            <rect x="27" y="13" width="3" height="5" rx="1.5" fill="#1e3a5f"/>
+          </svg>
+        </div>
+        <div class="step-text">
+          <h3>Your agent fleet</h3>
+          <div class="why">Each AI CLI you have installed is a <strong>dispatch target</strong> — synlynk routes tasks to any of them. More agents = more parallel capacity and specialisation. <strong>Add more anytime with synlynk probe --discover.</strong></div>
+        </div>
+      </div>
+      <div class="scan-box">
+        <div class="scan-box-header"><div class="scan-pulse"></div><span class="scan-badge">scan found</span></div>
+        <div class="scan-row">
+          <svg width="13" height="13" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+          <span class="scan-key">claude</span><span class="scan-val val-ok">v1.2.3 · TC-1–4 ready</span>
+        </div>
+        <div class="scan-row"><span style="color:#5B8DEF;font-size:11px;width:13px;font-family:'JetBrains Mono',monospace">&gt;_</span><span class="scan-key">codex</span><span class="scan-val val-ok">v1.1.0 · TC-1–3 ready</span></div>
+        <div class="scan-row"><span style="color:#334155;font-size:11px;width:13px">·</span><span class="scan-key">agy</span><span class="scan-val val-na">not installed</span></div>
+        <div class="scan-row"><span style="color:#334155;font-size:11px;width:13px">·</span><span class="scan-key">grok</span><span class="scan-val val-na">not installed</span></div>
+      </div>
+      <div class="choices">
+        <div class="choice active">
+          <span class="choice-key">1</span>
+          <div class="choice-icon-wrap" style="display:flex;gap:2px">
+            <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+            <span style="color:#5B8DEF;font-size:13px;font-family:'JetBrains Mono',monospace">&gt;_</span>
+          </div>
+          <div class="choice-body">
+            <div class="choice-title">claude + codex <span class="pill pill-purple">recommended</span></div>
+            <div class="choice-desc">Full installed fleet. Creates .agents/claude.json + .agents/codex.json.</div>
+          </div>
+        </div>
+        <div class="choice">
+          <span class="choice-key">2</span>
+          <div class="choice-icon-wrap">
+            <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+          </div>
+          <div class="choice-body">
+            <div class="choice-title">claude only</div>
+            <div class="choice-desc">Start simple — add agents anytime with synlynk probe --discover.</div>
+          </div>
+        </div>
+      </div>
+      <div class="wiz-prompt"><span class="prompt-arrow">›</span><span class="prompt-hint">1 · 2 or press enter to accept recommended</span><span class="cursor"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN 6: LAUNCH ══════════ -->
+<div class="section-label">Screen 6 / 6 — launch</div>
+<div class="wizard-card" style="max-width:580px">
+  <div class="wiz-header">
+    <div style="display:flex;align-items:center;gap:0.5rem">
+      <svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+      <span class="wiz-step-label">step <em>6</em> / 6</span>
+    </div>
+    <div class="step-dots">
+      <div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot active"></div>
+    </div>
+  </div>
+  <div class="wiz-progress"><div class="wiz-progress-fill" style="width:100%"></div></div>
+  <div class="wiz-body">
+    <div class="step-hero">
+      <div class="step-icon launch">🚀</div>
+      <div class="step-text">
+        <h3>You're set. Here's what to do next.</h3>
+        <div class="why">Workspace <strong style="color:#2EC4A0">synlynk</strong> is live — 2 agents ready, context built, roles configured. Here are your first 3 commands.</div>
+      </div>
+    </div>
+    <div class="scan-box" style="margin-bottom:1rem">
+      <div class="scan-box-header"><div class="scan-pulse"></div><span class="scan-badge">your setup</span></div>
+      <div class="scan-row"><span style="width:13px">🏠</span><span class="scan-key">home harness</span><span class="scan-val val-ok">Claude Code</span></div>
+      <div class="scan-row"><span style="width:13px">📁</span><span class="scan-key">workspace</span><span class="scan-val val-ok">synlynk (single repo)</span></div>
+      <div class="scan-row"><span style="width:13px"></span><span class="scan-key">agents</span>
+        <span style="display:flex;gap:4px;align-items:center">
+          <svg width="11" height="11" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+          <span class="scan-val val-ok">claude</span>
+          <span style="color:#5B8DEF;font-size:11px;font-family:'JetBrains Mono',monospace">&gt;_</span>
+          <span class="scan-val val-ok">codex</span>
+        </span>
+      </div>
+      <div class="scan-row"><span style="width:13px">⚡</span><span class="scan-key">skills</span><span class="scan-val val-ok">superpowers v5.1.0</span></div>
+    </div>
+    <div style="background:#080d14;border:1px solid #1e293b;border-radius:10px;padding:0.85rem 1rem;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:2">
+      <div><span style="color:#334155"># dispatch a task to codex</span></div>
+      <div><span style="color:#A259F7">$</span> <span style="color:#e2e8f0">synlynk dispatch --agent codex --task <span style="color:#4ade80">"add tests for _preflight_dispatch"</span></span></div>
+      <div style="margin-top:0.35rem"><span style="color:#334155"># check platform health</span></div>
+      <div><span style="color:#A259F7">$</span> <span style="color:#e2e8f0">synlynk status</span></div>
+      <div style="margin-top:0.35rem"><span style="color:#334155"># re-scan after adding repos</span></div>
+      <div><span style="color:#A259F7">$</span> <span style="color:#e2e8f0">synlynk scan --refresh</span></div>
+    </div>
+    <div class="wiz-prompt" style="margin-top:0.65rem">
+      <span class="prompt-arrow">›</span>
+      <span style="color:#2EC4A0;font-family:'JetBrains Mono',monospace;font-size:11.5px">setup complete · press enter to exit</span>
+      <span class="cursor"></span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

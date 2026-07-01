@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — multi-repo workspace flow</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #080b12; color: #e2e8f0; font-family: 'Inter', sans-serif; padding: 2rem; font-size: 12px; line-height: 1.6; }
+
+.page-label { color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1.25rem; }
+.section-label { color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin: 1.75rem 0 0.65rem; }
+
+/* ── FLOW DIAGRAM ── */
+.flow-diagram {
+  display: flex; align-items: flex-start; gap: 0; margin-bottom: 2rem;
+  overflow-x: auto; padding-bottom: 0.5rem;
+}
+.flow-node {
+  background: #0d1117; border: 1px solid #1e293b; border-radius: 8px;
+  padding: 0.55rem 0.85rem; font-size: 10.5px; white-space: nowrap; flex-shrink: 0;
+}
+.flow-node.screen { border-color: #1e3a5f; }
+.flow-node.active { border-color: #A259F7; background: #130a2a; color: #c4b5fd; }
+.flow-node.sub { border-color: #0d4a3a; background: #080f0c; color: #2EC4A0; }
+.flow-node.normal { border-color: #1a3a1a; color: #4ade80; font-size: 10px; }
+.flow-arrow {
+  display: flex; align-items: center; padding: 0 4px; color: #334155;
+  font-size: 14px; flex-shrink: 0; align-self: center;
+}
+.flow-branch {
+  display: flex; flex-direction: column; gap: 0.35rem; flex-shrink: 0;
+}
+.branch-label { font-size: 9px; color: #475569; text-align: center; margin-bottom: 0.2rem; }
+
+/* ── WIZARD CARD ── */
+.wizard-card {
+  background: #0d1117; border: 1px solid #1e293b; border-radius: 14px;
+  overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.wiz-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1.2rem; border-bottom: 1px solid #131b27; background: #0a0e17;
+}
+.wiz-step-label { font-size: 11px; color: #334155; font-family: 'JetBrains Mono', monospace; }
+.wiz-step-label em { color: #A259F7; font-style: normal; }
+.step-dots { display: flex; align-items: center; gap: 0.3rem; }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: #1e293b; }
+.dot.done   { background: #3b1f7a; }
+.dot.active { background: #A259F7; width: 16px; border-radius: 2px; }
+.dot.sub-active { background: #2EC4A0; width: 10px; border-radius: 2px; }
+.wiz-progress { height: 2px; background: #0f1520; }
+.wiz-progress-fill { height: 100%; background: linear-gradient(90deg, #A259F7 0%, #5B8DEF 60%, #2EC4A0 100%); }
+.wiz-body { padding: 1.3rem 1.6rem 1.1rem; }
+
+/* step hero */
+.step-hero { display: flex; align-items: flex-start; gap: 0.9rem; margin-bottom: 0.9rem; }
+.step-icon {
+  width: 42px; height: 42px; border-radius: 11px; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.2rem;
+}
+.icon-topology { background: #0a1525; border: 1px solid #1e3f6e; }
+.icon-name     { background: #0a1a10; border: 1px solid #0d4a3a; }
+.icon-pick     { background: #13100a; border: 1px solid #5c3a0a; }
+.icon-confirm  { background: #130a2a; border: 1px solid #3b1f7a; }
+
+.step-text h3 { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.15rem; }
+.step-text .why { font-size: 11px; color: #64748b; line-height: 1.6; }
+.step-text .why strong { color: #94a3b8; }
+
+/* scan box */
+.scan-box { background: #080d14; border: 1px solid #1e3a5f; border-radius: 8px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; }
+.scan-box-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+.scan-badge { font-size: 9.5px; font-family: 'JetBrains Mono', monospace; color: #38bdf8; background: #0c2a3f; padding: 0.1rem 0.45rem; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+.scan-pulse { width: 5px; height: 5px; border-radius: 50%; background: #38bdf8; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.scan-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; font-size: 10.5px; }
+.scan-key { color: #475569; min-width: 6rem; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.scan-val { color: #7dd3fc; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.val-ok   { color: #4ade80; }
+.val-warn { color: #fbbf24; }
+.val-na   { color: #334155; }
+
+/* choices */
+.choices { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+.choice {
+  display: flex; align-items: flex-start; gap: 0.7rem;
+  background: #090d14; border: 1px solid #1a2540; border-radius: 9px;
+  padding: 0.6rem 0.85rem; cursor: pointer; transition: all 0.15s;
+}
+.choice:hover { border-color: #2d3f6e; }
+.choice.active { border-color: #5b21b6; background: #100828; }
+.choice.teal-active { border-color: #0d4a3a; background: #080f0c; }
+.choice-key {
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+  color: #475569; border: 1px solid #1e293b; border-radius: 3px;
+  padding: 0.05rem 0.35rem; flex-shrink: 0; margin-top: 0.15rem;
+}
+.choice.active .choice-key     { color: #A259F7; border-color: #5b21b6; }
+.choice.teal-active .choice-key { color: #2EC4A0; border-color: #0d4a3a; }
+.choice-body { flex: 1; }
+.choice-title { font-size: 11.5px; font-weight: 500; color: #e2e8f0; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.choice-desc  { font-size: 10.5px; color: #475569; margin-top: 0.15rem; }
+.pill { font-size: 9px; padding: 0.08rem 0.4rem; border-radius: 3px; font-weight: 500; }
+.pill-purple { background: #2e1065; color: #c4b5fd; }
+.pill-teal   { background: #0a2e20; color: #2EC4A0; }
+.pill-amber  { background: #2a1700; color: #fbbf24; }
+.pill-blue   { background: #0c2a3f; color: #7dd3fc; }
+
+/* repo picker */
+.repo-picker { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+.repo-item {
+  display: flex; align-items: flex-start; gap: 0.7rem;
+  background: #090d14; border: 1px solid #1a2540; border-radius: 9px;
+  padding: 0.55rem 0.85rem;
+}
+.repo-item.checked { border-color: #0d4a3a; background: #080f0c; }
+.repo-check {
+  width: 15px; height: 15px; border: 1px solid #1e293b; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  margin-top: 0.2rem; font-size: 9px;
+}
+.repo-item.checked .repo-check { background: #0d4a3a; border-color: #2EC4A0; color: #2EC4A0; }
+.repo-meta { flex: 1; }
+.repo-name { font-size: 12px; font-weight: 500; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; gap: 0.4rem; }
+.repo-path { font-size: 10px; color: #334155; font-family: 'JetBrains Mono', monospace; }
+.repo-stack { font-size: 10px; color: #475569; margin-top: 0.1rem; }
+.repo-add {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.45rem 0.85rem; border: 1px dashed #1e293b; border-radius: 9px;
+  color: #334155; font-size: 10.5px; cursor: pointer;
+}
+.repo-add span { color: #1e3a5f; font-size: 14px; }
+
+/* workspace name input */
+.name-input {
+  background: #080d14; border: 1px solid #1e3a5f; border-radius: 8px;
+  padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+}
+.name-input-label { font-size: 9.5px; color: #475569; margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.name-input-row { display: flex; align-items: center; gap: 0.5rem; }
+.name-chip {
+  background: #130a2a; border: 1px solid #A259F7; border-radius: 5px;
+  padding: 0.2rem 0.55rem; color: #c4b5fd; font-size: 11px; cursor: pointer;
+}
+.name-chip.dim { background: #0a0d14; border-color: #1e293b; color: #334155; }
+.name-sep { color: #1e293b; font-size: 11px; }
+
+/* workspace preview */
+.ws-preview {
+  background: #080d14; border: 1px solid #0d4a3a; border-radius: 8px;
+  padding: 0.65rem 0.9rem; margin-bottom: 0.75rem;
+}
+.ws-preview-label { font-size: 9.5px; color: #2EC4A0; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.45rem; font-family: 'JetBrains Mono', monospace; }
+.ws-tree { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.8; }
+.ws-tree .t-root  { color: #2EC4A0; }
+.ws-tree .t-dir   { color: #7dd3fc; }
+.ws-tree .t-file  { color: #475569; }
+.ws-tree .t-repo  { color: #94a3b8; }
+.ws-tree .t-check { color: #4ade80; font-size: 9px; }
+.ws-tree .t-dim   { color: #1e293b; }
+
+/* prompt */
+.wiz-prompt {
+  display: flex; align-items: center; gap: 0.55rem;
+  border-top: 1px solid #0f1826; padding: 0.55rem 0; margin-top: 0.1rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+}
+.prompt-arrow { color: #A259F7; }
+.prompt-hint  { color: #1e3a5f; }
+.prompt-teal  { color: #2EC4A0; }
+.cursor { display: inline-block; width: 6px; height: 12px; background: #A259F7; vertical-align: middle; animation: blink 1s step-end infinite; border-radius: 1px; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* three-up grid */
+.three-up { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.1rem; }
+</style>
+</head>
+<body>
+
+<div class="page-label">Multi-repo workspace — sub-flow (branches from screen 2 when option 3 selected)</div>
+
+<!-- ── FLOW DIAGRAM ── -->
+<div class="flow-diagram" style="margin-bottom:1.75rem">
+  <div class="flow-node screen">screen 2</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-branch">
+    <div class="branch-label">if single / mono</div>
+    <div class="flow-node normal">→ screen 3 (skills)</div>
+  </div>
+  <div style="width:1rem"></div>
+  <div class="flow-branch">
+    <div class="branch-label">if multi-repo ↓</div>
+    <div class="flow-node sub">2a — name workspace</div>
+    <div style="display:flex;align-items:center;gap:4px;padding-left:8px">
+      <span style="color:#334155;font-size:11px">↓</span>
+    </div>
+    <div class="flow-node sub">2b — pick repos</div>
+    <div style="display:flex;align-items:center;gap:4px;padding-left:8px">
+      <span style="color:#334155;font-size:11px">↓</span>
+    </div>
+    <div class="flow-node sub">2c — confirm structure</div>
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-node screen">screen 3 (skills)</div>
+</div>
+
+<!-- ── THREE SCREENS ── -->
+<div class="section-label">Sub-screens 2a · 2b · 2c</div>
+<div class="three-up">
+
+  <!-- 2a: NAME WORKSPACE -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.45rem">
+        <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>2a</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div><div class="dot sub-active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:20%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <div class="step-icon icon-name">🌐</div>
+        <div class="step-text">
+          <h3>Name your workspace</h3>
+          <div class="why">A multi-repo workspace needs a name that spans all its repos. synlynk scanned your parent directory and your repo names to suggest the best fit. <strong>This becomes your shared state.db identifier — it should be short and memorable.</strong></div>
+        </div>
+      </div>
+      <div class="scan-box">
+        <div class="scan-box-header"><div class="scan-pulse"></div><span class="scan-badge">inferred from scan</span></div>
+        <div class="scan-row"><span style="width:13px">📁</span><span class="scan-key">parent dir</span><span class="scan-val">~/dev/</span></div>
+        <div class="scan-row"><span style="width:13px">🔗</span><span class="scan-key">repos found</span><span class="scan-val val-ok">synlynk · rxcc · playblazer-ng</span></div>
+        <div class="scan-row"><span style="width:13px">✨</span><span class="scan-key">common prefix</span><span class="scan-val val-warn">none (mixed names)</span></div>
+      </div>
+
+      <!-- name suggestions -->
+      <div class="name-input">
+        <div class="name-input-label">suggested names — pick or type your own</div>
+        <div class="name-input-row" style="flex-wrap:wrap;gap:0.4rem;margin-bottom:0.5rem">
+          <span class="name-chip">dev-workspace</span>
+          <span class="name-chip dim">nikhil-dev</span>
+          <span class="name-chip dim">synlynk-group</span>
+          <span class="name-chip dim">main-stack</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.35rem;font-size:10.5px;color:#475569">
+          <span style="color:#A259F7">›</span>
+          <span style="color:#e2e8f0">dev-workspace</span>
+          <span class="cursor" style="background:#2EC4A0"></span>
+        </div>
+        <div style="font-size:9.5px;color:#1e3a5f;margin-top:0.35rem;font-family:'JetBrains Mono',monospace">~/.synlynk/workspaces/dev-workspace/state.db</div>
+      </div>
+
+      <div class="wiz-prompt">
+        <span class="prompt-arrow">›</span>
+        <span class="prompt-hint">type a name or press enter to accept</span>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2b: PICK REPOS -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.45rem">
+        <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>2b</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div><div class="dot done"></div><div class="dot sub-active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:28%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <div class="step-icon icon-pick">🗂️</div>
+        <div class="step-text">
+          <h3>Which repos are in this workspace?</h3>
+          <div class="why">All selected repos share one <strong>state.db</strong>, one agent fleet, and one cost budget. synlynk found these git roots nearby — <strong>include every repo your agents need to see together.</strong> You can add more later.</div>
+        </div>
+      </div>
+
+      <div class="repo-picker">
+        <div class="repo-item checked">
+          <div class="repo-check">✓</div>
+          <div class="repo-meta">
+            <div class="repo-name">synlynk <span class="pill pill-teal">current</span></div>
+            <div class="repo-path">~/dev/synlynk</div>
+            <div class="repo-stack">Python · SQLite · CLI</div>
+          </div>
+        </div>
+        <div class="repo-item checked">
+          <div class="repo-check">✓</div>
+          <div class="repo-meta">
+            <div class="repo-name">rxcc</div>
+            <div class="repo-path">~/dev/rxcc</div>
+            <div class="repo-stack">TypeScript · Next.js · AWS</div>
+          </div>
+        </div>
+        <div class="repo-item checked">
+          <div class="repo-check">✓</div>
+          <div class="repo-meta">
+            <div class="repo-name">playblazer-ng</div>
+            <div class="repo-path">~/dev/playblazer-ng</div>
+            <div class="repo-stack">TypeScript · React · Pulumi</div>
+          </div>
+        </div>
+        <div class="repo-item">
+          <div class="repo-check"></div>
+          <div class="repo-meta">
+            <div class="repo-name" style="color:#475569">dotfiles</div>
+            <div class="repo-path" style="color:#334155">~/dotfiles</div>
+            <div class="repo-stack" style="color:#334155">shell · zsh</div>
+          </div>
+        </div>
+        <div class="repo-add">
+          <span>+</span>
+          <span>add repo from another path…</span>
+        </div>
+      </div>
+
+      <div class="wiz-prompt">
+        <span class="prompt-arrow">›</span>
+        <span class="prompt-hint">space to toggle · enter to confirm</span>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2c: CONFIRM STRUCTURE -->
+  <div class="wizard-card">
+    <div class="wiz-header">
+      <div style="display:flex;align-items:center;gap:0.45rem">
+        <svg width="14" height="14" viewBox="0 0 28 28" fill="none"><path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/><path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/><circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/><circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/></svg>
+        <span class="wiz-step-label">step <em>2c</em> / 6</span>
+      </div>
+      <div class="step-dots">
+        <div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot sub-active"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+    <div class="wiz-progress"><div class="wiz-progress-fill" style="width:36%"></div></div>
+    <div class="wiz-body">
+      <div class="step-hero">
+        <div class="step-icon icon-confirm">✅</div>
+        <div class="step-text">
+          <h3>Here's your workspace</h3>
+          <div class="why">This is what synlynk will create. One shared state.db for all three repos — <strong>agents can reference any of them, costs and jobs roll up together, context.md includes all three stacks.</strong></div>
+        </div>
+      </div>
+
+      <div class="ws-preview">
+        <div class="ws-preview-label">workspace structure</div>
+        <div class="ws-tree">
+          <div><span class="t-root">dev-workspace</span> <span style="color:#334155;font-size:9.5px">~/.synlynk/workspaces/dev-workspace/</span></div>
+          <div style="padding-left:0.75rem"><span class="t-file">├─ state.db</span> <span style="color:#334155;font-size:9px">shared · 3 repos</span></div>
+          <div style="padding-left:0.75rem"><span class="t-file">├─ config.json</span></div>
+          <div style="padding-left:0.75rem"><span class="t-dir">└─ repos/</span></div>
+          <div style="padding-left:1.5rem"><span class="t-check">✓</span> <span class="t-repo">synlynk</span> <span style="color:#334155;font-size:9px">~/dev/synlynk</span></div>
+          <div style="padding-left:1.5rem"><span class="t-check">✓</span> <span class="t-repo">rxcc</span> <span style="color:#334155;font-size:9px">~/dev/rxcc</span></div>
+          <div style="padding-left:1.5rem"><span class="t-check">✓</span> <span class="t-repo">playblazer-ng</span> <span style="color:#334155;font-size:9px">~/dev/playblazer-ng</span></div>
+        </div>
+      </div>
+
+      <!-- key facts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.75rem">
+        <div style="background:#080d14;border:1px solid #1a2540;border-radius:7px;padding:0.5rem 0.7rem">
+          <div style="font-size:9.5px;color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.2rem">synlynk scan runs</div>
+          <div style="font-size:11px;color:#e2e8f0">across all 3 repos</div>
+          <div style="font-size:10px;color:#334155">context.md includes all stacks</div>
+        </div>
+        <div style="background:#080d14;border:1px solid #1a2540;border-radius:7px;padding:0.5rem 0.7rem">
+          <div style="font-size:9.5px;color:#475569;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.2rem">add more repos later</div>
+          <div style="font-size:11px;color:#e2e8f0">synlynk scan --add</div>
+          <div style="font-size:10px;color:#334155">~/dev/new-repo</div>
+        </div>
+      </div>
+
+      <div class="choices">
+        <div class="choice teal-active">
+          <span class="choice-key">↵</span>
+          <div class="choice-body">
+            <div class="choice-title">Create workspace <span class="pill pill-teal">dev-workspace · 3 repos</span></div>
+            <div class="choice-desc">Continues to screen 3 — skills &amp; plugins.</div>
+          </div>
+        </div>
+        <div class="choice">
+          <span class="choice-key">e</span>
+          <div class="choice-body">
+            <div class="choice-title">Edit — go back and change repos or name</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wiz-prompt">
+        <span class="prompt-arrow">›</span>
+        <span class="prompt-teal">enter to create · e to edit</span>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

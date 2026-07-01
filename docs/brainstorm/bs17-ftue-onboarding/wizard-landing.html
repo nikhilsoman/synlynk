@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk — wizard landing screen</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #080b12;
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+  padding: 2rem;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.page-title { color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1.25rem; }
+
+/* ── LANDING CARD ── */
+.landing-card {
+  background: #0d1117;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  overflow: hidden;
+  max-width: 580px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(162,89,247,0.07);
+}
+
+/* top bar */
+.land-bar {
+  background: #0a0e17;
+  padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid #131b27;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.land-bar-dots { display: flex; gap: 6px; }
+.land-bar-dot { width: 10px; height: 10px; border-radius: 50%; }
+.d-red    { background: #ff5f57; }
+.d-yellow { background: #febc2e; }
+.d-green  { background: #28c840; }
+.land-bar-label { font-size: 10px; color: #334155; font-family: 'JetBrains Mono', monospace; }
+
+/* body */
+.land-body { padding: 2.5rem 2.25rem 2rem; }
+
+/* hero logo block */
+.hero-logo {
+  display: flex; flex-direction: column; align-items: flex-start;
+  margin-bottom: 1.75rem;
+}
+.hero-glyph-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; }
+.hero-wordmark {
+  font-family: 'Courier New', monospace;
+  font-weight: 500; font-size: 1.85rem;
+  letter-spacing: -0.04em; line-height: 1;
+}
+.hero-wordmark .syn { color: #e2e8f0; }
+.hero-wordmark .l   { color: #5B8DEF; }
+.hero-wordmark .y   { color: #A259F7; }
+.hero-wordmark .n   { color: #2EC4A0; }
+.hero-wordmark .k   { color: #e2e8f0; }
+.hero-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px; color: #334155;
+  text-transform: uppercase; letter-spacing: 0.18em;
+  margin-top: 0.1rem; padding-left: 2px;
+}
+
+/* divider */
+.land-divider { border: none; border-top: 1px solid #131b27; margin: 1.5rem 0; }
+
+/* synaptic link explainer */
+.synapse-block {
+  background: #090d16;
+  border: 1px solid #1e2d4a;
+  border-left: 3px solid #A259F7;
+  border-radius: 0 8px 8px 0;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.5rem;
+}
+.synapse-label {
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.12em;
+  color: #A259F7; margin-bottom: 0.4rem; font-family: 'JetBrains Mono', monospace;
+}
+.synapse-text { font-size: 12px; color: #94a3b8; line-height: 1.7; }
+.synapse-text strong { color: #c4b5fd; }
+.synapse-text em { color: #7dd3fc; font-style: normal; }
+
+/* product description */
+.product-desc {
+  font-size: 13px; color: #94a3b8; line-height: 1.75;
+  margin-bottom: 1.5rem;
+}
+.product-desc strong { color: #e2e8f0; }
+.product-desc .hi-purple { color: #A259F7; }
+.product-desc .hi-teal   { color: #2EC4A0; }
+.product-desc .hi-blue   { color: #5B8DEF; }
+
+/* value bullets */
+.value-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.65rem; margin-bottom: 1.75rem;
+}
+.value-item {
+  background: #090d14; border: 1px solid #1a2540;
+  border-radius: 9px; padding: 0.7rem 0.8rem;
+}
+.value-icon { font-size: 1.1rem; margin-bottom: 0.3rem; display: block; }
+.value-title { font-size: 11px; font-weight: 600; color: #e2e8f0; margin-bottom: 0.15rem; }
+.value-sub   { font-size: 10.5px; color: #475569; line-height: 1.5; }
+
+/* prompt */
+.land-prompt {
+  display: flex; align-items: center; gap: 0.6rem;
+  border-top: 1px solid #0f1826;
+  padding: 0.65rem 0; margin-top: 0.25rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+}
+.prompt-arrow { color: #A259F7; font-size: 14px; }
+.prompt-hint  { color: #1e3a5f; }
+.prompt-action { color: #2EC4A0; }
+.cursor {
+  display: inline-block; width: 7px; height: 13px;
+  background: #A259F7; vertical-align: middle;
+  animation: blink 1s step-end infinite; border-radius: 1px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* two variants side by side for review */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.split .landing-card { max-width: 100%; }
+.variant-label { color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="page-title">Landing screen — two copy variants (pick preferred tone)</div>
+
+<div class="split">
+
+<!-- ── VARIANT A: technical / precise ── -->
+<div>
+  <div class="variant-label">A — technical / precise</div>
+  <div class="landing-card">
+    <div class="land-bar">
+      <div class="land-bar-dots"><div class="land-bar-dot d-red"></div><div class="land-bar-dot d-yellow"></div><div class="land-bar-dot d-green"></div></div>
+      <div class="land-bar-label">synlynk — setup</div>
+      <div style="width:52px"></div>
+    </div>
+    <div class="land-body">
+
+      <div class="hero-logo">
+        <div class="hero-glyph-row">
+          <svg width="38" height="38" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+            <line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/>
+            <circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/>
+          </svg>
+          <div class="hero-wordmark"><span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span></div>
+        </div>
+        <div class="hero-tagline">synaptic link for AI development</div>
+      </div>
+
+      <div class="synapse-block">
+        <div class="synapse-label">what's a synaptic link?</div>
+        <div class="synapse-text">
+          A <strong>synapse</strong> is the junction where one neuron hands a signal to the next — the gap that makes thought possible. Without it, neurons fire in isolation. <em>synlynk</em> is that junction for your AI tools: the coordination layer that connects them, keeps them in context, and makes them work as a single thinking system rather than a pile of CLIs.
+        </div>
+      </div>
+
+      <div class="product-desc">
+        <strong>synlynk is the OS layer for multi-agent development.</strong> It wraps your AI CLIs — Claude, Codex, Agy, Grok — in a shared project context, routes tasks to the right agent, tracks every dispatch, and surfaces what's actually happening across your fleet. <span class="hi-purple">One context.</span> <span class="hi-blue">Many agents.</span> <span class="hi-teal">Zero drift.</span>
+      </div>
+
+      <div class="value-row">
+        <div class="value-item">
+          <span class="value-icon">🧠</span>
+          <div class="value-title">Shared context</div>
+          <div class="value-sub">Every agent sees the same project state before it acts.</div>
+        </div>
+        <div class="value-item">
+          <span class="value-icon">⚡</span>
+          <div class="value-title">Headless dispatch</div>
+          <div class="value-sub">Tasks run clean — no conversation history bloat.</div>
+        </div>
+        <div class="value-item">
+          <span class="value-icon">🔭</span>
+          <div class="value-title">Full observability</div>
+          <div class="value-sub">Sentinel patterns, costs, and job status in one place.</div>
+        </div>
+      </div>
+
+      <div class="land-prompt">
+        <span class="prompt-arrow">›</span>
+        <span class="prompt-action">press enter to start setup</span>
+        <span style="color:#334155;margin-left:0.4rem">— takes about 2 minutes</span>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── VARIANT B: warm / story-led ── -->
+<div>
+  <div class="variant-label">B — warm / story-led</div>
+  <div class="landing-card">
+    <div class="land-bar">
+      <div class="land-bar-dots"><div class="land-bar-dot d-red"></div><div class="land-bar-dot d-yellow"></div><div class="land-bar-dot d-green"></div></div>
+      <div class="land-bar-label">synlynk — setup</div>
+      <div style="width:52px"></div>
+    </div>
+    <div class="land-body">
+
+      <div class="hero-logo">
+        <div class="hero-glyph-row">
+          <svg width="38" height="38" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+            <line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/>
+            <circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/>
+          </svg>
+          <div class="hero-wordmark"><span class="syn">syn</span><span class="l">l</span><span class="y">y</span><span class="n">n</span><span class="k">k</span></div>
+        </div>
+        <div class="hero-tagline">synaptic link for AI development</div>
+      </div>
+
+      <div class="synapse-block">
+        <div class="synapse-label">what's a synaptic link?</div>
+        <div class="synapse-text">
+          In the brain, a <strong>synaptic link</strong> is the tiny gap where one neuron passes its signal to the next. Alone, neurons are just cells. Connected, they produce thought. Your AI tools are the same — powerful in isolation, transformative when they share a signal. <em>synlynk</em> is the gap that makes them think together.
+        </div>
+      </div>
+
+      <div class="product-desc">
+        You already have great AI tools. The problem is <strong>they don't know about each other</strong> — or your project. synlynk fixes that: it <span class="hi-purple">injects shared context</span> before every dispatch, <span class="hi-blue">routes tasks</span> to the right agent, and <span class="hi-teal">keeps score</span> on what's working. Your fleet, finally coordinated.
+      </div>
+
+      <div class="value-row">
+        <div class="value-item">
+          <span class="value-icon">🧠</span>
+          <div class="value-title">One brain</div>
+          <div class="value-sub">Every agent works from the same project memory.</div>
+        </div>
+        <div class="value-item">
+          <span class="value-icon">⚡</span>
+          <div class="value-title">4× efficiency</div>
+          <div class="value-sub">Headless dispatch = no wasted tokens on chat history.</div>
+        </div>
+        <div class="value-item">
+          <span class="value-icon">🔭</span>
+          <div class="value-title">Always watching</div>
+          <div class="value-sub">Costs, drift, and job status tracked automatically.</div>
+        </div>
+      </div>
+
+      <div class="land-prompt">
+        <span class="prompt-arrow">›</span>
+        <span class="prompt-action">press enter to start setup</span>
+        <span style="color:#334155;margin-left:0.4rem">— takes about 2 minutes</span>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
