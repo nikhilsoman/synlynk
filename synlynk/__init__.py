@@ -8270,6 +8270,97 @@ def _wiz_screen_workspace_confirm(workspace: dict) -> bool:
     return key not in ("e", "E")
 
 
+def _wiz_screen_skills(scan: dict) -> None:
+    """Screen 3 — skills/plugins education (no required choice)."""
+    _wiz_clear()
+    _wiz_header(step=3, total=6)
+    print(f"  {_BOLD}synlynk and your skill packs work together{_RESET}\n")
+    print(f"  {_DIM}synlynk injects project context before skills run — it never overrides{_RESET}")
+    print(f"  {_DIM}them. If you use Superpowers or GStack, your skill routes stay intact.{_RESET}")
+    print(f"  {_DIM}synlynk adds the layer below: shared state, dispatch coordination,{_RESET}")
+    print(f"  {_DIM}cost tracking.{_RESET}\n")
+
+    skills = scan.get("skills", [])
+    if skills:
+        print(f"  {_DIM}scan found:{_RESET}")
+        for s in skills:
+            print(f"    {_GREEN}●{_RESET} {s['name']:20} {_DIM}v{s['version']}  {s['path']}{_RESET}")
+    else:
+        print(f"  {_DIM}No skill packs found. You can install them later —{_RESET}")
+        print(f"  {_DIM}synlynk works great without them.{_RESET}")
+
+    _wiz_prompt("press enter to continue")
+    _wiz_read_key()
+
+
+_ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
+
+
+def _wiz_screen_agents(scan: dict) -> None:
+    """Screen 4 — agent fleet display (no required choice)."""
+    _wiz_clear()
+    _wiz_header(step=4, total=6)
+    print(f"  {_BOLD}Your agent fleet{_RESET}\n")
+    print(f"  {_DIM}Each agent has different strengths. synlynk's dispatch command routes{_RESET}")
+    print(f"  {_DIM}tasks to the right agent and tracks what they cost you.{_RESET}\n")
+
+    agents = [a for a in scan.get("agents", []) if a.get("functional")]
+    if agents:
+        print(f"  {_DIM}installed agents:{_RESET}\n")
+        for a in agents:
+            caps = ", ".join((a.get("capabilities") or a.get("roles") or [])[:3])
+            print(f"  {_CYAN}{_ROBOT_ASCII}{_RESET}  {_BOLD}{a['name']:12}{_RESET}"
+                  f"  {_DIM}{a.get('version', 'unknown'):10}{_RESET}  {caps}")
+    else:
+        print(f"  {_YELLOW}No functional agents found.{_RESET}")
+        print(f"  {_DIM}Install claude, gemini, or codex to form your agent fleet.{_RESET}")
+
+    _wiz_prompt("press enter to continue")
+    _wiz_read_key()
+
+
+def _wiz_screen_roles(scan: dict) -> dict:
+    """Screen 5 — agent role assignment.
+
+    Returns dict: {agent_name: role_description}
+    """
+    _wiz_clear()
+    _wiz_header(step=5, total=6)
+    print(f"  {_BOLD}Who does what?{_RESET}\n")
+    print(f"  {_DIM}Consistent role assignment stops agents stomping on each other's work.{_RESET}")
+    print(f"  {_DIM}synlynk writes a role block into each agent's directive file so every{_RESET}")
+    print(f"  {_DIM}agent knows its lane from token one.{_RESET}\n")
+
+    agents = [a for a in scan.get("agents", []) if a.get("functional")]
+    _DEFAULT_ROLES = {
+        "claude": "PM · code review · deployments",
+        "agy": "implementation · testing · templates",
+        "codex": "CLI plumbing · refactoring",
+        "grok": "canvas/JS · infra scaffold · complex data structures",
+    }
+    roles = {}
+    for a in agents:
+        name = a["name"]
+        existing = _DEFAULT_ROLES.get(name, ", ".join(a.get("roles", [])) or "general")
+        roles[name] = existing
+        print(f"  {_CYAN}{name:12}{_RESET} {_DIM}→{_RESET}  {existing}")
+
+    print()
+    print(f"  {_CYAN}[enter]{_RESET} use these roles  "
+          f"{_DIM}[e]{_RESET} edit (opens per-agent prompts)")
+    _wiz_prompt("enter to accept · e to edit")
+    key = _wiz_read_key()
+
+    if key in ("e", "E"):
+        for name in list(roles.keys()):
+            print(f"\n  {name} role [{roles[name]}]: ", end="", flush=True)
+            entered = input().strip()
+            if entered:
+                roles[name] = entered
+
+    return roles
+
+
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo") -> None:

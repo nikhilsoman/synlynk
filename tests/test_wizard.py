@@ -136,3 +136,47 @@ def test_wiz_screen_workspace_confirm_e_returns_false(monkeypatch, capsys):
                  "topology": "multi", "home_harness": "claude"}
     monkeypatch.setattr("sys.stdin", io.StringIO("e"))
     assert synlynk._wiz_screen_workspace_confirm(workspace) is False
+
+
+# === Task B-4 tests (screens skills, agents, roles) ===
+
+def test_wiz_screen_skills_enter_continues(monkeypatch, capsys):
+    """Skills screen is education-only — pressing enter continues."""
+    scan = {"skills": [{"name": "superpowers", "version": "5.1.0", "path": "/tmp/sp"}]}
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r"))
+    synlynk._wiz_screen_skills(scan)  # should not raise
+    out = capsys.readouterr().out
+    assert "superpowers" in out or "skill" in out.lower()
+
+
+def test_wiz_screen_skills_no_skills(monkeypatch, capsys):
+    """Skills screen with no skills found shows fallback message."""
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r"))
+    synlynk._wiz_screen_skills({"skills": []})
+    out = capsys.readouterr().out
+    assert "no skill" in out.lower() or "none" in out.lower() or "skill" in out.lower()
+
+
+def test_wiz_screen_agents_enter_continues(monkeypatch, capsys):
+    scan = {"agents": [
+        {"name": "claude", "version": "1.x", "functional": True,
+         "roles": ["PM"], "capabilities": ["reasoning"]}
+    ]}
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r"))
+    synlynk._wiz_screen_agents(scan)
+    out = capsys.readouterr().out
+    assert "claude" in out
+
+
+def test_wiz_screen_roles_returns_dict(monkeypatch, capsys):
+    """Roles screen: pressing enter accepts pre-filled roles."""
+    scan = {"agents": [
+        {"name": "claude", "version": "1.x", "functional": True,
+         "roles": ["PM", "code review"], "capabilities": []},
+        {"name": "agy", "version": "2.x", "functional": True,
+         "roles": ["implementation"], "capabilities": []},
+    ]}
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r"))
+    roles = synlynk._wiz_screen_roles(scan)
+    assert isinstance(roles, dict)
+    assert "claude" in roles
