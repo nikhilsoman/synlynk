@@ -561,7 +561,7 @@ def test_cmd_scan_force_refresh(tmp_path, monkeypatch, isolated_db):
     (tmp_path / "mod.py").write_text("class Widget: pass\n")
     fake_sha = "b" * 40
     monkeypatch.setattr(synlynk, "_git_head_sha", lambda: fake_sha)
-    synlynk.cmd_scan()
+    synlynk.cmd_scan(deep=True)
     meta = synlynk._load_scan_meta()
     assert meta is not None
     assert meta["head_sha"] == fake_sha
