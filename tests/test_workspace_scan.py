@@ -95,3 +95,23 @@ def test_cmd_scan_add_appends_repo(tmp_path, monkeypatch, capsys):
                      workspace_name="test-ws")
     data = json.loads((ws_dir / "config.json").read_text())
     assert any(r["name"] == "newrepo" for r in data["repos"])
+
+
+def test_synlynk_scan_dry_run_cli(tmp_path, monkeypatch):
+    import subprocess as sp
+    (tmp_path / '.git').mkdir()
+    (tmp_path / 'pyproject.toml').write_text("[project]\nname='test'")
+    (tmp_path / '.synlynk').mkdir()
+    env = os.environ.copy()
+    env['HOME'] = str(tmp_path)
+    env['PYTHONPATH'] = os.pathsep.join([
+        os.path.abspath(os.path.join(os.path.dirname(__file__), '..')),
+        env.get('PYTHONPATH', ''),
+    ]).rstrip(os.pathsep)
+    result = sp.run(
+        ['python', '-m', 'synlynk', 'scan', '--dry-run'],
+        cwd=str(tmp_path),
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'dry-run' in result.stdout or 'scan' in result.stdout
