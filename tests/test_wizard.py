@@ -213,3 +213,103 @@ def test_wizard_init_completes_without_write_on_ctrl_c(monkeypatch, tmp_path):
     }
     # Should not raise
     synlynk.wizard_init(scan=scan, dry_run=True)
+
+
+# ── Wizard integration tests ──────────────────────────────────────────────
+
+def test_wizard_single_repo_full_flow(tmp_path, monkeypatch, capsys):
+    """Full wizard run (single-repo path) completes and writes workspace config."""
+    import json
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    # Keys: landing=\r, harness=\r(default), topo=1(single),
+    #       skills=\r, agents=\r, roles=\r, launch=\r
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r\r1\r\r\r\r"))
+    scan = {
+        "workspace_name": "int-test", "topology": "single",
+        "repos": [{"path": str(tmp_path), "name": "int-test",
+                   "stack_labels": [], "readme_excerpt": "", "context_sections": {}}],
+        "harnesses": [{"name": "claude", "cli": "claude",
+                       "version": "1.x", "path": "/bin/claude"}],
+        "agents": [], "skills": [], "home_harness": "claude",
+        "scanned_at": "2026-07-01T10:00:00",
+    }
+    synlynk.wizard_init(scan=scan, dry_run=False)
+    ws_config = tmp_path / ".synlynk" / "workspaces" / "int-test" / "config.json"
+    # May be under ~HOME/.synlynk/... which is tmp_path in this test
+    home_ws = tmp_path / ".synlynk" / "workspaces" / "int-test" / "config.json"
+    assert home_ws.exists(), "workspace config should have been written"
+    data = json.loads(home_ws.read_text())
+    assert data["home_harness"] == "claude"
+
+
+def test_wizard_ctrl_c_leaves_no_state(tmp_path, monkeypatch):
+    """If wizard_init raises KeyboardInterrupt, no workspace config is written."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    call_count = {"n": 0}
+    original = synlynk._wiz_screen_landing
+
+    def raising_landing():
+        call_count["n"] += 1
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(synlynk, "_wiz_screen_landing", raising_landing)
+    scan = {"workspace_name": "ctrl-c-test", "topology": "single", "repos": [],
+            "harnesses": [], "agents": [], "skills": [], "home_harness": None,
+            "scanned_at": ""}
+    try:
+        synlynk.wizard_init(scan=scan, dry_run=False)
+    except KeyboardInterrupt:
+        pass
+    ws_dir = tmp_path / ".synlynk" / "workspaces" / "ctrl-c-test"
+    assert not ws_dir.exists(), "workspace dir must not be created before Screen 6"
+
+
+def test_wizard_multi_repo_flow(tmp_path, monkeypatch, capsys):
+    """Multi-repo path (topo=3) runs through 2ab+2c sub-flow."""
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    # Keys: landing=\n, harness=\n, topo=3(multi), name=\n, repos=\n, confirm=\n,
+    #       skills=\n, agents=\n, roles=\n, launch=\n
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n\n3\n\n\n\n\n\n\n\n"))
+    scan = {
+        "workspace_name": "multi-test", "topology": "multi",
+        "repos": [
+            {"path": str(tmp_path / "a"), "name": "a", "stack_labels": [],
+             "readme_excerpt": "", "context_sections": {}},
+            {"path": str(tmp_path / "b"), "name": "b", "stack_labels": [],
+             "readme_excerpt": "", "context_sections": {}},
+        ],
+        "harnesses": [{"name": "claude", "cli": "claude",
+                       "version": "1.x", "path": "/bin/claude"}],
+        "agents": [], "skills": [], "home_harness": "claude",
+        "scanned_at": "2026-07-01T10:00:00",
+    }
+    # Should complete without raising
+    synlynk.wizard_init(scan=scan, dry_run=True)
+
+
+# === Task B-6: subprocess smoke test for synlynk init --wizard ===
+
+def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
+    import subprocess as sp
+    (tmp_path / '.git').mkdir()
+    (tmp_path / '.synlynk').mkdir()
+    stdin_seq = '\r\r1\r\r\r\r'
+    env = os.environ.copy()
+    env['HOME'] = str(tmp_path)
+    result = sp.run(
+        ['python', '-m', 'synlynk', 'init', '--wizard'],
+        input=stdin_seq, cwd=str(tmp_path),
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    assert result.returncode == 0 or 'Traceback' not in result.stderr, result.stderr
