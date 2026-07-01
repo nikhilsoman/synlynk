@@ -115,3 +115,77 @@ def test_synlynk_scan_dry_run_cli(tmp_path, monkeypatch):
     )
     assert result.returncode == 0, result.stderr
     assert 'dry-run' in result.stdout or 'scan' in result.stdout
+
+
+# ── Integration tests (require real git repos in tmp_path) ──────────────
+
+def test_scan_add_then_remove_roundtrip(tmp_path, monkeypatch, capsys):
+    """scan --add adds a repo; scan --remove removes it; config stays valid."""
+    import json
+    # Set up existing workspace config
+    ws_dir = tmp_path / ".synlynk" / "workspaces" / "rtest"
+    ws_dir.mkdir(parents=True)
+    cfg = {"workspace_name": "rtest", "topology": "single", "home_harness": "claude",
+           "repos": [], "agent_roles": {}, "created_at": "", "last_scanned_at": ""}
+    (ws_dir / "config.json").write_text(json.dumps(cfg))
+
+    # Add a repo
+    repo = tmp_path / "myrepo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    synlynk.cmd_scan(add_path=str(repo), workspace_name="rtest")
+    data = json.loads((ws_dir / "config.json").read_text())
+    assert any(r["name"] == "myrepo" for r in data["repos"])
+
+    # Remove it
+    synlynk.cmd_scan(remove_path=str(repo), workspace_name="rtest")
+    data = json.loads((ws_dir / "config.json").read_text())
+    assert not any(r["name"] == "myrepo" for r in data["repos"])
+
+
+def test_scan_dry_run_writes_nothing(tmp_path, monkeypatch):
+    """scan --dry-run leaves no workspace config or context.md."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    synlynk.cmd_scan(dry_run=True)
+    ws_root = tmp_path / ".synlynk" / "workspaces"
+    assert not ws_root.exists()
+    context = tmp_path / ".synlynk" / "context.md"
+    assert not context.exists()
+
+
+def test_structured_context_written_after_scan(tmp_path, monkeypatch):
+    """After a real scan, context.md exists and has workspace section."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
+    synlynk.cmd_scan()
+    context = tmp_path / ".synlynk" / "context.md"
+    assert context.exists()
+    content = context.read_text()
+    assert "# synlynk context" in content
+    assert "workspace" in content
+
+
+def test_fingerprint_stack_ci_cd(tmp_path):
+    """Repos with .github/workflows get CI/CD label."""
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github" / "workflows").mkdir()
+    labels = synlynk.fingerprint_stack(str(tmp_path))
+    assert "CI/CD" in labels
+
+
+def test_fingerprint_stack_sql(tmp_path):
+    """Repos with migrations/ get SQL label."""
+    (tmp_path / "migrations").mkdir()
+    labels = synlynk.fingerprint_stack(str(tmp_path))
+    assert "SQL" in labels
