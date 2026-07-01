@@ -3098,6 +3098,101 @@ def fingerprint_stack(repo_path: str) -> list:
     return labels
 
 
+_KNOWN_SKILL_PATTERNS = [
+    "~/.claude/plugins/cache/superpowers-marketplace/superpowers/*/",
+    "~/.config/gstack/plugins/*/",
+]
+_SKILL_MANIFEST_NAMES = ("manifest.json", "package.json", "skill.json")
+
+
+def scan_skills(extra_paths: list = None) -> list:
+    """Discover installed skill packs from known plugin cache paths."""
+    import glob as _glob
+    import json as _json
+
+    patterns = list(_KNOWN_SKILL_PATTERNS)
+    if extra_paths:
+        patterns.extend(extra_paths)
+
+    found = []
+    seen_paths = set()
+    for pattern in patterns:
+        for candidate in _glob.glob(os.path.expanduser(pattern)):
+            if not os.path.isdir(candidate):
+                continue
+            abs_path = os.path.abspath(candidate)
+            if abs_path in seen_paths:
+                continue
+            seen_paths.add(abs_path)
+
+            name = os.path.basename(candidate)
+            version = "unknown"
+            for manifest_name in _SKILL_MANIFEST_NAMES:
+                manifest_path = os.path.join(candidate, manifest_name)
+                if not os.path.exists(manifest_path):
+                    continue
+                try:
+                    with open(manifest_path) as f:
+                        data = _json.load(f)
+                    name = data.get("name") or name
+                    version = data.get("version") or version
+                    break
+                except (OSError, ValueError, TypeError):
+                    continue
+
+            found.append({"name": name, "version": version, "path": abs_path})
+
+    found.sort(key=lambda item: (item["name"], item["path"]))
+    return found
+
+
+def detect_home_harness(harnesses: list) -> "str | None":
+    """Choose the preferred harness using env override, then claude, then first."""
+    env_name = os.environ.get("SYNLYNK_HOME_HARNESS", "").strip().lower()
+    normalized = [(h.get("name", ""), h) for h in harnesses or []]
+    if env_name:
+        for name, _entry in normalized:
+            if name.lower() == env_name:
+                return name
+
+    for name, _entry in normalized:
+        if name.lower() == "claude":
+            return name
+
+    return normalized[0][0] if normalized else None
+
+
+def parse_context_sections(repo_path: str) -> dict:
+    """Extract ## sections from agent context files in a repository."""
+    sections = {}
+    for fname in ("CLAUDE.md", "GEMINI.md", "AGENTS.md"):
+        path = os.path.join(repo_path, fname)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                text = f.read(4000)
+        except OSError:
+            continue
+
+        current_title = None
+        current_lines = []
+        for line in text.splitlines():
+            if line.startswith("## "):
+                if current_title and current_lines:
+                    sections.setdefault(current_title, "\n".join(current_lines).strip())
+                current_title = line[3:].strip()
+                current_lines = []
+                continue
+            if current_title is not None:
+                current_lines.append(line)
+
+        if current_title and current_lines:
+            sections.setdefault(current_title, "\n".join(current_lines).strip())
+
+    return sections
+
+
 def _extract_synlynk_section(content: str, marker_style: str = "html") -> Optional[str]:
     """Return the text inside synlynk markers, or the whole content for marker_style='none'."""
     if marker_style == "none":

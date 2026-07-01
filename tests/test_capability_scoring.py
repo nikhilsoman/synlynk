@@ -816,5 +816,38 @@ def test_implement_plan_a_tasks_a1_and_a2_from_docs_superpowers_plans_scan_wizar
     assert "Next.js" in repo_b_labels
 
 
+def test_implement_plan_a_tasks_a1_and_a2_from_docs_superpowers_plans_scan_wizard_a2_scan_skills_detect_home_harness_and_parse_context_sections(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+
+    skill_root = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "superpowers-marketplace"
+        / "superpowers"
+        / "5.1.0"
+    )
+    skill_root.mkdir(parents=True)
+    (skill_root / "manifest.json").write_text('{"name":"superpowers","version":"5.1.0"}\n')
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    import synlynk as sl
+
+    skills = sl.scan_skills()
+    assert any(skill["name"] == "superpowers" for skill in skills)
+    assert sl.detect_home_harness([{"name": "codex"}, {"name": "claude"}]) == "claude"
+    monkeypatch.setenv("SYNLYNK_HOME_HARNESS", "codex")
+    assert sl.detect_home_harness([{"name": "codex"}, {"name": "claude"}]) == "codex"
+
+    (tmp_path / "CLAUDE.md").write_text(
+        "# CLAUDE.md\n\n## Your Role\nYou are the PM.\n\n## Architecture\nKeep it simple.\n"
+    )
+    sections = sl.parse_context_sections(str(tmp_path))
+    assert sections["Your Role"] == "You are the PM."
+    assert "Keep it simple." in sections["Architecture"]
+
 
 
