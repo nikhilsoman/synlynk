@@ -2,6 +2,10 @@
 ## 2026-07-01
 ### Shipped
 - feat(BS-17): `synlynk scan` + `synlynk init --wizard` FTUE onboarding — PR #89 merged [cli]
+- feat(BS-18): `synlynk migrate` — state.db source of truth — PR #90 merged [cli]
+- chore(packaging): VERSION single source of truth + pipx-aware upgrade — PR #91 merged [packaging]
+- docs(readme): v0.10.0 overhaul — PR #92 merged [docs]
+- release: **v0.10.0 cut** — gh release create v0.10.0 [release]
 - feat(BS-18): `synlynk migrate` — state.db as permanent source of truth; `project-docs/` moves to `.synlynk/project-docs/`; 5 new DB tables (memory_entries, roadmap_arcs, roadmap_phases, cost_entries, devlog_entries); immediate write-through on every DB write; DR sync via local cloud-synced folder; `--dry-run`, `--recover`, `--setup-dr` flags; 28 tests (616 total); PR #90 merged [cli]
 
 ### Agents used
