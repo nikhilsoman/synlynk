@@ -8133,6 +8133,143 @@ def _wiz_screen_harness(scan: dict) -> str:
     return home or (harnesses[0]["name"] if harnesses else "")
 
 
+def _wiz_screen_topology(scan: dict) -> str:
+    """Screen 2 — repo topology. Returns 'single', 'monorepo', or 'multi'."""
+    _wiz_clear()
+    _wiz_header(step=2, total=6)
+    print(f"  {_BOLD}How are your repos arranged?{_RESET}\n")
+    print(f"  {_DIM}synlynk organises your work into workspaces — named containers{_RESET}")
+    print(f"  {_DIM}that share a context database, agent fleet, and budget.{_RESET}\n")
+
+    repos = scan.get("repos", [])
+    if repos:
+        print(f"  {_DIM}scan found {len(repos)} git repo(s) nearby:{_RESET}")
+        for r in repos[:5]:
+            stack = ", ".join(r["stack_labels"]) or "unknown"
+            print(f"    {_CYAN}●{_RESET} {r['name']:20} {_DIM}{stack}{_RESET}")
+        if len(repos) > 5:
+            print(f"    {_DIM}… and {len(repos) - 5} more{_RESET}")
+        print()
+
+    print(f"  {_CYAN}[1]{_RESET} Single repo  {_DIM}— just this repo{_RESET}")
+    print(f"  {_CYAN}[2]{_RESET} Monorepo     {_DIM}— one repo with packages/ or apps/ sub-dirs{_RESET}")
+    print(f"  {_CYAN}[3]{_RESET} Multi-repo   {_DIM}— multiple repos sharing one workspace{_RESET}")
+
+    # Pre-select based on scan result
+    auto = scan.get("topology", "single")
+    auto_num = {"single": "1", "monorepo": "2", "multi": "3"}.get(auto, "1")
+    _wiz_prompt(f"enter 1/2/3 · enter for auto-detected ({auto_num})")
+    key = _wiz_read_key()
+
+    if key in ("\r", "\n", ""):
+        return auto
+    mapping = {"1": "single", "2": "monorepo", "3": "multi"}
+    return mapping.get(key, auto)
+
+
+def _wiz_screen_workspace_name_pick(scan: dict) -> dict:
+    """Screen 2ab — combined workspace name input + repo picker (multi-repo).
+
+    Returns dict: {workspace_name: str, repos: list[dict]}
+    """
+    _TEAL = "\033[36m"
+    _wiz_clear()
+    _wiz_header(step=2, total=6, sub_active=True)
+    print(f"  {_BOLD}Name & assemble your workspace{_RESET}\n")
+    print(f"  {_DIM}All selected repos share one state.db, agent fleet, and budget.{_RESET}")
+    print(f"  {_DIM}synlynk found these git roots nearby — include everything your{_RESET}")
+    print(f"  {_DIM}agents need to see together.{_RESET}\n")
+
+    # Workspace name
+    suggested = scan.get("workspace_name", "my-workspace")
+    print(f"  {_DIM}workspace name{_RESET}  [{_CYAN}{suggested}{_RESET}]  "
+          f"{_DIM}(enter to accept, or type new name){_RESET}")
+    _wiz_prompt("workspace name")
+
+    if sys.stdin.isatty():
+        import tty as _tty, termios as _termios
+        # Restore normal line editing for text input
+        fd = sys.stdin.fileno()
+        try:
+            old = _termios.tcgetattr(fd)
+            _termios.tcsetattr(fd, _termios.TCSADRAIN, old)
+        except Exception:
+            pass
+    raw_name = input().strip()
+    workspace_name = raw_name if raw_name else suggested
+
+    # Repo picker
+    repos = scan.get("repos", [])
+    _DOTFILE_NAMES = {"dotfiles", ".dotfiles", "dotfile"}
+    selected = [r["name"] not in _DOTFILE_NAMES for r in repos]
+
+    print(f"\n  {_DIM}repos to include:{_RESET}  "
+          f"{_DIM}(space to toggle, enter to confirm){_RESET}\n")
+    for i, (r, sel) in enumerate(zip(repos, selected)):
+        stack = ", ".join(r["stack_labels"]) or "unknown"
+        check = f"{_TEAL}[✓]{_RESET}" if sel else f"{_DIM}[ ]{_RESET}"
+        print(f"  {check} {i+1}. {r['name']:20} {_DIM}{stack}{_RESET}")
+
+    print(f"\n  {_DIM}[a] add repo from another path{_RESET}")
+    _wiz_prompt("number to toggle · a to add · enter to confirm")
+
+    while True:
+        key = _wiz_read_key()
+        if key in ("\r", "\n", ""):
+            break
+        if key == "a":
+            print(f"\n  {_DIM}path to repo:{_RESET} ", end="", flush=True)
+            extra = input().strip()
+            if extra and os.path.isdir(os.path.join(extra, ".git")):
+                repos.append({
+                    "path": os.path.abspath(extra),
+                    "name": os.path.basename(extra),
+                    "stack_labels": fingerprint_stack(extra),
+                    "readme_excerpt": "",
+                    "context_sections": {},
+                })
+                selected.append(True)
+                print(f"  {_GREEN}✓{_RESET} added {os.path.basename(extra)}")
+        try:
+            idx = int(key) - 1
+            if 0 <= idx < len(selected):
+                selected[idx] = not selected[idx]
+        except ValueError:
+            pass
+
+    chosen_repos = [r for r, s in zip(repos, selected) if s]
+    return {"workspace_name": workspace_name, "repos": chosen_repos}
+
+
+def _wiz_screen_workspace_confirm(workspace: dict) -> bool:
+    """Screen 2c — confirm workspace structure.
+
+    Returns True = confirmed (continue), False = go back to 2ab.
+    """
+    _TEAL = "\033[36m"
+    _wiz_clear()
+    _wiz_header(step=2, total=6, sub_active=True)
+    print(f"  {_BOLD}Here's your workspace{_RESET}\n")
+
+    ws_name = workspace.get("workspace_name", "workspace")
+    repos = workspace.get("repos", [])
+    print(f"  {_TEAL}{ws_name}/{_RESET}")
+    print(f"  {_DIM}├─ state.db{_RESET}")
+    print(f"  {_DIM}├─ config.json{_RESET}")
+    print(f"  {_DIM}└─ repos{_RESET}")
+    for r in repos:
+        print(f"  {_GREEN}    ✓{_RESET} {r['name']:20} {_DIM}{r['path']}{_RESET}")
+
+    print(f"\n  {_DIM}state lives at: ~/.synlynk/workspaces/{ws_name}/state.db{_RESET}")
+    print(f"  {_DIM}add more later: synlynk scan --add ~/path/to/repo{_RESET}\n")
+
+    print(f"  {_TEAL}[enter]{_RESET} Create workspace · "
+          f"{_DIM}[e]{_RESET} Edit")
+    _wiz_prompt("enter to create · e to edit")
+    key = _wiz_read_key()
+    return key not in ("e", "E")
+
+
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo") -> None:

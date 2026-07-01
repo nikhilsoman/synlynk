@@ -82,3 +82,57 @@ def test_implement_plan_b_tasks_b1_and_b2_from_docs_superpowers_plans_2026_07_01
     assert hasattr(synlynk, '_wiz_screen_harness')
     # At time of writing tests, they are not implemented so this would fail until code added.
     # But since test is in wrong file for -k on capability, the real tests are above.
+
+
+# === Task B-3 tests (topology + workspace name/confirm) appended per plan ===
+
+def test_wiz_screen_topology_single(monkeypatch, capsys):
+    """Pressing '1' → 'single' topology."""
+    scan = {"repos": [{"path": "/tmp/r", "name": "r",
+                       "stack_labels": [], "readme_excerpt": "",
+                       "context_sections": {}}], "topology": "single"}
+    monkeypatch.setattr("sys.stdin", io.StringIO("1"))
+    topo = synlynk._wiz_screen_topology(scan)
+    assert topo == "single"
+
+
+def test_wiz_screen_topology_multi(monkeypatch, capsys):
+    """Pressing '3' → 'multi' topology."""
+    scan = {"repos": [
+        {"path": "/tmp/a", "name": "a", "stack_labels": [], "readme_excerpt": "", "context_sections": {}},
+        {"path": "/tmp/b", "name": "b", "stack_labels": [], "readme_excerpt": "", "context_sections": {}},
+    ], "topology": "multi"}
+    monkeypatch.setattr("sys.stdin", io.StringIO("3"))
+    topo = synlynk._wiz_screen_topology(scan)
+    assert topo == "multi"
+
+
+def test_wiz_screen_workspace_name_pick_returns_dict(monkeypatch, capsys):
+    """Returns dict with workspace_name and repos keys."""
+    scan = {
+        "workspace_name": "dev-ws",
+        "topology": "multi",
+        "repos": [
+            {"path": "/tmp/a", "name": "repo_a", "stack_labels": ["Python"],
+             "readme_excerpt": "", "context_sections": {}},
+        ],
+    }
+    # Simulate: press Enter for suggested name, then space to toggle repo_a, then Enter
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r \r"))
+    result = synlynk._wiz_screen_workspace_name_pick(scan)
+    assert "workspace_name" in result
+    assert "repos" in result
+
+
+def test_wiz_screen_workspace_confirm_enter_returns_true(monkeypatch, capsys):
+    workspace = {"workspace_name": "dev-ws", "repos": [],
+                 "topology": "multi", "home_harness": "claude"}
+    monkeypatch.setattr("sys.stdin", io.StringIO("\r"))
+    assert synlynk._wiz_screen_workspace_confirm(workspace) is True
+
+
+def test_wiz_screen_workspace_confirm_e_returns_false(monkeypatch, capsys):
+    workspace = {"workspace_name": "dev-ws", "repos": [],
+                 "topology": "multi", "home_harness": "claude"}
+    monkeypatch.setattr("sys.stdin", io.StringIO("e"))
+    assert synlynk._wiz_screen_workspace_confirm(workspace) is False
