@@ -1472,18 +1472,21 @@ def test_version_is_098(project_dir):
 
 
 def test_pyproject_version_matches_module(project_dir):
-    """pyproject.toml version must stay in sync with synlynk.VERSION."""
+    """pyproject.toml should source version dynamically from synlynk.VERSION."""
     import re
+
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     toml_path = os.path.join(repo_root, "pyproject.toml")
     if not os.path.exists(toml_path):
         pytest.skip("pyproject.toml not present")
     text = open(toml_path).read()
-    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    assert m, "version field not found in pyproject.toml"
-    assert m.group(1) == synlynk.VERSION, (
-        f"pyproject.toml version {m.group(1)!r} != synlynk.VERSION {synlynk.VERSION!r}"
+    assert re.search(r'^\s*dynamic\s*=\s*\["version"\]', text, re.MULTILINE)
+    assert re.search(
+        r'^\s*version\s*=\s*\{\s*attr\s*=\s*"synlynk\.VERSION"\s*\}',
+        text,
+        re.MULTILINE,
     )
+    assert not re.search(r'^\s*version\s*=\s*"[^"]+"\s*$', text, re.MULTILINE)
 
 
 def test_main_entrypoint_importable():
