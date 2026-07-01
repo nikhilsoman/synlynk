@@ -169,3 +169,36 @@ def test_render_prompt_missing_variable_uses_empty_string():
     result = synlynk._render_prompt(template, {})
     assert "{unknown_var}" not in result
     assert "Hello" in result
+
+
+def test_launch_screen_tasks_skip_returns_none(monkeypatch):
+    tasks = synlynk._select_launch_tasks(_minimal_scan())
+    scan = _minimal_scan()
+    monkeypatch.setattr(synlynk, '_wiz_read_key', lambda: 's')
+    result = synlynk._launch_screen_tasks(tasks, scan)
+    assert result is None
+
+
+def test_launch_screen_cycles_returns_on_any_key(monkeypatch, capsys):
+    monkeypatch.setattr(synlynk, '_wiz_read_key', lambda: 'x')
+    synlynk._launch_screen_cycles()
+    out = capsys.readouterr().out
+    assert "dream" in out.lower() or "Dream" in out
+
+
+def test_launch_screen_preview_returns_confirmed_and_prompt(monkeypatch):
+    task = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "arch-review")
+    scan = _minimal_scan()
+    monkeypatch.setattr(synlynk, '_wiz_read_key', lambda: '\r')
+    confirmed, prompt = synlynk._launch_screen_preview(task, scan)
+    assert confirmed is True
+    assert isinstance(prompt, str)
+    assert len(prompt) > 10
+
+
+def test_launch_screen_preview_esc_returns_not_confirmed(monkeypatch):
+    task = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "arch-review")
+    scan = _minimal_scan()
+    monkeypatch.setattr(synlynk, '_wiz_read_key', lambda: '\x1b')
+    confirmed, prompt = synlynk._launch_screen_preview(task, scan)
+    assert confirmed is False

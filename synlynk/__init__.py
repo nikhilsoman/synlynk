@@ -9492,6 +9492,186 @@ def _wiz_screen_launch(workspace: dict, scan: dict) -> None:
     _wiz_read_key()
 
 
+def _launch_screen_cycles() -> None:
+    """Screen 3 — cycles explainer. Any key returns to Screen 1."""
+    _wiz_clear()
+    cycle_ansi = {
+        "Dream":   "\033[38;5;141m",
+        "Design":  "\033[38;5;117m",
+        "Plan":    "\033[38;5;120m",
+        "Build":   "\033[38;5;221m",
+        "Ship":    "\033[38;5;210m",
+        "Sustain": "\033[38;5;246m",
+    }
+    print(f"\n  {_BOLD}{_CYAN}◆ The 6 cycles — your multi-agent SDLC{_RESET}\n")
+    cycle_agents = {
+        "Dream":   "→ claude",
+        "Design":  "→ claude",
+        "Plan":    "→ claude",
+        "Build":   "→ agy · codex · grok",
+        "Ship":    "→ claude",
+        "Sustain": "→ all agents",
+    }
+    for name, desc in [
+        ("Dream",   "What's worth building? Ideate, assess, identify opportunities."),
+        ("Design",  "Brainstorm → spec → UX. Turn ideas into a concrete brief."),
+        ("Plan",    "Implementation plan, story breakdown, agent wave schedule."),
+        ("Build",   "Dispatch agents, run jobs, iterate on diffs."),
+        ("Ship",    "Cut release, changelog, publish."),
+        ("Sustain", "Monitor, patch, community, docs, support."),
+    ]:
+        color = cycle_ansi.get(name, "")
+        agents = cycle_agents.get(name, "")
+        print(f"  {color}{_BOLD}{name:<8}{_RESET}  {_DIM}{desc}  {agents}{_RESET}")
+    print(f"\n  {_DIM}Tasks in synlynk launch are tagged to the cycle they open.")
+    print(f"  Any cycle can dispatch any agent.{_RESET}\n")
+    print(f"  {_DIM}[any key] back to tasks{_RESET}\n")
+    _wiz_read_key()
+
+
+def _launch_screen_preview(task: dict, scan: dict) -> tuple:
+    """Screen 2 — dispatch preview.
+    Returns (confirmed: bool, prompt: str).
+    [enter/space] → (True, prompt); [e] → edit prompt inline; [esc/q] → (False, prompt)
+    """
+    prompt = _render_prompt(task, scan)
+
+    while True:
+        _wiz_clear()
+        cycle = task.get("cycle", "dream")
+        agent = task.get("agent", "claude")
+        est = task.get("est_hours", 1)
+        est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
+        r = task.get("r_tokens", 0)
+        w = task.get("w_tokens", 0)
+        t = task.get("tool_calls", 0)
+        r_str = f"{r // 1000}K" if r >= 1000 else str(r)
+        w_str = f"{w // 1000}K" if w >= 1000 else str(w)
+
+        cycle_ansi = {
+            "dream":   "\033[38;5;141m",
+            "design":  "\033[38;5;117m",
+            "plan":    "\033[38;5;120m",
+            "build":   "\033[38;5;221m",
+            "ship":    "\033[38;5;210m",
+            "sustain": "\033[38;5;246m",
+        }
+        cycle_color = cycle_ansi.get(cycle, "")
+
+        print(f"\n  {_BOLD}{_CYAN}◆ Dispatch preview{_RESET}\n")
+        print(f"  {_DIM}{'agent':<8}{_RESET}{agent}")
+        print(f"  {_DIM}{'cycle':<8}{_RESET}{cycle_color}{cycle.capitalize()}{_RESET}")
+        print(f"  {_DIM}{'mode':<8}{_RESET}{task.get('context_mode', 'full')} context")
+        print(f"  {_DIM}{'est.':<8}{_RESET}{est_str}  │  "
+              f"\033[38;5;117mR\033[0m {r_str} · "
+              f"\033[38;5;120mW\033[0m {w_str} · "
+              f"\033[38;5;221mT\033[0m {t}\n")
+        print(f"  {_DIM}task prompt:{_RESET}")
+
+        # Wrap prompt at 56 chars for the box
+        words = prompt.split()
+        lines = []
+        current = ""
+        for word in words:
+            if len(current) + len(word) + 1 > 56:
+                lines.append(current)
+                current = word
+            else:
+                current = f"{current} {word}".strip()
+        if current:
+            lines.append(current)
+
+        print(f"  ┌{'─' * 58}┐")
+        for line in lines:
+            print(f"  │ {line:<56} │")
+        print(f"  └{'─' * 58}┘\n")
+        print(f"  {_DIM}[enter] dispatch now   [e] edit prompt   [esc] back to tasks{_RESET}\n")
+
+        key = _wiz_read_key()
+
+        if key in ("\r", "\n", " "):
+            return True, prompt
+        if key in ("\x1b", "q"):
+            return False, prompt
+        if key in ("e", "E"):
+            print(f"\n  Edit prompt (press Enter to confirm):\n  > ", end="", flush=True)
+            try:
+                edited = input().strip()
+                if edited:
+                    prompt = edited
+            except (EOFError, KeyboardInterrupt):
+                pass
+            continue
+        # any other key — redraw
+
+
+def _launch_screen_tasks(tasks: list, scan: dict):
+    """Screen 1 — task selection TUI. Returns chosen template dict or None if user skips."""
+    while True:
+        _wiz_clear()
+        ws_name = scan.get("workspace_name", "workspace")
+        repos = scan.get("repos", [])
+        primary = repos[0] if repos else {}
+        stack = ", ".join(primary.get("stack_labels", [])) or "unknown"
+        topology = scan.get("topology", "single")
+        harnesses = scan.get("harnesses", [])
+        agent_names = ", ".join(h["name"] for h in harnesses) or "none"
+
+        print(f"\n  {_BOLD}{_CYAN}◆ synlynk launch{_RESET}")
+        print(f"  {_DIM}{ws_name} · {stack} · {topology} repo · {agent_names}{_RESET}\n")
+        print(f"  Where do you want to start?\n")
+
+        cycle_ansi = {
+            "dream":   "\033[38;5;141m",
+            "design":  "\033[38;5;117m",
+            "plan":    "\033[38;5;120m",
+            "build":   "\033[38;5;221m",
+            "ship":    "\033[38;5;210m",
+            "sustain": "\033[38;5;246m",
+        }
+
+        for i, task in enumerate(tasks, 1):
+            cycle = task.get("cycle", "dream")
+            cycle_color = cycle_ansi.get(cycle, "")
+            cycle_tag = f"{cycle_color}[{cycle.capitalize()}]{_RESET}"
+            num_color = cycle_ansi.get(cycle, _CYAN)
+            print(f"  {num_color}[{i}]{_RESET} {_BOLD}{task['title']}{_RESET}  {cycle_tag}")
+            if task.get("trigger_condition") is not None:
+                print(f"     {_YELLOW}⚡ scan found: {task['description']}{_RESET}")
+            else:
+                print(f"     {_DIM}{task['description']}{_RESET}")
+            est = task.get("est_hours", 1)
+            est_str = f"~{int(est * 60)}m" if est < 1 else f"~{int(est)}h"
+            r = task.get("r_tokens", 0)
+            w = task.get("w_tokens", 0)
+            t = task.get("tool_calls", 0)
+            r_str = f"{r // 1000}K" if r >= 1000 else str(r)
+            w_str = f"{w // 1000}K" if w >= 1000 else str(w)
+            print(f"     {_DIM}{est_str}  │  "
+                  f"\033[38;5;117mR\033[0m {r_str} · "
+                  f"\033[38;5;120mW\033[0m {w_str} · "
+                  f"\033[38;5;221mT\033[0m {t}{_RESET}")
+            print()
+
+        print(f"  {_DIM}{'─' * 52}{_RESET}")
+        print(f"  {_DIM}\033[38;5;117mR\033[0m{_DIM} read · "
+              f"\033[38;5;120mW\033[0m{_DIM} write · "
+              f"\033[38;5;221mT\033[0m{_DIM} tool calls · estimates based on task template{_RESET}")
+        valid_keys = "".join(str(i) for i in range(1, len(tasks) + 1))
+        print(f"  {_DIM}[{valid_keys}] pick   [?] cycles   [s] skip{_RESET}\n")
+
+        key = _wiz_read_key()
+
+        if key in ("s", "q", "\x03"):
+            return None
+        if key == "?":
+            _launch_screen_cycles()
+            continue
+        if key.isdigit() and 1 <= int(key) <= len(tasks):
+            return tasks[int(key) - 1]
+        # invalid key — redraw
+
+
 def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
     """Run the FTUE wizard. All state is held in memory until Screen 6.
 
