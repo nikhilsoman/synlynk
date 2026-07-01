@@ -1,4 +1,14 @@
 
+## 2026-07-01
+### Shipped
+- feat(BS-17): `synlynk scan` + `synlynk init --wizard` FTUE onboarding — PR #89 merged [cli]
+- feat(BS-18): `synlynk migrate` — state.db as permanent source of truth; `project-docs/` moves to `.synlynk/project-docs/`; 5 new DB tables (memory_entries, roadmap_arcs, roadmap_phases, cost_entries, devlog_entries); immediate write-through on every DB write; DR sync via local cloud-synced folder; `--dry-run`, `--recover`, `--setup-dr` flags; 28 tests (616 total); PR #90 merged [cli]
+
+### Agents used
+- Codex: BS-18 T1-T4+T7 (DB schema, parsers, infra helpers, cmd_migrate, CLI wiring)
+- Grok: BS-18 T5+T6 (write-through hooks, _generate_context_from_db, context routing)
+- Agy: BS-18 T8 (E2E integration test) + blog post 36
+
 ## 2026-06-29
 ### Resolved (checkpoint)
 - feat: synlynk v0.2.0 — watch daemon, checkpoint, status command, context compaction [cli]

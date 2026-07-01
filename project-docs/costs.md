@@ -11,8 +11,8 @@
 | Light (~50K tokens) | 10 | ~$0.25–0.50 | ~$3.50 |
 | Medium (~150K tokens) | 12 | ~$0.65–1.50 | ~$12.00 |
 | Heavy (~400K tokens) | 8 | ~$1.75–3.00 | ~$18.00 |
-| Very Heavy / Subagent (~800K tokens) | 7 | ~$3.50–6.00 | ~$28.00 |
-| **Total** | **38** | | **~$62.00** |
+| Very Heavy / Subagent (~800K tokens) | 8 | ~$3.50–6.00 | ~$31.50 |
+| **Total** | **39** | | **~$65.50** |
 
 ---
 
@@ -50,3 +50,4 @@
 | 2026-06-28 | agy | ~10 | ~15K / ~2K | ~$0.08 | BS-5 docs sidebar scroll-spy implementation with IntersectionObserver |
 
 | 2026-06-30 | nikhil | ~10 | ~30K / ~15K | ~$0.50 | Implement story-bs14-sentinel-stall (per-job stall check inside _reconcile_jobs with config default) and added TDD test |
+| 2026-07-01 | nikhil | ~150 | ~320K / ~160K | ~$3.90 | BS-17 final merge (PR #89) + BS-18 full cycle: brainstorm → spec → plan → 4 agent waves (Codex T1-T7, Grok T5-T6, Agy T8) → PR #90 merged; 616 tests; state.db source of truth shipped |
