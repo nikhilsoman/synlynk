@@ -881,7 +881,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
     # ── --remove ──────────────────────────────────────────────────────────
     if remove_path:
         abs_remove = os.path.abspath(remove_path)
-        ws_dir = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name or 'default'}")
+        ws_dir = _workspace_config_dir(workspace_name or "default")
         cfg_path = os.path.join(ws_dir, "config.json")
         if not os.path.exists(cfg_path):
             print(f"  ⚠ No workspace config found at {cfg_path}")
@@ -904,7 +904,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
         if not os.path.isdir(os.path.join(abs_add, ".git")):
             print(f"  ⚠ {abs_add} is not a git repository")
             return
-        ws_dir = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name or 'default'}")
+        ws_dir = _workspace_config_dir(workspace_name or "default")
         cfg_path = os.path.join(ws_dir, "config.json")
         if not os.path.exists(cfg_path):
             print(f"  ⚠ No workspace config at {cfg_path} — run `synlynk scan` first")
@@ -926,6 +926,19 @@ def cmd_scan(deep: bool = False, status: bool = False,
         cfg["repos"].append(new_entry)
         open(cfg_path, "w").write(_json.dumps(cfg, indent=2))
         print(f"  {_GREEN}✓{_RESET} Added {new_entry['name']} to workspace")
+        return
+
+    # ── Compatibility: non-git working tree keeps legacy source scan ─────
+    in_git_repo = os.path.isdir(os.path.join(os.getcwd(), ".git"))
+    if not in_git_repo and not refresh:
+        head_sha = _git_head_sha()
+        if head_sha is None:
+            print("  ⚠ Not in a git repository — scan requires git")
+            return
+        skeleton = _scan_source_skeleton()
+        _save_scan_meta(head_sha, skeleton)
+        sha_short = head_sha[:7]
+        print(f"  {_GREEN}✓{_RESET} Skeleton refreshed · {len(skeleton)} files · HEAD {sha_short}")
         return
 
     # ── Default / --refresh: full workspace scan ──────────────────────────
@@ -3384,14 +3397,25 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
     }
 
 
+def _workspace_config_dir(workspace_name: str) -> str:
+    """Return a writable workspace config directory, preferring ~/.synlynk."""
+    preferred = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name}")
+    try:
+        os.makedirs(preferred, exist_ok=True)
+        return preferred
+    except PermissionError:
+        fallback = os.path.abspath(os.path.join(".synlynk", "workspaces", workspace_name))
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+
 def write_workspace_config(scan_result: dict, workspace_name: str) -> str:
     """Write workspace config to ~/.synlynk/workspaces/<name>/config.json.
 
     Returns the path written.
     """
     import json as _json
-    ws_dir = os.path.expanduser(f"~/.synlynk/workspaces/{workspace_name}")
-    os.makedirs(ws_dir, exist_ok=True)
+    ws_dir = _workspace_config_dir(workspace_name)
     config = {
         "workspace_name": workspace_name,
         "topology": scan_result.get("topology", "single"),
