@@ -396,3 +396,66 @@ def test_generate_context_uses_files_when_not_migrated(tmp_path, monkeypatch):
     # No sentinel — should use flat-file path (returns empty since no docs_dir)
     ctx = synlynk.generate_context(out_path=str(tmp_path / "ctx.md"))
     assert isinstance(ctx, str)  # doesn't crash, returns string
+
+
+def test_full_migration_end_to_end(tmp_path, monkeypatch):
+    import json, subprocess as _sp
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('HOME', str(tmp_path))
+    (tmp_path / '.synlynk').mkdir()
+    monkeypatch.setattr(_sp, 'run', lambda *a, **kw: None)
+
+    pd = tmp_path / 'project-docs'
+    pd.mkdir()
+    (pd / 'memory.md').write_text('# synlynk Memory\n\n## Key Decisions\n\nDecision A. [@nikhil]\n\n## Agents\n\nAgent rules.\n')
+    (pd / 'roadmap.md').write_text('# Roadmap\n\n## v0.10.0 — Developer Preview\n\n- wizard [P0]\n- scan [P0]\n')
+    (pd / 'costs.md').write_text('| Date | Agent | Model | In | Out | Cache | Cost | Notes |\n|---|---|---|---|---|---|---|---|\n| 2026-07-01 | claude | sonnet | 200000 | 40000 | 0 | .20 | exec: migrate |\n')
+    devlogs = pd / 'devlogs'
+    devlogs.mkdir()
+    (devlogs / 'nikhil.md').write_text('# Nikhil Devlog\n\n## 2026-07-01 — Session: BS-18\n\n### Shipped\n- full migration\n')
+    (pd / 'todo.md').write_text('- [ ] packaging <!-- id:story-v010-pkg --> <!-- gh:#90 -->\n')
+
+    # Dry-run imports nothing
+    synlynk.cmd_migrate(dry_run=True)
+    conn = synlynk._get_db()
+    assert conn.execute('SELECT COUNT(*) FROM memory_entries').fetchone()[0] == 0
+    conn.close()
+
+    # Real migrate
+    synlynk.cmd_migrate()
+    assert synlynk._is_migrated()
+
+    conn = synlynk._get_db()
+    assert conn.execute('SELECT COUNT(*) FROM memory_entries').fetchone()[0] == 2
+    assert conn.execute('SELECT COUNT(*) FROM roadmap_arcs').fetchone()[0] == 1
+    assert conn.execute('SELECT COUNT(*) FROM roadmap_phases').fetchone()[0] == 2
+    assert conn.execute('SELECT COUNT(*) FROM cost_entries').fetchone()[0] == 1
+    assert conn.execute('SELECT COUNT(*) FROM devlog_entries').fetchone()[0] == 1
+    conn.close()
+
+    backup = tmp_path / '.synlynk' / 'project-docs'
+    assert (backup / 'memory.md').exists()
+    assert (backup / 'devlogs' / 'nikhil.md').exists()
+
+    # Write-through
+    synlynk.cmd_memory_add('New Decision', 'Something important.', author='nikhil')
+    assert 'New Decision' in (backup / 'memory.md').read_text()
+
+    synlynk.cmd_devlog_append('nikhil', '2026-07-02', '### Done\n- follow-up\n', 'Follow-up')
+    assert 'Follow-up' in (backup / 'devlogs' / 'nikhil.md').read_text()
+
+    # generate_context reads from DB
+    ctx = synlynk.generate_context(out_path=str(tmp_path / 'ctx.md'))
+    assert isinstance(ctx, str) and len(ctx) > 0
+
+    # Recover re-imports from backup
+    conn = synlynk._get_db()
+    conn.execute('DELETE FROM memory_entries')
+    conn.commit()
+    conn.close()
+    synlynk.cmd_migrate(recover=True)
+    conn = synlynk._get_db()
+    count = conn.execute('SELECT COUNT(*) FROM memory_entries').fetchone()[0]
+    conn.close()
+    assert count == 3  # 2 original + 1 written-through
+
