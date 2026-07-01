@@ -239,6 +239,55 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
             recorded_at TEXT NOT NULL
         );
     """)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS memory_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            section     TEXT NOT NULL,
+            body        TEXT NOT NULL,
+            author      TEXT,
+            created_at  TEXT DEFAULT (datetime('now')),
+            updated_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS roadmap_arcs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            version     TEXT NOT NULL UNIQUE,
+            title       TEXT,
+            status      TEXT DEFAULT 'planned',
+            target_date TEXT,
+            notes       TEXT
+        );
+        CREATE TABLE IF NOT EXISTS roadmap_phases (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            arc_version TEXT NOT NULL REFERENCES roadmap_arcs(version),
+            phase_title TEXT NOT NULL,
+            status      TEXT DEFAULT 'planned',
+            priority    TEXT,
+            story_id    TEXT REFERENCES stories(story_id),
+            notes       TEXT
+        );
+        CREATE TABLE IF NOT EXISTS cost_entries (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_date      TEXT NOT NULL,
+            agent             TEXT,
+            model             TEXT,
+            input_tokens      INTEGER,
+            output_tokens     INTEGER,
+            cache_read_tokens INTEGER,
+            total_cost_usd    REAL,
+            notes             TEXT,
+            recorded_at       TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS devlog_entries (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            author        TEXT NOT NULL,
+            entry_date    TEXT NOT NULL,
+            session_title TEXT,
+            body          TEXT NOT NULL,
+            recorded_at   TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
+        CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
+    """)
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
@@ -253,6 +302,10 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
             _json.dumps(_baseline.get("dispatch_flags", {})),
             _json.dumps(_baseline.get("network_deps", {})),
         ))
+    try:
+        conn.execute("ALTER TABLE stories ADD COLUMN gh_issue TEXT")
+    except Exception:
+        pass
     conn.commit()
     # v0.9.2: token budget columns on stories
     for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
@@ -262,6 +315,151 @@ def _migrate_db(conn: _sqlite3.Connection) -> None:
             pass  # column already exists
     conn.commit()
     _seed_verb_map(conn)
+
+
+def _parse_memory_md(content: str) -> list:
+    sections = []
+    current_section = None
+    current_body = []
+    for line in content.splitlines(keepends=True):
+        m = re.match(r'^## (.+)', line)
+        if m:
+            if current_section is not None:
+                body = ''.join(current_body).strip()
+                author_m = re.search(r'\[@(\w+)\]', body)
+                sections.append({'section': current_section, 'body': body,
+                                 'author': author_m.group(1) if author_m else None})
+            current_section = m.group(1).strip()
+            current_body = []
+        elif current_section is not None:
+            current_body.append(line)
+    if current_section is not None and current_body:
+        body = ''.join(current_body).strip()
+        author_m = re.search(r'\[@(\w+)\]', body)
+        sections.append({'section': current_section, 'body': body,
+                         'author': author_m.group(1) if author_m else None})
+    return sections
+
+
+def _parse_roadmap_md(content: str) -> tuple:
+    arcs, phases, current_arc = [], [], None
+    for line in content.splitlines():
+        arc_m = re.match(r'^## (v[\d.]+[\w.-]*)\s*[-—]?\s*(.*)', line)
+        if arc_m:
+            version = arc_m.group(1).strip()
+            title = arc_m.group(2).strip() or None
+            status = ('shipped' if ('✅' in line or 'shipped' in line.lower()) else
+                      'in_progress' if ('🚧' in line or 'in progress' in line.lower()) else 'planned')
+            current_arc = {'version': version, 'title': title, 'status': status}
+            arcs.append(current_arc)
+            continue
+        if current_arc is None:
+            continue
+        phase_m = re.match(r'^[-*]\s+(.+)', line)
+        if phase_m:
+            text = phase_m.group(1).strip()
+            priority = next((p for p in ('P0', 'P1', 'daily-driver')
+                             if f'({p})' in text or f'[{p}]' in text), None)
+            status = ('shipped' if '✅' in text else
+                      'in_progress' if '🚧' in text else 'planned')
+            phases.append({'arc_version': current_arc['version'], 'phase_title': text,
+                           'status': status, 'priority': priority, 'story_id': None, 'notes': None})
+    return arcs, phases
+
+
+def _parse_costs_md(content: str) -> list:
+    rows = []
+    for line in content.splitlines():
+        if not line.startswith('|') or '---' in line:
+            continue
+        cells = [c.strip().lstrip('~') for c in line.split('|')[1:-1]]
+        if len(cells) < 2:
+            continue
+        date = cells[0]
+        if not date or not re.match(r'\d{4}', date) or date.lower() in ('date', 'session', 'timestamp'):
+            continue
+        def _int(v):
+            try: return int(v.replace(',', ''))
+            except: return None
+        def _float(v):
+            try: return float(v.replace('$', '').replace(',', ''))
+            except: return None
+        rows.append({'session_date': date,
+                     'agent': cells[1] if len(cells) > 1 else None,
+                     'model': cells[2] if len(cells) > 2 else None,
+                     'input_tokens': _int(cells[3]) if len(cells) > 3 else None,
+                     'output_tokens': _int(cells[4]) if len(cells) > 4 else None,
+                     'cache_read_tokens': _int(cells[5]) if len(cells) > 5 else None,
+                     'total_cost_usd': _float(cells[6]) if len(cells) > 6 else None,
+                     'notes': cells[7] if len(cells) > 7 else None})
+    return rows
+
+
+def _parse_devlog_file(content: str, author: str) -> list:
+    entries, current_date, current_title, current_body = [], None, None, []
+    for line in content.splitlines(keepends=True):
+        m = re.match(r'^## (\d{4}-\d{2}-\d{2})(?:\s*[—-]\s*(?:Session:\s*)?(.+))?', line)
+        if m:
+            if current_date and current_body:
+                entries.append({'author': author, 'entry_date': current_date,
+                                 'session_title': current_title, 'body': ''.join(current_body).strip()})
+            current_date = m.group(1)
+            raw = m.group(2)
+            current_title = raw.strip() if raw else None
+            current_body = []
+        elif current_date is not None:
+            current_body.append(line)
+    if current_date and current_body:
+        entries.append({'author': author, 'entry_date': current_date,
+                         'session_title': current_title, 'body': ''.join(current_body).strip()})
+    return entries
+
+
+def _parse_todo_metadata(content: str) -> list:
+    results = []
+    for line in content.splitlines():
+        id_m = re.search(r'<!--\s*id:(story-[\w-]+)\s*-->', line)
+        if not id_m:
+            continue
+        gh_m = re.search(r'<!--\s*gh:(#\d+)\s*-->', line)
+        pri_m = re.search(r'<!--\s*priority:([\w-]+)\s*-->', line)
+        if gh_m or pri_m:
+            results.append({'story_id': id_m.group(1),
+                             'gh_issue': gh_m.group(1) if gh_m else None,
+                             'priority': pri_m.group(1) if pri_m else None})
+    return results
+
+
+def _is_migrated() -> bool:
+    return os.path.exists(os.path.join('.synlynk', '.synlynk_migrated'))
+
+
+def _synlynk_project_docs_dir() -> str:
+    return os.path.join('.synlynk', 'project-docs')
+
+
+def _dr_sync(relative_path: str) -> None:
+    try:
+        cfg_path = os.path.join('.synlynk', 'config.json')
+        if not os.path.exists(cfg_path):
+            return
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+        dr_path = cfg.get('dr_sync_path')
+        if not dr_path:
+            return
+        dr_path = os.path.expanduser(str(dr_path))
+        if not os.path.isdir(dr_path):
+            return
+        src = os.path.join('.synlynk', 'project-docs', relative_path)
+        if not os.path.exists(src):
+            return
+        dst = os.path.join(dr_path, 'project-docs', relative_path)
+        os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
+        import shutil as _shutil
+        _shutil.copy2(src, dst)
+    except Exception:
+        pass
 
 
 def _seed_verb_map(db_conn):
