@@ -111,7 +111,8 @@ The verb interoperability matrix is the first step toward capability-aware routi
 
 ## Strategic Note: The Goal at the End of This PR
 
-The harness contract layer is in place. The next work items are:
+The harness contract layer is in place. v0.9.9 is shipped. The next work items are:
+- **v0.9.8 Health Pulse + Lifecycle** (PR #70, open): `synlynk doctor` registry-based health checks, lifecycle commands — this ships before Developer Preview
 - **v0.10.0 Developer Preview**: pipx packaging, pyproject.toml, README, `synlynk viz` (BS-6) — the launch milestone
 - **BS-13 Live Job Observatory**: real-time SSE job streaming dashboard
 - **BS-15 Native Harness**: synlynk as its own dispatch harness (no dependency on Claude CLI in the loop)
