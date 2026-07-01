@@ -1,5 +1,5 @@
 
-## 2026-06-28
+## 2026-06-29
 ### Resolved (checkpoint)
 - feat: synlynk v0.2.0 — watch daemon, checkpoint, status command, context compaction [cli]
 - fix: synlynk v0.2.1 — correctness patch [cli]
@@ -34,3 +34,4 @@
 - T4: Relay wire protocol — SynlynkRelay SSE broker + relay start/broadcast CLI [infra]
 - T5: Sentinel VERIFY_SKIP pattern + _extract_compliance_tags [backend]
 - dispatch: write job context to .synlynk/contexts/<job_id>.md not global context.md [dispatch]
+- BS-5: brainstorm — standalone synlynk website (design-first, beyond functional) [web]

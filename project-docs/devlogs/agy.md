@@ -11,13 +11,4 @@
 - Extended `website/src/assets/css/main.css` to add support for all new visual components (buttons, gradients, cards, and terminal window styling).
 - Fixed the footer docs link in `base.njk` to point to the absolute `/#docs` path.
 - Verified successful Eleventy build in the worktree.
-- Authored Phase 2 blog post at `docs/blog/30-pr78-bs5-phase2-agy-templates.md`.
-
-## 2026-06-28 — Docs Sidebar Scroll-Spy (Phase 2 Hotfix)
-
-### Shipped
-- Implemented `initDocsSidebar()` in `website/src/assets/js/main.js` using `IntersectionObserver` to highlight active links as user scrolls.
-- Added click listener to immediately update active class on link click.
-- Added `.sidebar-link.active` rules in `website/src/assets/css/main.css` to visually distinguish active sidebar item.
-- Verified local Eleventy build successfully builds pages.
-
+- Authored Phase 2 blog post at `docs/blog/30-pr-bs5-phase2-website-redesign.md`.
