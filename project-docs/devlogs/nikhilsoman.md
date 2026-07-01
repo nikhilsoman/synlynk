@@ -61,3 +61,23 @@ Wave execution per plan `docs/superpowers/plans/2026-07-01-bs17-scan-wizard.md`.
 **Key fix applied 3x:** Grok dispatch `--yes` → `--always-approve` (agents keep reverting it when rewriting `_VERB_MAP_SEED`/`AGENT_CAPABILITY_BASELINES`).
 
 ⚠️ **Compaction watch:** After Wave 5 gate, dispatch Wave 6 (Agy C-3 blog post), then open PR.
+
+## 2026-07-01 (session end)
+### BS-17 FTUE Scan + Wizard — All Waves Complete, PR #89 Open
+
+All 6 waves executed to plan. Final state:
+
+**Wave 5 gate (post-compaction):**
+- Resolved GEMINI.md stash-pop merge conflict (timestamp only, took newer)
+- Confirmed Grok B-6 complete (test already in HEAD, 588 confirmed on main)
+- Confirmed Agy C-1+C-2 complete (integration tests committed on main)
+- 588 tests pass on main
+
+**Wave 6:**
+- Agy C-3 blog post written: `docs/blog/35-pr89-v0.10.0-bs17-scan-wizard.md`
+- `story-v010-wizard` + `story-v010-scan` marked `[x]` in todo.md
+
+**Gate 6 (PR open):**
+- PR #89: https://github.com/nikhilsoman/synlynk/pull/89
+- Branch: `feat/bs17-scan-wizard` → `main`
+- 37 new tests (551 → 588), all passing
