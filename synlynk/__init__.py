@@ -9327,7 +9327,7 @@ def _detect_install_type() -> str:
         return "pip"
     except Exception:
         pass
-    if os.path.exists(os.path.expanduser("~/synlynk/bin/synlynk")):
+    if os.path.exists(os.path.expanduser("~/.synlynk/bin/synlynk")):
         return "script"
     return "unknown"
 

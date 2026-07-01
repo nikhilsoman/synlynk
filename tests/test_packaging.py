@@ -33,7 +33,7 @@ def test_detect_install_type_script(monkeypatch, tmp_path):
     monkeypatch.setattr(
         os.path,
         "expanduser",
-        lambda p: str(tmp_path / "synlynk") if "~/synlynk/bin/synlynk" in p else p,
+        lambda p: str(tmp_path / "synlynk") if "~/.synlynk/bin/synlynk" in p else p,
     )
     assert synlynk._detect_install_type() == "script"
 
