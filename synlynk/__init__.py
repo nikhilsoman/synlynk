@@ -9338,6 +9338,244 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
+def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False) -> None:
+    """Cut a named release: bump version, prepend CHANGELOG.md, write blog stub, print checklist."""
+    import datetime
+    import re
+
+    # Resolve project root:
+    # First priority: check if a VERSION file exists in CWD. If so, root is CWD.
+    if os.path.exists(os.path.join(os.getcwd(), "VERSION")):
+        root = os.getcwd()
+    else:
+        root = _get_project_root()
+
+    version_path = os.path.join(root, "VERSION")
+    changelog_path = os.path.join(root, "CHANGELOG.md")
+    blog_dir = os.path.join(root, "docs", "blog")
+
+    # Step a: Determine next version
+    if version:
+        next_version = version
+    else:
+        # read current VERSION file
+        if os.path.exists(version_path):
+            with open(version_path, "r") as f:
+                current_version = f.read().strip()
+        else:
+            current_version = "0.10.0"
+        
+        # parse current_version
+        parts = current_version.split(".")
+        if len(parts) >= 3:
+            try:
+                major = int(parts[0])
+                minor_ver = int(parts[1])
+                patch = int(parts[2].split("-")[0].split("+")[0]) # strip any prerelease suffix
+            except ValueError:
+                major, minor_ver, patch = 0, 10, 0
+        else:
+            major, minor_ver, patch = 0, 10, 0
+
+        if minor:
+            next_version = f"{major}.{minor_ver + 1}.0"
+        else:
+            next_version = f"{major}.{minor_ver}.{patch + 1}"
+
+    print(f"Proposed version: v{next_version}")
+
+    # Step b: Read merged stories since last git tag
+    try:
+        tag_cmd = "git describe --tags --abbrev=0 2>/dev/null || echo ''"
+        last_tag = subprocess.check_output(tag_cmd, shell=True).decode("utf-8").strip()
+    except Exception:
+        last_tag = ""
+
+    if last_tag:
+        git_cmd = f"git log {last_tag}..HEAD --oneline"
+    else:
+        git_cmd = "git log -n 20 --oneline"
+
+    try:
+        log_output = subprocess.check_output(git_cmd, shell=True).decode("utf-8").strip()
+    except Exception:
+        log_output = ""
+
+    lines = log_output.splitlines() if log_output else []
+    added = []
+    fixed = []
+    changed = []
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(" ", 1)
+        if len(parts) < 2:
+            continue
+        msg = parts[1].strip()
+        
+        match = re.match(r"^([a-zA-Z0-9_\-]+)(?:\(.*?\))?\s*:\s*(.*)", msg)
+        if match:
+            prefix = match.group(1).lower()
+        else:
+            prefix = ""
+
+        if prefix == "feat":
+            added.append(msg)
+        elif prefix == "fix":
+            fixed.append(msg)
+        else:
+            changed.append(msg)
+
+    # Step c: Build CHANGELOG entry
+    today = datetime.date.today().isoformat()
+    changelog_parts = [f"## [v{next_version}] - {today}"]
+    if added:
+        changelog_parts.append("### Added")
+        changelog_parts.extend(f"- {item}" for item in added)
+    if fixed:
+        changelog_parts.append("### Fixed")
+        changelog_parts.extend(f"- {item}" for item in fixed)
+    if changed:
+        changelog_parts.append("### Changed")
+        changelog_parts.extend(f"- {item}" for item in changed)
+    
+    changelog_entry = "\n".join(changelog_parts) + "\n\n"
+
+    # Step d: Build blog post stub
+    # Determine NN
+    next_nn = 0
+    if os.path.exists(blog_dir):
+        existing_numbers = []
+        for name in os.listdir(blog_dir):
+            if name.endswith(".md"):
+                match = re.match(r"^(\d+)-", name)
+                if match:
+                    existing_numbers.append(int(match.group(1)))
+        if existing_numbers:
+            next_nn = max(existing_numbers) + 1
+
+    nn_str = f"{next_nn:02d}"
+    blog_filename = f"{nn_str}-prTBD-v{next_version}.md"
+    blog_path = os.path.join(blog_dir, blog_filename)
+
+    # Read template from docs/blog/README.md if it exists
+    readme_path = os.path.join(blog_dir, "README.md")
+    template_content = None
+    if os.path.exists(readme_path):
+        try:
+            with open(readme_path, "r") as f:
+                readme_text = f.read()
+            h_idx = readme_text.find("## Per-PR Post Template")
+            if h_idx != -1:
+                sub = readme_text[h_idx:]
+                m_idx = sub.find("```markdown")
+                if m_idx != -1:
+                    start_idx = m_idx + len("```markdown")
+                    end_idx = sub.find("```", start_idx)
+                    if end_idx != -1:
+                        template_content = sub[start_idx:end_idx].strip()
+        except Exception:
+            pass
+
+    if not template_content:
+        template_content = """---
+title: "PR #N — <theme>"
+date: YYYY-MM-DD
+series: "Building the OS for Multi-Agent Development"
+post: N
+pr: "#N"
+merged: YYYY-MM-DD (or status: open)
+---
+
+## The Broader Goal at the End of the Previous PR
+[What was the stated/understood goal before this work started?]
+
+## Strategic Shifts in This PR (if any)
+[What changed in the broader strategy? What moved the goalpost and why?]
+
+## What This PR Shipped
+[Deep technical description: commands, key implementation decisions, data structures, test approach]
+
+## Brainstorm Visuals Used
+[Links to any HTML brainstorm files in docs/brainstorm/ that informed decisions in this PR]
+
+## What This Achieved on the Path to Autonomy
+[Specific ways this PR advances the eventual goal of autonomous multi-agent dispatch]
+
+## Strategic Note: The Goal at the End of This PR
+[The new goalpost, as understood after this PR's decisions]"""
+
+    stub_content = template_content
+    stub_content = stub_content.replace('title: "PR #N — <theme>"', f'title: "PR #TBD — v{next_version} Release"')
+    stub_content = stub_content.replace('date: YYYY-MM-DD', f'date: {today}')
+    stub_content = stub_content.replace('post: N', f'post: {next_nn}')
+    stub_content = stub_content.replace('pr: "#N"', 'pr: "#TBD"')
+    stub_content = stub_content.replace('merged: YYYY-MM-DD (or status: open)', 'status: open')
+    stub_content = stub_content.replace('merged: status: open', 'status: open')
+
+    if dry_run:
+        # Step f: In dry-run mode, print everything but write nothing
+        print("\n--- Proposed CHANGELOG Entry ---")
+        print(changelog_entry.strip())
+        print("\n--- Proposed Blog Post Stub ---")
+        print(f"Path: docs/blog/{blog_filename}")
+        print(stub_content.strip())
+        print("\n--------------------------------")
+    else:
+        # Write VERSION file
+        with open(version_path, "w") as f:
+            f.write(next_version + "\n")
+            
+        # Write to synlynk/__init__.py VERSION if it exists
+        init_py_path = os.path.join(root, "synlynk", "__init__.py")
+        if os.path.exists(init_py_path):
+            with open(init_py_path, "r") as f:
+                init_content = f.read()
+            new_init_content = re.sub(
+                r'^VERSION\s*=\s*".*"',
+                f'VERSION = "{next_version}"',
+                init_content,
+                flags=re.MULTILINE
+            )
+            with open(init_py_path, "w") as f:
+                f.write(new_init_content)
+
+        # Prepend to CHANGELOG.md (create if missing)
+        if os.path.exists(changelog_path):
+            with open(changelog_path, "r") as f:
+                old_content = f.read()
+            match = re.search(r"##\s*\[v?\d+\.\d+\.\d+\]", old_content)
+            if match:
+                idx = match.start()
+                new_changelog = old_content[:idx] + changelog_entry + "---\n\n" + old_content[idx:]
+            else:
+                idx = old_content.find("## ")
+                if idx != -1:
+                    new_changelog = old_content[:idx] + changelog_entry + "---\n\n" + old_content[idx:]
+                else:
+                    new_changelog = old_content + "\n\n" + changelog_entry
+        else:
+            new_changelog = "# Changelog\n\nAll notable changes to synlynk are documented here.\n\n" + changelog_entry
+            
+        with open(changelog_path, "w") as f:
+            f.write(new_changelog)
+
+        # Write blog post stub
+        os.makedirs(os.path.dirname(blog_path), exist_ok=True)
+        with open(blog_path, "w") as f:
+            f.write(stub_content + "\n")
+
+    # Step e: Print named release checklist
+    print(f"synlynk release checklist for v{next_version}")
+    print("[x] VERSION bumped")
+    print("[x] CHANGELOG entry written")
+    print(f"[x] Blog post stub: docs/blog/{blog_filename}")
+    print(f"[ ] git tag v{next_version} && git push --tags")
+    print(f"[ ] gh release create v{next_version}")
+    print("[ ] Roadmap row marked shipped")
+
 def cmd_status(json_output: bool = False) -> None:
     """Displays project state dashboard. Exits 1 if sentinel active or budget exceeded."""
     username = get_username()
@@ -11839,6 +12077,11 @@ def main() -> None:
         "--fix", action="store_true",
         help="Write missing role fences into agent directive files")
 
+    release_parser = subparsers.add_parser('release', help='Cut a named release')
+    release_parser.add_argument('--dry-run', action='store_true')
+    release_parser.add_argument('--version', help='Explicit version string e.g. 0.11.0')
+    release_parser.add_argument('--minor', action='store_true', help='Bump minor instead of patch')
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -12017,6 +12260,12 @@ def main() -> None:
         sys.exit(cmd_doctor())
     elif args.command == "roles":
         cmd_roles(fix=getattr(args, "fix", False))
+    elif args.command == "release":
+        cmd_release(
+            dry_run=getattr(args, "dry_run", False),
+            version=getattr(args, "version", None),
+            minor=getattr(args, "minor", False),
+        )
     elif args.command == "exit":
         sys.exit(cmd_exit(dry_run=not args.confirm, remove_docs=args.remove_docs))
     elif args.command == "repair":

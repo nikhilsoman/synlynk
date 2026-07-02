@@ -941,3 +941,29 @@ def test_implement__write_scan_fences_for_synlynk(tmp_path):
     assert len(updated) == 1
     assert str(claude_md) in updated
     assert "## Codebase Context" in claude_md.read_text()
+
+
+def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
+    """Verifies that cmd_release is implemented in synlynk and can run in dry-run mode."""
+    import synlynk
+    assert hasattr(synlynk, "cmd_release")
+    
+    # Setup temp VERSION and CHANGELOG
+    version_file = tmp_path / "VERSION"
+    version_file.write_text("0.10.0\n")
+    changelog_file = tmp_path / "CHANGELOG.md"
+    changelog_file.write_text("# Changelog\n\n## [0.9.0] - 2026-06-01\n")
+    
+    monkeypatch.chdir(tmp_path)
+    
+    # Mock git calls
+    import subprocess
+    def mock_check_output(cmd, **kwargs):
+        return b""
+    monkeypatch.setattr(subprocess, "check_output", mock_check_output)
+    
+    # Run in dry-run
+    synlynk.cmd_release(dry_run=True)
+    
+    # Ensure no file writes
+    assert version_file.read_text().strip() == "0.10.0"
