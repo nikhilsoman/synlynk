@@ -256,6 +256,16 @@ def test_write_capability_rating_no_cap_for_real_test_suite(tmp_path, monkeypatc
     assert row[0] > 5.0
 
 
+def test_upgrade_launch_task_templates_in_synlynk():
+    """Marker test for the launch template upgrade verification command."""
+    import synlynk
+
+    ids = {t["id"] for t in synlynk.LAUNCH_TASK_TEMPLATES}
+    assert len(synlynk.LAUNCH_TASK_TEMPLATES) == 15
+    assert {"add-tests", "type-safety", "refactor-module",
+            "reduce-complexity", "fix-churn-debt"} <= ids
+
+
 # --- Hotfix #43: quality_auto normalization ---
 
 def test_quality_auto_normalizes_when_tests_absent(tmp_path, monkeypatch):
@@ -896,7 +906,7 @@ def test_implement_plan_a_task_a3_from_docssuperp_run_workspace_scan_contract(
         assert key in result
 
     assert result["topology"] == "single"
-    assert result["workspace_name"] == tmp_path.parent.name
+    assert result["workspace_name"] == tmp_path.name
     assert result["home_harness"] is None
     assert isinstance(result["repos"], list) and len(result["repos"]) == 1
     assert result["repos"][0]["name"] == tmp_path.name
@@ -905,3 +915,23 @@ def test_implement_plan_a_task_a3_from_docssuperp_run_workspace_scan_contract(
     assert result["repos"][0]["readme_excerpt"] == ""
     assert isinstance(result["harnesses"], list)
     assert isinstance(result["skills"], list)
+
+
+def test_implement__write_scan_fences_for_synlynk(tmp_path):
+    """Verifies that _write_scan_fences is implemented in synlynk."""
+    import synlynk
+    # Ensure _write_scan_fences exists
+    assert hasattr(synlynk, "_write_scan_fences")
+    
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text("# CLAUDE\n")
+    
+    results = {
+        "stack": {"language": "python", "version": "3.11"},
+        "source": [{"path": "app.py", "lines": 100, "functions": 5}],
+    }
+    
+    updated = synlynk._write_scan_fences(results, root=str(tmp_path))
+    assert len(updated) == 1
+    assert str(claude_md) in updated
+    assert "## Codebase Context" in claude_md.read_text()

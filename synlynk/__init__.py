@@ -118,18 +118,22 @@ LAUNCH_TASK_TEMPLATES = [
         "agent": "agy",
         "context_mode": "full",
         "prompt_template": (
-            "The {workspace} repo has low test coverage (test_ratio < 0.1). "
-            "Identify the 3 most critical untested modules in {repo_name}. "
-            "For each, write a test file with at least 5 meaningful tests covering "
-            "happy path, edge cases, and error handling. Commit each test file "
-            "with a message like 'test: add coverage for <module>'. "
-            "Do not mock the database or filesystem unless unavoidable."
+            "Add pytest tests for {workspace}. "
+            "Target the following untested public functions in {repo_name}: "
+            "{gap_functions}. "
+            "For each function: write a test file if one doesn't exist, add at minimum "
+            "one happy-path test and one edge-case test. Use the existing test patterns "
+            "in tests/. Do not mock internal functions or the filesystem unless unavoidable. "
+            "Commit each test file with 'test: add coverage for <function>'."
         ),
         "est_hours": 3,
         "r_tokens": 60000,
         "w_tokens": 20000,
         "tool_calls": 30,
-        "trigger_condition": lambda scan: scan.get("test_ratio", 1.0) < 0.1,
+        "trigger_condition": lambda scan: (
+            (scan.get("tests") or {}).get("gap_count", 0) > 5
+            or scan.get("test_ratio", 1.0) < 0.1
+        ),
     },
     {
         "id": "setup-ci",
@@ -251,7 +255,8 @@ LAUNCH_TASK_TEMPLATES = [
         "context_mode": "full",
         "prompt_template": (
             "Add type annotations to the public API of {workspace} ({stack}). "
-            "Target: all functions and methods that are exported or called from tests. "
+            "The codebase is currently {typed_pct}% typed. "
+            "Target all functions and methods exported or called from tests. "
             "Use Python type hints (PEP 484). Do not annotate private (_-prefixed) helpers "
             "unless they are called by public functions. "
             "Commit each annotated file separately with 'refactor: add type hints to <module>'."
@@ -261,9 +266,14 @@ LAUNCH_TASK_TEMPLATES = [
         "w_tokens": 30000,
         "tool_calls": 45,
         "trigger_condition": lambda scan: (
-            any(lbl == "python" for lbl in
-                scan.get("repos", [{}])[0].get("stack_labels", []))
-            and not scan.get("has_type_hints", False)
+            any(lbl == "python" for lbl in scan.get("repos", [{}])[0].get("stack_labels", []))
+            and (
+                (
+                    scan.get("source") is not None
+                    and sum(f.get("typed_pct", 0) for f in scan["source"]) / max(len(scan["source"]), 1) < 40
+                )
+                or not scan.get("has_type_hints", True)
+            )
         ),
     },
     {
@@ -311,6 +321,78 @@ LAUNCH_TASK_TEMPLATES = [
         "tool_calls": 10,
         "trigger_condition": lambda scan: scan.get("has_orm", False),
     },
+    {
+        "id": "refactor-module",
+        "title": "Refactor large module",
+        "description": "Split monolithic source file into focused modules.",
+        "cycle": "design",
+        "agent": "codex",
+        "context_mode": "full",
+        "prompt_template": (
+            "The file {largest_file} in {workspace} has grown to {largest_file_lines} lines "
+            "with {largest_file_fns} functions. Refactor it: "
+            "identify 3-5 logical groupings of functions, extract each group into a new "
+            "module under the same package directory, update all imports, and ensure the "
+            "test suite still passes. The largest function is {largest_fn} at {largest_fn_lines} lines - "
+            "break it down if it has multiple responsibilities. "
+            "Commit each extracted module separately."
+        ),
+        "est_hours": 4,
+        "r_tokens": 200000,
+        "w_tokens": 50000,
+        "tool_calls": 60,
+        "trigger_condition": lambda scan: (
+            bool(scan.get("source"))
+            and any(f.get("lines", 0) > 5000 for f in (scan.get("source") or []))
+        ),
+    },
+    {
+        "id": "reduce-complexity",
+        "title": "Reduce complexity hotspots",
+        "description": "Break down functions >50 lines into focused helpers.",
+        "cycle": "build",
+        "agent": "codex",
+        "context_mode": "full",
+        "prompt_template": (
+            "Reduce complexity in {workspace}. The top hotspot is {top_hotspot} "
+            "({top_hotspot_lines} lines). For each of the top 3 complexity hotspots: "
+            "extract sub-responsibilities into named helper functions, add a docstring "
+            "explaining what each piece does, and ensure tests still pass. "
+            "Do not change observable behaviour. "
+            "Commit each refactored function separately."
+        ),
+        "est_hours": 3,
+        "r_tokens": 120000,
+        "w_tokens": 40000,
+        "tool_calls": 40,
+        "trigger_condition": lambda scan: (
+            len((scan.get("complexity") or {}).get("hotspots", [])) > 2
+        ),
+    },
+    {
+        "id": "fix-churn-debt",
+        "title": "Address hot file tech debt",
+        "description": "Stabilise the most-changed file with tests + docstrings.",
+        "cycle": "sustain",
+        "agent": "agy",
+        "context_mode": "full",
+        "prompt_template": (
+            "The file {hot_file} in {workspace} has been modified {commit_count} times "
+            "in the last 30 commits - it is the highest-churn file in the repo. "
+            "Stabilise it by: adding docstrings to all public functions that lack them, "
+            "writing tests for any public function with no test (check test_ratio first), "
+            "and adding a module-level docstring explaining the file's responsibility. "
+            "Commit each category of change separately."
+        ),
+        "est_hours": 2,
+        "r_tokens": 80000,
+        "w_tokens": 20000,
+        "tool_calls": 25,
+        "trigger_condition": lambda scan: (
+            bool((scan.get("git") or {}).get("churn"))
+            and (scan.get("git") or {}).get("churn", [{}])[0].get("commits", 0) > 30
+        ),
+    },
 ]
 
 
@@ -340,12 +422,55 @@ def _render_prompt(template: dict, scan: dict) -> str:
 
     repos = scan.get("repos", [])
     primary = repos[0] if repos else {}
+    tests = scan.get("tests") or {}
+    source = scan.get("source") or []
+    complexity = scan.get("complexity") or {}
+    git = scan.get("git") or {}
+    gap_functions = tests.get("gap_functions", [])
+    if gap_functions:
+        gap_functions_text = ", ".join(
+            g.get("name", str(g)) if isinstance(g, dict) else str(g)
+            for g in gap_functions
+        )
+    else:
+        gap_functions_text = "none"
+    typed_pct = (
+        int(sum(f.get("typed_pct", 0) for f in source) / max(len(source), 1))
+        if source
+        else int(scan.get("typed_pct", 0) or 0)
+    )
+    largest_file = max(source, key=lambda f: f.get("lines", 0), default={})
+    largest_fn = {}
+    for file_info in source:
+        for fn in file_info.get("largest_fns", []):
+            if fn.get("lines", 0) > largest_fn.get("lines", 0):
+                largest_fn = {
+                    "name": fn.get("name", ""),
+                    "lines": fn.get("lines", 0),
+                    "file": file_info.get("path", ""),
+                }
+    hotspots = complexity.get("hotspots", [])
+    top_hotspot = max(hotspots, key=lambda h: h.get("lines", 0), default={})
+    churn = git.get("churn", [])
+    hot_file = churn[0].get("path", "") if churn else ""
+    commit_count = churn[0].get("commits", 0) if churn else 0
     variables = {
         "workspace": scan.get("workspace_name", ""),
         "stack": ", ".join(primary.get("stack_labels", [])) or "unknown",
         "repo_name": primary.get("name", ""),
         "topology": scan.get("topology", "single"),
         "test_count": str(scan.get("test_ratio", 0)),
+        "gap_functions": gap_functions_text,
+        "typed_pct": str(typed_pct),
+        "largest_file": largest_file.get("path", ""),
+        "largest_file_lines": str(largest_file.get("lines", 0)),
+        "largest_file_fns": str(largest_file.get("functions", 0)),
+        "largest_fn": largest_fn.get("name", ""),
+        "largest_fn_lines": str(largest_fn.get("lines", 0)),
+        "top_hotspot": top_hotspot.get("fn") or os.path.basename(top_hotspot.get("path", "")),
+        "top_hotspot_lines": str(top_hotspot.get("lines", 0)),
+        "hot_file": hot_file,
+        "commit_count": str(commit_count),
         "date": _datetime.date.today().isoformat(),
         "agent": template.get("agent", "claude"),
     }
@@ -1308,6 +1433,225 @@ def _upsert_harness_fence(file_path: str, harness_version: str, body: str) -> No
         f.write(updated)
 
 
+def _write_scan_fences(results: dict, root: str = ".") -> list:
+    """Write Codebase Context fences into present directive files."""
+    import datetime as _dt
+
+    directive_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
+    body_lines = []
+
+    stack = results.get("stack") or {}
+    source = results.get("source") or []
+    complexity = results.get("complexity") or {}
+    tests_data = results.get("tests") or {}
+    git_data = results.get("git") or {}
+    arch_data = results.get("arch") or {}
+
+    lang = str(stack.get("language", "unknown")).capitalize()
+    ver = str(stack.get("version", "")).strip()
+    pattern = arch_data.get("pattern", "unknown")
+    entry_points = arch_data.get("entry_points", []) or []
+    total_files = len(source)
+    total_fns = sum(int(f.get("functions", 0) or 0) for f in source)
+    largest = source[0] if source else {}
+    avg_typed = round(
+        sum(float(f.get("typed_pct", 0) or 0) for f in source) / max(len(source), 1)
+    ) if source else 0
+    avg_doc = round(
+        sum(float(f.get("docstring_pct", 0) or 0) for f in source) / max(len(source), 1)
+    ) if source else 0
+
+    body_lines.append("## Codebase Context")
+    if stack:
+        body_lines.append(
+            f"- Architecture: {pattern} · {lang} {ver} · {len(entry_points)} entry point"
+            f"{'s' if len(entry_points) != 1 else ''}"
+        )
+    if source:
+        largest_note = ""
+        if largest.get("lines", 0) > 1000:
+            largest_note = f" · {largest['path']} {largest['lines']:,} lines"
+        body_lines.append(
+            f"- Source: {total_files} file{'s' if total_files != 1 else ''} · "
+            f"{total_fns} functions{largest_note}"
+        )
+        body_lines.append(f"- Type coverage: {avg_typed}% · Docstring coverage: {avg_doc}%")
+
+    hotspots = complexity.get("hotspots", []) or []
+    if hotspots:
+        body_lines.append("")
+        body_lines.append("## Complexity Hotspots")
+        for hotspot in hotspots[:3]:
+            fn_label = f"{hotspot['fn']}()" if hotspot.get("fn") else os.path.basename(hotspot.get("path", "?"))
+            body_lines.append(
+                f"- {fn_label} — {int(hotspot.get('lines', 0) or 0)} lines "
+                f"({hotspot.get('path', '?')}:{hotspot.get('lineno', '?')})"
+            )
+
+    gap_count = int(tests_data.get("gap_count", 0) or 0)
+    if gap_count > 0:
+        body_lines.append("")
+        body_lines.append("## Test Gaps (structural, not runtime coverage)")
+        gap_names = [gap.get("name", "?") for gap in (tests_data.get("gap_functions", []) or [])[:5]]
+        suffix = f" [+{gap_count - 5} more]" if gap_count > 5 else ""
+        body_lines.append(
+            f"- {gap_count} untested public function{'s' if gap_count != 1 else ''}: "
+            f"{', '.join(gap_names)}{suffix}"
+        )
+
+    churn = git_data.get("churn", []) or []
+    has_git_error = "error" in git_data and not churn
+    if churn and not has_git_error:
+        body_lines.append("")
+        body_lines.append("## Hot Files (last 30 commits)")
+        for item in churn[:3]:
+            icon = "🔥" if item.get("temp") == "hot" else ("⚡" if item.get("temp") == "warm" else "·")
+            body_lines.append(f"- {icon} {item.get('path', '?')} — {int(item.get('commits', 0) or 0)} commits")
+
+    todo_counts = complexity.get("todo_counts", {}) or {}
+    total_markers = sum(int(v or 0) for v in todo_counts.values())
+    if total_markers > 0:
+        body_lines.append("")
+        body_lines.append("## Tech Debt")
+        parts = [f"{v} {k}" for k, v in todo_counts.items() if v]
+        body_lines.append(f"- {' · '.join(parts)}")
+
+    body = "\n".join(body_lines)
+    scan_date = _dt.date.today().isoformat()
+
+    updated = []
+    for fname in directive_files:
+        fpath = os.path.join(root, fname)
+        if not os.path.exists(fpath):
+            continue
+        _upsert_harness_fence(fpath, f"scan-{scan_date}", body)
+        updated.append(fpath)
+
+    return updated
+
+
+def _write_scan_fences(results: dict, root: str = '.') -> list:
+    """Write '## Codebase Context' fence into every present directive file in root.
+
+    Directive files to update: CLAUDE.md, GEMINI.md, AGENTS.md, GROK.md (only if they exist in root).
+    Calls _upsert_harness_fence(fpath, f'scan-{date}', body) for each present file.
+    Returns list of absolute paths updated (empty list if none exist).
+    """
+    import datetime as _dt
+
+    def _is_ok(key):
+        val = results.get(key)
+        if val is None:
+            return False
+        if isinstance(val, dict) and "error" in val:
+            return False
+        return True
+
+    body_lines = []
+
+    # 1. Codebase Context
+    has_stack = _is_ok("stack")
+    has_source = _is_ok("source")
+    has_arch = _is_ok("arch")
+
+    if has_stack or has_source or has_arch:
+        body_lines.append("## Codebase Context")
+
+        if has_stack or has_arch:
+            stack_data = results.get("stack") or {}
+            arch_data = results.get("arch") or {}
+            
+            pat = arch_data.get("pattern", "unknown")
+            lang = stack_data.get("language", "unknown")
+            lang = lang.capitalize() if lang else "Unknown"
+            ver = stack_data.get("version", "")
+            ver_str = f" {ver}" if ver else ""
+            eps = len(arch_data.get("entry_points", []))
+            eps_str = f"{eps} entry point{'s' if eps != 1 else ''}"
+            
+            body_lines.append(f"- Architecture: {pat} · {lang}{ver_str} · {eps_str}")
+
+        if has_source:
+            source_data = results.get("source") or []
+            total_files = len(source_data)
+            total_fns = sum(f.get("functions", 0) for f in source_data)
+            
+            largest = source_data[0] if source_data else {}
+            largest_lines = largest.get("lines", 0)
+            largest_note = ""
+            if largest_lines > 1000:
+                largest_note = f" · largest_file {largest_lines} lines"
+                
+            body_lines.append(f"- Source: {total_files} file{'s' if total_files != 1 else ''} · {total_fns} function{'s' if total_fns != 1 else ''}{largest_note}")
+            
+            avg_typed = sum(f.get("typed_pct", 0) for f in source_data) // max(total_files, 1)
+            avg_doc = sum(f.get("docstring_pct", 0) for f in source_data) // max(total_files, 1)
+            body_lines.append(f"- Type coverage: {avg_typed}% · Docstring coverage: {avg_doc}%")
+
+    # 2. Complexity Hotspots
+    if _is_ok("complexity"):
+        comp_data = results.get("complexity") or {}
+        hotspots = comp_data.get("hotspots", [])
+        if hotspots:
+            body_lines.append("")
+            body_lines.append("## Complexity Hotspots")
+            for h in hotspots[:3]:
+                fn_label = f"{h['fn']}()" if h.get("fn") else os.path.basename(h["path"])
+                body_lines.append(f"- {fn_label} — {h['lines']} lines ({h['path']}:{h['lineno']})")
+
+    # 3. Test Gaps
+    if _is_ok("tests"):
+        tests_data = results.get("tests") or {}
+        gap_count = tests_data.get("gap_count", 0)
+        if gap_count > 0:
+            body_lines.append("")
+            body_lines.append("## Test Gaps (structural, not runtime coverage)")
+            gap_fns = tests_data.get("gap_functions", [])
+            gap_names = [g["name"] for g in gap_fns[:5]]
+            suffix = f" [+{gap_count - 5} more]" if gap_count > 5 else ""
+            body_lines.append(f"- {gap_count} untested public function{'s' if gap_count != 1 else ''}: {', '.join(gap_names)}{suffix}")
+
+    # 4. Hot Files
+    if _is_ok("git"):
+        git_data = results.get("git") or {}
+        churn = git_data.get("churn", [])
+        if churn:
+            body_lines.append("")
+            body_lines.append("## Hot Files (last 30 commits)")
+            for c in churn[:3]:
+                icon = "🔥" if c.get("temp") == "hot" else ("⚡" if c.get("temp") == "warm" else "·")
+                body_lines.append(f"- {icon} {c['path']} — {c['commits']} commits")
+
+    # 5. Tech Debt
+    if _is_ok("complexity"):
+        comp_data = results.get("complexity") or {}
+        todo_counts = comp_data.get("todo_counts", {})
+        total_markers = sum(todo_counts.get(k, 0) for k in ("TODO", "FIXME", "HACK", "XXX"))
+        if total_markers > 0:
+            body_lines.append("")
+            body_lines.append("## Tech Debt")
+            parts = []
+            for k in ("TODO", "FIXME", "HACK", "XXX"):
+                v = todo_counts.get(k, 0)
+                if v > 0:
+                    parts.append(f"{v} {k}")
+            body_lines.append(f"- {' · '.join(parts)}")
+
+    updated = []
+    abs_root = os.path.abspath(root)
+    directive_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
+    date_str = _dt.date.today().isoformat()
+    body = "\n".join(body_lines)
+
+    for fname in directive_files:
+        fpath = os.path.join(abs_root, fname)
+        if os.path.exists(fpath):
+            _upsert_harness_fence(fpath, f"scan-{date_str}", body)
+            updated.append(fpath)
+
+    return updated
+
+
 def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
     import json as _j
     baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
@@ -1720,7 +2064,7 @@ def cmd_pr_check() -> None:
 def cmd_scan(deep: bool = False, status: bool = False,
              refresh: bool = False, add_path: str = None,
              remove_path: str = None, dry_run: bool = False,
-             workspace_name: str = None) -> None:
+             workspace_name: str = None, no_tui: bool = False) -> None:
     """synlynk scan — workspace environment scan + context generation.
 
     No flags: first-time workspace scan (discover topology, harnesses,
@@ -1731,6 +2075,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
     --dry-run: print what would change; write nothing.
     --deep: (original) full source-tree walk → state.db + source-map.md.
     --status: (original) show skeleton cache status.
+    --no-tui: skip the interactive stage-card TUI and print a text summary.
     """
     import json as _json
 
@@ -1827,30 +2172,72 @@ def cmd_scan(deep: bool = False, status: bool = False,
         print(f"  {_GREEN}✓{_RESET} Skeleton refreshed · {len(skeleton)} files · HEAD {sha_short}")
         return
 
-    # ── Default / --refresh: full workspace scan ──────────────────────────
+    # ── Preserved: --refresh keeps the legacy workspace scan summary path ──
+    if refresh:
+        print(f"  {_CYAN}›{_RESET} scanning your environment...")
+        scan = run_workspace_scan(workspace_name=workspace_name, dry_run=dry_run, deep=False)
+
+        repo_names = ", ".join(r["name"] for r in scan["repos"])
+        harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
+        stacks = sorted({lbl for r in scan["repos"] for lbl in r["stack_labels"]})
+        print(f"  repos found: {len(scan['repos'])}  ·  "
+              f"harnesses: {harness_names}  ·  "
+              f"stacks: {', '.join(stacks) or 'unknown'}")
+
+        if not dry_run:
+            config_path = write_workspace_config(scan, scan["workspace_name"])
+            generate_structured_context(scan)
+            print(f"  {_GREEN}✓{_RESET} workspace: {scan['workspace_name']}")
+            print(f"  {_GREEN}✓{_RESET} repos: {repo_names}")
+            if scan["skills"]:
+                skill_names = ", ".join(s["name"] for s in scan["skills"])
+                print(f"  {_GREEN}✓{_RESET} skills: {skill_names}")
+            print(f"\n  next: synlynk dispatch {scan['home_harness'] or 'claude'} "
+                  f'"what\'s the current task?"')
+        else:
+            print("  [dry-run] no files written")
+        return
+
+    # ── Default: deep workspace scan with optional TUI ───────────────────
     print(f"  {_CYAN}›{_RESET} scanning your environment...")
-    scan = run_workspace_scan(workspace_name=workspace_name, dry_run=dry_run)
+    scan = run_workspace_scan(workspace_name=workspace_name, dry_run=dry_run, deep=True)
+    primary_root = scan["repos"][0]["path"] if scan.get("repos") else os.getcwd()
 
-    # Print scan summary
-    repo_names = ", ".join(r["name"] for r in scan["repos"])
-    harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
-    stacks = sorted({lbl for r in scan["repos"] for lbl in r["stack_labels"]})
-    print(f"  repos found: {len(scan['repos'])}  ·  "
-          f"harnesses: {harness_names}  ·  "
-          f"stacks: {', '.join(stacks) or 'unknown'}")
+    if dry_run or no_tui or not sys.stdin.isatty() or not sys.stdout.isatty():
+        print(f"\n  {_BOLD}synlynk scan{_RESET}  workspace: {scan['workspace_name']}\n")
+        for key, label in zip(STAGE_KEYS, _STAGE_LABELS):
+            data = scan.get(key)
+            if data is None:
+                print(f"  {_DIM}{label}: skipped{_RESET}")
+            elif isinstance(data, dict) and data.get("error"):
+                print(f"  {_RED}✗ {label}: {data['error']}{_RESET}")
+            else:
+                line1, _ = _card_summary(key, data)
+                print(f"  {_GREEN}✓{_RESET} {label}: {line1}")
+        if not dry_run:
+            updated = _write_scan_fences(scan, root=primary_root)
+            for path in updated:
+                print(f"  {_GREEN}✓{_RESET} {os.path.basename(path)} updated")
+        else:
+            print("  [dry-run] no files written")
+        return
 
-    if not dry_run:
-        config_path = write_workspace_config(scan, scan["workspace_name"])
-        generate_structured_context(scan)
-        print(f"  {_GREEN}✓{_RESET} workspace: {scan['workspace_name']}")
-        print(f"  {_GREEN}✓{_RESET} repos: {repo_names}")
-        if scan["skills"]:
-            skill_names = ", ".join(s["name"] for s in scan["skills"])
-            print(f"  {_GREEN}✓{_RESET} skills: {skill_names}")
-        print(f"\n  next: synlynk dispatch {scan['home_harness'] or 'claude'} "
-              f'"what\'s the current task?"')
-    else:
-        print("  [dry-run] no files written")
+    results_live = {key: None for key in STAGE_KEYS}
+    results_live["workspace_name"] = scan["workspace_name"]
+    threads = []
+    for stage_fn in (
+        _scan_stage_stack,
+        _scan_stage_source,
+        _scan_stage_complexity,
+        _scan_stage_tests,
+        _scan_stage_git,
+        _scan_stage_arch,
+    ):
+        thread = threading.Thread(target=stage_fn, args=(primary_root, results_live), daemon=True)
+        thread.start()
+        threads.append(thread)
+
+    _run_scan_tui(results_live, threads, primary_root=primary_root)
 
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:
@@ -2089,6 +2476,8 @@ _YELLOW = "\033[33m"
 _CYAN = "\033[36m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
+_RED = "\033[31m"
+_MAGENTA = "\033[35m"
 
 
 def get_username() -> str:
@@ -4196,8 +4585,589 @@ def parse_context_sections(repo_path: str) -> dict:
 _MONOREPO_MARKERS = ("packages", "apps", "services", "modules", "libs")
 
 
+def _scan_stage_source(root: str, results: dict) -> None:
+    """Stage 2: AST-parse Python files and collect per-file source metrics."""
+    import ast as _ast
+
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+
+    def _should_skip(dirpath: str) -> bool:
+        parts = set(dirpath.split(os.sep))
+        return bool(parts & skip_names)
+
+    file_results = []
+    if not os.path.isdir(root):
+        results["source"] = file_results
+        return
+
+    for dirpath, _, filenames in os.walk(root):
+        if _should_skip(dirpath):
+            continue
+        for fn in filenames:
+            if not fn.endswith(".py"):
+                continue
+            filepath = os.path.join(dirpath, fn)
+            rel_path = os.path.relpath(filepath, root)
+            try:
+                with open(filepath, encoding="utf-8", errors="ignore") as fh:
+                    content = fh.read()
+            except OSError:
+                continue
+
+            lines = content.count("\n") + 1
+            try:
+                tree = _ast.parse(content, filename=filepath)
+            except SyntaxError:
+                file_results.append({
+                    "path": rel_path,
+                    "lines": lines,
+                    "functions": 0,
+                    "classes": 0,
+                    "typed_pct": 0,
+                    "docstring_pct": 0,
+                    "largest_fns": [],
+                    "parse_error": True,
+                })
+                continue
+
+            functions = [
+                node for node in _ast.walk(tree)
+                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+            ]
+            classes = [node for node in _ast.walk(tree) if isinstance(node, _ast.ClassDef)]
+            public_functions = [node for node in functions if not node.name.startswith("_")]
+            typed_functions = [
+                node for node in functions
+                if getattr(node, "returns", None)
+                or any(arg.annotation for arg in getattr(node.args, "args", []))
+                or getattr(node.args, "vararg", None) and node.args.vararg.annotation
+                or getattr(node.args, "kwarg", None) and node.args.kwarg.annotation
+                or any(arg.annotation for arg in getattr(node.args, "kwonlyargs", []))
+            ]
+            typed_pct = int((len(typed_functions) * 100) / len(functions)) if functions else 0
+            docstring_pct = int((sum(1 for node in public_functions if _ast.get_docstring(node)) * 100) / len(public_functions)) if public_functions else 0
+
+            fn_sizes = []
+            for node in functions:
+                end_lineno = getattr(node, "end_lineno", node.lineno)
+                fn_sizes.append({
+                    "name": node.name,
+                    "lines": max(1, end_lineno - node.lineno + 1),
+                    "lineno": node.lineno,
+                })
+            fn_sizes.sort(key=lambda item: item["lines"], reverse=True)
+
+            file_results.append({
+                "path": rel_path,
+                "lines": lines,
+                "functions": len(functions),
+                "classes": len(classes),
+                "typed_pct": typed_pct,
+                "docstring_pct": docstring_pct,
+                "largest_fns": fn_sizes[:3],
+            })
+
+    file_results.sort(key=lambda item: item["lines"], reverse=True)
+    results["source"] = file_results
+
+
+def _scan_stage_complexity(root: str, results: dict) -> None:
+    """Stage 3: detect function/file hotspots and count TODO-style markers."""
+    import ast as _ast
+
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+
+    def _should_skip(dirpath: str) -> bool:
+        parts = set(dirpath.split(os.sep))
+        return bool(parts & skip_names)
+
+    hotspots = []
+    todo_counts = {"TODO": 0, "FIXME": 0, "HACK": 0, "XXX": 0}
+    if not os.path.isdir(root):
+        results["complexity"] = {"hotspots": hotspots, "todo_counts": todo_counts}
+        return
+
+    marker_pattern = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
+
+    for dirpath, _, filenames in os.walk(root):
+        if _should_skip(dirpath):
+            continue
+        for fn in filenames:
+            if not fn.endswith(".py"):
+                continue
+            filepath = os.path.join(dirpath, fn)
+            rel_path = os.path.relpath(filepath, root)
+            try:
+                with open(filepath, encoding="utf-8", errors="ignore") as fh:
+                    content = fh.read()
+            except OSError:
+                continue
+
+            for marker in marker_pattern.findall(content):
+                todo_counts[marker] += 1
+
+            lines = content.count("\n") + 1
+            if lines > 500:
+                hotspots.append({
+                    "path": rel_path,
+                    "fn": None,
+                    "lines": lines,
+                    "lineno": 1,
+                })
+
+            try:
+                tree = _ast.parse(content, filename=filepath)
+            except SyntaxError:
+                continue
+
+            for node in _ast.walk(tree):
+                if not isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                    continue
+                end_lineno = getattr(node, "end_lineno", node.lineno)
+                fn_lines = max(1, end_lineno - node.lineno + 1)
+                if fn_lines > 50:
+                    hotspots.append({
+                        "path": rel_path,
+                        "fn": node.name,
+                        "lines": fn_lines,
+                        "lineno": node.lineno,
+                    })
+
+    hotspots.sort(key=lambda item: item["lines"], reverse=True)
+    results["complexity"] = {"hotspots": hotspots, "todo_counts": todo_counts}
+
+
+def _scan_stage_tests(root: str, results: dict) -> None:
+    """Stage 4: structural name matching for public-function test gaps."""
+    import ast as _ast
+
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+
+    def _should_skip(dirpath: str) -> bool:
+        parts = set(dirpath.split(os.sep))
+        return bool(parts & skip_names)
+
+    source_functions = []
+    covered_names = set()
+    if not os.path.isdir(root):
+        results["tests"] = {
+            "gap_functions": [],
+            "covered_count": 0,
+            "gap_count": 0,
+            "ratio": 0.0,
+        }
+        return
+
+    for dirpath, _, filenames in os.walk(root):
+        if _should_skip(dirpath):
+            continue
+        for fn in filenames:
+            if not fn.endswith(".py"):
+                continue
+            filepath = os.path.join(dirpath, fn)
+            rel_path = os.path.relpath(filepath, root)
+            is_test = fn.startswith("test_") or fn.endswith("_test.py")
+            try:
+                with open(filepath, encoding="utf-8", errors="ignore") as fh:
+                    content = fh.read()
+                tree = _ast.parse(content, filename=filepath)
+            except (OSError, SyntaxError):
+                continue
+
+            if is_test:
+                for node in _ast.walk(tree):
+                    if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+                        covered_names.add(node.name[5:])
+                    elif isinstance(node, _ast.Call):
+                        func = node.func
+                        if isinstance(func, _ast.Name):
+                            covered_names.add(func.id)
+                        elif isinstance(func, _ast.Attribute):
+                            covered_names.add(func.attr)
+                continue
+
+            for node in _ast.walk(tree):
+                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and not node.name.startswith("_"):
+                    source_functions.append({
+                        "name": node.name,
+                        "file": rel_path,
+                        "lineno": node.lineno,
+                    })
+
+    covered = [item for item in source_functions if item["name"] in covered_names]
+    gaps = [item for item in source_functions if item["name"] not in covered_names]
+    total = len(source_functions)
+    results["tests"] = {
+        "gap_functions": gaps,
+        "covered_count": len(covered),
+        "gap_count": len(gaps),
+        "ratio": (len(covered) / total) if total else 0.0,
+    }
+
+
+def _scan_stage_git(root: str, results: dict) -> None:
+    """Stage 5: scan the last 30 commits and compute file churn."""
+    import datetime as _dt
+
+    error_result = {"error": "", "churn": [], "total_commits_scanned": 0}
+    try:
+        proc = subprocess.run(
+            ["git", "log", "--name-only", "-n", "30", "--pretty=format:COMMIT:%ai"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        error_result["error"] = str(exc)
+        results["git"] = error_result
+        return
+
+    if proc.returncode != 0:
+        stderr = (proc.stderr or proc.stdout or "").strip()
+        error_result["error"] = stderr or "git log failed"
+        results["git"] = error_result
+        return
+
+    file_counts = {}
+    first_seen = {}
+    commit_count = 0
+    current_date = None
+
+    for raw_line in proc.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("COMMIT:"):
+            commit_count += 1
+            date_text = line[len("COMMIT:"):].strip()
+            try:
+                current_date = _dt.datetime.strptime(date_text, "%Y-%m-%d %H:%M:%S %z")
+            except ValueError:
+                current_date = None
+            continue
+        file_counts[line] = file_counts.get(line, 0) + 1
+        if current_date is not None and line not in first_seen:
+            first_seen[line] = current_date
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    churn = []
+    for path, commits in file_counts.items():
+        seen_at = first_seen.get(path)
+        last_days_ago = (now - seen_at.astimezone(_dt.timezone.utc)).days if seen_at else 0
+        if commits > 20:
+            temp = "hot"
+        elif commits >= 5:
+            temp = "warm"
+        else:
+            temp = "cold"
+        churn.append({
+            "path": path,
+            "commits": commits,
+            "last_days_ago": last_days_ago,
+            "temp": temp,
+        })
+
+    churn.sort(key=lambda item: item["commits"], reverse=True)
+    results["git"] = {"churn": churn, "total_commits_scanned": commit_count}
+
+
+def _scan_stage_arch(root: str, results: dict) -> None:
+    """Stage 6: scan entry points, local imports, dead candidates, and pattern."""
+    import ast as _ast
+
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+    pkg_name = os.path.basename(os.path.abspath(root)) or ""
+
+    def _should_skip(dirpath: str) -> bool:
+        parts = set(dirpath.split(os.sep))
+        return bool(parts & skip_names)
+
+    entry_points = []
+    import_graph = {}
+    inbound = {}
+    file_line_counts = {}
+    public_api_count = 0
+
+    if not os.path.isdir(root):
+        results["arch"] = {
+            "entry_points": entry_points,
+            "import_graph": import_graph,
+            "dead_candidates": [],
+            "public_api_count": public_api_count,
+            "pattern": "library",
+        }
+        return
+
+    for dirpath, _, filenames in os.walk(root):
+        if _should_skip(dirpath):
+            continue
+        for fn in filenames:
+            if not fn.endswith(".py"):
+                continue
+            filepath = os.path.join(dirpath, fn)
+            rel_path = os.path.relpath(filepath, root)
+            try:
+                with open(filepath, encoding="utf-8", errors="ignore") as fh:
+                    content = fh.read()
+            except OSError:
+                continue
+
+            file_line_counts[rel_path] = content.count("\n") + 1
+            try:
+                tree = _ast.parse(content, filename=filepath)
+            except SyntaxError:
+                continue
+
+            is_test = fn.startswith("test_") or fn.endswith("_test.py")
+            if not is_test:
+                for node in _ast.walk(tree):
+                    if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef)) and not node.name.startswith("_"):
+                        public_api_count += 1
+
+            local_imports = []
+            for node in _ast.walk(tree):
+                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name == "main":
+                    entry_points.append({
+                        "name": "main",
+                        "file": rel_path,
+                        "lineno": node.lineno,
+                    })
+                elif isinstance(node, _ast.If):
+                    test = node.test
+                    if (
+                        isinstance(test, _ast.Compare)
+                        and isinstance(test.left, _ast.Name)
+                        and test.left.id == "__name__"
+                        and any(
+                            isinstance(comp, _ast.Constant) and comp.value == "__main__"
+                            for comp in test.comparators
+                        )
+                    ):
+                        entry_points.append({
+                            "name": "__main__",
+                            "file": rel_path,
+                            "lineno": node.lineno,
+                        })
+                elif isinstance(node, _ast.ImportFrom):
+                    if node.level > 0:
+                        local_imports.append(rel_path)
+                        inbound[rel_path] = inbound.get(rel_path, 0) + 1
+                    elif node.module and node.module.split(".")[0] == pkg_name:
+                        imported = node.module.replace(".", os.sep) + ".py"
+                        local_imports.append(imported)
+                        inbound[imported] = inbound.get(imported, 0) + 1
+
+            if local_imports:
+                import_graph[rel_path] = local_imports
+
+    source_files = {
+        path for path in file_line_counts
+        if not os.path.basename(path).startswith("test_")
+    }
+    total_lines = sum(file_line_counts.values()) or 1
+    max_lines = max(file_line_counts.values(), default=0)
+    if not entry_points and len(source_files) == 1 and next(iter(source_files), "") == "__init__.py":
+        pattern = "library"
+    elif max_lines / total_lines > 0.5:
+        pattern = "monolith"
+    elif not entry_points:
+        pattern = "library"
+    else:
+        pattern = "modular"
+
+    dead_candidates = sorted(
+        path for path in source_files
+        if path != "__init__.py" and inbound.get(path, 0) == 0 and "__init__" not in path
+    )
+
+    results["arch"] = {
+        "entry_points": entry_points,
+        "import_graph": import_graph,
+        "dead_candidates": dead_candidates,
+        "public_api_count": public_api_count,
+        "pattern": pattern,
+    }
+
+
+def _scan_stage_stack(root: str, results: dict) -> None:
+    """Stage 1: detect language, version, frameworks, CI, deps, and lock freshness."""
+    import fnmatch as _fnmatch
+    import json as _json
+
+    skip_names = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
+
+    def _should_skip(dirpath: str) -> bool:
+        parts = set(dirpath.split(os.sep))
+        return bool(parts & skip_names)
+
+    language = "unknown"
+    if os.path.isdir(root):
+        if os.path.exists(os.path.join(root, "pyproject.toml")) or os.path.exists(os.path.join(root, "setup.py")):
+            language = "python"
+        elif os.path.exists(os.path.join(root, "package.json")):
+            language = "node"
+        elif os.path.exists(os.path.join(root, "go.mod")):
+            language = "go"
+        elif os.path.exists(os.path.join(root, "Gemfile")):
+            language = "ruby"
+        else:
+            for dirpath, _, filenames in os.walk(root):
+                if _should_skip(dirpath):
+                    continue
+                if any(_fnmatch.fnmatch(fn, "*.py") for fn in filenames):
+                    language = "python"
+                    break
+                if any(_fnmatch.fnmatch(fn, "*.ts") or _fnmatch.fnmatch(fn, "*.tsx") for fn in filenames):
+                    language = "node"
+                    break
+
+    version = "unknown"
+    version_files = [
+        (".python-version", "line"),
+        (".nvmrc", "line"),
+        (".node-version", "line"),
+        ("pyproject.toml", r'python_requires\s*=\s*["\']([^"\']+)'),
+        ("go.mod", r"^go\s+(\S+)"),
+    ]
+    for filename, pattern in version_files:
+        path = os.path.join(root, filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            content = open(path, encoding="utf-8", errors="ignore").read()
+        except OSError:
+            continue
+        if pattern == "line":
+            lines = [line.strip() for line in content.splitlines() if line.strip()]
+            if lines:
+                version = lines[0]
+                break
+            continue
+        match = re.search(pattern, content, re.MULTILINE)
+        if match:
+            version = match.group(1)
+            break
+
+    frameworks = []
+    seen_frameworks = set()
+    framework_checks = [
+        ("pytest", "pyproject.toml", "pytest"),
+        ("pytest", "pytest.ini", None),
+        ("pytest", "setup.cfg", "pytest"),
+        ("django", "manage.py", None),
+        ("flask", "requirements.txt", "flask"),
+        ("fastapi", "requirements.txt", "fastapi"),
+        ("next", "next.config.js", None),
+        ("next", "next.config.ts", None),
+        ("react", "package.json", "react"),
+    ]
+    for fw, filename, marker in framework_checks:
+        if fw in seen_frameworks:
+            continue
+        path = os.path.join(root, filename)
+        if not os.path.exists(path):
+            continue
+        if marker is None:
+            frameworks.append(fw)
+            seen_frameworks.add(fw)
+            continue
+        try:
+            content = open(path, encoding="utf-8", errors="ignore").read().lower()
+        except OSError:
+            continue
+        if marker.lower() in content:
+            frameworks.append(fw)
+            seen_frameworks.add(fw)
+
+    package_manager = "unknown"
+    for candidate in ("pyproject.toml", "setup.py", "package.json", "go.mod",
+                      "Gemfile", "requirements.txt"):
+        if os.path.exists(os.path.join(root, candidate)):
+            package_manager = candidate
+            break
+
+    ci = (
+        os.path.isdir(os.path.join(root, ".github", "workflows"))
+        or os.path.exists(os.path.join(root, ".gitlab-ci.yml"))
+        or os.path.isdir(os.path.join(root, ".circleci"))
+    )
+    ci_workflows = 0
+    wf_dir = os.path.join(root, ".github", "workflows")
+    if os.path.isdir(wf_dir):
+        try:
+            ci_workflows = sum(
+                1 for name in os.listdir(wf_dir)
+                if name.endswith((".yml", ".yaml"))
+            )
+        except OSError:
+            ci_workflows = 0
+
+    dep_count = {"prod": 0, "dev": 0}
+    req_path = os.path.join(root, "requirements.txt")
+    if os.path.exists(req_path):
+        try:
+            with open(req_path, encoding="utf-8", errors="ignore") as fh:
+                dep_count["prod"] = sum(
+                    1 for line in fh if line.strip() and not line.lstrip().startswith("#")
+                )
+        except OSError:
+            pass
+    req_dev = os.path.join(root, "requirements-dev.txt")
+    if os.path.exists(req_dev):
+        try:
+            with open(req_dev, encoding="utf-8", errors="ignore") as fh:
+                dep_count["dev"] = sum(
+                    1 for line in fh if line.strip() and not line.lstrip().startswith("#")
+                )
+        except OSError:
+            pass
+    pkg_json = os.path.join(root, "package.json")
+    if os.path.exists(pkg_json):
+        try:
+            with open(pkg_json, encoding="utf-8", errors="ignore") as fh:
+                data = _json.loads(fh.read())
+            dep_count["prod"] = len(data.get("dependencies", {}) or {})
+            dep_count["dev"] = len(data.get("devDependencies", {}) or {})
+        except (OSError, ValueError, TypeError):
+            pass
+
+    lockfile_fresh = False
+    lock_pairs = [
+        ("package.json", "package-lock.json"),
+        ("package.json", "yarn.lock"),
+        ("Gemfile", "Gemfile.lock"),
+        ("go.mod", "go.sum"),
+    ]
+    for manifest, lockfile in lock_pairs:
+        manifest_path = os.path.join(root, manifest)
+        lock_path = os.path.join(root, lockfile)
+        if os.path.exists(manifest_path) and os.path.exists(lock_path):
+            try:
+                lockfile_fresh = os.path.getmtime(lock_path) >= os.path.getmtime(manifest_path)
+            except OSError:
+                lockfile_fresh = False
+            break
+    if os.path.exists(os.path.join(root, "pyproject.toml")):
+        lockfile_fresh = True
+
+    results["stack"] = {
+        "language": language,
+        "version": version,
+        "frameworks": frameworks,
+        "package_manager": package_manager,
+        "ci": ci,
+        "ci_workflows": ci_workflows,
+        "dep_count": dep_count,
+        "lockfile_fresh": lockfile_fresh,
+    }
+
+
+STAGE_KEYS = ["stack", "source", "complexity", "tests", "git", "arch"]
+
+
 def run_workspace_scan(roots: list = None, workspace_name: str = None,
-                       dry_run: bool = False) -> dict:
+                       dry_run: bool = False, deep: bool = True) -> dict:
     """Scan a workspace and return the contract payload used by init --wizard.
 
     roots: explicit list of repo paths. If omitted, discover git roots from
@@ -4291,8 +5261,11 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
 
     if workspace_name is None:
         if normalized_roots:
-            parent = os.path.basename(os.path.dirname(normalized_roots[0]))
-            workspace_name = parent if parent and parent not in (os.sep, "~") else repos[0]["name"]
+            if topology == "single" and repos:
+                workspace_name = repos[0]["name"]
+            else:
+                parent = os.path.basename(os.path.dirname(normalized_roots[0]))
+                workspace_name = parent if parent and parent not in (os.sep, "~") else repos[0]["name"]
         else:
             workspace_name = os.path.basename(os.getcwd()) or "workspace"
 
@@ -4341,27 +5314,8 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
                 has_docs = True
                 break
 
-    # has_type_hints: Python repo + any .pyi files or >30% of .py files have annotations
+    # has_type_hints: derived from source-stage typed_pct after deep scan joins.
     has_type_hints = False
-    py_files_with_hints = 0
-    py_files_total = 0
-    for dirpath, _, filenames in os.walk(primary_root):
-        if any(p in dirpath for p in (".git", "__pycache__", "node_modules", ".venv", "venv")):
-            continue
-        for fn in filenames:
-            if fn.endswith(".pyi"):
-                has_type_hints = True
-            elif fn.endswith(".py"):
-                py_files_total += 1
-                try:
-                    content = open(os.path.join(dirpath, fn)).read(1000)
-                    if ("from __future__ import annotations" in content or
-                            re.search(r"def \w+\([^)]*: \w|-> \w", content)):
-                        py_files_with_hints += 1
-                except OSError:
-                    pass
-    if py_files_total > 0 and not has_type_hints:
-        has_type_hints = (py_files_with_hints / py_files_total) > 0.3
 
     # has_orm
     orm_markers = ("sqlalchemy", "from django.db", "import prisma", "activerecord", "ActiveRecord")
@@ -4378,7 +5332,7 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
             except OSError:
                 pass
 
-    return {
+    base = {
         "workspace_name": workspace_name,
         "topology": topology,
         "repos": repos,
@@ -4393,7 +5347,41 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
         "has_docs": has_docs,
         "has_type_hints": has_type_hints,
         "has_orm": has_orm,
+        "stack": None,
+        "source": None,
+        "complexity": None,
+        "tests": None,
+        "git": None,
+        "arch": None,
     }
+    if not deep:
+        return base
+
+    stage_fns = [
+        _scan_stage_stack,
+        _scan_stage_source,
+        _scan_stage_complexity,
+        _scan_stage_tests,
+        _scan_stage_git,
+        _scan_stage_arch,
+    ]
+    threads = []
+    for stage_fn in stage_fns:
+        thread = threading.Thread(target=stage_fn, args=(primary_root, base), daemon=True)
+        thread.start()
+        threads.append(thread)
+    for thread in threads:
+        thread.join()
+
+    source_rows = [
+        row for row in (base.get("source") or [])
+        if isinstance(row, dict) and not row.get("parse_error") and row.get("path", "").endswith(".py")
+    ]
+    if source_rows:
+        avg_typed = sum(row.get("typed_pct", 0) for row in source_rows) / len(source_rows)
+        base["has_type_hints"] = avg_typed > 30.0
+
+    return base
 
 
 def _workspace_config_dir(workspace_name: str) -> str:
@@ -5995,7 +6983,7 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
         return
 
     try:
-        scan = run_workspace_scan()
+        scan = run_workspace_scan(deep=False)
     except Exception:
         scan = {
             "workspace_name": os.path.basename(os.getcwd()) or "workspace",
@@ -9311,6 +10299,295 @@ def _wiz_read_key() -> str:
         return line[0] if line else "\r"
 
 
+def _kbhit() -> bool:
+    """Return True if a keypress is waiting on stdin without blocking."""
+    import select as _select
+    try:
+        if not sys.stdin.isatty():
+            return False
+    except Exception:
+        return False
+    try:
+        ready, _, _ = _select.select([sys.stdin], [], [], 0)
+        return bool(ready)
+    except Exception:
+        return False
+
+
+_STAGE_LABELS = ["STACK", "SOURCE", "COMPLEXITY", "TESTS", "GIT CHURN", "ARCHITECTURE"]
+_STAGE_COLORS = [_GREEN, _CYAN, _YELLOW, _GREEN, _RED, _MAGENTA]
+
+
+def _card_summary(key: str, data) -> tuple[str, str]:
+    """Return the two summary lines used in the stage cards."""
+    if key == "stack":
+        data = data or {}
+        lang = str(data.get("language", "unknown")).capitalize()
+        ver = str(data.get("version", "")).strip()
+        frameworks = data.get("frameworks", []) or []
+        framework_text = ", ".join(frameworks[:2]) or "no frameworks"
+        dep_count = data.get("dep_count", {}) or {}
+        prod = dep_count.get("prod", 0)
+        dev = dep_count.get("dev", 0)
+        ci = "CI ✓" if data.get("ci") else "no CI"
+        lockfile = "fresh" if data.get("lockfile_fresh") else "stale"
+        line1 = f"{lang} {ver}".strip()
+        line2 = f"{framework_text} · {ci} · {prod} prod · {dev} dev · {lockfile}"
+        return line1, line2
+    if key == "source":
+        source = data or []
+        total_files = len(source)
+        total_fns = sum(int(f.get("functions", 0) or 0) for f in source)
+        typed_pct = 0
+        if source:
+            typed_pct = round(
+                sum(float(f.get("typed_pct", 0) or 0) for f in source) / max(len(source), 1)
+            )
+        largest = source[0] if source else {}
+        line1 = f"{total_files} files · {total_fns} fns · {typed_pct}% typed"
+        line2 = ""
+        if largest.get("path"):
+            line2 = f"{largest['path']} · {int(largest.get('lines', 0) or 0):,} lines"
+        return line1, line2
+    if key == "complexity":
+        complexity = data or {}
+        hotspots = complexity.get("hotspots", []) or []
+        todo_counts = complexity.get("todo_counts", {}) or {}
+        marker_total = sum(int(v or 0) for v in todo_counts.values())
+        line1 = f"{len(hotspots)} hotspots · {marker_total} markers"
+        top = hotspots[0] if hotspots else {}
+        if top.get("path"):
+            label = top.get("fn") or os.path.basename(top["path"])
+            line2 = f"{label} · {int(top.get('lines', 0) or 0):,} lines"
+        else:
+            parts = [f"{k}:{v}" for k, v in todo_counts.items() if v]
+            line2 = " · ".join(parts[:3])
+        return line1, line2
+    if key == "tests":
+        tests = data or {}
+        ratio = float(tests.get("ratio", 0) or 0)
+        gap_count = int(tests.get("gap_count", 0) or 0)
+        line1 = f"{int(round(ratio * 100))}% covered · {gap_count} gaps"
+        gaps = tests.get("gap_functions", []) or []
+        names = [g.get("name", "?") for g in gaps[:2]]
+        suffix = f" +{gap_count - 2}" if gap_count > 2 else ""
+        line2 = f"{', '.join(names)}{suffix}".strip()
+        return line1, line2
+    if key == "git":
+        git_data = data or {}
+        churn = git_data.get("churn", []) or []
+        total = int(git_data.get("total_commits_scanned", 0) or 0)
+        if churn:
+            line1 = f"{churn[0].get('path', '?')} · {int(churn[0].get('commits', 0) or 0)} commits"
+        else:
+            line1 = f"{total} commits scanned"
+        line2 = ""
+        warm = next((item for item in churn if item.get("temp") == "warm"), None)
+        if warm:
+            line2 = f"warm: {warm.get('path', '?')}"
+        elif churn:
+            line2 = f"hot files: {len(churn)}"
+        return line1, line2
+    if key == "arch":
+        arch = data or {}
+        pattern = arch.get("pattern", "unknown")
+        entry_points = arch.get("entry_points", []) or []
+        dead = arch.get("dead_candidates", []) or []
+        public_api_count = int(arch.get("public_api_count", 0) or 0)
+        line1 = f"{pattern} · {len(entry_points)} entry point{'s' if len(entry_points) != 1 else ''}"
+        line2 = f"{len(dead)} dead candidates · {public_api_count} public API"
+        return line1, line2
+    return ("", "")
+
+
+def _render_one_card(idx: int, results: dict) -> str:
+    """Render a single stage card box."""
+    key = STAGE_KEYS[idx]
+    label = _STAGE_LABELS[idx]
+    color = _STAGE_COLORS[idx]
+    data = results.get(key)
+    width = 34
+
+    top = f"┌{'─' * width}┐"
+    bottom = f"└{'─' * width}┘"
+
+    def _line(text: str, style: str = "") -> str:
+        text = (text or "")[:width]
+        return f"│ {style}{text:<{width - 2}}{_RESET} │"
+
+    if data is None:
+        return "\n".join([
+            f"{_DIM}{top}{_RESET}",
+            _line(f"{label} ⟳", _DIM),
+            _line("scanning...", _DIM),
+            _line("", _DIM),
+            f"{_DIM}{bottom}{_RESET}",
+        ])
+
+    if isinstance(data, dict) and data.get("error"):
+        err = str(data.get("error", "error"))
+        return "\n".join([
+            f"{_RED}{top}{_RESET}",
+            _line(f"{label} !", _RED),
+            _line(err, _DIM),
+            _line("", _DIM),
+            f"{_RED}{bottom}{_RESET}",
+        ])
+
+    line1, line2 = _card_summary(key, data)
+    done_icon = "✓"
+    return "\n".join([
+        f"{color}{top}{_RESET}",
+        _line(f"{label} {done_icon}", color),
+        _line(line1, ""),
+        _line(line2, _DIM),
+        f"{color}{bottom}{_RESET}",
+    ])
+
+
+def _render_expanded_card(key: str, results: dict) -> None:
+    """Print a detail view below the grid for the expanded stage."""
+    if key not in STAGE_KEYS:
+        return
+    idx = STAGE_KEYS.index(key)
+    label = _STAGE_LABELS[idx]
+    color = _STAGE_COLORS[idx]
+    data = results.get(key)
+    print(f"  {color}── {label} ─────────────────────────────────{_RESET}")
+    if data is None:
+        print(f"  {_DIM}still scanning...{_RESET}")
+        return
+    if isinstance(data, dict) and data.get("error"):
+        print(f"  {_RED}{data['error']}{_RESET}")
+        return
+    if key == "stack":
+        for field in ("language", "version", "package_manager", "ci", "ci_workflows", "lockfile_fresh"):
+            print(f"  {_DIM}{field:<16}{_RESET} {data.get(field)}")
+        frameworks = ", ".join(data.get("frameworks", []) or []) or "none"
+        print(f"  {_DIM}{'frameworks':<16}{_RESET} {frameworks}")
+        dep_count = data.get("dep_count", {}) or {}
+        print(f"  {_DIM}{'deps':<16}{_RESET} prod={dep_count.get('prod', 0)} dev={dep_count.get('dev', 0)}")
+    elif key == "source":
+        for row in (data or [])[:5]:
+            print(f"  {row.get('path', '?'):<36} {int(row.get('lines', 0) or 0):>6} lines  "
+                  f"{int(row.get('functions', 0) or 0):>3} fns")
+    elif key == "complexity":
+        for hotspot in (data.get("hotspots", []) or [])[:5]:
+            label_text = hotspot.get("fn") or os.path.basename(hotspot.get("path", "?"))
+            print(f"  {_YELLOW}{label_text:<28}{_RESET} "
+                  f"{int(hotspot.get('lines', 0) or 0)} lines  "
+                  f"({hotspot.get('path', '?')}:{hotspot.get('lineno', '?')})")
+        todo_counts = data.get("todo_counts", {}) or {}
+        todo_line = " · ".join(f"{k}: {v}" for k, v in todo_counts.items() if v)
+        if todo_line:
+            print(f"  {_DIM}{todo_line}{_RESET}")
+    elif key == "tests":
+        for gap in (data.get("gap_functions", []) or [])[:8]:
+            print(f"  {_DIM}✗ {gap.get('name', '?'):<28}{_RESET} "
+                  f"{gap.get('file', '?')}:{gap.get('lineno', '?')}")
+    elif key == "git":
+        for item in (data.get("churn", []) or [])[:6]:
+            icon = "🔥" if item.get("temp") == "hot" else ("⚡" if item.get("temp") == "warm" else "·")
+            print(f"  {icon} {item.get('path', '?'):<34} {int(item.get('commits', 0) or 0):>3} commits")
+    elif key == "arch":
+        for entry in (data.get("entry_points", []) or [])[:5]:
+            print(f"  {_CYAN}{entry.get('name', '?')}{_RESET}  "
+                  f"{entry.get('file', '?')}:{entry.get('lineno', '?')}")
+        if data.get("dead_candidates"):
+            print(f"  {_DIM}Dead candidates: {', '.join(data.get('dead_candidates', [])[:4])}{_RESET}")
+    print()
+
+
+def _render_scan_cards(results: dict, expanded, elapsed: float) -> None:
+    """Render the full Stage Cards TUI."""
+    all_done = all(results.get(key) is not None for key in STAGE_KEYS)
+    status = f"{_GREEN}✓ complete · {elapsed:.1f}s{_RESET}" if all_done else f"{_YELLOW}⟳ scanning…{_RESET}"
+    workspace_name = results.get("workspace_name") or os.path.basename(os.getcwd()) or "workspace"
+    print(f"\n  {_BOLD}{_CYAN}◆ synlynk scan{_RESET}  {_DIM}workspace: {workspace_name}{_RESET}  {status}\n")
+
+    for row in range(3):
+        left_idx = row * 2
+        right_idx = left_idx + 1
+        left_lines = _render_one_card(left_idx, results).splitlines()
+        right_lines = _render_one_card(right_idx, results).splitlines() if right_idx < len(STAGE_KEYS) else []
+        width = max(len(line) for line in left_lines) if left_lines else 0
+        for i in range(max(len(left_lines), len(right_lines))):
+            left = left_lines[i] if i < len(left_lines) else ""
+            right = right_lines[i] if i < len(right_lines) else ""
+            print(f"  {left:<{width}}  {right}")
+        print()
+
+    if expanded:
+        _render_expanded_card(expanded, results)
+
+    hints = "[1–6] expand card · [r] re-scan · [q] quit"
+    if all_done:
+        hints = f"[enter] {_CYAN}synlynk launch{_RESET} · {hints}"
+    print(f"  {_DIM}{hints}{_RESET}\n")
+
+
+def _run_scan_tui(results: dict, threads: list, primary_root: str = ".") -> None:
+    """Poll stage results at 200ms, refresh the grid, and finish on Enter."""
+    import json as _json
+    import time as _time
+
+    expanded = None
+    started = _time.monotonic()
+    while True:
+        elapsed = _time.monotonic() - started
+        _wiz_clear()
+        _render_scan_cards(results, expanded, elapsed)
+
+        if _kbhit():
+            key = _wiz_read_key()
+            if key in ("q", "\x03"):
+                sys.exit(0)
+            if key == "r":
+                return
+            if key.isdigit() and 1 <= int(key) <= len(STAGE_KEYS):
+                next_expanded = STAGE_KEYS[int(key) - 1]
+                expanded = None if expanded == next_expanded else next_expanded
+            elif key in ("\r", "\n") and all(results.get(k) is not None for k in STAGE_KEYS):
+                break
+
+        if all(results.get(k) is not None for k in STAGE_KEYS) and not sys.stdin.isatty():
+            break
+
+        _time.sleep(0.2)
+
+    for thread in threads or []:
+        try:
+            thread.join(timeout=0.1)
+        except Exception:
+            pass
+
+    updated = _write_scan_fences(results, root=primary_root)
+    if updated:
+        print(f"\n  {_GREEN}── Agent fences updated ──────────────────{_RESET}")
+        for path in updated:
+            print(f"  {_GREEN}✓{_RESET} {path}  — codebase context written")
+
+    scan_json = os.path.join(primary_root, ".synlynk", "scan-result.json")
+    os.makedirs(os.path.dirname(scan_json), exist_ok=True)
+    try:
+        with open(scan_json, "w", encoding="utf-8") as fh:
+            _json.dump(results, fh, indent=2, default=str)
+        print(f"  {_DIM}.synlynk/scan-result.json saved{_RESET}")
+    except OSError:
+        pass
+
+    if sys.stdin.isatty():
+        print(f"\n  {_DIM}Press{_RESET} {_CYAN}[enter]{_RESET} {_DIM}to run{_RESET} "
+              f"{_CYAN}synlynk launch{_RESET}  {_DIM}or [q] to quit{_RESET}")
+        key = _wiz_read_key()
+        if key in ("\r", "\n"):
+            cmd_launch_ftue()
+        elif key in ("q", "\x03"):
+            sys.exit(0)
+    else:
+        cmd_launch_ftue()
+
+
 def _wiz_header(step: int, total: int, sub_active: bool = False) -> None:
     """Print the wizard progress header.
 
@@ -9842,7 +11119,7 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
     if scan is None:
         print(f"\n  {_CYAN}›{_RESET} scanning your environment...")
         try:
-            scan = run_workspace_scan()
+            scan = run_workspace_scan(deep=False)
             repo_names = ", ".join(r["name"] for r in scan["repos"])
             harness_names = ", ".join(h["name"] for h in scan["harnesses"]) or "none"
             stacks = sorted({l for r in scan["repos"] for l in r["stack_labels"]})
