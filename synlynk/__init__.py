@@ -9576,8 +9576,249 @@ merged: YYYY-MM-DD (or status: open)
     print(f"[ ] gh release create v{next_version}")
     print("[ ] Roadmap row marked shipped")
 
-def cmd_status(json_output: bool = False) -> None:
+def _load_telemetry_events() -> list:
+    """Returns telemetry events from .synlynk/telemetry.json, or [] on failure."""
+    telemetry_file = ".synlynk/telemetry.json"
+    if not os.path.exists(telemetry_file):
+        return []
+    try:
+        with open(telemetry_file) as f:
+            events = json.load(f)
+        return events if isinstance(events, list) else []
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def _parse_status_timestamp(value):
+    import datetime as _dt
+
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return _dt.datetime.fromtimestamp(float(value), tz=_dt.timezone.utc)
+    if not isinstance(value, str):
+        return None
+    try:
+        dt = _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_dt.timezone.utc)
+    return dt.astimezone(_dt.timezone.utc)
+
+
+def _humanize_ago(value) -> str:
+    import datetime as _dt
+
+    dt = _parse_status_timestamp(value)
+    if dt is None:
+        return "not probed"
+    now = _dt.datetime.now(_dt.timezone.utc)
+    age_s = max(0, int((now - dt).total_seconds()))
+    if age_s < 60:
+        return f"{age_s}s ago"
+    if age_s < 3600:
+        return f"{age_s // 60}m ago"
+    if age_s < 86400:
+        return f"{age_s // 3600}h ago"
+    return f"{age_s // 86400}d ago"
+
+
+def _load_platform_harness_rows() -> tuple:
+    """Returns (rows, source) for platform health tables."""
+    known_agents = ["claude", "agy", "codex", "grok", "gemini"]
+    try:
+        conn = _get_db()
+    except Exception:
+        conn = None
+    db_rows = []
+    if conn is not None:
+        try:
+            db_rows = conn.execute(
+                "SELECT agent_name, installed_version, last_probe_at, "
+                "compliance_status AS probe_status, capability_hash "
+                "FROM harness_records ORDER BY agent_name"
+            ).fetchall()
+        except Exception:
+            db_rows = []
+        finally:
+            conn.close()
+
+    if db_rows:
+        rows = []
+        for agent_name, installed_version, last_probe_at, probe_status, capability_hash in db_rows:
+            rows.append({
+                "agent_name": agent_name,
+                "installed_version": installed_version or "—",
+                "last_probe_at": last_probe_at,
+                "probe_status": probe_status or "unknown",
+                "capability_hash": capability_hash or "",
+                "installed": True,
+            })
+        return rows, "db"
+
+    rows = []
+    for agent_name in known_agents:
+        path = shutil.which(agent_name)
+        version = "—"
+        if path:
+            try:
+                result = subprocess.run(
+                    [agent_name, "--version"], capture_output=True, text=True, timeout=5
+                )
+                raw = (result.stdout or result.stderr or "").strip()
+                if raw:
+                    version = raw.split()[-1]
+            except Exception:
+                version = os.path.basename(path)
+        rows.append({
+            "agent_name": agent_name,
+            "installed_version": version,
+            "last_probe_at": None,
+            "probe_status": "unknown",
+            "capability_hash": "",
+            "installed": bool(path),
+        })
+    return rows, "which"
+
+
+def _load_platform_drift_agents() -> tuple:
+    """Returns drifted agent names and raw DRIFT sentinel lines."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        return set(), []
+    try:
+        with open(sentinel_file) as f:
+            drift_lines = [line.strip() for line in f if "DRIFT" in line]
+    except IOError:
+        return set(), []
+    drift_agents = set()
+    for line in drift_lines:
+        lower = line.lower()
+        for agent_name in ("claude", "agy", "codex", "grok", "gemini"):
+            if agent_name in lower:
+                drift_agents.add(agent_name)
+    return drift_agents, drift_lines
+
+
+def _load_platform_budget_pulse(events: list, limit_usd: float) -> tuple:
+    import datetime as _dt
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    daily_cutoff = now - _dt.timedelta(days=1)
+    weekly_cutoff = now - _dt.timedelta(days=7)
+    daily = 0.0
+    weekly = 0.0
+    for event in events:
+        cost = event.get("cost_usd")
+        if cost is None:
+            continue
+        ts = _parse_status_timestamp(
+            event.get("timestamp") or event.get("ts") or event.get("created_at")
+        )
+        if ts is None:
+            continue
+        try:
+            cost_val = float(cost)
+        except (TypeError, ValueError):
+            continue
+        if ts >= weekly_cutoff:
+            weekly += cost_val
+        if ts >= daily_cutoff:
+            daily += cost_val
+    remaining = max(0.0, limit_usd - weekly) if limit_usd else 0.0
+    pct_used = (weekly / limit_usd * 100.0) if limit_usd else 0.0
+    return daily, weekly, remaining, pct_used
+
+
+def _print_platform_table(title: str, headers: list, rows: list) -> None:
+    print()
+    print(f" {title}")
+    if not rows:
+        print("   (none active)")
+        return
+    widths = [len(h) for h in headers]
+    rendered_rows = []
+    for row in rows:
+        rendered = [str(value) for value in row]
+        rendered_rows.append(rendered)
+        for idx, value in enumerate(rendered):
+            widths[idx] = max(widths[idx], len(value))
+    print("  " + "  ".join(h.ljust(widths[idx]) for idx, h in enumerate(headers)))
+    for rendered in rendered_rows:
+        print("  " + "  ".join(rendered[idx].ljust(widths[idx]) for idx in range(len(headers))))
+
+
+def _print_platform_health() -> bool:
+    import datetime as _dt
+
+    events = _load_telemetry_events()
+    config = load_config()
+    limit_usd = float(config.get("budget", {}).get("limit_usd", 0.0) or 0.0)
+    daily_burn, weekly_burn, remaining_budget, pct_used = _load_platform_budget_pulse(events, limit_usd)
+    drift_agents, drift_lines = _load_platform_drift_agents()
+    rows, source = _load_platform_harness_rows()
+    now = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    print(f"◆ synlynk platform health  {now}")
+
+    compliance_rows = []
+    availability_rows = []
+    for row in rows:
+        agent_name = row["agent_name"]
+        probe_status = "DRIFT" if agent_name in drift_agents else "OK"
+        status_icon = "⚠" if probe_status == "DRIFT" else "✓"
+        age = _humanize_ago(row.get("last_probe_at"))
+        compliance_rows.append([
+            agent_name,
+            row.get("installed_version") or "—",
+            f"probed {age}" if age != "not probed" else "not probed",
+            f"{status_icon} {probe_status}",
+        ])
+        if row.get("installed", False):
+            tc_status = "known" if row.get("capability_hash") else "unknown"
+            availability_rows.append([
+                agent_name,
+                row.get("installed_version") or "—",
+                f"✓ {tc_status}" if tc_status == "known" else "⚠ unknown",
+            ])
+
+    _print_platform_table(
+        "HARNESSES",
+        ["agent", "version", "probe", "compliance"],
+        compliance_rows,
+    )
+
+    _print_platform_table(
+        "AGENT AVAILABILITY",
+        ["agent", "version", "TC"],
+        availability_rows,
+    )
+
+    print()
+    print(" BUDGET")
+    print(
+        f"   today: ${daily_burn:.2f}  ·  week: ${weekly_burn:.2f}  ·  "
+        f"remaining: ${remaining_budget:.2f} / ${limit_usd:.2f}  ·  {pct_used:.0f}% used"
+    )
+
+    print()
+    print(" SENTINELS")
+    if drift_lines:
+        for line in drift_lines:
+            print(f"   {line}")
+    else:
+        print("   (none active)")
+
+    return bool(drift_lines) or (limit_usd > 0 and weekly_burn >= limit_usd)
+
+
+def cmd_status(json_output: bool = False, platform: bool = False) -> None:
     """Displays project state dashboard. Exits 1 if sentinel active or budget exceeded."""
+    if platform:
+        has_alert = _print_platform_health()
+        sys.exit(1 if has_alert else 0)
+
     username = get_username()
     mode = get_mode()
 
@@ -9593,19 +9834,14 @@ def cmd_status(json_output: bool = False) -> None:
                     text = re.sub(r'<!--.*?-->', '', text).strip()
                     active_tasks.append({"id": id_m.group(1) if id_m else None, "text": text})
 
+    telemetry_events = _load_telemetry_events()
+
     # Last checkpoint from telemetry
     last_checkpoint = None
-    telemetry_file = ".synlynk/telemetry.json"
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file) as f:
-                events = json.load(f)
-            for e in reversed(events):
-                if e.get("type") == "checkpoint":
-                    last_checkpoint = e
-                    break
-        except (json.JSONDecodeError, IOError):
-            pass
+    for e in reversed(telemetry_events):
+        if e.get("type") == "checkpoint":
+            last_checkpoint = e
+            break
 
     # Sentinel alerts
     sentinel_alerts = []
@@ -9626,16 +9862,10 @@ def cmd_status(json_output: bool = False) -> None:
     daemon = WatchDaemon()
     watcher_running = daemon._is_running()
     last_trigger_file = None
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file) as f:
-                events = json.load(f)
-            for e in reversed(events):
-                if e.get("type") == "watch_trigger":
-                    last_trigger_file = e.get("changed_file")
-                    break
-        except (json.JSONDecodeError, IOError):
-            pass
+    for e in reversed(telemetry_events):
+        if e.get("type") == "watch_trigger":
+            last_trigger_file = e.get("changed_file")
+            break
 
     # Teammates (team mode)
     teammates = []
@@ -11933,6 +12163,8 @@ def main() -> None:
     status_parser = subparsers.add_parser("status", help="Show project state dashboard")
     status_parser.add_argument("--json", action="store_true", dest="json_output",
                                help="Output machine-readable JSON")
+    status_parser.add_argument("--platform", action="store_true", dest="platform",
+                               help="Show infrastructure health instead of workspace status")
 
     sentinel_parser = subparsers.add_parser("sentinel",
                                              help="View and manage sentinel alerts")
@@ -12130,7 +12362,7 @@ def main() -> None:
     elif args.command == "checkpoint":
         checkpoint()
     elif args.command == "status":
-        cmd_status(json_output=args.json_output)
+        cmd_status(json_output=args.json_output, platform=getattr(args, "platform", False))
     elif args.command == "sentinel":
         action = getattr(args, 'sentinel_action', None)
         if action == "clear":
