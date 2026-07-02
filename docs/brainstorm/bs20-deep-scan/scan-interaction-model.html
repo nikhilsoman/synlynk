@@ -1,0 +1,85 @@
+<h2>BS-20: Deep Scan — Interaction Model</h2>
+<p class="subtitle">How should the scan experience feel while it runs? Pick the model that fits.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:18px 16px;font-family:monospace;font-size:12px;line-height:1.7;color:#e2e8f0;border-radius:8px 8px 0 0;">
+      <div style="color:#60a5fa;margin-bottom:6px;">◆ synlynk scan  <span style="color:#4ade80;font-size:11px;">scanning 3,847 files…</span></div>
+      <div style="color:#94a3b8;">── Stack detection</div>
+      <div style="color:#4ade80;">  ✓ Python 3.11 · pytest · pyproject.toml</div>
+      <div style="color:#4ade80;">  ✓ GitHub Actions CI (4 workflows)</div>
+      <div style="color:#94a3b8;">── Source analysis <span style="color:#fbbf24;">⟳ scanning…</span></div>
+      <div style="color:#94a3b8;padding-left:12px;">  synlynk/__init__.py    10,651 lines ↑</div>
+      <div style="color:#94a3b8;padding-left:12px;">  tests/test_wizard.py    847 lines</div>
+      <div style="color:#94a3b8;padding-left:12px;">  tests/test_scan.py      312 lines</div>
+      <div style="color:#94a3b8;padding-left:12px;">  … 41 more files</div>
+      <div style="color:#94a3b8;margin-top:4px;">── Git churn <span style="color:#94a3b8;font-size:10px;">(waiting)</span></div>
+      <div style="color:#94a3b8;">── Architecture <span style="color:#94a3b8;font-size:10px;">(waiting)</span></div>
+    </div>
+    <div class="card-body">
+      <h3>A — Live Feed</h3>
+      <p>Findings stream in real-time as files are scanned. Each completed stage prints immediately. Fast, transparent, feels like a capable tool.</p>
+      <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Best for: power users who want to see what's happening</div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:18px 16px;font-family:monospace;font-size:12px;line-height:1.7;color:#e2e8f0;border-radius:8px 8px 0 0;">
+      <div style="color:#60a5fa;margin-bottom:10px;">◆ synlynk scan  <span style="color:#94a3b8;">workspace: synlynk</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #4ade80;">
+          <div style="color:#4ade80;font-size:10px;letter-spacing:1px;">STACK</div>
+          <div style="color:#e2e8f0;margin-top:4px;">Python · pytest</div>
+          <div style="color:#94a3b8;font-size:11px;">CI ✓  Types ✗  ORM ✗</div>
+        </div>
+        <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #60a5fa;">
+          <div style="color:#60a5fa;font-size:10px;letter-spacing:1px;">FILES</div>
+          <div style="color:#e2e8f0;margin-top:4px;">44 source · 16 test</div>
+          <div style="color:#94a3b8;font-size:11px;">1 file &gt;5K lines ⚠</div>
+        </div>
+        <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #fbbf24;">
+          <div style="color:#fbbf24;font-size:10px;letter-spacing:1px;">COMPLEXITY</div>
+          <div style="color:#e2e8f0;margin-top:4px;">3 hotspots</div>
+          <div style="color:#94a3b8;font-size:11px;">press [c] to expand</div>
+        </div>
+        <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #a78bfa;">
+          <div style="color:#a78bfa;font-size:10px;letter-spacing:1px;">GIT</div>
+          <div style="color:#e2e8f0;margin-top:4px;">⟳ scanning…</div>
+          <div style="color:#94a3b8;font-size:11px;">&nbsp;</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;color:#94a3b8;font-size:11px;">[c] complexity  [g] git churn  [a] architecture  [enter] continue</div>
+    </div>
+    <div class="card-body">
+      <h3>B — Stage Cards (Recommended)</h3>
+      <p>Each scan stage completes and reveals a summary card. User can press a key to expand any card for detail while remaining stages run in parallel. Interactive without blocking.</p>
+      <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Best for: architect-grade review + quick navigation to what matters</div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:18px 16px;font-family:monospace;font-size:12px;line-height:1.7;color:#e2e8f0;border-radius:8px 8px 0 0;">
+      <div style="color:#60a5fa;margin-bottom:6px;">◆ synlynk scan  <span style="color:#4ade80;">✓ complete — 4.2s</span></div>
+      <div style="color:#e2e8f0;margin-bottom:6px;">I found <span style="color:#fbbf24;">3 opportunities</span> worth your attention:</div>
+      <div style="background:#1e293b;border-radius:6px;padding:8px 12px;margin-bottom:6px;border-left:3px solid #f87171;">
+        <span style="color:#f87171;">⚡</span> <span style="color:#e2e8f0;">synlynk/__init__.py is 10,651 lines</span>
+        <div style="color:#94a3b8;font-size:11px;margin-top:2px;">No module split in 8 months. 12 public entry points. [1] to dispatch</div>
+      </div>
+      <div style="background:#1e293b;border-radius:6px;padding:8px 12px;margin-bottom:6px;border-left:3px solid #fbbf24;">
+        <span style="color:#fbbf24;">⚡</span> <span style="color:#e2e8f0;">28% of functions have no docstring</span>
+        <div style="color:#94a3b8;font-size:11px;margin-top:2px;">147 public functions undocumented. [2] to dispatch</div>
+      </div>
+      <div style="background:#1e293b;border-radius:6px;padding:8px 12px;border-left:3px solid #60a5fa;">
+        <span style="color:#60a5fa;">●</span> <span style="color:#e2e8f0;">No type stubs (.pyi) found</span>
+        <div style="color:#94a3b8;font-size:11px;margin-top:2px;">Type coverage at 34%. [3] to dispatch</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Debrief Mode</h3>
+      <p>Scan runs silently, then presents the top findings as ranked opportunities with one-key dispatch. Clean, opinionated, action-oriented — hides the process, shows the insight.</p>
+      <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Best for: users who want answers not process</div>
+    </div>
+  </div>
+
+</div>
