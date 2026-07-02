@@ -1,0 +1,68 @@
+<h2>When scan completes — what happens next?</h2>
+<p class="subtitle">The stage cards are all filled in. The architect has the picture. What's the primary action?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:16px;font-family:monospace;font-size:12px;color:#e2e8f0;border-radius:8px 8px 0 0;line-height:1.7;">
+      <div style="color:#4ade80;margin-bottom:8px;">✓ scan complete — 4.2s  ·  6 stages  ·  synlynk</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+        <div style="background:#1e293b;border-radius:4px;padding:6px 8px;border-top:2px solid #4ade80;"><div style="color:#4ade80;font-size:10px;">STACK</div><div style="color:#e2e8f0;font-size:11px;">Python·CI·pytest</div></div>
+        <div style="background:#1e293b;border-radius:4px;padding:6px 8px;border-top:2px solid #60a5fa;"><div style="color:#60a5fa;font-size:10px;">FILES</div><div style="color:#e2e8f0;font-size:11px;">44 src · 16 test</div></div>
+        <div style="background:#1e293b;border-radius:4px;padding:6px 8px;border-top:2px solid #f87171;"><div style="color:#f87171;font-size:10px;">COMPLEXITY</div><div style="color:#e2e8f0;font-size:11px;">3 hotspots ⚠</div></div>
+        <div style="background:#1e293b;border-radius:4px;padding:6px 8px;border-top:2px solid #fbbf24;"><div style="color:#fbbf24;font-size:10px;">GIT CHURN</div><div style="color:#e2e8f0;font-size:11px;">2 hot files</div></div>
+        <div style="background:#1e293b;border-radius:4px;padding:6px 8px;border-top:2px solid #34d399;"><div style="color:#34d399;font-size:10px;">TESTS</div><div style="color:#e2e8f0;font-size:11px;">39% coverage</div></div>
+        <div style="background:#1e293b;border-radius:4px;padding:6px 8px;border-top:2px solid #a78bfa;"><div style="color:#a78bfa;font-size:10px;">ARCH</div><div style="color:#e2e8f0;font-size:11px;">monolith · 12 CLI</div></div>
+      </div>
+      <div style="color:#94a3b8;font-size:11px;">Agent files updated: CLAUDE.md  GEMINI.md  AGENTS.md</div>
+      <div style="margin-top:8px;color:#94a3b8;">[enter] run <span style="color:#60a5fa;">synlynk launch</span>  [r] re-scan  [q] quit</div>
+    </div>
+    <div class="card-body">
+      <h3>A — Scan → Launch (Recommended)</h3>
+      <p>Scan writes rich signals to state.db and updates agent instruction fences automatically. Pressing <code>[enter]</code> drops straight into <code>synlynk launch</code>, which now surfaces architect-grade task suggestions powered by the deep data.</p>
+      <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Clean handoff. Scan informs, Launch acts.</div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:16px;font-family:monospace;font-size:12px;color:#e2e8f0;border-radius:8px 8px 0 0;line-height:1.7;">
+      <div style="color:#4ade80;margin-bottom:8px;">✓ scan complete  ·  <span style="color:#fbbf24;">4 opportunities ranked</span></div>
+      <div style="background:#1e293b;border-radius:5px;padding:8px 10px;margin-bottom:5px;border-left:3px solid #f87171;cursor:pointer;">
+        <span style="color:#f87171;">[1]</span> <span style="color:#e2e8f0;">Split __init__.py</span> <span style="color:#94a3b8;font-size:11px;">· Build · Codex · ~4h</span>
+        <div style="color:#94a3b8;font-size:10px;margin-top:2px;">10,651 lines, 12 entry points, 0 module splits in 8mo</div>
+      </div>
+      <div style="background:#1e293b;border-radius:5px;padding:8px 10px;margin-bottom:5px;border-left:3px solid #fbbf24;cursor:pointer;">
+        <span style="color:#fbbf24;">[2]</span> <span style="color:#e2e8f0;">Add type hints</span> <span style="color:#94a3b8;font-size:11px;">· Build · Agy · ~2h</span>
+        <div style="color:#94a3b8;font-size:10px;margin-top:2px;">147 public functions, 34% typed, no .pyi stubs</div>
+      </div>
+      <div style="background:#1e293b;border-radius:5px;padding:8px 10px;margin-bottom:5px;border-left:3px solid #60a5fa;cursor:pointer;">
+        <span style="color:#60a5fa;">[3]</span> <span style="color:#e2e8f0;">Fill coverage gaps</span> <span style="color:#94a3b8;font-size:11px;">· Build · Codex · ~3h</span>
+        <div style="color:#94a3b8;font-size:10px;margin-top:2px;">cmd_roles, cmd_probe untested — 8 functions exposed</div>
+      </div>
+      <div style="margin-top:8px;color:#94a3b8;">[1-4] dispatch  [s] skip  [enter] go to launch</div>
+    </div>
+    <div class="card-body">
+      <h3>B — Dispatch directly from scan</h3>
+      <p>After cards fill in, scan pivots to a ranked opportunity list. User can dispatch any task with a single keypress — without needing to open <code>synlynk launch</code> separately. Scan + action in one flow.</p>
+      <div style="margin-top:8px;font-size:12px;color:#94a3b8;">More powerful, slightly heavier flow.</div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1117;padding:16px;font-family:monospace;font-size:12px;color:#e2e8f0;border-radius:8px 8px 0 0;line-height:1.7;">
+      <div style="color:#4ade80;margin-bottom:8px;">✓ scan complete — 4.2s</div>
+      <div style="color:#94a3b8;margin-bottom:6px;">Written to:</div>
+      <div style="color:#e2e8f0;">  .synlynk/state.db  <span style="color:#4ade80;font-size:11px;">← rich signal store</span></div>
+      <div style="color:#e2e8f0;">  .synlynk/scan-report.md  <span style="color:#4ade80;font-size:11px;">← human-readable</span></div>
+      <div style="color:#e2e8f0;">  CLAUDE.md  <span style="color:#4ade80;font-size:11px;">← fence updated</span></div>
+      <div style="color:#e2e8f0;">  GEMINI.md  <span style="color:#4ade80;font-size:11px;">← fence updated</span></div>
+      <div style="margin-top:10px;color:#94a3b8;font-size:11px;">Next: <span style="color:#60a5fa;">synlynk launch</span> to pick a task  ·  <span style="color:#60a5fa;">cat .synlynk/scan-report.md</span> to read findings</div>
+    </div>
+    <div class="card-body">
+      <h3>C — Scan writes, exit cleanly</h3>
+      <p>Scan runs, fills cards, writes everything to state.db + a human-readable <code>scan-report.md</code>, updates agent fences, then exits. No interactive dispatch — the user reads the report and runs <code>synlynk launch</code> at their own pace.</p>
+      <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Simplest implementation. Separates concerns cleanly.</div>
+    </div>
+  </div>
+
+</div>

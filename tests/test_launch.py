@@ -47,7 +47,7 @@ def test_scan_returns_readme_word_count(tmp_path, monkeypatch):
 
 
 def test_launch_task_templates_count():
-    assert len(synlynk.LAUNCH_TASK_TEMPLATES) == 12
+    assert len(synlynk.LAUNCH_TASK_TEMPLATES) == 15
 
 
 def test_launch_task_templates_have_required_fields():
@@ -173,6 +173,65 @@ def test_template_matches_type_safety_python_only():
                          repos=[{"name": "r", "stack_labels": ["node"]}])
     tmpl = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "type-safety")
     assert not synlynk._template_matches(tmpl, scan)
+
+
+def test_add_tests_trigger_uses_gap_count():
+    """add-tests triggers on gap_count > 5 from deep scan, not just test_ratio."""
+    t = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "add-tests")
+    scan_deep = {"test_ratio": 0.5, "tests": {"gap_count": 8, "gap_functions": [],
+                                               "covered_count": 5, "ratio": 0.5}}
+    scan_shallow = {"test_ratio": 0.05, "tests": None}
+    assert t["trigger_condition"](scan_deep)
+    assert t["trigger_condition"](scan_shallow)
+
+
+def test_type_safety_trigger_uses_typed_pct():
+    """type-safety triggers on avg typed_pct < 40, not just has_type_hints."""
+    t = next(t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "type-safety")
+    scan_deep = {
+        "repos": [{"stack_labels": ["python"]}],
+        "has_type_hints": True,
+        "source": [{"typed_pct": 20, "path": "app.py", "lines": 100}],
+    }
+    scan_shallow = {
+        "repos": [{"stack_labels": ["python"]}],
+        "has_type_hints": False,
+        "source": None,
+    }
+    assert t["trigger_condition"](scan_deep)
+    assert t["trigger_condition"](scan_shallow)
+
+
+def test_reduce_complexity_template_exists():
+    """reduce-complexity template exists and triggers on hotspots."""
+    t = next((t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "reduce-complexity"), None)
+    assert t is not None
+    scan = {"complexity": {"hotspots": [
+        {"path": "app.py", "fn": "big_fn", "lines": 200, "lineno": 10},
+        {"path": "app.py", "fn": "also_big", "lines": 80, "lineno": 100},
+        {"path": "app.py", "fn": "and_big", "lines": 60, "lineno": 200},
+    ], "todo_counts": {}}}
+    assert t["trigger_condition"](scan)
+
+
+def test_fix_churn_debt_template_exists():
+    """fix-churn-debt template exists and triggers on hot files."""
+    t = next((t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "fix-churn-debt"), None)
+    assert t is not None
+    scan = {"git": {"churn": [{"path": "app.py", "commits": 35, "temp": "hot",
+                                "last_days_ago": 2}],
+                    "total_commits_scanned": 30}}
+    assert t["trigger_condition"](scan)
+
+
+def test_refactor_module_template_exists():
+    """refactor-module template exists and triggers on large files."""
+    t = next((t for t in synlynk.LAUNCH_TASK_TEMPLATES if t["id"] == "refactor-module"), None)
+    assert t is not None
+    scan = {"source": [{"path": "app.py", "lines": 6000, "functions": 200,
+                        "classes": 5, "typed_pct": 20, "docstring_pct": 10,
+                        "largest_fns": [{"name": "big_fn", "lines": 300, "lineno": 100}]}]}
+    assert t["trigger_condition"](scan)
 
 
 def test_select_tasks_returns_max_5():
