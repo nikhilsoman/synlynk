@@ -3870,6 +3870,47 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     return True
 
 
+def _job_summary_path(job_id: str) -> str:
+    return os.path.join(LOGS_DIR, f"{job_id}.summary")
+
+
+def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
+                        exit_code: Optional[int], duration_s: Optional[float],
+                        in_tokens: int, out_tokens: int, cost_usd: float,
+                        files_touched: Optional[list] = None) -> str:
+    """Formats the structured completion summary for a finished job."""
+    story_label = story_id or "-"
+    exit_code = -1 if exit_code is None else exit_code
+    status_label = "OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})"
+    duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
+    files_touched = files_touched or []
+    summary = (
+        f"-- job {job_id} complete ---------\n"
+        f"agent:    {agent}   story: {story_label}\n"
+        f"status:   {status_label}\n"
+        f"duration: {duration_label}\n"
+        f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
+        f"files:    {len(files_touched)} touched\n"
+        f"---------------------------------\n"
+    )
+    return summary
+
+
+def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
+                       exit_code: Optional[int], duration_s: Optional[float],
+                       in_tokens: int, out_tokens: int, cost_usd: float,
+                       files_touched: Optional[list]) -> str:
+    """Writes a structured completion summary for a job and returns the text."""
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    summary = _format_job_summary(
+        job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
+        cost_usd, files_touched
+    )
+    with open(_job_summary_path(job_id), "w") as f:
+        f.write(summary)
+    return summary
+
+
 def _reconcile_jobs() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
@@ -3885,6 +3926,36 @@ def _reconcile_jobs() -> None:
         if job.get("status") not in ("running",):
             continue
         if _check_job_stall(job, config, sentinel_path):
+            ended_at = job.get("ended_at") or now
+            started_at = job.get("started_at")
+            duration_s = None
+            try:
+                duration_s = max(0.0, time.mktime(time.strptime(ended_at, "%Y-%m-%dT%H:%M:%S")) -
+                                 time.mktime(time.strptime(started_at, "%Y-%m-%dT%H:%M:%S")))
+            except Exception:
+                duration_s = None
+            log_file = job.get("log_file")
+            log_text = ""
+            if log_file and os.path.exists(log_file):
+                try:
+                    with open(log_file) as f:
+                        log_text = f.read()
+                except Exception:
+                    log_text = ""
+            in_tokens, out_tokens = extract_tokens(log_text)
+            cost_usd = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            summary = _write_job_summary(
+                job.get("id", ""),
+                job.get("agent", ""),
+                job.get("story_id"),
+                job.get("exit_code"),
+                duration_s,
+                in_tokens,
+                out_tokens,
+                cost_usd,
+                [],
+            )
+            print(summary, end="")
             changed = True
             continue
         pid = job.get("pid")
@@ -3916,9 +3987,33 @@ def _reconcile_jobs() -> None:
             changed = True
 
             if log_file and os.path.exists(log_file):
-                log_text = open(log_file).read()
+                with open(log_file) as f:
+                    log_text = f.read()
                 job["micro_rework"] = _extract_micro_rework(log_text)
                 _write_capability_rating(job, log_text)
+            else:
+                log_text = ""
+
+            in_tokens, out_tokens = extract_tokens(log_text)
+            cost_usd = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            duration_s = None
+            try:
+                duration_s = max(0.0, time.mktime(time.strptime(job.get("ended_at"), "%Y-%m-%dT%H:%M:%S")) -
+                                 time.mktime(time.strptime(job.get("started_at"), "%Y-%m-%dT%H:%M:%S")))
+            except Exception:
+                duration_s = None
+            summary = _write_job_summary(
+                job.get("id", ""),
+                job.get("agent", ""),
+                job.get("story_id"),
+                job.get("exit_code"),
+                duration_s,
+                in_tokens,
+                out_tokens,
+                cost_usd,
+                [],
+            )
+            print(summary, end="")
 
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.
@@ -3931,11 +4026,12 @@ def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
     conn = _get_db()
     rows = conn.execute(
-        "SELECT job_id, pid, log_path FROM daemon_jobs WHERE status='running'"
+        "SELECT job_id, agent, story_id, pid, started_at, completed_at, log_path "
+        "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        for job_id, pid, log_path in rows:
+        for job_id, agent, story_id, pid, started_at, completed_at, log_path in rows:
             if pid is None:
                 continue
             exited = False
@@ -3973,6 +4069,26 @@ def _reconcile_daemon_jobs() -> None:
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
                     "WHERE job_id=?",
                     (status, exit_code, now, job_id)
+                )
+                duration_s = None
+                try:
+                    end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))
+                    start_ts = time.mktime(time.strptime(started_at, "%Y-%m-%dT%H:%M:%S"))
+                    duration_s = max(0.0, end_ts - start_ts)
+                except Exception:
+                    duration_s = None
+                log_text = ""
+                if log_path and os.path.exists(log_path):
+                    try:
+                        with open(log_path) as f:
+                            log_text = f.read()
+                    except Exception:
+                        log_text = ""
+                in_tokens, out_tokens = extract_tokens(log_text)
+                cost_usd = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+                _write_job_summary(
+                    job_id, agent, story_id, exit_code, duration_s, in_tokens,
+                    out_tokens, cost_usd, []
                 )
         conn.commit()
     finally:
@@ -6062,9 +6178,18 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     return job
 
 
-def cmd_jobs(all_jobs: bool = False, watch: bool = False) -> None:
+def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None) -> None:
     """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
     import time as _time
+
+    if summary:
+        summary_path = _job_summary_path(summary)
+        if not os.path.exists(summary_path):
+            print(f"No summary for {summary} -- job may still be running or predates this feature")
+            return
+        with open(summary_path) as f:
+            print(f.read(), end="")
+        return
 
     def _parse_age(enqueued_at: str) -> str:
         try:
@@ -11600,6 +11725,7 @@ def main() -> None:
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
         help="Include completed and failed jobs")
+    jobs_parser.add_argument("--summary", metavar="JOB_ID")
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
 
@@ -11783,7 +11909,8 @@ def main() -> None:
             sys.exit(1)
     elif args.command == "jobs":
         cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
-                 watch=getattr(args, "watch", False))
+                 watch=getattr(args, "watch", False),
+                 summary=getattr(args, "summary", None))
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":

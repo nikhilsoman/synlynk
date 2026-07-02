@@ -178,6 +178,12 @@ def test_extract_auto_signals_all_zeros_on_empty_log():
     assert signals["build_success"] is None
 
 
+def test_add_job_completion_summaries_to_synlynk_helper_exists():
+    import synlynk
+    assert hasattr(synlynk, "_write_job_summary")
+    assert hasattr(synlynk, "cmd_jobs")
+
+
 def test_extract_auto_signals_returns_test_count(tmp_path, monkeypatch):
     """_extract_auto_signals returns test_count when tests are mentioned in log."""
     monkeypatch.chdir(tmp_path)
