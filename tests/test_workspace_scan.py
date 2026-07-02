@@ -161,14 +161,14 @@ def test_scan_dry_run_writes_nothing(tmp_path, monkeypatch):
 
 
 def test_structured_context_written_after_scan(tmp_path, monkeypatch):
-    """After a real scan, context.md exists and has workspace section."""
+    """--refresh keeps the legacy config/context write-through path."""
     (tmp_path / ".git").mkdir()
     (tmp_path / ".synlynk").mkdir()
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(synlynk, "discover_agents", lambda config=None: [])
-    synlynk.cmd_scan()
+    synlynk.cmd_scan(refresh=True)
     context = tmp_path / ".synlynk" / "context.md"
     assert context.exists()
     content = context.read_text()
@@ -576,3 +576,117 @@ def test_write_scan_fences_omits_errored_stage(tmp_path):
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "Hot Files" not in content
     assert "git unavailable" not in content
+
+
+def test_kbhit_returns_bool(monkeypatch):
+    """_kbhit() returns a boolean and never blocks."""
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    assert isinstance(synlynk._kbhit(), bool)
+
+
+def test_run_scan_tui_exits_when_enter_pressed(monkeypatch, tmp_path):
+    """TUI finishes cleanly when Enter is pressed after all stages complete."""
+    results = {k: {} for k in synlynk.STAGE_KEYS}
+    results["workspace_name"] = "demo"
+    threads = []
+    class _DummyStdin:
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(synlynk, "_wiz_clear", lambda: None)
+    monkeypatch.setattr(synlynk, "_kbhit", lambda: True)
+    monkeypatch.setattr(synlynk, "_wiz_read_key", lambda: "\r")
+    monkeypatch.setattr(synlynk, "_write_scan_fences", lambda r, root=".": [])
+    monkeypatch.setattr(synlynk, "cmd_launch_ftue", lambda: None)
+    monkeypatch.setattr(synlynk.sys, "stdin", _DummyStdin())
+
+    synlynk._run_scan_tui(results, threads, primary_root=str(tmp_path))
+
+
+def test_run_scan_tui_quit_exits(monkeypatch, tmp_path):
+    """Pressing q exits the TUI with status 0."""
+    results = {k: {} for k in synlynk.STAGE_KEYS}
+    results["workspace_name"] = "demo"
+    threads = []
+    class _DummyStdin:
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(synlynk, "_wiz_clear", lambda: None)
+    monkeypatch.setattr(synlynk, "_kbhit", lambda: True)
+    monkeypatch.setattr(synlynk, "_wiz_read_key", lambda: "q")
+    monkeypatch.setattr(synlynk, "_write_scan_fences", lambda r, root=".": [])
+    monkeypatch.setattr(synlynk.sys, "stdin", _DummyStdin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        synlynk._run_scan_tui(results, threads, primary_root=str(tmp_path))
+    assert exc_info.value.code == 0
+
+
+def test_render_scan_cards_no_crash(capsys):
+    """_render_scan_cards() renders cleanly for empty and populated stage data."""
+    results_none = {k: None for k in synlynk.STAGE_KEYS}
+    results_none["workspace_name"] = "demo"
+    synlynk._render_scan_cards(results_none, expanded=None, elapsed=0.0)
+
+    results_full = {
+        "workspace_name": "demo",
+        "stack": {"language": "python", "version": "3.11", "frameworks": ["pytest"],
+                  "package_manager": "pyproject.toml", "ci": True, "ci_workflows": 2,
+                  "dep_count": {"prod": 3, "dev": 4}, "lockfile_fresh": True},
+        "source": [{"path": "app.py", "lines": 500, "functions": 20, "classes": 2,
+                    "typed_pct": 45, "docstring_pct": 30, "largest_fns": []}],
+        "complexity": {"hotspots": [{"path": "app.py", "fn": "big_fn", "lines": 120, "lineno": 10}],
+                       "todo_counts": {"TODO": 3, "FIXME": 1, "HACK": 0, "XXX": 0}},
+        "tests": {"gap_functions": [{"name": "foo", "file": "app.py", "lineno": 1}],
+                  "covered_count": 10, "gap_count": 5, "ratio": 0.67},
+        "git": {"churn": [{"path": "app.py", "commits": 30, "last_days_ago": 1, "temp": "hot"}],
+                "total_commits_scanned": 30},
+        "arch": {"entry_points": [{"name": "main", "file": "app.py", "lineno": 1}],
+                 "import_graph": {}, "dead_candidates": [],
+                 "public_api_count": 15, "pattern": "monolith"},
+    }
+    synlynk._render_scan_cards(results_full, expanded=None, elapsed=2.1)
+    out = capsys.readouterr().out
+    assert "STACK" in out
+    assert "SOURCE" in out
+
+
+def test_cmd_scan_no_tui_prints_summary(tmp_path, monkeypatch, capsys):
+    """synlynk scan --no-tui prints a text summary for each stage."""
+    scan = {
+        "workspace_name": "test-ws",
+        "repos": [{"path": str(tmp_path), "name": "repo", "stack_labels": ["Python"]}],
+        "harnesses": [],
+        "agents": [],
+        "skills": [],
+        "home_harness": "claude",
+        "stack": {"language": "python", "version": "3.11", "frameworks": ["pytest"],
+                  "package_manager": "pyproject.toml", "ci": False, "ci_workflows": 0,
+                  "dep_count": {"prod": 1, "dev": 1}, "lockfile_fresh": True},
+        "source": [{"path": "app.py", "lines": 10, "functions": 2, "classes": 0,
+                    "typed_pct": 50, "docstring_pct": 50, "largest_fns": []}],
+        "complexity": {"hotspots": [], "todo_counts": {"TODO": 0, "FIXME": 0, "HACK": 0, "XXX": 0}},
+        "tests": {"gap_functions": [], "covered_count": 2, "gap_count": 0, "ratio": 1.0},
+        "git": {"churn": [], "total_commits_scanned": 0},
+        "arch": {"entry_points": [], "import_graph": {}, "dead_candidates": [],
+                 "public_api_count": 2, "pattern": "library"},
+        "has_ci": False,
+        "has_docs": False,
+        "has_type_hints": True,
+        "has_orm": False,
+        "test_ratio": 1.0,
+        "readme_word_count": 0,
+        "topology": "single",
+        "scanned_at": "2026-07-03T00:00:00",
+    }
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, "run_workspace_scan", lambda **kwargs: scan)
+    written = []
+    monkeypatch.setattr(synlynk, "_write_scan_fences", lambda results, root=".": written.append(root) or [str(tmp_path / "CLAUDE.md")])
+    synlynk.cmd_scan(no_tui=True)
+    out = capsys.readouterr().out
+    assert "STACK" in out or "stack" in out.lower()
+    assert written == [str(tmp_path)]

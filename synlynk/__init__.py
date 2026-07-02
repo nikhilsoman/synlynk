@@ -1530,128 +1530,6 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
     return updated
 
 
-def _write_scan_fences(results: dict, root: str = '.') -> list:
-    """Write '## Codebase Context' fence into every present directive file in root.
-
-    Directive files to update: CLAUDE.md, GEMINI.md, AGENTS.md, GROK.md (only if they exist in root).
-    Calls _upsert_harness_fence(fpath, f'scan-{date}', body) for each present file.
-    Returns list of absolute paths updated (empty list if none exist).
-    """
-    import datetime as _dt
-
-    def _is_ok(key):
-        val = results.get(key)
-        if val is None:
-            return False
-        if isinstance(val, dict) and "error" in val:
-            return False
-        return True
-
-    body_lines = []
-
-    # 1. Codebase Context
-    has_stack = _is_ok("stack")
-    has_source = _is_ok("source")
-    has_arch = _is_ok("arch")
-
-    if has_stack or has_source or has_arch:
-        body_lines.append("## Codebase Context")
-
-        if has_stack or has_arch:
-            stack_data = results.get("stack") or {}
-            arch_data = results.get("arch") or {}
-            
-            pat = arch_data.get("pattern", "unknown")
-            lang = stack_data.get("language", "unknown")
-            lang = lang.capitalize() if lang else "Unknown"
-            ver = stack_data.get("version", "")
-            ver_str = f" {ver}" if ver else ""
-            eps = len(arch_data.get("entry_points", []))
-            eps_str = f"{eps} entry point{'s' if eps != 1 else ''}"
-            
-            body_lines.append(f"- Architecture: {pat} · {lang}{ver_str} · {eps_str}")
-
-        if has_source:
-            source_data = results.get("source") or []
-            total_files = len(source_data)
-            total_fns = sum(f.get("functions", 0) for f in source_data)
-            
-            largest = source_data[0] if source_data else {}
-            largest_lines = largest.get("lines", 0)
-            largest_note = ""
-            if largest_lines > 1000:
-                largest_note = f" · largest_file {largest_lines} lines"
-                
-            body_lines.append(f"- Source: {total_files} file{'s' if total_files != 1 else ''} · {total_fns} function{'s' if total_fns != 1 else ''}{largest_note}")
-            
-            avg_typed = sum(f.get("typed_pct", 0) for f in source_data) // max(total_files, 1)
-            avg_doc = sum(f.get("docstring_pct", 0) for f in source_data) // max(total_files, 1)
-            body_lines.append(f"- Type coverage: {avg_typed}% · Docstring coverage: {avg_doc}%")
-
-    # 2. Complexity Hotspots
-    if _is_ok("complexity"):
-        comp_data = results.get("complexity") or {}
-        hotspots = comp_data.get("hotspots", [])
-        if hotspots:
-            body_lines.append("")
-            body_lines.append("## Complexity Hotspots")
-            for h in hotspots[:3]:
-                fn_label = f"{h['fn']}()" if h.get("fn") else os.path.basename(h["path"])
-                body_lines.append(f"- {fn_label} — {h['lines']} lines ({h['path']}:{h['lineno']})")
-
-    # 3. Test Gaps
-    if _is_ok("tests"):
-        tests_data = results.get("tests") or {}
-        gap_count = tests_data.get("gap_count", 0)
-        if gap_count > 0:
-            body_lines.append("")
-            body_lines.append("## Test Gaps (structural, not runtime coverage)")
-            gap_fns = tests_data.get("gap_functions", [])
-            gap_names = [g["name"] for g in gap_fns[:5]]
-            suffix = f" [+{gap_count - 5} more]" if gap_count > 5 else ""
-            body_lines.append(f"- {gap_count} untested public function{'s' if gap_count != 1 else ''}: {', '.join(gap_names)}{suffix}")
-
-    # 4. Hot Files
-    if _is_ok("git"):
-        git_data = results.get("git") or {}
-        churn = git_data.get("churn", [])
-        if churn:
-            body_lines.append("")
-            body_lines.append("## Hot Files (last 30 commits)")
-            for c in churn[:3]:
-                icon = "🔥" if c.get("temp") == "hot" else ("⚡" if c.get("temp") == "warm" else "·")
-                body_lines.append(f"- {icon} {c['path']} — {c['commits']} commits")
-
-    # 5. Tech Debt
-    if _is_ok("complexity"):
-        comp_data = results.get("complexity") or {}
-        todo_counts = comp_data.get("todo_counts", {})
-        total_markers = sum(todo_counts.get(k, 0) for k in ("TODO", "FIXME", "HACK", "XXX"))
-        if total_markers > 0:
-            body_lines.append("")
-            body_lines.append("## Tech Debt")
-            parts = []
-            for k in ("TODO", "FIXME", "HACK", "XXX"):
-                v = todo_counts.get(k, 0)
-                if v > 0:
-                    parts.append(f"{v} {k}")
-            body_lines.append(f"- {' · '.join(parts)}")
-
-    updated = []
-    abs_root = os.path.abspath(root)
-    directive_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
-    date_str = _dt.date.today().isoformat()
-    body = "\n".join(body_lines)
-
-    for fname in directive_files:
-        fpath = os.path.join(abs_root, fname)
-        if os.path.exists(fpath):
-            _upsert_harness_fence(fpath, f"scan-{date_str}", body)
-            updated.append(fpath)
-
-    return updated
-
-
 def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
     import json as _j
     baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
@@ -2161,7 +2039,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
 
     # ── Compatibility: non-git working tree keeps legacy source scan ─────
     in_git_repo = os.path.isdir(os.path.join(os.getcwd(), ".git"))
-    if not in_git_repo and not refresh:
+    if not in_git_repo and not refresh and not no_tui and not dry_run:
         head_sha = _git_head_sha()
         if head_sha is None:
             print("  ⚠ Not in a git repository — scan requires git")
@@ -2200,10 +2078,12 @@ def cmd_scan(deep: bool = False, status: bool = False,
 
     # ── Default: deep workspace scan with optional TUI ───────────────────
     print(f"  {_CYAN}›{_RESET} scanning your environment...")
-    scan = run_workspace_scan(workspace_name=workspace_name, dry_run=dry_run, deep=True)
-    primary_root = scan["repos"][0]["path"] if scan.get("repos") else os.getcwd()
+    primary_root = os.getcwd()
+    workspace_label = workspace_name or os.path.basename(primary_root) or "workspace"
 
     if dry_run or no_tui or not sys.stdin.isatty() or not sys.stdout.isatty():
+        scan = run_workspace_scan(workspace_name=workspace_name, dry_run=dry_run, deep=True)
+        primary_root = scan["repos"][0]["path"] if scan.get("repos") else primary_root
         print(f"\n  {_BOLD}synlynk scan{_RESET}  workspace: {scan['workspace_name']}\n")
         for key, label in zip(STAGE_KEYS, _STAGE_LABELS):
             data = scan.get(key)
@@ -2223,7 +2103,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
         return
 
     results_live = {key: None for key in STAGE_KEYS}
-    results_live["workspace_name"] = scan["workspace_name"]
+    results_live["workspace_name"] = workspace_label
     threads = []
     for stage_fn in (
         _scan_stage_stack,
@@ -3238,7 +3118,7 @@ def cmd_join() -> None:
 
     arch_context = ""
     try:
-        cmd_scan()
+        cmd_scan(no_tui=True)
         ctx_path = ".synlynk/context.md"
         if os.path.exists(ctx_path):
             arch_context = open(ctx_path).read()[:2000]
@@ -11601,6 +11481,8 @@ def main() -> None:
                              help="Preview changes without writing")
     scan_parser.add_argument("--workspace", default=None, dest="workspace_name",
                              help="Workspace name (default: inferred from parent dir)")
+    scan_parser.add_argument("--no-tui", action="store_true",
+                             help="Print a text summary instead of the interactive TUI")
 
     migrate_parser = subparsers.add_parser(
         "migrate", help="Migrate project-docs markdown into state.db and .synlynk/project-docs"
@@ -11994,6 +11876,7 @@ def main() -> None:
             remove_path=getattr(args, "remove_path", None),
             dry_run=getattr(args, "dry_run", False),
             workspace_name=getattr(args, "workspace_name", None),
+            no_tui=getattr(args, "no_tui", False),
         )
     elif args.command == "migrate":
         cmd_migrate(
