@@ -1,0 +1,106 @@
+<h2>synlynk watch — Terminal HUD Layout</h2>
+<p class="subtitle">Where do the 6 cycles live, and how does the job list relate?</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1117;border-radius:6px;padding:14px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.6">
+      <div style="color:#58a6ff;margin-bottom:6px;font-size:10px;letter-spacing:.08em">▶ PLATFORM HEALTH [p to expand]</div>
+      <div style="border-bottom:1px solid #30363d;margin-bottom:8px"></div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="color:#3fb950">● Dream</span>
+        <span style="color:#3fb950">● Plan</span>
+        <span style="color:#f0883e;font-weight:bold">◉ Work</span>
+        <span style="color:#3fb950">● Ship</span>
+        <span style="color:#6e7681">○ Maintain</span>
+        <span style="color:#6e7681">○ Engage</span>
+      </div>
+      <div style="border-bottom:1px solid #30363d;margin-bottom:8px"></div>
+      <div style="color:#8b949e;font-size:10px;margin-bottom:4px">RUNNING JOBS</div>
+      <div>codex  &nbsp; feat/bs20-deep-scan &nbsp; <span style="color:#f0883e">running</span> &nbsp; 4m12s &nbsp; <span style="color:#3fb950">$0.42</span></div>
+      <div>agy &nbsp;&nbsp;&nbsp; docs/blog-post &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#f0883e">running</span> &nbsp; 1m30s &nbsp; <span style="color:#3fb950">$0.11</span></div>
+      <div style="margin-top:6px;color:#8b949e">──────────────────────────────</div>
+      <div style="color:#8b949e;font-size:10px">total: 2 jobs · $0.53 · 14.2k tok &nbsp;&nbsp; [q]quit [r]refresh [1]compact</div>
+    </div>
+    <div class="card-body">
+      <h3>A — Horizontal cycle bar</h3>
+      <p>Cycles as a compact status row below a collapsible platform health header. Full-width job list below. Most terminal space goes to jobs. Cycle state is always visible but never dominant.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1117;border-radius:6px;padding:14px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.6;display:flex;gap:12px">
+      <div style="width:110px;flex-shrink:0;border-right:1px solid #30363d;padding-right:12px">
+        <div style="color:#8b949e;font-size:10px;margin-bottom:6px">CYCLES</div>
+        <div style="color:#3fb950">● Dream</div>
+        <div style="color:#3fb950">● Plan</div>
+        <div style="color:#f0883e;font-weight:bold">◉ Work ◀</div>
+        <div style="color:#3fb950">● Ship</div>
+        <div style="color:#6e7681">○ Maintain</div>
+        <div style="color:#6e7681">○ Engage</div>
+        <div style="margin-top:8px;border-top:1px solid #30363d;padding-top:6px;color:#8b949e;font-size:10px">2 active<br/>$0.53 total</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="color:#f0883e;font-size:10px;margin-bottom:4px">◉ WORK — 2 running</div>
+        <div>codex &nbsp; feat/bs20 &nbsp; <span style="color:#f0883e">run</span> &nbsp; 4m &nbsp; $0.42</div>
+        <div>agy &nbsp;&nbsp; docs/blog &nbsp; <span style="color:#f0883e">run</span> &nbsp; 1m &nbsp; $0.11</div>
+        <div style="margin-top:8px;color:#8b949e;font-size:10px">[↑↓] select cycle &nbsp; [q]quit</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Left sidebar cycles, filtered job pane</h3>
+      <p>Cycles as a navigable left column. Job list on the right filters to the selected cycle. Arrow keys move between cycles. Richer interaction but needs a wider terminal.</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1117;border-radius:6px;padding:14px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.6">
+      <div style="color:#58a6ff;font-size:10px;margin-bottom:4px;letter-spacing:.06em">▶ PLATFORM [p] &nbsp;&nbsp; synlynk watch &nbsp;&nbsp; workspace: synlynk &nbsp;&nbsp; 10s refresh</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px;margin-top:6px">
+        <div style="border:1px solid #3fb95044;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#8b949e">DREAM</div>
+          <div style="color:#3fb950;font-size:13px">●</div>
+          <div style="font-size:9px;color:#3fb950">ready</div>
+        </div>
+        <div style="border:1px solid #3fb95044;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#8b949e">PLAN</div>
+          <div style="color:#3fb950;font-size:13px">●</div>
+          <div style="font-size:9px;color:#3fb950">ready</div>
+        </div>
+        <div style="border:2px solid #f0883e;border-radius:4px;padding:4px 6px;text-align:center;background:#f0883e11">
+          <div style="font-size:9px;color:#f0883e">WORK</div>
+          <div style="color:#f0883e;font-size:13px">◉</div>
+          <div style="font-size:9px;color:#f0883e">2 jobs</div>
+        </div>
+        <div style="border:1px solid #3fb95044;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#8b949e">SHIP</div>
+          <div style="color:#3fb950;font-size:13px">●</div>
+          <div style="font-size:9px;color:#3fb950">ready</div>
+        </div>
+        <div style="border:1px solid #30363d;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#6e7681">MAINT</div>
+          <div style="color:#6e7681;font-size:13px">○</div>
+          <div style="font-size:9px;color:#6e7681">idle</div>
+        </div>
+        <div style="border:1px solid #30363d;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#6e7681">ENGAGE</div>
+          <div style="color:#6e7681;font-size:13px">○</div>
+          <div style="font-size:9px;color:#6e7681">idle</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #30363d;padding-top:8px">
+        <div>codex &nbsp; feat/bs20-deep-scan &nbsp; <span style="color:#f0883e">running</span> &nbsp; 4m12s &nbsp; $0.42</div>
+        <div>agy &nbsp;&nbsp; docs/blog-post &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#f0883e">running</span> &nbsp; 1m30s &nbsp; $0.11</div>
+        <div style="margin-top:6px;color:#8b949e;font-size:10px">2 jobs · $0.53 · 14.2k tok &nbsp;&nbsp; [q]quit [r]refresh [1]compact [p]platform</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 6-cell cycle grid, jobs below</h3>
+      <p>Cycles as a fixed 6-cell grid — always visible, each cell shows name + indicator + status label. Active cycles glow with an orange border. Jobs list below. Clear visual hierarchy even when idle.</p>
+    </div>
+  </div>
+
+</div>
