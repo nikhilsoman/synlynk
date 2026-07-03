@@ -97,3 +97,17 @@ All 6 waves executed to plan. Final state:
 - PR #89: https://github.com/nikhilsoman/synlynk/pull/89
 - Branch: `feat/bs17-scan-wizard` → `main`
 - 37 new tests (551 → 588), all passing
+
+## 2026-07-03 — v0.10.0 daily-driver stories shipped (PRs #97, #98, #99)
+
+**Dispatched** 3 v0.10.0 daily-driver stories to agents (2× Codex + 1× Agy), all completed 726 tests passing.
+
+**Shipped** 3 separate PRs:
+
+- **PR #97** `feat/v010-jobsummary` — `_write_job_summary`, `_format_job_summary`, `_job_summary_path`; wired into `_reconcile_jobs` + `_reconcile_daemon_jobs`; `cmd_jobs --summary <id>` to read back structured close-out files from `.synlynk/logs/`
+- **PR #98** `feat/v010-release` — `cmd_release [--version X.Y.Z] [--minor] [--dry-run]`; reads/bumps VERSION, prepends CHANGELOG.md, writes dated blog stub under `docs/blog/`, prints named-release checklist; blog post: `docs/blog/38-pr97-v0.10.1-release-command.md`
+- **PR #99** `feat/v010-status` — `cmd_status --platform`; 8 helper functions (`_load_telemetry_events`, `_parse_status_timestamp`, `_humanize_ago`, `_load_platform_*`, `_print_platform_*`); three-section dashboard (Harness Compliance, Drift Sentinels, Budget Pulse); exits 1 on any alert/budget breach
+
+**PR split approach**: changes were uncommitted on main; used Python to construct valid per-story `@@` header sub-hunks from the mixed hunk 7 (which contained both `cmd_release` and status helpers). Conflict on status PR (after release merged) resolved via 3-way: kept `cmd_release` from HEAD + status helpers from branch.
+
+**v0.10.0 status**: all P0 stories shipped (T1–T6 in prior sessions) + 3 daily-driver stories shipped today. 726 tests. Ready for named release.
