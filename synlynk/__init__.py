@@ -11186,7 +11186,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
 
     return exit_code
 # --- module extractions (backwards compat) ---
-from synlynk.cli import main  # noqa: E402
+from synlynk.cli import main, cmd_watch  # noqa: E402
 from synlynk.db import (  # noqa: E402
     _generate_todo_md,
     _import_todo_to_stories,
