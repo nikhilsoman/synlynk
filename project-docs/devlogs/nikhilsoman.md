@@ -1,17 +1,27 @@
 
 ## 2026-07-03
 ### Shipped
-- brainstorm(BS-21): Vizor — browser-based local workspace dashboard; 5 iterations of Gantt visual companion (v1–v5) [ux]
-- design: Vizor Gantt v5 locked — stage zoom drill-down, SVG pencil note icons (4 states), right-aligned task names in accordion rows, light/dark/system theming, agent avatars on stage bars [ux]
+- brainstorm(BS-21): Vizor — browser-based local workspace dashboard; 5 iterations of Gantt visual companion (v1–v5), 2 tube map variants [ux]
+- design: Vizor Gantt v5 locked — stage zoom drill-down, SVG pencil note icons (5 states), right-aligned task names in accordion rows, light/dark/system theming, agent avatars on stage bars [ux]
 - docs: brainstorm HTML files committed to `docs/brainstorm/bs21-vizor/` [docs]
-- docs: added 5 new backlog stories (BS-21 viz, BS-13 HUD refresh, v0.11.0 daily brief, scan delta, v1.0 workspace FTUE) [roadmap]
-
-### In progress
-- BS-21: Vizor design spec to be written (`docs/superpowers/specs/2026-07-03-bs21-vizor-design.md`)
-- Remaining 4 Vizor views to design: Architect tube-map HLD, Effort & Cost, Efficiency/agent report card, User Journeys
+- spec: BS-21 Vizor design spec written (`docs/superpowers/specs/2026-07-03-bs21-vizor-design.md`) [docs]
+- plan: BS-21 implementation plan written (T1-T12, 12 tasks across Codex/Agy/Grok) [docs]
+- feat(BS-21): `synlynk viz` command — CLI scaffold, FTUE, VizorHandler, `--serve/--generate/--open/--stop` flags [cli]
+- feat(BS-21): `generate_viz_data()` — reads `state.db` (roadmap_arcs, roadmap_phases, stories, cost_entries) + telemetry.json + sentinel.md + viz-notes.json into unified data dict [cli]
+- feat(BS-21): 6 HTML generators — index/shell (left nav, iframe), Gantt (v5 port, accordion drill-down, stage bars, note modal), Architect Map (tube map SVG / setup prompt), User Journeys (split-pane), Effort & Cost (SVG bar charts), Efficiency (agent cards, sentinel timeline, recent runs) [cli]
+- feat(BS-21): note system — `POST /note` → `viz-notes.json` → injected into `generate_context()` for bidirectional visual→AI annotation loop [cli]
+- feat(BS-21): live JS polling every 60s + browser reload banner + Web Notifications on manifest change [cli]
+- fix(BS-21): agent inflation (stories.phase values leaking as agent names) — tightened filter to known agents only [cli]
+- fix(BS-21): missing page headers on Journeys + Effort views [ux]
+- test: 21 tests across `test_viz.py` + `test_viz_serve.py` [test]
+- docs(blog): post 39 — BS-21 Vizor [blog]
+- **PR #101 merged · `synlynk viz` live on main** [release]
+- docs: roadmap updated — BS-21 ✅ Shipped, BS-6 superseded [roadmap]
 
 ### Agents used
-- Claude: PM + visual brainstorm (all 5 Gantt iterations inline)
+- Claude: PM, brainstorm (all 5 Gantt + 2 tube map iterations), spec, plan, visual review, fixes
+- Codex: T1 scaffold, T2 data extraction, T3 shell (fallback), T4 Gantt (fallback), T7 effort, T8 efficiency, T9 note context injection, T10 live JS, T11 integration tests, T12 blog post
+- Agy: T5 tube map (+ bundled T6 journeys)
 
 ## 2026-07-01
 ### Shipped
