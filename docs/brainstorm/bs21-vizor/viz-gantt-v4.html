@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Gantt v4 (light mode + task drill-down)</title>
+<style>
+/* ═══════════════════════════════════════════════
+   THEME TOKENS
+═══════════════════════════════════════════════ */
+:root {
+  --bg:        #f6f8fa;
+  --bg2:       #ffffff;
+  --bg3:       #eaeef2;
+  --border:    #d1d5db;
+  --border2:   #e8ebee;
+  --text:      #1f2328;
+  --text2:     #57606a;
+  --text3:     #8b949e;
+  --accent:    #0d9e87;
+  --accent-bg: #e6f7f4;
+  --accent-dim:#c0ede6;
+
+  /* stage — light */
+  --s-dream-bg:   #ede9fe; --s-dream-bd:  #c4b5fd; --s-dream-tx:  #6d28d9;
+  --s-plan-bg:    #dbeafe; --s-plan-bd:   #93c5fd; --s-plan-tx:   #1d4ed8;
+  --s-work-bg:    #dcfce7; --s-work-bd:   #86efac; --s-work-tx:   #15803d;
+  --s-ship-bg:    #ffedd5; --s-ship-bd:   #fdba74; --s-ship-tx:   #c2410c;
+  --s-maint-bg:   #e0e7ff; --s-maint-bd:  #a5b4fc; --s-maint-tx:  #4338ca;
+  --s-engage-bg:  #fce7f3; --s-engage-bd: #f9a8d4; --s-engage-tx: #be185d;
+
+  /* agents */
+  --ag-claude-bg:#e6f7f4; --ag-claude-bd:#0d9e87; --ag-claude-tx:#0d9e87;
+  --ag-agy-bg:   #e8f0fe; --ag-agy-bd:   #4285f4; --ag-agy-tx:   #1a56c7;
+  --ag-codex-bg: #e6f4f0; --ag-codex-bd: #10a37f; --ag-codex-tx: #0b7a60;
+  --ag-grok-bg:  #f0f0f0; --ag-grok-bd:  #666;    --ag-grok-tx:  #333;
+}
+[data-theme="dark"] {
+  --bg:        #0d0f14;
+  --bg2:       #0a0c10;
+  --bg3:       #13171f;
+  --border:    #1e2430;
+  --border2:   #13171f;
+  --text:      #c9d1d9;
+  --text2:     #8b949e;
+  --text3:     #4a5568;
+  --accent:    #3de0c0;
+  --accent-bg: #0d2137;
+  --accent-dim:#0a3050;
+
+  --s-dream-bg:#2d1f5e; --s-dream-bd:#4a3f80; --s-dream-tx:#a78bfa;
+  --s-plan-bg: #1e3a5a; --s-plan-bd: #3a6090; --s-plan-tx: #60a5fa;
+  --s-work-bg: #1a4a2e; --s-work-bd: #2a7040; --s-work-tx: #4ade80;
+  --s-ship-bg: #5a3a00; --s-ship-bd: #8a5a00; --s-ship-tx: #fb923c;
+  --s-maint-bg:#1e2a4a; --s-maint-bd:#3a4a80; --s-maint-tx:#818cf8;
+  --s-engage-bg:#3a1a3a;--s-engage-bd:#6a2a6a;--s-engage-tx:#f472b6;
+
+  --ag-claude-bg:#0d2a2a; --ag-claude-bd:#3de0c0; --ag-claude-tx:#3de0c0;
+  --ag-agy-bg:  #0d1a3a; --ag-agy-bd:  #4285f4; --ag-agy-tx:  #4285f4;
+  --ag-codex-bg:#0a1f18; --ag-codex-bd:#10a37f; --ag-codex-tx:#10a37f;
+  --ag-grok-bg: #1a1a1a; --ag-grok-bd: #e0e0e0; --ag-grok-tx: #e0e0e0;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'SF Mono','JetBrains Mono',monospace;
+  background: var(--bg); color: var(--text); font-size: 13px;
+  transition: background .2s, color .2s;
+}
+
+/* ═══ APP SHELL ═══════════════════════════════ */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+
+/* ─── LEFT NAV ──────────────────────────────── */
+.sidenav {
+  width: 220px; min-width: 220px;
+  background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: background .2s;
+}
+.nav-header {
+  padding: 13px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.nav-logo { font-size: 14px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+.nav-logo span { color: var(--text3); font-weight: 400; font-size: 13px; }
+.nav-search {
+  margin: 9px 10px 5px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 5px; padding: 5px 9px;
+  color: var(--text3); font-size: 11px; font-family: inherit;
+  outline: none; width: calc(100% - 20px);
+}
+.nav-section { padding: 4px 0; flex: 1; overflow-y: auto; }
+.nav-sec-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text3); padding: 8px 14px 3px;
+}
+.nav-item {
+  padding: 5px 10px 5px 14px; display: flex; align-items: center;
+  gap: 7px; cursor: pointer; border-radius: 5px; margin: 1px 6px;
+  color: var(--text2); font-size: 12px;
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--accent-bg); color: var(--accent); }
+.nav-item .icon { font-size: 11px; width: 14px; text-align: center; }
+.nav-badge {
+  margin-left: auto; font-size: 10px;
+  background: var(--bg3); color: var(--text3);
+  padding: 1px 5px; border-radius: 8px;
+}
+.nav-item.active .nav-badge { background: var(--accent-dim); color: var(--accent); }
+.repo-item {
+  padding: 4px 10px 4px 30px; display: flex; align-items: center;
+  gap: 6px; cursor: pointer; margin: 0 6px;
+  color: var(--text3); font-size: 11px; border-radius: 4px;
+}
+.repo-item:hover { background: var(--bg3); color: var(--text2); }
+.repo-item.active { color: var(--accent); }
+.rdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* ─── SETTINGS PANEL ─────────────────────────── */
+.nav-footer {
+  border-top: 1px solid var(--border); padding: 10px 12px;
+}
+.nav-footer-top {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #0b7a60);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.avatar-name { font-size: 11px; color: var(--text2); flex: 1; }
+.gear-btn { color: var(--text3); cursor: pointer; font-size: 15px; }
+.gear-btn:hover { color: var(--text); }
+
+/* Theme switcher */
+.theme-switcher { display: flex; gap: 4px; }
+.theme-btn {
+  flex: 1; padding: 5px 0; border-radius: 5px; font-size: 10px;
+  text-align: center; cursor: pointer; border: 1px solid var(--border);
+  color: var(--text3); background: transparent; font-family: inherit;
+  transition: all .15s;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+.theme-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.theme-label { font-size: 10px; color: var(--text3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ─── MAIN AREA ──────────────────────────────── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.view-tabs {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: stretch; padding: 0 20px;
+  flex-shrink: 0;
+}
+.vtab {
+  padding: 10px 16px 8px; font-size: 12px; color: var(--text3);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.vtab:hover { color: var(--text2); }
+.vtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-sp { flex: 1; }
+.tab-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text3); padding: 0 4px; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 5px #16a34a88; }
+
+.content { flex: 1; overflow-y: auto; padding: 18px 22px; }
+
+.ws-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.ws-title { font-size: 17px; font-weight: 700; color: var(--text); }
+.ws-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.ws-chip {
+  background: var(--accent-bg); color: var(--accent);
+  border: 1px solid var(--accent-dim); border-radius: 12px;
+  font-size: 11px; padding: 3px 10px;
+}
+
+/* ═══ AGENT AVATARS ═══════════════════════════ */
+.aa {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 800; flex-shrink: 0; border: 1.5px solid;
+  position: relative; cursor: default;
+}
+.aa.lg { width: 22px; height: 22px; font-size: 9px; }
+.aa-claude { background: var(--ag-claude-bg); border-color: var(--ag-claude-bd); color: var(--ag-claude-tx); }
+.aa-agy    { background: var(--ag-agy-bg);    border-color: var(--ag-agy-bd);    color: var(--ag-agy-tx);    }
+.aa-codex  { background: var(--ag-codex-bg);  border-color: var(--ag-codex-bd);  color: var(--ag-codex-tx);  font-size: 8px; }
+.aa-grok   { background: var(--ag-grok-bg);   border-color: var(--ag-grok-bd);   color: var(--ag-grok-tx);   }
+.aa-stack  { display: flex; align-items: center; gap: 3px; }
+
+/* Tooltip */
+.aa[title]:hover::after {
+  content: attr(title); position: absolute; bottom: 26px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg3); color: var(--text); padding: 3px 7px;
+  border-radius: 4px; font-size: 10px; white-space: nowrap;
+  border: 1px solid var(--border); z-index: 200; pointer-events: none;
+}
+
+/* ═══ NOTE SYSTEM ═════════════════════════════ */
+.editable { position: relative; }
+.note-btn {
+  opacity: 0; position: absolute; top: 4px; right: 5px;
+  font-size: 14px; cursor: pointer; z-index: 20;
+  transition: opacity .15s; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 5px; line-height: 1; user-select: none;
+}
+.editable:hover .note-btn { opacity: 1; }
+.note-btn:hover { border-color: #d97706; background: #fef3c7; }
+.note-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: #fef3c7; border: 1px solid #fcd34d;
+  border-radius: 4px; font-size: 10px; color: #92400e;
+  padding: 2px 6px; cursor: pointer; margin-left: 6px;
+}
+.has-note::after { content: ' 📌'; font-size: 11px; }
+
+.ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:999; }
+.ov.open { display:block; }
+.note-modal {
+  display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+  padding:18px; width:400px; z-index:1000;
+  box-shadow:0 20px 60px rgba(0,0,0,.18);
+}
+.note-modal.open { display:block; }
+.nm-title { font-size:12px; color:var(--text2); margin-bottom:10px; }
+.note-modal textarea {
+  width:100%; background:var(--bg3); border:1px solid var(--border);
+  border-radius:6px; color:var(--text); font-family:inherit; font-size:12px;
+  padding:8px 10px; resize:none; outline:none; height:80px;
+  transition: border-color .15s;
+}
+.note-modal textarea:focus { border-color:var(--accent); }
+.ac-row { display:flex; align-items:center; gap:7px; margin-top:10px; }
+.ac-lbl { font-size:11px; color:var(--text3); }
+.ac {
+  padding:3px 9px; border-radius:10px; font-size:11px;
+  border:1px solid var(--border); color:var(--text2);
+  cursor:pointer; background:transparent; font-family:inherit;
+}
+.ac:hover { border-color:var(--accent); color:var(--accent); }
+.ac.on { border-color:#f0883e; color:#f0883e; background:#fff7ed; }
+.nm-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+.btn { padding:6px 14px; border-radius:5px; cursor:pointer; font-family:inherit; font-size:12px; border:1px solid; }
+.btn-cancel { background:transparent; border-color:var(--border); color:var(--text2); }
+.btn-save { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); }
+
+/* ═══ TOOLBAR ══════════════════════════════════ */
+.toolbar { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.lbl { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.8px; }
+.chip {
+  padding:3px 9px; border-radius:10px; font-size:11px;
+  border:1px solid var(--border); color:var(--text2);
+  cursor:pointer; background:transparent; font-family:inherit;
+}
+.chip.on { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); }
+.sp { flex:1; }
+.zbtn {
+  padding:4px 9px; border-radius:5px; font-size:11px;
+  background:var(--bg3); border:1px solid var(--border);
+  color:var(--text2); cursor:pointer; font-family:inherit;
+}
+
+/* ═══ GANTT ════════════════════════════════════ */
+.gw { overflow-x:auto; }
+.gantt {
+  min-width:960px; background:var(--bg2);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden;
+}
+
+/* Header */
+.gh {
+  display:grid; grid-template-columns:260px repeat(10,1fr);
+  border-bottom:1px solid var(--border); background:var(--bg3);
+}
+.ghl { padding:7px 14px; font-size:11px; color:var(--text3); border-right:1px solid var(--border); text-transform:uppercase; letter-spacing:.5px; }
+.gw-label { padding:7px 4px; font-size:10px; color:var(--text3); text-align:center; border-right:1px solid var(--border2); }
+.gw-label.now { color:var(--accent); font-weight:700; }
+
+/* ── DREAM ROW ──────────────────────────────── */
+.drow {
+  display:grid; grid-template-columns:260px 1fr;
+  border-bottom:1px solid var(--border); background:var(--bg2);
+}
+.drow.exp { background:var(--bg3); }
+.drow:hover { background:var(--bg3); }
+
+.dlbl {
+  padding:9px 14px; border-right:1px solid var(--border);
+  display:flex; flex-direction:column; justify-content:center; gap:5px;
+  position:relative; cursor:pointer;
+}
+.dtop { display:flex; align-items:center; gap:7px; }
+.darr { font-size:11px; color:var(--text3); transition:transform .2s; }
+.exp .darr { transform:rotate(90deg); color:var(--accent); }
+.dname { font-size:12px; color:var(--text); font-weight:600; }
+.dbot { display:flex; align-items:center; gap:8px; }
+.dcost { font-size:10px; }
+.dcost.ok   { color:#16a34a; }
+.dcost.over { color:#dc2626; }
+.dcost.na   { color:var(--text3); }
+
+/* ── TIMELINE AREA ──────────────────────────── */
+.dbars { position:relative; height:52px; }
+
+/* Stage bars — DREAM ROW */
+.sb {
+  position:absolute; height:28px; border-radius:5px;
+  display:flex; align-items:center; padding:0 8px; top:12px;
+  font-size:10px; font-weight:600; gap:5px;
+  cursor:pointer; transition:filter .15s; white-space:nowrap;
+  border:1px solid;
+}
+.sb:hover { filter:brightness(.92); }
+[data-theme="dark"] .sb:hover { filter:brightness(1.2); }
+
+.sb-dream  { background:var(--s-dream-bg);  border-color:var(--s-dream-bd);  color:var(--s-dream-tx);  }
+.sb-plan   { background:var(--s-plan-bg);   border-color:var(--s-plan-bd);   color:var(--s-plan-tx);   }
+.sb-work   { background:var(--s-work-bg);   border-color:var(--s-work-bd);   color:var(--s-work-tx);   }
+.sb-ship   { background:var(--s-ship-bg);   border-color:var(--s-ship-bd);   color:var(--s-ship-tx);   }
+.sb-maint  { background:var(--s-maint-bg);  border-color:var(--s-maint-bd);  color:var(--s-maint-tx);  }
+.sb-engage { background:var(--s-engage-bg); border-color:var(--s-engage-bd); color:var(--s-engage-tx); }
+
+.sb.dim { opacity:.3; cursor:default; }
+.sb.dim:hover { filter:none; }
+.sb.live { animation:shimmer 2s infinite; }
+.sb-plan.live  { background:linear-gradient(90deg,var(--s-plan-bg),#bfdbfe,var(--s-plan-bg));  background-size:200% 100%; }
+.sb-work.live  { background:linear-gradient(90deg,var(--s-work-bg),#bbf7d0,var(--s-work-bg));  background-size:200% 100%; }
+[data-theme="dark"] .sb-plan.live { background:linear-gradient(90deg,#1e3a5a,#2e5a8a,#1e3a5a); background-size:200% 100%; }
+[data-theme="dark"] .sb-work.live { background:linear-gradient(90deg,#1a4a2e,#2a6a3e,#1a4a2e); background-size:200% 100%; }
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+.bar-agents { display:flex; gap:2px; }
+.bar-agents .aa { width:14px; height:14px; font-size:7px; border-width:1px; }
+
+.today-line {
+  position:absolute; top:0; bottom:0; width:2px;
+  background:var(--accent); opacity:.5; pointer-events:none; z-index:5;
+}
+.today-line::before {
+  content:'today'; position:absolute; top:2px; left:4px;
+  font-size:9px; color:var(--accent); white-space:nowrap;
+}
+
+/* ── TASK DRILL SECTION ─────────────────────── */
+.drill-section {
+  display:none; border-bottom:1px solid var(--border);
+  background:var(--bg);
+  border-left:3px solid var(--accent);
+}
+.drill-section.open { display:block; }
+
+.drill-header {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 14px; border-bottom:1px solid var(--border2);
+  background:var(--bg2);
+}
+.stage-pill {
+  padding:3px 10px; border-radius:10px; font-size:11px;
+  font-weight:700; border:1px solid;
+}
+.drill-ttl { font-size:12px; color:var(--text2); }
+.drill-close { margin-left:auto; color:var(--text3); cursor:pointer; font-size:14px; }
+.drill-close:hover { color:var(--text); }
+
+/* ── TASK ROW (same Gantt grid structure) ──── */
+.trow {
+  display:grid; grid-template-columns:260px 1fr;
+  border-bottom:1px solid var(--border2);
+  background:var(--bg);
+  min-height:40px;
+}
+.trow:last-child { border-bottom:none; }
+.trow:hover { background:var(--bg3); }
+
+.tlbl {
+  padding:7px 14px; border-right:1px solid var(--border2);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:8px; position:relative;
+}
+.tlbl-left { display:flex; align-items:center; gap:7px; min-width:0; }
+.tname { font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tname.has-note::after { content:' 📌'; font-size:10px; }
+.tid {
+  font-size:10px; color:var(--text3); white-space:nowrap;
+  text-align:right; flex-shrink:0; font-style:italic;
+}
+
+/* Task bar — smaller, within the stage time window */
+.tbars { position:relative; height:40px; }
+.tb {
+  position:absolute; height:20px; border-radius:4px; top:10px;
+  display:flex; align-items:center; padding:0 6px;
+  font-size:9px; font-weight:600; gap:4px;
+  border:1px solid; white-space:nowrap;
+}
+.tb.dim { opacity:.3; }
+.tb.live { animation:shimmer 2s infinite; }
+.tb-done   { background:var(--bg3); border-color:var(--border); color:var(--text3); }
+.tb-active { background:var(--s-work-bg); border-color:var(--s-work-bd); color:var(--s-work-tx); }
+.tb-active.live { background:linear-gradient(90deg,var(--s-work-bg),#bbf7d0,var(--s-work-bg)); background-size:200% 100%; }
+[data-theme="dark"] .tb-active.live { background:linear-gradient(90deg,#1a4a2e,#2a6a3e,#1a4a2e); background-size:200% 100%; }
+.tb-queued { background:var(--bg3); border-color:var(--border); color:var(--text3); opacity:.5; }
+.tb-blocked{ background:#fee2e2; border-color:#fca5a5; color:#dc2626; }
+
+/* Status dot */
+.st-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.st-dot.done    { background:#16a34a; }
+.st-dot.active  { background:var(--s-work-tx); animation:pulse 1.5s infinite; }
+.st-dot.queued  { background:var(--text3); }
+.st-dot.blocked { background:#dc2626; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ═══ LEGEND ═══════════════════════════════════ */
+.legend { display:flex; align-items:center; gap:12px; margin-top:14px; flex-wrap:wrap; }
+.li { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text3); }
+.ld { width:10px; height:10px; border-radius:3px; border:1px solid; }
+.lsep { color:var(--border); }
+.al-row { display:flex; align-items:center; gap:14px; margin-top:8px; }
+.ali { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text3); }
+
+/* ═══ SUMMARY CARDS ════════════════════════════ */
+.srow { display:flex; gap:10px; margin-top:18px; }
+.sc {
+  flex:1; background:var(--bg2); border:1px solid var(--border);
+  border-radius:7px; padding:11px 13px; position:relative;
+}
+.sc .sl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.5px; }
+.sc .sv { font-size:20px; font-weight:700; color:var(--text); margin:4px 0 2px; }
+.sc .ss { font-size:11px; color:var(--text3); }
+.sc.teal .sv { color:var(--accent); }
+.sc.blue .sv { color:#1d4ed8; } [data-theme="dark"] .sc.blue .sv { color:#60a5fa; }
+.sc.org  .sv { color:#c2410c; } [data-theme="dark"] .sc.org  .sv { color:#fb923c; }
+.sc.purp .sv { color:#6d28d9; } [data-theme="dark"] .sc.purp .sv { color:#a78bfa; }
+.wow { display:inline-block; margin-top:4px; background:var(--s-work-bg); color:var(--s-work-tx); border:1px solid var(--s-work-bd); border-radius:10px; font-size:10px; padding:2px 8px; }
+
+/* Status bar */
+.status-bar {
+  background:var(--bg2); border-top:1px solid var(--border);
+  padding:5px 20px; display:flex; align-items:center; gap:14px;
+  font-size:11px; color:var(--text3); flex-shrink:0;
+}
+.sb-ok  { color:#16a34a; }
+.sb-rt  { margin-left:auto; display:flex; gap:14px; }
+</style>
+</head>
+<body>
+
+<!-- OVERLAY + MODAL -->
+<div class="ov" id="ov" onclick="closeNote()"></div>
+<div class="note-modal" id="nm">
+  <div class="nm-title" id="nt">Note on <strong>—</strong></div>
+  <textarea placeholder="Add a note, reminder, or instruction for next Vizor run…" id="ntxt"></textarea>
+  <div class="ac-row">
+    <span class="ac-lbl">Action:</span>
+    <button class="ac" onclick="this.classList.toggle('on')">↺ Redo stage</button>
+    <button class="ac" onclick="this.classList.toggle('on')">⇄ Reassign agent</button>
+    <button class="ac" onclick="this.classList.toggle('on')">⏸ Defer</button>
+  </div>
+  <div class="nm-footer">
+    <button class="btn btn-cancel" onclick="closeNote()">Cancel</button>
+    <button class="btn btn-save" onclick="closeNote()">Save note</button>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- LEFT NAV -->
+  <div class="sidenav">
+    <div class="nav-header">
+      <div class="nav-logo">S<span>ynlynk</span> <span style="color:var(--accent)">viz</span></div>
+    </div>
+    <input class="nav-search" placeholder="⌘K  search…" readonly>
+    <div class="nav-section">
+      <div class="nav-sec-label">Workspaces</div>
+      <div class="nav-item active">
+        <span class="icon">▾</span> synlynk-core
+        <span class="nav-badge">5</span>
+      </div>
+      <div class="repo-item active"><div class="rdot" style="background:var(--accent)"></div>synlynk (main)</div>
+      <div class="repo-item"><div class="rdot" style="background:#f59e0b"></div>synlynk-website</div>
+      <div class="repo-item"><div class="rdot" style="background:var(--text3)"></div>tokq-bridge</div>
+      <div class="nav-item" style="margin-top:6px"><span class="icon">▸</span> rxcc <span class="nav-badge">1</span></div>
+      <div class="nav-item"><span class="icon">▸</span> playblazer-ng <span class="nav-badge">2</span></div>
+      <div class="nav-sec-label" style="margin-top:6px;cursor:pointer;color:var(--accent)">+ Add workspace</div>
+    </div>
+    <div class="nav-footer">
+      <div class="nav-footer-top">
+        <div class="avatar">N</div>
+        <div class="avatar-name">nikhilsoman</div>
+        <div class="gear-btn">⚙</div>
+      </div>
+      <div class="theme-label">Theme</div>
+      <div class="theme-switcher">
+        <button class="theme-btn active" id="btn-light" onclick="setTheme('light')">☀ Light</button>
+        <button class="theme-btn" id="btn-dark"  onclick="setTheme('dark')">☾ Dark</button>
+        <button class="theme-btn" id="btn-sys"   onclick="setTheme('system')">⊙ System</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="view-tabs">
+      <div class="vtab active">📅 Gantt</div>
+      <div class="vtab">🗺 User Journeys</div>
+      <div class="vtab">🚇 Architect Map</div>
+      <div class="vtab">💰 Effort & Cost</div>
+      <div class="vtab">📊 Efficiency</div>
+      <div class="tab-sp"></div>
+      <div class="tab-meta"><div class="live-dot"></div>updated 3m ago</div>
+    </div>
+
+    <div class="content">
+      <div class="ws-header">
+        <div>
+          <div class="ws-title">synlynk-core</div>
+          <div class="ws-sub">3 repos · 5 Dreams · last scan 3 min ago</div>
+        </div>
+        <div class="ws-chip">Developer Preview · v0.10.0</div>
+      </div>
+
+      <!-- TOOLBAR -->
+      <div class="toolbar">
+        <span class="lbl">Filter:</span>
+        <button class="chip on">All Dreams</button>
+        <button class="chip">In Progress</button>
+        <button class="chip">Ships soon</button>
+        <div class="sp"></div>
+        <button class="zbtn">← 4w</button>
+        <button class="zbtn" style="border-color:var(--accent);color:var(--accent)">10w ✓</button>
+        <button class="zbtn">26w →</button>
+      </div>
+
+      <!-- GANTT -->
+      <div class="gw"><div class="gantt">
+
+        <!-- HEADER -->
+        <div class="gh">
+          <div class="ghl">Dream / Epic</div>
+          <div class="gw-label">Jul W1</div><div class="gw-label">Jul W2</div>
+          <div class="gw-label now">Jul W3 ▾</div><div class="gw-label">Jul W4</div>
+          <div class="gw-label">Aug W1</div><div class="gw-label">Aug W2</div>
+          <div class="gw-label">Aug W3</div><div class="gw-label">Aug W4</div>
+          <div class="gw-label">Sep W1</div><div class="gw-label">Sep W2</div>
+        </div>
+
+        <!-- ══ BS-21 Vizor (expanded) ════════════════════════════════════ -->
+        <div class="drow exp" id="drow-bs21">
+          <div class="dlbl editable" onclick="toggleDrill('bs21')">
+            <div class="dtop">
+              <span class="darr">▶</span>
+              <div class="dname">BS-21 · Vizor</div>
+              <span class="note-chip">📌</span>
+            </div>
+            <div class="dbot">
+              <div class="aa-stack">
+                <div class="aa aa-agy" title="Agy (Gemini)">A</div>
+                <div class="aa aa-codex" title="Codex">Co</div>
+              </div>
+              <span class="dcost ok">$4.20 / est $6</span>
+            </div>
+            <span class="note-btn" onclick="openNote('BS-21 Vizor');event.stopPropagation()">📝</span>
+          </div>
+          <div class="dbars">
+            <div class="today-line" style="left:19%"></div>
+            <div class="sb sb-dream dim" style="left:0%;width:10%">✦ Dream</div>
+            <div class="sb sb-plan live" style="left:10%;width:12%" onclick="openDrill('bs21','Plan',0.10,0.12)">
+              ⊡ Plan
+              <div class="bar-agents"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div></div>
+            </div>
+            <div class="sb sb-work dim" style="left:22%;width:30%" onclick="openDrill('bs21','Work',0.22,0.30)">⚙ Work</div>
+            <div class="sb sb-ship dim" style="left:52%;width:10%" onclick="openDrill('bs21','Ship',0.52,0.10)">▲ Ship</div>
+          </div>
+        </div>
+
+        <!-- DRILL: BS-21 Plan (pre-open) -->
+        <div class="drill-section open" id="drill-bs21">
+          <div class="drill-header">
+            <div class="stage-pill" style="background:var(--s-plan-bg);border-color:var(--s-plan-bd);color:var(--s-plan-tx)">⊡ Plan stage</div>
+            <div class="drill-ttl">BS-21 · Vizor — 3 tasks · click a stage bar to switch</div>
+            <div class="drill-close" onclick="closeDrill('bs21')">✕</div>
+          </div>
+          <div id="tasks-bs21"></div>
+        </div>
+
+        <!-- ══ BS-20 Deep Scan ════════════════════════════════════════════ -->
+        <div class="drow" id="drow-bs20">
+          <div class="dlbl editable" onclick="toggleDrill('bs20')">
+            <div class="dtop"><span class="darr">▶</span><div class="dname">BS-20 · Deep Scan</div></div>
+            <div class="dbot"><div class="aa-stack"><div class="aa aa-codex" title="Codex">Co</div></div><span class="dcost ok">$11.40 / est $14</span></div>
+            <span class="note-btn" onclick="openNote('BS-20');event.stopPropagation()">📝</span>
+          </div>
+          <div class="dbars">
+            <div class="today-line" style="left:19%"></div>
+            <div class="sb sb-dream dim" style="left:0%;width:8%;opacity:.25">✦</div>
+            <div class="sb sb-plan dim"  style="left:8%;width:10%;opacity:.25">⊡</div>
+            <div class="sb sb-work live" style="left:18%;width:24%" onclick="openDrill('bs20','Work',0.18,0.24)">⚙ Work<div class="bar-agents"><div class="aa aa-codex">Co</div></div></div>
+            <div class="sb sb-ship dim"  style="left:42%;width:10%" onclick="openDrill('bs20','Ship',0.42,0.10)">▲ Ship</div>
+            <div class="sb sb-maint dim" style="left:52%;width:20%">↺ Maint</div>
+          </div>
+        </div>
+        <div class="drill-section" id="drill-bs20"><div class="drill-header"><div class="stage-pill" id="dp-bs20" style="background:var(--s-work-bg);border-color:var(--s-work-bd);color:var(--s-work-tx)">⚙ Work stage</div><div class="drill-ttl" id="dt-bs20">BS-20 · Deep Scan</div><div class="drill-close" onclick="closeDrill('bs20')">✕</div></div><div id="tasks-bs20"></div></div>
+
+        <!-- ══ v1.0 Community Layer ══════════════════════════════════════ -->
+        <div class="drow" id="drow-v100">
+          <div class="dlbl editable" onclick="toggleDrill('v100')">
+            <div class="dtop"><span class="darr">▶</span><div class="dname">v1.0 · Community Layer</div></div>
+            <div class="dbot"><div class="aa-stack"><div class="aa aa-agy" title="Agy">A</div><div class="aa aa-grok" title="Grok">G</div><div class="aa aa-codex" title="Codex">Co</div></div><span class="dcost na">est $38 · not started</span></div>
+            <span class="note-btn" onclick="openNote('v1.0');event.stopPropagation()">📝</span>
+          </div>
+          <div class="dbars">
+            <div class="sb sb-dream dim" style="left:30%;width:10%">✦ Dream</div>
+            <div class="sb sb-plan dim"  style="left:40%;width:12%">⊡ Plan</div>
+            <div class="sb sb-work dim"  style="left:52%;width:30%">⚙ Work</div>
+          </div>
+        </div>
+        <div class="drill-section" id="drill-v100"><div class="drill-header"><div class="stage-pill" id="dp-v100" style="background:var(--s-dream-bg);border-color:var(--s-dream-bd);color:var(--s-dream-tx)">✦ Dream stage</div><div class="drill-ttl" id="dt-v100">v1.0 Community Layer</div><div class="drill-close" onclick="closeDrill('v100')">✕</div></div><div id="tasks-v100"></div></div>
+
+        <!-- ══ BS-5 Website ══════════════════════════════════════════════ -->
+        <div class="drow" id="drow-bs5">
+          <div class="dlbl editable" onclick="toggleDrill('bs5')">
+            <div class="dtop"><span class="darr">▶</span><div class="dname has-note">BS-5 · Website</div></div>
+            <div class="dbot"><div class="aa-stack"><div class="aa aa-agy" title="Agy">A</div></div><span class="dcost over">$9.80 / est $8 ↑</span></div>
+            <span class="note-btn" onclick="openNote('BS-5');event.stopPropagation()">📝</span>
+          </div>
+          <div class="dbars">
+            <div class="today-line" style="left:19%"></div>
+            <div class="sb sb-dream dim" style="left:0%;width:6%;opacity:.25">✦</div>
+            <div class="sb sb-plan dim"  style="left:6%;width:8%;opacity:.25">⊡</div>
+            <div class="sb sb-work live" style="left:14%;width:18%" onclick="openDrill('bs5','Work',0.14,0.18)">⚙ Work<div class="bar-agents"><div class="aa aa-agy">A</div></div></div>
+            <div class="sb sb-ship dim"  style="left:32%;width:8%">▲ Ship</div>
+            <div class="sb sb-engage dim"style="left:40%;width:14%">♡ Engage</div>
+          </div>
+        </div>
+        <div class="drill-section" id="drill-bs5"><div class="drill-header"><div class="stage-pill" id="dp-bs5" style="background:var(--s-work-bg);border-color:var(--s-work-bd);color:var(--s-work-tx)">⚙ Work stage</div><div class="drill-ttl" id="dt-bs5">BS-5 · Website</div><div class="drill-close" onclick="closeDrill('bs5')">✕</div></div><div id="tasks-bs5"></div></div>
+
+        <!-- ══ Module Extraction ══════════════════════════════════════════ -->
+        <div class="drow" id="drow-mod">
+          <div class="dlbl editable" onclick="toggleDrill('mod')">
+            <div class="dtop"><span class="darr">▶</span><div class="dname">Module Extraction</div></div>
+            <div class="dbot"><div class="aa-stack"><div class="aa aa-codex" title="Codex">Co</div></div><span class="dcost ok">$3.10 / est $5</span></div>
+            <span class="note-btn" onclick="openNote('Module Extraction');event.stopPropagation()">📝</span>
+          </div>
+          <div class="dbars">
+            <div class="today-line" style="left:19%"></div>
+            <div class="sb sb-dream dim" style="left:0%;width:5%;opacity:.25">✦</div>
+            <div class="sb sb-work live" style="left:5%;width:14%" onclick="openDrill('mod','Work',0.05,0.14)">⚙ Work<div class="bar-agents"><div class="aa aa-codex">Co</div></div></div>
+            <div class="sb sb-ship dim"  style="left:19%;width:6%">▲</div>
+          </div>
+        </div>
+        <div class="drill-section" id="drill-mod"><div class="drill-header"><div class="stage-pill" id="dp-mod" style="background:var(--s-work-bg);border-color:var(--s-work-bd);color:var(--s-work-tx)">⚙ Work stage</div><div class="drill-ttl" id="dt-mod">Module Extraction</div><div class="drill-close" onclick="closeDrill('mod')">✕</div></div><div id="tasks-mod"></div></div>
+
+      </div></div><!-- /gantt -->
+
+      <!-- LEGEND -->
+      <div class="legend">
+        <div class="li"><div class="ld" style="background:var(--s-dream-bg);border-color:var(--s-dream-bd)"></div>✦ Dream</div>
+        <div class="li"><div class="ld" style="background:var(--s-plan-bg);border-color:var(--s-plan-bd)"></div>⊡ Plan</div>
+        <div class="li"><div class="ld" style="background:var(--s-work-bg);border-color:var(--s-work-bd)"></div>⚙ Work</div>
+        <div class="li"><div class="ld" style="background:var(--s-ship-bg);border-color:var(--s-ship-bd)"></div>▲ Ship</div>
+        <div class="li"><div class="ld" style="background:var(--s-maint-bg);border-color:var(--s-maint-bd)"></div>↺ Maintain</div>
+        <div class="li"><div class="ld" style="background:var(--s-engage-bg);border-color:var(--s-engage-bd)"></div>♡ Engage</div>
+        <span class="lsep">|</span>
+        <div class="li" style="font-style:italic">~ animated = in progress · dimmed = upcoming</div>
+      </div>
+      <div class="al-row">
+        <span class="lbl">Agents:</span>
+        <div class="ali"><div class="aa aa-claude">C</div> Claude</div>
+        <div class="ali"><div class="aa aa-agy">A</div> Agy (Gemini)</div>
+        <div class="ali"><div class="aa aa-codex">Co</div> Codex (OpenAI)</div>
+        <div class="ali"><div class="aa aa-grok">G</div> Grok (xAI)</div>
+      </div>
+
+      <!-- SUMMARY -->
+      <div class="srow">
+        <div class="sc teal editable"><div class="sl">Dreams in flight</div><div class="sv">5</div><div class="ss">across 2 workspaces</div><div class="wow">⚡ 3 parallel</div><span class="note-btn" onclick="openNote('summary')">📝</span></div>
+        <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="aa-stack" style="margin-top:6px"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div><div class="aa aa-grok">G</div></div><span class="note-btn" onclick="openNote('agents')">📝</span></div>
+        <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><span class="note-btn" onclick="openNote('cost')">📝</span></div>
+        <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><span class="note-btn" onclick="openNote('ship date')">📝</span></div>
+      </div>
+    </div><!-- /content -->
+
+    <div class="status-bar">
+      <span class="sb-ok">● local</span>
+      <span>3 workspaces · 726 tests</span>
+      <div class="sb-rt"><span>next update: ~7 min</span></div>
+    </div>
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+/* ── TASK DATA ─────────────────────────────────────────────────── */
+// stageStart and stageWidth are fractions of the 100% timeline width
+const TASKS = {
+  'bs21-Plan': {
+    stageStart:0.10, stageWidth:0.12,
+    pill:'⊡ Plan stage', pillBg:'plan',
+    items:[
+      {id:'story-bs21-shell', name:'Shell + left-nav layout',       agent:'agy',   st:'done',   est:1.20, actual:1.10},
+      {id:'story-bs21-gantt', name:'Gantt view implementation',     agent:'codex', st:'active', est:1.80, actual:1.40, note:true},
+      {id:'story-bs21-fences',name:'Agent directive fence writer',  agent:'agy',   st:'queued', est:0.90, actual:null},
+    ]
+  },
+  'bs21-Work': {
+    stageStart:0.22, stageWidth:0.30,
+    pill:'⚙ Work stage', pillBg:'work',
+    items:[
+      {id:'story-bs21-tube',  name:'Architect tube-map HLD',         agent:'agy',   st:'queued', est:3.00, actual:null},
+      {id:'story-bs21-effort',name:'Effort & Cost view',             agent:'codex', st:'queued', est:1.50, actual:null},
+      {id:'story-bs21-eff',   name:'Efficiency agent report card',   agent:'codex', st:'queued', est:1.80, actual:null},
+      {id:'story-bs21-sched', name:'Scheduled pilot + local notify', agent:'codex', st:'queued', est:2.00, actual:null},
+    ]
+  },
+  'bs21-Ship': {
+    stageStart:0.52, stageWidth:0.10,
+    pill:'▲ Ship stage', pillBg:'ship',
+    items:[
+      {id:'story-bs21-rel', name:'synlynk viz v1 release + docs', agent:'agy', st:'queued', est:0.60, actual:null},
+    ]
+  },
+  'bs20-Work': {
+    stageStart:0.18, stageWidth:0.24,
+    pill:'⚙ Work stage', pillBg:'work',
+    items:[
+      {id:'story-bs20-stages',name:'6 scan stage functions',          agent:'codex', st:'done',   est:3.00, actual:2.80},
+      {id:'story-bs20-tui',   name:'_run_scan_tui() cards',           agent:'codex', st:'active', est:2.50, actual:1.90, note:true},
+      {id:'story-bs20-fences',name:'_write_scan_fences()',            agent:'codex', st:'queued', est:1.50, actual:null},
+      {id:'story-bs20-launch',name:'LAUNCH_TASK_TEMPLATES upgrade',   agent:'codex', st:'queued', est:1.20, actual:null},
+    ]
+  },
+  'bs5-Work': {
+    stageStart:0.14, stageWidth:0.18,
+    pill:'⚙ Work stage', pillBg:'work',
+    items:[
+      {id:'story-bs5-hero', name:'Hero + isometric diagram', agent:'agy', st:'done',   est:2.00, actual:2.40, note:true},
+      {id:'story-bs5-pages',name:'All site pages',           agent:'agy', st:'active', est:3.00, actual:3.80},
+      {id:'story-bs5-blog', name:'Blog image strategy',      agent:'agy', st:'queued', est:1.00, actual:null},
+    ]
+  },
+  'mod-Work': {
+    stageStart:0.05, stageWidth:0.14,
+    pill:'⚙ Work stage', pillBg:'work',
+    items:[
+      {id:'story-mod-cli',name:'Extract main() → synlynk/cli.py',  agent:'codex', st:'done',   est:1.50, actual:1.20},
+      {id:'story-mod-db', name:'Extract DB layer → synlynk/db.py', agent:'codex', st:'active', est:2.00, actual:1.90},
+    ]
+  },
+  'v100-Dream': {
+    stageStart:0.30, stageWidth:0.10,
+    pill:'✦ Dream stage', pillBg:'dream',
+    items:[
+      {id:'story-v100-csl', name:'Community layer brainstorm spec', agent:'agy', st:'queued', est:1.00, actual:null},
+    ]
+  },
+};
+
+const AGENTS = {
+  agy:  {cls:'aa-agy',  lbl:'A',  name:'Agy (Gemini)'},
+  codex:{cls:'aa-codex',lbl:'Co', name:'Codex (OpenAI)'},
+  grok: {cls:'aa-grok', lbl:'G',  name:'Grok (xAI)'},
+  claude:{cls:'aa-claude',lbl:'C',name:'Claude'},
+};
+
+const STATUS_CSS = {done:'tb-done',active:'tb-active live',queued:'tb-queued',blocked:'tb-blocked'};
+const STATUS_DOT = {done:'done',active:'active',queued:'queued',blocked:'blocked'};
+
+const PILL_STYLES = {
+  dream:`background:var(--s-dream-bg);border-color:var(--s-dream-bd);color:var(--s-dream-tx)`,
+  plan: `background:var(--s-plan-bg);border-color:var(--s-plan-bd);color:var(--s-plan-tx)`,
+  work: `background:var(--s-work-bg);border-color:var(--s-work-bd);color:var(--s-work-tx)`,
+  ship: `background:var(--s-ship-bg);border-color:var(--s-ship-bd);color:var(--s-ship-tx)`,
+};
+
+function renderTaskRows(dreamId, stage) {
+  const key = dreamId + '-' + stage;
+  const data = TASKS[key];
+  const container = document.getElementById('tasks-' + dreamId);
+  if (!container) return;
+  if (!data || data.items.length === 0) {
+    container.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No tasks for this stage. <span style="color:var(--accent);cursor:pointer" onclick="openNote('${key}')">📝 Add planning note</span></div>`;
+    return;
+  }
+
+  // Compute per-task bar position within stage window
+  // Tasks are evenly distributed across the stage window, sequenced
+  const n = data.items.length;
+  const slotW = data.stageWidth / n;
+
+  container.innerHTML = data.items.map((t, i) => {
+    const ag = AGENTS[t.agent] || AGENTS.codex;
+    const leftPct = ((data.stageStart + i * slotW) * 100).toFixed(1);
+    const widPct  = (slotW * 100 * 0.85).toFixed(1); // 85% of slot, small gap between tasks
+    const stCss   = STATUS_CSS[t.st] || STATUS_CSS.queued;
+    const stDot   = STATUS_DOT[t.st] || 'queued';
+    const actualTxt = t.actual != null
+      ? `<span style="color:${t.actual > t.est ? '#dc2626':'#16a34a'}">$${t.actual.toFixed(2)}</span>`
+      : `<span style="color:var(--text3)">—</span>`;
+
+    return `
+    <div class="trow">
+      <div class="tlbl editable">
+        <div class="tlbl-left">
+          <div class="aa lg ${ag.cls}" title="${ag.name}">${ag.lbl}</div>
+          <div class="tname${t.note?' has-note':''}">${t.name}</div>
+        </div>
+        <div class="tid">${t.id}</div>
+        <span class="note-btn" onclick="openNote('${t.id}')">📝</span>
+      </div>
+      <div class="tbars">
+        <div class="today-line" style="left:19%"></div>
+        <div class="tb ${stCss}" style="left:${leftPct}%;width:${widPct}%">
+          <div class="st-dot ${stDot}"></div>
+          ${t.name.split(' ').slice(0,3).join(' ')}…
+          <div class="bar-agents"><div class="aa" style="width:12px;height:12px;font-size:7px;border:1px solid;border-radius:50%;display:inline-flex;align-items:center;justify-content:center" class="${ag.cls}">${ag.lbl}</div></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openDrill(dreamId, stage, stageStart, stageWidth) {
+  const dr = document.getElementById('drill-' + dreamId);
+  const drow = document.getElementById('drow-' + dreamId);
+  if (!dr) return;
+
+  const key = dreamId + '-' + stage;
+  const data = TASKS[key];
+
+  // Update header pill
+  const pill = dr.querySelector('.stage-pill');
+  const ttl  = dr.querySelector('.drill-ttl');
+  if (pill && data) { pill.setAttribute('style', PILL_STYLES[data.pillBg]||''); pill.textContent = data.pill; }
+  if (ttl && data) ttl.textContent = `${data.items.length} task${data.items.length!==1?'s':''} · click other stage bars to switch`;
+
+  // Update data
+  if (data) data.stageStart = stageStart; // update to match bar position
+
+  dr.classList.add('open');
+  drow.classList.add('exp');
+  renderTaskRows(dreamId, stage);
+}
+
+function closeDrill(dreamId) {
+  document.getElementById('drill-'+dreamId)?.classList.remove('open');
+  document.getElementById('drow-'+dreamId)?.classList.remove('exp');
+}
+
+function toggleDrill(dreamId) {
+  const dr = document.getElementById('drill-'+dreamId);
+  if (dr?.classList.contains('open')) closeDrill(dreamId);
+  else {
+    // Find first active stage
+    const stages = ['Work','Plan','Ship','Dream'];
+    for (const s of stages) {
+      if (TASKS[dreamId+'-'+s]) {
+        const stageMap = {Dream:[0,.10],Plan:[.10,.12],Work:[.18,.24],Ship:[.42,.10]};
+        const pos = stageMap[s]||[0,.10];
+        openDrill(dreamId, s, pos[0], pos[1]);
+        break;
+      }
+    }
+  }
+}
+
+// Pre-open BS-21 Plan
+openDrill('bs21','Plan',0.10,0.12);
+
+/* ── THEME ─────────────────────────────────────────────────────── */
+function setTheme(t) {
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const resolved = t === 'system' ? (mq.matches ? 'dark' : 'light') : t;
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-'+t)?.classList.add('active');
+  localStorage.setItem('vizor-theme', t);
+}
+
+// Load saved
+const saved = localStorage.getItem('vizor-theme') || 'light';
+setTheme(saved);
+
+/* ── NOTES ─────────────────────────────────────────────────────── */
+function openNote(target) {
+  document.getElementById('nt').innerHTML = 'Note on <strong>' + target + '</strong>';
+  document.getElementById('ntxt').value = '';
+  document.getElementById('nm').classList.add('open');
+  document.getElementById('ov').classList.add('open');
+  document.getElementById('ntxt').focus();
+  document.querySelectorAll('.ac').forEach(c => c.classList.remove('on'));
+}
+function closeNote() {
+  document.getElementById('nm').classList.remove('open');
+  document.getElementById('ov').classList.remove('open');
+}
+</script>
+</body>
+</html>
