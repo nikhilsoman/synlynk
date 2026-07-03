@@ -452,30 +452,13 @@ def generate_index_html(data: dict, port: int) -> str:
     ]
     nav_html = "\n".join(
         f"""
-        <a class="nav-link{' active' if active else ''}" href="{view_html}" data-view="{view_id}" onclick="return setView('{view_id}', '{view_html}');">
+        <a class="nav-link{' active' if active else ''}" href="{view_html}" data-view="{view_id}" onclick="document.getElementById('view-frame').src = '{view_html}'; return setView('{view_id}');">
           <span class="nav-icon">{icon}</span>
           <span class="nav-label">{label}</span>
         </a>
         """.rstrip()
         for view_id, icon, label, view_html, active in nav_items
     )
-
-    theme_buttons = "\n".join(
-        f"""
-        <button class="theme-btn{' active' if theme == 'light' else ''}" type="button" data-theme-mode="light">☀ Light</button>
-        <button class="theme-btn{' active' if theme == 'dark' else ''}" type="button" data-theme-mode="dark">☾ Dark</button>
-        <button class="theme-btn{' active' if theme == 'system' else ''}" type="button" data-theme-mode="system">⊙ System</button>
-        """.strip()
-        for theme in ["light", "dark", "system"]
-    )
-    # The loop above intentionally emits all three buttons while preserving a single
-    # active state in the markup based on the stored theme.
-    theme_buttons = """
-        <button class="theme-btn" type="button" data-theme-mode="light">☀ Light</button>
-        <button class="theme-btn" type="button" data-theme-mode="dark">☾ Dark</button>
-        <button class="theme-btn active" type="button" data-theme-mode="system">⊙ System</button>
-    """
-    # Default active state is corrected by the loader script after reading localStorage.
 
     style_content = """
     :root {
@@ -711,7 +694,6 @@ def generate_index_html(data: dict, port: int) -> str:
     """
 
     meta_json = json.dumps({"port": port, "updated_at": updated_at})
-    initial_theme = "system"
     avatar_label = (workspace_name[:1] or "S").upper()
     if workspace_name.lower().startswith("synlynk"):
         avatar_label = "S"
@@ -791,7 +773,7 @@ def generate_index_html(data: dict, port: int) -> str:
   }}
 
   function setView(viewId, viewSrc) {{
-    if (viewFrame) {{
+    if (viewSrc && viewFrame) {{
       viewFrame.src = viewSrc;
     }}
     navLinks.forEach((link) => {{
@@ -831,7 +813,10 @@ def generate_index_html(data: dict, port: int) -> str:
   navLinks.forEach((link) => {{
     link.addEventListener('click', (event) => {{
       event.preventDefault();
-      setView(link.dataset.view || 'gantt', link.getAttribute('href') || 'gantt.html');
+      const viewId = link.dataset.view || 'gantt';
+      const viewSrc = link.getAttribute('href') || 'gantt.html';
+      document.getElementById('view-frame').src = viewSrc;
+      setView(viewId);
     }});
   }});
 
