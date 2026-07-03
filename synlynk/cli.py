@@ -2,12 +2,135 @@ import argparse
 import os
 import sys
 
+_SYNLYNK_DIR = ".synlynk"
+
+def cmd_watch(args) -> None:
+    """Terminal HUD for live workspace state."""
+    import select
+    import termios
+    import time
+    import tty
+
+    from synlynk.hud import CYCLES, FrameBuffer, HUDRenderer, JobSnapshot, LiveRenderer, _get_terminal_size
+
+    jobs_file = os.path.join(_SYNLYNK_DIR, "jobs.json")
+    if not os.path.exists(jobs_file):
+        print(f"\033[38;5;196m✗ {jobs_file} not found -- run synlynk scan first\033[0m", file=sys.stderr)
+        raise SystemExit(1)
+
+    live_mode = getattr(args, "live", False)
+    refresh_seconds = 3 if live_mode else 10
+    snapshot = JobSnapshot(jobs_file)
+    selected_cycle_idx = CYCLES.index("work")
+    platform_expanded = False
+    show_all = False
+    last_refresh = 0.0
+    interactive = sys.stdin.isatty()
+    fd = None
+    old_settings = None
+
+    try:
+        if interactive:
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            tty.setcbreak(fd)
+
+        sys.stdout.write("\033[?1049h")
+        sys.stdout.write("\033[2J")
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
+
+        rows, cols = _get_terminal_size()
+        buf = FrameBuffer(rows, cols)
+        renderer = LiveRenderer(buf) if live_mode else HUDRenderer(buf)
+        rendered_once = False
+
+        while True:
+            now = time.time()
+            need_refresh = not rendered_once or (now - last_refresh) >= refresh_seconds
+
+            if need_refresh:
+                rows, cols = _get_terminal_size()
+                buf.rows = rows
+                buf.cols = cols
+                buf.clear()
+
+                if cols < 60:
+                    renderer.render_narrow_warning(cols)
+                elif live_mode:
+                    active_jobs = snapshot.active_jobs()
+                    if not show_all:
+                        active_jobs = [job for job in active_jobs if job.get("status") in ("running", "queued")]
+                    renderer.render(active_jobs=active_jobs, show_all=show_all)
+                else:
+                    selected_cycle = CYCLES[selected_cycle_idx]
+                    summary = snapshot.cycle_summary()
+                    row = 0
+                    row += renderer.render_header(summary, platform_expanded, row)
+                    renderer.render_sidebar(summary, selected_cycle, row, 0)
+                    renderer.render_right_panel(
+                        selected_cycle,
+                        snapshot.active_jobs(cycle=selected_cycle),
+                        snapshot.recent_jobs(n=5, cycle=selected_cycle),
+                        20,
+                        row,
+                    )
+
+                sys.stdout.write(buf.flush())
+                sys.stdout.flush()
+                rendered_once = True
+                last_refresh = now
+
+            if not interactive:
+                ready, _, _ = select.select([sys.stdin], [], [], 0)
+                if ready:
+                    ch = sys.stdin.read(1)
+                    if ch in ("q", "Q", ""):
+                        break
+                    if ch == "r":
+                        last_refresh = 0.0
+                        continue
+                break
+
+            ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if not ready:
+                continue
+            ch = sys.stdin.read(1)
+            if ch in ("q", "Q", ""):
+                break
+            if ch == "r":
+                last_refresh = 0.0
+                continue
+            if ch == "p" and not live_mode:
+                platform_expanded = not platform_expanded
+                last_refresh = 0.0
+                continue
+            if ch == "a" and live_mode:
+                show_all = not show_all
+                last_refresh = 0.0
+                continue
+            if ch == "\x1b" and not live_mode:
+                rest = sys.stdin.read(2)
+                if rest == "[A":
+                    selected_cycle_idx = max(0, selected_cycle_idx - 1)
+                    last_refresh = 0.0
+                elif rest == "[B":
+                    selected_cycle_idx = min(len(CYCLES) - 1, selected_cycle_idx + 1)
+                    last_refresh = 0.0
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if interactive and old_settings is not None and fd is not None:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        sys.stdout.write("\033[?25h")
+        sys.stdout.write("\033[?1049l")
+        sys.stdout.flush()
+
 def main() -> None:
     from synlynk import (
         VERSION,
         SynlynkDaemon,
         SynlynkRelay,
-        WatchDaemon,
         _CYAN,
         _GREEN,
         _RESET,
@@ -51,6 +174,7 @@ def main() -> None:
         cmd_story_list,
         cmd_sync,
         cmd_team_status,
+        cmd_watch,
         dispatch_agent,
         exec_command,
         init,
@@ -188,9 +312,9 @@ def main() -> None:
     exec_parser.add_argument("--force", action="store_true",
                              help="Bypass CRITICAL sentinel gate")
 
-    watch_parser = subparsers.add_parser("watch", help="Manage the file watcher daemon")
-    watch_parser.add_argument("action", choices=["start", "stop", "status"],
-                              help="Daemon action")
+    watch_parser = subparsers.add_parser("watch", help="Live workspace HUD (synlynk watch)")
+    watch_parser.add_argument("--live", action="store_true",
+                              help="Active-job stream mode (3s refresh, no sidebar)")
 
     daemon_parser = subparsers.add_parser("daemon", help="Manage the always-on context daemon")
     daemon_parser.add_argument(
@@ -394,13 +518,7 @@ def main() -> None:
     elif args.command == "upgrade":
         upgrade()
     elif args.command == "watch":
-        daemon = WatchDaemon()
-        if args.action == "start":
-            daemon.start()
-        elif args.action == "stop":
-            daemon.stop()
-        elif args.action == "status":
-            daemon.status()
+        cmd_watch(args)
     elif args.command == "daemon":
         d = SynlynkDaemon()
         if getattr(args, "install_service", False):

@@ -5287,7 +5287,8 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
-                   context_mode: str = None) -> dict:
+                   context_mode: str = None,
+                   cycle: str = "work") -> dict:
     """Dispatches an agent to run a task in the background.
 
     Uses non-interactive agent mode (no PTY). Stdout captured to
@@ -5431,6 +5432,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "agent": agent,
         "story_id": story_id or "",
         "task": task,
+        "cycle": cycle,
         "pid": proc.pid,
         "log_file": log_file,
         "prompt_file": prompt_file,
@@ -5451,25 +5453,26 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     dconn = None
     try:
         dconn = _get_db()
-        dconn.execute(
-            "INSERT OR REPLACE INTO daemon_jobs "
-            "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-            "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                job_id,
-                agent,
-                task,
-                story_id,
-                "running",
-                5,
-                "[]",
-                proc.pid,
-                job["started_at"],
-                job["started_at"],
-                log_file,
-            ),
-        )
-        dconn.commit()
+        if dconn is not None:
+            dconn.execute(
+                "INSERT OR REPLACE INTO daemon_jobs "
+                "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
+                "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    job_id,
+                    agent,
+                    task,
+                    story_id,
+                    "running",
+                    5,
+                    "[]",
+                    proc.pid,
+                    job["started_at"],
+                    job["started_at"],
+                    log_file,
+                ),
+            )
+            dconn.commit()
     finally:
         if dconn is not None:
             try:
