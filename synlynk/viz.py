@@ -1885,6 +1885,7 @@ __LIVE_JS_HTML__
 
 def generate_journeys_html(data: dict, port: int) -> str:
     data_json = json.dumps(data)
+    live_js_block = _live_js(port)
     html_template = """<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -2430,7 +2431,7 @@ initApp();
 {_live_js(port)}
 </body>
 </html>"""
-    return html_template.replace("{{data_json}}", data_json)
+    return html_template.replace("{{data_json}}", data_json).replace("{_live_js(port)}", live_js_block)
 
 
 def _viz_json(data: dict) -> str:
