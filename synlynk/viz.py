@@ -47,7 +47,6 @@ def _live_js(port: int) -> str:
     if (Notification.permission !== 'granted') return;
     new Notification('synlynk viz updated', {{
       body: `Workspace snapshot refreshed at ${{new Date(updatedAt).toLocaleTimeString()}}`,
-      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="28" font-size="28">🚇</text></svg>',
       tag: 'vizor-refresh',
     }});
   }}

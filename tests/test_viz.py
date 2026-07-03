@@ -332,3 +332,86 @@ def test_generate_journeys_html_ftue_notice():
     }
     html = generate_journeys_html(data, 8721)
     assert "Your workspace is configured for the Architect Map as the primary structural view. User Journeys is available if your project has UX screens." in html
+
+
+def test_write_cache_creates_all_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import _write_cache, VIZ_CACHE_DIR
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
+        "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [], "tube_config": None, "notes": {},
+    }
+    _write_cache(data, port=8721)
+    expected = ["index.html", "gantt.html", "tube.html", "journeys.html",
+                "effort.html", "efficiency.html", "manifest.json"]
+    for filename in expected:
+        assert os.path.exists(os.path.join(VIZ_CACHE_DIR, filename)), f"Missing: {filename}"
+
+
+def test_manifest_updated_at_is_iso(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import _write_cache, VIZ_CACHE_DIR
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
+        "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [], "tube_config": None, "notes": {},
+    }
+    _write_cache(data, port=8721)
+    with open(os.path.join(VIZ_CACHE_DIR, "manifest.json")) as f:
+        m = json.load(f)
+    assert "updated_at" in m
+    from datetime import datetime
+    datetime.fromisoformat(m["updated_at"].replace("Z", "+00:00"))
+
+
+def test_gantt_html_contains_vizor_data(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import generate_gantt_html
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [{"id": "v0.11.0", "name": "Retention", "status": "active",
+                    "cost_total": 1.5, "cost_est": 2.0,
+                    "stages": [{"key": "Plan", "status": "done", "agents": ["codex"],
+                                "start_frac": 0.0, "width_frac": 0.2,
+                                "cost_actual": 0.5, "cost_est": 0.5, "tasks": []}]}],
+        "costs": {"total_usd": 1.5, "by_agent": {}, "by_stage": {}},
+        "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [], "tube_config": None, "notes": {},
+    }
+    html = generate_gantt_html(data, port=8721)
+    assert "VIZOR_DATA" in html
+    assert "Retention" in html
+    assert "v0.11.0" in html
+
+
+def test_effort_html_shows_empty_state(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import generate_effort_html
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
+        "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [], "tube_config": None, "notes": {},
+    }
+    html = generate_effort_html(data, port=8721)
+    assert "No cost data" in html
+
+
+def test_all_html_contain_live_js(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import (generate_index_html, generate_gantt_html,
+                              generate_tube_html, generate_journeys_html,
+                              generate_effort_html, generate_efficiency_html)
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
+        "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [], "tube_config": None, "notes": {},
+    }
+    for fn in [generate_index_html, generate_gantt_html, generate_tube_html,
+               generate_journeys_html, generate_effort_html, generate_efficiency_html]:
+        html = fn(data, port=8721)
+        assert "checkManifest" in html, f"{fn.__name__} missing live JS"
