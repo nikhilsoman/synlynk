@@ -1,4 +1,18 @@
 
+## 2026-07-03
+### Shipped
+- brainstorm(BS-21): Vizor — browser-based local workspace dashboard; 5 iterations of Gantt visual companion (v1–v5) [ux]
+- design: Vizor Gantt v5 locked — stage zoom drill-down, SVG pencil note icons (4 states), right-aligned task names in accordion rows, light/dark/system theming, agent avatars on stage bars [ux]
+- docs: brainstorm HTML files committed to `docs/brainstorm/bs21-vizor/` [docs]
+- docs: added 5 new backlog stories (BS-21 viz, BS-13 HUD refresh, v0.11.0 daily brief, scan delta, v1.0 workspace FTUE) [roadmap]
+
+### In progress
+- BS-21: Vizor design spec to be written (`docs/superpowers/specs/2026-07-03-bs21-vizor-design.md`)
+- Remaining 4 Vizor views to design: Architect tube-map HLD, Effort & Cost, Efficiency/agent report card, User Journeys
+
+### Agents used
+- Claude: PM + visual brainstorm (all 5 Gantt iterations inline)
+
 ## 2026-07-01
 ### Shipped
 - feat(BS-17): `synlynk scan` + `synlynk init --wizard` FTUE onboarding — PR #89 merged [cli]

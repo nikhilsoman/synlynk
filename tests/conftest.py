@@ -1,7 +1,9 @@
 import os
 import json
+import sys
 import pytest
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):

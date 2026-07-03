@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Architect Tube Map</title>
+<style>
+/* ── TOKENS ─────────────────────────────────── */
+:root {
+  --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eaeef2;
+  --border:#d1d5db; --border2:#e8ebee;
+  --text:#1f2328; --text2:#57606a; --text3:#8b949e;
+  --accent:#0d9e87; --accent-bg:#e6f7f4; --accent-dim:#c0ede6;
+  --shadow:0 2px 12px rgba(0,0,0,.10);
+  /* line colors */
+  --l-invoke:#0d9e87;  /* teal   — main invocation */
+  --l-ctx:   #3b82f6;  /* blue   — context/state   */
+  --l-sent:  #f59e0b;  /* amber  — sentinel        */
+  --l-init:  #7c3aed;  /* purple — init/bootstrap  */
+  --l-vizor: #d97706;  /* gold   — vizor           */
+}
+[data-theme="dark"] {
+  --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
+  --border:#1e2430; --border2:#13171f;
+  --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
+  --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+  --shadow:0 2px 20px rgba(0,0,0,.5);
+  --l-invoke:#3de0c0;
+  --l-ctx:   #60a5fa;
+  --l-sent:  #fbbf24;
+  --l-init:  #a78bfa;
+  --l-vizor: #fcd34d;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); color:var(--text); font-size:13px; transition:background .2s,color .2s; }
+
+/* ── SHELL ──────────────────────────────────── */
+.shell { display:flex; height:100vh; overflow:hidden; }
+.sidenav { width:220px;min-width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column; }
+.nav-header { padding:12px 14px 10px;border-bottom:1px solid var(--border); }
+.nav-logo { font-size:14px;font-weight:800;color:var(--accent);letter-spacing:-.5px; }
+.nav-logo span { color:var(--text3);font-weight:400;font-size:13px; }
+.nav-section { flex:1;overflow-y:auto;padding:4px 0; }
+.nav-sec-label { font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding:7px 14px 3px; }
+.nav-item { padding:5px 10px 5px 14px;display:flex;align-items:center;gap:7px;cursor:pointer;border-radius:5px;margin:1px 6px;color:var(--text2);font-size:12px; }
+.nav-item:hover { background:var(--bg3);color:var(--text); }
+.nav-item.active { background:var(--accent-bg);color:var(--accent); }
+.repo-item { padding:4px 10px 4px 30px;display:flex;align-items:center;gap:6px;cursor:pointer;margin:0 6px;color:var(--text3);font-size:11px;border-radius:4px; }
+.repo-item:hover { background:var(--bg3);color:var(--text2); }
+.repo-item.active { color:var(--accent); }
+.rdot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+.nav-footer { border-top:1px solid var(--border);padding:10px 12px; }
+.avatar { width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#0b7a60);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0; }
+.av-name { font-size:11px;color:var(--text2);flex:1; }
+.theme-label { font-size:10px;color:var(--text3);margin:8px 0 5px;text-transform:uppercase;letter-spacing:.5px; }
+.theme-sw { display:flex;gap:4px; }
+.theme-btn { flex:1;padding:5px 0;border-radius:5px;font-size:10px;text-align:center;cursor:pointer;border:1px solid var(--border);color:var(--text3);background:transparent;font-family:inherit; }
+.theme-btn:hover { border-color:var(--accent);color:var(--accent); }
+.theme-btn.active { background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:700; }
+
+/* ── MAIN ───────────────────────────────────── */
+.main { flex:1;display:flex;flex-direction:column;overflow:hidden; }
+.view-tabs { background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:stretch;padding:0 20px;flex-shrink:0; }
+.vtab { padding:10px 16px 8px;font-size:12px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px;white-space:nowrap; }
+.vtab:hover { color:var(--text2); }
+.vtab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.tab-sp { flex:1; }
+.tab-meta { display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);padding:0 4px; }
+.live-dot { width:6px;height:6px;border-radius:50%;background:#16a34a;box-shadow:0 0 5px #16a34a88; }
+.content { flex:1;overflow:auto;padding:18px 22px; }
+.view-header { display:flex;align-items:center;gap:12px;margin-bottom:14px; }
+.view-title { font-size:16px;font-weight:700;color:var(--text); }
+.view-sub { font-size:12px;color:var(--text3);margin-top:2px; }
+.view-chip { background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-dim);border-radius:12px;font-size:11px;padding:3px 10px; }
+.toolbar { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
+.chip { padding:3px 9px;border-radius:10px;font-size:11px;border:1px solid var(--border);color:var(--text2);cursor:pointer;background:transparent;font-family:inherit; }
+.chip.on { background:var(--accent-bg);border-color:var(--accent);color:var(--accent); }
+.sp { flex:1; }
+.zbtn { padding:4px 9px;border-radius:5px;font-size:11px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-family:inherit; }
+
+/* ── SVG TUBE MAP ───────────────────────────── */
+.tube-wrap { background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative; }
+svg.tube { width:100%;height:auto;display:block; }
+
+/* Station tooltip */
+.tip {
+  position:absolute;display:none;background:var(--bg2);border:1px solid var(--border);
+  border-radius:7px;padding:9px 12px;font-size:11px;color:var(--text);
+  box-shadow:var(--shadow);pointer-events:none;z-index:100;max-width:240px;
+  white-space:nowrap;
+}
+.tip-name { font-weight:700;color:var(--text);margin-bottom:3px; }
+.tip-line { color:var(--text3);font-size:10px; }
+.tip-desc { color:var(--text2);font-size:10px;margin-top:4px;white-space:normal; }
+
+/* ── LEGEND + AGENT KEY ─────────────────────── */
+.legend-row { display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px; }
+.li { display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3); }
+.lline { width:28px;height:4px;border-radius:2px;flex-shrink:0; }
+.lsep { color:var(--border);margin:0 4px; }
+.aa { width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex-shrink:0;border:1.5px solid; }
+
+.status-bar { background:var(--bg2);border-top:1px solid var(--border);padding:5px 20px;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text3);flex-shrink:0; }
+.sb-ok { color:#16a34a; }
+.sb-rt { margin-left:auto; }
+</style>
+</head>
+<body>
+
+<!-- Tooltip -->
+<div class="tip" id="tip">
+  <div class="tip-name" id="tip-name"></div>
+  <div class="tip-line" id="tip-line"></div>
+  <div class="tip-desc" id="tip-desc"></div>
+</div>
+
+<div class="shell">
+<!-- LEFT NAV -->
+<div class="sidenav">
+  <div class="nav-header"><div class="nav-logo">S<span>ynlynk</span> <span style="color:var(--accent)">viz</span></div></div>
+  <div class="nav-section">
+    <div class="nav-sec-label">Workspaces</div>
+    <div class="nav-item"><span>▾</span>synlynk-core</div>
+    <div class="repo-item active"><div class="rdot" style="background:var(--accent)"></div>synlynk</div>
+    <div class="repo-item"><div class="rdot" style="background:#f59e0b"></div>synlynk-website</div>
+    <div class="nav-sec-label" style="margin-top:10px">Views</div>
+    <div class="nav-item">📅 Gantt</div>
+    <div class="nav-item">🗺 User Journeys</div>
+    <div class="nav-item active">🚇 Architect Map</div>
+    <div class="nav-item">💰 Effort & Cost</div>
+    <div class="nav-item">📊 Efficiency</div>
+  </div>
+  <div class="nav-footer">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div class="avatar">N</div><div style="font-size:11px;color:var(--text2);flex:1">nikhilsoman</div></div>
+    <div class="theme-label">Theme</div>
+    <div class="theme-sw">
+      <button class="theme-btn active" id="btn-light" onclick="setTheme('light')">☀ Light</button>
+      <button class="theme-btn" id="btn-dark"  onclick="setTheme('dark')">☾ Dark</button>
+      <button class="theme-btn" id="btn-sys"   onclick="setTheme('system')">⊙ Sys</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="view-tabs">
+    <div class="vtab">📅 Gantt</div>
+    <div class="vtab">🗺 User Journeys</div>
+    <div class="vtab active">🚇 Architect Map</div>
+    <div class="vtab">💰 Effort & Cost</div>
+    <div class="vtab">📊 Efficiency</div>
+    <div class="tab-sp"></div>
+    <div class="tab-meta"><div class="live-dot"></div>synlynk · main</div>
+  </div>
+  <div class="content">
+    <div class="view-header">
+      <div><div class="view-title">Architect Map — synlynk</div><div class="view-sub">5 subsystem lines · 1 interchange hub · hover any station for details</div></div>
+      <div class="view-chip">🚇 tube map</div>
+    </div>
+    <div class="toolbar">
+      <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Show:</span>
+      <button class="chip on">All lines</button>
+      <button class="chip">Active only</button>
+      <button class="chip">Agents</button>
+      <div class="sp"></div>
+      <button class="zbtn" id="zoom-out">− zoom</button>
+      <button class="zbtn" id="zoom-in">+ zoom</button>
+    </div>
+
+    <div class="tube-wrap">
+      <!-- ══════════════════════════════════════════
+           SVG TUBE MAP
+           viewBox: 0 0 1060 580
+           All bends: 0° / 45° / 90° only
+           ══════════════════════════════════════════ -->
+      <svg class="tube" id="tube-svg" viewBox="0 0 1060 580" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Glow filters for active stations -->
+          <filter id="glow-teal" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow-blue" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <!-- Arrow marker -->
+          <marker id="arr-teal" markerWidth="7" markerHeight="7" refX="3" refY="3.5" orient="auto">
+            <polygon points="0 1,7 3.5,0 6" fill="#0d9e87" opacity=".5"/>
+          </marker>
+          <marker id="arr-gold" markerWidth="7" markerHeight="7" refX="3" refY="3.5" orient="auto">
+            <polygon points="0 1,7 3.5,0 6" fill="#d97706" opacity=".5"/>
+          </marker>
+        </defs>
+
+        <!-- ── BACKGROUND GRID (subtle) ─────────── -->
+        <rect width="1060" height="580" fill="none"/>
+        <!-- subtle dot grid -->
+        <pattern id="dotgrid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+          <circle cx="20" cy="20" r="1" fill="currentColor" opacity=".08"/>
+        </pattern>
+        <rect width="1060" height="580" fill="url(#dotgrid)" color="var(--text3)"/>
+
+        <!-- ═══════════════════════════════════════
+             LINES (drawn first, stations on top)
+             ═══════════════════════════════════════ -->
+
+        <!-- ── INIT LINE (purple) ──────────────────
+             Route: (60,90)→(230,90)  horizontal
+                    (230,90)→(440,300) diagonal 45°
+             ─────────────────────────────────────── -->
+        <polyline
+          points="60,90 230,90 440,300"
+          fill="none" stroke="#7c3aed" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round"
+          class="tube-line line-init"/>
+        <!-- label along top -->
+        <text x="145" y="76" text-anchor="middle" font-size="10" fill="#7c3aed" font-family="SF Mono,monospace" font-weight="700" letter-spacing="1">INIT LINE</text>
+
+        <!-- ── INVOCATION LINE (teal) ──────────────
+             Route: (60,300)→(940,300)  full horizontal
+             ─────────────────────────────────────── -->
+        <line
+          x1="60" y1="300" x2="940" y2="300"
+          stroke="#0d9e87" stroke-width="5"
+          stroke-linecap="round"
+          class="tube-line line-invoke"/>
+        <text x="500" y="270" text-anchor="middle" font-size="10" fill="#0d9e87" font-family="SF Mono,monospace" font-weight="700" letter-spacing="1">INVOCATION LINE</text>
+
+        <!-- ── SENTINEL LINE (amber) ───────────────
+             Route: (440,300)→(520,220) diagonal 45°
+                    (520,220)→(940,220) horizontal
+             ─────────────────────────────────────── -->
+        <polyline
+          points="440,300 520,220 940,220"
+          fill="none" stroke="#f59e0b" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round"
+          class="tube-line line-sent"/>
+        <text x="720" y="208" text-anchor="middle" font-size="10" fill="#f59e0b" font-family="SF Mono,monospace" font-weight="700" letter-spacing="1">SENTINEL LINE</text>
+
+        <!-- ── CONTEXT / STATE LINE (blue) ─────────
+             Route: (60,400)→(340,400) horizontal
+                    (340,400)→(440,300) diagonal 45°
+                    — continues right from EXEC:
+                    (440,300)→(500,360) diagonal 45°
+                    (500,360)→(940,360) horizontal
+             ─────────────────────────────────────── -->
+        <polyline
+          points="60,400 340,400 440,300 500,360 940,360"
+          fill="none" stroke="#3b82f6" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round"
+          class="tube-line line-ctx"/>
+        <text x="160" y="388" text-anchor="middle" font-size="10" fill="#3b82f6" font-family="SF Mono,monospace" font-weight="700" letter-spacing="1">CONTEXT / STATE LINE</text>
+
+        <!-- ── VIZOR LINE (gold, dashed = planned) ──
+             Route: (60,480)→(700,480) horizontal
+             Connects to main line via platform change at x=60
+             ─────────────────────────────────────── -->
+        <line
+          x1="60" y1="480" x2="700" y2="480"
+          stroke="#d97706" stroke-width="4"
+          stroke-dasharray="10 5"
+          stroke-linecap="round"
+          class="tube-line line-vizor"
+          marker-end="url(#arr-gold)"/>
+        <text x="380" y="468" text-anchor="middle" font-size="10" fill="#d97706" font-family="SF Mono,monospace" font-weight="700" letter-spacing="1">VIZOR LINE  ·  BS-21 in progress</text>
+
+        <!-- Platform connector: user terminal at x=60, y=300→480 -->
+        <line x1="60" y1="300" x2="60" y2="480" stroke="var(--text3)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".4"/>
+        <text x="72" y="395" font-size="9" fill="var(--text3)" font-family="SF Mono,monospace" opacity=".6">platform</text>
+        <text x="72" y="406" font-size="9" fill="var(--text3)" font-family="SF Mono,monospace" opacity=".6">change</text>
+
+        <!-- ═══════════════════════════════════════
+             STATIONS
+             ═══════════════════════════════════════ -->
+        <!-- Helper: regular station = circle r=6, terminal = circle r=10+square notch, interchange = r=14 white+thick ring -->
+
+        <!-- ── INIT LINE STATIONS ──────────────── -->
+
+        <!-- synlynk init [terminal] -->
+        <g class="station" data-name="synlynk init"
+           data-line="Init Line (purple)" data-desc="Entry point. Creates project-docs/, .synlynk/, writes directive files (CLAUDE.md, GEMINI.md, AGENTS.md). Skips existing files." data-stage="ship" data-agent="">
+          <rect x="46" y="76" width="28" height="28" rx="4" fill="var(--bg2)" stroke="#7c3aed" stroke-width="3"/>
+          <text x="60" y="94" text-anchor="middle" font-size="9" fill="#7c3aed" font-weight="800">init</text>
+        </g>
+        <text x="60" y="58" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">synlynk</text>
+        <text x="60" y="70" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">init</text>
+
+        <!-- FTUE wizard -->
+        <g class="station" data-name="FTUE wizard"
+           data-line="Init Line" data-desc="Interactive 3-question setup: project mode (single/team), pilot agents, budget limits. Writes .synlynk/config.json.">
+          <circle cx="145" cy="90" r="6" fill="var(--bg2)" stroke="#7c3aed" stroke-width="2.5"/>
+        </g>
+        <text x="145" y="112" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">FTUE</text>
+        <text x="145" y="124" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">wizard</text>
+
+        <!-- project-docs/ (junction point where diagonal starts) -->
+        <g class="station" data-name="project-docs/"
+           data-line="Init Line" data-desc="Created by init: roadmap.md, todo.md, memory.md, costs.md, devlogs/. Also writes .synlynk/config.json and directive files at repo root.">
+          <circle cx="230" cy="90" r="7" fill="var(--bg2)" stroke="#7c3aed" stroke-width="2.5"/>
+        </g>
+        <text x="230" y="112" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">project-</text>
+        <text x="230" y="124" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">docs/</text>
+
+        <!-- config.json [on diagonal, at 1/3 point: (230+70,90+70)=(300,160)] -->
+        <g class="station" data-name=".synlynk/config.json"
+           data-line="Init Line" data-desc="Stores budget limits: limit_usd, limit_requests. Read by check_budgets() before every exec run. Written by FTUE wizard.">
+          <circle cx="300" cy="160" r="6" fill="var(--bg2)" stroke="#7c3aed" stroke-width="2.5"/>
+        </g>
+        <text x="270" y="155" text-anchor="end" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">.synlynk/</text>
+        <text x="270" y="167" text-anchor="end" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">config.json</text>
+
+        <!-- ── INVOCATION LINE STATIONS ─────────── -->
+
+        <!-- $ synlynk [terminal entry] -->
+        <g class="station" data-name="$ synlynk &lt;cmd&gt;"
+           data-line="Invocation Line (teal)" data-desc="User entry point. Parsed by argparse. Routes to: exec, init, scan, jobs, roles, upgrade. Sets up logging and telemetry path.">
+          <rect x="44" y="286" width="32" height="28" rx="4" fill="var(--bg2)" stroke="#0d9e87" stroke-width="3"/>
+          <text x="60" y="304" text-anchor="middle" font-size="8" fill="#0d9e87" font-weight="800">$ cmd</text>
+        </g>
+        <text x="60" y="324" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">$</text>
+        <text x="60" y="336" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">synlynk</text>
+
+        <!-- check_budgets -->
+        <g class="station" data-name="check_budgets()"
+           data-line="Invocation Line" data-desc="Reads .synlynk/config.json limits. Compares cumulative cost+requests from telemetry.json. Exits with error if over budget before spawning AI.">
+          <circle cx="260" cy="300" r="6" fill="var(--bg2)" stroke="#0d9e87" stroke-width="2.5"/>
+        </g>
+        <text x="260" y="318" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">check_</text>
+        <text x="260" y="330" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">budgets()</text>
+
+        <!-- EXEC INTERCHANGE (440,300) — drawn last, on top of everything -->
+
+        <!-- AI subprocess -->
+        <g class="station" data-name="AI subprocess"
+           data-line="Invocation Line" data-desc="subprocess.run([cmd, '--context', ctx_path, ...] + user_args). Captures stdout. cmd = 'claude' or 'agy' or 'codex', resolved by synlynk roles." data-agent="claude">
+          <!-- active glow -->
+          <circle cx="580" cy="300" r="10" fill="#0d9e87" opacity=".15" filter="url(#glow-teal)"/>
+          <circle cx="580" cy="300" r="7" fill="var(--bg2)" stroke="#0d9e87" stroke-width="2.5"/>
+          <circle cx="580" cy="300" r="3" fill="#0d9e87" opacity=".6"/>
+        </g>
+        <!-- Agent badge (claude) -->
+        <circle cx="580" cy="283" r="9" fill="#e6f7f4" stroke="#0d9e87" stroke-width="1.5"/>
+        <text x="580" y="287" text-anchor="middle" font-size="8" fill="#0d9e87" font-weight="800">C</text>
+        <text x="580" y="318" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">AI</text>
+        <text x="580" y="330" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">subprocess</text>
+
+        <!-- capture output -->
+        <g class="station" data-name="capture output"
+           data-line="Invocation Line" data-desc="stdout captured via subprocess.PIPE. Stored as output_text. Also records duration, exit_code. Passed to extract_tokens(), check_sentinel_patterns().">
+          <circle cx="700" cy="300" r="6" fill="var(--bg2)" stroke="#0d9e87" stroke-width="2.5"/>
+        </g>
+        <text x="700" y="318" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">capture</text>
+        <text x="700" y="330" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">output</text>
+
+        <!-- extract_tokens -->
+        <g class="station" data-name="extract_tokens()"
+           data-line="Invocation Line" data-desc="Regex-scrapes AI stdout for token counts. Handles multiple known formats (claude, gemini, codex). Returns {input_tokens, output_tokens, cost}.">
+          <circle cx="820" cy="300" r="6" fill="var(--bg2)" stroke="#0d9e87" stroke-width="2.5"/>
+        </g>
+        <text x="820" y="318" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">extract_</text>
+        <text x="820" y="330" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">tokens()</text>
+
+        <!-- output ✓ [terminal exit] -->
+        <g class="station" data-name="output ✓"
+           data-line="Invocation Line" data-desc="Done. AI stdout printed to user terminal. Budget Pulse summary printed. Exit code propagated from AI subprocess.">
+          <rect x="916" y="286" width="28" height="28" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="3"/>
+          <text x="930" y="304" text-anchor="middle" font-size="10" fill="#16a34a" font-weight="800">✓</text>
+        </g>
+        <text x="940" y="318" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">done</text>
+        <text x="940" y="330" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">✓</text>
+
+        <!-- ── SENTINEL LINE STATIONS ─────────────── -->
+
+        <!-- check_sentinel_patterns (on diagonal, midpoint 440,300→520,220 = 480,260) -->
+        <g class="station" data-name="check_sentinel_patterns()"
+           data-line="Sentinel Line (amber)" data-desc="Reads telemetry.json. Detects: FLATLINE (3 consecutive fails), SUCCESS_LOOP, QUOTA_EXHAUSTED, COST_SPIKE. Writes alerts to sentinel.md.">
+          <circle cx="480" cy="260" r="7" fill="var(--bg2)" stroke="#f59e0b" stroke-width="2.5"/>
+        </g>
+        <text x="510" y="256" text-anchor="start" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">check_sentinel</text>
+        <text x="510" y="268" text-anchor="start" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">_patterns()</text>
+
+        <!-- telemetry.json -->
+        <g class="station" data-name="telemetry.json"
+           data-line="Sentinel Line" data-desc="Rolling log of last 100 exec runs. Each entry: timestamp, duration, exit_code, cost, input/output tokens, cmd. Written by log_telemetry(). Read by check_sentinel and check_budgets.">
+          <circle cx="660" cy="220" r="6" fill="var(--bg2)" stroke="#f59e0b" stroke-width="2.5"/>
+        </g>
+        <text x="660" y="204" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">telemetry</text>
+        <text x="660" y="216" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">.json</text>
+
+        <!-- sentinel.md [terminal on sentinel line] -->
+        <g class="station" data-name="sentinel.md"
+           data-line="Sentinel Line" data-desc="Alert log. One entry per detected pattern. Includes: timestamp, pattern type, severity, recommended action. Read by pilot agents to detect runaway loops.">
+          <rect x="916" y="206" width="28" height="28" rx="4" fill="var(--bg2)" stroke="#f59e0b" stroke-width="3"/>
+          <text x="930" y="224" text-anchor="middle" font-size="7" fill="#f59e0b" font-weight="800">ALERT</text>
+        </g>
+        <text x="940" y="200" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">sentinel</text>
+        <text x="940" y="212" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">.md</text>
+        <text x="940" y="244" text-anchor="middle" font-size="11" fill="var(--text3)" font-family="SF Mono,monospace" font-style="italic">alerts</text>
+
+        <!-- ── CONTEXT / STATE LINE STATIONS ─────── -->
+
+        <!-- state.db [terminal on left] -->
+        <g class="station" data-name="state.db"
+           data-line="Context / State Line (blue)" data-desc="SQLite DB. 5 tables: memory_entries, roadmap_arcs, roadmap_phases, cost_entries, devlog_entries. Migrated from project-docs/ flat files. Source of truth since v0.10.0.">
+          <rect x="44" y="386" width="32" height="28" rx="4" fill="var(--bg2)" stroke="#3b82f6" stroke-width="3"/>
+          <text x="60" y="404" text-anchor="middle" font-size="9" fill="#3b82f6" font-weight="800">DB</text>
+        </g>
+        <text x="60" y="424" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">state</text>
+        <text x="60" y="436" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">.db</text>
+
+        <!-- memory_entries -->
+        <g class="station" data-name="memory_entries"
+           data-line="Context / State Line" data-desc="memory.md rows parsed into DB. Each row: key, value, author, timestamp. generate_context() reads all entries and injects into .synlynk/context.md.">
+          <circle cx="170" cy="400" r="6" fill="var(--bg2)" stroke="#3b82f6" stroke-width="2.5"/>
+        </g>
+        <text x="170" y="418" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">memory_</text>
+        <text x="170" y="430" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">entries</text>
+
+        <!-- generate_context() [on diagonal: midpoint of (340,400)→(440,300) = (390,350)] -->
+        <g class="station" data-name="generate_context()"
+           data-line="Context / State Line" data-desc="Reads memory.md, roadmap.md, todo.md (or state.db views). Concatenates into .synlynk/context.md. Called before every exec run." data-active="true">
+          <!-- active glow -->
+          <circle cx="390" cy="350" r="10" fill="#3b82f6" opacity=".12" filter="url(#glow-blue)"/>
+          <circle cx="390" cy="350" r="7" fill="var(--bg2)" stroke="#3b82f6" stroke-width="2.5"/>
+          <circle cx="390" cy="350" r="3" fill="#3b82f6" opacity=".6"/>
+        </g>
+        <!-- Agent badge (agy on diagonal) -->
+        <circle cx="374" cy="337" r="9" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+        <text x="374" y="341" text-anchor="middle" font-size="8" fill="#1a56c7" font-weight="800">A</text>
+        <text x="412" y="340" text-anchor="start" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">generate_</text>
+        <text x="412" y="352" text-anchor="start" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">context()</text>
+
+        <!-- context.md [after EXEC, on post-diagonal: midpoint (440,300)→(500,360) = (470,330)] -->
+        <g class="station" data-name=".synlynk/context.md"
+           data-line="Context / State Line" data-desc="Auto-generated snapshot. Overwritten on every exec run. Injected as --context arg into AI subprocess. Contains: memory + roadmap summary + active todos.">
+          <circle cx="470" cy="330" r="6" fill="var(--bg2)" stroke="#3b82f6" stroke-width="2.5"/>
+        </g>
+        <text x="490" y="325" text-anchor="start" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">context</text>
+        <text x="490" y="337" text-anchor="start" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">.md</text>
+
+        <!-- update_costs -->
+        <g class="station" data-name="update_costs()"
+           data-line="Context / State Line" data-desc="Appends row to project-docs/costs.md and cost_entries table. Prints Budget Pulse: session cost, total spend, remaining budget. Rates hardcoded: $0.003/K input, $0.015/K output.">
+          <circle cx="620" cy="360" r="6" fill="var(--bg2)" stroke="#3b82f6" stroke-width="2.5"/>
+        </g>
+        <text x="620" y="378" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">update_</text>
+        <text x="620" y="390" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">costs()</text>
+
+        <!-- log_telemetry -->
+        <g class="station" data-name="log_telemetry()"
+           data-line="Context / State Line" data-desc="Appends to .synlynk/telemetry.json. Keeps last 100 entries. Fields: timestamp, duration, exit_code, cost, tokens, cmd. Also feeds sentinel pattern detection.">
+          <circle cx="760" cy="360" r="6" fill="var(--bg2)" stroke="#3b82f6" stroke-width="2.5"/>
+        </g>
+        <text x="760" y="378" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">log_</text>
+        <text x="760" y="390" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">telemetry()</text>
+
+        <!-- costs.md [terminal right of state line] -->
+        <g class="station" data-name="costs.md"
+           data-line="Context / State Line" data-desc="Append-only log of every exec run cost. Human-readable CSV-ish format. Also backed by cost_entries table in state.db. Referenced by Budget Pulse.">
+          <rect x="916" y="346" width="28" height="28" rx="4" fill="var(--bg2)" stroke="#3b82f6" stroke-width="3"/>
+          <text x="930" y="364" text-anchor="middle" font-size="7" fill="#3b82f6" font-weight="800">$LOG</text>
+        </g>
+        <text x="940" y="340" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">costs</text>
+        <text x="940" y="352" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">.md</text>
+
+        <!-- ── VIZOR LINE STATIONS ────────────────── -->
+
+        <!-- synlynk viz [entry terminal] -->
+        <g class="station" data-name="synlynk viz"
+           data-line="Vizor Line (gold) — BS-21 planned" data-desc="BS-21: New command. Triggers workspace snapshot generation. Reads state.db for roadmap, tasks, costs. Generates Gantt/tube/effort HTML files to .synlynk/viz-cache/." data-active="true">
+          <rect x="44" y="466" width="32" height="28" rx="4" fill="#fef9c3" stroke="#d97706" stroke-width="3" stroke-dasharray="5 3"/>
+          <text x="60" y="484" text-anchor="middle" font-size="8" fill="#d97706" font-weight="800">viz</text>
+        </g>
+        <text x="60" y="504" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">synlynk</text>
+        <text x="60" y="516" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">viz</text>
+
+        <!-- generate() — active, being planned now -->
+        <g class="station" data-name="generate()"
+           data-line="Vizor Line — BS-21" data-desc="Reads state.db → generates 5 HTML views (Gantt, Tube, Effort, Efficiency, Journeys). Writes to .synlynk/viz-cache/. Snappy: all data local. Agent: Agy (HTML/CSS)." data-active="true">
+          <circle cx="200" cy="480" r="10" fill="#d97706" opacity=".12" filter="url(#glow-gold)"/>
+          <circle cx="200" cy="480" r="7" fill="var(--bg2)" stroke="#d97706" stroke-width="2.5" stroke-dasharray="5 3"/>
+          <circle cx="200" cy="480" r="3" fill="#d97706" opacity=".7"/>
+        </g>
+        <!-- Agy badge -->
+        <circle cx="200" cy="463" r="9" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+        <text x="200" y="467" text-anchor="middle" font-size="8" fill="#1a56c7" font-weight="800">A</text>
+        <text x="200" y="498" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">generate</text>
+        <text x="200" y="510" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">()</text>
+
+        <!-- viz-cache/ -->
+        <g class="station" data-name=".synlynk/viz-cache/"
+           data-line="Vizor Line — BS-21" data-desc="Generated HTML views stored locally. Served by a lightweight local HTTP server (python3 -m http.server). Offline-capable. Regenerated on schedule or pilot trigger.">
+          <circle cx="340" cy="480" r="6" fill="var(--bg2)" stroke="#d97706" stroke-width="2.5" stroke-dasharray="4 3"/>
+        </g>
+        <text x="340" y="498" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">viz-</text>
+        <text x="340" y="510" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">cache/</text>
+
+        <!-- browser serve -->
+        <g class="station" data-name="browser serve"
+           data-line="Vizor Line — BS-21" data-desc="Local HTTP server (localhost:port). synlynk viz --serve. Opens browser automatically. Serves HTML from viz-cache/. No internet required.">
+          <circle cx="480" cy="480" r="6" fill="var(--bg2)" stroke="#d97706" stroke-width="2.5" stroke-dasharray="4 3"/>
+        </g>
+        <text x="480" y="498" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">browser</text>
+        <text x="480" y="510" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">serve</text>
+
+        <!-- notifications [terminal] -->
+        <g class="station" data-name="browser notifications"
+           data-line="Vizor Line — BS-21" data-desc="Web Notifications API. Fires when: new job finishes, cost spike detected, sentinel alert triggered, scheduled refresh complete. User can approve/deny at first open.">
+          <rect x="606" y="466" width="28" height="28" rx="4" fill="#fef9c3" stroke="#d97706" stroke-width="3" stroke-dasharray="5 3"/>
+          <text x="620" y="484" text-anchor="middle" font-size="9" fill="#d97706" font-weight="800">🔔</text>
+        </g>
+        <text x="620" y="504" text-anchor="middle" font-size="11" fill="var(--text)" font-family="SF Mono,monospace">notifs</text>
+
+        <!-- ═══════════════════════════════════════
+             EXEC INTERCHANGE HUB — drawn last, on top
+             (440, 300) — all 4 main lines converge here
+             ═══════════════════════════════════════ -->
+        <!-- Multi-color ring segments to show which lines pass through -->
+        <!-- Draw colored arcs around the interchange -->
+        <circle cx="440" cy="300" r="22" fill="none" stroke="#7c3aed" stroke-width="5" stroke-dasharray="34 103" stroke-dashoffset="0" opacity=".8"/>   <!-- init: top-left arc -->
+        <circle cx="440" cy="300" r="22" fill="none" stroke="#0d9e87" stroke-width="5" stroke-dasharray="70 67" stroke-dashoffset="-34" opacity=".8"/>  <!-- invoke: right arc -->
+        <circle cx="440" cy="300" r="22" fill="none" stroke="#f59e0b" stroke-width="5" stroke-dasharray="25 112" stroke-dashoffset="-104" opacity=".8"/> <!-- sentinel: top-right -->
+        <circle cx="440" cy="300" r="22" fill="none" stroke="#3b82f6" stroke-width="5" stroke-dasharray="34 103" stroke-dashoffset="-129" opacity=".8"/> <!-- ctx: bottom-left -->
+        <!-- White fill on top -->
+        <circle cx="440" cy="300" r="14" fill="var(--bg2)"/>
+        <!-- Inner label -->
+        <text x="440" y="296" text-anchor="middle" font-size="8" fill="var(--text2)" font-family="SF Mono,monospace" font-weight="700">exec_</text>
+        <text x="440" y="307" text-anchor="middle" font-size="8" fill="var(--text2)" font-family="SF Mono,monospace" font-weight="700">command</text>
+        <!-- Interchange label above -->
+        <text x="440" y="265" text-anchor="middle" font-size="12" fill="var(--text)" font-family="SF Mono,monospace" font-weight="800">exec_command()</text>
+        <text x="440" y="277" text-anchor="middle" font-size="10" fill="var(--text3)" font-family="SF Mono,monospace">⬡ 4-line interchange</text>
+
+        <!-- ── ACTIVE PULSE ANIMATION ─────────────
+             on exec_command hub
+             ─────────────────────────────────────── -->
+        <circle cx="440" cy="300" r="22" fill="none" stroke="#0d9e87" stroke-width="1.5" opacity=".0">
+          <animate attributeName="r" values="22;34;22" dur="2.5s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite"/>
+        </circle>
+      </svg>
+    </div><!-- /tube-wrap -->
+
+    <!-- LEGEND -->
+    <div class="legend-row">
+      <div class="li"><div class="lline" style="background:#7c3aed"></div>Init Line</div>
+      <div class="li"><div class="lline" style="background:#0d9e87"></div>Invocation Line</div>
+      <div class="li"><div class="lline" style="background:#f59e0b"></div>Sentinel Line</div>
+      <div class="li"><div class="lline" style="background:#3b82f6"></div>Context / State Line</div>
+      <div class="li"><div class="lline" style="background:#d97706;border-top:2px dashed #d97706;height:0;margin-top:2px"></div></div>
+      <div class="li"><div class="lline" style="background:transparent;border-top:3px dashed #d97706"></div>Vizor Line (BS-21 planned)</div>
+      <span class="lsep">|</span>
+      <div class="li"><div style="width:10px;height:10px;border-radius:50%;border:2px solid var(--text);background:var(--bg2)"></div>regular station</div>
+      <div class="li"><div style="width:10px;height:10px;border-radius:2px;border:2px solid var(--text3);background:var(--bg2)"></div>terminal</div>
+      <div class="li"><div style="width:14px;height:14px;border-radius:50%;border:3px solid var(--text2);background:var(--bg2)"></div>interchange ⬡</div>
+      <div class="li"><div style="width:8px;height:8px;border-radius:50%;background:#0d9e87;opacity:.7"></div>active station</div>
+    </div>
+    <div class="legend-row" style="margin-top:8px">
+      <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Agents:</span>
+      <div class="li"><div class="aa" style="background:#e6f7f4;border-color:#0d9e87;color:#0d9e87;width:18px;height:18px;font-size:8px">C</div>Claude</div>
+      <div class="li"><div class="aa" style="background:#e8f0fe;border-color:#4285f4;color:#1a56c7;width:18px;height:18px;font-size:8px">A</div>Agy (Gemini)</div>
+      <div class="li"><div class="aa" style="background:#e6f4f0;border-color:#10a37f;color:#0b7a60;width:18px;height:18px;font-size:8px">Co</div>Codex</div>
+      <div class="li"><div class="aa" style="background:#f0f0f0;border-color:#666;color:#333;width:18px;height:18px;font-size:8px">G</div>Grok</div>
+    </div>
+  </div><!-- /content -->
+  <div class="status-bar"><span class="sb-ok">● local · offline-ready</span><span>synlynk-core</span><div class="sb-rt">updated 3m ago</div></div>
+</div>
+</div><!-- /shell -->
+
+<script>
+/* ── THEME ───────────────────────────────────── */
+function setTheme(t) {
+  const resolved = t==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('btn-'+t)?.classList.add('active');
+  localStorage.setItem('vizor-theme',t);
+}
+setTheme(localStorage.getItem('vizor-theme')||'light');
+
+/* ── STATION TOOLTIPS ────────────────────────── */
+const tip = document.getElementById('tip');
+document.querySelectorAll('.station').forEach(el => {
+  el.style.cursor = 'pointer';
+  el.addEventListener('mouseenter', e => {
+    document.getElementById('tip-name').textContent = el.dataset.name;
+    document.getElementById('tip-line').textContent = el.dataset.line || '';
+    document.getElementById('tip-desc').textContent = el.dataset.desc || '';
+    tip.style.display = 'block';
+    positionTip(e);
+  });
+  el.addEventListener('mousemove', positionTip);
+  el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+});
+
+function positionTip(e) {
+  const x = e.clientX + 14;
+  const y = e.clientY - 10;
+  const tw = tip.offsetWidth;
+  const th = tip.offsetHeight;
+  tip.style.left = (x + tw > window.innerWidth - 10 ? x - tw - 20 : x) + 'px';
+  tip.style.top  = (y + th > window.innerHeight - 10 ? y - th - 10 : y) + 'px';
+}
+
+/* ── ZOOM ────────────────────────────────────── */
+let scale = 1;
+const svg = document.getElementById('tube-svg');
+document.getElementById('zoom-in').addEventListener('click', () => {
+  scale = Math.min(scale + 0.15, 2.5);
+  svg.style.transform = `scale(${scale})`;
+  svg.style.transformOrigin = 'top left';
+});
+document.getElementById('zoom-out').addEventListener('click', () => {
+  scale = Math.max(scale - 0.15, 0.5);
+  svg.style.transform = `scale(${scale})`;
+  svg.style.transformOrigin = 'top left';
+});
+</script>
+</body>
+</html>

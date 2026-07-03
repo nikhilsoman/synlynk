@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Gantt v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'JetBrains Mono', monospace; background: #0d0f14; color: #c9d1d9; font-size: 13px; padding: 20px; }
+
+  h2 { font-size: 15px; color: #e6edf3; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #4a5568; margin-bottom: 20px; }
+
+  /* ── AGENT AVATAR SYSTEM ──────────────────────── */
+  .agent-avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; flex-shrink: 0;
+    border: 1.5px solid;
+    cursor: default;
+    position: relative;
+  }
+  /* Claude — teal ring, C glyph */
+  .agent-claude { background: #0d2a2a; border-color: #3de0c0; color: #3de0c0; }
+  /* Agy (Gemini) — Google blue ring, diamond glyph */
+  .agent-agy { background: #0d1a3a; border-color: #4285f4; color: #4285f4; }
+  /* Codex (OpenAI) — green ring, Co glyph */
+  .agent-codex { background: #0a1f18; border-color: #10a37f; color: #10a37f; font-size: 8px; }
+  /* Grok (xAI) — white/silver ring */
+  .agent-grok { background: #1a1a1a; border-color: #e0e0e0; color: #e0e0e0; }
+
+  .agent-stack { display: flex; align-items: center; gap: 3px; }
+  .agent-avatar[title]:hover::after {
+    content: attr(title);
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e2430; color: #c9d1d9; padding: 3px 7px; border-radius: 4px;
+    font-size: 10px; white-space: nowrap; pointer-events: none;
+    border: 1px solid #2a3040; z-index: 100;
+  }
+
+  /* ── PENCIL EDIT SYSTEM ───────────────────────── */
+  .editable { position: relative; }
+  .edit-trigger {
+    opacity: 0;
+    position: absolute; top: 2px; right: 4px;
+    font-size: 11px; color: #4a5568; cursor: pointer;
+    transition: opacity 0.15s;
+    z-index: 20;
+    background: #13171f; border: 1px solid #1e2430;
+    border-radius: 3px; padding: 1px 4px;
+    line-height: 1.4;
+  }
+  .editable:hover .edit-trigger { opacity: 1; }
+  .edit-trigger:hover { color: #d4b800; border-color: #5a4a00; background: #2d2500; }
+
+  /* Note editor modal */
+  .note-modal {
+    display: none;
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: #13171f; border: 1px solid #1e2430; border-radius: 10px;
+    padding: 16px; width: 380px; z-index: 1000;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .note-modal.open { display: block; }
+  .note-modal-title { font-size: 12px; color: #8b949e; margin-bottom: 10px; }
+  .note-modal textarea {
+    width: 100%; background: #0a0c10; border: 1px solid #1e2430;
+    border-radius: 6px; color: #c9d1d9; font-family: inherit; font-size: 12px;
+    padding: 8px 10px; resize: none; outline: none; height: 80px;
+  }
+  .note-modal textarea:focus { border-color: #3de0c0; }
+  .note-actions-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .note-action-label { font-size: 11px; color: #4a5568; }
+  .action-chip {
+    padding: 3px 9px; border-radius: 10px; font-size: 11px;
+    border: 1px solid #1e2430; color: #8b949e; cursor: pointer;
+    background: transparent; font-family: inherit;
+  }
+  .action-chip:hover { border-color: #3de0c0; color: #3de0c0; background: #0d2137; }
+  .action-chip.selected { border-color: #f0883e; color: #f0883e; background: #2d1a00; }
+  .note-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .btn-cancel {
+    padding: 6px 12px; background: transparent; border: 1px solid #1e2430;
+    color: #6a737d; border-radius: 5px; cursor: pointer; font-family: inherit; font-size: 12px;
+  }
+  .btn-save {
+    padding: 6px 12px; background: #0a3050; border: 1px solid #3de0c0;
+    color: #3de0c0; border-radius: 5px; cursor: pointer; font-family: inherit; font-size: 12px;
+  }
+  .note-modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999;
+  }
+  .note-modal-overlay.open { display: block; }
+
+  /* Existing note indicator */
+  .has-note::after {
+    content: '📌';
+    font-size: 9px; margin-left: 4px; vertical-align: middle;
+  }
+
+  /* ── ONBOARD BANNER ───────────────────────────── */
+  .onboard-banner {
+    background: #0d1f2d; border: 1px solid #1a4a6e;
+    border-radius: 8px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
+  }
+  .onboard-banner .sparkle { font-size: 18px; }
+  .onboard-text { flex: 1; }
+  .onboard-text strong { color: #3de0c0; font-size: 13px; }
+  .onboard-text p { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .onboard-choices { display: flex; gap: 8px; }
+  .onboard-btn {
+    padding: 6px 12px; border-radius: 6px; font-size: 11px;
+    font-family: inherit; cursor: pointer; border: 1px solid; white-space: nowrap;
+  }
+  .onboard-btn.primary { background: #0a3050; border-color: #3de0c0; color: #3de0c0; }
+  .onboard-btn.secondary { background: transparent; border-color: #1e2430; color: #8b949e; }
+  .onboard-dismiss { color: #4a5568; font-size: 14px; cursor: pointer; }
+
+  /* ── GANTT TOOLBAR ─────────────────────────────── */
+  .gantt-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .label { font-size: 11px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.8px; }
+  .filter-chip {
+    padding: 3px 9px; border-radius: 10px; font-size: 11px;
+    border: 1px solid #1e2430; color: #8b949e; cursor: pointer;
+    background: transparent; font-family: inherit;
+  }
+  .filter-chip.active { background: #0d2137; border-color: #3de0c0; color: #3de0c0; }
+  .spacer { flex: 1; }
+  .zoom-btn {
+    padding: 4px 9px; border-radius: 5px; font-size: 11px;
+    background: #13171f; border: 1px solid #1e2430; color: #8b949e;
+    cursor: pointer; font-family: inherit;
+  }
+
+  /* ── GANTT GRID ────────────────────────────────── */
+  .gantt-wrap { overflow-x: auto; }
+  .gantt {
+    min-width: 900px; background: #0a0c10;
+    border: 1px solid #1e2430; border-radius: 8px; overflow: hidden;
+  }
+
+  .gantt-header {
+    display: grid; grid-template-columns: 240px repeat(10, 1fr);
+    border-bottom: 1px solid #1e2430; background: #111520;
+  }
+  .gantt-header-label {
+    padding: 7px 14px; font-size: 11px; color: #4a5568;
+    border-right: 1px solid #1e2430; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .gantt-week {
+    padding: 7px 6px; font-size: 10px; color: #4a5568; text-align: center;
+    border-right: 1px solid #13171f;
+  }
+  .gantt-week.current { color: #3de0c0; font-weight: 700; }
+
+  .gantt-row {
+    display: grid; grid-template-columns: 240px repeat(10, 1fr);
+    border-bottom: 1px solid #1e2430; align-items: stretch; min-height: 52px;
+  }
+  .gantt-row:last-child { border-bottom: none; }
+  .gantt-row:hover { background: #0d1017; }
+
+  .dream-label {
+    padding: 9px 14px; border-right: 1px solid #1e2430;
+    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+    position: relative;
+  }
+  .dream-top { display: flex; align-items: center; gap: 8px; }
+  .dream-name { font-size: 12px; color: #c9d1d9; font-weight: 600; }
+  .dream-bottom { display: flex; align-items: center; gap: 8px; }
+  .dream-cost { font-size: 10px; color: #4a5568; }
+  .dream-cost.over { color: #f85149; }
+  .dream-cost.under { color: #3de0c0; }
+
+  .gantt-cells { grid-column: 2 / 12; position: relative; display: flex; align-items: center; }
+
+  .stage-bar {
+    position: absolute; height: 28px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+    overflow: visible; white-space: nowrap; cursor: default;
+    transition: opacity 0.15s;
+  }
+  .stage-bar:hover { z-index: 10; filter: brightness(1.2); }
+
+  .stage-dream  { background: #2d1f5e; color: #a78bfa; border: 1px solid #4a3f80; }
+  .stage-plan   { background: #1e3a5a; color: #60a5fa; border: 1px solid #3a6090; }
+  .stage-work   { background: #1a4a2e; color: #4ade80; border: 1px solid #2a7040; }
+  .stage-ship   { background: #5a3a00; color: #fb923c; border: 1px solid #8a5a00; }
+  .stage-maint  { background: #1e2a4a; color: #818cf8; border: 1px solid #3a4a80; }
+  .stage-engage { background: #3a1a3a; color: #f472b6; border: 1px solid #6a2a6a; }
+
+  .stage-bar.in-progress { background-size: 200% 100%; animation: shimmer 2s infinite; }
+  .stage-work.in-progress { background: linear-gradient(90deg, #1a4a2e 0%, #2a6a3e 50%, #1a4a2e 100%); background-size: 200% 100%; }
+  .stage-plan.in-progress { background: linear-gradient(90deg, #1e3a5a 0%, #2e5a8a 50%, #1e3a5a 100%); background-size: 200% 100%; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  .stage-bar.upcoming { opacity: 0.35; }
+
+  /* Pencil on stage bars */
+  .stage-bar { position: absolute; }
+  .stage-wrap { position: absolute; }
+  .stage-wrap .edit-trigger { top: -10px; right: -4px; }
+
+  .today-line {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: #3de0c0; opacity: 0.6; pointer-events: none;
+  }
+  .today-line::after {
+    content: 'today'; position: absolute; top: -18px; left: -12px;
+    font-size: 9px; color: #3de0c0; white-space: nowrap;
+  }
+
+  /* ── LEGEND ────────────────────────────────────── */
+  .legend { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6a737d; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+  .legend-sep { color: #1e2430; }
+
+  /* ── AGENTS LEGEND ─────────────────────────────── */
+  .agents-legend { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+  .agent-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6a737d; }
+
+  /* ── SUMMARY ───────────────────────────────────── */
+  .summary-row { display: flex; gap: 10px; margin-top: 18px; }
+  .summary-card {
+    flex: 1; background: #0a0c10; border: 1px solid #1e2430;
+    border-radius: 7px; padding: 11px 13px; position: relative;
+  }
+  .summary-card .s-label { font-size: 10px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-card .s-value { font-size: 20px; font-weight: 700; color: #e6edf3; margin: 4px 0 2px; }
+  .summary-card .s-sub { font-size: 11px; color: #4a5568; }
+  .summary-card.teal .s-value { color: #3de0c0; }
+  .summary-card.blue .s-value { color: #60a5fa; }
+  .summary-card.orange .s-value { color: #fb923c; }
+  .summary-card.purple .s-value { color: #a78bfa; }
+  .wow-chip {
+    display: inline-block; margin-top: 4px;
+    background: #1a4a2e; color: #4ade80; border: 1px solid #2a6a3e;
+    border-radius: 10px; font-size: 10px; padding: 2px 8px;
+  }
+
+  /* Existing note chip */
+  .note-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #2d2500; border: 1px solid #5a4a00;
+    border-radius: 4px; font-size: 10px; color: #d4b800;
+    padding: 2px 6px; margin-top: 5px; cursor: pointer;
+  }
+  .note-chip:hover { background: #3d3000; }
+</style>
+</head>
+<body>
+
+<!-- NOTE MODAL OVERLAY -->
+<div class="note-modal-overlay" id="overlay" onclick="closeNote()"></div>
+
+<!-- NOTE EDITOR MODAL -->
+<div class="note-modal" id="noteModal">
+  <div class="note-modal-title" id="noteTarget">Note on <strong>BS-21 · Work stage</strong></div>
+  <textarea placeholder="Add a note, reminder, or instruction for the next Vizor run…" id="noteText"></textarea>
+  <div class="note-actions-row">
+    <span class="note-action-label">Action:</span>
+    <button class="action-chip" onclick="toggleAction(this)">↺ Redo stage</button>
+    <button class="action-chip" onclick="toggleAction(this)">⇄ Reassign agent</button>
+    <button class="action-chip" onclick="toggleAction(this)">⏸ Defer</button>
+  </div>
+  <div class="note-modal-footer">
+    <button class="btn-cancel" onclick="closeNote()">Cancel</button>
+    <button class="btn-save" onclick="closeNote()">Save note</button>
+  </div>
+</div>
+
+<h2>📅 Gantt — Dreams in flight</h2>
+<p class="subtitle">synlynk-core · 5 active Dreams · 10-week view · hover any element to annotate ✏</p>
+
+<!-- VIZOR FIRST-RUN PICKER -->
+<div class="onboard-banner">
+  <div class="sparkle">✦</div>
+  <div class="onboard-text">
+    <strong>Welcome to the Vizor.</strong>
+    <p>Choose your default landing view — change any time in ⚙ Settings.</p>
+  </div>
+  <div class="onboard-choices">
+    <button class="onboard-btn primary">📅 Gantt (Dreams + stages)</button>
+    <button class="onboard-btn secondary">🚇 Architect Map (tube map)</button>
+  </div>
+  <div class="onboard-dismiss" onclick="this.parentElement.style.display='none'">✕</div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="gantt-toolbar">
+  <span class="label">Filter:</span>
+  <button class="filter-chip active">All Dreams</button>
+  <button class="filter-chip">In Progress</button>
+  <button class="filter-chip">Blocked</button>
+  <button class="filter-chip">Ships soon</button>
+  <div class="spacer"></div>
+  <button class="zoom-btn">← 4w</button>
+  <button class="zoom-btn" style="border-color:#3de0c0;color:#3de0c0">10w ✓</button>
+  <button class="zoom-btn">26w →</button>
+</div>
+
+<!-- GANTT GRID -->
+<div class="gantt-wrap">
+<div class="gantt">
+
+  <div class="gantt-header">
+    <div class="gantt-header-label">Dream / Epic</div>
+    <div class="gantt-week">Jul W1</div>
+    <div class="gantt-week">Jul W2</div>
+    <div class="gantt-week current">Jul W3 ▾</div>
+    <div class="gantt-week">Jul W4</div>
+    <div class="gantt-week">Aug W1</div>
+    <div class="gantt-week">Aug W2</div>
+    <div class="gantt-week">Aug W3</div>
+    <div class="gantt-week">Aug W4</div>
+    <div class="gantt-week">Sep W1</div>
+    <div class="gantt-week">Sep W2</div>
+  </div>
+
+  <!-- Dream 1: BS-21 Vizor -->
+  <div class="gantt-row">
+    <div class="dream-label editable" onclick="openNote('BS-21 · Vizor')">
+      <div class="dream-top">
+        <div class="dream-name">BS-21 · Vizor</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-agy" title="Agy (Gemini)">A</div>
+          <div class="agent-avatar agent-codex" title="Codex (OpenAI)">Co</div>
+        </div>
+        <span class="dream-cost under">$4.20 / est $6</span>
+      </div>
+      <span class="edit-trigger">✏</span>
+    </div>
+    <div class="gantt-cells">
+      <div class="today-line" style="left:19%"></div>
+      <div class="stage-bar stage-dream editable" style="left:0%;width:10%" onclick="openNote('BS-21 · Dream stage')">✦ Dream<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-plan in-progress editable" style="left:10%;width:12%" onclick="openNote('BS-21 · Plan stage')">⊡ Plan<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-work upcoming editable" style="left:22%;width:30%" onclick="openNote('BS-21 · Work stage')">⚙ Work<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-ship upcoming editable" style="left:52%;width:10%" onclick="openNote('BS-21 · Ship stage')">▲ Ship<span class="edit-trigger">✏</span></div>
+    </div>
+  </div>
+
+  <!-- Dream 2: BS-20 Deep Scan -->
+  <div class="gantt-row">
+    <div class="dream-label editable" onclick="openNote('BS-20 · Deep Scan')">
+      <div class="dream-top">
+        <div class="dream-name">BS-20 · Deep Scan</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-codex" title="Codex (OpenAI)">Co</div>
+        </div>
+        <span class="dream-cost under">$11.40 / est $14</span>
+      </div>
+      <span class="edit-trigger">✏</span>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream editable" style="left:0%;width:8%;opacity:0.5" onclick="openNote('BS-20 · Dream stage')">✦<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-plan editable" style="left:8%;width:10%;opacity:0.5" onclick="openNote('BS-20 · Plan stage')">⊡<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-work in-progress editable" style="left:18%;width:24%" onclick="openNote('BS-20 · Work stage')">⚙ Work<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-ship upcoming editable" style="left:42%;width:10%" onclick="openNote('BS-20 · Ship stage')">▲ Ship<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-maint upcoming editable" style="left:52%;width:20%" onclick="openNote('BS-20 · Maintain stage')">↺ Maintain<span class="edit-trigger">✏</span></div>
+    </div>
+  </div>
+
+  <!-- Dream 3: v1.0 Community Layer -->
+  <div class="gantt-row">
+    <div class="dream-label editable" onclick="openNote('v1.0 · Community Layer')">
+      <div class="dream-top">
+        <div class="dream-name">v1.0 · Community Layer</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-agy" title="Agy (Gemini)">A</div>
+          <div class="agent-avatar agent-grok" title="Grok (xAI)">G</div>
+          <div class="agent-avatar agent-codex" title="Codex (OpenAI)">Co</div>
+        </div>
+        <span class="dream-cost" style="color:#4a5568">est $38 · not started</span>
+      </div>
+      <span class="edit-trigger">✏</span>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream upcoming editable" style="left:30%;width:10%" onclick="openNote('v1.0 · Dream stage')">✦ Dream<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-plan upcoming editable" style="left:40%;width:12%" onclick="openNote('v1.0 · Plan stage')">⊡ Plan<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-work upcoming editable" style="left:52%;width:30%" onclick="openNote('v1.0 · Work stage')">⚙ Work<span class="edit-trigger">✏</span></div>
+    </div>
+  </div>
+
+  <!-- Dream 4: BS-5 Website — has a note -->
+  <div class="gantt-row">
+    <div class="dream-label editable" onclick="openNote('BS-5 · Website Redesign')">
+      <div class="dream-top">
+        <div class="dream-name has-note">BS-5 · Website Redesign</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-agy" title="Agy (Gemini)">A</div>
+        </div>
+        <span class="dream-cost over">$9.80 / est $8 ↑</span>
+      </div>
+      <div class="note-chip" onclick="openNote('BS-5 · Website Redesign')">📌 1 note · ↺ redo?</div>
+      <span class="edit-trigger">✏</span>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream editable" style="left:0%;width:6%;opacity:0.4" onclick="openNote('BS-5 · Dream stage')">✦<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-plan editable" style="left:6%;width:8%;opacity:0.4" onclick="openNote('BS-5 · Plan stage')">⊡<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-work in-progress editable" style="left:14%;width:18%" onclick="openNote('BS-5 · Work stage')">⚙ Work<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-ship upcoming editable" style="left:32%;width:8%" onclick="openNote('BS-5 · Ship stage')">▲ Ship<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-engage upcoming editable" style="left:40%;width:14%" onclick="openNote('BS-5 · Engage stage')">♡ Engage<span class="edit-trigger">✏</span></div>
+    </div>
+  </div>
+
+  <!-- Dream 5: Module Extraction -->
+  <div class="gantt-row">
+    <div class="dream-label editable" onclick="openNote('Module Extraction')">
+      <div class="dream-top">
+        <div class="dream-name">Module Extraction</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-codex" title="Codex (OpenAI)">Co</div>
+        </div>
+        <span class="dream-cost under">$3.10 / est $5</span>
+      </div>
+      <span class="edit-trigger">✏</span>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream editable" style="left:0%;width:5%;opacity:0.4" onclick="openNote('Module Extraction · Dream stage')">✦<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-work in-progress editable" style="left:5%;width:14%" onclick="openNote('Module Extraction · Work stage')">⚙ Work<span class="edit-trigger">✏</span></div>
+      <div class="stage-bar stage-ship upcoming editable" style="left:19%;width:6%" onclick="openNote('Module Extraction · Ship stage')">▲<span class="edit-trigger">✏</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#2d1f5e;border:1px solid #4a3f80"></div>✦ Dream</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1e3a5a;border:1px solid #3a6090"></div>⊡ Plan</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a4a2e;border:1px solid #2a7040"></div>⚙ Work</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#5a3a00;border:1px solid #8a5a00"></div>▲ Ship</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1e2a4a;border:1px solid #3a4a80"></div>↺ Maintain</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3a1a3a;border:1px solid #6a2a6a"></div>♡ Engage</div>
+  <span class="legend-sep">|</span>
+  <div class="legend-item" style="opacity:0.5"><div class="legend-dot" style="background:#1a4a2e"></div>upcoming</div>
+  <div class="legend-item" style="font-style:italic; color:#3de0c0">~ animated = in progress</div>
+</div>
+
+<!-- AGENT LEGEND -->
+<div class="agents-legend">
+  <span class="label">Agents:</span>
+  <div class="agent-legend-item"><div class="agent-avatar agent-claude" title="Claude">C</div> Claude (Sonnet)</div>
+  <div class="agent-legend-item"><div class="agent-avatar agent-agy" title="Agy">A</div> Agy (Gemini)</div>
+  <div class="agent-legend-item"><div class="agent-avatar agent-codex" title="Codex">Co</div> Codex (OpenAI)</div>
+  <div class="agent-legend-item"><div class="agent-avatar agent-grok" title="Grok">G</div> Grok (xAI)</div>
+</div>
+
+<!-- SUMMARY CARDS -->
+<div class="summary-row">
+  <div class="summary-card teal editable" onclick="openNote('Dreams in flight summary')">
+    <div class="s-label">Dreams in flight</div>
+    <div class="s-value">5</div>
+    <div class="s-sub">across 2 workspaces</div>
+    <div class="wow-chip">⚡ 3 running in parallel</div>
+    <span class="edit-trigger">✏</span>
+  </div>
+  <div class="summary-card blue editable" onclick="openNote('Active agents summary')">
+    <div class="s-label">Active agents</div>
+    <div class="s-value">3</div>
+    <div class="s-sub">agy · codex · grok</div>
+    <div class="agent-stack" style="margin-top:6px">
+      <div class="agent-avatar agent-agy" title="Agy (Gemini)">A</div>
+      <div class="agent-avatar agent-codex" title="Codex">Co</div>
+      <div class="agent-avatar agent-grok" title="Grok">G</div>
+    </div>
+    <span class="edit-trigger">✏</span>
+  </div>
+  <div class="summary-card orange editable" onclick="openNote('Cost summary')">
+    <div class="s-label">Total spend · est</div>
+    <div class="s-value">$28.50</div>
+    <div class="s-sub">of ~$71 projected · 40% in</div>
+    <span class="edit-trigger">✏</span>
+  </div>
+  <div class="summary-card purple editable" onclick="openNote('Next ship date')">
+    <div class="s-label">Next ship date</div>
+    <div class="s-value">Jul 24</div>
+    <div class="s-sub">Module Extraction → main</div>
+    <span class="edit-trigger">✏</span>
+  </div>
+</div>
+
+<script>
+function openNote(target) {
+  document.getElementById('noteTarget').innerHTML = 'Note on <strong>' + target + '</strong>';
+  document.getElementById('noteText').value = '';
+  document.getElementById('noteModal').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('noteText').focus();
+  // Reset action chips
+  document.querySelectorAll('.action-chip').forEach(c => c.classList.remove('selected'));
+}
+function closeNote() {
+  document.getElementById('noteModal').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+function toggleAction(el) {
+  el.classList.toggle('selected');
+}
+</script>
+
+</body>
+</html>

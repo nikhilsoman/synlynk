@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Gantt view</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'JetBrains Mono', monospace; background: #0d0f14; color: #c9d1d9; font-size: 13px; padding: 20px; }
+
+  h2 { font-size: 15px; color: #e6edf3; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #4a5568; margin-bottom: 20px; }
+
+  /* ── FIRST-RUN PICKER ─────────────────────────── */
+  .onboard-banner {
+    background: #0d1f2d; border: 1px solid #1a4a6e;
+    border-radius: 8px; padding: 14px 18px;
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 22px;
+  }
+  .onboard-banner .sparkle { font-size: 20px; }
+  .onboard-text { flex: 1; }
+  .onboard-text strong { color: #3de0c0; font-size: 13px; }
+  .onboard-text p { font-size: 12px; color: #8b949e; margin-top: 2px; }
+  .onboard-choices { display: flex; gap: 8px; }
+  .onboard-btn {
+    padding: 7px 14px; border-radius: 6px; font-size: 12px;
+    font-family: inherit; cursor: pointer; border: 1px solid;
+  }
+  .onboard-btn.primary {
+    background: #0a3050; border-color: #3de0c0; color: #3de0c0;
+  }
+  .onboard-btn.secondary {
+    background: transparent; border-color: #1e2430; color: #8b949e;
+  }
+  .onboard-dismiss { color: #4a5568; font-size: 16px; cursor: pointer; margin-left: 4px; }
+
+  /* ── GANTT TOOLBAR ─────────────────────────────── */
+  .gantt-toolbar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .gantt-toolbar .label { font-size: 11px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.8px; }
+  .filter-chip {
+    padding: 4px 10px; border-radius: 12px; font-size: 11px;
+    border: 1px solid #1e2430; color: #8b949e; cursor: pointer; font-family: inherit;
+    background: transparent;
+  }
+  .filter-chip.active { background: #0d2137; border-color: #3de0c0; color: #3de0c0; }
+  .spacer { flex: 1; }
+  .zoom-btn {
+    padding: 4px 10px; border-radius: 5px; font-size: 11px;
+    background: #13171f; border: 1px solid #1e2430; color: #8b949e;
+    cursor: pointer; font-family: inherit;
+  }
+
+  /* ── GANTT GRID ────────────────────────────────── */
+  .gantt-wrap { overflow-x: auto; }
+  .gantt {
+    min-width: 900px;
+    background: #0a0c10; border: 1px solid #1e2430; border-radius: 8px;
+    overflow: hidden;
+  }
+
+  /* Header row: week labels */
+  .gantt-header {
+    display: grid;
+    grid-template-columns: 220px repeat(10, 1fr);
+    border-bottom: 1px solid #1e2430;
+    background: #111520;
+  }
+  .gantt-header-label {
+    padding: 8px 14px; font-size: 11px; color: #4a5568;
+    border-right: 1px solid #1e2430; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .gantt-week {
+    padding: 8px 6px; font-size: 10px; color: #4a5568; text-align: center;
+    border-right: 1px solid #13171f;
+  }
+  .gantt-week.current { color: #3de0c0; font-weight: 700; }
+
+  /* Dream rows */
+  .gantt-row {
+    display: grid;
+    grid-template-columns: 220px repeat(10, 1fr);
+    border-bottom: 1px solid #1e2430;
+    align-items: stretch;
+    min-height: 52px;
+  }
+  .gantt-row:last-child { border-bottom: none; }
+  .gantt-row:hover { background: #0d1017; }
+
+  .dream-label {
+    padding: 10px 14px; border-right: 1px solid #1e2430;
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  }
+  .dream-name { font-size: 12px; color: #c9d1d9; font-weight: 600; }
+  .dream-meta { display: flex; align-items: center; gap: 6px; }
+  .dream-agent {
+    font-size: 10px; color: #4a5568;
+    background: #13171f; border: 1px solid #1e2430;
+    border-radius: 4px; padding: 1px 5px;
+  }
+  .dream-cost { font-size: 10px; color: #4a5568; }
+  .dream-cost.over { color: #f85149; }
+  .dream-cost.under { color: #3de0c0; }
+
+  /* The bar cells — span multiple columns via inline style */
+  .gantt-cells {
+    grid-column: 2 / 12;
+    position: relative;
+    display: flex; align-items: center;
+  }
+
+  /* Stage blocks inside the bar area */
+  .stage-bar {
+    position: absolute;
+    height: 28px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+    overflow: hidden; white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .stage-bar:hover { opacity: 0.85; z-index: 10; }
+
+  /* Stage color palette — 6 cycles */
+  .stage-dream  { background: #2d1f5e; color: #a78bfa; border: 1px solid #4a3f80; }
+  .stage-plan   { background: #1e3a5a; color: #60a5fa; border: 1px solid #3a6090; }
+  .stage-work   { background: #1a4a2e; color: #4ade80; border: 1px solid #2a7040; }
+  .stage-ship   { background: #5a3a00; color: #fb923c; border: 1px solid #8a5a00; }
+  .stage-maint  { background: #1e2a4a; color: #818cf8; border: 1px solid #3a4a80; }
+  .stage-engage { background: #3a1a3a; color: #f472b6; border: 1px solid #6a2a6a; }
+
+  /* In-progress: animated shimmer */
+  .stage-bar.in-progress {
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+  .stage-work.in-progress {
+    background: linear-gradient(90deg, #1a4a2e 0%, #2a6a3e 50%, #1a4a2e 100%);
+    background-size: 200% 100%;
+  }
+  .stage-plan.in-progress {
+    background: linear-gradient(90deg, #1e3a5a 0%, #2e5a8a 50%, #1e3a5a 100%);
+    background-size: 200% 100%;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Upcoming: dimmed */
+  .stage-bar.upcoming { opacity: 0.35; }
+
+  /* Today line */
+  .today-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px; background: #3de0c0;
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  .today-line::after {
+    content: 'today';
+    position: absolute; top: -18px; left: -12px;
+    font-size: 9px; color: #3de0c0; white-space: nowrap;
+  }
+
+  /* ── LEGEND ────────────────────────────────────── */
+  .legend {
+    display: flex; align-items: center; gap: 14px;
+    margin-top: 14px; flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6a737d;
+  }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 3px;
+  }
+  .legend-sep { color: #1e2430; }
+
+  /* ── SUMMARY CARDS ─────────────────────────────── */
+  .summary-row {
+    display: flex; gap: 12px; margin-top: 20px;
+  }
+  .summary-card {
+    flex: 1; background: #0a0c10; border: 1px solid #1e2430;
+    border-radius: 7px; padding: 12px 14px;
+  }
+  .summary-card .s-label { font-size: 10px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-card .s-value { font-size: 22px; font-weight: 700; color: #e6edf3; margin: 5px 0 2px; }
+  .summary-card .s-sub { font-size: 11px; color: #4a5568; }
+  .summary-card.teal .s-value { color: #3de0c0; }
+  .summary-card.blue .s-value { color: #60a5fa; }
+  .summary-card.orange .s-value { color: #fb923c; }
+  .summary-card.purple .s-value { color: #a78bfa; }
+
+  .wow-chip {
+    display: inline-block; margin-top: 4px;
+    background: #1a4a2e; color: #4ade80; border: 1px solid #2a6a3e;
+    border-radius: 10px; font-size: 10px; padding: 2px 8px;
+  }
+
+  /* ── NOTE PANEL ────────────────────────────────── */
+  .note-panel {
+    margin-top: 20px; background: #2d2500; border: 1px solid #5a4a00;
+    border-radius: 7px; padding: 12px 14px;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .note-panel .pin { font-size: 16px; }
+  .note-panel .note-body { flex: 1; }
+  .note-panel .note-title { font-size: 11px; color: #d4b800; font-weight: 600; margin-bottom: 4px; }
+  .note-panel .note-text { font-size: 12px; color: #a08a00; line-height: 1.5; }
+  .note-add { color: #4a5568; font-size: 11px; cursor: pointer; padding: 3px 8px; border: 1px dashed #2a2010; border-radius: 4px; }
+  .note-add:hover { color: #d4b800; border-color: #5a4a00; }
+</style>
+</head>
+<body>
+
+<h2>📅 Gantt — Dreams in flight</h2>
+<p class="subtitle">synlynk-core workspace · 5 active Dreams across 3 repos · 10-week view</p>
+
+<!-- FIRST-RUN VIZOR SETUP BANNER -->
+<div class="onboard-banner">
+  <div class="sparkle">✦</div>
+  <div class="onboard-text">
+    <strong>Welcome to the Vizor.</strong>
+    <p>Choose your default landing view — you can always switch tabs or change this in settings.</p>
+  </div>
+  <div class="onboard-choices">
+    <button class="onboard-btn primary">📅 Gantt (Dreams + stages)</button>
+    <button class="onboard-btn secondary">🚇 Architect Map (tube map HLD)</button>
+  </div>
+  <div class="onboard-dismiss">✕</div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="gantt-toolbar">
+  <span class="label">Filter:</span>
+  <button class="filter-chip active">All Dreams</button>
+  <button class="filter-chip">In Progress</button>
+  <button class="filter-chip">Blocked</button>
+  <button class="filter-chip">Ship this week</button>
+  <div class="spacer"></div>
+  <button class="zoom-btn">← 4w</button>
+  <button class="zoom-btn" style="background:#13171f;border-color:#3de0c0;color:#3de0c0">10w</button>
+  <button class="zoom-btn">26w →</button>
+</div>
+
+<!-- GANTT GRID -->
+<div class="gantt-wrap">
+<div class="gantt">
+
+  <!-- Header -->
+  <div class="gantt-header">
+    <div class="gantt-header-label">Dream / Epic</div>
+    <div class="gantt-week">Jul W1</div>
+    <div class="gantt-week">Jul W2</div>
+    <div class="gantt-week current">Jul W3 ▾</div>
+    <div class="gantt-week">Jul W4</div>
+    <div class="gantt-week">Aug W1</div>
+    <div class="gantt-week">Aug W2</div>
+    <div class="gantt-week">Aug W3</div>
+    <div class="gantt-week">Aug W4</div>
+    <div class="gantt-week">Sep W1</div>
+    <div class="gantt-week">Sep W2</div>
+  </div>
+
+  <!-- Dream 1: BS-21 Vizor (this very feature!) -->
+  <div class="gantt-row">
+    <div class="dream-label">
+      <div class="dream-name">BS-21 · Vizor</div>
+      <div class="dream-meta">
+        <span class="dream-agent">agy</span>
+        <span class="dream-agent">codex</span>
+        <span class="dream-cost under">$4.20 / est $6</span>
+      </div>
+    </div>
+    <div class="gantt-cells" style="position:relative">
+      <div class="today-line" style="left:19%"></div>
+      <!-- Dream stage: W1 -->
+      <div class="stage-bar stage-dream" style="left:0%;width:10%">✦ Dream</div>
+      <!-- Plan: W1 end -->
+      <div class="stage-bar stage-plan in-progress" style="left:10%;width:12%">⊡ Plan</div>
+      <!-- Work: W2-W4 (upcoming) -->
+      <div class="stage-bar stage-work upcoming" style="left:22%;width:30%">⚙ Work</div>
+      <!-- Ship: Aug W1 -->
+      <div class="stage-bar stage-ship upcoming" style="left:52%;width:10%">▲ Ship</div>
+    </div>
+  </div>
+
+  <!-- Dream 2: BS-20 Deep Scan -->
+  <div class="gantt-row">
+    <div class="dream-label">
+      <div class="dream-name">BS-20 · Deep Scan</div>
+      <div class="dream-meta">
+        <span class="dream-agent">codex</span>
+        <span class="dream-cost under">$11.40 / est $14</span>
+      </div>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream" style="left:0%;width:8%;opacity:0.5">✦</div>
+      <div class="stage-bar stage-plan" style="left:8%;width:10%;opacity:0.5">⊡</div>
+      <div class="stage-bar stage-work in-progress" style="left:18%;width:24%">⚙ Work</div>
+      <div class="stage-bar stage-ship upcoming" style="left:42%;width:10%">▲ Ship</div>
+      <div class="stage-bar stage-maint upcoming" style="left:52%;width:20%">↺ Maintain</div>
+    </div>
+  </div>
+
+  <!-- Dream 3: v1.0 Community Layer -->
+  <div class="gantt-row">
+    <div class="dream-label">
+      <div class="dream-name">v1.0 · Community Layer</div>
+      <div class="dream-meta">
+        <span class="dream-agent">agy</span>
+        <span class="dream-agent">grok</span>
+        <span class="dream-agent">codex</span>
+        <span class="dream-cost" style="color:#4a5568">est $38 · not started</span>
+      </div>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream upcoming" style="left:30%;width:10%">✦ Dream</div>
+      <div class="stage-bar stage-plan upcoming" style="left:40%;width:12%">⊡ Plan</div>
+      <div class="stage-bar stage-work upcoming" style="left:52%;width:30%">⚙ Work</div>
+    </div>
+  </div>
+
+  <!-- Dream 4: BS-5 Website -->
+  <div class="gantt-row">
+    <div class="dream-label">
+      <div class="dream-name">BS-5 · Website Redesign</div>
+      <div class="dream-meta">
+        <span class="dream-agent">agy</span>
+        <span class="dream-cost over">$9.80 / est $8 ↑</span>
+      </div>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream" style="left:0%;width:6%;opacity:0.4">✦</div>
+      <div class="stage-bar stage-plan" style="left:6%;width:8%;opacity:0.4">⊡</div>
+      <div class="stage-bar stage-work in-progress" style="left:14%;width:18%">⚙ Work</div>
+      <div class="stage-bar stage-ship upcoming" style="left:32%;width:8%">▲ Ship</div>
+      <div class="stage-bar stage-engage upcoming" style="left:40%;width:14%">♡ Engage</div>
+    </div>
+  </div>
+
+  <!-- Dream 5: Module Extraction Refactor -->
+  <div class="gantt-row">
+    <div class="dream-label">
+      <div class="dream-name">Module Extraction</div>
+      <div class="dream-meta">
+        <span class="dream-agent">codex</span>
+        <span class="dream-cost under">$3.10 / est $5</span>
+      </div>
+    </div>
+    <div class="gantt-cells">
+      <div class="stage-bar stage-dream" style="left:0%;width:5%;opacity:0.4">✦</div>
+      <div class="stage-bar stage-work in-progress" style="left:5%;width:14%">⚙ Work</div>
+      <div class="stage-bar stage-ship upcoming" style="left:19%;width:6%">▲ Ship</div>
+    </div>
+  </div>
+
+</div><!-- /gantt -->
+</div><!-- /wrap -->
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#2d1f5e;border:1px solid #4a3f80"></div>✦ Dream</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1e3a5a;border:1px solid #3a6090"></div>⊡ Plan</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a4a2e;border:1px solid #2a7040"></div>⚙ Work</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#5a3a00;border:1px solid #8a5a00"></div>▲ Ship</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1e2a4a;border:1px solid #3a4a80"></div>↺ Maintain</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3a1a3a;border:1px solid #6a2a6a"></div>♡ Engage</div>
+  <span class="legend-sep">|</span>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a4a2e;border:1px dashed #2a7040;opacity:0.4"></div>upcoming</div>
+  <div class="legend-item" style="font-style:italic">animated = in progress</div>
+</div>
+
+<!-- SUMMARY CARDS -->
+<div class="summary-row">
+  <div class="summary-card teal">
+    <div class="s-label">Dreams in flight</div>
+    <div class="s-value">5</div>
+    <div class="s-sub">across 2 workspaces</div>
+    <span class="wow-chip">⚡ 3 running in parallel</span>
+  </div>
+  <div class="summary-card blue">
+    <div class="s-label">Active agents</div>
+    <div class="s-value">3</div>
+    <div class="s-sub">agy · codex · grok</div>
+  </div>
+  <div class="summary-card orange">
+    <div class="s-label">Total spend · est</div>
+    <div class="s-value">$28.50</div>
+    <div class="s-sub">of ~$71 projected · 40% in</div>
+  </div>
+  <div class="summary-card purple">
+    <div class="s-label">Next ship date</div>
+    <div class="s-value">Jul 24</div>
+    <div class="s-sub">Module Extraction → main</div>
+  </div>
+</div>
+
+<!-- STICKY NOTE -->
+<div class="note-panel">
+  <div class="pin">📌</div>
+  <div class="note-body">
+    <div class="note-title">Note on BS-5 cost overrun — 2026-07-03</div>
+    <div class="note-text">Website CSS pass took 2 extra Agy sessions — template was more complex than scanned. Check if scan-delta on next BS-20 deep scan catches template complexity. May need to adjust effort estimate formula.</div>
+  </div>
+  <button class="note-add">+ add note</button>
+</div>
+
+</body>
+</html>
