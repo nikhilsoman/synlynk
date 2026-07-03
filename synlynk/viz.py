@@ -2,11 +2,14 @@
 import http.server
 import json
 import os
+import re
 import subprocess
 import threading
 import time
 import webbrowser
 from typing import Optional
+
+from synlynk import _get_db
 
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
@@ -16,7 +19,391 @@ DEFAULT_PORT = 8721
 
 
 def generate_viz_data() -> dict:
-    raise NotImplementedError  # Task 2
+    def _ts() -> str:
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    def _workspace_name() -> str:
+        try:
+            with open(".synlynk/config.json") as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+        return config.get("project_name") or os.path.basename(os.getcwd()) or "workspace"
+
+    def _base_data() -> dict:
+        return {
+            "workspace": {"name": _workspace_name(), "updated_at": _ts()},
+            "dreams": [],
+            "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
+            "agents": {},
+            "tube_config": _load_json_optional(VIZ_TUBE_PATH, default=None),
+            "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
+        }
+
+    def _minimal_data() -> dict:
+        data = _base_data()
+        data["telemetry"] = {"recent": [], "sentinel_alerts": []}
+        data["journeys"] = []
+        return data
+
+    def _load_json_optional(path: str, default):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            return default
+
+    def _normalize_stage(name: str) -> str:
+        key = (name or "").strip().lower()
+        aliases = {
+            "design": "design",
+            "plan": "plan",
+            "build": "build",
+            "ship": "ship",
+            "sustain": "sustain",
+        }
+        return aliases.get(key, key)
+
+    def _looks_like_stage_label(name: str) -> bool:
+        return _normalize_stage(name) in {"design", "plan", "build", "ship", "sustain"}
+
+    def _empty_agent_bucket() -> dict:
+        return {
+            "tasks_done": 0,
+            "tasks_active": 0,
+            "total_usd": 0.0,
+            "success_rate": 0.0,
+            "alert_count": 0,
+        }
+
+    def _read_support_files() -> dict:
+        data = _base_data()
+        data["telemetry"] = {
+            "recent": _load_recent_telemetry(),
+            "sentinel_alerts": _load_sentinel_alerts(),
+        }
+        data["journeys"] = _load_journeys()
+        return data
+
+    def _load_recent_telemetry() -> list:
+        try:
+            with open(".synlynk/telemetry.json") as f:
+                rows = json.load(f)
+        except Exception:
+            return []
+        if not isinstance(rows, list):
+            return []
+        recent = []
+        for row in rows[-20:]:
+            if not isinstance(row, dict):
+                continue
+            recent.append({
+                "ts": row.get("ts") or row.get("timestamp") or "",
+                "agent": row.get("agent") or "",
+                "duration_s": float(row.get("duration_s") or 0.0),
+                "exit_code": int(row.get("exit_code") or 0),
+                "cost_usd": float(row.get("cost_usd") or 0.0),
+            })
+        return recent
+
+    def _load_sentinel_alerts() -> list:
+        sentinel_path = ".synlynk/sentinel.md"
+        if not os.path.exists(sentinel_path):
+            return []
+        alerts = []
+        pattern = re.compile(
+            r"^\-\s*(?:\[(?P<severity>[A-Z]+)\]\s*)?\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?)\]\s*(?P<pattern>[A-Z_]+):"
+        )
+        try:
+            with open(sentinel_path) as f:
+                for line in f:
+                    text = line.strip()
+                    m = pattern.match(text)
+                    if not m:
+                        continue
+                    alerts.append({
+                        "ts": m.group("ts"),
+                        "pattern": m.group("pattern"),
+                        "severity": m.group("severity") or "WARNING",
+                        "resolved": "[RESOLVED]" in text,
+                    })
+        except Exception:
+            return []
+        return alerts
+
+    def _load_journeys() -> list:
+        journeys_dir = os.path.join("docs", "journeys")
+        if not os.path.isdir(journeys_dir):
+            return []
+        journeys = []
+        for filename in sorted(os.listdir(journeys_dir)):
+            if not filename.endswith(".md"):
+                continue
+            path = os.path.join(journeys_dir, filename)
+            try:
+                with open(path) as f:
+                    lines = f.read().splitlines()
+            except Exception:
+                continue
+            name = None
+            current_step = None
+            steps = []
+            for line in lines:
+                if name is None and line.startswith("# "):
+                    name = line[2:].strip()
+                    continue
+                if line.startswith("## "):
+                    if current_step:
+                        steps.append(current_step)
+                    current_step = {
+                        "screen": line[3:].strip(),
+                        "route": "",
+                        "desc": "",
+                        "agent": "",
+                        "stage": "",
+                    }
+                    continue
+                if current_step and ":" in line:
+                    key, _, value = line.partition(":")
+                    key = key.strip().lower()
+                    value = value.strip()
+                    if key in current_step:
+                        current_step[key] = value
+            if current_step:
+                steps.append(current_step)
+            if name is not None:
+                journeys.append({"id": os.path.splitext(filename)[0], "name": name, "steps": steps})
+        return journeys
+
+    def _get_latest_capability_agent(conn, story_id: str) -> str:
+        try:
+            row = conn.execute(
+                "SELECT agent FROM capability_ratings WHERE story_id=? ORDER BY ts DESC, id DESC LIMIT 1",
+                (story_id,),
+            ).fetchone()
+        except Exception:
+            return ""
+        return row[0] if row and row[0] else ""
+
+    def _story_cost_actual(conn, story_id: str) -> float:
+        try:
+            rows = conn.execute(
+                "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries WHERE notes LIKE ?",
+                (f"%{story_id}%",),
+            ).fetchone()
+        except Exception:
+            return 0.0
+        return float(rows[0] or 0.0) if rows else 0.0
+
+    def _dream_cost_actual(conn, dream_id: str) -> float:
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries WHERE notes LIKE ?",
+                (f"%{dream_id}%",),
+            ).fetchone()
+        except Exception:
+            return 0.0
+        return float(row[0] or 0.0) if row else 0.0
+
+    def _story_cost_est(tokens) -> Optional[float]:
+        if tokens is None:
+            return None
+        try:
+            return float(tokens) / 1000.0 * 0.003
+        except Exception:
+            return None
+
+    def _stage_order_key(row) -> int:
+        try:
+            return int(row[0])
+        except Exception:
+            return 0
+
+    try:
+        conn = _get_db()
+    except Exception:
+        return _minimal_data()
+
+    try:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return _minimal_data()
+
+    required_tables = {"roadmap_arcs", "roadmap_phases", "stories", "cost_entries"}
+    if not required_tables.issubset(tables):
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return _minimal_data()
+
+    data = _read_support_files()
+    by_agent = {name: 0.0 for name in ("claude", "agy", "codex", "grok")}
+    by_stage = {name: 0.0 for name in ("design", "plan", "build", "ship", "sustain")}
+    agents = {}
+    agent_runs = {}
+
+    try:
+        arc_rows = conn.execute(
+            "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id"
+        ).fetchall()
+        phase_rows = conn.execute(
+            "SELECT id, arc_version, phase_title, status, priority, story_id, notes "
+            "FROM roadmap_phases ORDER BY arc_version, id"
+        ).fetchall()
+        story_rows = conn.execute(
+            "SELECT story_id, title, status, phase, estimated_tokens FROM stories ORDER BY id"
+        ).fetchall()
+        cost_rows = conn.execute(
+            "SELECT session_date, agent, total_cost_usd, notes FROM cost_entries ORDER BY id"
+        ).fetchall()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return _minimal_data()
+
+    stories_by_id = {}
+    stories_by_phase = {}
+    for story_id, title, status, phase, estimated_tokens in story_rows:
+        story = {
+            "id": story_id,
+            "name": title or "",
+            "agent": phase or "",
+            "status": status or "open",
+            "cost_est": _story_cost_est(estimated_tokens),
+            "cost_actual": 0.0,
+            "note": data["notes"].get(story_id) if isinstance(data["notes"], dict) else None,
+        }
+        stories_by_id[story_id] = story
+        stories_by_phase.setdefault((phase or "").strip().lower(), []).append(story)
+
+    for row in cost_rows:
+        agent = row[1] or ""
+        amount = float(row[2] or 0.0)
+        notes = row[3] or ""
+        if agent:
+            by_agent.setdefault(agent, 0.0)
+            by_agent[agent] += amount
+            agents.setdefault(agent, _empty_agent_bucket())
+        for story_id, story in stories_by_id.items():
+            if story_id and story_id in notes:
+                story["cost_actual"] += amount
+
+    for agent in list(by_agent):
+        agents.setdefault(agent, _empty_agent_bucket())
+        agents[agent]["total_usd"] = float(by_agent.get(agent, 0.0))
+
+    for row in data["telemetry"]["recent"]:
+        agent = row.get("agent") or ""
+        if not agent:
+            continue
+        agent_runs.setdefault(agent, {"ok": 0, "total": 0})
+        agent_runs[agent]["total"] += 1
+        if int(row.get("exit_code") or 0) == 0:
+            agent_runs[agent]["ok"] += 1
+        agents.setdefault(agent, _empty_agent_bucket())
+
+    for alert in data["telemetry"]["sentinel_alerts"]:
+        alert_line = ""
+        if isinstance(alert, dict):
+            alert_line = f"{alert.get('pattern', '')} {alert.get('ts', '')}"
+        for agent in list(agents):
+            if agent and agent.lower() in alert_line.lower():
+                agents[agent]["alert_count"] += 1
+
+    for story in stories_by_id.values():
+        agent = story["agent"] or _get_latest_capability_agent(conn, story["id"])
+        if agent and not _looks_like_stage_label(agent):
+            agents.setdefault(agent, _empty_agent_bucket())
+            if story["status"] == "done":
+                agents[agent]["tasks_done"] += 1
+            elif story["status"] in ("active", "open"):
+                agents[agent]["tasks_active"] += 1
+
+    for agent, run_stats in agent_runs.items():
+        agents.setdefault(agent, _empty_agent_bucket())
+        total = run_stats["total"]
+        agents[agent]["success_rate"] = (run_stats["ok"] / total) if total else 0.0
+
+    dreams = []
+    for arc in arc_rows:
+        dream_id, dream_name, dream_status, _target_date, _notes = arc
+        stage_rows = [row for row in phase_rows if row[1] == dream_id]
+        stage_count = len(stage_rows)
+        dream_stages = []
+        dream_tasks_cost_actual = 0.0
+        dream_tasks_cost_est = 0.0
+        for index, phase_row in enumerate(stage_rows):
+            _phase_id, _arc_version, phase_title, phase_status, _priority, story_id, notes = phase_row
+            agent_list = []
+            for match in re.findall(r"\bagent:([a-z,]+)\b", notes or ""):
+                agent_list.extend([agent for agent in match.split(",") if agent])
+            phase_key = (phase_title or "").strip()
+            matched_tasks = []
+            if story_id and story_id in stories_by_id:
+                matched_tasks.append(stories_by_id[story_id])
+            matched_tasks.extend(stories_by_phase.get(phase_key.lower(), []))
+            deduped_tasks = []
+            seen_task_ids = set()
+            for task in matched_tasks:
+                if task["id"] in seen_task_ids:
+                    continue
+                seen_task_ids.add(task["id"])
+                deduped_tasks.append(task)
+            stage_cost_actual = sum(float(task["cost_actual"] or 0.0) for task in deduped_tasks)
+            stage_cost_est = sum(float(task["cost_est"] or 0.0) for task in deduped_tasks) or None
+            dream_tasks_cost_actual += stage_cost_actual
+            if stage_cost_est is not None:
+                dream_tasks_cost_est += stage_cost_est
+            for task in deduped_tasks:
+                if task["agent"] and not _looks_like_stage_label(task["agent"]):
+                    agent_list.append(task["agent"])
+            dream_stages.append({
+                "key": phase_key,
+                "status": phase_status or "planned",
+                "agents": sorted(dict.fromkeys(agent_list)),
+                "start_frac": (index / stage_count) if stage_count else 0.0,
+                "width_frac": (1.0 / stage_count) if stage_count else 1.0,
+                "cost_actual": stage_cost_actual or None,
+                "cost_est": stage_cost_est,
+                "tasks": deduped_tasks,
+            })
+            if phase_key.lower() in by_stage:
+                by_stage[phase_key.lower()] += stage_cost_actual
+        dream_cost_actual = _dream_cost_actual(conn, dream_id)
+        dreams.append({
+            "id": dream_id,
+            "name": dream_name or "",
+            "status": dream_status or "planned",
+            "cost_total": float(dream_cost_actual),
+            "cost_est": dream_tasks_cost_est or None,
+            "stages": dream_stages,
+        })
+
+    data["dreams"] = dreams
+    data["costs"] = {
+        "total_usd": float(sum(float(row[2] or 0.0) for row in cost_rows)),
+        "by_agent": by_agent,
+        "by_stage": by_stage,
+    }
+    data["agents"] = agents
+
+    try:
+        conn.close()
+    except Exception:
+        pass
+    return data
 
 
 def generate_index_html(data: dict, port: int) -> str:
