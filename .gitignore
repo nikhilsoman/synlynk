@@ -1,5 +1,7 @@
 .superpowers/
 .synlynk/
+.synlynk/viz-cache/
+.synlynk/viz-meta.json
 __pycache__/
 *.pyc
 .DS_Store

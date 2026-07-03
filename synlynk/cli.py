@@ -59,6 +59,7 @@ def main() -> None:
         upgrade,
         wizard_init,
     )
+    from synlynk.viz import cmd_viz
     _reconcile_jobs()
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
@@ -362,6 +363,18 @@ def main() -> None:
     release_parser.add_argument('--version', help='Explicit version string e.g. 0.11.0')
     release_parser.add_argument('--minor', action='store_true', help='Bump minor instead of patch')
 
+    viz_parser = subparsers.add_parser("viz", help="Open local browser workspace dashboard")
+    viz_parser.add_argument("--serve", action="store_true",
+                            help="Start background server (stable port)")
+    viz_parser.add_argument("--generate", action="store_true",
+                            help="Generate views without opening browser")
+    viz_parser.add_argument("--open", action="store_true",
+                            help="Open existing cache in browser")
+    viz_parser.add_argument("--stop", action="store_true",
+                            help="Stop background server")
+    viz_parser.add_argument("--port", type=int, default=None,
+                            help="Override port (default: 8721)")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -546,6 +559,8 @@ def main() -> None:
             version=getattr(args, "version", None),
             minor=getattr(args, "minor", False),
         )
+    elif args.command == "viz":
+        cmd_viz(args)
     elif args.command == "exit":
         sys.exit(cmd_exit(dry_run=not args.confirm, remove_docs=args.remove_docs))
     elif args.command == "repair":
