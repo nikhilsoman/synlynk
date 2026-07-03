@@ -11,17 +11,36 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.10.0] - 2026-07-01
+## [0.10.0] - 2026-07-03
 
-**Release pitch:** synlynk now ships as a proper Python package, walks you through first-time setup with a terminal wizard, and keeps all project state in SQLite so agents stop fighting over markdown files.
+**Release pitch:** synlynk v0.10.0 is the Developer Preview — install it via pipx, set up your workspace in 60 seconds with the terminal wizard, and get a live browser dashboard that shows exactly what your agent team is doing.
 
 ### Added
+
+**FTUE + Onboarding**
 - **`synlynk init --wizard`** — FTUE typeform-style TUI wizard (6 screens: home harness detection, workspace topology, skills scan, agent fleet, role assignment, launch cheat sheet). Mandatory Phase 0 silent scan; writes workspace config, state.db, and role blocks into each agent's directive file. Ctrl-C before completion leaves no state.
 - **`synlynk scan`** — re-runnable repo analysis: detects topology (single/mono/multi), fingerprints stack per repo/package via 14 file-presence heuristics, parses CLAUDE.md/GEMINI.md/AGENTS.md, maps to workspace in state.db, regenerates structured context.md. Flags: `--refresh`, `--add <path>`, `--remove <path>`, `--dry-run`.
+- **`synlynk launch`** — FTUE task picker TUI with 6-cycle SDLC view (Dream · Plan · Work · Ship · Maintain · Engage); 12 scan-triggered launch templates (3 core + 9 stack-aware); dispatch preview screen; `synlynk open` replaces old `synlynk launch <agent>` for direct agent open. (BS-19, PR #94)
+- **`synlynk roles`** — print current agent role table from `.synlynk/config.json`; `synlynk init` and `synlynk doctor` now generate per-agent directive role blocks (`## Your Role` in CLAUDE.md, GEMINI.md, AGENTS.md). (BS-12a, PR #95)
+
+**State + Migration**
 - **`synlynk migrate`** — one-shot atomic import of `project-docs/` markdown into state.db (8 steps: import → copy to `.synlynk/project-docs/` → `git rm` → `.gitignore` → sentinel → commit). After migration, every DB write immediately mirrors to `.synlynk/project-docs/` as a local backup (write-through). Flags: `--dry-run`, `--recover` (re-import from backup after DB loss), `--setup-dr` (configure cloud-synced DR folder).
 - **`synlynk memory add`** / **`synlynk devlog append`** — write memory entries and devlog sessions to state.db with immediate flat-file write-through.
 - **5 new state.db tables**: `memory_entries`, `roadmap_arcs`, `roadmap_phases`, `cost_entries`, `devlog_entries`; `gh_issue` column on `stories`.
 - **DR sync** — configurable `dr_sync_path` in `.synlynk/config.json`; every write-through copy is also synced to a cloud-synced local folder (iCloud/GDrive/OneDrive). No OAuth, no new deps.
+
+**Deep Scan**
+- **`synlynk scan` (deep mode)** — 6-stage pipeline: repo fingerprint, dependency graph, test coverage ratio, doc coverage, CI health, churn density. Stage Cards TUI with progress indicators; scan fences written to state.db; `synlynk launch` templates upgrade automatically from scan signal data. 6 new scan fields: `test_ratio`, `readme_word_count`, `has_ci`, `has_docs`, `has_type_hints`, `has_orm`. (BS-20, PR #96)
+
+**Daily-Driver Commands**
+- **`synlynk jobs --summary <id>`** — after every job closes, print structured summary: files touched, exit status, cost, tokens, duration; append to `.synlynk/logs/<job_id>.summary`; readable via `synlynk jobs --summary <id>`. (PR #97)
+- **`synlynk release`** — Ship cycle stub: bump VERSION, generate CHANGELOG entry from merged stories since last tag, write blog post stub in `docs/blog/`; `--dry-run` previews without writing. (PR #98)
+- **`synlynk status --platform`** — infrastructure health view: harness compliance (last probe, any DRIFT sentinels), agent availability table (installed/version/TC status), budget pulse (daily/weekly burn rate). (PR #99)
+
+**Browser Dashboard**
+- **`synlynk viz`** — 5-view local browser dashboard generated from `state.db`, served at `http://localhost:8721`. Views: Gantt (accordion drill-down, stage bars, pencil notes), User Journeys (split-pane, `docs/journeys/*.md`), Architect Map (tube map SVG from `vizor-tube.json`), Effort & Cost (SVG bar charts), Efficiency (agent report cards + sentinel timeline). Sticky note system: `POST /note` → `viz-notes.json` → injected into `generate_context()` (visual annotation → AI context loop). Live JS polling + browser notifications. Zero new deps. (BS-21, PR #101)
+
+**Packaging**
 - **pipx packaging** — `pyproject.toml` with `[project.scripts]` entry point; VERSION is the single source of truth in `synlynk/__init__.py` (pyproject.toml reads it via dynamic attr). Install via `pipx install git+https://github.com/nikhilsoman/synlynk`.
 - **`_detect_install_type()`** — detects pipx vs pip vs script install; `synlynk upgrade` routes to `pipx upgrade synlynk` when installed via pipx.
 
@@ -29,10 +48,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`generate_context()`** routes to `_generate_context_from_db()` when `.synlynk/.synlynk_migrated` sentinel is present; reads from state.db (top story, recent devlog entries, recent memory sections).
 - **`install.sh`** derives VERSION dynamically from `synlynk/__init__.py` instead of hardcoding.
 - **Python requirement** raised from 3.8+ to 3.9+.
-- README fully overhauled: pipx install, badge strip, wizard-first 60-second quickstart, state.db architecture, 5 new commands documented, corrected roadmap.
+- **Refactor:** `main()` extracted to `synlynk/cli.py`; data-layer functions extracted to `synlynk/db.py`. Single-file `bin/synlynk.py` is now a thin dispatcher.
+- README fully overhauled: pipx install, badge strip, wizard-first 60-second quickstart, state.db architecture, all new commands documented.
 
 ### Tests
-- 623 tests (up from 588 at v0.9.8); 28 new migrate tests including full E2E round-trip; 7 packaging tests.
+- **747 tests** (up from 588 at v0.9.8); 28 new migrate tests, 28 launch/FTUE tests, 21 Vizor tests, 7 packaging tests, 40 deep-scan tests, full E2E round-trips.
 
 ---
 
