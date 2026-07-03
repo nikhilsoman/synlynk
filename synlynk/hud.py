@@ -314,29 +314,45 @@ class LiveRenderer:
         HUDRenderer(self.buf).render_narrow_warning(cols)
 
     def render(self, active_jobs: list, show_all: bool) -> None:
+        """Render full --live frame into buf. Call buf.flush() to emit."""
         self.buf.clear()
-        self.buf.set_line(
-            0,
-            f"\033[38;5;208m◉ synlynk watch --live{RESET}   {DIM}3s refresh  [q]quit [r]refresh [a]all cycles{RESET}",
-        )
-        row = 2
+        rows, cols = self.buf.rows, self.buf.cols
+        row = 0
+
+        # Header
+        hint = "[q]quit  [r]refresh  [a]all cycles"
+        title = f"\033[38;5;208m◉ synlynk watch --live{RESET}"
+        self.buf.set_line(row, f"{title}   {DIM}3s refresh  {hint}{RESET}")
+        row += 1
+        self.buf.set_line(row, "")
+        row += 1
+
         if not active_jobs:
-            self.buf.set_line(row, f"{DIM}no active jobs{RESET}")
+            self.buf.set_line(row, f"  {DIM}no active jobs{RESET}")
             if not show_all:
-                self.buf.set_line(row + 1, f"{DIM}[a] show all cycles  ·  synlynk watch for full HUD{RESET}")
+                self.buf.set_line(row + 1,
+                    f"  {DIM}[a] show all cycles  ·  synlynk watch for full HUD{RESET}")
         else:
             for job in active_jobs:
-                color = CYCLE_COLOURS.get(job.get("cycle", "work"), RESET)
                 elapsed = job.get("elapsed_s", 0)
                 mins, secs = divmod(elapsed, 60)
                 elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
-                self.buf.set_line(row, f"{color}┌ {BOLD}{job.get('agent', '—')}{RESET}")
-                self.buf.set_line(row + 1, f"│ {job.get('task', '—')}")
-                self.buf.set_line(
-                    row + 2,
-                    f"{DIM}│ {job.get('cycle', 'work')}  ·  {elapsed_str}  ·  {job.get('status', '—')}{RESET}",
-                )
-                self.buf.set_line(row + 3, f"{color}└{'─' * 24}{RESET}")
+                cycle_c = CYCLE_COLOURS.get(job.get("cycle", "work"), RESET)
+
+                self.buf.set_line(row,
+                    f"  {cycle_c}┌ {BOLD}{job['agent']}{RESET}{cycle_c} {'─' * 50}{RESET}")
+                self.buf.set_line(row + 1,
+                    f"  │ {job.get('task', '—')}")
+                self.buf.set_line(row + 2,
+                    f"  │ {DIM}cycle: {job.get('cycle','work')}  ·  {elapsed_str}  ·  {job.get('status','—')}{RESET}")
+                self.buf.set_line(row + 3,
+                    f"  {cycle_c}└{'─' * 52}{RESET}")
                 row += 5
-        self.buf.set_line(self.buf.rows - 2, f"{DIM}{len(active_jobs)} running{RESET}")
-        self.buf.set_line(self.buf.rows - 1, f"{DIM}synlynk watch for full workspace HUD{RESET}")
+
+        # Footer
+        n = len(active_jobs)
+        footer = (f"  {DIM}{n} running  ·  refreshed just now{RESET}"
+                  if n else f"  {DIM}0 running  ·  refreshed just now{RESET}")
+        self.buf.set_line(rows - 2, footer)
+        self.buf.set_line(rows - 1,
+            f"  {DIM}synlynk watch for full workspace HUD{RESET}")
