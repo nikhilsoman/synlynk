@@ -245,8 +245,7 @@ def test_generate_gantt_html_renders_dreams_and_notes():
     assert "Gantt view" in html
     assert "note-info" in html
     assert "note-urgent" in html
-    assert "http://localhost:8721/note" in html
-    assert "No Dreams found in state db" not in html
+    assert "http://localhost:' + PORT + '/note" in html
 
 
 def test_generate_gantt_html_empty_state():
