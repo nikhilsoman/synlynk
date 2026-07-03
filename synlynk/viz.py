@@ -121,8 +121,12 @@ def generate_viz_data() -> dict:
         }
         return aliases.get(key, key)
 
+    _KNOWN_AGENTS = {"claude", "agy", "codex", "grok"}
+
     def _looks_like_stage_label(name: str) -> bool:
-        return _normalize_stage(name) in {"design", "plan", "build", "ship", "sustain"}
+        # Reject anything that isn't a known agent name — stories.phase is repurposed
+        # and often contains stage labels, arc versions, or roadmap cluster names
+        return name.lower().strip() not in _KNOWN_AGENTS
 
     def _empty_agent_bucket() -> dict:
         return {
@@ -2236,7 +2240,11 @@ body {
 </head>
 <body>
 
-<div id="app-container" style="height: 100vh; width: 100vw; display: flex; flex-direction: column;"></div>
+<header style="height:44px;padding:0 20px;display:flex;align-items:center;gap:20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;font-size:13px;font-family:inherit">
+  <span style="font-weight:700;color:var(--text)">🗺 User Journeys</span>
+  <span style="color:var(--text3)">Screen-by-screen flows from docs/journeys/</span>
+</header>
+<div id="app-container" style="height: calc(100vh - 44px); width: 100vw; display: flex; flex-direction: column;"></div>
 
 <script>
 window.VIZOR_DATA = {{data_json}};
@@ -2540,6 +2548,10 @@ def generate_effort_html(data: dict, port: int) -> str:
 </head>
 <body>
   <script>window.VIZOR_DATA = {data_json}; function checkManifest() {{ return window.VIZOR_DATA; }}</script>
+  <header style="height:44px;padding:0 20px;display:flex;align-items:center;gap:20px;background:#fff;border-bottom:1px solid rgba(15,23,42,.10);flex-shrink:0;font-size:13px;font-family:inherit">
+    <span style="font-weight:700;color:#142033">💰 Effort & Cost</span>
+    <span style="color:#64748b">Spend by dream, agent, and stage</span>
+  </header>
   <main class="shell">
     <section class="empty">
       <h1>Effort & Cost</h1>
