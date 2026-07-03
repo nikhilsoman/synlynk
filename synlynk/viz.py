@@ -19,6 +19,63 @@ VIZ_TUBE_PATH = ".synlynk/vizor-tube.json"
 DEFAULT_PORT = 8721
 
 
+def _live_js(port: int) -> str:
+    return f"""
+<script>
+(function() {{
+  const PORT = {port};
+  let lastUpdated = null;
+
+  async function checkManifest() {{
+    try {{
+      const r = await fetch(`http://localhost:${{PORT}}/manifest.json?_=${{Date.now()}}`);
+      if (!r.ok) return;
+      const m = await r.json();
+      if (lastUpdated === null) {{
+        lastUpdated = m.updated_at;
+        return;
+      }}
+      if (m.updated_at !== lastUpdated) {{
+        lastUpdated = m.updated_at;
+        fireNotification(m.updated_at);
+        showReloadBanner(m.updated_at);
+      }}
+    }} catch (e) {{}}
+  }}
+
+  function fireNotification(updatedAt) {{
+    if (Notification.permission !== 'granted') return;
+    new Notification('synlynk viz updated', {{
+      body: `Workspace snapshot refreshed at ${{new Date(updatedAt).toLocaleTimeString()}}`,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="28" font-size="28">🚇</text></svg>',
+      tag: 'vizor-refresh',
+    }});
+  }}
+
+  function showReloadBanner(updatedAt) {{
+    const existing = document.getElementById('vizor-reload-banner');
+    if (existing) existing.remove();
+    const banner = document.createElement('div');
+    banner.id = 'vizor-reload-banner';
+    banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:9999;background:#0d9e87;color:#fff;font-family:SF Mono,monospace;font-size:12px;padding:8px 16px;display:flex;align-items:center;gap:12px;`;
+    banner.innerHTML = `<span>✦ Vizor updated at ${{new Date(updatedAt).toLocaleTimeString()}}</span>
+      <button onclick="location.reload()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer">↺ Reload</button>
+      <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;margin-left:auto;font-size:16px">✕</button>`;
+    document.body.prepend(banner);
+  }}
+
+  document.addEventListener('click', function requestOnce() {{
+    if (Notification.permission === 'default') Notification.requestPermission();
+    document.removeEventListener('click', requestOnce);
+  }}, {{ once: true }});
+
+  setInterval(checkManifest, 60000);
+  checkManifest();
+}})();
+</script>
+""".replace("\n", " ")
+
+
 def generate_viz_data() -> dict:
     def _ts() -> str:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -823,6 +880,7 @@ def generate_index_html(data: dict, port: int) -> str:
   setView('gantt', 'gantt.html');
 }})();
 </script>
+{_live_js(port)}
 </body>
 </html>"""
 
@@ -1283,6 +1341,7 @@ renderDreams();
 <script>
 {script_content}
 </script>
+{_live_js(port)}
 </body>
 </html>"""
 
@@ -1296,13 +1355,7 @@ def generate_tube_html(data: dict, port: int) -> str:
     workspace_name = data.get("workspace", {}).get("name", "workspace")
     updated_at = data.get("workspace", {}).get("updated_at", "")
 
-    # Check if _live_js function exists in the module.
-    live_js_html = ""
-    try:
-        if "_live_js" in globals():
-            live_js_html = globals()["_live_js"](port)
-    except Exception:
-        pass
+    live_js_html = _live_js(port)
 
     style_content = """
     :root {
@@ -2374,6 +2427,7 @@ function initApp() {
 
 initApp();
 </script>
+{_live_js(port)}
 </body>
 </html>"""
     return html_template.replace("{{data_json}}", data_json)
@@ -2492,6 +2546,7 @@ def generate_effort_html(data: dict, port: int) -> str:
       <p>No cost data yet. Cost entries are recorded automatically on each synlynk exec run.</p>
     </section>
   </main>
+  {_live_js(port)}
 </body>
 </html>"""
 
@@ -2763,6 +2818,7 @@ def generate_effort_html(data: dict, port: int) -> str:
         "No stage spend yet",
     )}
   </main>
+  {_live_js(port)}
 </body>
 </html>"""
 
@@ -3211,6 +3267,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
 </head>
 <body>
   <div class="empty-state"><span>No telemetry recorded yet. Run synlynk exec or synlynk launch to generate efficiency data.</span></div>
+  {_live_js(port)}
 </body>
 </html>"""
 
@@ -3382,6 +3439,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       </div>
     </section>
   </div>
+  {_live_js(port)}
 </body>
 </html>"""
     return html_out
