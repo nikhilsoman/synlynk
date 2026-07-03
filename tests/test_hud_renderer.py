@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from synlynk.hud import HUDRenderer, FrameBuffer
+from synlynk.hud import HUDRenderer, FrameBuffer, SIDEBAR_WIDTH
 
 CYCLE_SUMMARY = {
     "dream":    {"running": 0, "ready": True},
@@ -41,3 +41,55 @@ def test_render_sidebar_contains_all_cycles(tmp_path):
     full_text = " ".join(buf._curr[:20]).lower()
     for cycle in CYCLES:
         assert cycle in full_text, f"Cycle '{cycle}' missing from sidebar"
+
+
+ACTIVE_JOBS = [
+    {"id": "job-aaa", "agent": "codex", "task": "feat/bs20-deep-scan",
+     "cycle": "work", "status": "running", "elapsed_s": 252},
+    {"id": "job-bbb", "agent": "agy", "task": "docs/blog-post",
+     "cycle": "work", "status": "running", "elapsed_s": 90},
+]
+
+RECENT_JOBS = [
+    {"id": "job-old", "agent": "codex", "task": "feat/bs21-vizor",
+     "cycle": "work", "status": "done", "ended_at": "2026-07-03T09:00:00",
+     "elapsed_s": 1320},
+]
+
+def test_render_right_panel_shows_agent_names():
+    r, buf = make_renderer()
+    r.render_right_panel(
+        selected_cycle="work",
+        active_jobs=ACTIVE_JOBS,
+        recent_jobs=RECENT_JOBS,
+        panel_col=SIDEBAR_WIDTH + 2,
+        start_row=2,
+    )
+    full = " ".join(buf._curr).lower()
+    assert "codex" in full
+    assert "agy" in full
+
+def test_render_right_panel_idle_shows_placeholder():
+    r, buf = make_renderer()
+    r.render_right_panel(
+        selected_cycle="dream",
+        active_jobs=[],
+        recent_jobs=[],
+        panel_col=SIDEBAR_WIDTH + 2,
+        start_row=2,
+    )
+    full = " ".join(buf._curr).lower()
+    assert "no active jobs" in full or "idle" in full
+
+def test_render_right_panel_shows_recent_jobs():
+    r, buf = make_renderer()
+    r.render_right_panel(
+        selected_cycle="work",
+        active_jobs=[],
+        recent_jobs=RECENT_JOBS,
+        panel_col=SIDEBAR_WIDTH + 2,
+        start_row=2,
+    )
+    full = " ".join(buf._curr).lower()
+    assert "recent" in full
+    assert "codex" in full

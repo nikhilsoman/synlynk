@@ -239,9 +239,66 @@ class HUDRenderer:
 
     def render_right_panel(self, selected_cycle: str, active_jobs: list,
                            recent_jobs: list, panel_col: int, start_row: int) -> None:
-        """Stub for TDD step — will be implemented next."""
-        # Intentionally minimal so task5 tests fail on content
-        pass
+        """Render cycle-filtered right panel starting at (start_row, panel_col)."""
+        colour = CYCLE_COLOURS.get(selected_cycle, RESET)
+        row = start_row
+
+        # Panel header
+        if active_jobs:
+            header = (f"{colour}◉ {selected_cycle.upper()}{RESET} — "
+                      f"{len(active_jobs)} running")
+        else:
+            header = f"{colour}● {selected_cycle.upper()}{RESET} — idle"
+        self.buf.set_line(row, (" " * panel_col) + header)
+        row += 1
+
+        # Active job cards
+        for job in active_jobs:
+            elapsed = job.get("elapsed_s", 0)
+            mins, secs = divmod(elapsed, 60)
+            elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+            self.buf.set_line(row, (" " * panel_col) +
+                f"{colour}┌ {BOLD}{job['agent']}{RESET}{colour} ─────────────────────────────{RESET}")
+            self.buf.set_line(row + 1, (" " * panel_col) +
+                f"│ {job.get('task', '—')}")
+            self.buf.set_line(row + 2, (" " * panel_col) +
+                f"{DIM}│ {elapsed_str}  ·  {job.get('status', '—')}{RESET}")
+            self.buf.set_line(row + 3, (" " * panel_col) +
+                f"{colour}└{'─' * 34}{RESET}")
+            row += 4
+
+        # Idle placeholder
+        if not active_jobs:
+            self.buf.set_line(row, (" " * panel_col) +
+                f"{DIM}  no active jobs in this cycle{RESET}")
+            self.buf.set_line(row + 1, (" " * panel_col) +
+                f"{DIM}  synlynk launch {selected_cycle} to start one{RESET}")
+            row += 2
+
+        row += 1  # spacer
+
+        # Readiness section
+        self.buf.set_line(row, (" " * panel_col) + f"{DIM}── READINESS{'─' * 20}{RESET}")
+        row += 1
+        agents_for_cycle = ["claude", "agy", "codex", "grok"]
+        line = (" " * panel_col) + "  " + "   ".join(
+            f"\033[38;5;71m{a} ✓{RESET}" for a in agents_for_cycle
+        )
+        self.buf.set_line(row, line)
+        row += 2
+
+        # Recent history
+        if recent_jobs:
+            self.buf.set_line(row, (" " * panel_col) + f"{DIM}── RECENT{'─' * 23}{RESET}")
+            row += 1
+            for job in recent_jobs[:3]:
+                elapsed = job.get("elapsed_s", 0)
+                mins, _ = divmod(elapsed, 60)
+                status_c = "\033[38;5;71m" if job.get("status") == "done" else "\033[38;5;196m"
+                self.buf.set_line(row, (" " * panel_col) +
+                    f"  {status_c}✓{RESET} {job['agent']}  {job.get('task','—')[:30]}  "
+                    f"{DIM}{mins}m{RESET}")
+                row += 1
 
 
 class LiveRenderer:
