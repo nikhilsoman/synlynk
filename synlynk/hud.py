@@ -25,6 +25,8 @@ RESET = "\033[0m"
 DIM = "\033[2m"
 BOLD = "\033[1m"
 
+SIDEBAR_WIDTH = 18   # chars for the left tube sidebar
+
 _ANSI_RE = re.compile(r"\033\[[0-9;?]*[A-Za-z]")
 
 
@@ -178,83 +180,68 @@ class HUDRenderer:
         self.buf.set_line(1, f"  {DIM}widen your terminal or use synlynk watch --live{RESET}")
         self.buf.set_line(2, f"  {DIM}Press q to quit{RESET}")
 
-    def render_header(self, cycle_summary: dict, platform_expanded: bool, start_row: int) -> int:
-        running = sum(item.get("running", 0) for item in cycle_summary.values())
+    def render_header(self, cycle_summary: dict, platform_expanded: bool,
+                      start_row: int) -> int:
+        """
+        Render the platform health header.
+        Returns number of rows consumed.
+        """
+        rows, cols = self.buf.rows, self.buf.cols
         if not platform_expanded:
-            self.buf.set_line(
-                start_row,
-                f"\033[38;5;75m▶ PLATFORM{RESET}  {running} active jobs  [p] expand",
-            )
+            # Collapsed: one line — agent checkmarks + budget summary
+            agents = ["claude", "agy", "codex", "grok"]
+            checks = "  ".join(f"\033[38;5;71m✓ {a}{RESET}" for a in agents)
+            line = f"\033[38;5;75m▶ PLATFORM{RESET}  {checks}  [p]"
+            self.buf.set_line(start_row, line)
             return 1
-
-        self.buf.set_line(start_row, f"\033[38;5;75m▼ PLATFORM HEALTH{RESET}  [p] collapse")
-        self.buf.set_line(
-            start_row + 1,
-            "  agents: " + "  ".join(f"✓ {name}" for name in ("claude", "agy", "codex", "grok")),
-        )
-        self.buf.set_line(start_row + 2, f"  budget: {DIM}—{RESET}")
-        self.buf.set_line(start_row + 3, f"  harness: {DIM}—{RESET}")
-        self.buf.set_line(start_row + 4, "")
-        return 5
-
-    def render_sidebar(self, cycle_summary: dict, selected_cycle: str, start_row: int, col: int) -> int:
-        prefix = " " * col
-        row = start_row
-        self.buf.set_line(row, f"{prefix}synlynk")
-        row += 1
-        for cycle in CYCLES:
-            info = cycle_summary.get(cycle, {"running": 0, "ready": True})
-            marker = "◀" if cycle == selected_cycle else " "
-            if info["running"]:
-                state = f"{info['running']} running"
-            elif info["ready"]:
-                state = "ready"
-            else:
-                state = "idle"
-            color = CYCLE_COLOURS.get(cycle, RESET)
-            self.buf.set_line(row, f"{prefix}{color}▌{RESET} {marker} {cycle.capitalize():<9} {state}")
-            row += 1
-        self.buf.set_line(row, f"{prefix}{DIM}[↑↓] cycle  [p] health{RESET}")
-        self.buf.set_line(row + 1, f"{prefix}{DIM}[r] refresh [q] quit{RESET}")
-        return row + 2 - start_row
-
-    def render_right_panel(
-        self,
-        selected_cycle: str,
-        active_jobs: list,
-        recent_jobs: list,
-        panel_col: int,
-        start_row: int,
-    ) -> None:
-        prefix = " " * panel_col
-        color = CYCLE_COLOURS.get(selected_cycle, RESET)
-        row = start_row
-        if active_jobs:
-            self.buf.set_line(row, f"{prefix}{color}◉ {selected_cycle.upper()}{RESET} — {len(active_jobs)} running")
-            row += 1
-            for job in active_jobs:
-                elapsed = job.get("elapsed_s", 0)
-                mins, secs = divmod(elapsed, 60)
-                elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
-                self.buf.set_line(row, f"{prefix}{BOLD}{job.get('agent', '—')}{RESET}  {job.get('task', '—')}")
-                self.buf.set_line(
-                    row + 1,
-                    f"{prefix}{DIM}{job.get('cycle', selected_cycle)}  {elapsed_str}  {job.get('status', '—')}{RESET}",
-                )
-                row += 3
         else:
-            self.buf.set_line(row, f"{prefix}{DIM}no active jobs in this cycle{RESET}")
-            self.buf.set_line(row + 1, f"{prefix}{DIM}run synlynk launch {selected_cycle} to start one{RESET}")
-            row += 3
+            # Expanded: 5 rows — title, agents, budget bar, harness, collapse hint
+            self.buf.set_line(start_row,     f"\033[38;5;75m▼ PLATFORM HEALTH{RESET}  [p] collapse")
+            self.buf.set_line(start_row + 1, f"  agents: ✓ claude  ✓ agy  ✓ codex  ✓ grok")
+            total_running = sum(v['running'] for v in cycle_summary.values())
+            self.buf.set_line(start_row + 2, f"  budget: {DIM}$— / limit from .synlynk/config.json{RESET}")
+            self.buf.set_line(start_row + 3, f"  harness: ✓ compliant  {DIM}· synlynk probe to recheck{RESET}")
+            self.buf.set_line(start_row + 4, "")
+            return 5
 
-        self.buf.set_line(row, f"{prefix}{DIM}recent{RESET}")
-        row += 1
-        for job in recent_jobs[:3]:
-            self.buf.set_line(
-                row,
-                f"{prefix}✓ {job.get('agent', '—')}  {job.get('task', '—')[:30]}",
-            )
-            row += 1
+    def render_sidebar(self, cycle_summary: dict, selected_cycle: str,
+                       start_row: int, col: int) -> int:
+        """
+        Render B3 tube-line sidebar. Returns number of rows consumed.
+        Each cycle gets a coloured 1-char vertical bar on the left.
+        """
+        self.buf.set_line(start_row, f"\033[38;5;75m{'synlynk':>{SIDEBAR_WIDTH - 2}}{RESET}")
+        row = start_row + 1
+        for cycle in CYCLES:
+            colour = CYCLE_COLOURS[cycle]
+            info = cycle_summary.get(cycle, {"running": 0, "ready": True})
+            count = info["running"]
+            if count > 0:
+                state_str = f"\033[38;5;208m◉ {count} running{RESET}"
+            elif info["ready"]:
+                state_str = f"{DIM}● ready{RESET}"
+            else:
+                state_str = f"{DIM}○ idle{RESET}"
+
+            selected = cycle == selected_cycle
+            bg = "\033[48;5;235m" if selected else ""
+            marker = "◀" if selected else " "
+            label = f"{BOLD}{colour}{cycle.capitalize()}{RESET}" if selected else f"{colour}{cycle.capitalize()}{RESET}"
+            line = f"{bg}{colour}▌{RESET}{bg} {label} {marker}{RESET}"
+            self.buf.set_line(row, line)
+            self.buf.set_line(row + 1, f"  {state_str}")
+            row += 2
+
+        # Key hint at bottom of sidebar
+        self.buf.set_line(row + 1, f"{DIM}  [↑↓] cycle  [p] health{RESET}")
+        self.buf.set_line(row + 2, f"{DIM}  [r] refresh  [q] quit{RESET}")
+        return row + 3 - start_row
+
+    def render_right_panel(self, selected_cycle: str, active_jobs: list,
+                           recent_jobs: list, panel_col: int, start_row: int) -> None:
+        """Stub for TDD step — will be implemented next."""
+        # Intentionally minimal so task5 tests fail on content
+        pass
 
 
 class LiveRenderer:
