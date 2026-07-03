@@ -8195,6 +8195,38 @@ def _generate_context_from_db(out_path: str = None) -> str:
         return f.read()
 
 
+def _append_vizor_notes(context_file: str) -> None:
+    viz_notes_path = ".synlynk/viz-notes.json"
+    if os.path.exists(viz_notes_path):
+        with open(viz_notes_path) as f:
+            viz_notes = json.load(f)
+        if not isinstance(viz_notes, dict):
+            return
+        action_notes = {
+            k: v
+            for k, v in viz_notes.items()
+            if v.get("tags") or v.get("state") in ("action", "urgent")
+        }
+        if viz_notes:
+            with open(context_file, "a") as f:
+                f.write("\n\n## Vizor Notes\n")
+                for element_id, note in viz_notes.items():
+                    f.write(f"\n- [{element_id}] ({note.get('state','info')}): {note.get('text','')}")
+                    if note.get("tags"):
+                        f.write(f" [tags: {', '.join(note['tags'])}]")
+        if action_notes:
+            with open(context_file, "a") as f:
+                f.write("\n\n## Pending actions from Vizor\n")
+                for element_id, note in action_notes.items():
+                    for tag in note.get("tags", []):
+                        if tag == "redo":
+                            f.write(f"\n- ↺ Redo: {element_id} — {note.get('text','')}")
+                        elif tag == "reassign":
+                            f.write(f"\n- ⇄ Reassign agent for: {element_id} — {note.get('text','')}")
+                        elif tag == "defer":
+                            f.write(f"\n- ⏸ Defer: {element_id} — {note.get('text','')}")
+
+
 def _generate_context_from_db(out_path: str = None) -> str:
     """Build context.md from state.db (post-migration path)."""
     context_file = out_path if out_path else ".synlynk/context.md"
@@ -8236,6 +8268,7 @@ def _generate_context_from_db(out_path: str = None) -> str:
             out.write("## Project Memory\n")
             for section, body in memory_sections:
                 out.write(f"\n### {section}\n{body[:300]}\n")
+    _append_vizor_notes(context_file)
     with open(context_file) as f:
         return f.read()
 
@@ -8363,6 +8396,7 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
                   "completed todos and old devlog entries.")
     except OSError:
         pass
+    _append_vizor_notes(context_file)
     try:
         return open(context_file).read()
     except OSError:
