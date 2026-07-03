@@ -207,6 +207,63 @@ def test_generate_tube_html_with_config():
     assert 'text-anchor="middle"' in html
 
 
+def test_generate_gantt_html_renders_dreams_and_notes():
+    from synlynk.viz import generate_gantt_html
+
+    data = {
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [
+            {
+                "id": "bs21",
+                "name": "Vizor",
+                "status": "active",
+                "stages": [
+                    {
+                        "key": "Plan",
+                        "status": "active",
+                        "start_frac": 0.10,
+                        "width_frac": 0.20,
+                        "agents": ["agy", "codex"],
+                        "tasks": [
+                            {"id": "task-1", "name": "Shell layout", "agent": "agy", "status": "done", "note": {"state": "info", "text": "ready"}},
+                            {"id": "task-2", "name": "Gantt view", "agent": "codex", "status": "active", "note": {"state": "urgent", "text": "blocked"}},
+                        ],
+                    }
+                ],
+            }
+        ],
+        "notes": {
+            "bs21": {"text": "dream note", "tags": ["Redo stage"], "state": "action", "updated_at": "2026-07-03T10:00:00Z"}
+        },
+    }
+
+    html = generate_gantt_html(data, port=8721)
+
+    assert "window.VIZOR_DATA =" in html
+    assert "Vizor" in html
+    assert "Shell layout" in html
+    assert "Gantt view" in html
+    assert "note-info" in html
+    assert "note-urgent" in html
+    assert "http://localhost:8721/note" in html
+    assert "No Dreams found in state db" not in html
+
+
+def test_generate_gantt_html_empty_state():
+    from synlynk.viz import generate_gantt_html
+
+    data = {
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
+        "dreams": [],
+        "notes": {},
+    }
+
+    html = generate_gantt_html(data, port=8721)
+
+    assert "No Dreams found in state db" in html
+    assert "<p class='empty-state'>" in html
+
+
 def test_generate_journeys_html_empty():
     from synlynk.viz import generate_journeys_html
     data = {
@@ -276,4 +333,3 @@ def test_generate_journeys_html_ftue_notice():
     }
     html = generate_journeys_html(data, 8721)
     assert "Your workspace is configured for the Architect Map as the primary structural view. User Journeys is available if your project has UX screens." in html
-

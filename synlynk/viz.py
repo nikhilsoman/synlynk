@@ -828,7 +828,463 @@ def generate_index_html(data: dict, port: int) -> str:
 
 
 def generate_gantt_html(data: dict, port: int) -> str:
-    return f"<html><body>gantt stub</body></html>"
+    from pathlib import Path
+
+    data_json = json.dumps(data)
+    reference_path = Path(__file__).resolve().parent.parent / "docs/brainstorm/bs21-vizor/viz-gantt-v5.html"
+    reference_html = reference_path.read_text() if reference_path.exists() else ""
+    css_start = reference_html.find("<style>")
+    css_end = reference_html.find("</style>", css_start + 7) if css_start != -1 else -1
+    style_content = reference_html[css_start + 7 : css_end] if css_start != -1 and css_end != -1 else ""
+
+    script_content = """
+const PORT = __PORT__;
+const NOTE_STATE_CLASS = { none:'note-none', info:'note-info', action:'note-action', urgent:'note-urgent', done:'note-done' };
+const STAGE_CLASS = { dream:'dream', plan:'plan', work:'work', ship:'ship', maintain:'maint', engage:'engage' };
+const STAGE_ICON = { dream:'✦ Dream', plan:'⊡ Plan', work:'⚙ Work', ship:'▲ Ship', maintain:'↺ Maintain', engage:'♡ Engage' };
+const STAGE_STYLE = {
+  dream:'background:var(--s-dream-bg);border-color:var(--s-dream-bd);color:var(--s-dream-tx)',
+  plan:'background:var(--s-plan-bg);border-color:var(--s-plan-bd);color:var(--s-plan-tx)',
+  work:'background:var(--s-work-bg);border-color:var(--s-work-bd);color:var(--s-work-tx)',
+  ship:'background:var(--s-ship-bg);border-color:var(--s-ship-bd);color:var(--s-ship-tx)',
+  maintain:'background:var(--s-maint-bg);border-color:var(--s-maint-bd);color:var(--s-maint-tx)',
+  engage:'background:var(--s-engage-bg);border-color:var(--s-engage-bd);color:var(--s-engage-tx)',
+};
+const dreams = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.dreams) ? window.VIZOR_DATA.dreams : [];
+const notes = (window.VIZOR_DATA && window.VIZOR_DATA.notes && typeof window.VIZOR_DATA.notes === 'object') ? window.VIZOR_DATA.notes : {};
+let openDrills = {};
+let currentNoteTarget = null;
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function safeStorageGet(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function safeStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {}
+}
+
+function setTheme(t) {
+  const resolved = t === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + t)?.classList.add('active');
+  safeStorageSet('vizor-theme', t);
+}
+
+function classForStage(stageKey) {
+  const key = String(stageKey || '').trim().toLowerCase();
+  return STAGE_CLASS[key] || 'plan';
+}
+
+function iconForStage(stageKey) {
+  const key = String(stageKey || '').trim().toLowerCase();
+  return STAGE_ICON[key] || (stageKey ? escapeHtml(stageKey) : '✦ Dream');
+}
+
+function noteStateClass(state) {
+  return NOTE_STATE_CLASS[state || 'none'] || NOTE_STATE_CLASS.none;
+}
+
+function noteData(targetId) {
+  return notes[targetId] || (window.VIZOR_DATA && window.VIZOR_DATA.notes && window.VIZOR_DATA.notes[targetId]) || null;
+}
+
+function setNoteButtons(tags) {
+  const wanted = new Set((tags || []).map(t => String(t).trim().toLowerCase()));
+  document.querySelectorAll('.ac').forEach(btn => {
+    const tag = String(btn.getAttribute('data-tag') || '').trim().toLowerCase();
+    btn.classList.toggle('on', wanted.has(tag));
+  });
+}
+
+function noteTagsFromButtons() {
+  return Array.from(document.querySelectorAll('.ac.on')).map(btn => btn.getAttribute('data-tag') || btn.textContent.trim()).filter(Boolean);
+}
+
+function updateNoteIcon(targetId, state) {
+  const el = document.querySelector('[data-note-target="' + CSS.escape(targetId) + '"]');
+  if (!el) return;
+  Object.values(NOTE_STATE_CLASS).forEach(cls => el.classList.remove(cls));
+  el.classList.add(noteStateClass(state));
+}
+
+function openNote(targetId, targetLabel) {
+  currentNoteTarget = targetId;
+  const existing = noteData(targetId);
+  document.getElementById('nt').innerHTML = 'Note on <strong>' + escapeHtml(targetLabel || targetId) + '</strong>';
+  document.getElementById('ntxt').value = existing && typeof existing.text === 'string' ? existing.text : '';
+  setNoteButtons(existing && Array.isArray(existing.tags) ? existing.tags : []);
+  document.getElementById('nm').classList.add('open');
+  document.getElementById('ov').classList.add('open');
+  document.getElementById('ntxt').focus();
+}
+
+function openNoteFromEl(el) {
+  openNote(el.getAttribute('data-note-target'), el.getAttribute('data-note-label'));
+}
+
+function closeNote() {
+  document.getElementById('nm').classList.remove('open');
+  document.getElementById('ov').classList.remove('open');
+  currentNoteTarget = null;
+}
+
+async function saveNote() {
+  if (!currentNoteTarget) return;
+  const text = document.getElementById('ntxt').value || '';
+  const tags = noteTagsFromButtons();
+  const existing = noteData(currentNoteTarget);
+  const derivedState = existing && existing.state ? existing.state : ((text || tags.length) ? 'info' : null);
+  const response = await fetch('http://localhost:' + PORT + '/note', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: currentNoteTarget, text, tags, state: derivedState }),
+  });
+  if (!response.ok) throw new Error('note save failed');
+  notes[currentNoteTarget] = { text, tags, state: derivedState };
+  if (window.VIZOR_DATA && window.VIZOR_DATA.notes) {
+    window.VIZOR_DATA.notes[currentNoteTarget] = notes[currentNoteTarget];
+  }
+  updateNoteIcon(currentNoteTarget, derivedState);
+  closeNote();
+}
+
+function renderTask(task, dreamId, stageKey, index, total) {
+  const status = String(task.status || 'queued').trim().toLowerCase();
+  const tbClass = status === 'done' ? 'tb-done' : status === 'active' ? 'tb-active' : status === 'blocked' ? 'tb-blocked' : 'tb-queued';
+  const dotClass = status === 'done' ? 'done' : status === 'active' ? 'active' : status === 'blocked' ? 'blocked' : 'queued';
+  const note = task.note || null;
+  const noteClass = noteStateClass(note && note.state);
+  const leftPct = total > 0 ? ((index / total) * 100).toFixed(1) : '0.0';
+  const widthPct = total > 0 ? ((0.85 / total) * 100).toFixed(1) : '100.0';
+  const agent = String(task.agent || '').trim().toLowerCase();
+  const agentClass = agent === 'agy' ? 'aa-agy' : agent === 'codex' ? 'aa-codex' : agent === 'grok' ? 'aa-grok' : 'aa-claude';
+  const agentLabel = agent === 'codex' ? 'Co' : agent === 'grok' ? 'G' : agent === 'claude' ? 'C' : 'A';
+  return `
+    <div class="trow editable" style="grid-template-columns:260px repeat(${total || 1}, 1fr)" title="ID: ${escapeHtml(task.id)}">
+      <div class="tlbl">
+        <div class="aa ${agentClass}" title="${escapeHtml(task.agent || 'agent')}">${agentLabel}</div>
+        <div class="tname">${escapeHtml(task.name || 'Task')}</div>
+        <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(task.id)}" data-note-label="${escapeHtml(task.name || task.id)}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
+      </div>
+      <div class="tbars" style="grid-column:2/span ${total || 1}">
+        <div class="tb ${tbClass}" style="left:${leftPct}%;width:${widthPct}%">
+          <div class="st-dot ${dotClass}"></div>
+          <span class="tb-name">${escapeHtml(task.name || 'Task')}</span>
+          <div class="tb-right">
+            <div class="aa sm ${agentClass}" title="${escapeHtml(task.agent || 'agent')}">${agentLabel}</div>
+            <span class="tb-cost">${escapeHtml(status)}${note && note.text ? ' · note' : ''}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderDrill(dreamId, stageKey) {
+  const dream = dreams.find(d => d.id === dreamId);
+  const stage = dream && Array.isArray(dream.stages) ? dream.stages.find(s => s.key === stageKey) : null;
+  const dr = document.getElementById('drill-' + dreamId);
+  if (!dr) return;
+  if (!stage) {
+    dr.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No tasks defined. <span style="color:var(--accent);cursor:pointer">📝 Add note</span></div>`;
+    return;
+  }
+
+  const tasks = Array.isArray(stage.tasks) ? stage.tasks : [];
+  const total = Math.max(tasks.length, 1);
+  const gridCols = `260px repeat(${total}, 1fr)`;
+  const headerCols = tasks.map((task, idx) => `<div class="zoom-col">${escapeHtml(task.name || ('Task ' + (idx + 1)))}</div>`).join('');
+  const taskRows = tasks.map((task, idx) => renderTask(task, dreamId, stageKey, idx, total)).join('');
+  const pillKey = classForStage(stageKey);
+  const lastLabel = tasks.length > 1 ? tasks[tasks.length - 1].name : '';
+  dr.innerHTML = `
+    <div class="drill-header">
+      <div class="stage-pill" style="${STAGE_STYLE[pillKey] || STAGE_STYLE.plan}">${escapeHtml(iconForStage(stageKey))} stage</div>
+      <div class="drill-ttl">${escapeHtml(dreamId.toUpperCase())} — ${tasks.length} task${tasks.length !== 1 ? 's' : ''} · zoomed to stage window</div>
+      <div class="drill-close" onclick="closeDrill('${escapeHtml(dreamId)}')">✕ collapse</div>
+    </div>
+    <div class="zoom-grid" style="grid-template-columns:${gridCols}">
+      <div class="zoom-lbl">↳ zoomed: ${escapeHtml(stage.key || stageKey)}${lastLabel ? ' → ' + escapeHtml(lastLabel) : ''}</div>
+      ${headerCols}
+    </div>
+    ${taskRows}`;
+}
+
+function zoomStage(dreamId, stageKey, barEl) {
+  const dr = document.getElementById('drill-' + dreamId);
+  const drow = document.getElementById('drow-' + dreamId);
+  if (!dr || !drow) return;
+  if (openDrills[dreamId] === stageKey) {
+    closeDrill(dreamId);
+    return;
+  }
+  if (openDrills[dreamId]) {
+    const prevBar = document.getElementById('sb-' + dreamId + '-' + openDrills[dreamId]);
+    if (prevBar) prevBar.classList.remove('sel');
+  }
+  renderDrill(dreamId, stageKey);
+  dr.classList.add('open');
+  drow.classList.add('exp');
+  if (barEl) barEl.classList.add('sel');
+  openDrills[dreamId] = stageKey;
+}
+
+function closeDrill(dreamId) {
+  const dr = document.getElementById('drill-' + dreamId);
+  const drow = document.getElementById('drow-' + dreamId);
+  dr?.classList.remove('open');
+  drow?.classList.remove('exp');
+  if (openDrills[dreamId]) {
+    const prevBar = document.getElementById('sb-' + dreamId + '-' + openDrills[dreamId]);
+    if (prevBar) prevBar.classList.remove('sel');
+  }
+  delete openDrills[dreamId];
+}
+
+function toggleDrill(dreamId) {
+  if (openDrills[dreamId]) {
+    closeDrill(dreamId);
+    return;
+  }
+  const dream = dreams.find(d => d.id === dreamId);
+  if (!dream || !Array.isArray(dream.stages) || !dream.stages.length) return;
+  const activeStage = dream.stages.find(s => String(s.status || '').toLowerCase() === 'active') || dream.stages[0];
+  const barEl = document.getElementById('sb-' + dreamId + '-' + activeStage.key);
+  zoomStage(dreamId, activeStage.key, barEl);
+}
+
+function renderDream(dream) {
+  const stages = Array.isArray(dream.stages) ? dream.stages : [];
+  const note = dream.note || noteData(dream.id);
+  const noteClass = noteStateClass(note && note.state);
+  const taskCount = stages.reduce((sum, stage) => sum + (Array.isArray(stage.tasks) ? stage.tasks.length : 0), 0);
+  const status = String(dream.status || 'planned').trim().toLowerCase();
+  const statusClass = status === 'done' ? 'ok' : status === 'blocked' ? 'over' : 'na';
+  const stageAgents = stages[0] && Array.isArray(stages[0].agents) ? stages[0].agents : [];
+  const agentsHtml = stageAgents.slice(0, 4).map(agent => {
+    const a = String(agent || '').trim().toLowerCase();
+    const agentClass = a === 'agy' ? 'aa-agy' : a === 'codex' ? 'aa-codex' : a === 'grok' ? 'aa-grok' : 'aa-claude';
+    const agentLabel = a === 'codex' ? 'Co' : a === 'grok' ? 'G' : a === 'claude' ? 'C' : 'A';
+    return `<div class="aa ${agentClass}" title="${escapeHtml(agent)}">${agentLabel}</div>`;
+  }).join('');
+  const barHtml = stages.map(stage => {
+    const cls = classForStage(stage.key);
+    const live = String(stage.status || '').toLowerCase() === 'active' ? 'live' : 'dim';
+    const left = Number(stage.start_frac || 0) * 100;
+    const width = Number(stage.width_frac || 0) * 100;
+    const agentHtml = Array.isArray(stage.agents) && stage.agents.length ? `<div class="bar-agents">${stage.agents.map(agent => {
+      const a = String(agent || '').trim().toLowerCase();
+      const agentClass = a === 'agy' ? 'aa-agy' : a === 'codex' ? 'aa-codex' : a === 'grok' ? 'aa-grok' : 'aa-claude';
+      const agentLabel = a === 'codex' ? 'Co' : a === 'grok' ? 'G' : a === 'claude' ? 'C' : 'A';
+      return `<div class="aa ${agentClass}">${agentLabel}</div>`;
+    }).join('')}</div>` : '';
+    return `<div class="sb sb-${cls} ${live}" id="sb-${dream.id}-${stage.key}" style="left:${left}%;width:${width}%" onclick="zoomStage('${escapeHtml(dream.id)}','${escapeHtml(stage.key)}',this)">${escapeHtml(iconForStage(stage.key))}${agentHtml}</div>`;
+  }).join('');
+  return `
+      <div class="drow" id="drow-${dream.id}">
+        <div class="dlbl editable" onclick="toggleDrill('${escapeHtml(dream.id)}')">
+          <div class="dtop"><span class="darr">▶</span><div class="dname">${escapeHtml(dream.id)} · ${escapeHtml(dream.name || dream.id)}</div>
+            <span class="note-chip nc-${noteClass.replace('note-', '') === 'none' ? 'info' : noteClass.replace('note-', '')}" style="display:${noteClass === 'note-none' ? 'none' : 'inline-flex'}" onclick="openNote('${escapeHtml(dream.id)}','${escapeHtml(dream.name || dream.id)}');event.stopPropagation()">✎ note</span>
+          </div>
+          <div class="dbot"><div class="aa-stack">${agentsHtml}</div><span class="dcost ${statusClass}">${escapeHtml(dream.status || 'planned')}${taskCount ? ' · ' + taskCount + ' tasks' : ''}</span></div>
+          <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(dream.id)}" data-note-label="${escapeHtml(dream.name || dream.id)}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
+        </div>
+        <div class="dbars">
+          <div class="today-ln" style="left:19%"></div>
+          ${barHtml}
+        </div>
+      </div>
+      <div class="drill" id="drill-${dream.id}"></div>`;
+}
+
+function renderDreams() {
+  const body = document.getElementById('gantt-body');
+  const wsSub = document.getElementById('ws-sub');
+  const dreamCount = document.getElementById('dream-count');
+  const dreamSub = document.getElementById('dream-sub');
+  const statusWorkspaces = document.getElementById('status-workspaces');
+  if (!body) return;
+
+  if (!dreams.length) {
+    body.innerHTML = "<p class='empty-state'>No Dreams found in state db</p>";
+    if (wsSub) wsSub.textContent = '0 Dreams · no stage data';
+    if (dreamCount) dreamCount.textContent = '0';
+    if (dreamSub) dreamSub.textContent = '0 stages';
+    if (statusWorkspaces) statusWorkspaces.textContent = '0 dreams';
+    return;
+  }
+
+  const dreamCountValue = dreams.length;
+  const stageCountValue = dreams.reduce((sum, dream) => sum + (Array.isArray(dream.stages) ? dream.stages.length : 0), 0);
+  const activeDreams = dreams.filter(dream => String(dream.status || '').toLowerCase() === 'active').length;
+  body.innerHTML = dreams.map(renderDream).join('');
+  if (wsSub) wsSub.textContent = dreamCountValue + ' Dreams · click any stage bar to zoom in';
+  if (dreamCount) dreamCount.textContent = String(dreamCountValue);
+  if (dreamSub) dreamSub.textContent = stageCountValue + ' stages · ' + activeDreams + ' active';
+  if (statusWorkspaces) statusWorkspaces.textContent = dreamCountValue + ' dreams';
+  const firstDream = dreams[0];
+  const firstStage = firstDream && Array.isArray(firstDream.stages) ? (firstDream.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstDream.stages[0]) : null;
+  if (firstDream && firstStage) {
+    const barEl = document.getElementById('sb-' + firstDream.id + '-' + firstStage.key);
+    zoomStage(firstDream.id, firstStage.key, barEl);
+  }
+}
+
+setTheme(safeStorageGet('vizor-theme', 'light'));
+renderDreams();
+""".replace("__PORT__", str(port))
+
+    if not style_content:
+        style_content = "body{font-family:monospace;background:#f6f8fa;color:#1f2328;}"
+
+    return f"""<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Gantt v5</title>
+<script>window.VIZOR_DATA = {data_json};</script>
+<style>
+{style_content}
+</style>
+</head>
+<body>
+
+<div class="ov" id="ov" onclick="closeNote()"></div>
+<div class="note-modal" id="nm">
+  <div class="nm-title" id="nt">Note on <strong>—</strong></div>
+  <textarea placeholder="Add a note or instruction for next Vizor run…" id="ntxt"></textarea>
+  <div class="ac-row">
+    <span class="ac-lbl">Action:</span>
+    <button class="ac" data-tag="Redo stage" onclick="this.classList.toggle('on')">↺ Redo stage</button>
+    <button class="ac" data-tag="Reassign agent" onclick="this.classList.toggle('on')">⇄ Reassign agent</button>
+    <button class="ac" data-tag="Defer" onclick="this.classList.toggle('on')">⏸ Defer</button>
+  </div>
+  <div class="nm-footer">
+    <button class="btn btn-cancel" onclick="closeNote()">Cancel</button>
+    <button class="btn btn-save" onclick="saveNote()">Save note</button>
+  </div>
+</div>
+
+<svg style="display:none"><symbol id="pencil-svg" viewBox="0 0 16 16">
+  <polygon points="2,14 3.5,10 12,1.5 14.5,4 6,12.5" fill="currentColor" opacity=".85"/>
+  <polygon points="2,14 3.5,10 5.5,12" fill="currentColor"/>
+  <rect x="12.2" y="0.5" width="2.5" height="3" rx=".5" fill="currentColor" opacity=".6"/>
+  <line x1="4.5" y1="11" x2="12.5" y2="3" stroke="white" stroke-width=".7" opacity=".3"/>
+</symbol></svg>
+
+<div class="shell">
+<div class="sidenav">
+  <div class="nav-header"><div class="nav-logo">S<span>ynlynk</span> <span style="color:var(--accent)">viz</span></div></div>
+  <input class="nav-search" placeholder="⌘K  search…" readonly>
+  <div class="nav-section">
+    <div class="nav-sec-label">Workspaces</div>
+    <div class="nav-item active"><span>▾</span> synlynk-core <span class="nav-badge">5</span></div>
+    <div class="repo-item active"><div class="rdot" style="background:var(--accent)"></div>synlynk (main)</div>
+    <div class="repo-item"><div class="rdot" style="background:#f59e0b"></div>synlynk-website</div>
+    <div class="repo-item"><div class="rdot" style="background:var(--text3)"></div>tokq-bridge</div>
+    <div class="nav-item" style="margin-top:5px"><span>▸</span> rxcc <span class="nav-badge">1</span></div>
+    <div class="nav-item"><span>▸</span> playblazer-ng <span class="nav-badge">2</span></div>
+    <div class="nav-sec-label" style="color:var(--accent);cursor:pointer;margin-top:4px">+ Add workspace</div>
+  </div>
+  <div class="nav-footer">
+    <div class="nav-footer-top"><div class="avatar">N</div><div class="av-name">nikhilsoman</div><div class="gear-btn">⚙</div></div>
+    <div class="theme-label">Theme</div>
+    <div class="theme-sw">
+      <button class="theme-btn active" id="btn-light" onclick="setTheme('light')">☀ Light</button>
+      <button class="theme-btn" id="btn-dark" onclick="setTheme('dark')">☾ Dark</button>
+      <button class="theme-btn" id="btn-sys" onclick="setTheme('system')">⊙ System</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="view-tabs">
+    <div class="vtab active">📅 Gantt</div>
+    <div class="vtab">🗺 User Journeys</div>
+    <div class="vtab">🚇 Architect Map</div>
+    <div class="vtab">💰 Effort & Cost</div>
+    <div class="vtab">📊 Efficiency</div>
+    <div class="tab-sp"></div>
+    <div class="tab-meta"><div class="live-dot"></div>updated 3m ago</div>
+  </div>
+  <div class="content">
+    <div class="ws-header">
+      <div><div class="ws-title">{html.escape(str(data.get("workspace", {}).get("name", "workspace")))}</div><div class="ws-sub" id="ws-sub">Loading dreams…</div></div>
+      <div class="ws-chip">Developer Preview · v0.10.0</div>
+    </div>
+    <div class="toolbar">
+      <span class="lbl">Filter:</span>
+      <button class="chip on">All</button><button class="chip">In Progress</button><button class="chip">Ships soon</button>
+      <div class="sp"></div>
+      <button class="zbtn">← 4w</button>
+      <button class="zbtn" style="border-color:var(--accent);color:var(--accent)">10w ✓</button>
+      <button class="zbtn">26w →</button>
+    </div>
+
+    <div class="gw"><div class="gantt" id="gantt">
+      <div class="gh" id="gantt-header">
+        <div class="ghl">Dream / Epic</div>
+        <div class="gwk">Jul W1</div><div class="gwk">Jul W2</div>
+        <div class="gwk now">Jul W3 ▾</div><div class="gwk">Jul W4</div>
+        <div class="gwk">Aug W1</div><div class="gwk">Aug W2</div>
+        <div class="gwk">Aug W3</div><div class="gwk">Aug W4</div>
+        <div class="gwk">Sep W1</div><div class="gwk">Sep W2</div>
+      </div>
+      <div id="gantt-body"></div>
+    </div></div>
+
+    <div class="legend">
+      <div class="li"><div class="ld" style="background:var(--s-dream-bg);border-color:var(--s-dream-bd)"></div>✦ Dream</div>
+      <div class="li"><div class="ld" style="background:var(--s-plan-bg);border-color:var(--s-plan-bd)"></div>⊡ Plan</div>
+      <div class="li"><div class="ld" style="background:var(--s-work-bg);border-color:var(--s-work-bd)"></div>⚙ Work</div>
+      <div class="li"><div class="ld" style="background:var(--s-ship-bg);border-color:var(--s-ship-bd)"></div>▲ Ship</div>
+      <div class="li"><div class="ld" style="background:var(--s-maint-bg);border-color:var(--s-maint-bd)"></div>↺ Maintain</div>
+      <div class="li"><div class="ld" style="background:var(--s-engage-bg);border-color:var(--s-engage-bd)"></div>♡ Engage</div>
+      <span class="lsep">|</span><div class="li" style="font-style:italic">~ animated = in progress</div>
+    </div>
+    <div class="ni-legend">
+      <span class="lbl">Note icons:</span>
+      <div class="nil"><svg width="14" height="14" style="color:#9ca3af"><use href="#pencil-svg"/></svg> no note</div>
+      <div class="nil"><svg width="14" height="14" style="color:#3b82f6"><use href="#pencil-svg"/></svg> has note</div>
+      <div class="nil"><svg width="14" height="14" style="color:#f59e0b"><use href="#pencil-svg"/></svg> action tagged</div>
+      <div class="nil"><svg width="14" height="14" style="color:#ef4444"><use href="#pencil-svg"/></svg> urgent / overrun</div>
+      <div class="nil"><svg width="14" height="14" style="color:#22c55e"><use href="#pencil-svg"/></svg> resolved</div>
+    </div>
+    <div class="al-row">
+      <span class="lbl">Agents:</span>
+      <div class="ali"><div class="aa aa-claude">C</div>Claude</div>
+      <div class="ali"><div class="aa aa-agy">A</div>Agy</div>
+      <div class="ali"><div class="aa aa-codex">Co</div>Codex</div>
+      <div class="ali"><div class="aa aa-grok">G</div>Grok</div>
+    </div>
+
+    <div class="srow">
+      <div class="sc teal editable"><div class="sl">Dreams in flight</div><div class="sv" id="dream-count">0</div><div class="ss" id="dream-sub">0 stages</div><div class="wow">⚡ live</div><div class="pencil-wrap note-none" onclick="openNote('summary','Summary');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+      <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="aa-stack" style="margin-top:6px"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div><div class="aa aa-grok">G</div></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+      <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+      <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    </div>
+  </div>
+  <div class="status-bar"><span class="sb-ok">● local · offline-ready</span><span id="status-workspaces">3 workspaces</span><div class="sb-rt">next update: ~7 min</div></div>
+</div>
+</div>
+
+<script>
+{script_content}
+</script>
+</body>
+</html>"""
 
 
 def generate_tube_html(data: dict, port: int) -> str:
@@ -2956,6 +3412,19 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=os.path.abspath(VIZ_CACHE_DIR), **kwargs)
 
+    def _send_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def do_OPTIONS(self):
+        if self.path != "/note":
+            self.send_error(404)
+            return
+        self.send_response(204)
+        self._send_cors_headers()
+        self.end_headers()
+
     def do_POST(self):
         if self.path != "/note":
             self.send_error(404)
@@ -2988,6 +3457,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             json.dump(notes, f, indent=2)
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(b'{"ok": true}')
 
