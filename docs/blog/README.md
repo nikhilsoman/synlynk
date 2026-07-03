@@ -47,6 +47,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [38](./38-pr97-v0.10.1-release-command.md) | PR #97–#99 — Job summaries, synlynk release, synlynk status | [#97](https://github.com/nikhilsoman/synlynk/pull/97) | 2026-07-02 |
 | [39](./39-prTBD-bs21-vizor.md) | PR #101 — BS-21 Vizor: Local Browser Dashboard | [#101](https://github.com/nikhilsoman/synlynk/pull/101) | 2026-07-03 |
 | **[40](./40-v010-developer-preview.md)** | **v0.10.0 — Developer Preview (Named Release)** | [#89–#102](https://github.com/nikhilsoman/synlynk/releases/tag/v0.10.0) | **2026-07-03** |
+| [41](./41-prTBD-bs13-workspace-hud.md) | BS-13 Workspace HUD | TBD | 2026-07-03 |
 
 ## Per-PR Post Template
 
