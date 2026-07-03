@@ -408,7 +408,438 @@ def generate_viz_data() -> dict:
 
 
 def generate_index_html(data: dict, port: int) -> str:
-    return f"<html><body>index stub port={port}</body></html>"
+    workspace = data.get("workspace") or {}
+    workspace_name = str(workspace.get("name") or "workspace")
+    updated_at = str(workspace.get("updated_at") or "")
+    repos = workspace.get("repos") or []
+    repo_items = []
+    for repo in repos:
+        if isinstance(repo, dict):
+            repo_name = str(repo.get("name") or repo.get("path") or repo.get("slug") or "")
+            repo_badge = str(repo.get("branch") or repo.get("status") or "")
+            active = bool(repo.get("active"))
+        else:
+            repo_name = str(repo)
+            repo_badge = ""
+            active = False
+        if not repo_name:
+            continue
+        badge_html = f'<span class="repo-badge">{html.escape(repo_badge)}</span>' if repo_badge else ""
+        repo_items.append(
+            f"""
+        <div class="repo-item{' active' if active else ''}">
+          <span class="repo-dot"></span>
+          <span class="repo-name">{html.escape(repo_name)}</span>
+          {badge_html}
+        </div>
+            """.rstrip()
+        )
+    repo_list_html = "\n".join(repo_items)
+    if repo_list_html:
+        repo_list_html = f"""
+      <div class="nav-group">
+        <div class="nav-group-label">Repos</div>
+        {repo_list_html}
+      </div>
+        """.rstrip()
+
+    nav_items = [
+        ("gantt", "📅", "Gantt", "gantt.html", True),
+        ("journeys", "🗺", "Journeys", "journeys.html", False),
+        ("tube", "🚇", "Architect Map", "tube.html", False),
+        ("effort", "💰", "Effort & Cost", "effort.html", False),
+        ("efficiency", "📊", "Efficiency", "efficiency.html", False),
+    ]
+    nav_html = "\n".join(
+        f"""
+        <a class="nav-link{' active' if active else ''}" href="{view_html}" data-view="{view_id}" onclick="return setView('{view_id}', '{view_html}');">
+          <span class="nav-icon">{icon}</span>
+          <span class="nav-label">{label}</span>
+        </a>
+        """.rstrip()
+        for view_id, icon, label, view_html, active in nav_items
+    )
+
+    theme_buttons = "\n".join(
+        f"""
+        <button class="theme-btn{' active' if theme == 'light' else ''}" type="button" data-theme-mode="light">☀ Light</button>
+        <button class="theme-btn{' active' if theme == 'dark' else ''}" type="button" data-theme-mode="dark">☾ Dark</button>
+        <button class="theme-btn{' active' if theme == 'system' else ''}" type="button" data-theme-mode="system">⊙ System</button>
+        """.strip()
+        for theme in ["light", "dark", "system"]
+    )
+    # The loop above intentionally emits all three buttons while preserving a single
+    # active state in the markup based on the stored theme.
+    theme_buttons = """
+        <button class="theme-btn" type="button" data-theme-mode="light">☀ Light</button>
+        <button class="theme-btn" type="button" data-theme-mode="dark">☾ Dark</button>
+        <button class="theme-btn active" type="button" data-theme-mode="system">⊙ System</button>
+    """
+    # Default active state is corrected by the loader script after reading localStorage.
+
+    style_content = """
+    :root {
+      --bg:        #f6f8fa;  --bg2: #ffffff; --bg3: #eaeef2;
+      --border:    #d1d5db;  --border2: #e8ebee;
+      --text:      #1f2328;  --text2: #57606a; --text3: #8b949e;
+      --accent:    #0d9e87;  --accent-bg: #e6f7f4; --accent-dim: #c0ede6;
+      --shadow:    0 2px 12px rgba(0,0,0,.10);
+
+      --s-dream-bg:#ede9fe; --s-dream-bd:#c4b5fd; --s-dream-tx:#6d28d9;
+      --s-plan-bg: #dbeafe; --s-plan-bd: #93c5fd; --s-plan-tx: #1d4ed8;
+      --s-work-bg: #dcfce7; --s-work-bd: #86efac; --s-work-tx: #15803d;
+      --s-ship-bg: #ffedd5; --s-ship-bd: #fdba74; --s-ship-tx: #c2410c;
+      --s-maint-bg:#e0e7ff; --s-maint-bd:#a5b4fc; --s-maint-tx:#4338ca;
+      --s-engage-bg:#fce7f3;--s-engage-bd:#f9a8d4;--s-engage-tx:#be185d;
+
+      --ag-claude-bg:#e6f7f4;--ag-claude-bd:#0d9e87;--ag-claude-tx:#0d9e87;
+      --ag-agy-bg:  #e8f0fe;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #1a56c7;
+      --ag-codex-bg:#e6f4f0;--ag-codex-bd:#10a37f;--ag-codex-tx:#0b7a60;
+      --ag-grok-bg: #f0f0f0;--ag-grok-bd: #666;   --ag-grok-tx: #333;
+    }
+    [data-theme="dark"] {
+      --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
+      --border:#1e2430; --border2:#13171f;
+      --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
+      --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+      --shadow: 0 2px 20px rgba(0,0,0,.5);
+
+      --s-dream-bg:#2d1f5e;--s-dream-bd:#4a3f80;--s-dream-tx:#a78bfa;
+      --s-plan-bg: #1e3a5a;--s-plan-bd: #3a6090;--s-plan-tx: #60a5fa;
+      --s-work-bg: #1a4a2e;--s-work-bd: #2a7040;--s-work-tx: #4ade80;
+      --s-ship-bg: #5a3a00;--s-ship-bd: #8a5a00;--s-ship-tx: #fb923c;
+      --s-maint-bg:#1e2a4a;--s-maint-bd:#3a4a80;--s-maint-tx:#818cf8;
+      --s-engage-bg:#3a1a3a;--s-engage-bd:#6a2a6a;--s-engage-tx:#f472b6;
+
+      --ag-claude-bg:#0d2a2a;--ag-claude-bd:#3de0c0;--ag-claude-tx:#3de0c0;
+      --ag-agy-bg:  #0d1a3a;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #4285f4;
+      --ag-codex-bg:#0a1f18;--ag-codex-bd:#10a37f;--ag-codex-tx:#10a37f;
+      --ag-grok-bg: #1a1a1a;--ag-grok-bd: #e0e0e0;--ag-grok-tx: #e0e0e0;
+    }
+
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html, body { height:100%; }
+    body {
+      display:flex;
+      height:100vh;
+      margin:0;
+      overflow:hidden;
+      font-family:'SF Mono','JetBrains Mono',monospace;
+      background:var(--bg);
+      color:var(--text);
+      font-size:13px;
+      transition:background .2s,color .2s;
+    }
+    a { color:inherit; text-decoration:none; }
+    button { font:inherit; }
+
+    .shell {
+      display:flex;
+      height:100vh;
+      width:100%;
+      overflow:hidden;
+    }
+    .sidenav {
+      width:220px;
+      min-width:220px;
+      flex-shrink:0;
+      background:var(--bg2);
+      border-right:1px solid var(--border);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    .nav-header {
+      padding:14px 14px 12px;
+      border-bottom:1px solid var(--border);
+    }
+    .nav-logo {
+      font-size:14px;
+      font-weight:800;
+      color:var(--accent);
+      letter-spacing:-.5px;
+      line-height:1.2;
+    }
+    .workspace-name {
+      margin-top:5px;
+      font-size:12px;
+      color:var(--text2);
+      line-height:1.35;
+      word-break:break-word;
+    }
+    .nav-section {
+      flex:1;
+      overflow-y:auto;
+      padding:10px 0 8px;
+    }
+    .nav-group-label {
+      font-size:10px;
+      text-transform:uppercase;
+      letter-spacing:1px;
+      color:var(--text3);
+      padding:6px 14px 4px;
+    }
+    .nav-link {
+      padding:7px 10px 7px 14px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      cursor:pointer;
+      border-radius:5px;
+      margin:1px 6px;
+      color:var(--text2);
+      font-size:12px;
+      line-height:1.2;
+      user-select:none;
+    }
+    .nav-link:hover { background:var(--bg3); color:var(--text); }
+    .nav-link.active { background:var(--accent-bg); color:var(--accent); }
+    .nav-icon { width:16px; text-align:center; flex-shrink:0; }
+    .nav-label { white-space:nowrap; }
+    .repo-item {
+      padding:4px 10px 4px 30px;
+      display:flex;
+      align-items:center;
+      gap:7px;
+      margin:0 6px;
+      color:var(--text3);
+      font-size:11px;
+      border-radius:4px;
+    }
+    .repo-item:hover { background:var(--bg3); color:var(--text2); }
+    .repo-item.active { background:var(--accent-bg); color:var(--accent); }
+    .repo-dot {
+      width:6px;
+      height:6px;
+      border-radius:50%;
+      background:var(--accent);
+      flex-shrink:0;
+    }
+    .repo-badge {
+      margin-left:auto;
+      font-size:10px;
+      background:var(--bg3);
+      color:var(--text3);
+      padding:1px 5px;
+      border-radius:8px;
+    }
+    .nav-footer {
+      border-top:1px solid var(--border);
+      padding:10px 12px;
+    }
+    .theme-label {
+      font-size:10px;
+      color:var(--text3);
+      margin-bottom:6px;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+    }
+    .theme-sw {
+      display:flex;
+      gap:4px;
+    }
+    .theme-btn {
+      flex:1;
+      padding:5px 0;
+      border-radius:5px;
+      font-size:10px;
+      text-align:center;
+      cursor:pointer;
+      border:1px solid var(--border);
+      color:var(--text3);
+      background:transparent;
+    }
+    .theme-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .theme-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); font-weight:700; }
+    .avatar-row {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top:10px;
+    }
+    .avatar {
+      width:24px;
+      height:24px;
+      border-radius:50%;
+      background:linear-gradient(135deg,var(--accent),#0b7a60);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:10px;
+      font-weight:800;
+      color:#fff;
+      flex-shrink:0;
+    }
+    .avatar-name {
+      font-size:11px;
+      color:var(--text2);
+      flex:1;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .main {
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      min-width:0;
+    }
+    iframe#view-frame {
+      flex:1;
+      border:none;
+      width:100%;
+      background:var(--bg);
+    }
+    .status-bar {
+      background:var(--bg2);
+      border-top:1px solid var(--border);
+      padding:5px 20px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:11px;
+      color:var(--text3);
+      flex-shrink:0;
+      min-height:28px;
+    }
+    .status-dot { color:var(--accent); }
+    .status-workspace { color:var(--text2); }
+    .status-updated { margin-left:auto; }
+    """
+
+    meta_json = json.dumps({"port": port, "updated_at": updated_at})
+    initial_theme = "system"
+    avatar_label = (workspace_name[:1] or "S").upper()
+    if workspace_name.lower().startswith("synlynk"):
+        avatar_label = "S"
+    return f"""<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Shell</title>
+<script>window.VIZOR_META = {meta_json};</script>
+<style>{style_content}</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidenav">
+    <div class="nav-header">
+      <div class="nav-logo">Synlynk viz</div>
+      <div class="workspace-name">{html.escape(workspace_name)}</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-group-label">Views</div>
+      {nav_html}
+      {repo_list_html}
+    </div>
+    <div class="nav-footer">
+      <div class="theme-label">Theme</div>
+      <div class="theme-sw">
+        <button class="theme-btn" type="button" data-theme-mode="light">☀ Light</button>
+        <button class="theme-btn" type="button" data-theme-mode="dark">☾ Dark</button>
+        <button class="theme-btn active" type="button" data-theme-mode="system">⊙ System</button>
+      </div>
+      <div class="avatar-row">
+        <div class="avatar">{html.escape(avatar_label)}</div>
+        <div class="avatar-name">{html.escape(workspace_name)}</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <iframe id="view-frame" src="gantt.html" title="Synlynk Vizor view"></iframe>
+    <div class="status-bar">
+      <span class="status-dot">●</span>
+      <span>local</span>
+      <span>·</span>
+      <span>offline-ready</span>
+      <span>·</span>
+      <span class="status-workspace">{html.escape(workspace_name)}</span>
+      <span>·</span>
+      <span class="status-updated">updated {html.escape(updated_at)}</span>
+    </div>
+  </main>
+</div>
+
+<script>
+(function() {{
+  const themeKey = 'vizor-theme';
+  const themeButtons = Array.from(document.querySelectorAll('.theme-btn'));
+  const viewFrame = document.getElementById('view-frame');
+  const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+
+  function resolveTheme(theme) {{
+    if (theme === 'system') {{
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }}
+    return theme || 'light';
+  }}
+
+  function syncThemeButtons(theme) {{
+    themeButtons.forEach((btn) => {{
+      btn.classList.toggle('active', btn.dataset.themeMode === theme);
+    }});
+  }}
+
+  function applyTheme(theme) {{
+    const resolved = resolveTheme(theme);
+    document.documentElement.setAttribute('data-theme', resolved);
+    syncThemeButtons(theme);
+  }}
+
+  function setView(viewId, viewSrc) {{
+    if (viewFrame) {{
+      viewFrame.src = viewSrc;
+    }}
+    navLinks.forEach((link) => {{
+      link.classList.toggle('active', link.dataset.view === viewId);
+    }});
+    return false;
+  }}
+
+  window.setView = setView;
+
+  const storedTheme = localStorage.getItem(themeKey) || 'system';
+  applyTheme(storedTheme);
+
+  themeButtons.forEach((btn) => {{
+    btn.addEventListener('click', () => {{
+      const theme = btn.dataset.themeMode || 'system';
+      localStorage.setItem(themeKey, theme);
+      applyTheme(theme);
+    }});
+  }});
+
+  window.addEventListener('storage', (e) => {{
+    if (e.key === themeKey) {{
+      applyTheme(e.newValue || 'system');
+    }}
+  }});
+
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+  if (prefersDark && typeof prefersDark.addEventListener === 'function') {{
+    prefersDark.addEventListener('change', () => {{
+      if ((localStorage.getItem(themeKey) || 'system') === 'system') {{
+        applyTheme('system');
+      }}
+    }});
+  }}
+
+  navLinks.forEach((link) => {{
+    link.addEventListener('click', (event) => {{
+      event.preventDefault();
+      setView(link.dataset.view || 'gantt', link.getAttribute('href') || 'gantt.html');
+    }});
+  }});
+
+  setView('gantt', 'gantt.html');
+}})();
+</script>
+</body>
+</html>"""
 
 
 def generate_gantt_html(data: dict, port: int) -> str:
@@ -1704,7 +2135,7 @@ def generate_effort_html(data: dict, port: int) -> str:
         est = row.get("cost_est")
         if est is not None and value > float(est or 0.0):
             return "#e05"
-        return "var(--teal)"
+        return "#0d9e87"
 
     def dream_label(row, value):
         est = row.get("cost_est")
@@ -1715,11 +2146,11 @@ def generate_effort_html(data: dict, port: int) -> str:
     def agent_color(row, value):
         agent = (row.get("label") or "").strip().lower()
         return {
-            "claude": "var(--teal)",
-            "agy": "var(--blue)",
-            "codex": "var(--green)",
-            "grok": "var(--gray)",
-        }.get(agent, "var(--teal)")
+            "claude": "#0d9e87",
+            "agy": "#3b7dd8",
+            "codex": "#1a9e5c",
+            "grok": "#888888",
+        }.get(agent, "#0d9e87")
 
     def agent_label(row, value):
         pct = (value / total_usd * 100.0) if total_usd else 0.0
