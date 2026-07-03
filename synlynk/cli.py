@@ -58,10 +58,12 @@ def cmd_watch(args) -> None:
                 if cols < 60:
                     renderer.render_narrow_warning(cols)
                 elif live_mode:
-                    active_jobs = snapshot.active_jobs()
-                    if not show_all:
-                        active_jobs = [job for job in active_jobs if job.get("status") in ("running", "queued")]
-                    renderer.render(active_jobs=active_jobs, show_all=show_all)
+                    if show_all:
+                        active_jobs = snapshot.active_jobs() + snapshot.recent_jobs(n=10)
+                    else:
+                        active_jobs = snapshot.active_jobs()
+                    renderer.render(active_jobs=active_jobs, show_all=show_all,
+                                    refreshed_s=int(now - last_refresh))
                 else:
                     selected_cycle = CYCLES[selected_cycle_idx]
                     summary = snapshot.cycle_summary()

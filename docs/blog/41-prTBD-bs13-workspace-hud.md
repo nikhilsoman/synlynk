@@ -1,9 +1,9 @@
 ---
-title: "PR TBD — BS-13 Workspace HUD"
-date: 2026-07-03
+title: "PR #106 — BS-13 Workspace HUD"
+date: 2026-07-04
 series: "Building the OS for Multi-Agent Development"
 post: 41
-pr: "TBD"
+pr: 106
 status: draft
 ---
 

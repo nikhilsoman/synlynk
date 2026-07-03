@@ -313,7 +313,7 @@ class LiveRenderer:
     def render_narrow_warning(self, cols: int) -> None:
         HUDRenderer(self.buf).render_narrow_warning(cols)
 
-    def render(self, active_jobs: list, show_all: bool) -> None:
+    def render(self, active_jobs: list, show_all: bool, refreshed_s: int = 0) -> None:
         """Render full --live frame into buf. Call buf.flush() to emit."""
         self.buf.clear()
         rows, cols = self.buf.rows, self.buf.cols
@@ -351,8 +351,7 @@ class LiveRenderer:
 
         # Footer
         n = len(active_jobs)
-        footer = (f"  {DIM}{n} running  ·  refreshed just now{RESET}"
-                  if n else f"  {DIM}0 running  ·  refreshed just now{RESET}")
+        footer = f"  {DIM}{n} running  ·  refreshed {refreshed_s}s ago{RESET}"
         self.buf.set_line(rows - 2, footer)
         self.buf.set_line(rows - 1,
             f"  {DIM}synlynk watch for full workspace HUD{RESET}")
