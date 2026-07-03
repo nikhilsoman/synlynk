@@ -31,6 +31,22 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [22](./22-pr56-57-58-v0.9.3-async-daemon.md) | PRs #56/#57/#58 — v0.9.3: synlynk Goes Always-On | [#56](https://github.com/nikhilsoman/synlynk/pull/56), [#57](https://github.com/nikhilsoman/synlynk/pull/57), [#58](https://github.com/nikhilsoman/synlynk/pull/58) | 2026-06-23 |
 | [23](./23-fix-dispatch-context-scoping.md) | P0 Fix: Dispatch Context Scoping | [#59](https://github.com/nikhilsoman/synlynk/pull/59) | 2026-06-24 |
 | [24](./24-pr31-v0.9.4-context-dispatch-relay.md) | PR #60 — v0.9.4: Context, Dispatch, and Relay | [#60](https://github.com/nikhilsoman/synlynk/pull/60) | 2026-06-24 |
+| [25](./25-pr64-v0.9.7-grok-agent-support.md) | PR #64 — v0.9.7: Grok Agent Support | [#64](https://github.com/nikhilsoman/synlynk/pull/64) | 2026-06-26 |
+| [26](./26-pr68-v0.9.8-pipx-packaging.md) | PR #68 — v0.9.8: pipx Packaging | [#68](https://github.com/nikhilsoman/synlynk/pull/68) | 2026-06-27 |
+| [27](./27-pr69-v0.9.8-synlynk-doctor.md) | PR #69 — v0.9.8: synlynk doctor | [#69](https://github.com/nikhilsoman/synlynk/pull/69) | 2026-06-27 |
+| [28](./28-pr70-v0.9.8-health-lifecycle.md) | PR #70 — v0.9.8: Health + Lifecycle | [#70](https://github.com/nikhilsoman/synlynk/pull/70) | 2026-06-27 |
+| [29](./29-pr78-bs5-phase1-scaffold.md) | PR #78 — BS-5: Website Phase 1 Scaffold | [#78](https://github.com/nikhilsoman/synlynk/pull/78) | — |
+| [30](./30-pr78-bs5-phase2-agy-templates.md) | PR #78 — BS-5: Website Phase 2 Agy Templates | [#78](https://github.com/nikhilsoman/synlynk/pull/78) | — |
+| [31](./31-pr78-bs5-phase2-grok-carousel.md) | PR #78 — BS-5: Website Phase 2 Grok Carousel | [#78](https://github.com/nikhilsoman/synlynk/pull/78) | — |
+| [32](./32-pr78-bs5-phase3-grok-canvas.md) | PR #78 — BS-5: Website Phase 3 Grok Canvas | [#78](https://github.com/nikhilsoman/synlynk/pull/78) | — |
+| [33](./33-pr78-bs5-phase3-agy-subpages.md) | PR #78 — BS-5: Website Phase 3 Agy Subpages | [#78](https://github.com/nikhilsoman/synlynk/pull/78) | — |
+| [34](./34-pr82-bs14-harness-compatibility.md) | PR #82 — BS-14: Harness Compatibility System | [#82](https://github.com/nikhilsoman/synlynk/pull/82) | 2026-07-01 |
+| [35](./35-pr89-v0.10.0-bs17-scan-wizard.md) | PR #89 — v0.10.0: synlynk scan + wizard FTUE | [#89](https://github.com/nikhilsoman/synlynk/pull/89) | 2026-07-01 |
+| [36](./36-prTBD-bs18-migrate.md) | BS-18: synlynk migrate — state.db import | — | 2026-07-01 |
+| [37](./37-prTBD-v010-readme.md) | v0.10.0: README overhaul | — | 2026-07-01 |
+| [38](./38-pr97-v0.10.1-release-command.md) | PR #97–#99 — Job summaries, synlynk release, synlynk status | [#97](https://github.com/nikhilsoman/synlynk/pull/97) | 2026-07-02 |
+| [39](./39-prTBD-bs21-vizor.md) | PR #101 — BS-21 Vizor: Local Browser Dashboard | [#101](https://github.com/nikhilsoman/synlynk/pull/101) | 2026-07-03 |
+| **[40](./40-v010-developer-preview.md)** | **v0.10.0 — Developer Preview (Named Release)** | [#89–#102](https://github.com/nikhilsoman/synlynk/releases/tag/v0.10.0) | **2026-07-03** |
 
 ## Per-PR Post Template
 
