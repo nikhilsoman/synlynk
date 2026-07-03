@@ -959,7 +959,552 @@ __LIVE_JS_HTML__
 
 
 def generate_journeys_html(data: dict, port: int) -> str:
-    return f"<html><body>journeys stub</body></html>"
+    data_json = json.dumps(data)
+    html_template = """<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — User Journeys</title>
+<style>
+/* ══════════════════════════════════════════════
+   THEME TOKENS
+   ══════════════════════════════════════════════ */
+:root {
+  --bg:        #f6f8fa;  --bg2: #ffffff; --bg3: #eaeef2;
+  --border:    #d1d5db;  --border2: #e8ebee;
+  --text:      #1f2328;  --text2: #57606a; --text3: #8b949e;
+  --accent:    #0d9e87;  --accent-bg: #e6f7f4; --accent-dim: #c0ede6;
+  --shadow:    0 2px 12px rgba(0,0,0,.10);
+
+  /* Stage colors: design/blue, plan/purple, build/teal, ship/green, sustain/amber */
+  --s-design-bg:  #dbeafe; --s-design-bd:  #93c5fd; --s-design-tx:  #1d4ed8;
+  --s-plan-bg:    #ede9fe; --s-plan-bd:    #c4b5fd; --s-plan-tx:    #6d28d9;
+  --s-build-bg:   #e6f7f4; --s-build-bd:   #c0ede6; --s-build-tx:   #0d9e87;
+  --s-ship-bg:    #dcfce7; --s-ship-bd:    #86efac; --s-ship-tx:    #15803d;
+  --s-sustain-bg: #fef3c7; --s-sustain-bd: #fde68a; --s-sustain-tx: #d97706;
+
+  --ag-claude-bg:#e6f7f4;--ag-claude-bd:#0d9e87;--ag-claude-tx:#0d9e87;
+  --ag-agy-bg:  #e8f0fe;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #1a56c7;
+  --ag-codex-bg:#e6f4f0;--ag-codex-bd:#10a37f;--ag-codex-tx:#0b7a60;
+  --ag-grok-bg: #f0f0f0;--ag-grok-bd: #666;   --ag-grok-tx: #333;
+}
+[data-theme="dark"] {
+  --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
+  --border:#1e2430; --border2:#13171f;
+  --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
+  --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+  --shadow: 0 2px 20px rgba(0,0,0,.5);
+
+  --s-design-bg:  #1e3a5a; --s-design-bd:  #3a6090; --s-design-tx:  #60a5fa;
+  --s-plan-bg:    #2d1f5e; --s-plan-bd:    #4a3f80; --s-plan-tx:    #a78bfa;
+  --s-build-bg:   #0d2a2a; --s-build-bd:   #1f4d45; --s-build-tx:   #3de0c0;
+  --s-ship-bg:    #1a4a2e; --s-ship-bd:    #2a7040; --s-ship-tx:    #4ade80;
+  --s-sustain-bg: #451a03; --s-sustain-bd: #78350f; --s-sustain-tx: #fbbf24;
+
+  --ag-claude-bg:#0d2a2a;--ag-claude-bd:#3de0c0;--ag-claude-tx:#3de0c0;
+  --ag-agy-bg:  #0d1a3a;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #4285f4;
+  --ag-codex-bg:#0a1f18;--ag-codex-bd:#10a37f;--ag-codex-tx:#10a37f;
+  --ag-grok-bg: #1a1a1a;--ag-grok-bd: #e0e0e0;--ag-grok-tx: #e0e0e0;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  font-size:13px;
+  transition:background .2s,color .2s;
+  overflow:hidden;
+}
+
+/* Split Pane Layout */
+.split-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+.left-panel {
+  width: 280px;
+  min-width: 200px;
+  max-width: 500px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.resizer {
+  width: 5px;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.resizer:hover, .resizer.dragging {
+  background: var(--accent);
+}
+.right-panel {
+  flex: 1;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Left Panel Header & Rows */
+.panel-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--text);
+  background: var(--bg2);
+}
+.journey-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.journey-row {
+  padding: 12px 16px;
+  cursor: pointer;
+  color: var(--text2);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border2);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.journey-row:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+.journey-row.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding-left: 13px;
+}
+.journey-steps-count {
+  font-size: 10px;
+  background: var(--bg3);
+  color: var(--text3);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
+}
+.journey-row.active .journey-steps-count {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* FTUE Notice Banner */
+.ftue-notice {
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--accent-dim);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 5;
+  animation: slideDown 0.3s ease;
+}
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+.notice-text {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.close-notice-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.close-notice-btn:hover {
+  opacity: 1;
+}
+
+/* Right Panel Content Header & Flow */
+.right-header {
+  padding: 16px 24px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  min-height: 53px;
+  display: flex;
+  align-items: center;
+}
+.right-header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.flow-viewport {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 40px 24px;
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+}
+.flow-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Cards & Arrows */
+.step-card {
+  width: 200px;
+  min-height: 120px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
+}
+.step-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+[data-theme="dark"] .step-card:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+.step-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.step-route {
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  background: var(--bg3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.step-desc {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.4;
+  flex: 1;
+  word-break: break-word;
+}
+.step-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* Stage Badge Pill Styles */
+.stage-pill {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid;
+  letter-spacing: 0.5px;
+}
+.st-design { background: var(--s-design-bg); border-color: var(--s-design-bd); color: var(--s-design-tx); }
+.st-plan { background: var(--s-plan-bg); border-color: var(--s-plan-bd); color: var(--s-plan-tx); }
+.st-build { background: var(--s-build-bg); border-color: var(--s-build-bd); color: var(--s-build-tx); }
+.st-ship { background: var(--s-ship-bg); border-color: var(--s-ship-bd); color: var(--s-ship-tx); }
+.st-sustain { background: var(--s-sustain-bg); border-color: var(--s-sustain-bd); color: var(--s-sustain-tx); }
+.st-unknown { background: var(--bg3); border-color: var(--border); color: var(--text3); }
+
+/* Agent Avatar Badges */
+.aa {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  flex-shrink: 0;
+  border: 1.5px solid;
+  cursor: default;
+}
+.aa-claude { background: var(--ag-claude-bg); border-color: var(--ag-claude-bd); color: var(--ag-claude-tx); }
+.aa-agy    { background: var(--ag-agy-bg);    border-color: var(--ag-agy-bd);    color: var(--ag-agy-tx);    }
+.aa-codex  { background: var(--ag-codex-bg);  border-color: var(--ag-codex-bd);  color: var(--ag-codex-tx);  font-size: 8px; }
+.aa-grok   { background: var(--ag-grok-bg);   border-color: var(--ag-grok-bd);   color: var(--ag-grok-tx);   }
+.aa-unknown { background: var(--bg3); border-color: var(--border); color: var(--text3); }
+
+.flow-arrow {
+  font-size: 20px;
+  color: var(--text3);
+  user-select: none;
+  font-weight: bold;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+}
+
+/* Empty State Styles */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px;
+  text-align: center;
+  color: var(--text2);
+  background: var(--bg);
+}
+.empty-state-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.empty-state-desc {
+  font-size: 12px;
+  max-width: 480px;
+  line-height: 1.6;
+  color: var(--text3);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 8px;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  text-align: left;
+}
+</style>
+</head>
+<body>
+
+<div id="app-container" style="height: 100vh; width: 100vw; display: flex; flex-direction: column;"></div>
+
+<script>
+window.VIZOR_DATA = {{data_json}};
+</script>
+<script>
+function setTheme(t) {
+  const resolved = t === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+  document.documentElement.setAttribute('data-theme', resolved);
+}
+setTheme(localStorage.getItem('vizor-theme') || 'system');
+window.addEventListener('storage', (e) => {
+  if (e.key === 'vizor-theme') {
+    setTheme(e.newValue);
+  }
+});
+
+let selectedJourneyId = null;
+
+function getAgentDetails(name) {
+  const n = (name || '').trim().toLowerCase();
+  if (n.startsWith('claude')) return { cls: 'aa-claude', lbl: 'C' };
+  if (n.startsWith('agy')) return { cls: 'aa-agy', lbl: 'A' };
+  if (n.startsWith('codex')) return { cls: 'aa-codex', lbl: 'Cx' };
+  if (n.startsWith('grok')) return { cls: 'aa-grok', lbl: 'G' };
+  if (!n) return null;
+  return { cls: 'aa-unknown', lbl: n.charAt(0).toUpperCase() };
+}
+
+function getStageClass(stage) {
+  const s = (stage || '').trim().toLowerCase();
+  if (s === 'design') return 'st-design';
+  if (s === 'plan') return 'st-plan';
+  if (s === 'build') return 'st-build';
+  if (s === 'ship') return 'st-ship';
+  if (s === 'sustain') return 'st-sustain';
+  return 'st-unknown';
+}
+
+function dismissNotice() {
+  const notice = document.getElementById('ftue-notice');
+  if (notice) {
+    notice.style.display = 'none';
+  }
+}
+
+function selectJourney(id) {
+  selectedJourneyId = id;
+  
+  // Highlight row
+  document.querySelectorAll('.journey-row').forEach(row => {
+    if (row.getAttribute('data-id') === id) {
+      row.classList.add('active');
+    } else {
+      row.classList.remove('active');
+    }
+  });
+
+  const journey = window.VIZOR_DATA.journeys.find(j => j.id === id);
+  if (!journey) return;
+
+  // Render header
+  const header = document.getElementById('right-header-title');
+  if (header) {
+    header.textContent = journey.name;
+  }
+
+  // Render flow
+  const viewport = document.getElementById('flow-viewport');
+  if (!viewport) return;
+
+  if (!journey.steps || journey.steps.length === 0) {
+    viewport.innerHTML = '<div class="empty-state"><div class="empty-state-title">No steps defined for this journey</div></div>';
+    return;
+  }
+
+  let html = '<div class="flow-row">';
+  journey.steps.forEach((step, idx) => {
+    const stageCls = getStageClass(step.stage);
+    const stageLabel = step.stage || 'unknown';
+    const agent = getAgentDetails(step.agent);
+    
+    let agentHtml = '';
+    if (agent) {
+      agentHtml = `<div class="aa ${agent.cls}" title="Agent: ${step.agent}">${agent.lbl}</div>`;
+    }
+
+    html += `
+      <div class="step-card">
+        <div class="step-name">${step.screen || 'Screen'}</div>
+        <div class="step-route" title="${step.route || ''}">${step.route || '/'}</div>
+        <div class="step-desc">${step.desc || ''}</div>
+        <div class="step-footer">
+          <div class="stage-pill ${stageCls}">${stageLabel}</div>
+          ${agentHtml}
+        </div>
+      </div>
+    `;
+
+    if (idx < journey.steps.length - 1) {
+      html += '<div class="flow-arrow">→</div>';
+    }
+  });
+  html += '</div>';
+  viewport.innerHTML = html;
+}
+
+function initApp() {
+  const container = document.getElementById('app-container');
+  const data = window.VIZOR_DATA;
+
+  if (!data || !data.journeys || data.journeys.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🗺️</div>
+        <div class="empty-state-title">User Journeys</div>
+        <div class="empty-state-desc">No journeys found. Create docs/journeys/ with .md files, each starting with a # H1 title. Steps use ## Screen Name headings with route:, desc:, agent:, stage: key-value lines.</div>
+      </div>
+    `;
+    return;
+  }
+
+  let leftRowsHtml = '';
+  data.journeys.forEach(j => {
+    const stepCount = j.steps ? j.steps.length : 0;
+    leftRowsHtml += `
+      <div class="journey-row" data-id="${j.id}" onclick="selectJourney('${j.id}')">
+        <span>${j.name}</span>
+        <span class="journey-steps-count">${stepCount} step${stepCount !== 1 ? 's' : ''}</span>
+      </div>
+    `;
+  });
+
+  const showFTUE = data.workspace && data.workspace.vizor_second_view === 'tube';
+  const noticeStyle = showFTUE ? 'display: flex;' : 'display: none;';
+
+  container.innerHTML = `
+    <div class="split-container">
+      <div class="left-panel" id="left-panel">
+        <div class="panel-header">User Journeys</div>
+        <div class="journey-list">${leftRowsHtml}</div>
+      </div>
+      <div class="resizer" id="resizer"></div>
+      <div class="right-panel" id="right-panel">
+        <div class="ftue-notice" id="ftue-notice" style="${noticeStyle}">
+          <span class="notice-text">Your workspace is configured for the Architect Map as the primary structural view. User Journeys is available if your project has UX screens.</span>
+          <button class="close-notice-btn" onclick="dismissNotice()">✕</button>
+        </div>
+        <div class="right-header">
+          <div class="right-header-title" id="right-header-title">Select a Journey</div>
+        </div>
+        <div class="flow-viewport" id="flow-viewport"></div>
+      </div>
+    </div>
+  `;
+
+  const resizer = document.getElementById('resizer');
+  const leftPanel = document.getElementById('left-panel');
+  let isDragging = false;
+
+  resizer.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const newWidth = e.clientX;
+    if (newWidth >= 200 && newWidth <= 500) {
+      leftPanel.style.width = `${newWidth}px`;
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+
+  if (data.journeys.length > 0) {
+    selectJourney(data.journeys[0].id);
+  }
+}
+
+initApp();
+</script>
+</body>
+</html>"""
+    return html_template.replace("{{data_json}}", data_json)
 
 
 def _viz_json(data: dict) -> str:
@@ -1351,7 +1896,623 @@ def generate_effort_html(data: dict, port: int) -> str:
 
 
 def generate_efficiency_html(data: dict, port: int) -> str:
-    return f"<html><body>efficiency stub</body></html>"
+    import html
+    import json
+
+    def _money(value) -> str:
+        try:
+            return f"${float(value):.2f}"
+        except Exception:
+            return "$0.00"
+
+    def _rate(value) -> float:
+        try:
+            return max(0.0, min(1.0, float(value)))
+        except Exception:
+            return 0.0
+
+    def _avatar(name: str) -> tuple[str, str]:
+        key = (name or "").strip().lower()
+        if key.startswith("claude"):
+            return "C", "claude"
+        if key.startswith("agy"):
+            return "A", "agy"
+        if key.startswith("codex"):
+            return "Co", "codex"
+        if key.startswith("grok"):
+            return "G", "grok"
+        if not name:
+            return "?", "unknown"
+        return (name.strip()[:2] if len(name.strip()) > 1 else name.strip()[0]).upper(), "unknown"
+
+    def _dot_class(rate: float, alert_count: int) -> str:
+        if rate >= 0.9 and alert_count == 0:
+            return "dot-good"
+        if 0.7 <= rate < 0.9 or alert_count == 1:
+            return "dot-warn"
+        return "dot-bad"
+
+    def _bar_class(rate: float) -> str:
+        if rate >= 0.9:
+            return "bar-good"
+        if rate >= 0.7:
+            return "bar-warn"
+        return "bar-bad"
+
+    def _pattern_class(pattern: str) -> str:
+        mapping = {
+            "FLATLINE": "pattern-flatline",
+            "SUCCESS_LOOP": "pattern-success-loop",
+            "COST_SPIKE": "pattern-cost-spike",
+            "QUOTA_EXHAUSTED": "pattern-quota-exhausted",
+        }
+        return mapping.get((pattern or "").upper(), "pattern-unknown")
+
+    agents = data.get("agents") or {}
+    telemetry = data.get("telemetry") or {}
+    sentinel_alerts = telemetry.get("sentinel_alerts") or []
+    recent_runs = telemetry.get("recent") or []
+    json_data = json.dumps(data, ensure_ascii=False)
+
+    style_content = """
+    :root {
+      --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eaeef2;
+      --border:#d1d5db; --border2:#e8ebee;
+      --text:#1f2328; --text2:#57606a; --text3:#8b949e;
+      --accent:#0d9e87; --accent-bg:#e6f7f4; --accent-dim:#c0ede6;
+      --shadow:0 2px 12px rgba(0,0,0,.10);
+
+      --ag-claude-bg:#e6f7f4; --ag-claude-bd:#0d9e87; --ag-claude-tx:#0d9e87;
+      --ag-agy-bg:#e8f0fe; --ag-agy-bd:#4285f4; --ag-agy-tx:#1a56c7;
+      --ag-codex-bg:#e6f4f0; --ag-codex-bd:#10a37f; --ag-codex-tx:#0b7a60;
+      --ag-grok-bg:#f0f0f0; --ag-grok-bd:#666; --ag-grok-tx:#333;
+      --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+    }
+    [data-theme="dark"] {
+      --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
+      --border:#1e2430; --border2:#13171f;
+      --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
+      --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+      --shadow:0 2px 20px rgba(0,0,0,.5);
+
+      --ag-claude-bg:#0d2a2a; --ag-claude-bd:#3de0c0; --ag-claude-tx:#3de0c0;
+      --ag-agy-bg:#0d1a3a; --ag-agy-bd:#4285f4; --ag-agy-tx:#4285f4;
+      --ag-codex-bg:#0a1f18; --ag-codex-bd:#10a37f; --ag-codex-tx:#10a37f;
+      --ag-grok-bg:#1a1a1a; --ag-grok-bd:#e0e0e0; --ag-grok-tx:#e0e0e0;
+      --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:'SF Mono','JetBrains Mono',monospace;
+      background: radial-gradient(circle at top, rgba(13,158,135,.10), transparent 36%), var(--bg);
+      color:var(--text);
+      font-size:13px;
+      transition:background .2s,color .2s;
+      min-height:100vh;
+      padding:20px;
+    }
+    .page {
+      max-width:1280px;
+      margin:0 auto;
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+    .hero {
+      display:flex;
+      align-items:end;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .title {
+      font-size:20px;
+      font-weight:800;
+      letter-spacing:-0.02em;
+    }
+    .subtitle {
+      margin-top:4px;
+      color:var(--text2);
+      font-size:12px;
+      line-height:1.4;
+    }
+    .meta-chip {
+      align-self:flex-start;
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:var(--bg2);
+      color:var(--text2);
+      font-size:11px;
+      white-space:nowrap;
+    }
+    .section {
+      background:var(--bg2);
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .section-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:14px 16px;
+      border-bottom:1px solid var(--border2);
+      background:linear-gradient(180deg, rgba(13,158,135,.06), transparent);
+    }
+    .section-title {
+      font-size:13px;
+      font-weight:800;
+      letter-spacing:.02em;
+      text-transform:uppercase;
+      color:var(--text);
+    }
+    .section-note {
+      color:var(--text3);
+      font-size:11px;
+    }
+    .cards-grid {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:14px;
+      padding:16px;
+    }
+    .cards-grid.single {
+      grid-template-columns:1fr;
+    }
+    .agent-card {
+      position:relative;
+      background:linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,0));
+      border:1px solid var(--border2);
+      border-radius:14px;
+      padding:16px 16px 14px;
+      min-height:168px;
+      overflow:hidden;
+    }
+    [data-theme="dark"] .agent-card {
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+    }
+    .agent-card::before {
+      content:'';
+      position:absolute;
+      inset:0;
+      border-radius:14px;
+      pointer-events:none;
+      background:linear-gradient(135deg, rgba(13,158,135,.08), transparent 42%);
+      opacity:.7;
+    }
+    .traffic-dot {
+      position:absolute;
+      top:14px;
+      right:14px;
+      width:12px;
+      height:12px;
+      border-radius:50%;
+      border:2px solid var(--bg2);
+      box-shadow:0 0 0 1px rgba(0,0,0,.06);
+      z-index:1;
+    }
+    .dot-good { background:var(--ok); }
+    .dot-warn { background:var(--warn); }
+    .dot-bad { background:var(--bad); }
+    .agent-head {
+      display:flex;
+      align-items:center;
+      gap:12px;
+      position:relative;
+      z-index:1;
+      margin-bottom:12px;
+      padding-right:20px;
+    }
+    .avatar-badge {
+      width:34px;
+      height:34px;
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:800;
+      font-size:11px;
+      letter-spacing:.02em;
+      color:#fff;
+      flex-shrink:0;
+    }
+    .agent-claude { background:linear-gradient(135deg, var(--ag-claude-bd), var(--ag-claude-tx)); }
+    .agent-agy { background:linear-gradient(135deg, var(--ag-agy-bd), var(--ag-agy-tx)); }
+    .agent-codex { background:linear-gradient(135deg, var(--ag-codex-bd), var(--ag-codex-tx)); }
+    .agent-grok { background:linear-gradient(135deg, var(--ag-grok-bd), var(--ag-grok-tx)); }
+    .agent-unknown { background:linear-gradient(135deg, var(--accent), #0b7a60); }
+    .agent-name {
+      font-size:15px;
+      font-weight:800;
+      color:var(--text);
+      line-height:1.2;
+    }
+    .agent-metrics {
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      position:relative;
+      z-index:1;
+    }
+    .agent-counts {
+      color:var(--text2);
+      font-size:12px;
+    }
+    .agent-spend {
+      font-size:12px;
+      color:var(--text);
+      font-weight:700;
+    }
+    .alert-count {
+      color:var(--bad);
+      font-size:12px;
+      font-weight:700;
+    }
+    .rate-wrap {
+      margin-top:2px;
+    }
+    .rate-label-row {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:6px;
+      font-size:11px;
+      color:var(--text2);
+    }
+    .rate-track {
+      width:100%;
+      height:10px;
+      background:var(--bg3);
+      border:1px solid var(--border);
+      border-radius:999px;
+      overflow:hidden;
+    }
+    .rate-fill {
+      height:100%;
+      border-radius:999px;
+    }
+    .bar-good { background:linear-gradient(90deg, #22c55e, #16a34a); }
+    .bar-warn { background:linear-gradient(90deg, #f59e0b, #d97706); }
+    .bar-bad { background:linear-gradient(90deg, #ef4444, #dc2626); }
+    .timeline-list {
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding:14px 16px 16px;
+      max-height:280px;
+      overflow:auto;
+    }
+    .timeline-row {
+      display:grid;
+      grid-template-columns:160px minmax(0, 1fr) auto;
+      gap:10px;
+      align-items:center;
+      padding:10px 12px;
+      border:1px solid var(--border2);
+      border-radius:12px;
+      background:var(--bg);
+    }
+    .timeline-ts {
+      color:var(--text2);
+      font-size:11px;
+      white-space:nowrap;
+    }
+    .badge {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:4px 8px;
+      border-radius:999px;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.02em;
+      white-space:nowrap;
+    }
+    .pattern-flatline { background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; }
+    .pattern-success-loop { background:#ffedd5; color:#c2410c; border:1px solid #fed7aa; }
+    .pattern-cost-spike { background:#fef3c7; color:#a16207; border:1px solid #fde68a; }
+    .pattern-quota-exhausted { background:#e5e7eb; color:#4b5563; border:1px solid #d1d5db; }
+    .pattern-unknown { background:var(--bg3); color:var(--text2); border:1px solid var(--border); }
+    [data-theme="dark"] .pattern-flatline { background:#2a1212; color:#fca5a5; border-color:#4c1d1d; }
+    [data-theme="dark"] .pattern-success-loop { background:#2a1b12; color:#fdba74; border-color:#4a2a16; }
+    [data-theme="dark"] .pattern-cost-spike { background:#2a2412; color:#fde68a; border-color:#4a4016; }
+    [data-theme="dark"] .pattern-quota-exhausted { background:#1f2937; color:#d1d5db; border-color:#374151; }
+    .resolved-badge {
+      background:rgba(22,163,74,.12);
+      color:var(--ok);
+      border:1px solid rgba(22,163,74,.22);
+    }
+    .timeline-row .resolved-badge {
+      justify-self:end;
+    }
+    .runs-table-wrap {
+      padding:0 16px 16px;
+    }
+    table.runs-table {
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border:1px solid var(--border2);
+      border-radius:12px;
+      background:var(--bg);
+    }
+    .runs-table th,
+    .runs-table td {
+      padding:11px 12px;
+      border-bottom:1px solid var(--border2);
+      text-align:left;
+      font-size:12px;
+      vertical-align:middle;
+    }
+    .runs-table th {
+      color:var(--text2);
+      font-size:10px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      background:var(--bg3);
+    }
+    .runs-table tr:last-child td {
+      border-bottom:none;
+    }
+    .run-agent {
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .run-duration,
+    .run-cost {
+      white-space:nowrap;
+      font-variant-numeric:tabular-nums;
+    }
+    .exit-ok {
+      color:var(--ok);
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .exit-bad {
+      color:var(--bad);
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .empty-state {
+      min-height:60vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:24px;
+      font-size:14px;
+      font-weight:700;
+      color:var(--text2);
+    }
+    .empty-state span {
+      display:inline-block;
+      max-width:560px;
+      line-height:1.6;
+      border:1px solid var(--border);
+      background:var(--bg2);
+      border-radius:16px;
+      padding:18px 20px;
+      box-shadow:var(--shadow);
+    }
+    @media (max-width: 900px) {
+      .cards-grid,
+      .cards-grid.single {
+        grid-template-columns:1fr;
+      }
+      .timeline-row {
+        grid-template-columns:1fr;
+      }
+      .timeline-row .resolved-badge {
+        justify-self:start;
+      }
+      .runs-table-wrap {
+        overflow:auto;
+      }
+      .runs-table {
+        min-width:680px;
+      }
+    }
+    """
+
+    if not agents:
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Efficiency Report Card</title>
+<script>window.VIZOR_DATA = {json_data};</script>
+<script>
+  (function() {{
+    const theme = localStorage.getItem('vizor-theme') || 'system';
+    let actualTheme = theme;
+    if (theme === 'system') {{
+      actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }}
+    document.documentElement.setAttribute('data-theme', actualTheme);
+  }})();
+</script>
+<style>{style_content}</style>
+</head>
+<body>
+  <div class="empty-state"><span>No telemetry recorded yet. Run synlynk exec or synlynk launch to generate efficiency data.</span></div>
+</body>
+</html>"""
+
+    cards_html = []
+    for name, stats in agents.items():
+        rate = _rate(stats.get("success_rate"))
+        alerts = int(stats.get("alert_count") or 0)
+        initials, avatar_class = _avatar(name)
+        dot_class = _dot_class(rate, alerts)
+        bar_class = _bar_class(rate)
+        alert_html = f'<div class="alert-count">{alerts} sentinel alerts</div>' if alerts > 0 else ""
+        cards_html.append(
+            f"""
+        <div class="agent-card">
+          <span class="traffic-dot {dot_class}"></span>
+          <div class="agent-head">
+            <div class="avatar-badge agent-{avatar_class}">{html.escape(initials)}</div>
+            <div class="agent-name">{html.escape(str(name))}</div>
+          </div>
+          <div class="agent-metrics">
+            <div class="agent-counts">{int(stats.get("tasks_done") or 0)} done · {int(stats.get("tasks_active") or 0)} active</div>
+            <div class="agent-spend">Total spend: {_money(stats.get("total_usd"))}</div>
+            {alert_html}
+            <div class="rate-wrap">
+              <div class="rate-label-row">
+                <span>Success rate</span>
+                <span>{rate * 100:.0f}%</span>
+              </div>
+              <div class="rate-track">
+                <div class="rate-fill {bar_class}" style="width:{rate * 100:.0f}%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+            """.rstrip()
+        )
+
+    sorted_alerts = sorted(
+        [alert for alert in sentinel_alerts if isinstance(alert, dict)],
+        key=lambda alert: str(alert.get("ts") or ""),
+        reverse=True,
+    )
+    timeline_html = []
+    for alert in sorted_alerts:
+        pattern = str(alert.get("pattern") or "")
+        resolved = bool(alert.get("resolved"))
+        resolved_html = '<span class="badge resolved-badge">[RESOLVED] ✓</span>' if resolved else ""
+        timeline_html.append(
+            f"""
+        <div class="timeline-row">
+          <div class="timeline-ts">{html.escape(str(alert.get("ts") or ""))}</div>
+          <span class="badge {_pattern_class(pattern)}">{html.escape(pattern or "UNKNOWN")}</span>
+          {resolved_html}
+        </div>
+            """.rstrip()
+        )
+    if not timeline_html:
+        timeline_html.append(
+            """
+        <div class="timeline-row">
+          <div class="timeline-ts">No sentinel alerts</div>
+          <span class="badge pattern-unknown">-</span>
+          <span class="badge resolved-badge" style="visibility:hidden;">[RESOLVED] ✓</span>
+        </div>
+            """.rstrip()
+        )
+
+    recent_rows = list((recent_runs or [])[-10:])[::-1]
+    runs_html = []
+    for row in recent_rows:
+        agent_name = str(row.get("agent") or "")
+        initials, avatar_class = _avatar(agent_name)
+        exit_code = int(row.get("exit_code") or 0)
+        duration = float(row.get("duration_s") or 0.0)
+        runs_html.append(
+            f"""
+        <tr>
+          <td>{html.escape(str(row.get("ts") or ""))}</td>
+          <td>
+            <div class="run-agent">
+              <span class="avatar-badge agent-{avatar_class}">{html.escape(initials)}</span>
+              <span>{html.escape(agent_name or "unknown")}</span>
+            </div>
+          </td>
+          <td class="run-duration">{duration:.0f}s</td>
+          <td class="run-cost">{_money(row.get("cost_usd"))}</td>
+          <td class="{ 'exit-ok' if exit_code == 0 else 'exit-bad' }">{'✓' if exit_code == 0 else '✗'} {exit_code}</td>
+        </tr>
+            """.rstrip()
+        )
+    if not runs_html:
+        runs_html.append(
+            """
+        <tr>
+          <td colspan="5" style="color:var(--text2);">No recent runs</td>
+        </tr>
+            """.rstrip()
+        )
+
+    grid_class = "cards-grid single" if len(agents) == 1 else "cards-grid"
+    html_out = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Efficiency Report Card</title>
+<script>window.VIZOR_DATA = {json_data};</script>
+<script>
+  (function() {{
+    const theme = localStorage.getItem('vizor-theme') || 'system';
+    let actualTheme = theme;
+    if (theme === 'system') {{
+      actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }}
+    document.documentElement.setAttribute('data-theme', actualTheme);
+  }})();
+</script>
+<style>{style_content}</style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <div>
+        <div class="title">Efficiency Report Card</div>
+        <div class="subtitle">Per-agent throughput, spend, success rate, and sentinel health.</div>
+      </div>
+      <div class="meta-chip">{html.escape(str(data.get("workspace", {}).get("name", "workspace")))} · {len(agents)} agent{'' if len(agents) == 1 else 's'}</div>
+    </div>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Agent Cards</div>
+        <div class="section-note">Traffic-light status uses success rate and sentinel alert count.</div>
+      </div>
+      <div class="{grid_class}">
+        {''.join(cards_html)}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Sentinel Timeline</div>
+        <div class="section-note">Newest first.</div>
+      </div>
+      <div class="timeline-list">
+        {''.join(timeline_html)}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Recent Runs</div>
+        <div class="section-note">Last 10 telemetry rows.</div>
+      </div>
+      <div class="runs-table-wrap">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Agent</th>
+              <th>Duration</th>
+              <th>Cost</th>
+              <th>Exit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(runs_html)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</body>
+</html>"""
+    return html_out
 
 
 def _write_cache(data: dict, port: int) -> None:
