@@ -44,7 +44,16 @@ v0.10.0 is ten PRs across three weeks. The groupings below reflect the actual im
 
 **`synlynk init --wizard`** — The 6-screen typeform-style TUI replaced the blunt `init` overwrite. Built entirely in `stdlib` (`termios`/`tty`). Screens: harness detection, workspace topology, skills scan, agent fleet discovery, role assignment, launch cheat sheet. Commit-on-complete: Ctrl-C before the final screen leaves zero state — no partial config, no orphaned `.synlynk/` directory. The wizard's role-assignment screen writes `## Your Role` blocks directly into CLAUDE.md, GEMINI.md, and AGENTS.md, so agents receive their directive in every session without any additional setup.
 
+![BS-17 wizard landing screen brainstorm](images/v010/bs17-wizard-landing.png)
+*Wizard landing screen design: S-glyph wordmark, brand introduction, teal accent. The landing locks in tone — not a config wizard, a workspace onboarding.*
+
+![BS-17 wizard step sequence](images/v010/bs17-wizard-steps.png)
+*Step sequence mockup showing the dot-trail progress indicator across all 6 screens. The multi-repo sub-flow branches at screen 2 and rejoins at screen 3.*
+
 **`synlynk scan`** — Re-runnable workspace analysis: detects topology (single/mono/multi), fingerprints stack via 14 file-presence heuristics, parses CLAUDE.md/GEMINI.md/AGENTS.md, maps everything to `state.db`. The key design decision: `scan` runs silently in the background as Phase 0 of the wizard, but is also a standalone command with `--refresh`, `--add <path>`, `--remove <path>`, and `--dry-run` flags. Every subsequent feature that needs workspace context reads from the scan output, not from `ls`.
+
+![BS-17 multi-repo workspace flow](images/v010/bs17-multirepo-flow.png)
+*Multi-repo sub-flow: screens 2a/2b combined (name input + repo picker), then 2c confirmation. The teal accent distinguishes multi-repo paths from single-repo flows throughout.*
 
 **`synlynk migrate`** — One-shot atomic import (8 steps: parse → import → copy to `.synlynk/project-docs/` → `git rm` → `.gitignore` → sentinel → `generate_context()` switch → commit). Flags: `--dry-run` (preview without writing), `--recover` (re-import from `.synlynk/project-docs/` backup after DB loss), `--setup-dr` (configure a cloud-synced DR folder — iCloud/GDrive/OneDrive, no OAuth). After migration, `generate_context()` reads from `state.db` instead of flat files.
 
@@ -64,6 +73,16 @@ v0.10.0 is ten PRs across three weeks. The groupings below reflect the actual im
 
 **`synlynk status --platform`** — Infrastructure health view distinct from the workspace/HUD surface: harness compliance (last `synlynk probe` run, any open `HARNESS_VERSION_DRIFT` sentinels), agent availability table (installed/version/TC compliance status), budget pulse (daily/weekly burn rate from `cost_entries`). Three quick checks to answer "is my agent fleet healthy before I dispatch anything?"
 
+![BS-16 ecosystem status HUD v3](images/v010/bs16-hud-v3.png)
+*BS-16 HUD v3 design: agent cards with R/W/T budget bars (left), 6-cycle × agent capability matrix (right). The `synlynk status --platform` terminal output follows the same information hierarchy — harness compliance → agent availability → budget — distilled to a single-screen CLI view.*
+
+### Deep Scan (PR #96)
+
+**`synlynk scan --deep`** (BS-20) — Six-stage pipeline: repo fingerprint → dependency graph → test coverage ratio → doc coverage → CI health → churn density.
+
+![BS-20 scan stages pipeline](images/v010/bs20-scan-stages.png)
+*Stage Cards TUI: each stage lights up as it completes, with duration and a one-line finding. The design decision was to show progress rather than just a spinner — each stage result is visible immediately, so a slow stage is obvious before the full scan finishes.*
+
 ### P2: Browser Dashboard (PR #101)
 
 **`synlynk viz`** (BS-21 Vizor) — `synlynk/viz.py` at 3,642 lines. Five views served at `http://localhost:8721` from `state.db`:
@@ -73,6 +92,12 @@ v0.10.0 is ten PRs across three weeks. The groupings below reflect the actual im
 3. **Architect Map** — tube map SVG generated from `vizor-tube.json`. Components are stations; dependencies are lines. London tube map aesthetic: colour-coded lines by layer, interchange circles for shared components.
 4. **Effort & Cost** — SVG bar charts: estimate-at-dispatch vs. actual cost per story arc, ±ROI in red/green.
 5. **Efficiency** — Agent report cards: per-epic and per-task breakdowns of agent used, tokens, wall time, reviews-before-PR, hours from dispatch to merge.
+
+![BS-21 Vizor Gantt v5](images/v010/bs21-gantt-v5.png)
+*Gantt v5 — the final design iteration: accordion story rows, stage-segmented bars (dispatch / model load / execution), pencil note affordance per row. Five iterations preceded this; v1–v3 explored flat lists and swimlane layouts before the accordion model won.*
+
+![BS-21 Vizor tube map v2](images/v010/bs21-tube-v2.png)
+*Architect Map tube map v2: colour-coded lines by architectural layer (data / compute / interface / infra), interchange circles at shared components, station labels for each module. Generated from `vizor-tube.json` — the config file is the design artifact, the SVG is the output.*
 
 The sticky note system is the feature with the longest tail. Notes written in the Gantt view are persisted to `viz-notes.json` and injected into `generate_context()` on the next exec run. A note like "Agy took 4 rounds on this story — may need better scoping" becomes part of the context the next agent reads. Visual annotation feeds back into AI context bidirectionally.
 
@@ -88,10 +113,10 @@ The single-file `bin/synlynk.py` was split into `synlynk/cli.py` (the command di
 
 Four brainstorm sessions shaped the design decisions in v0.10.0:
 
-- **`docs/brainstorm/bs17-ftue-onboarding/`** — 6 HTML files: wizard landing, screen flow, multi-repo sub-flow, 2ab picker layout, agent card rendering, role definition tables. These locked in the commit-on-complete pattern and the multi-repo sub-flow sequence.
-- **`docs/brainstorm/bs16-ecosystem-status/`** — Agent card layout, R/W/T budget bars, cycle × agent capability matrix (Option A), per-agent radar hexagon (Option B). The `synlynk status --platform` output structure came directly from this session.
-- **`docs/brainstorm/bs19-launch-extended-ftue/`** — Task picker screen layout, 6-cycle SDLC color scheme, scan-triggered template ranking logic.
-- **`docs/brainstorm/bs21-vizor/`** — Five Gantt iterations, two tube map variants, the split-pane journey layout. The note-to-context feedback loop was the key insight that emerged in the visual session: sticky notes shouldn't be decorative, they should close the loop between what the user sees and what the agent reads.
+- **`docs/brainstorm/bs17-ftue-onboarding/`** — 6 HTML files: wizard landing, screen flow, multi-repo sub-flow, 2ab picker layout, agent card rendering, role definition tables. These locked in the commit-on-complete pattern and the multi-repo sub-flow sequence. Screenshots: [landing](images/v010/bs17-wizard-landing.png), [steps](images/v010/bs17-wizard-steps.png), [multi-repo flow](images/v010/bs17-multirepo-flow.png).
+- **`docs/brainstorm/bs16-ecosystem-status/`** — 8 HTML files: approaches, capacity design, HUD v1–v3. Agent card layout, R/W/T budget bars, cycle × agent capability matrix (Option A), per-agent radar hexagon (Option B). Screenshot: [hud-v3](images/v010/bs16-hud-v3.png).
+- **`docs/brainstorm/bs20-deep-scan/`** — 4 HTML files: scan stages pipeline, TUI mockup, interaction model, end-action screen. The Stage Cards TUI design came from this session. Screenshot: [scan-stages](images/v010/bs20-scan-stages.png).
+- **`docs/brainstorm/bs21-vizor/`** — 8 HTML files across five Gantt iterations and two tube map variants. The note-to-context feedback loop was the key insight that emerged in the visual session: sticky notes shouldn't be decorative, they should close the loop between what the user sees and what the agent reads. Screenshots: [gantt-v5](images/v010/bs21-gantt-v5.png), [tube-v2](images/v010/bs21-tube-v2.png).
 
 ## What This Achieved on the Path to Autonomy
 
