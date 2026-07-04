@@ -479,7 +479,7 @@ def _run_tc2(agent_name: str, flags_spec: dict) -> dict:
     else:
         invalid_flags, valid_flags, required_flags = [], [], []
 
-    failed = list(invalid_flags)
+    failed = []
     try:
         result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
         help_text = (result.stdout or "") + (result.stderr or "")
