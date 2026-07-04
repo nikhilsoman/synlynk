@@ -334,6 +334,25 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
                 "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
             }
 
+    if isinstance(flags_spec, dict):
+        valid_flags = list(flags_spec.get("valid_flags", []))
+        required_flags = list(flags_spec.get("required_flags", []))
+    else:
+        valid_flags, required_flags = [], []
+    if valid_flags or required_flags:
+        from synlynk.probe import _run_tc2
+
+        tc2 = _run_tc2(agent_name, flags_spec)
+        if not tc2.get("passed", True):
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": (
+                    f"TC-2 flag check failed for {agent_name}: {tc2.get('failed_flags', [])}. "
+                    f"Run synlynk probe {agent_name} to update."
+                ),
+            }
+
     required = baseline.get("network_deps", {}).get("required_endpoints", [])
     for endpoint in required:
         host, _, port_str = endpoint.rpartition(":")
@@ -417,7 +436,8 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
                    context_mode: str = None,
-                   cycle: str = "work") -> dict:
+                   cycle: str = "work",
+                   skip_preflight: bool = False) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     if story_id and not force_agent:
         best_agent = _pkg("_best_agent_for_story")
@@ -432,24 +452,25 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     baselines = baselines_map[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
-    preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
-    _get_db_fn = _pkg("_get_db")
-    _preflight_db = _get_db_fn() if _get_db_fn else None
-    try:
-        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db, _task_hint=task)
-    except TypeError:
-        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
-    if isinstance(preflight, dict):
-        if not preflight.get("passed", False):
+    if not skip_preflight:
+        preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
+        _get_db_fn = _pkg("_get_db")
+        _preflight_db = _get_db_fn() if _get_db_fn else None
+        try:
+            preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db, _task_hint=task)
+        except TypeError:
+            preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
+        if isinstance(preflight, dict):
+            if not preflight.get("passed", False):
+                sentinel_path = os.path.join(".synlynk", "sentinel.md")
+                write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+                write_alert("CRITICAL", preflight["sentinel"], preflight["reason"], sentinel_path)
+                raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight['reason']}")
+        elif preflight:
             sentinel_path = os.path.join(".synlynk", "sentinel.md")
             write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
-            write_alert("CRITICAL", preflight["sentinel"], preflight["reason"], sentinel_path)
-            raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight['reason']}")
-    elif preflight:
-        sentinel_path = os.path.join(".synlynk", "sentinel.md")
-        write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
-        write_alert("CRITICAL", "HARNESS_PREFLIGHT_FAIL", str(preflight), sentinel_path)
-        raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight}")
+            write_alert("CRITICAL", "HARNESS_PREFLIGHT_FAIL", str(preflight), sentinel_path)
+            raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight}")
 
     load_profile = _pkg("_load_agent_profile")
     profile = load_profile(agent) if load_profile else {}

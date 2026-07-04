@@ -475,14 +475,16 @@ def _run_tc2(agent_name: str, flags_spec: dict) -> dict:
     if isinstance(flags_spec, dict):
         invalid_flags = list(flags_spec.get("invalid_flags", []))
         valid_flags = list(flags_spec.get("valid_flags", []))
+        required_flags = list(flags_spec.get("required_flags", []))
     else:
-        invalid_flags, valid_flags = [], []
+        invalid_flags, valid_flags, required_flags = [], [], []
 
     failed = list(invalid_flags)
     try:
         result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
         help_text = (result.stdout or "") + (result.stderr or "")
-        for flag in valid_flags:
+        expected_flags = list(dict.fromkeys(valid_flags + required_flags))
+        for flag in expected_flags:
             flag_name = flag.lstrip("-")
             if flag_name and flag_name not in help_text and flag not in help_text:
                 failed.append(flag)
