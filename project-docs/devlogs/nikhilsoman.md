@@ -1,4 +1,23 @@
 
+## 2026-07-04
+### BS-13 Workspace HUD + Upgrade Path Audit
+
+**Shipped (4 PRs):**
+
+- **PR #105** `chore/bs13-hud-spec` — BS-13 design spec (`docs/superpowers/specs/2026-07-03-bs13-workspace-hud-design.md`), brainstorm visuals (`docs/brainstorm/bs13-workspace-hud/` — 4 HTML files), implementation plan (10 tasks, Codex+Grok split) [docs]
+- **PR #106** `feat/bs13-workspace-hud` — `synlynk watch` + `synlynk watch --live`; `synlynk/hud.py` (JobSnapshot, FrameBuffer, HUDRenderer, LiveRenderer — 357L stdlib-only); `cycle` field added to dispatch_agent + job records; 30 tests; blog post #41. Codex: tasks 1-3+7-8 (data layer, renderer base, CLI wiring, error states). Grok: tasks 4-6+9 (layout components, integration tests). Codex review found 4 issues — 3 fixed before merge (refreshed Ns ago, show_all dead code, blog TBD→#106). Daemon HTTP enrichment deferred. [feat]
+- **PR #107** `fix/upgrade-path` — 4 upgrade bugs: `_detect_install_type()` pipx detection via `shutil.which` + `PIPX_HOME`; `install.sh` curl downloads all 6 modules; `_ver_tuple()` semver comparison; migrate hint post-upgrade. 8 tests. [fix]
+- **PR #108** `fix/upgrade-path-b` — 2 remaining upgrade bugs: `install.sh` deprecation notice; `_warn_stale_script_install()` called at end of `upgrade()`; `_get_pipx_source()` reads `pipx_metadata.json`; pipx local-path → force reinstall from GitHub tag. 21 total upgrade tests. [fix]
+
+**Roadmap:** BS-13 marked ✅ Shipped; roadmap priority recap done
+
+**Agent workflow notes:**
+- Codex committed to main twice (git refs lockfile) — fixed by branching after the fact, resetting main
+- Codex review via dispatch effective: found 4 real issues in 3 minutes
+- Upgrade deep-dive pattern: read install.sh + `_detect_install_type` + `_run_upgrade` + pipx_metadata.json together
+
+**Test count:** 791 passing (up from ~760 pre-session)
+
 ## 2026-07-03
 ### Shipped
 - brainstorm(BS-21): Vizor — browser-based local workspace dashboard; 5 iterations of Gantt visual companion (v1–v5), 2 tube map variants [ux]
