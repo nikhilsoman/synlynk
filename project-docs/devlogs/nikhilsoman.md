@@ -1,5 +1,16 @@
 
 ## 2026-07-04
+### BS-22 Vizor Ecosystem Status Data Integration
+
+**Shipped:**
+
+- **Branch** `feat/bs22-vizor-efficiency` — Enriched the Vizor Efficiency tab (`synlynk/viz.py`) with BS-16 ecosystem status data.
+- Built a Headless efficiency banner with skeleton placeholder styling.
+- Built a Capacity Table rendering relative progress bars for Claude, Agy, Codex, and Grok read/write/tool/ctx limits.
+- Built a Cycle Capability Matrix displaying support state for all 6 SDLC phases (Dream, Plan, Work, Ship, Maintain, Engage) using inline SVG icons.
+- Built a Fleet Header displaying attached count and current dispatch mode pill.
+- Added 7 tests under `tests/test_vizor_efficiency.py` validating string presence, capacities rendering, cycle presence, dispatch modes, placeholder fallbacks, and dictionary wiring in `generate_viz_data()`.
+
 ### BS-13 Workspace HUD + Upgrade Path Audit
 
 **Shipped (4 PRs):**
