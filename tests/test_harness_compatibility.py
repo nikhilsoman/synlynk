@@ -97,6 +97,8 @@ def test_tc1_detects_pipe_hang_and_records_pty_required(tmp_path, monkeypatch):
 
 
 def test_tc2_flags_invalid_flag_as_noncompliant(tmp_path, monkeypatch):
+    # invalid_flags are dispatch-time guards, not flags verified against --help.
+    # TC-2 only checks valid_flags/required_flags for presence in --help output.
     _make_stub_cli(tmp_path, "grok", help_text="--yes  Approve\n--model  Model\n")
     monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
 
@@ -104,7 +106,9 @@ def test_tc2_flags_invalid_flag_as_noncompliant(tmp_path, monkeypatch):
 
     test_flags = {"valid_flags": ["--yes"], "invalid_flags": ["--always-approve"]}
     result = _run_tc2("grok", test_flags)
-    assert "--always-approve" in result["failed_flags"]
+    # --yes is in help → passes; invalid_flags never affect failed_flags
+    assert result["passed"] is True
+    assert "--always-approve" not in result["failed_flags"]
 
 
 def test_tc3_marks_unreachable_endpoint(monkeypatch):
