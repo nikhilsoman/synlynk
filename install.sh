@@ -10,6 +10,12 @@
 
 set -e
 
+echo "⚠️  DEPRECATION NOTICE: The install.sh script installer is deprecated"
+echo "   Migrate to pipx for automatic updates:"
+echo "   pipx install git+https://github.com/nikhilsoman/synlynk"
+echo "   (Continuing install for backward compatibility)"
+echo ""
+
 VERSION=$(python3 -c "import re, pathlib; m = re.search(r'VERSION = \"([^\"]+)\"', pathlib.Path('synlynk/__init__.py').read_text()); print(m.group(1) if m else '0.0.0')")
 INSTALL_DIR="$HOME/.synlynk/bin"
 LIB_DIR="$HOME/.synlynk/lib"
