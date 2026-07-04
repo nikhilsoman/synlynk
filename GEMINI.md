@@ -139,7 +139,7 @@ rather than resolving it silently. This project tracks those conflicts as resear
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.0.0 verified:2026-07-04T04:46:15Z -->
+<!-- synlynk:harness v1.0.16 verified:2026-07-04T12:08:27Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
@@ -148,8 +148,8 @@ rather than resolving it silently. This project tracks those conflicts as resear
 - Stdout flush: unbuffered (set PYTHONUNBUFFERED=1)
 
 ## Active Dispatch Flags
-- Valid: --print --model --output-format --add-dir
-- Invalid (do not use): --always-approve --dangerously-skip-permissions --non-interactive
+- Valid: --print --model --add-dir --sandbox
+- Invalid (do not use): --always-approve --non-interactive
 
 ## Network Dependencies
 - Required: generativelanguage.googleapis.com:443
