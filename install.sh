@@ -36,7 +36,10 @@ else
     # Remote install via curl
     echo "  Downloading synlynk package..."
     mkdir -p "$PACKAGE_DIR"
-    curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/__init__.py" -o "$PACKAGE_DIR/__init__.py"
+    for f in __init__.py __main__.py cli.py db.py hud.py viz.py; do
+        curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f" \
+             -o "$PACKAGE_DIR/$f"
+    done
     # Write shim directly (bin/synlynk.py references package via sys.path)
     cat > "$BINARY_PATH" <<'SHIM'
 #!/usr/bin/env python3

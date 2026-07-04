@@ -11033,18 +11033,31 @@ _INSTALL_SCRIPT_URL = (
 
 def _detect_install_type() -> str:
     """Returns 'pipx', 'pip', 'script', or 'unknown'."""
+    import shutil as _shutil
+
+    binary = _shutil.which("synlynk") or ""
+    if "pipx" in binary or "pipx" in os.environ.get("PIPX_HOME", ""):
+        return "pipx"
     try:
         import importlib.metadata as _meta
 
         loc = str(_meta.distribution("synlynk").locate_file(""))
         if "pipx" in loc:
             return "pipx"
-        return "pip"
+        if loc != "":
+            return "pip"
     except Exception:
         pass
     if os.path.exists(os.path.expanduser("~/.synlynk/bin/synlynk")):
         return "script"
     return "unknown"
+
+
+def _ver_tuple(v: str) -> tuple:
+    try:
+        return tuple(int(x) for x in v.strip().split("."))
+    except ValueError:
+        return (0,)
 
 
 def _run_upgrade(latest: str) -> None:
@@ -11054,6 +11067,7 @@ def _run_upgrade(latest: str) -> None:
         result = subprocess.run(["pipx", "upgrade", "synlynk"], text=True)
         if result.returncode == 0:
             print(f"  ✓ Upgraded to v{latest} via pipx")
+            print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
         else:
             print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
         return
@@ -11067,6 +11081,7 @@ def _run_upgrade(latest: str) -> None:
         if result.returncode == 0:
             print(f"  ✓ Upgraded to v{latest}")
             print("  Restart your shell or run: source ~/.zshrc")
+            print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
         else:
             print(f"  ⚠ Install script exited {result.returncode} — run manually:")
             print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
@@ -11086,7 +11101,7 @@ def upgrade() -> None:
         )
         if result.returncode == 0:
             latest = result.stdout.strip().lstrip("v")
-            if latest and latest != VERSION:
+            if latest and _ver_tuple(latest) > _ver_tuple(VERSION):
                 _run_upgrade(latest)
             else:
                 print(f"  ✓ You are on the latest version (v{VERSION}).")
@@ -11100,7 +11115,7 @@ def upgrade() -> None:
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
         latest = data.get("tag_name", "").lstrip("v")
-        if latest and latest != VERSION:
+        if latest and _ver_tuple(latest) > _ver_tuple(VERSION):
             _run_upgrade(latest)
         else:
             print(f"  ✓ You are on the latest version (v{VERSION}).")
