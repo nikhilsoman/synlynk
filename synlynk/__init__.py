@@ -12,7 +12,12 @@ import urllib.request
 from typing import Optional
 import sqlite3 as _sqlite3
 
-VERSION = "0.10.0"
+from synlynk._constants import (
+    AGENT_CAPABILITY_BASELINES,
+    QUOTA_PATTERNS,
+    VERSION,
+    _INSTALL_SCRIPT_URL,
+)
 
 CYCLE_NAMES = ["dream", "design", "plan", "build", "ship", "sustain"]
 
@@ -1474,72 +1479,6 @@ def _infer_engg_domain(log_text: str) -> str:
 JOBS_FILE = ".synlynk/jobs.json"
 LOGS_DIR = ".synlynk/logs"
 PROMPTS_DIR = ".synlynk/prompts"
-
-# Known baseline capabilities per agent CLI.
-# Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
-AGENT_CAPABILITY_BASELINES = {
-    "claude": {
-        "cli": "claude",
-        "non_interactive_flags": ["--print"],
-        "dispatch_flags": ["--dangerously-skip-permissions"],
-        "roles": ["architect", "builder"],
-        "strengths": ["long context", "reasoning", "code review", "planning"],
-    },
-    "codex": {
-        "cli": "codex",
-        # 'exec' subcommand + '-' reads prompt from stdin without requiring a TTY.
-        # 'codex exec' sets approval:never by default — no bypass flag needed.
-        # '-s workspace-write' confines writes to workdir + /tmp while allowing
-        # model-generated file edits. Do NOT add --dangerously-bypass-approvals-and-sandbox:
-        # it silently overrides -s and runs at danger-full-access (full host access).
-        "non_interactive_flags": [
-            "exec", "-",
-            "-s", "workspace-write",
-        ],
-        "roles": ["builder"],
-        "strengths": ["code completion", "inline edits", "fast iteration"],
-    },
-    "agy": {
-        "cli": "agy",
-        "non_interactive_flags": [],
-        "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
-        "prompt_via_arg": True,
-        "dispatch_flags": {
-            "valid_flags": ["--print", "--model", "--output-format", "--add-dir"],
-            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--non-interactive"],
-            "required_flags": [],
-        },
-        "headless_contract": {
-            "requires_pty": False,
-            "stdout_flush_method": "unbuffered",
-            "env_vars_required": ["PYTHONUNBUFFERED=1"],
-            "non_interactive_flag": "-p",
-        },
-        "network_deps": {
-            "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
-            "optional_endpoints": [],
-        },
-        "roles": ["builder", "verifier"],
-        "strengths": ["multimodal", "large context", "search-augmented"],
-    },
-    "grok": {
-        "cli": "grok",
-        "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
-        "prompt_via_arg": True,
-        "dispatch_flags": {
-            "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
-            "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--always-approve"],
-        },
-        "network_deps": {
-            "required_endpoints": ["cli-chat-proxy.grok.com:443"],
-            "optional_endpoints": [],
-        },
-        "roles": ["builder", "architect"],
-        "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
-    },
-}
 
 _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
@@ -7771,13 +7710,6 @@ def _check_pre_exec_gate(force: bool = False) -> bool:
     return True
 
 
-QUOTA_PATTERNS = [
-    "rate limit", "quota exceeded", "resource exhausted",
-    "billing", "insufficient_quota", "too many requests",
-    "RESOURCE_EXHAUSTED",
-]
-
-
 def _extract_compliance_tags(output_text: str) -> dict:
     """Scans agent output for compliance evidence. Returns a dict of bool flags.
 
@@ -11025,12 +10957,6 @@ def init(force: bool = False, agents: list = None,
             print(f"    {_CYAN}synlynk run --trio --task \"your task\"{_RESET}  "
                   f"← runs {agent_names} in parallel")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
-
-_INSTALL_SCRIPT_URL = (
-    "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh"
-)
-
-
 def _detect_install_type() -> str:
     """Returns 'pipx', 'pip', 'script', or 'unknown'."""
     import shutil as _shutil

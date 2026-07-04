@@ -1,0 +1,79 @@
+"""Shared constants used across synlynk modules."""
+
+VERSION = "0.10.0"
+
+_INSTALL_SCRIPT_URL = (
+    "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh"
+)
+
+QUOTA_PATTERNS = [
+    "rate limit", "quota exceeded", "resource exhausted",
+    "billing", "insufficient_quota", "too many requests",
+    "RESOURCE_EXHAUSTED",
+]
+
+# Known baseline capabilities per agent CLI.
+# Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
+AGENT_CAPABILITY_BASELINES = {
+    "claude": {
+        "cli": "claude",
+        "non_interactive_flags": ["--print"],
+        "dispatch_flags": ["--dangerously-skip-permissions"],
+        "roles": ["architect", "builder"],
+        "strengths": ["long context", "reasoning", "code review", "planning"],
+    },
+    "codex": {
+        "cli": "codex",
+        # 'exec' subcommand + '-' reads prompt from stdin without requiring a TTY.
+        # 'codex exec' sets approval:never by default — no bypass flag needed.
+        # '-s workspace-write' confines writes to workdir + /tmp while allowing
+        # model-generated file edits. Do NOT add --dangerously-bypass-approvals-and-sandbox:
+        # it silently overrides -s and runs at danger-full-access (full host access).
+        "non_interactive_flags": [
+            "exec", "-",
+            "-s", "workspace-write",
+        ],
+        "roles": ["builder"],
+        "strengths": ["code completion", "inline edits", "fast iteration"],
+    },
+    "agy": {
+        "cli": "agy",
+        "non_interactive_flags": [],
+        "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
+        "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": ["--print", "--model", "--output-format", "--add-dir"],
+            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--non-interactive"],
+            "required_flags": [],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "unbuffered",
+            "env_vars_required": ["PYTHONUNBUFFERED=1"],
+            "non_interactive_flag": "-p",
+        },
+        "network_deps": {
+            "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
+            "optional_endpoints": [],
+        },
+        "roles": ["builder", "verifier"],
+        "strengths": ["multimodal", "large context", "search-augmented"],
+    },
+    "grok": {
+        "cli": "grok",
+        "non_interactive_flags": [],
+        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
+        "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
+            "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
+            "required_flags": ["--always-approve"],
+        },
+        "network_deps": {
+            "required_endpoints": ["cli-chat-proxy.grok.com:443"],
+            "optional_endpoints": [],
+        },
+        "roles": ["builder", "architect"],
+        "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
+    },
+}
