@@ -151,8 +151,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS harness_verb_map (
-            synlynk_verb TEXT NOT NULL,
-            verb_category TEXT NOT NULL,
+            synlynk_verb TEXT,
+            verb_category TEXT,
             agent_name TEXT NOT NULL,
             agent_command TEXT,
             supported TEXT NOT NULL DEFAULT 'none',
@@ -182,6 +182,71 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             new_hash TEXT,
             recorded_at TEXT NOT NULL
         );
+    """)
+    harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
+    if "verb" not in harness_verb_cols:
+        try:
+            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN verb TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "cycle_hint" not in harness_verb_cols:
+        try:
+            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN cycle_hint TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "support" not in harness_verb_cols:
+        try:
+            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN support TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "notes" not in harness_verb_cols:
+        try:
+            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN notes TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "updated_at" not in harness_verb_cols:
+        try:
+            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN updated_at TEXT")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cycle_capability (
+            agent_name    TEXT NOT NULL,
+            cycle         TEXT NOT NULL,
+            support       TEXT NOT NULL DEFAULT 'none',
+            notes         TEXT,
+            verb_count    INTEGER DEFAULT 0,
+            full_count    INTEGER DEFAULT 0,
+            partial_count INTEGER DEFAULT 0,
+            updated_at    TEXT NOT NULL,
+            PRIMARY KEY (agent_name, cycle)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS harness_status (
+            agent_name             TEXT PRIMARY KEY,
+            attach_rate_24h        REAL DEFAULT 0.0,
+            attach_point_in_time   INTEGER DEFAULT 0,
+            adherence_score        REAL DEFAULT NULL,
+            completion_rate_24h    REAL DEFAULT NULL,
+            rescue_count_24h       INTEGER DEFAULT 0,
+            output_velocity_p50    REAL DEFAULT NULL,
+            installed_version      TEXT DEFAULT '',
+            latest_version         TEXT DEFAULT NULL,
+            plan_tier              TEXT DEFAULT 'unknown',
+            plan_type              TEXT DEFAULT 'd2c',
+            ctx_window_tokens      INTEGER DEFAULT NULL,
+            read_budget_tokens     INTEGER DEFAULT NULL,
+            write_budget_tokens    INTEGER DEFAULT NULL,
+            tool_budget_count      INTEGER DEFAULT NULL,
+            tc1_status             TEXT DEFAULT 'unknown',
+            tc2_status             TEXT DEFAULT 'unknown',
+            tc3_status             TEXT DEFAULT 'unknown',
+            tc4_status             TEXT DEFAULT 'unknown',
+            harness_compat_score   REAL DEFAULT NULL,
+            last_probe_at          TEXT DEFAULT NULL,
+            last_telemetry_at      TEXT DEFAULT NULL
+        )
     """)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS memory_entries (

@@ -11,7 +11,8 @@ def cmd_watch(args) -> None:
     import time
     import tty
 
-    from synlynk.hud import CYCLES, FrameBuffer, HUDRenderer, JobSnapshot, LiveRenderer, _get_terminal_size
+    from synlynk import _resolve_db_path
+    from synlynk.hud import CYCLES, FrameBuffer, HUDRenderer, HarnessSnapshot, JobSnapshot, LiveRenderer, _get_terminal_size
 
     jobs_file = os.path.join(_SYNLYNK_DIR, "jobs.json")
     if not os.path.exists(jobs_file):
@@ -21,6 +22,7 @@ def cmd_watch(args) -> None:
     live_mode = getattr(args, "live", False)
     refresh_seconds = 3 if live_mode else 10
     snapshot = JobSnapshot(jobs_file)
+    harness_snapshot = HarnessSnapshot(_resolve_db_path())
     selected_cycle_idx = CYCLES.index("work")
     platform_expanded = False
     show_all = False
@@ -67,8 +69,9 @@ def cmd_watch(args) -> None:
                 else:
                     selected_cycle = CYCLES[selected_cycle_idx]
                     summary = snapshot.cycle_summary()
+                    harness_data = harness_snapshot.load()
                     row = 0
-                    row += renderer.render_header(summary, platform_expanded, row)
+                    row += renderer.render_header(summary, platform_expanded, row, harness_data=harness_data)
                     renderer.render_sidebar(summary, selected_cycle, row, 0)
                     renderer.render_right_panel(
                         selected_cycle,
@@ -171,7 +174,7 @@ def main() -> None:
         cmd_score_attest,
         cmd_score_list,
         cmd_shell,
-        cmd_status,
+        cmd_status as cmd_project_status,
         cmd_story_create,
         cmd_story_list,
         cmd_sync,
@@ -185,6 +188,7 @@ def main() -> None:
         upgrade,
         wizard_init,
     )
+    from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
     _reconcile_jobs()
     parser = argparse.ArgumentParser(
@@ -339,7 +343,13 @@ def main() -> None:
     status_parser.add_argument("--json", action="store_true", dest="json_output",
                                help="Output machine-readable JSON")
     status_parser.add_argument("--platform", action="store_true", dest="platform",
-                               help="Show infrastructure health instead of workspace status")
+                               help="Show legacy project dashboard instead of ecosystem status")
+
+    config_parser = subparsers.add_parser("config", help="Manage synlynk config")
+    config_sub = config_parser.add_subparsers(dest="config_action")
+    config_set_parser = config_sub.add_parser("set", help="Set a config key")
+    config_set_parser.add_argument("key")
+    config_set_parser.add_argument("value")
 
     sentinel_parser = subparsers.add_parser("sentinel",
                                              help="View and manage sentinel alerts")
@@ -543,7 +553,17 @@ def main() -> None:
     elif args.command == "checkpoint":
         checkpoint()
     elif args.command == "status":
-        cmd_status(json_output=args.json_output, platform=getattr(args, "platform", False))
+        if getattr(args, "platform", False):
+            cmd_project_status(json_output=args.json_output, platform=True)
+        else:
+            from synlynk import _get_db
+            cmd_ecosystem_status(db_conn=_get_db(), json_output=args.json_output)
+    elif args.command == "config":
+        if getattr(args, "config_action", None) == "set":
+            from synlynk import cmd_config_set
+            cmd_config_set(args.key, args.value)
+        else:
+            config_parser.print_help()
     elif args.command == "sentinel":
         action = getattr(args, 'sentinel_action', None)
         if action == "clear":

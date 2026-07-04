@@ -133,6 +133,26 @@ class JobSnapshot:
         return summary
 
 
+class HarnessSnapshot:
+    """Read harness_status rows from state.db for the watch panel."""
+
+    def __init__(self, db_path: str):
+        self._path = db_path
+
+    def load(self) -> dict:
+        """Return {agent_name: row} or an empty dict on error."""
+        try:
+            import sqlite3 as _sq
+
+            conn = _sq.connect(self._path, timeout=1.0)
+            conn.row_factory = _sq.Row
+            rows = conn.execute("SELECT * FROM harness_status").fetchall()
+            conn.close()
+            return {row["agent_name"]: dict(row) for row in rows}
+        except Exception:
+            return {}
+
+
 class FrameBuffer:
     """Two-frame buffered ANSI renderer."""
 
@@ -181,23 +201,41 @@ class HUDRenderer:
         self.buf.set_line(2, f"  {DIM}Press q to quit{RESET}")
 
     def render_header(self, cycle_summary: dict, platform_expanded: bool,
-                      start_row: int) -> int:
+                      start_row: int, harness_data: dict = None) -> int:
         """
         Render the platform health header.
         Returns number of rows consumed.
         """
+        if harness_data is None:
+            harness_data = {}
         rows, cols = self.buf.rows, self.buf.cols
         if not platform_expanded:
             # Collapsed: one line — agent checkmarks + budget summary
             agents = ["claude", "agy", "codex", "grok"]
-            checks = "  ".join(f"\033[38;5;71m✓ {a}{RESET}" for a in agents)
+            parts = []
+            for a in agents:
+                row = harness_data.get(a, {})
+                attached = row.get("attach_point_in_time")
+                if attached == 1:
+                    parts.append(f"\033[38;5;71m✓ {a}{RESET}")
+                elif attached == 0:
+                    parts.append(f"\033[38;5;196m✗ {a}{RESET}")
+                else:
+                    parts.append(f"{DIM}? {a}{RESET}")
+            checks = "  ".join(parts)
             line = f"\033[38;5;75m▶ PLATFORM{RESET}  {checks}  [p]"
             self.buf.set_line(start_row, line)
             return 1
         else:
             # Expanded: 5 rows — title, agents, budget bar, harness, collapse hint
             self.buf.set_line(start_row,     f"\033[38;5;75m▼ PLATFORM HEALTH{RESET}  [p] collapse")
-            self.buf.set_line(start_row + 1, f"  agents: ✓ claude  ✓ agy  ✓ codex  ✓ grok")
+            agent_parts = []
+            for a in ["claude", "agy", "codex", "grok"]:
+                row = harness_data.get(a, {})
+                sym = "✓" if row.get("attach_point_in_time") == 1 else "✗"
+                ver = row.get("installed_version") or "?"
+                agent_parts.append(f"{sym} {a} {DIM}v{ver}{RESET}")
+            self.buf.set_line(start_row + 1, "  agents: " + "   ".join(agent_parts))
             total_running = sum(v['running'] for v in cycle_summary.values())
             self.buf.set_line(start_row + 2, f"  budget: {DIM}$— / limit from .synlynk/config.json{RESET}")
             self.buf.set_line(start_row + 3, f"  harness: ✓ compliant  {DIM}· synlynk probe to recheck{RESET}")

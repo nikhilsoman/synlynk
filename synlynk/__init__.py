@@ -1248,6 +1248,7 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "watch_interval_seconds": 30,
         "auto_launch_after_wizard": True,
+        "dispatch_mode": "daily-grind",
         "org": None,
         "owner": None,
         "repo": None,
@@ -1281,6 +1282,17 @@ def load_config() -> dict:
         return config
     except (json.JSONDecodeError, IOError):
         return defaults
+
+
+def cmd_config_set(key: str, value: str) -> None:
+    """Set a top-level config key in .synlynk/config.json."""
+    config_path = ".synlynk/config.json"
+    config = load_config()
+    config[key] = value
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"  ✓ {key} = {value!r} saved to .synlynk/config.json")
 
 
 def _load_jobs() -> list:
@@ -1317,6 +1329,12 @@ def _extract_micro_rework(log_text: str) -> int:
     for pat in patterns:
         count += len(re.findall(pat, log_text, re.IGNORECASE))
     return count
+
+
+def _count_tool_calls(log_text: str) -> int:
+    """Counts coarse tool-call markers in captured agent output."""
+    patterns = ("Tool:", "Running tool", "function_call", "tool_use")
+    return sum(log_text.count(pattern) for pattern in patterns)
 
 
 def _write_capability_rating(job: dict, log_text: str) -> None:

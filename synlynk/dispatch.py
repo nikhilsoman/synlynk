@@ -104,9 +104,13 @@ def _inject_grok_rules(cmd_args: list) -> list:
     return injected
 
 
-def _tee_process(process, buffer: list) -> None:
+def _tee_process(process, buffer: list, meta: Optional[dict] = None) -> None:
     """Reads process stdout line-by-line, writes to terminal and appends to buffer."""
     for line in iter(process.stdout.readline, b""):
+        if meta is not None:
+            meta["output_bytes"] = meta.get("output_bytes", 0) + len(line)
+            if not meta.get("first_output_at") and line.strip():
+                meta["first_output_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         sys.stdout.buffer.write(line)
         sys.stdout.buffer.flush()
         buffer.append(line.decode("utf-8", errors="replace"))
@@ -264,7 +268,7 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
-def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> dict:
+def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
     import socket as _socket
 
     baseline = {}
@@ -348,6 +352,65 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> 
                 "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
             }
 
+    if db_conn and _task_hint:
+        try:
+            from synlynk.status import TIER1_CAPACITY, estimate_dispatch_tokens
+
+            ctx_path = os.path.join(".synlynk", "context.md")
+            context_md = ""
+            if os.path.exists(ctx_path):
+                with open(ctx_path) as f:
+                    context_md = f.read()
+
+            est = estimate_dispatch_tokens(_task_hint, context_md, agent_name)
+            cap_row = None
+            try:
+                cap_row = db_conn.execute(
+                    "SELECT read_budget_tokens, write_budget_tokens, tool_budget_count "
+                    "FROM harness_status WHERE agent_name=?",
+                    (agent_name,),
+                ).fetchone()
+            except Exception:
+                cap_row = None
+
+            if cap_row and any(v is not None for v in cap_row):
+                read_budget, write_budget, tool_budget = cap_row
+            else:
+                tier1 = TIER1_CAPACITY.get(agent_name, {})
+                read_budget = tier1.get("read_budget_tokens", 999_999)
+                write_budget = tier1.get("write_budget_tokens", 32_000)
+                tool_budget = tier1.get("tool_budget_count", 200)
+
+            if est["input"] >= (read_budget or 0):
+                return {
+                    "passed": False,
+                    "sentinel": "CAPACITY_EXCEEDED_INPUT",
+                    "reason": (
+                        f"task needs ~{est['input']:,} input tokens; "
+                        f"{agent_name} budget is {(read_budget or 0):,}."
+                    ),
+                }
+
+            if est["output"] >= (write_budget or 0):
+                return {
+                    "passed": False,
+                    "sentinel": "CAPACITY_EXCEEDED_OUTPUT",
+                    "reason": (
+                        f"task needs ~{est['output']:,} output tokens; "
+                        f"{agent_name} write budget is {(write_budget or 0):,}."
+                    ),
+                }
+
+            if tool_budget and est["tools"] > tool_budget * 0.7:
+                write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+                write_alert(
+                    "WARNING",
+                    "TOOL_PRESSURE",
+                    f"{agent_name} tool budget ~{tool_budget}; estimated usage {est['tools']}",
+                )
+        except Exception:
+            pass
+
     return {"passed": True, "sentinel": None, "reason": None}
 
 
@@ -370,7 +433,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
     preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
-    preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=None)
+    _get_db_fn = _pkg("_get_db")
+    _preflight_db = _get_db_fn() if _get_db_fn else None
+    try:
+        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db, _task_hint=task)
+    except TypeError:
+        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
     if isinstance(preflight, dict):
         if not preflight.get("passed", False):
             sentinel_path = os.path.join(".synlynk", "sentinel.md")
@@ -385,6 +453,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     load_profile = _pkg("_load_agent_profile")
     profile = load_profile(agent) if load_profile else {}
+    load_config = _pkg("load_config")
+    dispatch_mode = (load_config() or {}).get("dispatch_mode", "daily-grind") if load_config else "daily-grind"
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]
         flags = flags + ["--permission-mode", "bypassPermissions"]
@@ -492,6 +562,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "ended_at": None,
         "status": "running",
         "exit_code": None,
+        "dispatch_mode": dispatch_mode,
         "dispatch_rework": _pkg("_count_dispatch_rework")(story_id or "") if _pkg("_count_dispatch_rework") else 0,
         "micro_rework": 0,
         "model_at_dispatch": model_at_dispatch,
@@ -588,7 +659,8 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                 stderr=subprocess.STDOUT,
             )
             buffer: list = []
-            tee_thread = threading.Thread(target=_tee_process, args=(process, buffer))
+            stream_meta = {"first_output_at": None, "output_bytes": 0}
+            tee_thread = threading.Thread(target=_tee_process, args=(process, buffer, stream_meta))
             tee_thread.start()
             process.wait()
             tee_thread.join()
@@ -621,6 +693,16 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         if check_costs:
             check_costs()
         if log_telemetry:
+            tool_call_count = _pkg("_count_tool_calls", lambda _text: 0)(output_text)
+            output_bytes = 0
+            first_output_at = None
+            output_velocity_bpm = None
+            if not _is_interactive(cmd_args):
+                output_bytes = len(output_text.encode("utf-8"))
+                if output_text:
+                    first_output_at = stream_meta.get("first_output_at") if "stream_meta" in locals() else None
+                if duration > 0 and output_bytes > 0:
+                    output_velocity_bpm = round(output_bytes / (duration / 60.0), 1)
             log_telemetry({
                 "type": "exec",
                 "schema_version": 1,
@@ -632,6 +714,10 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                 "exit_code": exit_code,
                 "in_tokens": in_tokens,
                 "out_tokens": out_tokens,
+                "first_output_at": first_output_at,
+                "tool_call_count": tool_call_count,
+                "rescue_agent": None,
+                "output_velocity_bpm": output_velocity_bpm,
             })
         if check_sentinels:
             check_sentinels(output_text=output_text, exit_code=exit_code, cmd=" ".join(cmd_args))
