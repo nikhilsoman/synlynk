@@ -52,6 +52,7 @@ def test_run_upgrade_pipx_success(monkeypatch, capsys):
     import subprocess
 
     monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "pipx")
+    monkeypatch.setattr(synlynk, "_get_pipx_source", lambda: "")
     calls = []
     monkeypatch.setattr(
         subprocess,
@@ -68,6 +69,7 @@ def test_run_upgrade_pipx_failure(monkeypatch, capsys):
     import subprocess
 
     monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "pipx")
+    monkeypatch.setattr(synlynk, "_get_pipx_source", lambda: "")
     monkeypatch.setattr(
         subprocess, "run", lambda cmd, **kw: types.SimpleNamespace(returncode=1)
     )
