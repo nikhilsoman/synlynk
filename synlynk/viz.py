@@ -95,6 +95,7 @@ def generate_viz_data() -> dict:
             "agents": {},
             "tube_config": _load_json_optional(VIZ_TUBE_PATH, default=None),
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
+            "ecosystem": {},
         }
 
     def _minimal_data() -> dict:
@@ -459,6 +460,24 @@ def generate_viz_data() -> dict:
         "by_stage": by_stage,
     }
     data["agents"] = agents
+
+    # Fetch ecosystem data via subprocess
+    ecosystem = {}
+    try:
+        import subprocess
+        import sys
+        python_bin = sys.executable or "python3"
+        res = subprocess.run(
+            [python_bin, "-m", "synlynk.cli", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5.0
+        )
+        if res.returncode == 0:
+            ecosystem = json.loads(res.stdout)
+    except Exception:
+        pass
+    data["ecosystem"] = ecosystem
 
     try:
         conn.close()
@@ -2894,6 +2913,39 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     recent_runs = telemetry.get("recent") or []
     json_data = json.dumps(data, ensure_ascii=False)
 
+    try:
+        from synlynk.status import TIER1_CAPACITY
+    except ImportError:
+        TIER1_CAPACITY = {
+            "claude": {"ctx_window_tokens": 200_000, "read_budget_tokens": 750_000, "write_budget_tokens": 32_000, "tool_budget_count": 200},
+            "agy": {"ctx_window_tokens": 1_000_000, "read_budget_tokens": 900_000, "write_budget_tokens": 65_000, "tool_budget_count": 500},
+            "codex": {"ctx_window_tokens": 128_000, "read_budget_tokens": 110_000, "write_budget_tokens": 16_000, "tool_budget_count": 128},
+            "grok": {"ctx_window_tokens": 131_000, "read_budget_tokens": 115_000, "write_budget_tokens": 16_000, "tool_budget_count": 100},
+        }
+
+    eco = data.get("ecosystem", {})
+    is_placeholder = not bool(eco)
+
+    if is_placeholder:
+        efficiency = 1.0
+        fleet_attached = 0
+        fleet_total = 0
+        dispatch_mode = "—"
+        agents_data = {}
+        cycle_cap = {}
+        capacity = TIER1_CAPACITY
+        sentinels_active = 0
+    else:
+        efficiency = eco.get("headless_efficiency", 1.0)
+        fleet = eco.get("fleet", {})
+        fleet_attached = fleet.get("attached", 0)
+        fleet_total = fleet.get("total", 0)
+        dispatch_mode = fleet.get("dispatch_mode", "—")
+        agents_data = eco.get("agents", {})
+        cycle_cap = eco.get("cycle_capability", {})
+        capacity = eco.get("capacity", {}) or TIER1_CAPACITY
+        sentinels_active = eco.get("sentinels_active", 0)
+
     style_content = """
     :root {
       --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eaeef2;
@@ -2909,17 +2961,17 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
     }
     [data-theme="dark"] {
-      --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
-      --border:#1e2430; --border2:#13171f;
+      --bg:#0d1117; --bg2:#161b22; --bg3:#0d1117;
+      --border:#30363d; --border2:#30363d;
       --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
-      --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+      --accent:#58a6ff; --accent-bg:#0d2137; --accent-dim:#0a3050;
       --shadow:0 2px 20px rgba(0,0,0,.5);
 
       --ag-claude-bg:#0d2a2a; --ag-claude-bd:#3de0c0; --ag-claude-tx:#3de0c0;
       --ag-agy-bg:#0d1a3a; --ag-agy-bd:#4285f4; --ag-agy-tx:#4285f4;
       --ag-codex-bg:#0a1f18; --ag-codex-bd:#10a37f; --ag-codex-tx:#10a37f;
       --ag-grok-bg:#1a1a1a; --ag-grok-bd:#e0e0e0; --ag-grok-tx:#e0e0e0;
-      --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+      --ok:#3fb950; --warn:#f0883e; --bad:#f85149;
     }
     * { box-sizing:border-box; margin:0; padding:0; }
     body {
@@ -3256,32 +3308,184 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         min-width:680px;
       }
     }
+    .number-font {
+      font-family: system-ui, monospace;
+    }
+    .label-font {
+      font-family: sans-serif;
+    }
+    .eco-top-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .eco-banner-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      flex: 1;
+      min-width: 280px;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+    .efficiency-num {
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .efficiency-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .efficiency-sub {
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 4px;
+    }
+    .fleet-header-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      min-width: 280px;
+      box-shadow: var(--shadow);
+    }
+    .fleet-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+    .fleet-status-row {
+      display: flex;
+      gap: 12px;
+    }
+    .fleet-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dispatch-mode-pill {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .attached-badge {
+      color: var(--ok);
+      border-color: var(--ok);
+    }
+    .eco-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .cap-table, .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .cap-table th, .cap-table td,
+    .matrix-table th, .matrix-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border2);
+      vertical-align: middle;
+    }
+    .cap-table th, .matrix-table th {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text2);
+      font-weight: 700;
+      background: var(--bg3);
+      padding: 8px 12px;
+    }
+    .cap-table td, .matrix-table td {
+      background: var(--bg2);
+    }
+    .cap-agent-name, .matrix-agent-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .cap-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .cap-num {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .cap-bar-track {
+      width: 100%;
+      height: 4px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .cap-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .matrix-table th, .matrix-table td {
+      text-align: center;
+    }
+    .matrix-table th:first-child, .matrix-table td:first-child {
+      text-align: left;
+    }
+    .matrix-circle-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .skeleton-text {
+      color: var(--text3) !important;
+    }
+    .skeleton-fill {
+      background: var(--border) !important;
+      opacity: 0.5;
+    }
+    .skeleton-pulse::after {
+      content: "";
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+      animation: skeleton-pulse-anim 1.5s infinite;
+      pointer-events: none;
+    }
+    @keyframes skeleton-pulse-anim {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
     """
-
-    if not agents:
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>synlynk Vizor — Efficiency Report Card</title>
-<script>window.VIZOR_DATA = {json_data};</script>
-<script>
-  (function() {{
-    const theme = localStorage.getItem('vizor-theme') || 'system';
-    let actualTheme = theme;
-    if (theme === 'system') {{
-      actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }}
-    document.documentElement.setAttribute('data-theme', actualTheme);
-  }})();
-</script>
-<style>{style_content}</style>
-</head>
-<body>
-  <div class="empty-state"><span>No telemetry recorded yet. Run synlynk exec or synlynk launch to generate efficiency data.</span></div>
-  {_live_js(port)}
-</body>
-</html>"""
 
     cards_html = []
     for name, stats in agents.items():
@@ -3317,6 +3521,12 @@ def generate_efficiency_html(data: dict, port: int) -> str:
             """.rstrip()
         )
 
+    if not cards_html:
+        cards_html.append(
+            '<div style="grid-column: 1 / -1; text-align: center; color: var(--text3); padding: 32px 16px;" class="label-font">'
+            'No agent telemetry recorded yet. Run synlynk exec or synlynk launch to populate.</div>'
+        )
+
     sorted_alerts = sorted(
         [alert for alert in sentinel_alerts if isinstance(alert, dict)],
         key=lambda alert: str(alert.get("ts") or ""),
@@ -3347,6 +3557,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
             """.rstrip()
         )
 
+    recent_runs = telemetry.get("recent") or []
     recent_rows = list((recent_runs or [])[-10:])[::-1]
     runs_html = []
     for row in recent_rows:
@@ -3379,6 +3590,235 @@ def generate_efficiency_html(data: dict, port: int) -> str:
             """.rstrip()
         )
 
+    # 1. Headless efficiency banner HTML
+    efficiency_val = efficiency
+    if is_placeholder:
+        eff_banner_html = f"""
+      <div class="eco-banner-card skeleton-pulse">
+        <div class="efficiency-num number-font skeleton-text">—x</div>
+        <div class="efficiency-title label-font">headless efficiency</div>
+        <div class="efficiency-sub label-font">vs. interactive baseline (no probe run yet)</div>
+      </div>
+        """
+    else:
+        eff_banner_html = f"""
+      <div class="eco-banner-card">
+        <div class="efficiency-num number-font">{efficiency_val:.1f}x</div>
+        <div class="efficiency-title label-font">headless efficiency</div>
+        <div class="efficiency-sub label-font">vs. interactive baseline</div>
+      </div>
+        """
+
+    # 2. Fleet header HTML
+    if is_placeholder:
+        fleet_html = f"""
+      <div class="fleet-header-card skeleton-pulse">
+        <div class="fleet-title label-font">Fleet Status</div>
+        <div class="fleet-status-row">
+          <span class="fleet-pill label-font skeleton-text" style="border-color: var(--border); color: var(--text3);">Mode: —</span>
+          <span class="fleet-pill label-font skeleton-text" style="border-color: var(--border); color: var(--text3);">— attached</span>
+        </div>
+      </div>
+        """
+    else:
+        fleet_html = f"""
+      <div class="fleet-header-card">
+        <div class="fleet-title label-font">Fleet Status</div>
+        <div class="fleet-status-row">
+          <span class="fleet-pill dispatch-mode-pill label-font">Mode: <span class="number-font">{html.escape(str(dispatch_mode))}</span></span>
+          <span class="fleet-pill attached-badge label-font"><span class="number-font">{int(fleet_attached)}/{int(fleet_total)}</span> attached</span>
+        </div>
+      </div>
+        """
+
+    eco_top_html = f"""
+    <div class="eco-top-row">
+      {eff_banner_html}
+      {fleet_html}
+    </div>
+    """
+
+    # 3. Capacity table HTML
+    agents_list = ["claude", "agy", "codex", "grok"]
+    
+    def _to_k(tokens) -> str:
+        try:
+            return f"{int(tokens) // 1000}K"
+        except Exception:
+            return "0K"
+
+    max_r = max((capacity.get(a, {}).get("read_budget_tokens", 0) for a in agents_list), default=1)
+    max_w = max((capacity.get(a, {}).get("write_budget_tokens", 0) for a in agents_list), default=1)
+    max_t = max((capacity.get(a, {}).get("tool_budget_count", 0) for a in agents_list), default=1)
+    max_ctx = max((capacity.get(a, {}).get("ctx_window_tokens", 0) for a in agents_list), default=1)
+
+    capacity_rows = []
+    for agent in agents_list:
+        cap = capacity.get(agent, {})
+        r_val = cap.get("read_budget_tokens", 0)
+        w_val = cap.get("write_budget_tokens", 0)
+        t_val = cap.get("tool_budget_count", 0)
+        ctx_val = cap.get("ctx_window_tokens", 0)
+
+        r_pct = (r_val / max_r) * 100 if max_r else 0
+        w_pct = (w_val / max_w) * 100 if max_w else 0
+        t_pct = (t_val / max_t) * 100 if max_t else 0
+        ctx_pct = (ctx_val / max_ctx) * 100 if max_ctx else 0
+
+        if is_placeholder:
+            r_str, w_str, t_str, ctx_str = "—", "—", "—", "—"
+            r_pct, w_pct, t_pct, ctx_pct = 0, 0, 0, 0
+            text_cls = "skeleton-text"
+            fill_cls = "skeleton-fill"
+        else:
+            r_str = _to_k(r_val)
+            w_str = _to_k(w_val)
+            t_str = str(t_val)
+            ctx_str = _to_k(ctx_val)
+            text_cls = ""
+            fill_cls = ""
+
+        capacity_rows.append(f"""
+        <tr>
+          <td class="cap-agent-name label-font">{html.escape(agent)}</td>
+          <td>
+            <div class="cap-cell">
+              <div class="cap-num number-font {text_cls}">{r_str}</div>
+              <div class="cap-bar-track">
+                <div class="cap-bar-fill {fill_cls}" style="width: {r_pct:.1f}%"></div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="cap-cell">
+              <div class="cap-num number-font {text_cls}">{w_str}</div>
+              <div class="cap-bar-track">
+                <div class="cap-bar-fill {fill_cls}" style="width: {w_pct:.1f}%"></div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="cap-cell">
+              <div class="cap-num number-font {text_cls}">{t_str}</div>
+              <div class="cap-bar-track">
+                <div class="cap-bar-fill {fill_cls}" style="width: {t_pct:.1f}%"></div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="cap-cell">
+              <div class="cap-num number-font {text_cls}">{ctx_str}</div>
+              <div class="cap-bar-track">
+                <div class="cap-bar-fill {fill_cls}" style="width: {ctx_pct:.1f}%"></div>
+              </div>
+            </div>
+          </td>
+        </tr>
+        """)
+
+    capacity_table_html = f"""
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title label-font">Capacity Table</div>
+        <div class="section-note label-font">Relative to max value in each column.</div>
+      </div>
+      <div style="padding: 16px; overflow-x: auto;">
+        <table class="cap-table">
+          <thead>
+            <tr>
+              <th class="label-font">Agent</th>
+              <th class="label-font">R (Read)</th>
+              <th class="label-font">W (Write)</th>
+              <th class="label-font">T (Tools)</th>
+              <th class="label-font">CTX (Context)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(capacity_rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    """
+
+    # 4. Cycle matrix HTML
+    def _matrix_svg(support: str) -> str:
+        s = (support or "").strip().lower()
+        if s == "full":
+            return (
+                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                '<circle cx="8" cy="8" r="7" fill="#3fb950" stroke="#3fb950" stroke-width="2"/>'
+                '</svg>'
+            )
+        elif s == "partial":
+            return (
+                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                '<circle cx="8" cy="8" r="7" stroke="#f0883e" stroke-width="2"/>'
+                '<path d="M8 1a7 7 0 0 1 0 14V1z" fill="#f0883e"/>'
+                '</svg>'
+            )
+        else:
+            return (
+                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                '<circle cx="8" cy="8" r="7" stroke="#30363d" stroke-width="2"/>'
+                '</svg>'
+            )
+
+    cycles_list = ["dream", "plan", "work", "ship", "maintain", "engage"]
+    matrix_rows = []
+    for agent in agents_list:
+        agent_cycles = cycle_cap.get(agent, {})
+        tds = []
+        for cycle in cycles_list:
+            support = "none" if is_placeholder else agent_cycles.get(cycle, "none")
+            tds.append(f"""
+          <td>
+            <div class="matrix-circle-container">
+              {_matrix_svg(support)}
+            </div>
+          </td>
+            """)
+        matrix_rows.append(f"""
+        <tr>
+          <td class="matrix-agent-name label-font">{html.escape(agent)}</td>
+          {''.join(tds)}
+        </tr>
+        """)
+
+    matrix_table_html = f"""
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title label-font">Cycle Capability Matrix</div>
+        <div class="section-note label-font">Support mapping across SDLC cycles.</div>
+      </div>
+      <div style="padding: 16px; overflow-x: auto;">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th class="label-font">Agent</th>
+              <th class="label-font">Dream</th>
+              <th class="label-font">Plan</th>
+              <th class="label-font">Work</th>
+              <th class="label-font">Ship</th>
+              <th class="label-font">Maintain</th>
+              <th class="label-font">Engage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(matrix_rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    """
+
+    eco_grid_html = f"""
+    <div class="eco-grid">
+      {capacity_table_html}
+      {matrix_table_html}
+    </div>
+    """
+
     grid_class = "cards-grid single" if len(agents) == 1 else "cards-grid"
     html_out = f"""<!DOCTYPE html>
 <html lang="en">
@@ -3407,6 +3847,10 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       </div>
       <div class="meta-chip">{html.escape(str(data.get("workspace", {}).get("name", "workspace")))} · {len(agents)} agent{'' if len(agents) == 1 else 's'}</div>
     </div>
+
+    {eco_top_html}
+
+    {eco_grid_html}
 
     <section class="section">
       <div class="section-head">
