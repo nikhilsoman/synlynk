@@ -53,6 +53,22 @@ from synlynk.probe import (
     _fence_exists,
     _probe_model_version,
 )
+from synlynk.dispatch import (
+    _spawn_with_pty_fallback,
+    _is_interactive,
+    _inject_grok_rules,
+    _tee_process,
+    _check_pre_exec_gate,
+    _check_job_stall,
+    _job_summary_path,
+    _format_job_summary,
+    _write_job_summary,
+    _format_prompt_for_agent,
+    _warn_context_size,
+    _preflight_dispatch,
+    dispatch_agent,
+    exec_command,
+)
 
 CYCLE_NAMES = ["dream", "design", "plan", "build", "ship", "sustain"]
 
@@ -1285,54 +1301,6 @@ def _save_jobs(jobs: list) -> None:
         json.dump(jobs, f, indent=2)
 
 
-def _spawn_with_pty_fallback(cmd, env, cwd):
-    """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            env=env, cwd=cwd)
-    try:
-        out, _ = proc.communicate(timeout=5)
-        if out:
-            return proc, out
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    # PTY fallback (POSIX only)
-    if sys.platform != "win32":
-        import pty
-        import select
-        master_fd, slave_fd = pty.openpty()
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                env=env,
-                cwd=cwd,
-                close_fds=True
-            )
-            os.close(slave_fd)
-            out_chunks = []
-            while True:
-                r, _, _ = select.select([master_fd], [], [], 5)
-                if not r:
-                    proc.kill()
-                    break
-                try:
-                    data = os.read(master_fd, 1024)
-                    if not data:
-                        break
-                    out_chunks.append(data)
-                except OSError:
-                    break
-            proc.wait(timeout=5)
-            return proc, b"".join(out_chunks)
-        finally:
-            try:
-                os.close(master_fd)
-            except OSError:
-                pass
-    return None, b""
-
-
 def _count_dispatch_rework(story_id: str) -> int:
     """Counts completed jobs for this story_id — each represents one dispatch cycle."""
     if not story_id:
@@ -2557,98 +2525,6 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
 
     conn.close()
     return None
-
-
-def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
-    """Returns True if job was stalled and killed."""
-    import signal as _signal
-    if job.get("status") != "running":
-        return False
-    log_file = job.get("log_file", "")
-    if not log_file or not os.path.exists(log_file):
-        return False
-    if os.path.getsize(log_file) > 0:
-        return False  # has output, not stalled
-
-    agent = job.get("agent", "")
-    global_timeout = config.get("stall_timeout_minutes", 30)
-    timeout = config.get("agents", {}).get(agent, {}).get("stall_timeout_minutes", global_timeout)
-
-    started_val = job.get("started_at")
-    if isinstance(started_val, str):
-        try:
-            import datetime as _dt
-            started_ts = _dt.datetime.strptime(started_val, "%Y-%m-%dT%H:%M:%S").timestamp()
-        except Exception:
-            started_ts = time.time()
-    elif isinstance(started_val, (int, float)):
-        started_ts = started_val
-    else:
-        started_ts = time.time()
-
-    elapsed_minutes = (time.time() - started_ts) / 60
-
-    if elapsed_minutes < timeout:
-        return False
-
-    pid = job.get("pid")
-    if pid:
-        try:
-            os.kill(pid, _signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-
-    job["status"] = "failed"
-    job["exit_code"] = -1
-    job["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-
-    _write_sentinel_alert(
-        "CRITICAL", "STALL_NO_OUTPUT",
-        f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. Process killed.",
-        sentinel_path,
-    )
-    return True
-
-
-def _job_summary_path(job_id: str) -> str:
-    return os.path.join(LOGS_DIR, f"{job_id}.summary")
-
-
-def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
-                        exit_code: Optional[int], duration_s: Optional[float],
-                        in_tokens: int, out_tokens: int, cost_usd: float,
-                        files_touched: Optional[list] = None) -> str:
-    """Formats the structured completion summary for a finished job."""
-    story_label = story_id or "-"
-    exit_code = -1 if exit_code is None else exit_code
-    status_label = "OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})"
-    duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
-    files_touched = files_touched or []
-    summary = (
-        f"-- job {job_id} complete ---------\n"
-        f"agent:    {agent}   story: {story_label}\n"
-        f"status:   {status_label}\n"
-        f"duration: {duration_label}\n"
-        f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
-        f"files:    {len(files_touched)} touched\n"
-        f"---------------------------------\n"
-    )
-    return summary
-
-
-def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
-                       exit_code: Optional[int], duration_s: Optional[float],
-                       in_tokens: int, out_tokens: int, cost_usd: float,
-                       files_touched: Optional[list]) -> str:
-    """Writes a structured completion summary for a job and returns the text."""
-    os.makedirs(LOGS_DIR, exist_ok=True)
-    summary = _format_job_summary(
-        job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
-        cost_usd, files_touched
-    )
-    with open(_job_summary_path(job_id), "w") as f:
-        f.write(summary)
-    return summary
 
 
 def _reconcile_jobs() -> None:
@@ -4560,464 +4436,6 @@ def _verify_contract_for_story(story_id: str, task: str) -> str:
     )
 
 
-def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
-                              task: str, file_section: str, verify_section: str) -> str:
-    """Returns a prompt formatted for the agent's preferred input style.
-
-    Codex: criteria list + file list first (ignores narrative prose).
-    AGY: concise directive (prompt_via_arg — shell-escaping limits length).
-    Claude: full context narrative (default).
-    """
-    story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
-
-    if agent == "codex":
-        # Codex works best with explicit, scannable criteria and a concrete file list
-        sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
-        criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
-        return (
-            f"## Task Criteria\n{criteria}\n"
-            f"{file_section}\n"
-            f"{verify_section}\n"
-            f"## Context\n{context_text}"
-            f"{story_ref}\n"
-        )
-
-    if agent == "agy":
-        # AGY receives the prompt as a CLI arg — keep short, lead with directive.
-        # Working directory is explicit because agy resets CWD to its own scratch on startup.
-        return (
-            f"## Working Directory\n{os.getcwd()}\n"
-            f"All file edits MUST be in this directory.\n\n"
-            f"Task: {task}\n"
-            f"{story_ref}\n"
-            f"{file_section}\n"
-            f"{verify_section}\n"
-            f"Context summary:\n{context_text}"
-        )
-
-    # Default (claude): full context narrative
-    return (
-        f"{context_text}"
-        f"{story_ref}"
-        f"{file_section}"
-        f"\n\n## Your Task\n{task}"
-        f"{verify_section}\n"
-    )
-
-
-_CONTEXT_WARN_BYTES = 81920  # 80KB soft limit — warn but continue
-
-
-def _warn_context_size(context_text: str) -> None:
-    size = len(context_text.encode("utf-8"))
-    if size > _CONTEXT_WARN_BYTES:
-        print(f"  ⚠ context: full ({size // 1024}KB) — exceeds soft limit "
-              f"({_CONTEXT_WARN_BYTES // 1024}KB)")
-        print("    Use --context-mode task to reduce size")
-
-
-def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None) -> dict:
-    """
-    Fast preflight guard before every dispatch (~2s, no CLI spawn).
-
-    Falls back to AGENT_CAPABILITY_BASELINES when harness_records are not yet
-    available (v0.10.1). Returns:
-    {"passed": bool, "sentinel": str|None, "reason": str|None}
-    """
-    import json as _json
-    import socket as _socket
-
-    baseline = {}
-    if db_conn:
-        try:
-            row = db_conn.execute(
-                "SELECT active_flags, active_contract FROM harness_records WHERE agent_name=?",
-                (agent_name,),
-            ).fetchone()
-        except Exception:
-            row = None
-        if row:
-            try:
-                baseline["dispatch_flags"] = _json.loads(row[0]) if row[0] else {}
-                baseline["headless_contract"] = _json.loads(row[1]) if row[1] else {}
-                baseline["network_deps"] = baseline["headless_contract"].get("network_deps", {})
-            except Exception:
-                baseline = {}
-    if not baseline:
-        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
-
-    import time as _time
-    _STALE_THRESHOLD = 3600  # 1hr
-
-    if db_conn:
-        try:
-            _row = db_conn.execute(
-                "SELECT installed_version, last_probe_at FROM harness_records WHERE agent_name=?",
-                (agent_name,),
-            ).fetchone()
-        except Exception:
-            _row = None
-        if _row:
-            _recorded_version, _last_probe_at = _row
-            _is_stale = True
-            if _last_probe_at:
-                try:
-                    _probe_ts = _time.mktime(_time.strptime(_last_probe_at, "%Y-%m-%dT%H:%M:%SZ"))
-                    _is_stale = (_time.time() - _probe_ts) > _STALE_THRESHOLD
-                except ValueError:
-                    _is_stale = True
-
-            if _is_stale:
-                try:
-                    _ver_result = subprocess.run(
-                        [agent_name, "--version"],
-                        capture_output=True,
-                        text=True,
-                        timeout=3,
-                    )
-                    _live_version = _ver_result.stdout.strip().split()[-1] if _ver_result.stdout.strip() else "unknown"
-                    if _live_version != _recorded_version:
-                        _write_sentinel_alert(
-                            "WARNING",
-                            "HARNESS_VERSION_DRIFT",
-                            f"Agent '{agent_name}' version changed: {_recorded_version} -> {_live_version}. Run synlynk probe to update.",
-                        )
-                except (FileNotFoundError, subprocess.TimeoutExpired):
-                    pass
-
-    flags_spec = baseline.get("dispatch_flags", {})
-    if isinstance(flags_spec, dict):
-        invalid_flags = set(flags_spec.get("invalid_flags", []))
-    else:
-        invalid_flags = set()
-
-    for flag in dispatch_flags or []:
-        f = flag.split("=", 1)[0]
-        if f in invalid_flags:
-            return {
-                "passed": False,
-                "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
-            }
-
-    required = baseline.get("network_deps", {}).get("required_endpoints", [])
-    for endpoint in required:
-        host, _, port_str = endpoint.rpartition(":")
-        if not host:
-            host = endpoint
-        port = int(port_str) if port_str.isdigit() else 443
-        try:
-            sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-            sock.settimeout(2.0)
-            sock.connect((host, port))
-            sock.close()
-        except (OSError, ConnectionRefusedError, _socket.timeout):
-            return {
-                "passed": False,
-                "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
-            }
-
-    return {"passed": True, "sentinel": None, "reason": None}
-
-
-def dispatch_agent(agent: str, task: str, story_id: str = None,
-                   force_agent: bool = False,
-                   context_mode: str = None,
-                   cycle: str = "work") -> dict:
-    """Dispatches an agent to run a task in the background.
-
-    Uses non-interactive agent mode (no PTY). Stdout captured to
-    .synlynk/logs/<job_id>.log. Returns the job dict.
-    Raises ValueError for unknown agent names.
-
-    When force_agent=False (default) and a story_id is given, the capability
-    router may override 'agent' with a better-scoring one. Set force_agent=True
-    to disable the router override and dispatch to the exact agent specified.
-    force_agent has no effect when story_id is None (no routing can occur).
-    """
-    if story_id and not force_agent:
-        best = _best_agent_for_story(story_id)
-        if best and best in AGENT_CAPABILITY_BASELINES:
-            agent = best
-
-    if agent not in AGENT_CAPABILITY_BASELINES:
-        raise ValueError(f"Unknown agent: '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
-
-    baselines = AGENT_CAPABILITY_BASELINES[agent]
-    cli = baselines["cli"]
-    flags = baselines["non_interactive_flags"]
-    flags = flags + _dispatch_flags_for_agent(agent)
-    preflight = _preflight_dispatch(agent_name=agent, dispatch_flags=flags, db_conn=None)
-    if isinstance(preflight, dict):
-        if not preflight.get("passed", False):
-            sentinel_path = os.path.join(".synlynk", "sentinel.md")
-            _write_sentinel_alert(
-                "CRITICAL",
-                preflight["sentinel"],
-                preflight["reason"],
-                sentinel_path,
-            )
-            raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight['reason']}")
-    elif preflight:
-        sentinel_path = os.path.join(".synlynk", "sentinel.md")
-        _write_sentinel_alert("CRITICAL", "HARNESS_PREFLIGHT_FAIL", str(preflight), sentinel_path)
-        raise RuntimeError(f"Dispatch blocked — preflight failed: {preflight}")
-
-    profile = _load_agent_profile(agent)
-    if agent == "grok" and profile.get("always_approve_unsupported"):
-        flags = [flag for flag in flags if flag != "--always-approve"]
-        flags = flags + ["--permission-mode", "bypassPermissions"]
-    if agent == "grok":
-        flags = flags + ["--output-format", "json"]
-    model_at_dispatch = _probe_model_version(agent, cli)
-    if context_mode is None:
-        context_mode = profile.get("context_mode", "task")
-    # else: explicit caller value wins; profile is default-only
-
-    import hashlib as _hashlib
-    job_id = "job-" + _hashlib.md5(
-        f"{agent}{task}{time.time()}".encode()
-    ).hexdigest()[:8]
-
-    os.makedirs(LOGS_DIR, exist_ok=True)
-    os.makedirs(PROMPTS_DIR, exist_ok=True)
-    contexts_dir = os.path.join(".synlynk", "contexts")
-    os.makedirs(contexts_dir, exist_ok=True)
-
-    log_file = os.path.join(LOGS_DIR, f"{job_id}.log")
-    prompt_file = os.path.join(PROMPTS_DIR, f"{job_id}.md")
-    context_file = os.path.join(contexts_dir, f"{job_id}.md")
-
-    context_text = ""
-    if context_mode != "none":
-        if context_mode == "task":
-            scope = f"task:{story_id}" if story_id else "full"
-        else:
-            scope = "full"
-        try:
-            context_text = generate_context(scope=scope, out_path=context_file) or ""
-        except Exception:
-            pass
-    _warn_context_size(context_text)
-    context_max_bytes = profile.get("context_max_bytes")
-    if context_max_bytes is not None:
-        try:
-            context_max_bytes = int(context_max_bytes)
-        except (TypeError, ValueError):
-            context_max_bytes = None
-    if context_max_bytes is not None:
-        encoded_context = context_text.encode("utf-8")
-        if len(encoded_context) > context_max_bytes:
-            context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
-            print(f"  context truncated to {context_max_bytes}B (agent profile limit)")
-
-    # Inject relevant file list
-    file_list = _relevant_files_for_story(story_id) if story_id else []
-    file_section = ""
-    if file_list:
-        file_section = "\n\n## Relevant Files\n" + "\n".join(f"- `{f}`" for f in file_list)
-
-    verify_section = _verify_contract_for_story(story_id, task) if story_id else ""
-
-    prompt = _format_prompt_for_agent(
-        agent, context_text, story_id or "", task, file_section, verify_section
-    )
-    with open(prompt_file, "w") as f:
-        f.write(prompt)
-
-    import shlex as _shlex
-    prompt_via_arg = baselines.get("prompt_via_arg", False)
-    prompt_flag = baselines.get("prompt_flag")
-    if prompt_via_arg:
-        # Agent takes prompt as a flag value, not stdin.
-        # prompt_flag ("--single", "-p") is placed last so it immediately precedes "$PROMPT",
-        # preventing other flags from being consumed as the prompt value.
-        # e.g. grok --yes --output-format json --single "$PROMPT"
-        if prompt_flag:
-            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
-        else:
-            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
-        shell_cmd = (
-            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
-            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
-            f"echo $? > {_shlex.quote(log_file)}.exit"
-        )
-    else:
-        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
-        shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
-
-    contract = baselines.get("headless_contract", {})
-    env = os.environ.copy()
-    for var in contract.get("env_vars_required", []):
-        if "=" in var:
-            k, v = var.split("=", 1)
-            env[k] = v
-
-    proc = subprocess.Popen(
-        ["sh", "-c", shell_cmd],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        cwd=os.getcwd(),
-        env=env,
-    )
-
-    job = {
-        "id": job_id,
-        "agent": agent,
-        "story_id": story_id or "",
-        "task": task,
-        "cycle": cycle,
-        "pid": proc.pid,
-        "log_file": log_file,
-        "prompt_file": prompt_file,
-        "context_file": context_file if context_mode != "none" else "",
-        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "ended_at": None,
-        "status": "running",
-        "exit_code": None,
-        "dispatch_rework": _count_dispatch_rework(story_id or ""),
-        "micro_rework": 0,
-        "model_at_dispatch": model_at_dispatch,
-    }
-
-    jobs = _load_jobs()
-    jobs.append(job)
-    _save_jobs(jobs)
-
-    dconn = None
-    try:
-        dconn = _get_db()
-        if dconn is not None:
-            dconn.execute(
-                "INSERT OR REPLACE INTO daemon_jobs "
-                "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    job_id,
-                    agent,
-                    task,
-                    story_id,
-                    "running",
-                    5,
-                    "[]",
-                    proc.pid,
-                    job["started_at"],
-                    job["started_at"],
-                    log_file,
-                ),
-            )
-            dconn.commit()
-    finally:
-        if dconn is not None:
-            try:
-                dconn.close()
-            except Exception:
-                pass
-
-    log_telemetry_event({"type": "dispatch", "agent": agent,
-                         "story_id": story_id, "job_id": job_id})
-    return job
-
-
-def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None) -> None:
-    """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
-    import time as _time
-
-    if summary:
-        summary_path = _job_summary_path(summary)
-        if not os.path.exists(summary_path):
-            print(f"No summary for {summary} -- job may still be running or predates this feature")
-            return
-        with open(summary_path) as f:
-            print(f.read(), end="")
-        return
-
-    def _parse_age(enqueued_at: str) -> str:
-        try:
-            enq = _time.mktime(_time.strptime(enqueued_at, "%Y-%m-%dT%H:%M:%S"))
-            age_s = int(_time.time() - enq)
-            if age_s < 60:
-                return f"{age_s}s"
-            if age_s < 3600:
-                return f"{age_s // 60}m{age_s % 60:02d}s"
-            return f"{age_s // 3600}h{(age_s % 3600) // 60}m"
-        except Exception:
-            return "?"
-
-    def _render_legacy_jobs() -> None:
-        _reconcile_jobs()
-        jobs = _load_jobs()
-        if not jobs:
-            print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
-            return
-        visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
-        if not visible:
-            completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
-            print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
-            return
-        header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
-        print(f"{_BOLD}{header}{_RESET}")
-        print("─" * 70)
-        for j in visible:
-            sid = (j.get("story_id") or "—")[:6]
-            task = (j.get("task") or "")[:40]
-            status = j["status"]
-            color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
-            print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
-
-    def _render() -> None:
-        _reconcile_daemon_jobs()
-        conn = _get_db()
-        rows = conn.execute(
-            "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
-            "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
-        ).fetchall()
-        conn.close()
-
-        if not rows:
-            _render_legacy_jobs()
-            return
-
-        if all_jobs:
-            visible = rows
-        else:
-            visible = [r for r in rows if r[3] in ("queued", "running")]
-            if not visible:
-                done = sum(1 for r in rows if r[3] in ("done", "failed"))
-                print(f"  No active jobs. ({done} completed — use synlynk jobs --all)")
-                return
-
-        header = f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'AGE':8}  {'EXIT':4}"
-        print(f"{_BOLD}{header}{_RESET}")
-        print("  " + "─" * 64)
-        for job_id, agent, story_id, status, enqueued_at, exit_code in visible:
-            sid = (story_id or "—")[:12]
-            age = _parse_age(enqueued_at)
-            color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
-            exit_str = str(exit_code) if exit_code is not None else "—"
-            print(
-                f"  {job_id:14}  {agent:8}  {sid:12}  "
-                f"{color}{status:10}{_RESET}  {age:8}  {exit_str:4}"
-            )
-
-    if watch:
-        try:
-            while True:
-                print("\033[H\033[J", end="")
-                try:
-                    _render()
-                except Exception as e:
-                    print(f"  render error: {e}")
-                print(f"\n  {_DIM}Refreshing every 2s... Ctrl-C to exit{_RESET}")
-                _time.sleep(2)
-        except KeyboardInterrupt:
-            pass
-    else:
-        _render()
-
-
 def cmd_agent_configure(agent_name: str) -> None:
     """Interactively write .agents/<agent_name>.json context-profile settings."""
     import json as _json
@@ -5406,6 +4824,103 @@ def _collect_github_issues(signal_cfg: dict) -> list:
             "signal_hash": signal_hash,
         })
     return findings
+
+
+def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None) -> None:
+    """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
+    import time as _time
+
+    if summary:
+        summary_path = _job_summary_path(summary)
+        if not os.path.exists(summary_path):
+            print(f"No summary for {summary} -- job may still be running or predates this feature")
+            return
+        with open(summary_path) as f:
+            print(f.read(), end="")
+        return
+
+    def _parse_age(enqueued_at: str) -> str:
+        try:
+            enq = _time.mktime(_time.strptime(enqueued_at, "%Y-%m-%dT%H:%M:%S"))
+            age_s = int(_time.time() - enq)
+            if age_s < 60:
+                return f"{age_s}s"
+            if age_s < 3600:
+                return f"{age_s // 60}m{age_s % 60:02d}s"
+            return f"{age_s // 3600}h{(age_s % 3600) // 60}m"
+        except Exception:
+            return "?"
+
+    def _render_legacy_jobs() -> None:
+        _reconcile_jobs()
+        jobs = _load_jobs()
+        if not jobs:
+            print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+            return
+        visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
+        if not visible:
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
+            print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
+            return
+        header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
+        print(f"{_BOLD}{header}{_RESET}")
+        print("─" * 70)
+        for j in visible:
+            sid = (j.get("story_id") or "—")[:6]
+            task = (j.get("task") or "")[:40]
+            status = j["status"]
+            color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
+            print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+
+    def _render() -> None:
+        _reconcile_daemon_jobs()
+        conn = _get_db()
+        rows = conn.execute(
+            "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
+            "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            _render_legacy_jobs()
+            return
+
+        if all_jobs:
+            visible = rows
+        else:
+            visible = [r for r in rows if r[3] in ("queued", "running")]
+            if not visible:
+                done = sum(1 for r in rows if r[3] in ("done", "failed"))
+                print(f"  No active jobs. ({done} completed — use synlynk jobs --all)")
+                return
+
+        header = f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'AGE':8}  {'EXIT':4}"
+        print(f"{_BOLD}{header}{_RESET}")
+        print("  " + "─" * 64)
+        for job_id, agent, story_id, status, enqueued_at, exit_code in visible:
+            sid = (story_id or "—")[:12]
+            age = _parse_age(enqueued_at)
+            color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
+            exit_str = str(exit_code) if exit_code is not None else "—"
+            print(
+                f"  {job_id:14}  {agent:8}  {sid:12}  "
+                f"{color}{status:10}{_RESET}  {age:8}  {exit_str:4}"
+            )
+
+    if watch:
+        try:
+            while True:
+                print("\033[H\033[J", end="")
+                try:
+                    _render()
+                except Exception as e:
+                    print(f"  render error: {e}")
+                print(f"\n  {_DIM}Refreshing every 2s... Ctrl-C to exit{_RESET}")
+                _time.sleep(2)
+        except KeyboardInterrupt:
+            pass
+    else:
+        _render()
 
 
 def _dedup_findings(findings: list) -> list:
@@ -7106,22 +6621,6 @@ def check_stall() -> None:
                   f"consider checking or restarting.")
     except (IOError, OSError):
         pass
-
-
-def _check_pre_exec_gate(force: bool = False) -> bool:
-    """Checks for active sentinel alerts. Returns False to abort if CRITICAL and not forced."""
-    warns = _read_sentinel_alerts(severity="WARN")
-    criticals = _read_sentinel_alerts(severity="CRITICAL")
-    for w in warns:
-        print(f"  ⚠ {w}")
-    if criticals:
-        for c in criticals:
-            print(f"  🚨 {c}")
-        if not force:
-            print("  Exec blocked by CRITICAL sentinel alert. "
-                  "Fix the issue or re-run with --force to bypass.")
-            return False
-    return True
 
 
 def _compute_burn_rate() -> tuple:
@@ -10190,83 +9689,6 @@ def init(force: bool = False, agents: list = None,
                   f"← runs {agent_names} in parallel")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
-def exec_command(cmd_args: list, force: bool = False) -> int:
-    if not cmd_args:
-        print("Error: No command provided to exec.")
-        return 1
-
-    generate_context()
-    cmd_args = _inject_grok_rules(cmd_args)
-    check_budgets()
-
-    if not _check_pre_exec_gate(force=force):
-        return 1
-
-    set_state("active")
-    print(f"  Executing: {' '.join(cmd_args)}")
-    start_time = time.time()
-    exit_code = 0
-    output_text = ""
-
-    try:
-        interactive = _is_interactive(cmd_args)
-        if interactive:
-            process = subprocess.Popen(cmd_args)
-            process.wait()
-            exit_code = process.returncode
-        else:
-            process = subprocess.Popen(
-                cmd_args,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
-            buffer: list = []
-            tee_thread = threading.Thread(target=_tee_process, args=(process, buffer))
-            tee_thread.start()
-            process.wait()
-            tee_thread.join()
-            exit_code = process.returncode
-            output_text = "".join(buffer)
-    except FileNotFoundError:
-        exit_code = 127
-        print(f"  Error: Command '{cmd_args[0]}' not found.")
-    except Exception as e:
-        exit_code = 1
-        print(f"  Error: {e}")
-    finally:
-        duration = time.time() - start_time
-        print(f"\n  ✓ Execution finished in {duration:.2f}s")
-
-        in_tokens, out_tokens = extract_tokens(output_text)
-        if in_tokens > 0:
-            est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
-            print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
-            update_costs(' '.join(cmd_args), in_tokens, out_tokens, duration)
-        elif not _is_interactive(cmd_args):
-            pass  # non-interactive but no tokens found — silent
-        else:
-            print("  ⚡ Token count unavailable (interactive mode)")
-
-        _check_costs_freshness()
-        log_telemetry_event({
-            "type": "exec",
-            "schema_version": 1,
-            "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
-            "_ts": time.time(),
-            "user": get_username(),
-            "command": ' '.join(cmd_args),
-            "duration": round(duration, 2),
-            "exit_code": exit_code,
-            "in_tokens": in_tokens,
-            "out_tokens": out_tokens,
-        })
-        check_sentinel_patterns(output_text=output_text, exit_code=exit_code,
-                                cmd=' '.join(cmd_args))
-        _check_instruction_drift()
-        daemon = WatchDaemon()
-        set_state("watching" if daemon._is_running() else "stopped")
-
-    return exit_code
 # --- module extractions (backwards compat) ---
 from synlynk.cli import main, cmd_watch  # noqa: E402
 from synlynk.db import (  # noqa: E402
