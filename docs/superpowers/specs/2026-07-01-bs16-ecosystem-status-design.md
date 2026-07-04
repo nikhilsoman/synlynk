@@ -1,11 +1,22 @@
 # BS-16: Ecosystem Status + Capacity
 ## Design Spec
 
-**Date:** 2026-07-01
+**Date:** 2026-07-01 (revised 2026-07-04)
 **Session:** BS-16 (Nikhil + Claude)
 **Status:** Approved — ready for implementation plan
-**Epic:** BS-16 (new)
-**Target:** v0.10.0 (status command + agent cards + cycle matrix); HUD visual = post-v0.10.0
+**Epic:** BS-16
+**Target:** v0.11.0
+
+**Prerequisite:** `chore/modularise-init` must ship first — extracts probe, sentinel, upgrade, and dispatch logic from `synlynk/__init__.py` (currently 11,268L) into dedicated modules. BS-16 modifies probe + preflight heavily; landing on a modular base keeps the PR reviewable.
+
+**Revision log (2026-07-04 review brainstorm):**
+- Target changed v0.10.0 → v0.11.0 (v0.10.0 shipped without it)
+- Watch panel integration added (Option C): `synlynk probe` writes `harness_status` to state.db; `synlynk watch` reads state.db at each poll, no daemon required; `HUDRenderer.render_header()` gains `harness_data` param
+- Vizor Efficiency enrichment split out → **BS-22** (Agy dispatch, HTML/CSS in `viz.py`)
+- `synlynk status --json` retained as thin flag in BS-16 (BS-22 will consume it)
+- New file: `synlynk/status.py` for compute logic + `cmd_status()` formatter
+- `HarnessSnapshot(db_path)` added to `synlynk/hud.py` (mirrors `JobSnapshot` pattern)
+- Plan-aware capacity (Tier 2), daemon HTTP enrichment, surge detection (Tier 3) remain deferred
 
 ---
 
@@ -333,9 +344,11 @@ Terminal uses Unicode: `●` (U+25CF) for full, `◐` (U+25D0) for partial, `○
 
 ---
 
-## Web HUD Visual Design
+## Web HUD Visual Design (BS-22 — deferred)
 
-The web HUD (`synlynk watch` / `synlynk viz` web board) renders the same data with full visual treatment. Design approved in brainstorm session 2026-07-01. HTML files in `.superpowers/brainstorm/2822-1782873607/content/hud-v3.html`.
+> **Note (2026-07-04):** The web HUD is split into BS-22 and is out of scope for BS-16. BS-21 Vizor shipped 2026-07-03 with an Efficiency tab showing agent cards from telemetry. BS-22 will enrich that existing view with `harness_status` data (R/W/T budget bars, cycle matrix, radar hexagons) via `synlynk status --json`. The design below is preserved as the visual target for BS-22.
+
+The web HUD (`synlynk viz` Efficiency tab) renders the same data with full visual treatment. Design approved in brainstorm session 2026-07-01. HTML files in `.superpowers/brainstorm/2822-1782873607/content/hud-v3.html`.
 
 ### Layout (top to bottom)
 
@@ -419,7 +432,7 @@ Claude's adherence is `None` (reference, not scored against itself). All scores 
 
 ## Scope
 
-### In scope (BS-16 v1 — targets v0.10.0)
+### In scope (BS-16 — targets v0.11.0)
 
 - `harness_status` and `cycle_capability` tables in `_migrate_db()`
 - `_compute_cycle_capability()` — aggregate verb_map into cycle scores
@@ -428,16 +441,18 @@ Claude's adherence is `None` (reference, not scored against itself). All scores 
 - Telemetry: `first_output_at`, `tool_call_count`, `rescue_agent`, `output_velocity_bpm` fields
 - `synlynk probe` enhancements: cycle capability write, capacity record write, best-effort latest version
 - `synlynk status` terminal output: efficiency banner, agent score, capacity table, cycle capability matrix
+- `synlynk status --json` — thin flag, same data as terminal output in JSON form (consumed by BS-22)
 - Dispatch mode config (`dispatch_mode` in `.synlynk/config.json`), `synlynk config set dispatch_mode`
 - Headless efficiency metric computation and display
+- **Watch panel integration:** `HarnessSnapshot(db_path)` in `hud.py`; `HUDRenderer.render_header()` gains `harness_data: dict` param; `cmd_watch()` reads state.db at each poll and passes data to renderer; collapsed panel shows real attach status (✓/✗); expanded panel shows `harness_compat_score`, installed version, version drift warning; falls back to stubs if state.db absent (probe not run)
+- New file `synlynk/status.py`: all new compute logic + `cmd_status()` output formatter
 - Tests: `tests/test_ecosystem_status.py` — ~20 tests covering all new functions
 
-### In scope (BS-16 v2 — post v0.10.0)
+### Deferred (post-v0.11.0)
 
-- Plan-tier and plan-type config in `.agents/<agent>.json` + `PLAN_CAPACITY_TABLE`
-- Plan-aware capacity limits per agent
-- `synlynk status --json` output for HUD consumption
-- Web HUD agent cards + cycle matrix + radar (BS-13 integration)
+- **BS-22** — Vizor Efficiency view enrichment: agent cards with R/W/T budget bars + cycle matrix + radar hexagons in `viz.py` (Agy dispatch, HTML/CSS work); consumes `synlynk status --json`
+- Plan-aware capacity (Tier 2): plan-tier + plan-type config in `.agents/<agent>.json` + `PLAN_CAPACITY_TABLE`
+- Daemon HTTP enrichment: `localhost:27471` live feed for watch panel (Tier 2 streaming, not needed — state.db read is sufficient for v0.11.0)
 
 ### Deferred (Tier 3 — post-GA)
 
