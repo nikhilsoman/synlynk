@@ -5189,6 +5189,11 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
         print(line, end="")
     if len(lines) > tail:
         print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
+    summary_path = _job_summary_path(job_id)
+    if os.path.exists(summary_path):
+        print()
+        with open(summary_path) as f:
+            print(f.read(), end="")
 
 
 def cmd_shell(story_id: str = None) -> None:

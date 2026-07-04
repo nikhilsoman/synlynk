@@ -2887,8 +2887,12 @@ def test_preflight_blocks_unreachable_endpoint(monkeypatch):
 
     monkeypatch.setattr(socket.socket, "connect", mock_connect)
 
+    # TC-2 now runs before network check — mock it to pass so we reach the network gate.
+    from synlynk import probe as probe_mod
+    monkeypatch.setattr(probe_mod, "_run_tc2",
+                        lambda agent, flags_spec, **kw: {"passed": True, "failed_flags": []})
+
     from synlynk import _preflight_dispatch
-    # --always-approve is now the correct required flag for Grok
     result = _preflight_dispatch(
         agent_name="grok",
         dispatch_flags=["--always-approve"],

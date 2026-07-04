@@ -526,9 +526,13 @@ def test_run_workspace_scan_shallow_preserves_backwards_compat(tmp_path, monkeyp
 
 
 def test_write_scan_fences_updates_claude_md(tmp_path):
-    """_write_scan_fences writes Codebase Context into CLAUDE.md."""
+    """_write_scan_fences writes Codebase Context into GEMINI.md (not CLAUDE.md)."""
+    # CLAUDE.md is excluded from fence writes — probe must not touch it.
+    # GEMINI.md is the canonical agent directive file for fence updates.
     claude_md = tmp_path / "CLAUDE.md"
+    gemini_md = tmp_path / "GEMINI.md"
     claude_md.write_text("# Project\n\nSome existing content.\n")
+    gemini_md.write_text("# Gemini\n\nSome content.\n")
     results = {
         "stack": {"language": "python", "version": "3.11", "frameworks": ["pytest"],
                   "package_manager": "pyproject.toml", "ci": True, "ci_workflows": 1,
@@ -543,10 +547,12 @@ def test_write_scan_fences_updates_claude_md(tmp_path):
                  "public_api_count": 8, "pattern": "modular"},
     }
     updated = synlynk._write_scan_fences(results, root=str(tmp_path))
-    assert str(claude_md) in updated or "CLAUDE.md" in " ".join(updated)
-    content = claude_md.read_text()
-    assert "Codebase Context" in content
-    assert "python" in content.lower()
+    # CLAUDE.md must NOT be written by probe
+    assert "CLAUDE.md" not in " ".join(updated)
+    assert "Codebase Context" not in claude_md.read_text()
+    # GEMINI.md should receive the fence
+    assert str(gemini_md) in updated or "GEMINI.md" in " ".join(updated)
+    assert "Codebase Context" in gemini_md.read_text()
 
 
 def test_write_scan_fences_skips_missing_files(tmp_path):

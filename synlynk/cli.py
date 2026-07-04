@@ -376,6 +376,10 @@ def main() -> None:
         "--context-mode", choices=["none", "task", "full"], default="task",
         dest="context_mode", help="Context injection mode"
     )
+    dispatch_parser.add_argument(
+        "--skip-preflight", action="store_true", dest="skip_preflight",
+        help="Bypass harness preflight checks"
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -577,7 +581,8 @@ def main() -> None:
         try:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
-                                 context_mode=getattr(args, "context_mode", "task"))
+                                 context_mode=getattr(args, "context_mode", "task"),
+                                 skip_preflight=getattr(args, "skip_preflight", False))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
         except ValueError as e:
