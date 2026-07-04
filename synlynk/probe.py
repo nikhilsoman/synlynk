@@ -353,6 +353,70 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
             ),
         )
 
+    try:
+        from synlynk.status import TIER1_CAPACITY, _compute_cycle_capability
+
+        cap = TIER1_CAPACITY.get(agent_name, {})
+        attach_point_in_time = 1 if compliance == "ok" else 0
+        db_conn.execute(
+            """
+            INSERT INTO harness_status (
+                agent_name, attach_point_in_time, installed_version,
+                ctx_window_tokens, read_budget_tokens, write_budget_tokens,
+                tool_budget_count, tc1_status, tc2_status, tc3_status, tc4_status,
+                last_probe_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(agent_name) DO UPDATE SET
+                attach_point_in_time=excluded.attach_point_in_time,
+                installed_version=excluded.installed_version,
+                ctx_window_tokens=excluded.ctx_window_tokens,
+                read_budget_tokens=excluded.read_budget_tokens,
+                write_budget_tokens=excluded.write_budget_tokens,
+                tool_budget_count=excluded.tool_budget_count,
+                tc1_status=excluded.tc1_status,
+                tc2_status=excluded.tc2_status,
+                tc3_status=excluded.tc3_status,
+                tc4_status=excluded.tc4_status,
+                last_probe_at=excluded.last_probe_at
+            """,
+            (
+                agent_name,
+                attach_point_in_time,
+                installed_version,
+                cap.get("ctx_window_tokens"),
+                cap.get("read_budget_tokens"),
+                cap.get("write_budget_tokens"),
+                cap.get("tool_budget_count"),
+                "unknown",
+                "unknown",
+                "unknown",
+                "unknown",
+                now,
+            ),
+        )
+        _compute_cycle_capability(agent_name, db_conn)
+
+        latest_version_cmds = {
+            "claude": ["npm", "info", "@anthropic-ai/claude-code", "version"],
+            "codex": ["npm", "info", "@openai/codex", "version"],
+            "agy": None,
+            "grok": None,
+        }
+        ver_cmd = latest_version_cmds.get(agent_name)
+        if ver_cmd:
+            try:
+                latest_result = subprocess.run(ver_cmd, capture_output=True, text=True, timeout=3)
+                latest_version = latest_result.stdout.strip() if latest_result.returncode == 0 else ""
+                if latest_version:
+                    db_conn.execute(
+                        "UPDATE harness_status SET latest_version=? WHERE agent_name=?",
+                        (latest_version, agent_name),
+                    )
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     _INSTRUCTION_FILES = {
         "claude": "CLAUDE.md",
         "agy": "GEMINI.md",
