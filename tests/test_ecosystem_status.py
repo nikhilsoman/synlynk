@@ -340,3 +340,41 @@ def test_exec_command_telemetry_enrichment(monkeypatch, tmp_path):
     assert event["tool_call_count"] >= 2
     assert event["output_velocity_bpm"] is not None
     assert event["rescue_agent"] is None
+
+
+def test_preflight_receives_real_db_conn(monkeypatch, tmp_path, db):
+    """dispatch_agent() passes a real db_conn to _preflight_dispatch, not None."""
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(
+        json.dumps({"dispatch_mode": "daily-grind", "budget": {"limit_usd": 10, "limit_requests": 100}})
+    )
+
+    received = {}
+
+    def fake_preflight(agent_name, dispatch_flags, db_conn=None, _task_hint=""):
+        received["db_conn"] = db_conn
+        return {"passed": True, "sentinel": None, "reason": None}
+
+    class FakeProc:
+        pid = 99999
+
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [])
+    monkeypatch.setattr(synlynk, "_save_jobs", lambda jobs: None)
+    monkeypatch.setattr(synlynk, "_count_dispatch_rework", lambda _story_id: 0)
+    monkeypatch.setattr(synlynk, "_best_agent_for_story", lambda _story_id: None)
+    monkeypatch.setattr(synlynk, "_get_db", lambda: db)
+    monkeypatch.setattr(synlynk, "_preflight_dispatch", fake_preflight)
+    monkeypatch.setattr(synlynk, "_load_agent_profile", lambda _agent: {})
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda _agent, _cli: "model")
+    monkeypatch.setattr(synlynk, "_warn_context_size", lambda _context: None)
+    monkeypatch.setattr(synlynk, "_relevant_files_for_story", lambda _story_id: [])
+    monkeypatch.setattr(synlynk, "_verify_contract_for_story", lambda _story_id, _task: "")
+    monkeypatch.setattr(synlynk, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+
+    synlynk.dispatch_agent("codex", "fix a small bug")
+    assert received["db_conn"] is db, "dispatch_agent must pass a real db_conn to _preflight_dispatch"

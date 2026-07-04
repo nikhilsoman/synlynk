@@ -433,10 +433,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
     preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
+    _get_db_fn = _pkg("_get_db")
+    _preflight_db = _get_db_fn() if _get_db_fn else None
     try:
-        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=None, _task_hint=task)
+        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db, _task_hint=task)
     except TypeError:
-        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=None)
+        preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
     if isinstance(preflight, dict):
         if not preflight.get("passed", False):
             sentinel_path = os.path.join(".synlynk", "sentinel.md")
