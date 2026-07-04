@@ -124,7 +124,9 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
     """Write Codebase Context fences into present directive files."""
     import datetime as _dt
 
-    directive_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
+    # CLAUDE.md is Claude Code's project instructions — probe must not write fences there.
+    # Only write to agent directive files that read harness fences for headless dispatch.
+    directive_files = ["GEMINI.md", "AGENTS.md", "GROK.md"]
     body_lines = []
 
     stack = results.get("stack") or {}
