@@ -42,8 +42,8 @@ AGENT_CAPABILITY_BASELINES = {
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--print", "--model", "--output-format", "--add-dir"],
-            "invalid_flags": ["--always-approve", "--dangerously-skip-permissions", "--non-interactive"],
+            "valid_flags": ["--print", "--model", "--add-dir", "--sandbox"],
+            "invalid_flags": ["--always-approve", "--non-interactive"],
             "required_flags": [],
         },
         "headless_contract": {

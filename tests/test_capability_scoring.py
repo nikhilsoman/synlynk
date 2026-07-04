@@ -929,8 +929,8 @@ def test_implement__write_scan_fences_for_synlynk(tmp_path):
     # Ensure _write_scan_fences exists
     assert hasattr(synlynk, "_write_scan_fences")
     
-    claude_md = tmp_path / "CLAUDE.md"
-    claude_md.write_text("# CLAUDE\n")
+    gemini_md = tmp_path / "GEMINI.md"
+    gemini_md.write_text("# GEMINI\n")
     
     results = {
         "stack": {"language": "python", "version": "3.11"},
@@ -939,8 +939,8 @@ def test_implement__write_scan_fences_for_synlynk(tmp_path):
     
     updated = synlynk._write_scan_fences(results, root=str(tmp_path))
     assert len(updated) == 1
-    assert str(claude_md) in updated
-    assert "## Codebase Context" in claude_md.read_text()
+    assert str(gemini_md) in updated
+    assert "## Codebase Context" in gemini_md.read_text()
 
 
 def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
