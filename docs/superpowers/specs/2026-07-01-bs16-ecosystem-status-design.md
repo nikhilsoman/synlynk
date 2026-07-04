@@ -346,7 +346,7 @@ Terminal uses Unicode: `●` (U+25CF) for full, `◐` (U+25D0) for partial, `○
 
 ## Web HUD Visual Design (BS-22 — deferred)
 
-> **Note (2026-07-04):** The web HUD is split into BS-22 and is out of scope for BS-16. BS-21 Vizor shipped 2026-07-03 with an Efficiency tab showing agent cards from telemetry. BS-22 will enrich that existing view with `harness_status` data (R/W/T budget bars, cycle matrix, radar hexagons) via `synlynk status --json`. The design below is preserved as the visual target for BS-22.
+> **Note (2026-07-04):** Vizor (`synlynk viz`) is synlynk's **sole web HUD** — local-first today, extending to synlynk.com Team/Enterprise via NATS gate/sync post-v1.0. There are no parallel web surfaces. BS-22 enriches the existing Vizor Efficiency tab with `harness_status` data via `synlynk status --json`. Design `status --json` output as a stable data contract (primary consumer = Vizor, eventually the remote service). The design below is the visual target for BS-22.
 
 The web HUD (`synlynk viz` Efficiency tab) renders the same data with full visual treatment. Design approved in brainstorm session 2026-07-01. HTML files in `.superpowers/brainstorm/2822-1782873607/content/hud-v3.html`.
 
