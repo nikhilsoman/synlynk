@@ -127,7 +127,7 @@ def _compute_cycle_capability(agent_name: str, db_conn) -> dict:
         support = None
         if "support" in cols:
             support = row["support"]
-        elif "supported" in cols:
+        if support is None and "supported" in cols:
             support = row["supported"]
         if support is None:
             support = "none"

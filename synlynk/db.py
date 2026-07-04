@@ -297,23 +297,15 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
     """)
-    # Idempotent cycle rename: old names -> new names (no-ops if tables/columns absent)
+    # BS-22 introduced erroneous cycle renames; delete any rows with the wrong names
+    # so they don't block migration on databases that ran the bad migration.
     for sql in [
-        "UPDATE cycle_capability SET cycle = 'design'  WHERE cycle = 'plan'",
-        "UPDATE cycle_capability SET cycle = 'plan'    WHERE cycle = 'work'",
-        "UPDATE cycle_capability SET cycle = 'build'   WHERE cycle = 'ship'",
-        "UPDATE cycle_capability SET cycle = 'ship'    WHERE cycle = 'maintain'",
-        "UPDATE cycle_capability SET cycle = 'sustain' WHERE cycle = 'engage'",
-        "UPDATE harness_verb_map  SET cycle = 'design'  WHERE cycle = 'plan'",
-        "UPDATE harness_verb_map  SET cycle = 'plan'    WHERE cycle = 'work'",
-        "UPDATE harness_verb_map  SET cycle = 'build'   WHERE cycle = 'ship'",
-        "UPDATE harness_verb_map  SET cycle = 'ship'    WHERE cycle = 'maintain'",
-        "UPDATE harness_verb_map  SET cycle = 'sustain' WHERE cycle = 'engage'",
+        "DELETE FROM cycle_capability WHERE cycle IN ('design','build','sustain')",
     ]:
         try:
             conn.execute(sql)
-        except sqlite3.OperationalError:
-            pass  # table or column absent — migration is a no-op
+        except (sqlite3.OperationalError, sqlite3.IntegrityError):
+            pass
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
