@@ -124,6 +124,17 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
     if "status" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+    daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    if "handoff_count" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN handoff_count INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+    if "previous_agents" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN previous_agents TEXT")
+        except sqlite3.OperationalError:
+            pass
     try:
         conn.executescript(_DB_SCORES_VIEW)
     except sqlite3.OperationalError:

@@ -12,6 +12,29 @@ QUOTA_PATTERNS = [
     "RESOURCE_EXHAUSTED",
 ]
 
+_ROLE_PERMISSION_DEFAULTS = {
+    "pm": ["read:*"],
+    "review": ["read:*"],
+    "deploy": ["read:*"],
+    "implement": ["read:*", "write:src/", "run:tests"],
+    "test": ["read:*", "write:src/", "run:tests"],
+    "refactor": ["read:*", "write:src/", "run:tests"],
+    "css": ["read:*", "write:src/", "write:docs/"],
+    "templates": ["read:*", "write:src/", "write:docs/"],
+    "content": ["read:*", "write:src/", "write:docs/"],
+    "canvas": ["read:*", "write:src/", "run:shell"],
+    "js": ["read:*", "write:src/", "run:shell"],
+    "infra": ["read:*", "write:src/", "run:shell"],
+}
+
+_PERMISSION_TO_TOOL_MAP = {
+    "read:*": ["Read", "Glob", "Grep", "LS"],
+    "write:src/": ["Edit", "Write", "MultiEdit"],
+    "write:docs/": ["Edit", "Write"],
+    "run:tests": ["Bash(pytest:*)"],
+    "run:shell": ["Bash"],
+}
+
 # Known baseline capabilities per agent CLI.
 # Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
 AGENT_CAPABILITY_BASELINES = {

@@ -159,6 +159,7 @@ def main() -> None:
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
+        cmd_jobs_handoff,
         cmd_join,
         cmd_launch,
         cmd_launch_ftue,
@@ -181,6 +182,7 @@ def main() -> None:
         cmd_story_create,
         cmd_story_list,
         cmd_sync,
+        cmd_configure_agent,
         cmd_team_status,
         cmd_watch,
         dispatch_agent,
@@ -297,6 +299,25 @@ def main() -> None:
     sync_parser.add_argument(
         "--confirm", action="store_true",
         help="Execute sync (default is dry-run)")
+    sync_parser.add_argument(
+        "--repair-sops", action="store_true", dest="repair_sops",
+        help="Re-inject missing SOP sections into directive files")
+
+    configure_parser = subparsers.add_parser(
+        "configure", help="Configure synlynk components")
+    configure_sub = configure_parser.add_subparsers(dest="configure_target")
+    agent_configure_parser = configure_sub.add_parser(
+        "agent", help="Configure a specific agent's harness")
+    agent_configure_parser.add_argument("name", help="Agent name (claude, agy, codex, grok)")
+    agent_configure_parser.add_argument(
+        "--flag", action="append", default=[], metavar="KEY=VAL",
+        help="Set a dispatch flag override (repeatable)")
+    agent_configure_parser.add_argument(
+        "--env", action="append", default=[], metavar="KEY=VAL",
+        help="Set an env var override (repeatable)")
+    agent_configure_parser.add_argument(
+        "--network-dep", action="append", default=[], metavar="HOST:PORT",
+        help="Add a required network endpoint (repeatable)")
 
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
@@ -383,6 +404,14 @@ def main() -> None:
         "--skip-preflight", action="store_true", dest="skip_preflight",
         help="Bypass harness preflight checks"
     )
+    dispatch_parser.add_argument(
+        "--grant", action="append", default=[],
+        help="Add a permission for this dispatch (repeatable)"
+    )
+    dispatch_parser.add_argument(
+        "--revoke", action="append", default=[],
+        help="Remove a permission for this dispatch (repeatable)"
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -390,6 +419,12 @@ def main() -> None:
     jobs_parser.add_argument("--summary", metavar="JOB_ID")
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
+    jobs_parser.add_argument("--stalled", action="store_true",
+        help="List jobs awaiting handoff")
+    jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
+    handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another agent")
+    handoff_p.add_argument("job_id")
+    handoff_p.add_argument("--to", dest="to_agent", default=None)
 
     relay_parser = subparsers.add_parser("relay", help="Relay event broker commands")
     relay_sub = relay_parser.add_subparsers(dest="relay_action")
@@ -585,16 +620,22 @@ def main() -> None:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  context_mode=getattr(args, "context_mode", "task"),
-                                 skip_preflight=getattr(args, "skip_preflight", False))
+                                 skip_preflight=getattr(args, "skip_preflight", False),
+                                 grants=getattr(args, "grant", []),
+                                 revokes=getattr(args, "revoke", []))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
     elif args.command == "jobs":
-        cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
-                 watch=getattr(args, "watch", False),
-                 summary=getattr(args, "summary", None))
+        if getattr(args, "jobs_cmd", None) == "handoff":
+            cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))
+        else:
+            cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
+                     watch=getattr(args, "watch", False),
+                     summary=getattr(args, "summary", None),
+                     stalled=getattr(args, "stalled", False))
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
@@ -714,7 +755,17 @@ def main() -> None:
     elif args.command == "repair":
         sys.exit(cmd_repair(dry_run=not args.confirm))
     elif args.command == "sync":
-        sys.exit(cmd_sync(dry_run=not args.confirm))
+        sys.exit(cmd_sync(dry_run=not args.confirm, repair_sops=getattr(args, "repair_sops", False)))
+    elif args.command == "configure":
+        if getattr(args, "configure_target", None) == "agent":
+            flags = {}
+            for item in args.flag or []:
+                key, sep, val = item.partition("=")
+                flags[key] = val if sep else True
+            envs = dict(item.split("=", 1) for item in args.env) if args.env else {}
+            cmd_configure_agent(args.name, flags=flags, envs=envs, network_deps=args.network_dep)
+        else:
+            configure_parser.print_help()
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:

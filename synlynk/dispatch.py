@@ -36,6 +36,61 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return list(dispatch_flags or [])
 
 
+def _load_harness_overrides(agent: str) -> dict:
+    """Read per-project harness overrides from .agents/<agent>.json."""
+    empty = {"dispatch_flags": {}, "env": {}, "network_deps": []}
+    path = os.path.join(".agents", f"{agent}.json")
+    if not os.path.exists(path):
+        return empty
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data.get("harness_overrides") or empty
+    except (json.JSONDecodeError, OSError):
+        sys.stderr.write(f"Warning: corrupt {path}, ignoring harness overrides\n")
+        return empty
+
+
+def _resolve_dispatch_permissions(
+    agent: str,
+    role_list: list = None,
+    grants: list = None,
+    revokes: list = None,
+) -> list:
+    """Compute effective permissions from role defaults, grants, and revokes."""
+    from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
+
+    del agent
+    effective = set()
+    for role in role_list or []:
+        effective.update(_ROLE_PERMISSION_DEFAULTS.get(role, []))
+    effective.update(grants or [])
+    effective.difference_update(revokes or [])
+    return sorted(effective)
+
+
+def _permissions_to_flags(agent: str, permissions: list) -> list:
+    """Translate permission strings into agent-specific CLI flags."""
+    from synlynk._constants import _PERMISSION_TO_TOOL_MAP
+
+    if agent == "agy":
+        return []
+    if agent == "claude":
+        tools = []
+        for perm in permissions or []:
+            tools.extend(_PERMISSION_TO_TOOL_MAP.get(perm, []))
+        tools = sorted(set(tools))
+        if not tools:
+            return []
+        return ["--allowedTools", ",".join(tools)]
+    if agent == "codex":
+        has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
+        if not has_write:
+            return ["--approval-policy", "untrusted"]
+        return []
+    return []
+
+
 def _spawn_with_pty_fallback(cmd, env, cwd):
     """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -179,6 +234,11 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     write_alert(
         "CRITICAL", "STALL_NO_OUTPUT",
         f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. Process killed.",
+        sentinel_path,
+    )
+    write_alert(
+        "WARN", "HANDOFF_PENDING",
+        f"Job {job.get('id')} on agent '{agent}' is awaiting handoff to another agent.",
         sentinel_path,
     )
     return True
@@ -437,7 +497,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
                    context_mode: str = None,
                    cycle: str = "work",
-                   skip_preflight: bool = False) -> dict:
+                   skip_preflight: bool = False,
+                   grants: list = None,
+                   revokes: list = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     if story_id and not force_agent:
         best_agent = _pkg("_best_agent_for_story")
@@ -452,6 +514,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     baselines = baselines_map[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
+    overrides = _load_harness_overrides(agent)
+    for key, value in overrides.get("dispatch_flags", {}).items():
+        flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
+    load_config = _pkg("load_config")
+    cfg = load_config() if load_config else {}
+    role_list = (cfg.get("roles", {}) or {}).get(agent, [])
+    permissions = _resolve_dispatch_permissions(agent, role_list=role_list, grants=grants, revokes=revokes)
+    flags = flags + _permissions_to_flags(agent, permissions)
+    if agent == "agy" and permissions:
+        perm_lines = "\n".join(f"- {p}" for p in permissions)
+        task = f"## Permissions\n{perm_lines}\n\n{task}"
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
         _get_db_fn = _pkg("_get_db")
@@ -474,8 +547,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     load_profile = _pkg("_load_agent_profile")
     profile = load_profile(agent) if load_profile else {}
-    load_config = _pkg("load_config")
-    dispatch_mode = (load_config() or {}).get("dispatch_mode", "daily-grind") if load_config else "daily-grind"
+    dispatch_mode = (cfg or {}).get("dispatch_mode", "daily-grind") if load_config else "daily-grind"
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]
         flags = flags + ["--permission-mode", "bypassPermissions"]
@@ -554,11 +626,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
     contract = baselines.get("headless_contract", {})
-    env = os.environ.copy()
+    proc_env = os.environ.copy()
+    proc_env.update(overrides.get("env", {}))
     for var in contract.get("env_vars_required", []):
         if "=" in var:
             k, v = var.split("=", 1)
-            env[k] = v
+            proc_env[k] = v
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
@@ -566,7 +639,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
         cwd=os.getcwd(),
-        env=env,
+        env=proc_env,
     )
 
     job = {
