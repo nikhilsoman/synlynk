@@ -273,6 +273,66 @@ def test_resolve_dispatch_permissions_revoke_removes():
     assert "write:src/" in perms
 
 
+def test_permissions_to_flags_claude_allowedtools():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("claude", ["read:*", "write:src/"])
+    assert "--allowedTools" in result
+    idx = result.index("--allowedTools")
+    tools_str = result[idx + 1]
+    assert "Read" in tools_str
+    assert "Edit" in tools_str
+
+
+def test_permissions_to_flags_codex_approval_policy():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("codex", ["read:*"])
+    assert "--approval-policy" in result
+    assert "untrusted" in result
+
+
+def test_permissions_to_flags_agy_returns_context_section():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("agy", ["read:*", "write:docs/"])
+    assert result == []
+
+
+def test_dispatch_agent_injects_agy_permissions_header(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "agy.json").write_text("{}")
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"agy": ["content"]}}')
+
+    captured = {}
+
+    def fake_formatter(agent, context_text, story_id, task, file_section, verify_section):
+        captured["task"] = task
+        return task
+
+    def fake_popen(cmd, env=None, **kwargs):
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(synlynk, "_format_prompt_for_agent", fake_formatter)
+    monkeypatch.setattr("synlynk.dispatch.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda *args, **kwargs: "unknown")
+    from synlynk.dispatch import dispatch_agent
+
+    with pytest.raises(RuntimeError):
+        dispatch_agent(
+            "agy",
+            task="build docs",
+            context_mode="none",
+            skip_preflight=True,
+            grants=["write:docs/"],
+        )
+
+    assert captured["task"].startswith("## Permissions")
+    assert "write:docs/" in captured["task"]
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

@@ -68,6 +68,28 @@ def _resolve_dispatch_permissions(
     return sorted(effective)
 
 
+def _permissions_to_flags(agent: str, permissions: list) -> list:
+    """Translate permission strings into agent-specific CLI flags."""
+    from synlynk._constants import _PERMISSION_TO_TOOL_MAP
+
+    if agent == "agy":
+        return []
+    if agent == "claude":
+        tools = []
+        for perm in permissions or []:
+            tools.extend(_PERMISSION_TO_TOOL_MAP.get(perm, []))
+        tools = sorted(set(tools))
+        if not tools:
+            return []
+        return ["--allowedTools", ",".join(tools)]
+    if agent == "codex":
+        has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
+        if not has_write:
+            return ["--approval-policy", "untrusted"]
+        return []
+    return []
+
+
 def _spawn_with_pty_fallback(cmd, env, cwd):
     """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -469,7 +491,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    force_agent: bool = False,
                    context_mode: str = None,
                    cycle: str = "work",
-                   skip_preflight: bool = False) -> dict:
+                   skip_preflight: bool = False,
+                   grants: list = None,
+                   revokes: list = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     if story_id and not force_agent:
         best_agent = _pkg("_best_agent_for_story")
@@ -487,6 +511,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
+    load_config = _pkg("load_config")
+    cfg = load_config() if load_config else {}
+    role_list = (cfg.get("roles", {}) or {}).get(agent, [])
+    permissions = _resolve_dispatch_permissions(agent, role_list=role_list, grants=grants, revokes=revokes)
+    flags = flags + _permissions_to_flags(agent, permissions)
+    if agent == "agy" and permissions:
+        perm_lines = "\n".join(f"- {p}" for p in permissions)
+        task = f"## Permissions\n{perm_lines}\n\n{task}"
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
         _get_db_fn = _pkg("_get_db")
@@ -509,8 +541,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     load_profile = _pkg("_load_agent_profile")
     profile = load_profile(agent) if load_profile else {}
-    load_config = _pkg("load_config")
-    dispatch_mode = (load_config() or {}).get("dispatch_mode", "daily-grind") if load_config else "daily-grind"
+    dispatch_mode = (cfg or {}).get("dispatch_mode", "daily-grind") if load_config else "daily-grind"
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]
         flags = flags + ["--permission-mode", "bypassPermissions"]

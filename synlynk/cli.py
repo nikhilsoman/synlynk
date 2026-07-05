@@ -403,6 +403,14 @@ def main() -> None:
         "--skip-preflight", action="store_true", dest="skip_preflight",
         help="Bypass harness preflight checks"
     )
+    dispatch_parser.add_argument(
+        "--grant", action="append", default=[],
+        help="Add a permission for this dispatch (repeatable)"
+    )
+    dispatch_parser.add_argument(
+        "--revoke", action="append", default=[],
+        help="Remove a permission for this dispatch (repeatable)"
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -605,7 +613,9 @@ def main() -> None:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  context_mode=getattr(args, "context_mode", "task"),
-                                 skip_preflight=getattr(args, "skip_preflight", False))
+                                 skip_preflight=getattr(args, "skip_preflight", False),
+                                 grants=getattr(args, "grant", []),
+                                 revokes=getattr(args, "revoke", []))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
         except ValueError as e:
