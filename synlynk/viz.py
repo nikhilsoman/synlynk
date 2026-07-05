@@ -2883,15 +2883,6 @@ def generate_efficiency_html(data: dict, port: int) -> str:
             for k, v in sub.items():
                 if k.lower() == c_key:
                     return v
-        for k, v in cycle_cap.items():
-            if k.lower() == c_key and isinstance(v, dict):
-                for ak, av in v.items():
-                    if ak.lower() == a_key:
-                        return av
-            if k.lower() == a_key and isinstance(v, dict):
-                for ck, cv in v.items():
-                    if ck.lower() == c_key:
-                        return cv
         return "none"
 
     def _money(value) -> str:
@@ -3545,6 +3536,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     .cap-none { color: var(--text3); }
     """
 
+    cycles_list = ["dream", "plan", "work", "ship", "maintain", "engage"]
     cards_html = []
     for name, stats in agents.items():
         rate = _rate(stats.get("success_rate"))
@@ -3605,7 +3597,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
 
         # Radar hexagon SVG
         angles = [270, 330, 30, 90, 150, 210]
-        cycles_order = ["dream", "plan", "work", "ship", "maintain", "engage"]
+        cycles_order = cycles_list
 
         outer_points = []
         for deg in angles:
@@ -3929,13 +3921,11 @@ def generate_efficiency_html(data: dict, port: int) -> str:
                 '</svg>'
             )
 
-    cycles_list = ["dream", "plan", "work", "ship", "maintain", "engage"]
     matrix_rows = []
     for agent in agents_list:
-        agent_cycles = cycle_cap.get(agent, {})
         tds = []
         for cycle in cycles_list:
-            support = "none" if is_placeholder else agent_cycles.get(cycle, "none")
+            support = get_capability_level(cycle_cap, agent, cycle)
             tds.append(f"""
           <td>
             <div class="matrix-circle-container">
@@ -3999,7 +3989,8 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         row_tds = [f"<td>{cycle_emojis.get(cycle, cycle)}</td>"]
         for agent in matrix_agents:
             support = get_capability_level(cycle_cap, agent, cycle)
-            row_tds.append(f'<td><span class="cap-{support}">{support}</span></td>')
+            support_lower = support.lower()
+            row_tds.append(f'<td><span class="cap-{support_lower}">{support_lower}</span></td>')
         matrix_rows_new.append(f"<tr>{''.join(row_tds)}</tr>")
     new_matrix_table_html = f"""
     <section class="section">
