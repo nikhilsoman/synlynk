@@ -54,6 +54,7 @@ def test_generate_viz_data_structure(tmp_path, monkeypatch):
     assert "telemetry" in data
     assert "notes" in data
     assert "tube_config" in data
+    assert "observatory" in data
 
 def test_dreams_populated(tmp_path, monkeypatch):
     db_path = str(tmp_path / "state.db")

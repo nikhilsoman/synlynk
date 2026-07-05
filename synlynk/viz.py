@@ -11,6 +11,10 @@ import webbrowser
 from typing import Optional
 
 from synlynk import _get_db
+from synlynk.observatory import (
+    build_job_observatory_snapshot,
+    write_observatory_snapshot,
+)
 
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
@@ -88,6 +92,7 @@ def generate_viz_data() -> dict:
         return config.get("project_name") or os.path.basename(os.getcwd()) or "workspace"
 
     def _base_data() -> dict:
+        observatory = build_job_observatory_snapshot()
         return {
             "workspace": {"name": _workspace_name(), "updated_at": _ts()},
             "dreams": [],
@@ -96,6 +101,7 @@ def generate_viz_data() -> dict:
             "tube_config": _load_json_optional(VIZ_TUBE_PATH, default=None),
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
             "ecosystem": {},
+            "observatory": observatory,
         }
 
     def _minimal_data() -> dict:
@@ -527,6 +533,7 @@ def generate_index_html(data: dict, port: int) -> str:
         ("journeys", "🗺", "Journeys", "journeys.html", False),
         ("tube", "🚇", "Architect Map", "tube.html", False),
         ("effort", "💰", "Effort & Cost", "effort.html", False),
+        ("observatory", "◉", "Observatory", "observatory.html", False),
         ("efficiency", "📊", "Efficiency", "efficiency.html", False),
     ]
     nav_html = "\n".join(
@@ -3901,6 +3908,289 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     return html_out
 
 
+def generate_observatory_html(snapshot: dict) -> str:
+    snapshot = snapshot or {}
+    write_observatory_snapshot(snapshot)
+
+    def _money(value) -> str:
+        try:
+            return f"${float(value or 0.0):.2f}"
+        except Exception:
+            return "—"
+
+    def _tokens(input_tokens, output_tokens) -> str:
+        try:
+            total = int(input_tokens or 0) + int(output_tokens or 0)
+        except Exception:
+            return "—"
+        return f"{total/1000:.1f}k" if total >= 1000 else str(total)
+
+    def _age(seconds) -> str:
+        try:
+            seconds = int(seconds or 0)
+        except Exception:
+            return "—"
+        minutes, secs = divmod(max(0, seconds), 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours:
+            return f"{hours}h {minutes:02d}m"
+        if minutes:
+            return f"{minutes}m {secs:02d}s"
+        return f"{secs}s"
+
+    def _render_job(job: dict) -> str:
+        stage = html.escape(str(job.get("stage") or job.get("status") or "unknown"))
+        repo = html.escape(str(job.get("repo") or "unknown"))
+        job_id = html.escape(str(job.get("id") or "—"))
+        short_id = job_id[-8:] if len(job_id) > 8 else job_id
+        agent = html.escape(str(job.get("agent") or "—"))
+        return f"""
+          <div class="obs-job" data-stage="{stage}" data-repo="{repo}">
+            <div class="obs-job-id">{short_id}</div>
+            <div class="obs-job-agent">{agent}</div>
+            <div class="obs-job-stage">{stage}</div>
+            <div class="obs-job-age">{html.escape(_age(job.get("runtime_seconds")))}</div>
+            <div class="obs-job-cost">{html.escape(_money(job.get("cost_usd")))}</div>
+            <div class="obs-job-tokens">{html.escape(_tokens(job.get("input_tokens"), job.get("output_tokens")))}</div>
+          </div>
+        """.strip()
+
+    def _render_repo(repo: dict) -> str:
+        repo_name = html.escape(str(repo.get("repo") or "unknown"))
+        rollups = repo.get("rollups") or {}
+        jobs = repo.get("jobs") or []
+        job_cards = "\n".join(_render_job(job) for job in jobs)
+        if not job_cards:
+            job_cards = '<div class="obs-empty">No jobs</div>'
+        return f"""
+        <section class="obs-repo">
+          <header class="obs-repo-header">
+            <div>
+              <div class="obs-repo-title">{repo_name}</div>
+              <div class="obs-repo-meta">{len(jobs)} jobs · {_money(rollups.get("total_cost"))} · {rollups.get("active_count", 0)} active</div>
+            </div>
+          </header>
+          <div class="obs-job-grid">
+            <div class="obs-job-head">
+              <span>job</span><span>agent</span><span>stage</span><span>age</span><span>cost</span><span>tokens</span>
+            </div>
+            {job_cards}
+          </div>
+        </section>
+        """.strip()
+
+    repos = snapshot.get("repos") or []
+    rollups = snapshot.get("rollups") or {}
+    repo_cards = "\n".join(_render_repo(repo) for repo in repos)
+    if not repo_cards:
+        repo_cards = '<div class="obs-empty-state">No live jobs in this workspace.</div>'
+
+    snapshot_json = json.dumps(snapshot).replace("</", "<\\/")
+    html_out = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Observatory</title>
+<style>
+:root {{
+  --bg: #0b1020;
+  --panel: rgba(12, 18, 35, 0.82);
+  --panel-2: rgba(18, 24, 45, 0.9);
+  --line: rgba(255,255,255,0.08);
+  --text: #e7edf8;
+  --muted: #9aa7bd;
+  --accent: #47d7b1;
+  --accent-2: #7aa8ff;
+  --shadow: 0 24px 80px rgba(0,0,0,.45);
+  --running: #47d7b1;
+  --queued: #7aa8ff;
+  --failed: #ff7a90;
+  --done: #9ca3af;
+}}
+* {{ box-sizing: border-box; }}
+html, body {{ margin: 0; min-height: 100%; background: radial-gradient(circle at top, #18213d 0%, var(--bg) 44%, #05070f 100%); color: var(--text); font-family: "SF Mono", "JetBrains Mono", monospace; }}
+body {{ padding: 24px; }}
+.obs-shell {{ max-width: 1400px; margin: 0 auto; }}
+.obs-hero {{
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 18px;
+  margin-bottom: 18px; padding: 18px 20px; border: 1px solid var(--line);
+  border-radius: 18px; background: linear-gradient(180deg, rgba(25,34,61,.95), rgba(12,18,35,.88));
+  box-shadow: var(--shadow);
+}}
+.obs-title {{ font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }}
+.obs-subtitle {{ margin-top: 6px; color: var(--muted); font-size: 13px; }}
+.obs-stats {{ display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }}
+.obs-stat {{
+  min-width: 120px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+}}
+.obs-stat-label {{ display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }}
+.obs-stat-value {{ display: block; margin-top: 6px; font-size: 18px; font-weight: 700; }}
+.obs-grid {{ display: grid; gap: 16px; }}
+.obs-repo {{
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+  overflow: hidden; box-shadow: var(--shadow);
+}}
+.obs-repo-header {{
+  display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  padding: 16px 18px; background: var(--panel-2); border-bottom: 1px solid var(--line);
+}}
+.obs-repo-title {{ font-size: 18px; font-weight: 700; }}
+.obs-repo-meta {{ margin-top: 4px; color: var(--muted); font-size: 12px; }}
+.obs-job-grid {{ padding: 14px 18px 18px; }}
+.obs-job-head, .obs-job {{
+  display: grid; grid-template-columns: 1.2fr 1fr 1fr .9fr .9fr .9fr; gap: 10px;
+  align-items: center;
+}}
+.obs-job-head {{
+  padding: 0 6px 10px; color: var(--muted); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .14em;
+}}
+.obs-job {{
+  padding: 10px 6px; border-top: 1px solid rgba(255,255,255,0.05);
+  font-size: 13px;
+}}
+.obs-job:first-of-type {{ border-top: none; }}
+.obs-job-id {{ color: var(--accent); font-weight: 700; }}
+.obs-job-stage {{
+  display: inline-flex; justify-self: start; padding: 4px 9px; border-radius: 999px;
+  background: rgba(255,255,255,0.06); color: var(--text); font-size: 11px;
+}}
+.obs-job[data-stage="running"] .obs-job-stage {{ background: rgba(71, 215, 177, 0.16); color: var(--running); }}
+.obs-job[data-stage="queued"] .obs-job-stage {{ background: rgba(122, 168, 255, 0.16); color: var(--queued); }}
+.obs-job[data-stage="failed"] .obs-job-stage {{ background: rgba(255, 122, 144, 0.16); color: var(--failed); }}
+.obs-job[data-stage="done"] .obs-job-stage {{ background: rgba(156, 163, 175, 0.16); color: var(--done); }}
+.obs-job-age, .obs-job-cost, .obs-job-tokens {{ color: var(--muted); }}
+.obs-empty-state, .obs-empty {{ padding: 18px 4px; color: var(--muted); }}
+@media (max-width: 960px) {{
+  body {{ padding: 16px; }}
+  .obs-hero {{ flex-direction: column; align-items: flex-start; }}
+  .obs-stats {{ justify-content: flex-start; }}
+  .obs-job-head, .obs-job {{ grid-template-columns: 1fr 1fr; }}
+  .obs-job-head span:nth-child(n+3), .obs-job > *:nth-child(n+3) {{ display: none; }}
+}}
+</style>
+</head>
+<body>
+<div class="obs-shell">
+  <header class="obs-hero">
+    <div>
+      <div class="obs-title">Observatory</div>
+      <div class="obs-subtitle">Live job board, refreshed every 10 seconds from <code>observatory-snapshot.json</code>.</div>
+    </div>
+    <div class="obs-stats" id="obs-stats">
+      <div class="obs-stat"><span class="obs-stat-label">Total Cost</span><span class="obs-stat-value">{_money(rollups.get("total_cost"))}</span></div>
+      <div class="obs-stat"><span class="obs-stat-label">Active</span><span class="obs-stat-value">{rollups.get("active_count", 0)}</span></div>
+      <div class="obs-stat"><span class="obs-stat-label">Requests</span><span class="obs-stat-value">{rollups.get("total_requests", 0)}</span></div>
+      <div class="obs-stat"><span class="obs-stat-label">Tokens</span><span class="obs-stat-value">{rollups.get("total_tokens", 0)}</span></div>
+    </div>
+  </header>
+  <div class="obs-grid" id="obs-grid">
+    {repo_cards}
+  </div>
+</div>
+<script>
+(function() {{
+  const snapshotEl = document.getElementById('obs-grid');
+  const statsEl = document.getElementById('obs-stats');
+  const initialSnapshot = {snapshot_json};
+
+  function esc(value) {{
+    return String(value ?? '').replace(/[&<>"]/g, (c) => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}}[c]));
+  }}
+
+  function money(value) {{
+    const n = Number(value || 0);
+    return `$${{n.toFixed(2)}}`;
+  }}
+
+  function tokens(inputTokens, outputTokens) {{
+    const total = Number(inputTokens || 0) + Number(outputTokens || 0);
+    return total >= 1000 ? `${{(total / 1000).toFixed(1)}}k` : String(total);
+  }}
+
+  function age(seconds) {{
+    seconds = Number(seconds || 0);
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours) return `${{hours}}h ${{String(mins).padStart(2, '0')}}m`;
+    if (minutes) return `${{minutes}}m ${{String(secs).padStart(2, '0')}}s`;
+    return `${{secs}}s`;
+  }}
+
+  function renderJob(job) {{
+    const stage = esc(job.stage || job.status || 'unknown');
+    const repo = esc(job.repo || 'unknown');
+    const jobId = esc(job.id || '—');
+    const shortId = jobId.length > 8 ? jobId.slice(-8) : jobId;
+    return `
+      <div class="obs-job" data-stage="${{stage}}" data-repo="${{repo}}">
+        <div class="obs-job-id">${{shortId}}</div>
+        <div class="obs-job-agent">${{esc(job.agent || '—')}}</div>
+        <div class="obs-job-stage">${{stage}}</div>
+        <div class="obs-job-age">${{age(job.runtime_seconds)}}</div>
+        <div class="obs-job-cost">${{money(job.cost_usd)}}</div>
+        <div class="obs-job-tokens">${{tokens(job.input_tokens, job.output_tokens)}}</div>
+      </div>`;
+  }}
+
+  function renderRepo(repo) {{
+    const jobs = repo.jobs || [];
+    const rollups = repo.rollups || {{}};
+    return `
+      <section class="obs-repo">
+        <header class="obs-repo-header">
+          <div>
+            <div class="obs-repo-title">${{esc(repo.repo || 'unknown')}}</div>
+            <div class="obs-repo-meta">${{jobs.length}} jobs · ${{money(rollups.total_cost)}} · ${{rollups.active_count || 0}} active</div>
+          </div>
+        </header>
+        <div class="obs-job-grid">
+          <div class="obs-job-head">
+            <span>job</span><span>agent</span><span>stage</span><span>age</span><span>cost</span><span>tokens</span>
+          </div>
+          ${{jobs.length ? jobs.map(renderJob).join('') : '<div class="obs-empty">No jobs</div>'}}
+        </div>
+      </section>`;
+  }}
+
+  function renderStats(snapshot) {{
+    const rollups = snapshot.rollups || {{}};
+    statsEl.innerHTML = `
+      <div class="obs-stat"><span class="obs-stat-label">Total Cost</span><span class="obs-stat-value">${{money(rollups.total_cost)}}</span></div>
+      <div class="obs-stat"><span class="obs-stat-label">Active</span><span class="obs-stat-value">${{rollups.active_count || 0}}</span></div>
+      <div class="obs-stat"><span class="obs-stat-label">Requests</span><span class="obs-stat-value">${{rollups.total_requests || 0}}</span></div>
+      <div class="obs-stat"><span class="obs-stat-label">Tokens</span><span class="obs-stat-value">${{rollups.total_tokens || 0}}</span></div>
+    `;
+  }}
+
+  function render(snapshot) {{
+    const repos = snapshot.repos || [];
+    snapshotEl.innerHTML = repos.length ? repos.map(renderRepo).join('') : '<div class="obs-empty-state">No live jobs in this workspace.</div>';
+    renderStats(snapshot);
+  }}
+
+  async function refresh() {{
+    try {{
+      const response = await fetch('observatory-snapshot.json?_=' + Date.now(), {{ cache: 'no-store' }});
+      if (!response.ok) return;
+      render(await response.json());
+    }} catch (err) {{}}
+  }}
+
+  window.__OBSERVATORY_SNAPSHOT__ = initialSnapshot;
+  render(initialSnapshot);
+  setInterval(refresh, 10000);
+  refresh();
+}})();
+</script>
+</body>
+</html>"""
+    return html_out
+
+
 def _write_cache(data: dict, port: int) -> None:
     """Generate all views and write to viz-cache/."""
     os.makedirs(VIZ_CACHE_DIR, exist_ok=True)
@@ -3911,6 +4201,7 @@ def _write_cache(data: dict, port: int) -> None:
         "journeys.html": generate_journeys_html(data, port),
         "effort.html": generate_effort_html(data, port),
         "efficiency.html": generate_efficiency_html(data, port),
+        "observatory.html": generate_observatory_html(data.get("observatory") or {}),
     }
     for filename, html in views.items():
         with open(os.path.join(VIZ_CACHE_DIR, filename), "w") as f:
@@ -4066,6 +4357,7 @@ def cmd_viz(args) -> None:
             },
             "notes": {},
             "tube_config": None,
+            "observatory": build_job_observatory_snapshot(),
         }
     except Exception as e:
         print(f"  ✗ Data extraction failed: {e}")
