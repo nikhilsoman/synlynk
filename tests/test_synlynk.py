@@ -230,6 +230,49 @@ def test_dispatch_agent_applies_harness_overrides(tmp_path, isolated_db, monkeyp
     assert captured_env.get("MY_VAR") == "42"
 
 
+def test_role_permission_defaults_cover_all_default_roles():
+    from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
+
+    for role in [
+        "pm",
+        "review",
+        "deploy",
+        "implement",
+        "test",
+        "refactor",
+        "css",
+        "templates",
+        "content",
+        "canvas",
+        "js",
+        "infra",
+    ]:
+        assert role in _ROLE_PERMISSION_DEFAULTS, f"Missing role: {role}"
+
+
+def test_resolve_dispatch_permissions_returns_role_defaults():
+    from synlynk.dispatch import _resolve_dispatch_permissions
+
+    perms = _resolve_dispatch_permissions("codex", role_list=["implement", "test"])
+    assert "write:src/" in perms
+    assert "run:tests" in perms
+
+
+def test_resolve_dispatch_permissions_grant_expands():
+    from synlynk.dispatch import _resolve_dispatch_permissions
+
+    perms = _resolve_dispatch_permissions("codex", role_list=["review"], grants=["write:src/"])
+    assert "write:src/" in perms
+
+
+def test_resolve_dispatch_permissions_revoke_removes():
+    from synlynk.dispatch import _resolve_dispatch_permissions
+
+    perms = _resolve_dispatch_permissions("codex", role_list=["implement"], revokes=["run:tests"])
+    assert "run:tests" not in perms
+    assert "write:src/" in perms
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

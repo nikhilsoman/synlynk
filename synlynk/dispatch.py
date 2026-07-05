@@ -50,6 +50,24 @@ def _load_harness_overrides(agent: str) -> dict:
         return empty
 
 
+def _resolve_dispatch_permissions(
+    agent: str,
+    role_list: list = None,
+    grants: list = None,
+    revokes: list = None,
+) -> list:
+    """Compute effective permissions from role defaults, grants, and revokes."""
+    from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
+
+    del agent
+    effective = set()
+    for role in role_list or []:
+        effective.update(_ROLE_PERMISSION_DEFAULTS.get(role, []))
+    effective.update(grants or [])
+    effective.difference_update(revokes or [])
+    return sorted(effective)
+
+
 def _spawn_with_pty_fallback(cmd, env, cwd):
     """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
