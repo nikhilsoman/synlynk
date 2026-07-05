@@ -437,6 +437,60 @@ def test_jobs_handoff_updates_db_and_dispatches(tmp_path, isolated_db, monkeypat
     assert dispatched[0][0][0] == "codex"
 
 
+def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "agy.json").write_text("{}")
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"agy": ["builder"]}}')
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    inputs = iter(["1"])
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: next(inputs))
+    monkeypatch.setattr(
+        synlynk,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "agy": {
+                "cli": "agy",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(synlynk, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"roles": {}})
+
+    synlynk.cmd_doctor()
+
+    data = json.loads((tmp_path / ".agents" / "agy.json").read_text())
+    assert data["harness_overrides"]["dispatch_flags"]["bad-flag"] is None
+
+
+def test_doctor_wizard_escalate_option_calls_dispatch(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "telemetry.json").write_text(
+        json.dumps([{"agent": "agy", "command": "npm test", "tool_call_count": 3}])
+    )
+    dispatched = []
+    monkeypatch.setattr(
+        "synlynk.dispatch.dispatch_agent",
+        lambda *a, **kw: dispatched.append((a, kw)) or {"id": "job-esc"},
+    )
+
+    from synlynk import _doctor_maybe_escalate
+
+    _doctor_maybe_escalate("agy", {"tc2": {"passed": False, "failed_flags": ["--bad-flag"]}})
+    assert len(dispatched) == 1
+    assert dispatched[0][0][0] == "claude"
+    assert "doctor" in dispatched[0][1]["task"].lower()
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

@@ -2230,6 +2230,46 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 for ag, missing in tc5["missing"].items():
                     print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
 
+            if not tc1["passed"]:
+                choice = _doctor_fix_menu(agent, "tc1", tc1)
+                if choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc1": tc1})
+            if not tc2["passed"]:
+                choice = _doctor_fix_menu(agent, "tc2", tc2)
+                if choice == "1":
+                    cmd_configure_agent(
+                        agent,
+                        flags={flag.lstrip("-"): None for flag in tc2.get("failed_flags", [])},
+                        envs={},
+                        network_deps=[],
+                    )
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc2": tc2})
+            if not tc3["passed"]:
+                choice = _doctor_fix_menu(agent, "tc3", tc3)
+                if choice == "1":
+                    unreachable = ", ".join(f"{host}:{port}" for host, port in tc3.get("unreachable", []))
+                    print(f"    {_DIM}Unreachable endpoints: {unreachable}{_RESET}")
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc3": tc3})
+            if not tc4["passed"]:
+                choice = _doctor_fix_menu(agent, "tc4", tc4)
+                if choice == "1":
+                    cmd_configure_agent(
+                        agent,
+                        flags={verb.lstrip("-"): None for verb in tc4.get("failed_verbs", [])},
+                        envs={},
+                        network_deps=[],
+                    )
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc4": tc4})
+            if not tc5["passed"]:
+                choice = _doctor_fix_menu(agent, "tc5", tc5)
+                if choice == "1":
+                    cmd_sync(dry_run=False, repair_sops=True)
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc5": tc5})
+
         # Roles fence check
         _DIRECTIVE_MAP = {
             "claude": "CLAUDE.md",
@@ -5159,6 +5199,83 @@ def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
             f.write(handoff_task)
 
     print(f"  ✓ New job: {result.get('id', '?')}")
+
+
+_DOCTOR_FIX_MENUS = {
+    "tc1": lambda agent, tc: [
+        f"Show PTY workaround for {agent} (requires_pty={tc.get('requires_pty')})",
+    ],
+    "tc2": lambda agent, tc: [
+        f"Apply recommended flags to .agents/{agent}.json (fixes: {tc.get('failed_flags', [])})",
+    ],
+    "tc3": lambda agent, tc: [
+        f"Show unreachable endpoints and configure proxy for {agent}",
+        f"Skip {agent} in this session",
+    ],
+    "tc4": lambda agent, tc: [
+        f"Run: synlynk configure agent {agent} (adds missing verbs: {tc.get('failed_verbs', [])})",
+    ],
+    "tc5": lambda agent, tc: [
+        f"Run: synlynk sync --repair-sops (re-inject {len(tc.get('missing', {}).get(agent, []))} missing sections)",
+    ],
+}
+
+
+def _doctor_fix_menu(agent: str, tc_name: str, tc_result: dict) -> str:
+    """Render a numbered fix menu for a TC failure."""
+    if not sys.stdin.isatty():
+        return "skip"
+    menu_fn = _DOCTOR_FIX_MENUS.get(tc_name)
+    options = menu_fn(agent, tc_result) if menu_fn else []
+    print(f"\n    {_YELLOW}Fix options for {tc_name.upper()} [{agent}]:{_RESET}")
+    print("      0) I'm stuck — escalate to Claude")
+    for i, opt in enumerate(options, 1):
+        print(f"      {i}) {opt}")
+    print("      s) Skip")
+    try:
+        choice = input("    Choose [0/1.../s]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return "skip"
+    if choice == "0":
+        return "escalate"
+    if choice == "s" or not choice:
+        return "skip"
+    return choice
+
+
+def _doctor_maybe_escalate(agent: str, failures: dict) -> None:
+    """Assemble failure context and dispatch to Claude for diagnosis."""
+    lines = [f"# synlynk doctor failure — {agent}\n"]
+    for tc_name, result in failures.items():
+        lines.append(f"## {tc_name.upper()}\n```json\n{json.dumps(result, indent=2)}\n```\n")
+
+    tel_path = os.path.join(".synlynk", "telemetry.json")
+    if os.path.exists(tel_path):
+        try:
+            with open(tel_path) as f:
+                events = json.load(f)[-5:]
+            lines.append(f"## Last 5 telemetry events\n```json\n{json.dumps(events, indent=2)}\n```\n")
+        except Exception:
+            pass
+
+    cfg_path = os.path.join(".agents", f"{agent}.json")
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path) as f:
+                lines.append(f"## Agent Config\n```json\n{json.dumps(json.load(f), indent=2)}\n```\n")
+        except Exception:
+            pass
+
+    context = "\n".join(lines)
+    task = (
+        f"synlynk doctor found failures for agent '{agent}'. "
+        "Please diagnose and suggest fixes.\n\n"
+        f"{context}"
+    )
+    from synlynk.dispatch import dispatch_agent
+    print("\n    Escalating to Claude for diagnosis...\n")
+    result = dispatch_agent("claude", task=task)
+    print(f"    Dispatched: {result.get('id', '?')} — check synlynk jobs for output")
 
 
 def _dedup_findings(findings: list) -> list:
