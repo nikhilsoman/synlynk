@@ -2864,6 +2864,35 @@ def generate_effort_html(data: dict, port: int) -> str:
 def generate_efficiency_html(data: dict, port: int) -> str:
     import html
     import json
+    import math
+
+    def get_capability_level(cycle_cap: dict, agent: str, cycle: str) -> str:
+        c_key = cycle.lower()
+        a_key = agent.lower()
+        if c_key in cycle_cap and isinstance(cycle_cap[c_key], dict):
+            sub = cycle_cap[c_key]
+            if a_key in sub:
+                return sub[a_key]
+            for k, v in sub.items():
+                if k.lower() == a_key:
+                    return v
+        if a_key in cycle_cap and isinstance(cycle_cap[a_key], dict):
+            sub = cycle_cap[a_key]
+            if c_key in sub:
+                return sub[c_key]
+            for k, v in sub.items():
+                if k.lower() == c_key:
+                    return v
+        for k, v in cycle_cap.items():
+            if k.lower() == c_key and isinstance(v, dict):
+                for ak, av in v.items():
+                    if ak.lower() == a_key:
+                        return av
+            if k.lower() == a_key and isinstance(v, dict):
+                for ck, cv in v.items():
+                    if ck.lower() == c_key:
+                        return cv
+        return "none"
 
     def _money(value) -> str:
         try:
@@ -2939,7 +2968,14 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         fleet_total = 0
         dispatch_mode = "—"
         agents_data = {}
-        cycle_cap = {}
+        cycle_cap = {
+            "dream": {"claude": "full", "agy": "partial", "codex": "none", "grok": "none"},
+            "plan": {"claude": "full", "agy": "none", "codex": "none", "grok": "none"},
+            "work": {"claude": "full", "agy": "partial", "codex": "full", "grok": "partial"},
+            "ship": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "none"},
+            "maintain": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "partial"},
+            "engage": {"claude": "full", "agy": "partial", "codex": "none", "grok": "partial"},
+        }
         capacity = TIER1_CAPACITY
         sentinels_active = 0
     else:
@@ -3492,6 +3528,21 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       0% { transform: translateX(-100%); }
       100% { transform: translateX(100%); }
     }
+    .rwt-section { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .rwt-row { display: flex; align-items: center; gap: 6px; }
+    .rwt-label { font-size: 10px; font-weight: 700; color: var(--text3); width: 10px; }
+    .rwt-track { flex: 1; height: 5px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+    .rwt-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+    .rwt-fill.rwt-write { background: var(--ag-agy-bd); }
+    .rwt-fill.rwt-tool { background: var(--ag-codex-bd); }
+    .rwt-val { font-size: 10px; color: var(--text3); width: 36px; text-align: right; }
+    .cycle-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cycle-table th, .cycle-table td { padding: 7px 12px; border-bottom: 1px solid var(--border2); text-align: center; }
+    .cycle-table th { font-weight: 700; color: var(--text2); background: var(--bg3); }
+    .cycle-table td:first-child { text-align: left; }
+    .cap-full { background: rgba(22,163,74,.12); color: var(--ok); font-weight: 600; border-radius: 4px; padding: 1px 6px; }
+    .cap-partial { background: rgba(217,119,6,.12); color: var(--warn); border-radius: 4px; padding: 1px 6px; }
+    .cap-none { color: var(--text3); }
     """
 
     cards_html = []
@@ -3502,6 +3553,111 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         dot_class = _dot_class(rate, alerts)
         bar_class = _bar_class(rate)
         alert_html = f'<div class="alert-count">{alerts} sentinel alerts</div>' if alerts > 0 else ""
+
+        # Get capacity data safely
+        clean_name = (name or "").strip().lower()
+        agent_cap = capacity.get(clean_name) or capacity.get(name) or TIER1_CAPACITY.get(clean_name) or {}
+        baseline_cap = TIER1_CAPACITY.get(clean_name) or {}
+        if not baseline_cap:
+            baseline_cap = {"read_budget_tokens": 1, "write_budget_tokens": 1, "tool_budget_count": 1}
+
+        read_budget = agent_cap.get("read_budget_tokens", 0)
+        write_budget = agent_cap.get("write_budget_tokens", 0)
+        tool_budget = agent_cap.get("tool_budget_count", 0)
+
+        base_read = baseline_cap.get("read_budget_tokens", 1) or 1
+        base_write = baseline_cap.get("write_budget_tokens", 1) or 1
+        base_tool = baseline_cap.get("tool_budget_count", 1) or 1
+
+        if is_placeholder:
+            read_pct = 100.0
+            write_pct = 100.0
+            tool_pct = 100.0
+            read_budget_k = base_read // 1000
+            write_budget_k = base_write // 1000
+            tool_budget = base_tool
+        else:
+            read_pct = (read_budget / base_read) * 100 if base_read else 0.0
+            write_pct = (write_budget / base_write) * 100 if base_write else 0.0
+            tool_pct = (tool_budget / base_tool) * 100 if base_tool else 0.0
+            read_budget_k = read_budget // 1000
+            write_budget_k = write_budget // 1000
+
+        rwt_html = f"""
+            <div class="rwt-section">
+              <div class="rwt-row">
+                <span class="rwt-label">R</span>
+                <div class="rwt-track"><div class="rwt-fill" style="width:{read_pct:.0f}%"></div></div>
+                <span class="rwt-val">{read_budget_k}k</span>
+              </div>
+              <div class="rwt-row">
+                <span class="rwt-label">W</span>
+                <div class="rwt-track"><div class="rwt-fill rwt-write" style="width:{write_pct:.0f}%"></div></div>
+                <span class="rwt-val">{write_budget_k}k</span>
+              </div>
+              <div class="rwt-row">
+                <span class="rwt-label">T</span>
+                <div class="rwt-track"><div class="rwt-fill rwt-tool" style="width:{tool_pct:.0f}%"></div></div>
+                <span class="rwt-val">{tool_budget}</span>
+              </div>
+            </div>
+        """.strip()
+
+        # Radar hexagon SVG
+        angles = [270, 330, 30, 90, 150, 210]
+        cycles_order = ["dream", "plan", "work", "ship", "maintain", "engage"]
+
+        outer_points = []
+        for deg in angles:
+            rad = math.radians(deg)
+            x = 40 + 32 * math.cos(rad)
+            y = 40 + 32 * math.sin(rad)
+            outer_points.append(f"{x:.1f},{y:.1f}")
+        outer_points_str = " ".join(outer_points)
+
+        score_points = []
+        for i, cycle in enumerate(cycles_order):
+            support = get_capability_level(cycle_cap, clean_name, cycle)
+            if support == "full":
+                score = 1.0
+            elif support == "partial":
+                score = 0.5
+            else:
+                score = 0.0
+            deg = angles[i]
+            rad = math.radians(deg)
+            r = 32 * score
+            x = 40 + r * math.cos(rad)
+            y = 40 + r * math.sin(rad)
+            score_points.append((x, y))
+        score_points_str = " ".join(f"{x:.1f},{y:.1f}" for x, y in score_points)
+
+        axis_lines_html = []
+        for i in range(6):
+            rad = math.radians(angles[i])
+            x_outer = 40 + 32 * math.cos(rad)
+            y_outer = 40 + 32 * math.sin(rad)
+            axis_lines_html.append(
+                f'<line x1="40" y1="40" x2="{x_outer:.1f}" y2="{y_outer:.1f}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,2" />'
+            )
+        axis_lines_str = "\n".join(axis_lines_html)
+
+        dots_html = []
+        for x, y in score_points:
+            dots_html.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="var(--ag-{avatar_class}-bd, var(--accent))" />')
+        dots_str = "\n".join(dots_html)
+
+        radar_svg_html = f"""
+            <div class="radar-container" style="display: flex; justify-content: center; margin-top: 10px;">
+              <svg width="80" height="80" viewBox="0 0 80 80" style="overflow: visible;">
+                <polygon points="{outer_points_str}" fill="none" stroke="var(--border)" stroke-width="1" />
+                {axis_lines_str}
+                <polygon points="{score_points_str}" fill="var(--ag-{avatar_class}-bd, var(--accent))" fill-opacity="0.4" stroke="var(--ag-{avatar_class}-bd, var(--accent))" stroke-width="1.5" />
+                {dots_str}
+              </svg>
+            </div>
+        """.strip()
+
         cards_html.append(
             f"""
         <div class="agent-card">
@@ -3523,6 +3679,8 @@ def generate_efficiency_html(data: dict, port: int) -> str:
                 <div class="rate-fill {bar_class}" style="width:{rate * 100:.0f}%"></div>
               </div>
             </div>
+            {rwt_html}
+            {radar_svg_html}
           </div>
         </div>
             """.rstrip()
@@ -3826,6 +3984,38 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     </div>
     """
 
+    # 5. Cycle capability matrix section
+    matrix_rows_new = []
+    cycle_emojis = {
+        "dream": "💡 Dream",
+        "plan": "📋 Plan",
+        "work": "⚙️ Work",
+        "ship": "🚀 Ship",
+        "maintain": "🔧 Maintain",
+        "engage": "🤝 Engage"
+    }
+    matrix_agents = ["claude", "agy", "codex", "grok"]
+    for cycle in cycles_list:
+        row_tds = [f"<td>{cycle_emojis.get(cycle, cycle)}</td>"]
+        for agent in matrix_agents:
+            support = get_capability_level(cycle_cap, agent, cycle)
+            row_tds.append(f'<td><span class="cap-{support}">{support}</span></td>')
+        matrix_rows_new.append(f"<tr>{''.join(row_tds)}</tr>")
+    new_matrix_table_html = f"""
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Cycle Capability Matrix</div>
+        <div class="section-note">full / partial / none per agent per 6-cycle stage.</div>
+      </div>
+      <table class="cycle-table">
+        <thead><tr><th>Cycle</th><th>Claude</th><th>Agy</th><th>Codex</th><th>Grok</th></tr></thead>
+        <tbody>
+          {"".join(matrix_rows_new)}
+        </tbody>
+      </table>
+    </section>
+    """
+
     grid_class = "cards-grid single" if len(agents) == 1 else "cards-grid"
     html_out = f"""<!DOCTYPE html>
 <html lang="en">
@@ -3868,6 +4058,8 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         {''.join(cards_html)}
       </div>
     </section>
+
+    {new_matrix_table_html}
 
     <section class="section">
       <div class="section-head">
