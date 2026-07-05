@@ -51,3 +51,4 @@
 
 | 2026-06-30 | nikhil | ~10 | ~30K / ~15K | ~$0.50 | Implement story-bs14-sentinel-stall (per-job stall check inside _reconcile_jobs with config default) and added TDD test |
 | 2026-07-01 | nikhil | ~150 | ~320K / ~160K | ~$3.90 | BS-17 final merge (PR #89) + BS-18 full cycle: brainstorm → spec → plan → 4 agent waves (Codex T1-T7, Grok T5-T6, Agy T8) → PR #90 merged; 616 tests; state.db source of truth shipped |
+| 2026-07-04/05 | nikhil | ~200 | ~200K / ~90K | ~$4.00 | TC-2 preflight fix arc (PRs #114–116): logs summary, zombie recon, flag baseline correction, _run_tc2 root-cause fix, 837 tests · BS-13 Live Job Observatory (PR #117): observatory.py, watch --live panel, viz Observatory tab, Agy R1+R2 reviews · blog posts 42–45 with brainstorm screenshots · 11 agent dispatches (Agy ×8, Grok ×3, Codex ×1) |
