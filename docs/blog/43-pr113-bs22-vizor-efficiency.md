@@ -13,6 +13,16 @@ With PR #110 (BS-16), the harness gained a comprehensive instrument panel inside
 
 The broader target was to integrate this data into the browser-based workspace dashboard—**Vizor** (`synlynk viz`). For Vizor to serve as a complete project management and orchestration dashboard, it needed to present not just a history of what happened (Gantt and Cost views), but a forward-looking representation of whether the agent fleet is structurally prepared for the next task.
 
+## Brainstorm Visuals Used
+
+The Vizor design sessions produced two foundational views — the Gantt timeline and the architect tube map — which defined the dashboard's dual-mode identity (timeline for PMs, topology for architects):
+
+![BS-21 Vizor — Gantt v5 timeline view](images/v011/bs21-gantt-v5.png)
+
+![BS-21 Vizor — Architect tube map v2](images/v011/bs21-tube-v2.png)
+
+Full brainstorm HTML: [`docs/brainstorm/bs21-vizor/`](../brainstorm/bs21-vizor/)
+
 ## Strategic Shifts in This PR
 
 Vizor is evolving from a retrospective event logger into a **predictive scheduler dashboard**. 

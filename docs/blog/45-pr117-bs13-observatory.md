@@ -39,7 +39,13 @@ This PR delivers the complete data, CLI, and web UI layers for the Live Job Obse
 
 ## Brainstorm Visuals Used
 
-- `docs/brainstorm/bs13-workspace-hud/` — Brainstorming materials for the workspace HUD, which directly informed the design of the Observatory's grid layout and grouping mechanisms.
+HUD design exploration that informed the observatory layout — the full-screen job board design and the live + platform panel split:
+
+![BS-13 HUD — full observatory design](images/v011/bs13-hud-full-design.png)
+
+![BS-13 HUD — live jobs + platform health panel](images/v011/bs13-hud-live-platform.png)
+
+Full brainstorm HTML: [`docs/brainstorm/bs13-workspace-hud/`](../brainstorm/bs13-workspace-hud/)
 
 ## What This Achieved on the Path to Autonomy
 

@@ -1,0 +1,106 @@
+<h2>synlynk launch — how does the flow sequence?</h2>
+<p class="subtitle">Two approaches to introducing cycles and surfacing starter tasks</p>
+
+<div class="split" style="gap:2rem;margin-top:1.5rem;align-items:flex-start">
+
+  <!-- Option A -->
+  <div class="mockup" data-choice="a" onclick="toggleSelect(this)" style="cursor:pointer;flex:1">
+    <div class="mockup-header">Option A — Cycles first, then tasks</div>
+    <div class="mockup-body" style="padding:1.2rem;font-family:monospace;font-size:0.82rem">
+
+      <div style="color:#64748b;margin-bottom:0.5rem">Screen 1 of 2 — the model</div>
+      <div style="background:#0f172a;border-radius:6px;padding:1rem;color:#e2e8f0;margin-bottom:1rem">
+        <div style="color:#6366f1;font-weight:700;margin-bottom:0.6rem">  ◆ The synlynk development cycle</div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.8rem">
+          <span style="background:#1e293b;padding:2px 8px;border-radius:4px;color:#a78bfa">Dream</span>
+          <span style="color:#475569">→</span>
+          <span style="background:#1e293b;padding:2px 8px;border-radius:4px;color:#60a5fa">Design</span>
+          <span style="color:#475569">→</span>
+          <span style="background:#1e293b;padding:2px 8px;border-radius:4px;color:#34d399">Plan</span>
+          <span style="color:#475569">→</span>
+          <span style="background:#1e293b;padding:2px 8px;border-radius:4px;color:#fbbf24">Build</span>
+          <span style="color:#475569">→</span>
+          <span style="background:#1e293b;padding:2px 8px;border-radius:4px;color:#f87171">Ship</span>
+          <span style="color:#475569">→</span>
+          <span style="background:#1e293b;padding:2px 8px;border-radius:4px;color:#94a3b8">Sustain</span>
+        </div>
+        <div style="color:#64748b;font-size:0.78rem">Your agents cover all 6. Claude leads Dream+Design. Agy+Codex own Build.</div>
+        <div style="margin-top:0.8rem;color:#475569">  [enter] continue to tasks  [?] learn more about each cycle</div>
+      </div>
+
+      <div style="color:#64748b;margin-bottom:0.5rem">Screen 2 of 2 — starter tasks</div>
+      <div style="background:#0f172a;border-radius:6px;padding:1rem;color:#e2e8f0">
+        <div style="color:#10b981;font-weight:700;margin-bottom:0.6rem">  ◆ Where do you want to start?</div>
+        <div style="color:#64748b;font-size:0.78rem;margin-bottom:0.8rem">3 tasks tailored to synlynk · pick one to dispatch</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">
+          <div style="padding:0.5rem 0.75rem;background:#1e293b;border-radius:4px">
+            <span style="color:#a78bfa">[1]</span> <span style="color:#e2e8f0">Workspace architecture review</span>
+            <span style="color:#475569;font-size:0.75rem;margin-left:0.5rem">Dream cycle · ~2h</span>
+          </div>
+          <div style="padding:0.5rem 0.75rem;background:#1e293b;border-radius:4px">
+            <span style="color:#a78bfa">[2]</span> <span style="color:#e2e8f0">Product + opportunity assessment</span>
+            <span style="color:#475569;font-size:0.75rem;margin-left:0.5rem">Dream cycle · ~1h</span>
+          </div>
+          <div style="padding:0.5rem 0.75rem;background:#1e293b;border-radius:4px">
+            <span style="color:#a78bfa">[3]</span> <span style="color:#e2e8f0">Set up 6-cycle workflow for this repo</span>
+            <span style="color:#475569;font-size:0.75rem;margin-left:0.5rem">Plan cycle · ~30m</span>
+          </div>
+        </div>
+        <div style="margin-top:0.8rem;color:#475569">  [1–3] pick task  [s] skip for now</div>
+      </div>
+
+      <div style="margin-top:0.8rem;padding:0.6rem;background:#1e2d1e;border-radius:4px;font-size:0.75rem;color:#4ade80">
+        ✓ Teaches the model before showing tasks — user understands why each task maps to a cycle<br>
+        ✗ Two screens to navigate before getting to work
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="mockup" data-choice="b" onclick="toggleSelect(this)" style="cursor:pointer;flex:1">
+    <div class="mockup-header">Option B — Tasks first, cycles as labels</div>
+    <div class="mockup-body" style="padding:1.2rem;font-family:monospace;font-size:0.82rem">
+
+      <div style="color:#64748b;margin-bottom:0.5rem">Single screen</div>
+      <div style="background:#0f172a;border-radius:6px;padding:1rem;color:#e2e8f0">
+        <div style="color:#10b981;font-weight:700;margin-bottom:0.25rem">  ◆ synlynk · synlynk-py · Python · single repo</div>
+        <div style="color:#64748b;font-size:0.78rem;margin-bottom:0.9rem">Here's where to start. Each task kicks off a cycle.</div>
+
+        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1rem">
+          <div style="padding:0.6rem 0.75rem;background:#1e293b;border-radius:4px;border-left:3px solid #a78bfa">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#e2e8f0;font-weight:600">[1] Workspace architecture review</span>
+              <span style="background:#2d1f63;color:#a78bfa;padding:1px 6px;border-radius:3px;font-size:0.72rem">Dream</span>
+            </div>
+            <div style="color:#64748b;font-size:0.75rem;margin-top:0.25rem">Analyse code structure, patterns, tech debt. Claude leads.</div>
+          </div>
+          <div style="padding:0.6rem 0.75rem;background:#1e293b;border-radius:4px;border-left:3px solid #a78bfa">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#e2e8f0;font-weight:600">[2] Product + opportunity assessment</span>
+              <span style="background:#2d1f63;color:#a78bfa;padding:1px 6px;border-radius:3px;font-size:0.72rem">Dream</span>
+            </div>
+            <div style="color:#64748b;font-size:0.75rem;margin-top:0.25rem">Scope, features, market fit, growth levers. Claude leads.</div>
+          </div>
+          <div style="padding:0.6rem 0.75rem;background:#1e293b;border-radius:4px;border-left:3px solid #34d399">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#e2e8f0;font-weight:600">[3] Set up 6-cycle workflow for this repo</span>
+              <span style="background:#1a3a2a;color:#34d399;padding:1px 6px;border-radius:3px;font-size:0.72rem">Plan</span>
+            </div>
+            <div style="color:#64748b;font-size:0.75rem;margin-top:0.25rem">Initialise lifecycle tracking in state.db. Takes 30m.</div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #1e293b;padding-top:0.7rem;color:#475569;font-size:0.75rem;margin-bottom:0.5rem">
+          Dream · Design · Plan · Build · Ship · Sustain — your agents cover all 6
+        </div>
+        <div style="color:#475569">  [1–3] pick task  [?] explain cycles  [s] skip</div>
+      </div>
+
+      <div style="margin-top:0.8rem;padding:0.6rem;background:#1e2d1e;border-radius:4px;font-size:0.75rem;color:#4ade80">
+        ✓ One screen, less friction — cycles introduced via labels on the tasks themselves<br>
+        ✗ User encounters "Dream" cycle label without prior explanation
+      </div>
+    </div>
+  </div>
+
+</div>

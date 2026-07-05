@@ -13,6 +13,16 @@ At the close of PR #106 (Workspace HUD), synlynk had a functional terminal obser
 
 For the dispatch loop to be truly robust, the scheduler needed a detailed, capacity-aware routing engine that could validate dispatches *before* they booted up an agent process.
 
+## Brainstorm Visuals Used
+
+Design exploration for the ecosystem status HUD — capacity cards, cycle matrix, and compatibility scoring options:
+
+![BS-16 ecosystem status — capacity design v2](images/v011/bs16-design-v2.png)
+
+![BS-16 HUD v3 — fixed cards + compatibility options](images/v011/bs16-hud-v3.png)
+
+Full brainstorm HTML: [`docs/brainstorm/bs16-ecosystem-status/`](../brainstorm/bs16-ecosystem-status/)
+
 ## Strategic Shifts in This PR
 
 The core shift in BS-16 is moving from an execution engine to an **instrument panel**. In order to achieve autonomous multi-agent dispatch, the harness cannot treat guest agents (Claude, Agy, Codex, Grok) as opaque CLI wrappers. It must be self-aware of its own fleet's capabilities and current operating envelopes. 
