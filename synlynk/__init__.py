@@ -2447,7 +2447,7 @@ def cmd_repair(dry_run: bool = True) -> int:
     return 0
 
 
-def cmd_sync(dry_run: bool = True) -> int:
+def cmd_sync(dry_run: bool = True, repair_sops: bool = False) -> int:
     """Propagate updated synlynk artifacts to an existing repo without full re-init.
 
     Updates: instruction file sections (CLAUDE.md, GEMINI.md, etc.), .agents/ profile
@@ -2508,7 +2508,11 @@ def cmd_sync(dry_run: bool = True) -> int:
                 continue
             print(f"    {'→' if dry_run else _GREEN + '✓' + _RESET} {profile_path} — create default profile")
             if not dry_run:
-                _load_agent_config(name)  # writes default profile if absent
+                profile = _load_agent_profile(name)
+                os.makedirs(".agents", exist_ok=True)
+                with open(profile_path, "w") as f:
+                    json.dump(profile, f, indent=2)
+                    f.write("\n")
 
     print()
     if dry_run:
@@ -2516,6 +2520,37 @@ def cmd_sync(dry_run: bool = True) -> int:
     else:
         print(f"  {_GREEN}Sync complete.{_RESET}")
     print()
+
+    if repair_sops:
+        from synlynk.probe import SOP_BLOCKS as _SOP_BLOCKS, SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
+
+        directive_files = {
+            "claude": "CLAUDE.md",
+            "agy": "GEMINI.md",
+            "codex": "AGENTS.md",
+            "grok": "GROK.md",
+        }
+        cfg_roles = load_config().get("roles", {})
+        for agent_name in cfg_roles:
+            fpath = directive_files.get(agent_name)
+            if not fpath or not os.path.exists(fpath):
+                continue
+            tc5 = _run_tc5_local({agent_name: fpath})
+            missing_headers = tc5.get("missing", {}).get(agent_name, [])
+            if not missing_headers:
+                continue
+            if dry_run:
+                for missing_header in missing_headers:
+                    print(f"    → repair SOP '{missing_header}' in {fpath}")
+                continue
+            blocks = []
+            for missing_header in missing_headers:
+                idx = _SOP_HEADERS.index(missing_header)
+                blocks.append(_SOP_BLOCKS[idx])
+            _upsert_harness_fence(fpath, harness_version="sop-repair", body="\n".join(blocks))
+            for missing_header in missing_headers:
+                print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
+
     return 0
 
 

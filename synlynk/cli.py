@@ -297,6 +297,9 @@ def main() -> None:
     sync_parser.add_argument(
         "--confirm", action="store_true",
         help="Execute sync (default is dry-run)")
+    sync_parser.add_argument(
+        "--repair-sops", action="store_true", dest="repair_sops",
+        help="Re-inject missing SOP sections into directive files")
 
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
@@ -714,7 +717,7 @@ def main() -> None:
     elif args.command == "repair":
         sys.exit(cmd_repair(dry_run=not args.confirm))
     elif args.command == "sync":
-        sys.exit(cmd_sync(dry_run=not args.confirm))
+        sys.exit(cmd_sync(dry_run=not args.confirm, repair_sops=getattr(args, "repair_sops", False)))
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:

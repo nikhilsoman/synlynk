@@ -103,6 +103,37 @@ def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
     assert "missing 1 section(s)" in out
 
 
+def test_sync_repair_sops_injects_missing_sections(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm", "review"]}}')
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    (tmp_path / "CLAUDE.md").write_text("# Claude Instructions\n\n## PR Review Discipline\nsome content\n")
+
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "## Brainstorm-First Policy" in content
+    assert "## Repo Hygiene" in content
+    assert content.count("## PR Review Discipline") == 1
+
+
+def test_sync_repair_sops_is_idempotent(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}}')
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    (tmp_path / "CLAUDE.md").write_text("# Instructions\n")
+
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+    content_first = (tmp_path / "CLAUDE.md").read_text()
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+    content_second = (tmp_path / "CLAUDE.md").read_text()
+    assert content_first == content_second
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db
