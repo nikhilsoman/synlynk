@@ -49,6 +49,8 @@ from synlynk.probe import (
     _run_tc2,
     _run_tc3,
     _run_tc4,
+    _run_tc5,
+    SOP_BLOCKS,
     cmd_probe,
     _fence_exists,
     _probe_model_version,
@@ -657,7 +659,9 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     started_at   TEXT,
     completed_at TEXT,
     exit_code    INTEGER,
-    log_path     TEXT
+    log_path     TEXT,
+    handoff_count INTEGER NOT NULL DEFAULT 0,
+    previous_agents TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 """
@@ -2163,8 +2167,15 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 endpoints.append((host, int(port_s) if port_s.isdigit() else 443))
             tc3 = _run_tc3(endpoints)
             tc4 = _run_tc4(agent, db_conn)
+            tc5_files = {
+                "claude": "CLAUDE.md",
+                "agy": "GEMINI.md",
+                "codex": "AGENTS.md",
+                "grok": "GROK.md",
+            }
+            tc5 = _run_tc5({a: tc5_files[a] for a in agents if a in tc5_files})
 
-            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"]
+            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
             if not all_passed:
                 any_failed = True
             status = "ok" if all_passed else "degraded"
@@ -2213,6 +2224,51 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             print(f"    TC-2 flags:   {'✓' if tc2['passed'] else '✗ failed=' + str(tc2['failed_flags'])}")
             print(f"    TC-3 network: {'✓' if tc3['passed'] else '✗ unreachable=' + str(tc3['unreachable'])}")
             print(f"    TC-4 verbs:   {'✓' if tc4['passed'] else '✗ failed=' + str(tc4['failed_verbs'])}")
+            if tc5["passed"]:
+                print(f"    TC-5 sops:    ✓")
+            else:
+                for ag, missing in tc5["missing"].items():
+                    print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
+
+            if not tc1["passed"]:
+                choice = _doctor_fix_menu(agent, "tc1", tc1)
+                if choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc1": tc1})
+            if not tc2["passed"]:
+                choice = _doctor_fix_menu(agent, "tc2", tc2)
+                if choice == "1":
+                    cmd_configure_agent(
+                        agent,
+                        flags={flag.lstrip("-"): None for flag in tc2.get("failed_flags", [])},
+                        envs={},
+                        network_deps=[],
+                    )
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc2": tc2})
+            if not tc3["passed"]:
+                choice = _doctor_fix_menu(agent, "tc3", tc3)
+                if choice == "1":
+                    unreachable = ", ".join(f"{host}:{port}" for host, port in tc3.get("unreachable", []))
+                    print(f"    {_DIM}Unreachable endpoints: {unreachable}{_RESET}")
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc3": tc3})
+            if not tc4["passed"]:
+                choice = _doctor_fix_menu(agent, "tc4", tc4)
+                if choice == "1":
+                    cmd_configure_agent(
+                        agent,
+                        flags={verb.lstrip("-"): None for verb in tc4.get("failed_verbs", [])},
+                        envs={},
+                        network_deps=[],
+                    )
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc4": tc4})
+            if tc5["missing"].get(agent):
+                choice = _doctor_fix_menu(agent, "tc5", tc5)
+                if choice == "1":
+                    _repair_sops_only(agent_name=agent)
+                elif choice == "escalate":
+                    _doctor_maybe_escalate(agent, {"tc5": tc5})
 
         # Roles fence check
         _DIRECTIVE_MAP = {
@@ -2433,7 +2489,7 @@ def cmd_repair(dry_run: bool = True) -> int:
     return 0
 
 
-def cmd_sync(dry_run: bool = True) -> int:
+def cmd_sync(dry_run: bool = True, repair_sops: bool = False) -> int:
     """Propagate updated synlynk artifacts to an existing repo without full re-init.
 
     Updates: instruction file sections (CLAUDE.md, GEMINI.md, etc.), .agents/ profile
@@ -2494,7 +2550,11 @@ def cmd_sync(dry_run: bool = True) -> int:
                 continue
             print(f"    {'→' if dry_run else _GREEN + '✓' + _RESET} {profile_path} — create default profile")
             if not dry_run:
-                _load_agent_config(name)  # writes default profile if absent
+                profile = _load_agent_profile(name)
+                os.makedirs(".agents", exist_ok=True)
+                with open(profile_path, "w") as f:
+                    json.dump(profile, f, indent=2)
+                    f.write("\n")
 
     print()
     if dry_run:
@@ -2502,7 +2562,64 @@ def cmd_sync(dry_run: bool = True) -> int:
     else:
         print(f"  {_GREEN}Sync complete.{_RESET}")
     print()
+
+    if repair_sops:
+        _repair_sops_only(dry_run=dry_run)
+
     return 0
+
+
+def _read_harness_fence_body(file_path: str) -> str:
+    """Return the current body inside the synlynk harness fence, if present."""
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return ""
+    match = re.search(
+        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return ""
+    return match.group(1)
+
+
+def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
+    """Repair missing SOP sections without rewriting unrelated sync artifacts."""
+    from synlynk.probe import SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
+
+    directive_files = {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "codex": "AGENTS.md",
+        "grok": "GROK.md",
+    }
+    cfg_roles = load_config().get("roles", {})
+    agent_names = [agent_name] if agent_name else list(cfg_roles)
+    for agent in agent_names:
+        fpath = directive_files.get(agent)
+        if not fpath or not os.path.exists(fpath):
+            continue
+        tc5 = _run_tc5_local({agent: fpath})
+        missing_headers = tc5.get("missing", {}).get(agent, [])
+        if not missing_headers:
+            continue
+        if dry_run:
+            for missing_header in missing_headers:
+                print(f"    → repair SOP '{missing_header}' in {fpath}")
+            continue
+        existing_body = _read_harness_fence_body(fpath)
+        blocks = []
+        for missing_header in missing_headers:
+            idx = _SOP_HEADERS.index(missing_header)
+            blocks.append(SOP_BLOCKS[idx])
+        missing_body = "\n".join(blocks)
+        body = missing_body if not existing_body else f"{existing_body.rstrip('\n')}\n{missing_body}"
+        _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
+        for missing_header in missing_headers:
+            print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
 
 
 def _best_agent_for_story(story_id: str) -> Optional[str]:
@@ -4506,6 +4623,54 @@ def cmd_agent_configure(agent_name: str) -> None:
     print(f"\n  {_GREEN}✓{_RESET} Written {path}")
 
 
+def cmd_configure_agent(
+    name: str,
+    flags: dict = None,
+    envs: dict = None,
+    network_deps: list = None,
+) -> None:
+    """Write per-project harness overrides to .agents/<name>.json."""
+    flags = flags or {}
+    envs = envs or {}
+    network_deps = network_deps or []
+
+    os.makedirs(".agents", exist_ok=True)
+    profile_path = os.path.join(".agents", f"{name}.json")
+    profile: dict = {}
+    if os.path.exists(profile_path):
+        try:
+            with open(profile_path) as f:
+                profile = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            profile = {}
+
+    overrides = profile.setdefault(
+        "harness_overrides",
+        {"dispatch_flags": {}, "env": {}, "network_deps": []},
+    )
+    overrides.setdefault("dispatch_flags", {})
+    overrides.setdefault("env", {})
+    overrides.setdefault("network_deps", [])
+
+    overrides["dispatch_flags"].update(flags)
+    overrides["env"].update(envs)
+    for dep in network_deps:
+        if dep not in overrides["network_deps"]:
+            overrides["network_deps"].append(dep)
+
+    with open(profile_path, "w") as f:
+        json.dump(profile, f, indent=2)
+        f.write("\n")
+
+    print(f"  ✓ {name}: harness overrides written to {profile_path}")
+    if flags:
+        print(f"    flags: {flags}")
+    if envs:
+        print(f"    env:   {envs}")
+    if network_deps:
+        print(f"    deps:  {network_deps}")
+
+
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""
     relay = SynlynkRelay(port=port)
@@ -4844,7 +5009,8 @@ def _collect_github_issues(signal_cfg: dict) -> list:
     return findings
 
 
-def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None) -> None:
+def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None,
+             stalled: bool = False) -> None:
     """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
     import time as _time
 
@@ -4855,6 +5021,45 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             return
         with open(summary_path) as f:
             print(f.read(), end="")
+        return
+
+    if stalled:
+        sentinel_path = os.path.join(".synlynk", "sentinel.md")
+        sentinel_text = ""
+        if os.path.exists(sentinel_path):
+            with open(sentinel_path) as f:
+                sentinel_text = f.read()
+        pending_ids = _stalled_job_ids_from_sentinel(sentinel_text)
+        if not pending_ids:
+            print("No stalled jobs awaiting handoff.")
+            return
+
+        conn = _get_db()
+        print(f"\n  {_BOLD}Stalled jobs — awaiting handoff{_RESET}\n")
+        print(f"  {'JOB ID':14}  {'AGENT':8}  {'AGE':8}  {'TASK':36}  RECOMMENDED")
+        print("  " + "─" * 90)
+        try:
+            for job_id in sorted(pending_ids):
+                row = conn.execute(
+                    "SELECT agent, task, started_at FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if not row:
+                    continue
+                agent, task_text, started_at = row
+                age = "?"
+                try:
+                    if started_at:
+                        started_ts = _time.mktime(_time.strptime(started_at, "%Y-%m-%dT%H:%M:%S"))
+                        age_s = int(_time.time() - started_ts)
+                        age = f"{age_s // 60}m{age_s % 60:02d}s" if age_s >= 60 else f"{age_s}s"
+                except Exception:
+                    age = "?"
+                recommended = _recommend_handoff_agent(task_text or "", agent, conn)
+                print(f"  {job_id:14}  {agent:8}  {age:8}  {(task_text or '')[:36]:36}  → {recommended}")
+        finally:
+            conn.close()
+        print(f"\n  Run: synlynk jobs handoff <job_id> [--to <agent>]\n")
         return
 
     def _parse_age(enqueued_at: str) -> str:
@@ -4939,6 +5144,167 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             pass
     else:
         _render()
+
+
+def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
+    """Transfer a stalled job to another agent, preserving context."""
+    from synlynk.dispatch import dispatch_agent as _dispatch
+
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT agent, task, story_id, handoff_count, previous_agents FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            print(f"  ✗ Job {job_id} not found.")
+            return
+
+        orig_agent, task_text, story_id, handoff_count, previous_agents_json = row
+        previous = json.loads(previous_agents_json) if previous_agents_json else []
+        if not to_agent:
+            to_agent = _recommend_handoff_agent(task_text or "", orig_agent, conn)
+
+        ctx_path = os.path.join(".synlynk", "contexts", f"{job_id}.md")
+        context_text = ""
+        if os.path.exists(ctx_path):
+            with open(ctx_path) as f:
+                context_text = f.read()
+        handoff_note = (
+            "\n## Handoff Note\n"
+            f"- Previous agent: {orig_agent}\n"
+            "- Reason: HANDOFF_PENDING (stall/quota/flatline)\n"
+            f"- Handoff #{int(handoff_count or 0) + 1}\n"
+        )
+        if context_text:
+            with open(ctx_path, "a") as f:
+                if "## Handoff Note" not in context_text:
+                    f.write(handoff_note)
+            with open(ctx_path) as f:
+                context_text = f.read()
+        else:
+            os.makedirs(os.path.dirname(ctx_path), exist_ok=True)
+            with open(ctx_path, "w") as f:
+                f.write(handoff_note.lstrip("\n"))
+            context_text = handoff_note.lstrip("\n")
+
+        previous.append(orig_agent)
+        conn.execute(
+            "UPDATE daemon_jobs SET handoff_count=?, previous_agents=? WHERE job_id=?",
+            (int(handoff_count or 0) + 1, json.dumps(previous), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    sentinel_path = os.path.join(".synlynk", "sentinel.md")
+    if os.path.exists(sentinel_path):
+        with open(sentinel_path) as f:
+            lines = f.readlines()
+        with open(sentinel_path, "w") as f:
+            for line in lines:
+                if job_id in line and "HANDOFF_PENDING" in line:
+                    continue
+                f.write(line)
+
+    handoff_task = task_text
+    if context_text:
+        handoff_task = f"{task_text}\n\n{context_text}"
+    print(f"  ✓ Handing off {job_id} from {orig_agent} → {to_agent}")
+    result = _dispatch(
+        to_agent,
+        task=handoff_task,
+        story_id=story_id or None,
+        context_mode="none",
+        skip_preflight=False,
+    )
+
+    new_context_file = result.get("context_file")
+    if not new_context_file:
+        new_context_file = os.path.join(".synlynk", "contexts", f"{result.get('id', '')}.md")
+    if new_context_file:
+        os.makedirs(os.path.dirname(new_context_file), exist_ok=True)
+        with open(new_context_file, "w") as f:
+            f.write(handoff_task)
+
+    print(f"  ✓ New job: {result.get('id', '?')}")
+
+
+_DOCTOR_FIX_MENUS = {
+    "tc1": lambda agent, tc: [
+        f"Show PTY workaround for {agent} (requires_pty={tc.get('requires_pty')})",
+    ],
+    "tc2": lambda agent, tc: [
+        f"Apply recommended flags to .agents/{agent}.json (fixes: {tc.get('failed_flags', [])})",
+    ],
+    "tc3": lambda agent, tc: [
+        f"Show unreachable endpoints and configure proxy for {agent}",
+        f"Skip {agent} in this session",
+    ],
+    "tc4": lambda agent, tc: [
+        f"Run: synlynk configure agent {agent} (adds missing verbs: {tc.get('failed_verbs', [])})",
+    ],
+    "tc5": lambda agent, tc: [
+        f"Run: synlynk sync --repair-sops (re-inject {len(tc.get('missing', {}).get(agent, []))} missing sections)",
+    ],
+}
+
+
+def _doctor_fix_menu(agent: str, tc_name: str, tc_result: dict) -> str:
+    """Render a numbered fix menu for a TC failure."""
+    if not sys.stdin.isatty():
+        return "skip"
+    menu_fn = _DOCTOR_FIX_MENUS.get(tc_name)
+    options = menu_fn(agent, tc_result) if menu_fn else []
+    print(f"\n    {_YELLOW}Fix options for {tc_name.upper()} [{agent}]:{_RESET}")
+    print("      0) I'm stuck — escalate to Claude")
+    for i, opt in enumerate(options, 1):
+        print(f"      {i}) {opt}")
+    print("      s) Skip")
+    try:
+        choice = input("    Choose [0/1.../s]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return "skip"
+    if choice == "0":
+        return "escalate"
+    if choice == "s" or not choice:
+        return "skip"
+    return choice
+
+
+def _doctor_maybe_escalate(agent: str, failures: dict) -> None:
+    """Assemble failure context and dispatch to Claude for diagnosis."""
+    lines = [f"# synlynk doctor failure — {agent}\n"]
+    for tc_name, result in failures.items():
+        lines.append(f"## {tc_name.upper()}\n```json\n{json.dumps(result, indent=2)}\n```\n")
+
+    tel_path = os.path.join(".synlynk", "telemetry.json")
+    if os.path.exists(tel_path):
+        try:
+            with open(tel_path) as f:
+                events = json.load(f)[-5:]
+            lines.append(f"## Last 5 telemetry events\n```json\n{json.dumps(events, indent=2)}\n```\n")
+        except Exception:
+            pass
+
+    cfg_path = os.path.join(".agents", f"{agent}.json")
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path) as f:
+                lines.append(f"## Agent Config\n```json\n{json.dumps(json.load(f), indent=2)}\n```\n")
+        except Exception:
+            pass
+
+    context = "\n".join(lines)
+    task = (
+        f"synlynk doctor found failures for agent '{agent}'. "
+        "Please diagnose and suggest fixes.\n\n"
+        f"{context}"
+    )
+    from synlynk.dispatch import dispatch_agent
+    print("\n    Escalating to Claude for diagnosis...\n")
+    result = dispatch_agent("claude", task=task)
+    print(f"    Dispatched: {result.get('id', '?')} — check synlynk jobs for output")
 
 
 def _dedup_findings(findings: list) -> list:
@@ -5078,6 +5444,69 @@ def _file_gh_issue(finding: dict, investigation: dict, dry_run: bool) -> str:
         print(f"  [support] gh issue create failed: {result.stderr[:200]}")
         return ""
     return result.stdout.strip()
+
+
+def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
+    """Pick the highest cycle-capability agent for the stalled task."""
+    try:
+        from synlynk.status import _classify_task_type
+    except Exception:
+        _classify_task_type = lambda prompt: "default"  # type: ignore
+
+    task_type = _classify_task_type(task_text or "")
+    task_to_cycle = {
+        "implement": "work",
+        "review": "engage",
+        "plan": "plan",
+        "debug": "maintain",
+        "test": "maintain",
+        "docs": "maintain",
+        "default": "work",
+    }
+    cycle = task_to_cycle.get(task_type, "work")
+
+    try:
+        rows = db_conn.execute(
+            "SELECT agent_name, support, verb_count, full_count, partial_count "
+            "FROM cycle_capability WHERE cycle=?",
+            (cycle,),
+        ).fetchall()
+    except Exception:
+        rows = []
+
+    ranked = []
+    for agent_name, support, verb_count, full_count, partial_count in rows:
+        if agent_name == failed_agent:
+            continue
+        support_score = {"full": 300, "partial": 150, "none": 0}.get(support, 0)
+        score = (
+            support_score
+            + int(full_count or 0) * 10
+            + int(partial_count or 0) * 5
+            + int(verb_count or 0)
+        )
+        ranked.append((score, agent_name))
+
+    if ranked:
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return ranked[0][1]
+
+    for agent_name in AGENT_CAPABILITY_BASELINES:
+        if agent_name != failed_agent:
+            return agent_name
+    return failed_agent
+
+
+def _stalled_job_ids_from_sentinel(sentinel_text: str) -> set:
+    """Extract stalled job ids from HANDOFF_PENDING sentinel lines."""
+    pending_ids = set()
+    for line in (sentinel_text or "").splitlines():
+        if "HANDOFF_PENDING" not in line:
+            continue
+        match = re.search(r"Job (job-[\w-]+)", line)
+        if match:
+            pending_ids.add(match.group(1))
+    return pending_ids
 
 
 def _extract_diff(text: str) -> Optional[str]:
@@ -5890,7 +6319,6 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
     _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
-
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
@@ -5986,6 +6414,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 ```
 """
 
+    _sop_section = "\n".join(SOP_BLOCKS) + "\n"
+
     _claude_md = (
         "# synlynk Claude Instructions\n\n"
         "## Identity & Attribution\n"
@@ -6005,6 +6435,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )
@@ -6028,6 +6459,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )
@@ -6051,6 +6483,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )
@@ -6074,6 +6507,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )

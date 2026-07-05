@@ -22,6 +22,560 @@ def test_agent_capability_baselines_exist():
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
 
 
+def test_sop_section_headers_defined():
+    from synlynk.probe import SOP_SECTION_HEADERS
+
+    assert len(SOP_SECTION_HEADERS) == 6
+    assert "## PR Review Discipline" in SOP_SECTION_HEADERS
+    assert "## Brainstorm-First Policy" in SOP_SECTION_HEADERS
+    assert "## Design → Plan → Build Sequence" in SOP_SECTION_HEADERS
+    assert "## Capability-Based Task Allocation" in SOP_SECTION_HEADERS
+    assert "## Cost Visibility" in SOP_SECTION_HEADERS
+    assert "## Repo Hygiene" in SOP_SECTION_HEADERS
+
+
+def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "n")
+    synlynk.init(force=True, agents=["claude"], org="test-org", repo="test/repo", mode="solo")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "## PR Review Discipline" in content
+    assert "## Repo Hygiene" in content
+
+
+def test_run_tc5_passes_when_all_headers_present(tmp_path):
+    from synlynk.probe import SOP_SECTION_HEADERS, _run_tc5
+
+    fpath = tmp_path / "CLAUDE.md"
+    fpath.write_text("\n".join(SOP_SECTION_HEADERS) + "\nother content")
+    result = _run_tc5({"claude": str(fpath)})
+    assert result["passed"] is True
+    assert result["missing"] == {}
+
+
+def test_run_tc5_reports_missing_sections(tmp_path):
+    from synlynk.probe import _run_tc5
+
+    fpath = tmp_path / "CLAUDE.md"
+    fpath.write_text("## PR Review Discipline\nsome content")
+    result = _run_tc5({"claude": str(fpath)})
+    assert result["passed"] is False
+    missing = result["missing"]["claude"]
+    assert "## Brainstorm-First Policy" in missing
+    assert "## PR Review Discipline" not in missing
+
+
+def test_run_tc5_missing_file_reports_all_headers(tmp_path):
+    from synlynk.probe import SOP_SECTION_HEADERS, _run_tc5
+
+    result = _run_tc5({"claude": str(tmp_path / "CLAUDE.md")})
+    assert result["passed"] is False
+    assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
+
+
+def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "claude": {
+                "cli": "claude",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(
+        synlynk,
+        "_run_tc5",
+        lambda files: {"passed": False, "missing": {"claude": ["## Repo Hygiene"]}},
+    )
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"roles": {}})
+    synlynk.cmd_doctor()
+    out = capsys.readouterr().out
+    assert "TC-5 sops" in out
+    assert "missing 1 section(s)" in out
+
+
+def test_sync_repair_sops_injects_missing_sections(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm", "review"]}}')
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    (tmp_path / "CLAUDE.md").write_text("# Claude Instructions\n\n## PR Review Discipline\nsome content\n")
+
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "## Brainstorm-First Policy" in content
+    assert "## Repo Hygiene" in content
+    assert content.count("## PR Review Discipline") == 1
+
+
+def test_sync_repair_sops_preserves_existing_fence_body(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}}')
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    (tmp_path / "CLAUDE.md").write_text(
+        "# Claude Instructions\n\n"
+        "<!-- synlynk:harness vsop-repair verified:2026-07-05T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## PR Review Discipline\n"
+        "probe-written content\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "probe-written content" in content
+    assert "## Brainstorm-First Policy" in content
+    assert content.count("probe-written content") == 1
+
+
+def test_sync_repair_sops_is_idempotent(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}}')
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    (tmp_path / "CLAUDE.md").write_text("# Instructions\n")
+
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+    content_first = (tmp_path / "CLAUDE.md").read_text()
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+    content_second = (tmp_path / "CLAUDE.md").read_text()
+    assert content_first == content_second
+
+
+def test_configure_agent_writes_harness_overrides(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "codex.json").write_text('{"context_mode": "full"}')
+
+    synlynk.cmd_configure_agent("codex", flags={"timeout": "60"}, envs={}, network_deps=[])
+
+    data = json.loads((tmp_path / ".agents" / "codex.json").read_text())
+    assert data["harness_overrides"]["dispatch_flags"]["timeout"] == "60"
+
+
+def test_configure_agent_creates_file_if_missing(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+
+    synlynk.cmd_configure_agent("agy", flags={}, envs={"PYTHONUNBUFFERED": "1"}, network_deps=[])
+
+    data = json.loads((tmp_path / ".agents" / "agy.json").read_text())
+    assert data["harness_overrides"]["env"]["PYTHONUNBUFFERED"] == "1"
+
+
+def test_configure_agent_preserves_existing_keys(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text(
+        '{"context_mode": "full", "harness_overrides": {"dispatch_flags": {"model": "claude-3"}}}'
+    )
+
+    synlynk.cmd_configure_agent("claude", flags={"timeout": "30"}, envs={}, network_deps=[])
+
+    data = json.loads((tmp_path / ".agents" / "claude.json").read_text())
+    assert data["context_mode"] == "full"
+    assert data["harness_overrides"]["dispatch_flags"]["model"] == "claude-3"
+    assert data["harness_overrides"]["dispatch_flags"]["timeout"] == "30"
+
+
+def test_load_harness_overrides_returns_empty_when_no_file(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.dispatch import _load_harness_overrides
+
+    assert _load_harness_overrides("codex") == {
+        "dispatch_flags": {},
+        "env": {},
+        "network_deps": [],
+    }
+
+
+def test_load_harness_overrides_reads_from_agents_json(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "codex.json").write_text(
+        json.dumps(
+            {
+                "harness_overrides": {
+                    "dispatch_flags": {"timeout": "60"},
+                    "env": {},
+                    "network_deps": [],
+                }
+            }
+        )
+    )
+    from synlynk.dispatch import _load_harness_overrides
+
+    result = _load_harness_overrides("codex")
+    assert result["dispatch_flags"]["timeout"] == "60"
+
+
+def test_dispatch_agent_applies_harness_overrides(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text(
+        json.dumps(
+            {
+                "harness_overrides": {
+                    "dispatch_flags": {},
+                    "env": {"MY_VAR": "42"},
+                    "network_deps": [],
+                }
+            }
+        )
+    )
+    captured_env = {}
+
+    def fake_popen(cmd, env=None, **kwargs):
+        captured_env.update(env or {})
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr("synlynk.dispatch.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda *args, **kwargs: "unknown")
+    from synlynk.dispatch import dispatch_agent
+
+    with pytest.raises(RuntimeError):
+        dispatch_agent("claude", task="test", context_mode="none", skip_preflight=True)
+    assert captured_env.get("MY_VAR") == "42"
+
+
+def test_role_permission_defaults_cover_all_default_roles():
+    from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
+
+    for role in [
+        "pm",
+        "review",
+        "deploy",
+        "implement",
+        "test",
+        "refactor",
+        "css",
+        "templates",
+        "content",
+        "canvas",
+        "js",
+        "infra",
+    ]:
+        assert role in _ROLE_PERMISSION_DEFAULTS, f"Missing role: {role}"
+
+
+def test_resolve_dispatch_permissions_returns_role_defaults():
+    from synlynk.dispatch import _resolve_dispatch_permissions
+
+    perms = _resolve_dispatch_permissions("codex", role_list=["implement", "test"])
+    assert "write:src/" in perms
+    assert "run:tests" in perms
+
+
+def test_resolve_dispatch_permissions_grant_expands():
+    from synlynk.dispatch import _resolve_dispatch_permissions
+
+    perms = _resolve_dispatch_permissions("codex", role_list=["review"], grants=["write:src/"])
+    assert "write:src/" in perms
+
+
+def test_resolve_dispatch_permissions_revoke_removes():
+    from synlynk.dispatch import _resolve_dispatch_permissions
+
+    perms = _resolve_dispatch_permissions("codex", role_list=["implement"], revokes=["run:tests"])
+    assert "run:tests" not in perms
+    assert "write:src/" in perms
+
+
+def test_permissions_to_flags_claude_allowedtools():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("claude", ["read:*", "write:src/"])
+    assert "--allowedTools" in result
+    idx = result.index("--allowedTools")
+    tools_str = result[idx + 1]
+    assert "Read" in tools_str
+    assert "Edit" in tools_str
+
+
+def test_permissions_to_flags_codex_approval_policy():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("codex", ["read:*"])
+    assert "--approval-policy" in result
+    assert "untrusted" in result
+
+
+def test_permissions_to_flags_agy_returns_context_section():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("agy", ["read:*", "write:docs/"])
+    assert result == []
+
+
+def test_dispatch_agent_injects_agy_permissions_header(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "agy.json").write_text("{}")
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"agy": ["content"]}}')
+
+    captured = {}
+
+    def fake_formatter(agent, context_text, story_id, task, file_section, verify_section):
+        captured["task"] = task
+        return task
+
+    def fake_popen(cmd, env=None, **kwargs):
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(synlynk, "_format_prompt_for_agent", fake_formatter)
+    monkeypatch.setattr("synlynk.dispatch.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda *args, **kwargs: "unknown")
+    from synlynk.dispatch import dispatch_agent
+
+    with pytest.raises(RuntimeError):
+        dispatch_agent(
+            "agy",
+            task="build docs",
+            context_mode="none",
+            skip_preflight=True,
+            grants=["write:docs/"],
+        )
+
+    assert captured["task"].startswith("## Permissions")
+    assert "write:docs/" in captured["task"]
+
+
+def test_daemon_jobs_has_handoff_columns(isolated_db):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()]
+    assert "handoff_count" in cols
+    assert "previous_agents" in cols
+    conn.close()
+
+
+def test_stall_detection_writes_handoff_pending(tmp_path, isolated_db, monkeypatch):
+    import time as _time
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    log_file = tmp_path / ".synlynk" / "job.log"
+    log_file.write_text("")
+
+    from synlynk.dispatch import _check_job_stall
+
+    job = {
+        "id": "job-abc123",
+        "status": "running",
+        "pid": None,
+        "started_at": _time.strftime("%Y-%m-%dT%H:%M:%S", _time.gmtime(_time.time() - 99999)),
+        "log_file": str(log_file),
+    }
+    sentinel_path = str(tmp_path / ".synlynk" / "sentinel.md")
+    result = _check_job_stall(job, config={"stall_timeout_minutes": 0}, sentinel_path=sentinel_path)
+    assert result is True
+    sentinel_content = (tmp_path / ".synlynk" / "sentinel.md").read_text()
+    assert "STALL_NO_OUTPUT" in sentinel_content
+    assert "HANDOFF_PENDING" in sentinel_content
+
+
+def test_jobs_stalled_lists_handoff_pending_jobs(tmp_path, isolated_db, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "sentinel.md").write_text(
+        "[HANDOFF_PENDING] Job job-aaa on agent 'agy' is awaiting handoff.\n"
+    )
+
+    from synlynk import _get_db, cmd_jobs
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, handoff_count) "
+        "VALUES ('job-aaa', 'agy', 'write tests', 'failed', '2026-07-05T10:00:00', 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_jobs(stalled=True)
+    out = capsys.readouterr().out
+    assert "job-aaa" in out
+    assert "agy" in out
+
+
+def test_jobs_handoff_updates_db_and_dispatches(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk" / "contexts").mkdir(parents=True)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"codex": ["implement"]}}')
+    ctx_file = tmp_path / ".synlynk" / "contexts" / "job-bbb.md"
+    ctx_file.write_text("# Context\noriginal task content\n")
+    (tmp_path / ".synlynk" / "sentinel.md").write_text(
+        "[HANDOFF_PENDING] Job job-bbb on agent 'agy' is awaiting handoff.\n"
+    )
+
+    from synlynk import _get_db
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, handoff_count, previous_agents) "
+        "VALUES ('job-bbb', 'agy', 'implement feature', 'failed', '2026-07-05T10:00:00', 0, NULL)"
+    )
+    conn.commit()
+    conn.close()
+
+    dispatched = []
+    monkeypatch.setattr(
+        "synlynk.dispatch.dispatch_agent",
+        lambda *a, **kw: dispatched.append((a, kw)) or {"id": "job-ccc"},
+    )
+
+    from synlynk import cmd_jobs_handoff
+
+    cmd_jobs_handoff("job-bbb", to_agent="codex")
+    content = ctx_file.read_text()
+    assert "## Handoff Note" in content
+    assert "agy" in content
+
+    conn2 = _get_db()
+    row = conn2.execute(
+        "SELECT handoff_count, previous_agents FROM daemon_jobs WHERE job_id='job-bbb'"
+    ).fetchone()
+    conn2.close()
+    assert row[0] == 1
+    prev = json.loads(row[1])
+    assert "agy" in prev
+    assert len(dispatched) == 1
+    assert dispatched[0][0][0] == "codex"
+    assert "## Handoff Note" in dispatched[0][1]["task"]
+
+
+def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "agy.json").write_text("{}")
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"agy": ["builder"]}}')
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    inputs = iter(["1"])
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: next(inputs))
+    monkeypatch.setattr(
+        synlynk,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "agy": {
+                "cli": "agy",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(synlynk, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"roles": {}})
+
+    synlynk.cmd_doctor()
+
+    data = json.loads((tmp_path / ".agents" / "agy.json").read_text())
+    assert data["harness_overrides"]["dispatch_flags"]["bad-flag"] is None
+
+
+def test_doctor_wizard_escalate_option_calls_dispatch(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "telemetry.json").write_text(
+        json.dumps([{"agent": "agy", "command": "npm test", "tool_call_count": 3}])
+    )
+    dispatched = []
+    monkeypatch.setattr(
+        "synlynk.dispatch.dispatch_agent",
+        lambda *a, **kw: dispatched.append((a, kw)) or {"id": "job-esc"},
+    )
+
+    from synlynk import _doctor_maybe_escalate
+
+    _doctor_maybe_escalate("agy", {"tc2": {"passed": False, "failed_flags": ["--bad-flag"]}})
+    assert len(dispatched) == 1
+    assert dispatched[0][0][0] == "claude"
+    assert "doctor" in dispatched[0][1]["task"].lower()
+
+
+def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "claude": {
+                "cli": "claude",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(
+        synlynk,
+        "_run_tc5",
+        lambda files: {"passed": False, "missing": {"claude": ["## Repo Hygiene"]}},
+    )
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"roles": {"claude": ["pm"]}})
+    monkeypatch.setattr(synlynk, "cmd_sync", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("cmd_sync should not be called")))
+    monkeypatch.setattr(synlynk, "_doctor_fix_menu", lambda agent, tc_name, tc: "1")
+    called = {}
+
+    def fake_repair(agent_name=None, dry_run=False):
+        called["agent_name"] = agent_name
+        called["dry_run"] = dry_run
+
+    monkeypatch.setattr(synlynk, "_repair_sops_only", fake_repair)
+
+    synlynk.cmd_doctor()
+
+    assert called == {"agent_name": "claude", "dry_run": False}
+
+
+def test_cli_configure_agent_accepts_bare_flag(monkeypatch):
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_configure_agent(name, flags=None, envs=None, network_deps=None):
+        captured["name"] = name
+        captured["flags"] = flags
+
+    monkeypatch.setattr(synlynk, "cmd_configure_agent", fake_configure_agent)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "configure", "agent", "codex", "--flag", "no-stream", "--flag", "timeout=60"],
+    )
+
+    cli_mod.main()
+
+    assert captured["name"] == "codex"
+    assert captured["flags"] == {"no-stream": True, "timeout": "60"}
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

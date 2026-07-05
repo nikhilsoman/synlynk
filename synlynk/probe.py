@@ -12,6 +12,76 @@ from typing import Optional
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.sentinel import _write_sentinel_alert
 
+SOP_SECTION_HEADERS = [
+    "## PR Review Discipline",
+    "## Brainstorm-First Policy",
+    "## Design → Plan → Build Sequence",
+    "## Capability-Based Task Allocation",
+    "## Cost Visibility",
+    "## Repo Hygiene",
+]
+
+_PR_REVIEW_SOP = """\
+## PR Review Discipline
+1. Assign a non-authoring agent to review the PR.
+2. The reviewer must run `synlynk pr check <pr#>`.
+3. The reviewer alone must merge the PR.
+4. If the reviewer is unavailable, escalate to Claude.
+"""
+
+_BRAINSTORM_SOP = """\
+## Brainstorm-First Policy
+1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
+2. Run the brainstorm using Claude via `synlynk dispatch`.
+3. Spec is approved only when committed to the branch and Nikhil signs off.
+"""
+
+_DESIGN_SEQUENCE_SOP = """\
+## Design → Plan → Build Sequence
+1. Design: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+2. Plan: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+3. Build: Code implementation
+- Spec not committed = do not write plan.
+- Plan not committed = do not dispatch tasks.
+"""
+
+_CAPABILITY_ALLOCATION_SOP = """\
+## Capability-Based Task Allocation
+| Role | Agent | Tasks |
+| :--- | :--- | :--- |
+| Python/CLI/tests | Codex | Python, CLI, tests |
+| HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
+| canvas/JS/infra | Grok | canvas, JS, infra |
+| PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
+Do not start a task outside your role column without explicit Claude approval.
+"""
+
+_COST_VISIBILITY_SOP = """\
+## Cost Visibility
+1. Log estimated_cost in the job context header before dispatch.
+2. Check `synlynk status` for current burn rate.
+3. Flag to Claude if a single job is estimated > $2.
+4. Append actual cost to `project-docs/costs.md`.
+"""
+
+_REPO_HYGIENE_SOP = """\
+## Repo Hygiene
+1. Do not commit directly to main or master.
+2. Use branch naming pattern: `feat/<agent>/<desc>`.
+3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: AGY <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
+4. Use worktree per feature with `git worktree add`.
+5. Run `git branch --show-current` before committing to verify branch.
+"""
+
+SOP_BLOCKS = [
+    _PR_REVIEW_SOP,
+    _BRAINSTORM_SOP,
+    _DESIGN_SEQUENCE_SOP,
+    _CAPABILITY_ALLOCATION_SOP,
+    _COST_VISIBILITY_SOP,
+    _REPO_HYGIENE_SOP,
+]
+
 
 def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     import hashlib as _hashlib
@@ -528,6 +598,20 @@ def _run_tc4(agent_name: str, db_conn) -> dict:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             failed.append(verb)
     return {"failed_verbs": failed, "passed": len(failed) == 0}
+
+
+def _run_tc5(directive_files: dict) -> dict:
+    """TC-5: SOP section presence validation."""
+    missing = {}
+    for agent, path in (directive_files or {}).items():
+        try:
+            content = open(path).read() if os.path.exists(path) else ""
+        except OSError:
+            content = ""
+        absent = [header for header in SOP_SECTION_HEADERS if header not in content]
+        if absent:
+            missing[agent] = absent
+    return {"passed": not missing, "missing": missing}
 
 
 def cmd_probe(agent: str = None) -> None:
