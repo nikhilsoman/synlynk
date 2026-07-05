@@ -333,6 +333,41 @@ def test_dispatch_agent_injects_agy_permissions_header(tmp_path, isolated_db, mo
     assert "write:docs/" in captured["task"]
 
 
+def test_daemon_jobs_has_handoff_columns(isolated_db):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()]
+    assert "handoff_count" in cols
+    assert "previous_agents" in cols
+    conn.close()
+
+
+def test_stall_detection_writes_handoff_pending(tmp_path, isolated_db, monkeypatch):
+    import time as _time
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    log_file = tmp_path / ".synlynk" / "job.log"
+    log_file.write_text("")
+
+    from synlynk.dispatch import _check_job_stall
+
+    job = {
+        "id": "job-abc123",
+        "status": "running",
+        "pid": None,
+        "started_at": _time.strftime("%Y-%m-%dT%H:%M:%S", _time.gmtime(_time.time() - 99999)),
+        "log_file": str(log_file),
+    }
+    sentinel_path = str(tmp_path / ".synlynk" / "sentinel.md")
+    result = _check_job_stall(job, config={"stall_timeout_minutes": 0}, sentinel_path=sentinel_path)
+    assert result is True
+    sentinel_content = (tmp_path / ".synlynk" / "sentinel.md").read_text()
+    assert "STALL_NO_OUTPUT" in sentinel_content
+    assert "HANDOFF_PENDING" in sentinel_content
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

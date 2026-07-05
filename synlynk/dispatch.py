@@ -235,6 +235,11 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. Process killed.",
         sentinel_path,
     )
+    write_alert(
+        "WARN", "HANDOFF_PENDING",
+        f"Job {job.get('id')} on agent '{agent}' is awaiting handoff to another agent.",
+        sentinel_path,
+    )
     return True
 
 
