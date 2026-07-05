@@ -23,53 +23,54 @@ SOP_SECTION_HEADERS = [
 
 _PR_REVIEW_SOP = """\
 ## PR Review Discipline
-The agent that implements a feature never reviews or merges its own PR.
-- After opening a PR, post a review request to the assigned reviewer agent
-- Reviewer runs `synlynk pr check <pr>` before approving
-- Merge only after reviewer approval — never self-merge
+1. Assign a non-authoring agent to review the PR.
+2. The reviewer must run `synlynk pr check <pr#>`.
+3. The reviewer alone must merge the PR.
+4. If the reviewer is unavailable, escalate to Claude.
 """
 
 _BRAINSTORM_SOP = """\
 ## Brainstorm-First Policy
-Every feature and epic requires an approved design spec before implementation.
-- Claude runs the brainstorm; output is a spec in `docs/superpowers/specs/`
-- No implementation starts without an approved spec committed to the branch
-- No code before design approval — this applies to all agents
+1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
+2. Run the brainstorm using Claude via `synlynk dispatch`.
+3. Spec is approved only when committed to the branch and Nikhil signs off.
 """
 
 _DESIGN_SEQUENCE_SOP = """\
 ## Design → Plan → Build Sequence
-All work follows this sequence without exception:
-1. Brainstorm → design spec (`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`)
-2. Design spec → implementation plan (`docs/superpowers/plans/YYYY-MM-DD-<topic>.md`)
-3. Implementation plan → capability-allocated tasks dispatched to agents
-Never start step N+1 before step N is approved and committed.
+1. Design: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+2. Plan: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+3. Build: Code implementation
+- Spec not committed = do not write plan.
+- Plan not committed = do not dispatch tasks.
 """
 
 _CAPABILITY_ALLOCATION_SOP = """\
 ## Capability-Based Task Allocation
-Tasks are routed by agent role — never self-assign outside your role.
-- Python CLI / backend / tests: Codex
-- HTML/CSS / templates / content / documentation: Agy
-- PM / roadmap / code review / deployments: Claude
-Run `synlynk roles` to confirm your current role before starting any task.
+| Role | Agent | Tasks |
+| :--- | :--- | :--- |
+| Python/CLI/tests | Codex | Python, CLI, tests |
+| HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
+| canvas/JS/infra | Grok | canvas, JS, infra |
+| PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
+Do not start a task outside your role column without explicit Claude approval.
 """
 
 _COST_VISIBILITY_SOP = """\
 ## Cost Visibility
-Log an estimated cost before each significant dispatch.
-- Include `estimated_cost: $X.XX` in job context headers
-- If estimated cost exceeds the session budget (check `synlynk status`), flag to Claude first
-- Append actual cost to project-docs/costs.md after each session
+1. Log estimated_cost in the job context header before dispatch.
+2. Check `synlynk status` for current burn rate.
+3. Flag to Claude if a single job is estimated > $2.
+4. Append actual cost to `project-docs/costs.md`.
 """
 
 _REPO_HYGIENE_SOP = """\
 ## Repo Hygiene
-- Never commit directly to `main` or `master`
-- Branch naming: `feat/<agent>/<description>`, `fix/<agent>/<description>`
-- Every commit requires a Co-Authored-By trailer matching your agent identity
-- Use a dedicated worktree per feature: `git worktree add ../<slug> <branch>`
-- Run `git branch --show-current` before every commit to confirm you're on the right branch
+1. Do not commit directly to main or master.
+2. Use branch naming pattern: `feat/<agent>/<desc>`.
+3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: AGY <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
+4. Use worktree per feature with `git worktree add`.
+5. Run `git branch --show-current` before committing to verify branch.
 """
 
 SOP_BLOCKS = [
