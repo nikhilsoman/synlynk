@@ -11,6 +11,68 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.11.0] - 2026-07-05
+
+**Release pitch:** synlynk v0.11.0 is the Agent Ecosystem Operational Layer — every dispatch now carries permissions and recovery paths, your terminal shows a live fleet of agents in real time, and the full workflow discipline is baked into every agent directive file at init.
+
+### Added
+
+**Agent Autonomy Bridge (BS-12, PR #119)**
+- **`synlynk dispatch --grant <perm> --revoke <perm>`** — per-task permission overrides; role defaults in `.synlynk/config.json` map 12 roles (pm, review, implement, test, css, infra, etc.) to capability tiers. Resolved set translates to `--allowedTools` (Claude), `--approval-policy` (Codex), or a `## Permissions` context header (Agy).
+- **`synlynk configure agent <name> [--flag k=v] [--env K=V] [--network-dep host:port]`** — write per-project harness overrides to `.agents/<agent>.json`; `dispatch_agent()` merges at call time: baseline → per-project overrides → per-task grant/revoke.
+- **`synlynk jobs --stalled`** — list jobs with `HANDOFF_PENDING` sentinel (set when a job accumulates STALL_NO_OUTPUT, FLATLINE, or QUOTA_EXHAUSTED). Shows job ID, agent, failure sentinel, elapsed time, and recommended next agent.
+- **`synlynk jobs handoff <job_id> [--to <agent>]`** — transfer a stalled job to a new agent; appends `## Handoff Note` to the job context file, increments `handoff_count`, updates `previous_agents` (JSON array), launches new dispatch with full context, clears `HANDOFF_PENDING`.
+- **`synlynk doctor` TC-5** — scans each directive file for all 6 required SOP section headers; warns (non-blocking) if any are absent. Interactive fix wizard runs after each TC failure with structured fix paths (TC-1–5) and an "I'm stuck" escape that assembles failure context and dispatches Claude for conversational diagnosis.
+- **`synlynk sync --repair-sops`** — re-injects missing SOP sections into directive files without touching existing harness fence content. Idempotent.
+- **6 SOP blocks** written into CLAUDE.md, GEMINI.md, AGENTS.md, and GROK.md at `synlynk init` and `synlynk sync` time: PR Review Discipline · Brainstorm-First Policy · Design → Plan → Build Sequence · Capability-Based Task Allocation · Cost Visibility · Repo Hygiene.
+- **`daemon_jobs` schema additions**: `handoff_count INTEGER DEFAULT 0`, `previous_agents TEXT` (JSON array). Migration applied automatically on first access.
+
+**Live Job Observatory (BS-13, PR #117)**
+- **`synlynk watch --live`** — fullscreen live job board: all running/recent jobs with agent, status, elapsed time, cost, and output tail; auto-refreshes every 3s; Ctrl-C to exit.
+- **Vizor Observatory tab** — fifth tab in `synlynk viz` browser dashboard: real-time job fleet table (JS polling), per-agent status badges, cost rollup, job output drawer.
+
+**Vizor Efficiency Enrichment (BS-22, PRs #113, #118)**
+- **R/W/T budget bars** — per-agent card shows Read, Write, Test utilisation as percentage of TIER1_CAPACITY.
+- **Cycle × Agent capability matrix** — `6 × 4` table (dream/plan/work/ship/maintain/engage × Claude/Agy/Codex/Grok) with full/partial/none badges (`cap-full`, `cap-partial`, `cap-none` CSS classes).
+- **Per-agent radar hexagon SVGs** — 80×80px SVG radar on each agent card; 6-axis polygon filled at 30% opacity with agent theme colour; axis score maps `full`→1.0, `partial`→0.5, `none`→0.0.
+
+**Ecosystem Status + Capacity (BS-16, PR #110)**
+- **`synlynk status`** — terminal platform health: harness compliance table, agent availability, budget pulse (R/W/T capacity bars per agent), 6-cycle capability matrix.
+- **`synlynk status --json`** — machine-readable ecosystem snapshot consumed by Vizor as its live data contract.
+- **Three dispatch modes**: `eco` (respects R/W/T budget gates), `daily-grind` (default), `perf` (no budget gates).
+- **Three new `_preflight_dispatch()` gates**: `CAPACITY_EXCEEDED_INPUT`, `CAPACITY_EXCEEDED_OUTPUT`, `TOOL_PRESSURE`.
+- **New `state.db` tables**: `harness_status`, `cycle_capability`; `probe` command extended to seed Tier 1 capacity baselines.
+- **`synlynk/status.py`** new module; `HarnessSnapshot` dataclass in `hud.py`.
+
+**Modularisation (chore, PRs #103–#109)**
+- Extracted `synlynk/__init__.py` (11,268L) into five focused modules: `synlynk/probe.py`, `synlynk/sentinel.py`, `synlynk/upgrade.py`, `synlynk/dispatch.py`, `synlynk/_constants.py`. `__init__.py` reduced to ~1,500L of orchestration and CLI surface.
+
+### Fixed
+
+**TC-2 dispatch fix arc (PRs #114–#116)**
+- Fixed false-positive TC-2 failures caused by Agy `dispatch_flags` baseline including `--non-interactive` (valid for Agy but flagged as invalid by harness validator). Corrected per-agent flag baseline maps.
+- Fixed `_run_tc2` seeding invalid flags into the passed list on first scan, blocking all subsequent Agy dispatches.
+- `synlynk logs` now shows exit summary + TC-2 preflight gate result per dispatch.
+
+**BS-12 review fixes**
+- `--repair-sops` now merges missing SOP blocks into existing harness fence body instead of replacing the entire fence.
+- TC-5 result wired into `all_passed` in `cmd_doctor`; doctor now exits non-zero when SOPs are missing.
+- Handoff note included in `handoff_task` sent to new agent (was reading context before append).
+- TC-5 fix menu scoped to agents with missing sections only (was firing for all agents in loop).
+- `--flag KEY` (boolean flag without `=`) in `configure agent` now uses `partition` instead of crashing with `ValueError`.
+
+**BS-22 review fixes**
+- Removed `is_placeholder` short-circuit in SVG circles matrix that contradicted the new text capability matrix.
+- CSS class `cap-{support}` now normalised to lowercase; prevents unstyled cells from mixed-case DB values.
+- Removed unreachable dead-code fallback block in `get_capability_level()`.
+
+### Changed
+- `synlynk doctor` interactive fix wizard replaces silent print-and-exit after TC failures.
+- `_check_job_stall()` now also writes `HANDOFF_PENDING` sentinel on STALL_NO_OUTPUT / FLATLINE / QUOTA_EXHAUSTED.
+- `dispatch_agent()` merge layer: baseline → `.agents/<agent>.json` harness overrides → per-call `--grant`/`--revoke`.
+
+---
+
 ## [0.10.0] - 2026-07-03
 
 **Release pitch:** synlynk v0.10.0 is the Developer Preview — install it via pipx, set up your workspace in 60 seconds with the terminal wizard, and get a live browser dashboard that shows exactly what your agent team is doing.
