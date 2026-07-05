@@ -1,4 +1,11 @@
 
+## 2026-07-05
+### BS-13 Live Job Observatory
+
+**Shipped:**
+
+- **PR #117** — BS-13 shipped as PR #117: Live Job Observatory (observatory.py snapshot builder, synlynk watch --live observatory panel, viz Observatory tab, 837 tests passing).
+
 ## 2026-07-04
 ### BS-22 Vizor Ecosystem Status Data Integration
 

@@ -51,6 +51,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [42](./42-pr110-bs16-ecosystem-status.md) | PR #110 — BS-16 Ecosystem Status | [#110](https://github.com/nikhilsoman/synlynk/pull/110) | 2026-07-04 |
 | [43](./43-pr113-bs22-vizor-efficiency.md) | PR #113 — BS-22 Vizor Efficiency Tab | [#113](https://github.com/nikhilsoman/synlynk/pull/113) | 2026-07-04 |
 | [44](./44-pr114-116-tc2-agy-dispatch-fix.md) | PRs #114–#116 — The TC-2 Agent Dispatch Fix Arc | [#114](https://github.com/nikhilsoman/synlynk/pull/114), [#115](https://github.com/nikhilsoman/synlynk/pull/115), [#116](https://github.com/nikhilsoman/synlynk/pull/116) | 2026-07-05 |
+| [45](./45-pr117-bs13-observatory.md) | PR #117 — Live Job Observatory | [#117](https://github.com/nikhilsoman/synlynk/pull/117) | 2026-07-05 |
+
 
 ## Per-PR Post Template
 
