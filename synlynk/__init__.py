@@ -49,6 +49,7 @@ from synlynk.probe import (
     _run_tc2,
     _run_tc3,
     _run_tc4,
+    _run_tc5,
     SOP_BLOCKS,
     cmd_probe,
     _fence_exists,
@@ -2164,6 +2165,13 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 endpoints.append((host, int(port_s) if port_s.isdigit() else 443))
             tc3 = _run_tc3(endpoints)
             tc4 = _run_tc4(agent, db_conn)
+            tc5_files = {
+                "claude": "CLAUDE.md",
+                "agy": "GEMINI.md",
+                "codex": "AGENTS.md",
+                "grok": "GROK.md",
+            }
+            tc5 = _run_tc5({a: tc5_files[a] for a in agents if a in tc5_files})
 
             all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"]
             if not all_passed:
@@ -2214,6 +2222,11 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             print(f"    TC-2 flags:   {'✓' if tc2['passed'] else '✗ failed=' + str(tc2['failed_flags'])}")
             print(f"    TC-3 network: {'✓' if tc3['passed'] else '✗ unreachable=' + str(tc3['unreachable'])}")
             print(f"    TC-4 verbs:   {'✓' if tc4['passed'] else '✗ failed=' + str(tc4['failed_verbs'])}")
+            if tc5["passed"]:
+                print(f"    TC-5 sops:    ✓")
+            else:
+                for ag, missing in tc5["missing"].items():
+                    print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
 
         # Roles fence check
         _DIRECTIVE_MAP = {

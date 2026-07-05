@@ -43,6 +43,66 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     assert "## Repo Hygiene" in content
 
 
+def test_run_tc5_passes_when_all_headers_present(tmp_path):
+    from synlynk.probe import SOP_SECTION_HEADERS, _run_tc5
+
+    fpath = tmp_path / "CLAUDE.md"
+    fpath.write_text("\n".join(SOP_SECTION_HEADERS) + "\nother content")
+    result = _run_tc5({"claude": str(fpath)})
+    assert result["passed"] is True
+    assert result["missing"] == {}
+
+
+def test_run_tc5_reports_missing_sections(tmp_path):
+    from synlynk.probe import _run_tc5
+
+    fpath = tmp_path / "CLAUDE.md"
+    fpath.write_text("## PR Review Discipline\nsome content")
+    result = _run_tc5({"claude": str(fpath)})
+    assert result["passed"] is False
+    missing = result["missing"]["claude"]
+    assert "## Brainstorm-First Policy" in missing
+    assert "## PR Review Discipline" not in missing
+
+
+def test_run_tc5_missing_file_reports_all_headers(tmp_path):
+    from synlynk.probe import SOP_SECTION_HEADERS, _run_tc5
+
+    result = _run_tc5({"claude": str(tmp_path / "CLAUDE.md")})
+    assert result["passed"] is False
+    assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
+
+
+def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "claude": {
+                "cli": "claude",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(
+        synlynk,
+        "_run_tc5",
+        lambda files: {"passed": False, "missing": {"claude": ["## Repo Hygiene"]}},
+    )
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"roles": {}})
+    synlynk.cmd_doctor()
+    out = capsys.readouterr().out
+    assert "TC-5 sops" in out
+    assert "missing 1 section(s)" in out
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

@@ -599,6 +599,20 @@ def _run_tc4(agent_name: str, db_conn) -> dict:
     return {"failed_verbs": failed, "passed": len(failed) == 0}
 
 
+def _run_tc5(directive_files: dict) -> dict:
+    """TC-5: SOP section presence validation."""
+    missing = {}
+    for agent, path in (directive_files or {}).items():
+        try:
+            content = open(path).read() if os.path.exists(path) else ""
+        except OSError:
+            content = ""
+        absent = [header for header in SOP_SECTION_HEADERS if header not in content]
+        if absent:
+            missing[agent] = absent
+    return {"passed": not missing, "missing": missing}
+
+
 def cmd_probe(agent: str = None) -> None:
     agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
     package = sys.modules.get("synlynk")
