@@ -758,7 +758,10 @@ def main() -> None:
         sys.exit(cmd_sync(dry_run=not args.confirm, repair_sops=getattr(args, "repair_sops", False)))
     elif args.command == "configure":
         if getattr(args, "configure_target", None) == "agent":
-            flags = dict(item.split("=", 1) for item in args.flag) if args.flag else {}
+            flags = {}
+            for item in args.flag or []:
+                key, sep, val = item.partition("=")
+                flags[key] = val if sep else True
             envs = dict(item.split("=", 1) for item in args.env) if args.env else {}
             cmd_configure_agent(args.name, flags=flags, envs=envs, network_deps=args.network_dep)
         else:

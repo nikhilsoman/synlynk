@@ -2175,7 +2175,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             }
             tc5 = _run_tc5({a: tc5_files[a] for a in agents if a in tc5_files})
 
-            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"]
+            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
             if not all_passed:
                 any_failed = True
             status = "ok" if all_passed else "degraded"
@@ -2263,10 +2263,10 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                     )
                 elif choice == "escalate":
                     _doctor_maybe_escalate(agent, {"tc4": tc4})
-            if not tc5["passed"]:
+            if tc5["missing"].get(agent):
                 choice = _doctor_fix_menu(agent, "tc5", tc5)
                 if choice == "1":
-                    cmd_sync(dry_run=False, repair_sops=True)
+                    _repair_sops_only(agent_name=agent)
                 elif choice == "escalate":
                     _doctor_maybe_escalate(agent, {"tc5": tc5})
 
@@ -2564,36 +2564,62 @@ def cmd_sync(dry_run: bool = True, repair_sops: bool = False) -> int:
     print()
 
     if repair_sops:
-        from synlynk.probe import SOP_BLOCKS as _SOP_BLOCKS, SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
-
-        directive_files = {
-            "claude": "CLAUDE.md",
-            "agy": "GEMINI.md",
-            "codex": "AGENTS.md",
-            "grok": "GROK.md",
-        }
-        cfg_roles = load_config().get("roles", {})
-        for agent_name in cfg_roles:
-            fpath = directive_files.get(agent_name)
-            if not fpath or not os.path.exists(fpath):
-                continue
-            tc5 = _run_tc5_local({agent_name: fpath})
-            missing_headers = tc5.get("missing", {}).get(agent_name, [])
-            if not missing_headers:
-                continue
-            if dry_run:
-                for missing_header in missing_headers:
-                    print(f"    → repair SOP '{missing_header}' in {fpath}")
-                continue
-            blocks = []
-            for missing_header in missing_headers:
-                idx = _SOP_HEADERS.index(missing_header)
-                blocks.append(_SOP_BLOCKS[idx])
-            _upsert_harness_fence(fpath, harness_version="sop-repair", body="\n".join(blocks))
-            for missing_header in missing_headers:
-                print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
+        _repair_sops_only(dry_run=dry_run)
 
     return 0
+
+
+def _read_harness_fence_body(file_path: str) -> str:
+    """Return the current body inside the synlynk harness fence, if present."""
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return ""
+    match = re.search(
+        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return ""
+    return match.group(1)
+
+
+def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
+    """Repair missing SOP sections without rewriting unrelated sync artifacts."""
+    from synlynk.probe import SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
+
+    directive_files = {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "codex": "AGENTS.md",
+        "grok": "GROK.md",
+    }
+    cfg_roles = load_config().get("roles", {})
+    agent_names = [agent_name] if agent_name else list(cfg_roles)
+    for agent in agent_names:
+        fpath = directive_files.get(agent)
+        if not fpath or not os.path.exists(fpath):
+            continue
+        tc5 = _run_tc5_local({agent: fpath})
+        missing_headers = tc5.get("missing", {}).get(agent, [])
+        if not missing_headers:
+            continue
+        if dry_run:
+            for missing_header in missing_headers:
+                print(f"    → repair SOP '{missing_header}' in {fpath}")
+            continue
+        existing_body = _read_harness_fence_body(fpath)
+        blocks = []
+        for missing_header in missing_headers:
+            idx = _SOP_HEADERS.index(missing_header)
+            blocks.append(SOP_BLOCKS[idx])
+        missing_body = "\n".join(blocks)
+        body = missing_body if not existing_body else f"{existing_body.rstrip('\n')}\n{missing_body}"
+        _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
+        for missing_header in missing_headers:
+            print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
 
 
 def _best_agent_for_story(story_id: str) -> Optional[str]:
@@ -5154,10 +5180,13 @@ def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
             with open(ctx_path, "a") as f:
                 if "## Handoff Note" not in context_text:
                     f.write(handoff_note)
+            with open(ctx_path) as f:
+                context_text = f.read()
         else:
             os.makedirs(os.path.dirname(ctx_path), exist_ok=True)
             with open(ctx_path, "w") as f:
                 f.write(handoff_note.lstrip("\n"))
+            context_text = handoff_note.lstrip("\n")
 
         previous.append(orig_agent)
         conn.execute(
@@ -6290,8 +6319,6 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
     _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
-    from synlynk.probe import SOP_BLOCKS as _SOP_BLOCKS
-
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
@@ -6387,7 +6414,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 ```
 """
 
-    _sop_section = "\n".join(_SOP_BLOCKS) + "\n"
+    _sop_section = "\n".join(SOP_BLOCKS) + "\n"
 
     _claude_md = (
         "# synlynk Claude Instructions\n\n"

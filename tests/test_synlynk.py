@@ -119,6 +119,29 @@ def test_sync_repair_sops_injects_missing_sections(tmp_path, isolated_db, monkey
     assert content.count("## PR Review Discipline") == 1
 
 
+def test_sync_repair_sops_preserves_existing_fence_body(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}}')
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text("{}")
+    (tmp_path / "CLAUDE.md").write_text(
+        "# Claude Instructions\n\n"
+        "<!-- synlynk:harness vsop-repair verified:2026-07-05T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## PR Review Discipline\n"
+        "probe-written content\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+
+    synlynk.cmd_sync(dry_run=False, repair_sops=True)
+
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "probe-written content" in content
+    assert "## Brainstorm-First Policy" in content
+    assert content.count("probe-written content") == 1
+
+
 def test_sync_repair_sops_is_idempotent(tmp_path, isolated_db, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
@@ -435,6 +458,7 @@ def test_jobs_handoff_updates_db_and_dispatches(tmp_path, isolated_db, monkeypat
     assert "agy" in prev
     assert len(dispatched) == 1
     assert dispatched[0][0][0] == "codex"
+    assert "## Handoff Note" in dispatched[0][1]["task"]
 
 
 def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, monkeypatch):
@@ -489,6 +513,67 @@ def test_doctor_wizard_escalate_option_calls_dispatch(tmp_path, isolated_db, mon
     assert len(dispatched) == 1
     assert dispatched[0][0][0] == "claude"
     assert "doctor" in dispatched[0][1]["task"].lower()
+
+
+def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "claude": {
+                "cli": "claude",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(
+        synlynk,
+        "_run_tc5",
+        lambda files: {"passed": False, "missing": {"claude": ["## Repo Hygiene"]}},
+    )
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"roles": {"claude": ["pm"]}})
+    monkeypatch.setattr(synlynk, "cmd_sync", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("cmd_sync should not be called")))
+    monkeypatch.setattr(synlynk, "_doctor_fix_menu", lambda agent, tc_name, tc: "1")
+    called = {}
+
+    def fake_repair(agent_name=None, dry_run=False):
+        called["agent_name"] = agent_name
+        called["dry_run"] = dry_run
+
+    monkeypatch.setattr(synlynk, "_repair_sops_only", fake_repair)
+
+    synlynk.cmd_doctor()
+
+    assert called == {"agent_name": "claude", "dry_run": False}
+
+
+def test_cli_configure_agent_accepts_bare_flag(monkeypatch):
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_configure_agent(name, flags=None, envs=None, network_deps=None):
+        captured["name"] = name
+        captured["flags"] = flags
+
+    monkeypatch.setattr(synlynk, "cmd_configure_agent", fake_configure_agent)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "configure", "agent", "codex", "--flag", "no-stream", "--flag", "timeout=60"],
+    )
+
+    cli_mod.main()
+
+    assert captured["name"] == "codex"
+    assert captured["flags"] == {"no-stream": True, "timeout": "60"}
 
 
 def test_bs14_schema_tables_exist(tmp_path):

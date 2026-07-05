@@ -47,6 +47,7 @@ def _load_harness_overrides(agent: str) -> dict:
             data = json.load(f)
         return data.get("harness_overrides") or empty
     except (json.JSONDecodeError, OSError):
+        sys.stderr.write(f"Warning: corrupt {path}, ignoring harness overrides\n")
         return empty
 
 
