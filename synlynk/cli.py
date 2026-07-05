@@ -181,6 +181,7 @@ def main() -> None:
         cmd_story_create,
         cmd_story_list,
         cmd_sync,
+        cmd_configure_agent,
         cmd_team_status,
         cmd_watch,
         dispatch_agent,
@@ -300,6 +301,22 @@ def main() -> None:
     sync_parser.add_argument(
         "--repair-sops", action="store_true", dest="repair_sops",
         help="Re-inject missing SOP sections into directive files")
+
+    configure_parser = subparsers.add_parser(
+        "configure", help="Configure synlynk components")
+    configure_sub = configure_parser.add_subparsers(dest="configure_target")
+    agent_configure_parser = configure_sub.add_parser(
+        "agent", help="Configure a specific agent's harness")
+    agent_configure_parser.add_argument("name", help="Agent name (claude, agy, codex, grok)")
+    agent_configure_parser.add_argument(
+        "--flag", action="append", default=[], metavar="KEY=VAL",
+        help="Set a dispatch flag override (repeatable)")
+    agent_configure_parser.add_argument(
+        "--env", action="append", default=[], metavar="KEY=VAL",
+        help="Set an env var override (repeatable)")
+    agent_configure_parser.add_argument(
+        "--network-dep", action="append", default=[], metavar="HOST:PORT",
+        help="Add a required network endpoint (repeatable)")
 
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
@@ -718,6 +735,13 @@ def main() -> None:
         sys.exit(cmd_repair(dry_run=not args.confirm))
     elif args.command == "sync":
         sys.exit(cmd_sync(dry_run=not args.confirm, repair_sops=getattr(args, "repair_sops", False)))
+    elif args.command == "configure":
+        if getattr(args, "configure_target", None) == "agent":
+            flags = dict(item.split("=", 1) for item in args.flag) if args.flag else {}
+            envs = dict(item.split("=", 1) for item in args.env) if args.env else {}
+            cmd_configure_agent(args.name, flags=flags, envs=envs, network_deps=args.network_dep)
+        else:
+            configure_parser.print_help()
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:

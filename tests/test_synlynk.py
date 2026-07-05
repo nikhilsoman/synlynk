@@ -134,6 +134,42 @@ def test_sync_repair_sops_is_idempotent(tmp_path, isolated_db, monkeypatch):
     assert content_first == content_second
 
 
+def test_configure_agent_writes_harness_overrides(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "codex.json").write_text('{"context_mode": "full"}')
+
+    synlynk.cmd_configure_agent("codex", flags={"timeout": "60"}, envs={}, network_deps=[])
+
+    data = json.loads((tmp_path / ".agents" / "codex.json").read_text())
+    assert data["harness_overrides"]["dispatch_flags"]["timeout"] == "60"
+
+
+def test_configure_agent_creates_file_if_missing(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+
+    synlynk.cmd_configure_agent("agy", flags={}, envs={"PYTHONUNBUFFERED": "1"}, network_deps=[])
+
+    data = json.loads((tmp_path / ".agents" / "agy.json").read_text())
+    assert data["harness_overrides"]["env"]["PYTHONUNBUFFERED"] == "1"
+
+
+def test_configure_agent_preserves_existing_keys(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text(
+        '{"context_mode": "full", "harness_overrides": {"dispatch_flags": {"model": "claude-3"}}}'
+    )
+
+    synlynk.cmd_configure_agent("claude", flags={"timeout": "30"}, envs={}, network_deps=[])
+
+    data = json.loads((tmp_path / ".agents" / "claude.json").read_text())
+    assert data["context_mode"] == "full"
+    assert data["harness_overrides"]["dispatch_flags"]["model"] == "claude-3"
+    assert data["harness_overrides"]["dispatch_flags"]["timeout"] == "30"
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

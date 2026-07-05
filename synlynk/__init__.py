@@ -4555,6 +4555,54 @@ def cmd_agent_configure(agent_name: str) -> None:
     print(f"\n  {_GREEN}✓{_RESET} Written {path}")
 
 
+def cmd_configure_agent(
+    name: str,
+    flags: dict = None,
+    envs: dict = None,
+    network_deps: list = None,
+) -> None:
+    """Write per-project harness overrides to .agents/<name>.json."""
+    flags = flags or {}
+    envs = envs or {}
+    network_deps = network_deps or []
+
+    os.makedirs(".agents", exist_ok=True)
+    profile_path = os.path.join(".agents", f"{name}.json")
+    profile: dict = {}
+    if os.path.exists(profile_path):
+        try:
+            with open(profile_path) as f:
+                profile = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            profile = {}
+
+    overrides = profile.setdefault(
+        "harness_overrides",
+        {"dispatch_flags": {}, "env": {}, "network_deps": []},
+    )
+    overrides.setdefault("dispatch_flags", {})
+    overrides.setdefault("env", {})
+    overrides.setdefault("network_deps", [])
+
+    overrides["dispatch_flags"].update(flags)
+    overrides["env"].update(envs)
+    for dep in network_deps:
+        if dep not in overrides["network_deps"]:
+            overrides["network_deps"].append(dep)
+
+    with open(profile_path, "w") as f:
+        json.dump(profile, f, indent=2)
+        f.write("\n")
+
+    print(f"  ✓ {name}: harness overrides written to {profile_path}")
+    if flags:
+        print(f"    flags: {flags}")
+    if envs:
+        print(f"    env:   {envs}")
+    if network_deps:
+        print(f"    deps:  {network_deps}")
+
+
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""
     relay = SynlynkRelay(port=port)
