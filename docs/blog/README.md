@@ -48,6 +48,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [39](./39-prTBD-bs21-vizor.md) | PR #101 — BS-21 Vizor: Local Browser Dashboard | [#101](https://github.com/nikhilsoman/synlynk/pull/101) | 2026-07-03 |
 | **[40](./40-v010-developer-preview.md)** | **v0.10.0 — Developer Preview (Named Release)** | [#89–#102](https://github.com/nikhilsoman/synlynk/releases/tag/v0.10.0) | **2026-07-03** |
 | [41](./41-prTBD-bs13-workspace-hud.md) | BS-13 Workspace HUD | TBD | 2026-07-03 |
+| [42](./42-pr110-bs16-ecosystem-status.md) | PR #110 — BS-16 Ecosystem Status | [#110](https://github.com/nikhilsoman/synlynk/pull/110) | 2026-07-04 |
+| [43](./43-pr113-bs22-vizor-efficiency.md) | PR #113 — BS-22 Vizor Efficiency Tab | [#113](https://github.com/nikhilsoman/synlynk/pull/113) | 2026-07-04 |
+| [44](./44-pr114-116-tc2-agy-dispatch-fix.md) | PRs #114–#116 — The TC-2 Agent Dispatch Fix Arc | [#114](https://github.com/nikhilsoman/synlynk/pull/114), [#115](https://github.com/nikhilsoman/synlynk/pull/115), [#116](https://github.com/nikhilsoman/synlynk/pull/116) | 2026-07-05 |
 
 ## Per-PR Post Template
 
