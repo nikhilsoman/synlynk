@@ -4943,7 +4943,8 @@ def _collect_github_issues(signal_cfg: dict) -> list:
     return findings
 
 
-def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None) -> None:
+def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None,
+             stalled: bool = False) -> None:
     """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
     import time as _time
 
@@ -4954,6 +4955,45 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             return
         with open(summary_path) as f:
             print(f.read(), end="")
+        return
+
+    if stalled:
+        sentinel_path = os.path.join(".synlynk", "sentinel.md")
+        sentinel_text = ""
+        if os.path.exists(sentinel_path):
+            with open(sentinel_path) as f:
+                sentinel_text = f.read()
+        pending_ids = _stalled_job_ids_from_sentinel(sentinel_text)
+        if not pending_ids:
+            print("No stalled jobs awaiting handoff.")
+            return
+
+        conn = _get_db()
+        print(f"\n  {_BOLD}Stalled jobs — awaiting handoff{_RESET}\n")
+        print(f"  {'JOB ID':14}  {'AGENT':8}  {'AGE':8}  {'TASK':36}  RECOMMENDED")
+        print("  " + "─" * 90)
+        try:
+            for job_id in sorted(pending_ids):
+                row = conn.execute(
+                    "SELECT agent, task, started_at FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if not row:
+                    continue
+                agent, task_text, started_at = row
+                age = "?"
+                try:
+                    if started_at:
+                        started_ts = _time.mktime(_time.strptime(started_at, "%Y-%m-%dT%H:%M:%S"))
+                        age_s = int(_time.time() - started_ts)
+                        age = f"{age_s // 60}m{age_s % 60:02d}s" if age_s >= 60 else f"{age_s}s"
+                except Exception:
+                    age = "?"
+                recommended = _recommend_handoff_agent(task_text or "", agent, conn)
+                print(f"  {job_id:14}  {agent:8}  {age:8}  {(task_text or '')[:36]:36}  → {recommended}")
+        finally:
+            conn.close()
+        print(f"\n  Run: synlynk jobs handoff <job_id> [--to <agent>]\n")
         return
 
     def _parse_age(enqueued_at: str) -> str:
@@ -5038,6 +5078,87 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             pass
     else:
         _render()
+
+
+def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
+    """Transfer a stalled job to another agent, preserving context."""
+    from synlynk.dispatch import dispatch_agent as _dispatch
+
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT agent, task, story_id, handoff_count, previous_agents FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            print(f"  ✗ Job {job_id} not found.")
+            return
+
+        orig_agent, task_text, story_id, handoff_count, previous_agents_json = row
+        previous = json.loads(previous_agents_json) if previous_agents_json else []
+        if not to_agent:
+            to_agent = _recommend_handoff_agent(task_text or "", orig_agent, conn)
+
+        ctx_path = os.path.join(".synlynk", "contexts", f"{job_id}.md")
+        context_text = ""
+        if os.path.exists(ctx_path):
+            with open(ctx_path) as f:
+                context_text = f.read()
+        handoff_note = (
+            "\n## Handoff Note\n"
+            f"- Previous agent: {orig_agent}\n"
+            "- Reason: HANDOFF_PENDING (stall/quota/flatline)\n"
+            f"- Handoff #{int(handoff_count or 0) + 1}\n"
+        )
+        if context_text:
+            with open(ctx_path, "a") as f:
+                if "## Handoff Note" not in context_text:
+                    f.write(handoff_note)
+        else:
+            os.makedirs(os.path.dirname(ctx_path), exist_ok=True)
+            with open(ctx_path, "w") as f:
+                f.write(handoff_note.lstrip("\n"))
+
+        previous.append(orig_agent)
+        conn.execute(
+            "UPDATE daemon_jobs SET handoff_count=?, previous_agents=? WHERE job_id=?",
+            (int(handoff_count or 0) + 1, json.dumps(previous), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    sentinel_path = os.path.join(".synlynk", "sentinel.md")
+    if os.path.exists(sentinel_path):
+        with open(sentinel_path) as f:
+            lines = f.readlines()
+        with open(sentinel_path, "w") as f:
+            for line in lines:
+                if job_id in line and "HANDOFF_PENDING" in line:
+                    continue
+                f.write(line)
+
+    handoff_task = task_text
+    if context_text:
+        handoff_task = f"{task_text}\n\n{context_text}"
+    print(f"  ✓ Handing off {job_id} from {orig_agent} → {to_agent}")
+    result = _dispatch(
+        to_agent,
+        task=handoff_task,
+        story_id=story_id or None,
+        context_mode="none",
+        skip_preflight=False,
+    )
+
+    new_context_file = result.get("context_file")
+    if not new_context_file:
+        new_context_file = os.path.join(".synlynk", "contexts", f"{result.get('id', '')}.md")
+    if new_context_file:
+        os.makedirs(os.path.dirname(new_context_file), exist_ok=True)
+        with open(new_context_file, "w") as f:
+            f.write(handoff_task)
+
+    print(f"  ✓ New job: {result.get('id', '?')}")
 
 
 def _dedup_findings(findings: list) -> list:
@@ -5177,6 +5298,69 @@ def _file_gh_issue(finding: dict, investigation: dict, dry_run: bool) -> str:
         print(f"  [support] gh issue create failed: {result.stderr[:200]}")
         return ""
     return result.stdout.strip()
+
+
+def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
+    """Pick the highest cycle-capability agent for the stalled task."""
+    try:
+        from synlynk.status import _classify_task_type
+    except Exception:
+        _classify_task_type = lambda prompt: "default"  # type: ignore
+
+    task_type = _classify_task_type(task_text or "")
+    task_to_cycle = {
+        "implement": "work",
+        "review": "engage",
+        "plan": "plan",
+        "debug": "maintain",
+        "test": "maintain",
+        "docs": "maintain",
+        "default": "work",
+    }
+    cycle = task_to_cycle.get(task_type, "work")
+
+    try:
+        rows = db_conn.execute(
+            "SELECT agent_name, support, verb_count, full_count, partial_count "
+            "FROM cycle_capability WHERE cycle=?",
+            (cycle,),
+        ).fetchall()
+    except Exception:
+        rows = []
+
+    ranked = []
+    for agent_name, support, verb_count, full_count, partial_count in rows:
+        if agent_name == failed_agent:
+            continue
+        support_score = {"full": 300, "partial": 150, "none": 0}.get(support, 0)
+        score = (
+            support_score
+            + int(full_count or 0) * 10
+            + int(partial_count or 0) * 5
+            + int(verb_count or 0)
+        )
+        ranked.append((score, agent_name))
+
+    if ranked:
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return ranked[0][1]
+
+    for agent_name in AGENT_CAPABILITY_BASELINES:
+        if agent_name != failed_agent:
+            return agent_name
+    return failed_agent
+
+
+def _stalled_job_ids_from_sentinel(sentinel_text: str) -> set:
+    """Extract stalled job ids from HANDOFF_PENDING sentinel lines."""
+    pending_ids = set()
+    for line in (sentinel_text or "").splitlines():
+        if "HANDOFF_PENDING" not in line:
+            continue
+        match = re.search(r"Job (job-[\w-]+)", line)
+        if match:
+            pending_ids.add(match.group(1))
+    return pending_ids
 
 
 def _extract_diff(text: str) -> Optional[str]:

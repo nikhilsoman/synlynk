@@ -368,6 +368,75 @@ def test_stall_detection_writes_handoff_pending(tmp_path, isolated_db, monkeypat
     assert "HANDOFF_PENDING" in sentinel_content
 
 
+def test_jobs_stalled_lists_handoff_pending_jobs(tmp_path, isolated_db, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "sentinel.md").write_text(
+        "[HANDOFF_PENDING] Job job-aaa on agent 'agy' is awaiting handoff.\n"
+    )
+
+    from synlynk import _get_db, cmd_jobs
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, handoff_count) "
+        "VALUES ('job-aaa', 'agy', 'write tests', 'failed', '2026-07-05T10:00:00', 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_jobs(stalled=True)
+    out = capsys.readouterr().out
+    assert "job-aaa" in out
+    assert "agy" in out
+
+
+def test_jobs_handoff_updates_db_and_dispatches(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk" / "contexts").mkdir(parents=True)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"codex": ["implement"]}}')
+    ctx_file = tmp_path / ".synlynk" / "contexts" / "job-bbb.md"
+    ctx_file.write_text("# Context\noriginal task content\n")
+    (tmp_path / ".synlynk" / "sentinel.md").write_text(
+        "[HANDOFF_PENDING] Job job-bbb on agent 'agy' is awaiting handoff.\n"
+    )
+
+    from synlynk import _get_db
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, handoff_count, previous_agents) "
+        "VALUES ('job-bbb', 'agy', 'implement feature', 'failed', '2026-07-05T10:00:00', 0, NULL)"
+    )
+    conn.commit()
+    conn.close()
+
+    dispatched = []
+    monkeypatch.setattr(
+        "synlynk.dispatch.dispatch_agent",
+        lambda *a, **kw: dispatched.append((a, kw)) or {"id": "job-ccc"},
+    )
+
+    from synlynk import cmd_jobs_handoff
+
+    cmd_jobs_handoff("job-bbb", to_agent="codex")
+    content = ctx_file.read_text()
+    assert "## Handoff Note" in content
+    assert "agy" in content
+
+    conn2 = _get_db()
+    row = conn2.execute(
+        "SELECT handoff_count, previous_agents FROM daemon_jobs WHERE job_id='job-bbb'"
+    ).fetchone()
+    conn2.close()
+    assert row[0] == 1
+    prev = json.loads(row[1])
+    assert "agy" in prev
+    assert len(dispatched) == 1
+    assert dispatched[0][0][0] == "codex"
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

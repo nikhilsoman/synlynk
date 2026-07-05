@@ -159,6 +159,7 @@ def main() -> None:
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
+        cmd_jobs_handoff,
         cmd_join,
         cmd_launch,
         cmd_launch_ftue,
@@ -418,6 +419,12 @@ def main() -> None:
     jobs_parser.add_argument("--summary", metavar="JOB_ID")
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
+    jobs_parser.add_argument("--stalled", action="store_true",
+        help="List jobs awaiting handoff")
+    jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
+    handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another agent")
+    handoff_p.add_argument("job_id")
+    handoff_p.add_argument("--to", dest="to_agent", default=None)
 
     relay_parser = subparsers.add_parser("relay", help="Relay event broker commands")
     relay_sub = relay_parser.add_subparsers(dest="relay_action")
@@ -622,9 +629,13 @@ def main() -> None:
             print(f"Error: {e}")
             sys.exit(1)
     elif args.command == "jobs":
-        cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
-                 watch=getattr(args, "watch", False),
-                 summary=getattr(args, "summary", None))
+        if getattr(args, "jobs_cmd", None) == "handoff":
+            cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))
+        else:
+            cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
+                     watch=getattr(args, "watch", False),
+                     summary=getattr(args, "summary", None),
+                     stalled=getattr(args, "stalled", False))
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
