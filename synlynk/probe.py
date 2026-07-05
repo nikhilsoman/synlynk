@@ -12,6 +12,75 @@ from typing import Optional
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.sentinel import _write_sentinel_alert
 
+SOP_SECTION_HEADERS = [
+    "## PR Review Discipline",
+    "## Brainstorm-First Policy",
+    "## Design → Plan → Build Sequence",
+    "## Capability-Based Task Allocation",
+    "## Cost Visibility",
+    "## Repo Hygiene",
+]
+
+_PR_REVIEW_SOP = """\
+## PR Review Discipline
+The agent that implements a feature never reviews or merges its own PR.
+- After opening a PR, post a review request to the assigned reviewer agent
+- Reviewer runs `synlynk pr check <pr>` before approving
+- Merge only after reviewer approval — never self-merge
+"""
+
+_BRAINSTORM_SOP = """\
+## Brainstorm-First Policy
+Every feature and epic requires an approved design spec before implementation.
+- Claude runs the brainstorm; output is a spec in `docs/superpowers/specs/`
+- No implementation starts without an approved spec committed to the branch
+- No code before design approval — this applies to all agents
+"""
+
+_DESIGN_SEQUENCE_SOP = """\
+## Design → Plan → Build Sequence
+All work follows this sequence without exception:
+1. Brainstorm → design spec (`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`)
+2. Design spec → implementation plan (`docs/superpowers/plans/YYYY-MM-DD-<topic>.md`)
+3. Implementation plan → capability-allocated tasks dispatched to agents
+Never start step N+1 before step N is approved and committed.
+"""
+
+_CAPABILITY_ALLOCATION_SOP = """\
+## Capability-Based Task Allocation
+Tasks are routed by agent role — never self-assign outside your role.
+- Python CLI / backend / tests: Codex
+- HTML/CSS / templates / content / documentation: Agy
+- PM / roadmap / code review / deployments: Claude
+Run `synlynk roles` to confirm your current role before starting any task.
+"""
+
+_COST_VISIBILITY_SOP = """\
+## Cost Visibility
+Log an estimated cost before each significant dispatch.
+- Include `estimated_cost: $X.XX` in job context headers
+- If estimated cost exceeds the session budget (check `synlynk status`), flag to Claude first
+- Append actual cost to project-docs/costs.md after each session
+"""
+
+_REPO_HYGIENE_SOP = """\
+## Repo Hygiene
+- Never commit directly to `main` or `master`
+- Branch naming: `feat/<agent>/<description>`, `fix/<agent>/<description>`
+- Every commit requires a Co-Authored-By trailer matching your agent identity
+- Use a dedicated worktree per feature: `git worktree add ../<slug> <branch>`
+- Run `git branch --show-current` before every commit to confirm you're on the right branch
+"""
+
+SOP_BLOCKS = [
+    _PR_REVIEW_SOP,
+    _BRAINSTORM_SOP,
+    _DESIGN_SEQUENCE_SOP,
+    _CAPABILITY_ALLOCATION_SOP,
+    _COST_VISIBILITY_SOP,
+    _REPO_HYGIENE_SOP,
+]
+
 
 def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     import hashlib as _hashlib

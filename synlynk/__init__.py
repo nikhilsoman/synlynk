@@ -49,6 +49,7 @@ from synlynk.probe import (
     _run_tc2,
     _run_tc3,
     _run_tc4,
+    SOP_BLOCKS,
     cmd_probe,
     _fence_exists,
     _probe_model_version,
@@ -5890,6 +5891,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
     _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
+    from synlynk.probe import SOP_BLOCKS as _SOP_BLOCKS
 
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
@@ -5986,6 +5988,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 ```
 """
 
+    _sop_section = "\n".join(_SOP_BLOCKS) + "\n"
+
     _claude_md = (
         "# synlynk Claude Instructions\n\n"
         "## Identity & Attribution\n"
@@ -6005,6 +6009,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )
@@ -6028,6 +6033,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )
@@ -6051,6 +6057,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )
@@ -6074,6 +6081,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol
     )

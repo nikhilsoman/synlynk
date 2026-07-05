@@ -22,6 +22,27 @@ def test_agent_capability_baselines_exist():
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
 
 
+def test_sop_section_headers_defined():
+    from synlynk.probe import SOP_SECTION_HEADERS
+
+    assert len(SOP_SECTION_HEADERS) == 6
+    assert "## PR Review Discipline" in SOP_SECTION_HEADERS
+    assert "## Brainstorm-First Policy" in SOP_SECTION_HEADERS
+    assert "## Design → Plan → Build Sequence" in SOP_SECTION_HEADERS
+    assert "## Capability-Based Task Allocation" in SOP_SECTION_HEADERS
+    assert "## Cost Visibility" in SOP_SECTION_HEADERS
+    assert "## Repo Hygiene" in SOP_SECTION_HEADERS
+
+
+def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "n")
+    synlynk.init(force=True, agents=["claude"], org="test-org", repo="test/repo", mode="solo")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "## PR Review Discipline" in content
+    assert "## Repo Hygiene" in content
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db
