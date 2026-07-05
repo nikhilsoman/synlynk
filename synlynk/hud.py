@@ -464,8 +464,7 @@ def render_observatory_panel(buf: FrameBuffer, jobs: list, rollups: dict, cols: 
                 cost = _humanize_currency(job.get("cost_usd"))
                 tokens = _humanize_tokens(job.get("input_tokens"), job.get("output_tokens"))
                 line = (
-                    f"  {short_id:<8} | {agent:<8} | {stage_name:<8} | "
-                    f"{age:<8} | {cost:<8} | {tokens}"
+                    f"  {short_id:<8} | {agent:<8} | {age:<8} | {cost:<8} | {tokens}"
                 )
                 buf.set_line(row, line)
                 row += 1

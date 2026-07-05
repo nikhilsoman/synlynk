@@ -170,10 +170,13 @@ def _merge_telemetry(telemetry_rows: list[dict]) -> dict[str, dict]:
             value = row.get(key)
             if value is None:
                 continue
+            parsed = _safe_float(value) if key == "cost_usd" else _safe_int(value)
+            if parsed is None:
+                continue
             if key in bucket:
-                bucket[key] = (bucket[key] or 0) + (float(value) if key == "cost_usd" else int(float(value)))
+                bucket[key] = (bucket[key] or 0) + parsed
             else:
-                bucket[key] = float(value) if key == "cost_usd" else int(float(value))
+                bucket[key] = parsed
         for key in (
             "agent",
             "originating_agent",
