@@ -170,6 +170,66 @@ def test_configure_agent_preserves_existing_keys(tmp_path, isolated_db, monkeypa
     assert data["harness_overrides"]["dispatch_flags"]["timeout"] == "30"
 
 
+def test_load_harness_overrides_returns_empty_when_no_file(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.dispatch import _load_harness_overrides
+
+    assert _load_harness_overrides("codex") == {
+        "dispatch_flags": {},
+        "env": {},
+        "network_deps": [],
+    }
+
+
+def test_load_harness_overrides_reads_from_agents_json(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "codex.json").write_text(
+        json.dumps(
+            {
+                "harness_overrides": {
+                    "dispatch_flags": {"timeout": "60"},
+                    "env": {},
+                    "network_deps": [],
+                }
+            }
+        )
+    )
+    from synlynk.dispatch import _load_harness_overrides
+
+    result = _load_harness_overrides("codex")
+    assert result["dispatch_flags"]["timeout"] == "60"
+
+
+def test_dispatch_agent_applies_harness_overrides(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "claude.json").write_text(
+        json.dumps(
+            {
+                "harness_overrides": {
+                    "dispatch_flags": {},
+                    "env": {"MY_VAR": "42"},
+                    "network_deps": [],
+                }
+            }
+        )
+    )
+    captured_env = {}
+
+    def fake_popen(cmd, env=None, **kwargs):
+        captured_env.update(env or {})
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr("synlynk.dispatch.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda *args, **kwargs: "unknown")
+    from synlynk.dispatch import dispatch_agent
+
+    with pytest.raises(RuntimeError):
+        dispatch_agent("claude", task="test", context_mode="none", skip_preflight=True)
+    assert captured_env.get("MY_VAR") == "42"
+
+
 def test_bs14_schema_tables_exist(tmp_path):
     import sqlite3
     from synlynk import _migrate_db

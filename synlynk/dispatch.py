@@ -36,6 +36,20 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return list(dispatch_flags or [])
 
 
+def _load_harness_overrides(agent: str) -> dict:
+    """Read per-project harness overrides from .agents/<agent>.json."""
+    empty = {"dispatch_flags": {}, "env": {}, "network_deps": []}
+    path = os.path.join(".agents", f"{agent}.json")
+    if not os.path.exists(path):
+        return empty
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data.get("harness_overrides") or empty
+    except (json.JSONDecodeError, OSError):
+        return empty
+
+
 def _spawn_with_pty_fallback(cmd, env, cwd):
     """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -452,6 +466,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     baselines = baselines_map[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
+    overrides = _load_harness_overrides(agent)
+    for key, value in overrides.get("dispatch_flags", {}).items():
+        flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
         _get_db_fn = _pkg("_get_db")
@@ -554,11 +571,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
     contract = baselines.get("headless_contract", {})
-    env = os.environ.copy()
+    proc_env = os.environ.copy()
+    proc_env.update(overrides.get("env", {}))
     for var in contract.get("env_vars_required", []):
         if "=" in var:
             k, v = var.split("=", 1)
-            env[k] = v
+            proc_env[k] = v
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
@@ -566,7 +584,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
         cwd=os.getcwd(),
-        env=env,
+        env=proc_env,
     )
 
     job = {
