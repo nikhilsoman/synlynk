@@ -52,6 +52,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [43](./43-pr113-bs22-vizor-efficiency.md) | PR #113 — BS-22 Vizor Efficiency Tab | [#113](https://github.com/nikhilsoman/synlynk/pull/113) | 2026-07-04 |
 | [44](./44-pr114-116-tc2-agy-dispatch-fix.md) | PRs #114–#116 — The TC-2 Agent Dispatch Fix Arc | [#114](https://github.com/nikhilsoman/synlynk/pull/114), [#115](https://github.com/nikhilsoman/synlynk/pull/115), [#116](https://github.com/nikhilsoman/synlynk/pull/116) | 2026-07-05 |
 | [45](./45-pr117-bs13-observatory.md) | PR #117 — Live Job Observatory | [#117](https://github.com/nikhilsoman/synlynk/pull/117) | 2026-07-05 |
+| [46](./46-pr118-bs22-vizor-efficiency.md) | PR #118 — BS-22: Vizor Gets Its Eyes | [#118](https://github.com/nikhilsoman/synlynk/pull/118) | 2026-07-05 |
+| [47](./47-pr119-bs12-agent-autonomy-bridge.md) | PR #119 — BS-12: The Agent Autonomy Bridge | [#119](https://github.com/nikhilsoman/synlynk/pull/119) | 2026-07-05 |
+| **[48](./48-v011-agent-ecosystem-operational-layer.md)** | **v0.11.0 — The Agent Ecosystem Operational Layer (Named Release)** | [v0.11.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.11.0) | **2026-07-05** |
 
 
 ## Per-PR Post Template
