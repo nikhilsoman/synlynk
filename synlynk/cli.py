@@ -12,7 +12,8 @@ def cmd_watch(args) -> None:
     import tty
 
     from synlynk import _resolve_db_path
-    from synlynk.hud import CYCLES, FrameBuffer, HUDRenderer, HarnessSnapshot, JobSnapshot, LiveRenderer, _get_terminal_size
+    from synlynk.hud import CYCLES, FrameBuffer, HUDRenderer, HarnessSnapshot, JobSnapshot, _get_terminal_size, render_observatory_panel
+    from synlynk.observatory import build_job_observatory_snapshot
 
     jobs_file = os.path.join(_SYNLYNK_DIR, "jobs.json")
     if not os.path.exists(jobs_file):
@@ -44,7 +45,7 @@ def cmd_watch(args) -> None:
 
         rows, cols = _get_terminal_size()
         buf = FrameBuffer(rows, cols)
-        renderer = LiveRenderer(buf) if live_mode else HUDRenderer(buf)
+        renderer = HUDRenderer(buf)
         rendered_once = False
 
         while True:
@@ -60,12 +61,14 @@ def cmd_watch(args) -> None:
                 if cols < 60:
                     renderer.render_narrow_warning(cols)
                 elif live_mode:
-                    if show_all:
-                        active_jobs = snapshot.active_jobs() + snapshot.recent_jobs(n=10)
-                    else:
-                        active_jobs = snapshot.active_jobs()
-                    renderer.render(active_jobs=active_jobs, show_all=show_all,
-                                    refreshed_s=int(now - last_refresh))
+                    observatory = build_job_observatory_snapshot()
+                    summary = snapshot.cycle_summary()
+                    harness_data = harness_snapshot.load()
+                    row = 0
+                    row += renderer.render_header(summary, platform_expanded, row, harness_data=harness_data)
+                    row += render_observatory_panel(buf, observatory["jobs"], observatory["rollups"], cols, start_row=row)
+                    if rows - 2 > row:
+                        buf.set_line(rows - 2, "  q to quit  ·  r to refresh")
                 else:
                     selected_cycle = CYCLES[selected_cycle_idx]
                     summary = snapshot.cycle_summary()

@@ -46,6 +46,32 @@ def _elapsed_s(started_at: Optional[str]) -> int:
     return max(0, int(time.time() - dt.timestamp()))
 
 
+def _humanize_seconds(seconds: Optional[int]) -> str:
+    if seconds is None:
+        return "—"
+    seconds = max(0, int(seconds))
+    minutes, secs = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
+
+
+def _humanize_currency(amount: Optional[float]) -> str:
+    if amount is None:
+        return "—"
+    return f"${amount:.2f}"
+
+
+def _humanize_tokens(input_tokens: Optional[int], output_tokens: Optional[int]) -> str:
+    total = (input_tokens or 0) + (output_tokens or 0)
+    if total >= 1000:
+        return f"{total/1000:.1f}k"
+    return str(total)
+
+
 def _get_terminal_size() -> tuple[int, int]:
     size = shutil.get_terminal_size(fallback=(80, 24))
     return size.lines, size.columns
@@ -393,3 +419,55 @@ class LiveRenderer:
         self.buf.set_line(rows - 2, footer)
         self.buf.set_line(rows - 1,
             f"  {DIM}synlynk watch for full workspace HUD{RESET}")
+
+
+def render_observatory_panel(buf: FrameBuffer, jobs: list, rollups: dict, cols: int, start_row: int = 0) -> int:
+    """Render the live observatory job board into a framebuffer."""
+    jobs = [job for job in jobs if isinstance(job, dict)]
+    rollups = rollups or {}
+    row = start_row
+
+    header = (
+        f"{BOLD}\033[38;5;75mOBSERVATORY{RESET}  "
+        f"{_humanize_currency(rollups.get('total_cost'))} total  ·  "
+        f"{rollups.get('active_count', 0)} active  ·  "
+        f"{rollups.get('total_requests', 0)} reqs  ·  "
+        f"{rollups.get('total_tokens', 0)} tokens{RESET}"
+    )
+    buf.set_line(row, header)
+    row += 1
+
+    if not jobs:
+        buf.set_line(row, f"{DIM}  no live jobs in this workspace{RESET}")
+        return row - start_row + 1
+
+    repos: dict[str, dict[str, list[dict]]] = {}
+    for job in jobs:
+        repo = str(job.get("repo") or "unknown")
+        stage = str(job.get("stage") or job.get("status") or "unknown")
+        repos.setdefault(repo, {}).setdefault(stage, []).append(job)
+
+    for repo_name in sorted(repos):
+        repo_jobs = sum(len(items) for items in repos[repo_name].values())
+        repo_cost = sum(float(job.get("cost_usd") or 0.0) for stage_jobs in repos[repo_name].values() for job in stage_jobs)
+        buf.set_line(row, f"{BOLD}{repo_name}{RESET}  {DIM}{repo_jobs} jobs · {_humanize_currency(repo_cost)}{RESET}")
+        row += 1
+        for stage_name in sorted(repos[repo_name]):
+            stage_jobs = repos[repo_name][stage_name]
+            buf.set_line(row, f"  {DIM}{stage_name}{RESET}")
+            row += 1
+            for job in stage_jobs:
+                job_id = str(job.get("id") or "—")
+                short_id = job_id[-8:] if len(job_id) > 8 else job_id
+                agent = str(job.get("agent") or "—")
+                age = _humanize_seconds(job.get("runtime_seconds"))
+                cost = _humanize_currency(job.get("cost_usd"))
+                tokens = _humanize_tokens(job.get("input_tokens"), job.get("output_tokens"))
+                line = (
+                    f"  {short_id:<8} | {agent:<8} | {age:<8} | {cost:<8} | {tokens}"
+                )
+                buf.set_line(row, line)
+                row += 1
+        row += 1
+
+    return row - start_row
