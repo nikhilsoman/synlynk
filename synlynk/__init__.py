@@ -9,7 +9,7 @@ import json
 import re
 import threading
 import urllib.request
-from typing import Optional
+from typing import Optional, Tuple
 import sqlite3 as _sqlite3
 
 from synlynk._constants import (
@@ -2616,7 +2616,8 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
             idx = _SOP_HEADERS.index(missing_header)
             blocks.append(SOP_BLOCKS[idx])
         missing_body = "\n".join(blocks)
-        body = missing_body if not existing_body else f"{existing_body.rstrip('\n')}\n{missing_body}"
+        trimmed_existing_body = existing_body.rstrip("\n")
+        body = missing_body if not existing_body else f"{trimmed_existing_body}\n{missing_body}"
         _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
         for missing_header in missing_headers:
             print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
@@ -9087,7 +9088,7 @@ _STAGE_LABELS = ["STACK", "SOURCE", "COMPLEXITY", "TESTS", "GIT CHURN", "ARCHITE
 _STAGE_COLORS = [_GREEN, _CYAN, _YELLOW, _GREEN, _RED, _MAGENTA]
 
 
-def _card_summary(key: str, data) -> tuple[str, str]:
+def _card_summary(key: str, data) -> Tuple[str, str]:
     """Return the two summary lines used in the stage cards."""
     if key == "stack":
         data = data or {}
