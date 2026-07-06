@@ -172,3 +172,8 @@ All 6 waves executed to plan. Final state:
 **PR split approach**: changes were uncommitted on main; used Python to construct valid per-story `@@` header sub-hunks from the mixed hunk 7 (which contained both `cmd_release` and status helpers). Conflict on status PR (after release merged) resolved via 3-way: kept `cmd_release` from HEAD + status helpers from branch.
 
 **v0.10.0 status**: all P0 stories shipped (T1–T6 in prior sessions) + 3 daily-driver stories shipped today. 726 tests. Ready for named release.
+
+## 2026-07-06 — Four-POV strategic evaluation + company roadmap
+
+- Wrote `docs/strategy/2026-07-06-four-pov-evaluation-and-company-roadmap.md` — evaluation of goals/architecture/execution from 4 POVs (AI-coding dev, AI-company exec, enterprise tech exec, systems architect) + open-core company roadmap (Epics 0–6).
+- Key calls: reject native-harness pivot in favor of structured-interface adapters (Agent SDK/JSON/ACP); enforcement plane before enterprise sales; CLA + license split before v1.0 GA; provisionals on sentinels/permission-translation/handoff before further blog disclosure.
