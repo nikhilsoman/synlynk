@@ -9,7 +9,7 @@ import json
 import re
 import threading
 import urllib.request
-from typing import Optional
+from typing import Optional, Tuple
 import sqlite3 as _sqlite3
 
 from synlynk._constants import (
@@ -9088,7 +9088,7 @@ _STAGE_LABELS = ["STACK", "SOURCE", "COMPLEXITY", "TESTS", "GIT CHURN", "ARCHITE
 _STAGE_COLORS = [_GREEN, _CYAN, _YELLOW, _GREEN, _RED, _MAGENTA]
 
 
-def _card_summary(key: str, data) -> tuple[str, str]:
+def _card_summary(key: str, data) -> Tuple[str, str]:
     """Return the two summary lines used in the stage cards."""
     if key == "stack":
         data = data or {}
