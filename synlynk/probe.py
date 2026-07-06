@@ -593,6 +593,10 @@ def _run_tc4(agent_name: str, db_conn) -> dict:
         if supported == "none" or not cmd_template:
             continue
         cmd = cmd_template.split()[0]
+        if cmd.startswith("-"):
+            # Some verb rows store a flag fragment (e.g. "--model {model}")
+            # rather than a full invocation — there's no binary to probe here.
+            continue
         try:
             subprocess.run([cmd, "--help"], capture_output=True, timeout=3)
         except (FileNotFoundError, subprocess.TimeoutExpired):

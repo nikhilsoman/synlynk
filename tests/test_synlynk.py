@@ -73,6 +73,49 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
 
 
+def test_run_tc4_skips_flag_only_command_templates():
+    """dispatch.model/dispatch.tools store a bare flag ("--model {model}"), not a
+    full invocation. TC-4 must not try to exec the flag itself as a binary."""
+    import sqlite3
+    from synlynk.probe import _run_tc4
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE harness_verb_map (synlynk_verb TEXT, agent_command TEXT, supported TEXT, agent_name TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO harness_verb_map VALUES ('dispatch.model', '--model {model}', 'full', 'claude')"
+    )
+    conn.execute(
+        "INSERT INTO harness_verb_map VALUES ('probe', 'claude --version', 'full', 'claude')"
+    )
+    conn.commit()
+
+    result = _run_tc4("claude", conn)
+
+    assert result["passed"] is True
+    assert "dispatch.model" not in result["failed_verbs"]
+
+
+def test_run_tc4_still_reports_missing_real_binary():
+    import sqlite3
+    from synlynk.probe import _run_tc4
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE harness_verb_map (synlynk_verb TEXT, agent_command TEXT, supported TEXT, agent_name TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO harness_verb_map VALUES ('dispatch.task', 'nonexistent-binary-xyz --print', 'full', 'claude')"
+    )
+    conn.commit()
+
+    result = _run_tc4("claude", conn)
+
+    assert result["passed"] is False
+    assert "dispatch.task" in result["failed_verbs"]
+
+
 def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
