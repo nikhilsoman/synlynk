@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
@@ -339,7 +339,7 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
-def _job_worktree_details(job_id: str, agent: str) -> tuple[str, str]:
+def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     """Returns the per-job worktree path and branch name."""
     worktree_path = os.path.join("worktrees", job_id)
     worktree_branch = f"dispatch/{agent}/{job_id}"
