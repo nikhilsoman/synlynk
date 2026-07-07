@@ -40,6 +40,85 @@ def _dispatch_git_worktree_job(monkeypatch):
     return job
 
 
+def _commit_worktree_files(worktree_path: str, files: dict, message: str) -> None:
+    for rel_path, content in files.items():
+        abs_path = os.path.join(worktree_path, rel_path)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        with open(abs_path, "w") as f:
+            f.write(content)
+    subprocess.run([
+        "git",
+        "-C",
+        worktree_path,
+        "add",
+        *sorted(files),
+    ], capture_output=True, check=True)
+    subprocess.run([
+        "git",
+        "-C",
+        worktree_path,
+        "commit",
+        "-m",
+        message,
+    ], capture_output=True, check=True)
+
+
+def test_dispatch_real_files_touched_via_git_diff_lists_committed_and_dirty_files(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    _commit_worktree_files(
+        job["worktree_path"],
+        {"alpha.txt": "alpha\n", "beta.txt": "beta\n"},
+        "touch two files",
+    )
+    with open(os.path.join(job["worktree_path"], "dirty.txt"), "w") as f:
+        f.write("dirty\n")
+
+    touched = sl._worktree_files_touched(job["worktree_path"])
+
+    assert touched == ["alpha.txt", "beta.txt", "dirty.txt"]
+
+
+def test_dispatch_real_files_touched_via_git_diff_clean_worktree_returns_empty(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+
+    assert sl._worktree_files_touched(job["worktree_path"]) == []
+
+
+def test_dispatch_real_files_touched_via_git_diff_missing_worktree_path_returns_empty():
+    import synlynk as sl
+
+    assert sl._worktree_files_touched(None) == []
+
+
+def test_dispatch_real_files_touched_via_git_diff_summary_lists_and_truncates_files():
+    import synlynk as sl
+
+    files = [f"src/file-{idx:02d}.py" for idx in range(23)]
+    text = sl._format_job_summary(
+        "job-123",
+        "codex",
+        "story-9",
+        0,
+        12.4,
+        100,
+        20,
+        0.14,
+        files,
+        worktree_path="worktrees/job-123",
+        worktree_branch="dispatch/codex/job-123",
+    )
+
+    assert "files:    23 touched" in text
+    assert "          src/file-00.py" in text
+    assert "          src/file-19.py" in text
+    assert "          src/file-20.py" not in text
+    assert "          +3 more" in text
+
+
 def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
@@ -223,15 +302,31 @@ def test_dispatch_perjob_git_worktree_isolation_summary_includes_worktree(projec
     assert "worktree: worktrees/job-123 (branch: dispatch/codex/job-123)" in out
 
 
+def test_dispatch_real_files_touched_via_git_diff_reconciliation_writes_summary(git_worktree_repo, monkeypatch, capsys):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    _commit_worktree_files(
+        job["worktree_path"],
+        {"gamma.txt": "gamma\n", "delta.txt": "delta\n"},
+        "touch two more files",
+    )
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    assert job["worktree_path"] in out
+    assert "files:    2 touched" in out
+    assert "          delta.txt" in out
+    assert "          gamma.txt" in out
+    assert "FAILED_UNVERIFIED" in out
+
+
 def test_dispatch_gitstateverified_job_reconciliation_marks_ambiguous_exit_with_git_activity_unverified(git_worktree_repo, monkeypatch, capsys):
     import synlynk as sl
 
     job = _dispatch_git_worktree_job(monkeypatch)
-    proof_path = os.path.join(job["worktree_path"], "git-state-proof.txt")
-    with open(proof_path, "w") as f:
-        f.write("proof\n")
-    subprocess.run(["git", "-C", job["worktree_path"], "add", "git-state-proof.txt"], capture_output=True, check=True)
-    subprocess.run(["git", "-C", job["worktree_path"], "commit", "-m", "proof"], capture_output=True, check=True)
+    _commit_worktree_files(job["worktree_path"], {"git-state-proof.txt": "proof\n"}, "proof")
 
     sl._reconcile_jobs()
     out = capsys.readouterr().out
@@ -267,11 +362,7 @@ def test_dispatch_gitstateverified_job_stall_git_activity_defers_kill(git_worktr
     import synlynk as sl
 
     job = _dispatch_git_worktree_job(monkeypatch)
-    proof_path = os.path.join(job["worktree_path"], "git-stall-proof.txt")
-    with open(proof_path, "w") as f:
-        f.write("stall proof\n")
-    subprocess.run(["git", "-C", job["worktree_path"], "add", "git-stall-proof.txt"], capture_output=True, check=True)
-    subprocess.run(["git", "-C", job["worktree_path"], "commit", "-m", "stall proof"], capture_output=True, check=True)
+    _commit_worktree_files(job["worktree_path"], {"git-stall-proof.txt": "stall proof\n"}, "stall proof")
 
     log_file = tmp_path / f"{job['id']}.log"
     with open(log_file, "wb"):

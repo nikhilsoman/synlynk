@@ -62,6 +62,8 @@ from synlynk.dispatch import (
     _tee_process,
     _check_pre_exec_gate,
     _check_job_stall,
+    _resolve_worktree_base_commit,
+    _worktree_files_touched,
     _job_summary_path,
     _format_job_summary,
     _write_job_summary,
@@ -1335,22 +1337,10 @@ def _inspect_worktree_git_state(worktree_path: Optional[str]) -> Optional[dict]:
     dirty = bool((status_result.stdout or "").strip())
     commits_ahead = 0
     base_ref = None
-
-    for ref in ("main", "master", "origin/main", "origin/master"):
-        try:
-            base_result = subprocess.run(
-                ["git", "-C", worktree_path, "merge-base", "HEAD", ref],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except Exception:
-            continue
-
-        base_commit = (base_result.stdout or "").strip()
-        if base_result.returncode != 0 or not base_commit:
-            continue
-
+    base_info = _resolve_worktree_base_commit(worktree_path)
+    base_commit = (base_info or {}).get("base_commit")
+    base_ref = (base_info or {}).get("base_ref")
+    if base_commit:
         try:
             ahead_result = subprocess.run(
                 ["git", "-C", worktree_path, "rev-list", "--count", f"{base_commit}..HEAD"],
@@ -1359,23 +1349,20 @@ def _inspect_worktree_git_state(worktree_path: Optional[str]) -> Optional[dict]:
                 check=False,
             )
         except Exception:
-            continue
+            ahead_result = None
 
-        if ahead_result.returncode != 0:
-            continue
-
-        try:
-            commits_ahead = int((ahead_result.stdout or "0").strip() or "0")
-        except ValueError:
-            commits_ahead = 0
-        base_ref = ref
-        break
+        if ahead_result and ahead_result.returncode == 0:
+            try:
+                commits_ahead = int((ahead_result.stdout or "0").strip() or "0")
+            except ValueError:
+                commits_ahead = 0
 
     return {
         "worktree_path": worktree_path,
         "dirty": dirty,
         "commits_ahead": commits_ahead,
         "base_ref": base_ref,
+        "base_commit": base_commit,
         "has_activity": dirty or commits_ahead > 0,
     }
 
@@ -2768,7 +2755,7 @@ def _reconcile_jobs() -> None:
                 in_tokens,
                 out_tokens,
                 cost_usd,
-                [],
+                _worktree_files_touched(job.get("worktree_path")),
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
             )
@@ -2853,7 +2840,7 @@ def _reconcile_jobs() -> None:
                 in_tokens,
                 out_tokens,
                 cost_usd,
-                [],
+                _worktree_files_touched(job.get("worktree_path")),
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
                 status_label=summary_status,

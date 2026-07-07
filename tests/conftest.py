@@ -38,6 +38,7 @@ def stub_dispatch_worktree(monkeypatch, request):
         lambda job_id, agent: os.path.join("worktrees", job_id),
     )
     monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", lambda worktree_path: None)
+    monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path: [])
 
 
 @pytest.fixture
