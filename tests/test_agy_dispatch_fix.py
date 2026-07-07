@@ -1,9 +1,43 @@
 import hashlib
 import os
+import subprocess
 
 
 def _job_id(agent: str, task: str, timestamp: float) -> str:
     return "job-" + hashlib.md5(f"{agent}{task}{timestamp}".encode()).hexdigest()[:8]
+
+
+def _dispatch_git_worktree_job(monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    job_id = _job_id("codex", "fix bug", 1_725_000_000.123)
+    worktree_path, worktree_branch = dispatch_mod._job_worktree_details(job_id, "codex")
+    dispatch_mod._create_job_worktree(job_id, "codex")
+
+    log_file = os.path.abspath(os.path.join(worktree_path, ".synlynk", "logs", f"{job_id}.log"))
+    job = {
+        "id": job_id,
+        "agent": "codex",
+        "story_id": "",
+        "task": "fix bug",
+        "pid": 4242,
+        "log_file": log_file,
+        "prompt_file": os.path.abspath(os.path.join(worktree_path, ".synlynk", "prompts", f"{job_id}.md")),
+        "context_file": os.path.abspath(os.path.join(worktree_path, ".synlynk", "contexts", f"{job_id}.md")),
+        "worktree_path": worktree_path,
+        "worktree_branch": worktree_branch,
+        "started_at": "2026-07-07T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+    return job
 
 
 def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_worktree_repo, monkeypatch):
@@ -187,3 +221,99 @@ def test_dispatch_perjob_git_worktree_isolation_summary_includes_worktree(projec
     sl.cmd_jobs(summary="job-123")
     out = capsys.readouterr().out
     assert "worktree: worktrees/job-123 (branch: dispatch/codex/job-123)" in out
+
+
+def test_dispatch_gitstateverified_job_reconciliation_marks_ambiguous_exit_with_git_activity_unverified(git_worktree_repo, monkeypatch, capsys):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    proof_path = os.path.join(job["worktree_path"], "git-state-proof.txt")
+    with open(proof_path, "w") as f:
+        f.write("proof\n")
+    subprocess.run(["git", "-C", job["worktree_path"], "add", "git-state-proof.txt"], capture_output=True, check=True)
+    subprocess.run(["git", "-C", job["worktree_path"], "commit", "-m", "proof"], capture_output=True, check=True)
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+
+    assert reconciled["status"] == "failed_unverified"
+    assert reconciled["exit_code"] is None
+    assert job["worktree_path"] in out
+    assert "FAILED_UNVERIFIED (exit unknown)" in out
+    assert "job exited ambiguously but the worktree contains 1 commit(s)" in out
+    assert "inspect before discarding" in out
+
+
+def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktree_remains_failed(git_worktree_repo, monkeypatch, capsys):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+
+    assert reconciled["status"] == "failed"
+    assert reconciled["exit_code"] == -1
+    assert "FAILED_UNVERIFIED" not in out
+    assert "worktree:" in out
+
+
+def test_dispatch_gitstateverified_job_stall_git_activity_defers_kill(git_worktree_repo, monkeypatch, tmp_path):
+    import time
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    proof_path = os.path.join(job["worktree_path"], "git-stall-proof.txt")
+    with open(proof_path, "w") as f:
+        f.write("stall proof\n")
+    subprocess.run(["git", "-C", job["worktree_path"], "add", "git-stall-proof.txt"], capture_output=True, check=True)
+    subprocess.run(["git", "-C", job["worktree_path"], "commit", "-m", "stall proof"], capture_output=True, check=True)
+
+    log_file = tmp_path / f"{job['id']}.log"
+    with open(log_file, "wb"):
+        pass
+    job["log_file"] = str(log_file)
+    job["started_at"] = time.time() - 7200
+
+    killed = []
+
+    def fake_kill(pid, sig):
+        killed.append((pid, sig))
+
+    monkeypatch.setattr(sl.os, "kill", fake_kill)
+
+    result = sl._check_job_stall(job, {"stall_timeout_minutes": 30}, ".synlynk/sentinel.md")
+
+    assert result is False
+    assert job["status"] == "running"
+    assert killed == []
+
+
+def test_dispatch_gitstateverified_job_stall_clean_worktree_still_kills(git_worktree_repo, monkeypatch, tmp_path):
+    import time
+    import signal
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    log_file = tmp_path / f"{job['id']}.log"
+    with open(log_file, "wb"):
+        pass
+    job["log_file"] = str(log_file)
+    job["started_at"] = time.time() - 7200
+
+    killed = []
+
+    def fake_kill(pid, sig):
+        killed.append((pid, sig))
+
+    monkeypatch.setattr(sl.os, "kill", fake_kill)
+
+    result = sl._check_job_stall(job, {"stall_timeout_minutes": 30}, ".synlynk/sentinel.md")
+
+    assert result is True
+    assert job["status"] == "failed"
+    assert killed == [(job["pid"], signal.SIGKILL)]

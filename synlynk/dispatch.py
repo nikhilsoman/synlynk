@@ -219,6 +219,24 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if elapsed_minutes < timeout:
         return False
 
+    inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
+    git_state = inspect_worktree_git_state(job.get("worktree_path")) if inspect_worktree_git_state else None
+    if git_state and git_state.get("has_activity"):
+        worktree_path = job.get("worktree_path")
+        commit_count = git_state.get("commits_ahead", 0)
+        dirty = git_state.get("dirty", False)
+        parts = []
+        if commit_count:
+            parts.append(f"{commit_count} commit(s)")
+        if dirty:
+            parts.append("uncommitted changes")
+        details = " and ".join(parts) if parts else "git activity"
+        print(
+            f"  Stall check extended for job {job.get('id')}: git activity detected in "
+            f"{worktree_path} ({details})."
+        )
+        return False
+
     pid = job.get("pid")
     if pid:
         try:
@@ -253,14 +271,17 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         in_tokens: int, out_tokens: int, cost_usd: float,
                         files_touched: Optional[list] = None,
                         worktree_path: Optional[str] = None,
-                        worktree_branch: Optional[str] = None) -> str:
+                        worktree_branch: Optional[str] = None,
+                        status_label: Optional[str] = None,
+                        note: Optional[str] = None) -> str:
     """Formats the structured completion summary for a finished job."""
     story_label = story_id or "-"
     exit_code = -1 if exit_code is None else exit_code
-    status_label = "OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})"
+    status_label = status_label or ("OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})")
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
     files_touched = files_touched or []
     worktree_line = ""
+    note_line = f"note:     {note}\n" if note else ""
     if worktree_path:
         branch_note = f" (branch: {worktree_branch})" if worktree_branch else ""
         worktree_line = f"worktree: {worktree_path}{branch_note}\n"
@@ -268,6 +289,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"-- job {job_id} complete ---------\n"
         f"agent:    {agent}   story: {story_label}\n"
         f"status:   {status_label}\n"
+        f"{note_line}"
         f"duration: {duration_label}\n"
         f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
         f"{worktree_line}"
@@ -281,12 +303,15 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
                        in_tokens: int, out_tokens: int, cost_usd: float,
                        files_touched: Optional[list],
                        worktree_path: Optional[str] = None,
-                       worktree_branch: Optional[str] = None) -> str:
+                       worktree_branch: Optional[str] = None,
+                       status_label: Optional[str] = None,
+                       note: Optional[str] = None) -> str:
     """Writes a structured completion summary for a job and returns the text."""
     os.makedirs(".synlynk/logs", exist_ok=True)
     summary = _format_job_summary(
         job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
-        cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch
+        cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch,
+        status_label=status_label, note=note
     )
     with open(_job_summary_path(job_id), "w") as f:
         f.write(summary)

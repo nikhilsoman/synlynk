@@ -1317,6 +1317,69 @@ def _save_jobs(jobs: list) -> None:
         json.dump(jobs, f, indent=2)
 
 
+def _inspect_worktree_git_state(worktree_path: Optional[str]) -> Optional[dict]:
+    """Returns git evidence for a worktree, or None when it is unavailable."""
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return None
+
+    try:
+        status_result = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    dirty = bool((status_result.stdout or "").strip())
+    commits_ahead = 0
+    base_ref = None
+
+    for ref in ("main", "master", "origin/main", "origin/master"):
+        try:
+            base_result = subprocess.run(
+                ["git", "-C", worktree_path, "merge-base", "HEAD", ref],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            continue
+
+        base_commit = (base_result.stdout or "").strip()
+        if base_result.returncode != 0 or not base_commit:
+            continue
+
+        try:
+            ahead_result = subprocess.run(
+                ["git", "-C", worktree_path, "rev-list", "--count", f"{base_commit}..HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            continue
+
+        if ahead_result.returncode != 0:
+            continue
+
+        try:
+            commits_ahead = int((ahead_result.stdout or "0").strip() or "0")
+        except ValueError:
+            commits_ahead = 0
+        base_ref = ref
+        break
+
+    return {
+        "worktree_path": worktree_path,
+        "dirty": dirty,
+        "commits_ahead": commits_ahead,
+        "base_ref": base_ref,
+        "has_activity": dirty or commits_ahead > 0,
+    }
+
+
 def _count_dispatch_rework(story_id: str) -> int:
     """Counts completed jobs for this story_id — each represents one dispatch cycle."""
     if not story_id:
@@ -2721,6 +2784,8 @@ def _reconcile_jobs() -> None:
             # PID is dead. Check if wrapper wrote an exit code.
             log_file = job.get("log_file")
             exit_code = None
+            ambiguous_exit = False
+            git_state = None
             if log_file:
                 exit_file = log_file + ".exit"
                 if os.path.exists(exit_file):
@@ -2730,10 +2795,17 @@ def _reconcile_jobs() -> None:
                         os.remove(exit_file)
                     except Exception:
                         pass
+                elif job.get("worktree_path"):
+                    git_state = _inspect_worktree_git_state(job.get("worktree_path"))
+                    if git_state and git_state.get("has_activity"):
+                        ambiguous_exit = True
 
             if exit_code == 0:
                 job["status"] = "completed"
                 job["exit_code"] = 0
+            elif ambiguous_exit:
+                job["status"] = "failed_unverified"
+                job["exit_code"] = None
             else:
                 job["status"] = "failed"
                 job["exit_code"] = exit_code if exit_code is not None else -1
@@ -2756,6 +2828,22 @@ def _reconcile_jobs() -> None:
                                  time.mktime(time.strptime(job.get("started_at"), "%Y-%m-%dT%H:%M:%S")))
             except Exception:
                 duration_s = None
+            summary_note = None
+            summary_status = None
+            if ambiguous_exit and git_state:
+                commit_count = git_state.get("commits_ahead", 0)
+                dirty = git_state.get("dirty", False)
+                parts = []
+                if commit_count:
+                    parts.append(f"{commit_count} commit(s)")
+                if dirty:
+                    parts.append("uncommitted changes")
+                details = " and ".join(parts) if parts else "git activity"
+                summary_note = (
+                    f"job exited ambiguously but the worktree contains {details} "
+                    f"— inspect before discarding (worktree: {job.get('worktree_path')})"
+                )
+                summary_status = "FAILED_UNVERIFIED (exit unknown)"
             summary = _write_job_summary(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -2768,6 +2856,8 @@ def _reconcile_jobs() -> None:
                 [],
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
+                status_label=summary_status,
+                note=summary_note,
             )
             print(summary, end="")
 
@@ -5087,7 +5177,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             return
         visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
         if not visible:
-            completed = len([j for j in jobs if j["status"] in ("completed", "failed")])
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified")])
             print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
             return
         header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
