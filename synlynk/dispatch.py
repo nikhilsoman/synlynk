@@ -262,6 +262,86 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     return True
 
 
+def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict]:
+    """Find the merge-base used to compare a worktree against mainline refs."""
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return None
+
+    for ref in ("main", "master", "origin/main", "origin/master"):
+        try:
+            base_result = subprocess.run(
+                ["git", "-C", worktree_path, "merge-base", "HEAD", ref],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            continue
+
+        base_commit = (base_result.stdout or "").strip()
+        if base_result.returncode != 0 or not base_commit:
+            continue
+
+        return {"base_commit": base_commit, "base_ref": ref}
+
+    return None
+
+
+def _worktree_files_touched(worktree_path: Optional[str]) -> list:
+    """Return sorted file paths changed in a worktree since the resolved merge-base."""
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return []
+
+    inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
+    git_state = inspect_worktree_git_state(worktree_path) if inspect_worktree_git_state else None
+    base_commit = (git_state or {}).get("base_commit") or (
+        _resolve_worktree_base_commit(worktree_path) or {}
+    ).get("base_commit")
+    if not base_commit:
+        return []
+
+    touched = set()
+
+    try:
+        diff_result = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--name-only", base_commit, "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        diff_result = None
+
+    if diff_result and diff_result.returncode == 0:
+        for path in (diff_result.stdout or "").splitlines():
+            path = path.strip()
+            if path:
+                touched.add(path)
+
+    try:
+        status_result = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--short", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        status_result = None
+
+    if status_result and status_result.returncode == 0:
+        for line in (status_result.stdout or "").splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:].strip()
+            if not path:
+                continue
+            if " -> " in path:
+                path = path.split(" -> ", 1)[1].strip()
+            touched.add(path)
+
+    return sorted(touched)
+
+
 def _job_summary_path(job_id: str) -> str:
     return os.path.join(".synlynk/logs", f"{job_id}.summary")
 
@@ -275,16 +355,24 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         status_label: Optional[str] = None,
                         note: Optional[str] = None) -> str:
     """Formats the structured completion summary for a finished job."""
+    files_touched = sorted(set(files_touched or []))
     story_label = story_id or "-"
     exit_code = -1 if exit_code is None else exit_code
     status_label = status_label or ("OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})")
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
-    files_touched = files_touched or []
     worktree_line = ""
     note_line = f"note:     {note}\n" if note else ""
     if worktree_path:
         branch_note = f" (branch: {worktree_branch})" if worktree_branch else ""
         worktree_line = f"worktree: {worktree_path}{branch_note}\n"
+    files_line = f"files:    {len(files_touched)} touched\n"
+    if files_touched:
+        visible_files = files_touched[:20]
+        rendered_files = "".join(f"          {path}\n" for path in visible_files)
+        more_count = len(files_touched) - len(visible_files)
+        if more_count > 0:
+            rendered_files += f"          +{more_count} more\n"
+        files_line += rendered_files
     return (
         f"-- job {job_id} complete ---------\n"
         f"agent:    {agent}   story: {story_label}\n"
@@ -293,7 +381,7 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"duration: {duration_label}\n"
         f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
         f"{worktree_line}"
-        f"files:    {len(files_touched)} touched\n"
+        f"{files_line}"
         f"---------------------------------\n"
     )
 
