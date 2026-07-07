@@ -193,6 +193,17 @@ def _make_project_docs(tmp_path):
     return pd
 
 
+def _seed_stories(*story_ids):
+    conn = synlynk._get_db()
+    for story_id in story_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO stories (story_id, title, status) VALUES (?,?,?)",
+            (story_id, story_id, "open"),
+        )
+    conn.commit()
+    conn.close()
+
+
 def test_migrate_dry_run_imports_nothing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -212,6 +223,7 @@ def test_migrate_imports_all_tables(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
     _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
     synlynk.cmd_migrate()
     conn = synlynk._get_db()
     assert conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0] == 2
@@ -228,6 +240,7 @@ def test_migrate_copies_to_synlynk_project_docs(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
     _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
     synlynk.cmd_migrate()
     backup = tmp_path / ".synlynk" / "project-docs"
     assert (backup / "memory.md").exists()
@@ -241,6 +254,7 @@ def test_migrate_writes_sentinel(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
     _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
     synlynk.cmd_migrate()
     assert (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
 
@@ -282,6 +296,7 @@ def test_migrate_dr_sync_on_migrate(tmp_path, monkeypatch):
     cfg = tmp_path / ".synlynk" / "config.json"
     cfg.write_text(json.dumps({"dr_sync_path": str(dr_path)}))
     _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
     synlynk.cmd_migrate()
     assert (dr_path / "project-docs" / "memory.md").exists()
 
@@ -414,6 +429,7 @@ def test_full_migration_end_to_end(tmp_path, monkeypatch):
     devlogs.mkdir()
     (devlogs / 'nikhil.md').write_text('# Nikhil Devlog\n\n## 2026-07-01 — Session: BS-18\n\n### Shipped\n- full migration\n')
     (pd / 'todo.md').write_text('- [ ] packaging <!-- id:story-v010-pkg --> <!-- gh:#90 -->\n')
+    _seed_stories('story-v010-pkg')
 
     # Dry-run imports nothing
     synlynk.cmd_migrate(dry_run=True)
@@ -450,7 +466,8 @@ def test_full_migration_end_to_end(tmp_path, monkeypatch):
 
     # Recover re-imports from backup
     conn = synlynk._get_db()
-    conn.execute('DELETE FROM memory_entries')
+    for table in ['memory_entries', 'roadmap_phases', 'roadmap_arcs', 'cost_entries', 'devlog_entries']:
+        conn.execute(f'DELETE FROM {table}')
     conn.commit()
     conn.close()
     synlynk.cmd_migrate(recover=True)
@@ -458,4 +475,3 @@ def test_full_migration_end_to_end(tmp_path, monkeypatch):
     count = conn.execute('SELECT COUNT(*) FROM memory_entries').fetchone()[0]
     conn.close()
     assert count == 3  # 2 original + 1 written-through
-

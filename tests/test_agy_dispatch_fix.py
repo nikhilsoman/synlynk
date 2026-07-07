@@ -248,6 +248,60 @@ def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(g
     assert spawned == []
 
 
+def test_migrate_transparency__failloud_on_0row_import_reports_all_failed_sources(tmp_path, monkeypatch, capsys):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs_dir = tmp_path / "project-docs"
+    docs_dir.mkdir()
+    (docs_dir / "memory.md").write_text(
+        "# synlynk Memory\n\n## First\n\nBody [@alice].\n\n## Second\n\nMore body.\n"
+    )
+    (docs_dir / "roadmap.md").write_text(
+        "# Roadmap\n\n## v0.9.0 — Shipped ✅\n\n- feat: core [P0]\n\n## v0.10.0\n\n- wizard [P0]\n"
+    )
+    (docs_dir / "todo.md").write_text(
+        "- [ ] priority-only <!-- id:story-priority --> <!-- priority:next -->\n"
+    )
+
+    class FakeConn:
+        def execute(self, sql, params=()):
+            if sql.lstrip().upper().startswith(("INSERT", "UPDATE")):
+                raise RuntimeError("forced write failure")
+
+            class Cursor:
+                rowcount = 0
+
+            return Cursor()
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(sl, "_get_db", lambda: FakeConn())
+    monkeypatch.setattr(sl.subprocess, "run", lambda *a, **kw: None)
+
+    raised = False
+    try:
+        sl.cmd_migrate()
+    except SystemExit as exc:
+        raised = True
+        assert exc.code == 1
+
+    assert raised is True
+    out = capsys.readouterr().out
+    assert "DB path:" in out
+    assert "memory_entries" in out
+    assert "roadmap_arcs" in out
+    assert "roadmap_phases" in out
+    assert "todo_metadata (" not in out
+    assert "git rm --cached" not in out
+
+
 def test_dispatch_perjob_git_worktree_isolation_summary_includes_worktree(project_dir, capsys):
     import synlynk as sl
 

@@ -5,6 +5,9 @@ import sqlite3
 import subprocess
 import time
 
+class MigrationImportError(RuntimeError):
+    pass
+
 def _parse_memory_md(content: str) -> list:
     sections = []
     current_section = None
@@ -350,19 +353,25 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     from synlynk import _get_db, _parse_costs_md, _parse_devlog_file, _parse_memory_md, _parse_roadmap_md, _parse_todo_metadata
     conn = _get_db()
     counts = {}
+    inserted_counts = {}
+    attempted_counts = {}
 
     memory_path = os.path.join(docs_dir, "memory.md")
     if os.path.exists(memory_path):
         with open(memory_path) as f:
             sections = _parse_memory_md(f.read())
         counts["memory_entries"] = len(sections)
+        attempted_counts["memory_entries"] = len(sections)
+        inserted_counts["memory_entries"] = 0
         if not dry_run:
             for s in sections:
                 try:
-                    conn.execute(
+                    cursor = conn.execute(
                         "INSERT OR IGNORE INTO memory_entries (section, body, author) VALUES (?,?,?)",
                         (s["section"], s["body"], s["author"]),
                     )
+                    if getattr(cursor, "rowcount", 0) > 0:
+                        inserted_counts["memory_entries"] += 1
                 except Exception as e:
                     print(f"  ⚠ memory.md section skipped: {e}")
 
@@ -372,22 +381,30 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
             arcs, phases = _parse_roadmap_md(f.read())
         counts["roadmap_arcs"] = len(arcs)
         counts["roadmap_phases"] = len(phases)
+        attempted_counts["roadmap_arcs"] = len(arcs)
+        attempted_counts["roadmap_phases"] = len(phases)
+        inserted_counts["roadmap_arcs"] = 0
+        inserted_counts["roadmap_phases"] = 0
         if not dry_run:
             for a in arcs:
                 try:
-                    conn.execute(
+                    cursor = conn.execute(
                         "INSERT OR IGNORE INTO roadmap_arcs (version, title, status) VALUES (?,?,?)",
                         (a["version"], a["title"], a["status"]),
                     )
+                    if getattr(cursor, "rowcount", 0) > 0:
+                        inserted_counts["roadmap_arcs"] += 1
                 except Exception as e:
                     print(f"  ⚠ roadmap arc skipped: {e}")
             for p in phases:
                 try:
-                    conn.execute(
+                    cursor = conn.execute(
                         "INSERT OR IGNORE INTO roadmap_phases "
                         "(arc_version, phase_title, status, priority) VALUES (?,?,?,?)",
                         (p["arc_version"], p["phase_title"], p["status"], p["priority"]),
                     )
+                    if getattr(cursor, "rowcount", 0) > 0:
+                        inserted_counts["roadmap_phases"] += 1
                 except Exception as e:
                     print(f"  ⚠ roadmap phase skipped: {e}")
 
@@ -396,10 +413,12 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
         with open(costs_path) as f:
             rows = _parse_costs_md(f.read())
         counts["cost_entries"] = len(rows)
+        attempted_counts["cost_entries"] = len(rows)
+        inserted_counts["cost_entries"] = 0
         if not dry_run:
             for r in rows:
                 try:
-                    conn.execute(
+                    cursor = conn.execute(
                         """INSERT INTO cost_entries
                            (session_date, agent, model, input_tokens, output_tokens,
                             cache_read_tokens, total_cost_usd, notes)
@@ -415,11 +434,15 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                             r["notes"],
                         ),
                     )
+                    if getattr(cursor, "rowcount", 0) > 0:
+                        inserted_counts["cost_entries"] += 1
                 except Exception as e:
                     print(f"  ⚠ cost row skipped: {e}")
 
     devlogs_dir = os.path.join(docs_dir, "devlogs")
     devlog_count = 0
+    inserted_counts["devlog_entries"] = 0
+    attempted_counts["devlog_entries"] = 0
     if os.path.isdir(devlogs_dir):
         for fname in sorted(os.listdir(devlogs_dir)):
             if not fname.endswith(".md") or fname == "README.md":
@@ -428,34 +451,43 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
             with open(os.path.join(devlogs_dir, fname)) as f:
                 entries = _parse_devlog_file(f.read(), author)
             devlog_count += len(entries)
+            attempted_counts["devlog_entries"] += len(entries)
             if not dry_run:
                 for e in entries:
                     try:
-                        conn.execute(
+                        cursor = conn.execute(
                             "INSERT OR IGNORE INTO devlog_entries "
                             "(author, entry_date, session_title, body) VALUES (?,?,?,?)",
                             (e["author"], e["entry_date"], e["session_title"], e["body"]),
                         )
+                        if getattr(cursor, "rowcount", 0) > 0:
+                            inserted_counts["devlog_entries"] += 1
                     except Exception as ex:
                         print(f"  ⚠ devlog entry skipped ({fname}): {ex}")
     counts["devlog_entries"] = devlog_count
 
     todo_path = os.path.join(docs_dir, "todo.md")
     todo_sync_count = 0
+    inserted_counts["todo_metadata"] = 0
+    attempted_counts["todo_metadata"] = 0
     if os.path.exists(todo_path):
         with open(todo_path) as f:
             meta_rows = _parse_todo_metadata(f.read())
         todo_sync_count = len(meta_rows)
         if not dry_run:
             for m in meta_rows:
+                if not m["gh_issue"]:
+                    continue
+                attempted_counts["todo_metadata"] += 1
                 try:
-                    if m["gh_issue"]:
-                        conn.execute(
-                            "UPDATE stories SET gh_issue=? WHERE story_id=?",
-                            (m["gh_issue"], m["story_id"]),
-                        )
-                except Exception:
-                    pass
+                    cursor = conn.execute(
+                        "UPDATE stories SET gh_issue=? WHERE story_id=?",
+                        (m["gh_issue"], m["story_id"]),
+                    )
+                    if getattr(cursor, "rowcount", 0) > 0:
+                        inserted_counts["todo_metadata"] += 1
+                except Exception as e:
+                    print(f"  ⚠ todo.md story sync skipped ({m['story_id']}): {e}")
     counts["todo_metadata"] = todo_sync_count
 
     conn.commit()
@@ -477,6 +509,25 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
         print(f"  {prefix}: todo.md       → {counts['todo_metadata']} stories with metadata synced")
     if dry_run:
         print("\n  No files moved. No git changes.")
+
+    if dry_run:
+        return
+
+    failures = []
+    for key, parsed_total in counts.items():
+        attempted_total = attempted_counts.get(key, parsed_total)
+        inserted_total = inserted_counts.get(key, 0)
+        if attempted_total > 0 and inserted_total == 0:
+            if key == "todo_metadata":
+                failures.append(
+                    f"{key} ({parsed_total} parsed, {attempted_total} attempted, 0 inserted)"
+                )
+            else:
+                failures.append(f"{key} ({parsed_total} parsed/attempted, 0 inserted)")
+    if failures:
+        raise MigrationImportError(
+            "0 rows inserted for non-empty source file(s): " + "; ".join(failures)
+        )
 
 def _migrate_dr_mirror(backup_dir: str) -> None:
     """Mirror backup_dir -> dr_sync_path/project-docs/ if configured."""
@@ -504,8 +555,10 @@ def _migrate_dr_mirror(backup_dir: str) -> None:
 
 def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = False) -> None:
     """Migrate project-docs/ -> .synlynk/project-docs/ and state.db."""
-    from synlynk import _docs_dir, _migrate_import, _synlynk_project_docs_dir
+    from synlynk import DB_PATH, _docs_dir, _migrate_import, _synlynk_project_docs_dir
     import shutil as _shutil
+
+    print(f"  DB path: {DB_PATH}")
 
     if setup_dr:
         path = input(
@@ -535,7 +588,11 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
             print("  ✗ No backup at .synlynk/project-docs/ — cannot recover")
             return
         print("  ▶ Re-importing from .synlynk/project-docs/ ...")
-        _migrate_import(backup_dir)
+        try:
+            _migrate_import(backup_dir)
+        except MigrationImportError as exc:
+            print(f"  ✗ {exc}")
+            raise SystemExit(1)
         print("  ✓ Recovery complete")
         return
 
@@ -554,7 +611,11 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         return
 
     print("  ▶ Importing flat files → state.db ...")
-    _migrate_import(docs_dir)
+    try:
+        _migrate_import(docs_dir)
+    except MigrationImportError as exc:
+        print(f"  ✗ {exc}")
+        raise SystemExit(1)
 
     backup_dir = _synlynk_project_docs_dir()
     print(f"  ▶ Copying {docs_dir}/ → {backup_dir}/ ...")

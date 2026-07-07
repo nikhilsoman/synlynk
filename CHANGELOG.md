@@ -29,6 +29,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Job summaries now list up to 20 touched file paths (with a `+N more` suffix beyond that) instead of just a bare count.
 - Third step of the Job Lifecycle Ground-Truth Verification epic; #126 (migrate transparency) remains as the final sequenced follow-on.
 
+**Migrate transparency + fail-loud on 0-row imports (#126)**
+- `cmd_migrate()` now prints the resolved `DB_PATH` on every invocation, so "is my data there" checks target the real centralized `~/.synlynk/projects/<hash>/state.db` instead of a nonexistent local path.
+- `_migrate_import()` tracks *inserted* row counts separately from *parsed* row counts per source (memory.md, roadmap.md, costs.md, devlogs/, todo.md). If a non-empty source has rows to insert but 0 of them land, it raises a new `MigrationImportError` naming every failing source (not just the first one found) instead of silently printing a green "Imported: N" banner.
+- `cmd_migrate()` catches `MigrationImportError`, prints the failure, and exits non-zero — skipping the destructive `git rm --cached` / `.gitignore` write / sentinel write / `git commit` steps entirely so a failed import never looks committed.
+- `todo.md` rows without a `gh:` issue tag (priority-only rows — the common case before a GitHub issue is filed) are correctly excluded from the fail-loud check: they're parsed but never attempted for insert, so they don't count as a failure.
+- Final step of the Job Lifecycle Ground-Truth Verification epic; all four issues (#128, #129, #127, #126) are now shipped.
+
 ---
 
 ## [0.11.0] - 2026-07-05
