@@ -170,6 +170,19 @@ def test_dispatch_perjob_git_worktree_isolation_summary_includes_worktree(projec
             "worktree_branch": "dispatch/codex/job-123",
         }
     ])
+    sl._write_job_summary(
+        "job-123",
+        "codex",
+        "story-9",
+        0,
+        300.0,
+        100,
+        20,
+        0.14,
+        [],
+        worktree_path="worktrees/job-123",
+        worktree_branch="dispatch/codex/job-123",
+    )
 
     sl.cmd_jobs(summary="job-123")
     out = capsys.readouterr().out

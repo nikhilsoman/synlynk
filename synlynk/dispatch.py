@@ -355,6 +355,7 @@ def _create_job_worktree(job_id: str, agent: str) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        cwd=os.getcwd(),
     )
     if result.returncode != 0:
         details = "\n".join(
