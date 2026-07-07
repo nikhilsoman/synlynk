@@ -23,6 +23,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `_check_job_stall()`'s zero-output stall-killer now checks for git activity in the job's worktree before killing a silent job — a job with no log output but real commits/uncommitted changes gets its grace period extended instead of being SIGKILLed as a false positive.
 - Second step of the Job Lifecycle Ground-Truth Verification epic; #127 (real `files_touched`) and #126 (migrate transparency) remain as sequenced follow-ons.
 
+**Real `files_touched` via git diff (#127)**
+- `files_touched` is no longer hardcoded to `[]`. New `_worktree_files_touched()` computes the actual set of changed files in a job's worktree via `git diff --name-only <merge-base> HEAD` plus `git status --short --porcelain` (so uncommitted/dirty changes are counted too, with rename lines handled correctly).
+- Reuses the merge-base search extracted into a new shared `_resolve_worktree_base_commit()` helper (also used by `_inspect_worktree_git_state()`, which now exposes `base_commit` instead of recomputing it) so the two code paths don't run duplicate `git merge-base` searches.
+- Job summaries now list up to 20 touched file paths (with a `+N more` suffix beyond that) instead of just a bare count.
+- Third step of the Job Lifecycle Ground-Truth Verification epic; #126 (migrate transparency) remains as the final sequenced follow-on.
+
 ---
 
 ## [0.11.0] - 2026-07-05
