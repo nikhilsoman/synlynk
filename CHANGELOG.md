@@ -17,6 +17,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Worktree creation fails loudly (`RuntimeError`) rather than silently falling back to the shared cwd.
 - First step of the Job Lifecycle Ground-Truth Verification epic (`docs/superpowers/specs/2026-07-07-job-lifecycle-verification-design.md`); tracks #126, #127, #129 as sequenced follow-ons.
 
+**Git-state-verified job reconciliation (#129)**
+- `_reconcile_jobs()` no longer trusts a missing exit sentinel as an automatic hard failure. When a dispatched job's exit file is absent, reconciliation now cross-checks git state (`_inspect_worktree_git_state()`) in the job's worktree — commits ahead of `main`/`master` or uncommitted changes are evidence the agent did real work despite the ambiguous signal.
+- New `"failed_unverified"` job status distinguishes "exited ambiguously but the worktree shows activity — inspect before discarding" from a genuine `"failed"` (dead process, clean worktree, no git evidence of work). The job summary prints a note pointing at the worktree.
+- `_check_job_stall()`'s zero-output stall-killer now checks for git activity in the job's worktree before killing a silent job — a job with no log output but real commits/uncommitted changes gets its grace period extended instead of being SIGKILLed as a false positive.
+- Second step of the Job Lifecycle Ground-Truth Verification epic; #127 (real `files_touched`) and #126 (migrate transparency) remain as sequenced follow-ons.
+
 ---
 
 ## [0.11.0] - 2026-07-05
