@@ -2915,10 +2915,10 @@ def test_dispatch_agent_writes_per_job_context_file(project_dir, monkeypatch):
     story_id = sl.cmd_story_create("Fix login timeout", engg_domain="backend")
     job = sl.dispatch_agent("claude", "fix the bug", story_id=story_id)
 
-    job_ctx = project_dir / ".synlynk" / "contexts" / f"{job['id']}.md"
+    job_ctx = project_dir / job["worktree_path"] / ".synlynk" / "contexts" / f"{job['id']}.md"
     assert job_ctx.exists(), f"per-job context file not found: {job_ctx}"
     assert "Fix login timeout" in job_ctx.read_text()
-    assert job["context_file"] == os.path.join(".synlynk", "contexts", f"{job['id']}.md")
+    assert job["context_file"] == str(job_ctx)
 
 
 def test_dispatch_agent_concurrent_jobs_use_separate_context_files(project_dir, monkeypatch):
@@ -2937,8 +2937,8 @@ def test_dispatch_agent_concurrent_jobs_use_separate_context_files(project_dir, 
     job_a = sl.dispatch_agent("claude", "task A", story_id=story_a)
     job_b = sl.dispatch_agent("codex", "task B", story_id=story_b)
 
-    ctx_a = project_dir / ".synlynk" / "contexts" / f"{job_a['id']}.md"
-    ctx_b = project_dir / ".synlynk" / "contexts" / f"{job_b['id']}.md"
+    ctx_a = project_dir / job_a["worktree_path"] / ".synlynk" / "contexts" / f"{job_a['id']}.md"
+    ctx_b = project_dir / job_b["worktree_path"] / ".synlynk" / "contexts" / f"{job_b['id']}.md"
 
     assert ctx_a != ctx_b
     assert ctx_a.exists()

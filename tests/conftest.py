@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import subprocess
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -10,6 +11,31 @@ def isolated_db(tmp_path, monkeypatch):
     """Redirect DB_PATH to a per-test temp file so tests never share state.db."""
     import synlynk
     monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
+
+
+@pytest.fixture
+def git_worktree_repo(project_dir):
+    """Create a real git repo for worktree-isolation tests."""
+    subprocess.run(["git", "init"], cwd=project_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=project_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "Codex"], cwd=project_dir, capture_output=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=project_dir, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=project_dir, capture_output=True, check=True)
+    return project_dir
+
+
+@pytest.fixture(autouse=True)
+def stub_dispatch_worktree(monkeypatch, request):
+    """Avoid real git worktree creation unless a test asks for it explicitly."""
+    if "git_worktree_repo" in request.fixturenames:
+        return
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda job_id, agent: os.path.join("worktrees", job_id),
+    )
 
 
 @pytest.fixture

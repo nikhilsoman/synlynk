@@ -2706,6 +2706,8 @@ def _reconcile_jobs() -> None:
                 out_tokens,
                 cost_usd,
                 [],
+                job.get("worktree_path"),
+                job.get("worktree_branch"),
             )
             print(summary, end="")
             changed = True
@@ -2764,6 +2766,8 @@ def _reconcile_jobs() -> None:
                 out_tokens,
                 cost_usd,
                 [],
+                job.get("worktree_path"),
+                job.get("worktree_branch"),
             )
             print(summary, end="")
 

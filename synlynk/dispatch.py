@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
@@ -251,19 +251,26 @@ def _job_summary_path(job_id: str) -> str:
 def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         exit_code: Optional[int], duration_s: Optional[float],
                         in_tokens: int, out_tokens: int, cost_usd: float,
-                        files_touched: Optional[list] = None) -> str:
+                        files_touched: Optional[list] = None,
+                        worktree_path: Optional[str] = None,
+                        worktree_branch: Optional[str] = None) -> str:
     """Formats the structured completion summary for a finished job."""
     story_label = story_id or "-"
     exit_code = -1 if exit_code is None else exit_code
     status_label = "OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})"
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
     files_touched = files_touched or []
+    worktree_line = ""
+    if worktree_path:
+        branch_note = f" (branch: {worktree_branch})" if worktree_branch else ""
+        worktree_line = f"worktree: {worktree_path}{branch_note}\n"
     return (
         f"-- job {job_id} complete ---------\n"
         f"agent:    {agent}   story: {story_label}\n"
         f"status:   {status_label}\n"
         f"duration: {duration_label}\n"
         f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
+        f"{worktree_line}"
         f"files:    {len(files_touched)} touched\n"
         f"---------------------------------\n"
     )
@@ -272,12 +279,14 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
 def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
                        exit_code: Optional[int], duration_s: Optional[float],
                        in_tokens: int, out_tokens: int, cost_usd: float,
-                       files_touched: Optional[list]) -> str:
+                       files_touched: Optional[list],
+                       worktree_path: Optional[str] = None,
+                       worktree_branch: Optional[str] = None) -> str:
     """Writes a structured completion summary for a job and returns the text."""
     os.makedirs(".synlynk/logs", exist_ok=True)
     summary = _format_job_summary(
         job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
-        cost_usd, files_touched
+        cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch
     )
     with open(_job_summary_path(job_id), "w") as f:
         f.write(summary)
@@ -285,7 +294,8 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
 
 
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
-                              task: str, file_section: str, verify_section: str) -> str:
+                              task: str, file_section: str, verify_section: str,
+                              cwd_hint: Optional[str] = None) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     if agent == "codex":
@@ -299,8 +309,9 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"{story_ref}\n"
         )
     if agent == "agy":
+        working_dir = cwd_hint or os.getcwd()
         return (
-            f"## Working Directory\n{os.getcwd()}\n"
+            f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
             f"{story_ref}\n"
@@ -326,6 +337,36 @@ def _warn_context_size(context_text: str) -> None:
         print(f"  ⚠ context: full ({size // 1024}KB) — exceeds soft limit "
               f"({_CONTEXT_WARN_BYTES // 1024}KB)")
         print("    Use --context-mode task to reduce size")
+
+
+def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
+    """Returns the per-job worktree path and branch name."""
+    worktree_path = os.path.join("worktrees", job_id)
+    worktree_branch = f"dispatch/{agent}/{job_id}"
+    return worktree_path, worktree_branch
+
+
+def _create_job_worktree(job_id: str, agent: str) -> str:
+    """Create the isolated git worktree for a dispatched job."""
+    worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
+    os.makedirs(os.path.dirname(worktree_path), exist_ok=True)
+    result = subprocess.run(
+        ["git", "worktree", "add", worktree_path, "-b", worktree_branch],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=os.getcwd(),
+    )
+    if result.returncode != 0:
+        details = "\n".join(
+            part for part in [result.stdout.strip(), result.stderr.strip()] if part
+        )
+        raise RuntimeError(
+            f"Failed to create worktree for job {job_id} at {worktree_path} "
+            f"on branch {worktree_branch}."
+            + (f"\n{details}" if details else "")
+        )
+    return worktree_path
 
 
 def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
@@ -562,14 +603,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     import hashlib as _hashlib
     job_id = "job-" + _hashlib.md5(f"{agent}{task}{time.time()}".encode()).hexdigest()[:8]
 
-    os.makedirs(".synlynk/logs", exist_ok=True)
-    os.makedirs(".synlynk/prompts", exist_ok=True)
-    contexts_dir = os.path.join(".synlynk", "contexts")
+    worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
+    worktree_path = _create_job_worktree(job_id, agent)
+    worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
+    logs_dir = os.path.join(worktree_synlynk_dir, "logs")
+    prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
+    contexts_dir = os.path.join(worktree_synlynk_dir, "contexts")
+    os.makedirs(logs_dir, exist_ok=True)
+    os.makedirs(prompts_dir, exist_ok=True)
     os.makedirs(contexts_dir, exist_ok=True)
 
-    log_file = os.path.join(".synlynk/logs", f"{job_id}.log")
-    prompt_file = os.path.join(".synlynk/prompts", f"{job_id}.md")
-    context_file = os.path.join(contexts_dir, f"{job_id}.md")
+    log_file = os.path.abspath(os.path.join(logs_dir, f"{job_id}.log"))
+    prompt_file = os.path.abspath(os.path.join(prompts_dir, f"{job_id}.md"))
+    context_file = os.path.abspath(os.path.join(contexts_dir, f"{job_id}.md"))
 
     context_text = ""
     if context_mode != "none":
@@ -604,7 +650,18 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     verify_section = verify_contract(story_id, task) if (story_id and verify_contract) else ""
 
     format_prompt = _pkg("_format_prompt_for_agent", _format_prompt_for_agent)
-    prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)
+    try:
+        prompt = format_prompt(
+            agent,
+            context_text,
+            story_id or "",
+            task,
+            file_section,
+            verify_section,
+            cwd_hint=worktree_path,
+        )
+    except TypeError:
+        prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
@@ -638,7 +695,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
-        cwd=os.getcwd(),
+        cwd=worktree_path,
         env=proc_env,
     )
 
@@ -652,6 +709,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
+        "worktree_path": worktree_path,
+        "worktree_branch": worktree_branch,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "ended_at": None,
         "status": "running",
