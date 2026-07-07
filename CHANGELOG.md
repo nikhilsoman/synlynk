@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+**Dispatch job isolation (#128)**
+- `dispatch_agent()` now creates a dedicated `git worktree` per dispatched job (`worktrees/<job_id>`, branch `dispatch/<agent>/<job_id>`) instead of running every job in the invoking shell's shared `cwd`. Concurrent dispatches no longer collide or interleave uncommitted writes in one working directory.
+- Job dicts persist `worktree_path`/`worktree_branch`; job summaries (`synlynk jobs --summary <id>`) surface the worktree location so completed work is discoverable. Worktrees are not auto-deleted on job completion.
+- Worktree creation fails loudly (`RuntimeError`) rather than silently falling back to the shared cwd.
+- First step of the Job Lifecycle Ground-Truth Verification epic (`docs/superpowers/specs/2026-07-07-job-lifecycle-verification-design.md`); tracks #126, #127, #129 as sequenced follow-ons.
+
 ---
 
 ## [0.11.0] - 2026-07-05
