@@ -6,7 +6,7 @@ def _job_id(agent: str, task: str, timestamp: float) -> str:
     return "job-" + hashlib.md5(f"{agent}{task}{timestamp}".encode()).hexdigest()[:8]
 
 
-def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(project_dir, monkeypatch):
+def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
     captured_run = {}
@@ -53,7 +53,7 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(proj
     assert job["log_file"].startswith(os.path.abspath(expected_worktree))
 
 
-def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(project_dir, monkeypatch):
+def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
     created = []
@@ -97,7 +97,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(project_
     assert len(created) == 2
 
 
-def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(project_dir, monkeypatch):
+def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
     spawned = []
