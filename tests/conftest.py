@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import subprocess
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -10,6 +11,10 @@ def isolated_db(tmp_path, monkeypatch):
     """Redirect DB_PATH to a per-test temp file so tests never share state.db."""
     import synlynk
     monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "Codex"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
 
 
 @pytest.fixture
