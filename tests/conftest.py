@@ -30,12 +30,14 @@ def stub_dispatch_worktree(monkeypatch, request):
     if "git_worktree_repo" in request.fixturenames:
         return
     import synlynk.dispatch as dispatch_mod
+    import synlynk
 
     monkeypatch.setattr(
         dispatch_mod,
         "_create_job_worktree",
         lambda job_id, agent: os.path.join("worktrees", job_id),
     )
+    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", lambda worktree_path: None)
 
 
 @pytest.fixture
