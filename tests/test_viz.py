@@ -472,3 +472,61 @@ def test_all_html_contain_live_js(tmp_path, monkeypatch):
                generate_journeys_html, generate_effort_html, generate_efficiency_html]:
         html = fn(data, port=8721)
         assert "checkManifest" in html, f"{fn.__name__} missing live JS"
+
+
+def test_vizor_handler_dispatch_route_exists():
+    import inspect
+    from synlynk.viz import VizorHandler
+    src = inspect.getsource(VizorHandler.do_POST)
+    assert "/dispatch" in src
+    assert "/architect-map/view-pref" in src
+
+
+def test_vizor_handler_handle_dispatch_calls_dispatch_agent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import VizorHandler
+    called = {}
+
+    def fake_dispatch_agent(agent, task, force_agent=False, context_mode=None, **kwargs):
+        called["agent"] = agent
+        called["task"] = task
+        called["force_agent"] = force_agent
+        called["context_mode"] = context_mode
+        return {"job_id": "job-test123", "status": "dispatched"}
+
+    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", fake_dispatch_agent)
+
+    handler = VizorHandler.__new__(VizorHandler)
+    result = handler._handle_dispatch({"agent": "codex", "task": "do the thing"})
+
+    assert called["agent"] == "codex"
+    assert called["task"] == "do the thing"
+    assert called["force_agent"] is True
+    assert called["context_mode"] == "full"
+    assert result["job_id"] == "job-test123"
+
+
+def test_vizor_handler_handle_view_pref_persists_to_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"vizor": {"port": 8721}}, f)
+
+    from synlynk.viz import VizorHandler
+    handler = VizorHandler.__new__(VizorHandler)
+    result = handler._handle_view_pref({"view": "tree"})
+
+    assert result == {"ok": True}
+    with open(".synlynk/config.json") as f:
+        saved = json.load(f)
+    assert saved["vizor"]["architect_map_view"] == "tree"
+
+
+def test_vizor_handler_handle_view_pref_creates_config_if_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import VizorHandler
+    handler = VizorHandler.__new__(VizorHandler)
+    handler._handle_view_pref({"view": "graph"})
+    with open(".synlynk/config.json") as f:
+        saved = json.load(f)
+    assert saved["vizor"]["architect_map_view"] == "graph"

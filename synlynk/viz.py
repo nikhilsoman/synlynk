@@ -4471,7 +4471,7 @@ def _write_cache(data: dict, port: int) -> None:
 
 
 class VizorHandler(http.server.SimpleHTTPRequestHandler):
-    """Serves viz-cache/ and handles POST /note."""
+    """Serves viz-cache/ and handles POST /note, /dispatch, /architect-map/view-pref."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=os.path.abspath(VIZ_CACHE_DIR), **kwargs)
@@ -4481,8 +4481,20 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        return json.loads(body)
+
+    def _send_json_ok(self, payload: dict):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode("utf-8"))
+
     def do_OPTIONS(self):
-        if self.path != "/note":
+        if self.path not in ("/note", "/dispatch", "/architect-map/view-pref"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -4490,13 +4502,18 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path != "/note":
+        if self.path == "/note":
+            self._handle_note_request()
+        elif self.path == "/dispatch":
+            self._handle_dispatch_request()
+        elif self.path == "/architect-map/view-pref":
+            self._handle_view_pref_request()
+        else:
             self.send_error(404)
-            return
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length)
+
+    def _handle_note_request(self):
         try:
-            note = json.loads(body)
+            note = self._read_json_body()
         except json.JSONDecodeError:
             self.send_error(400, "Invalid JSON")
             return
@@ -4519,11 +4536,55 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         }
         with open(VIZ_NOTES_PATH, "w") as f:
             json.dump(notes, f, indent=2)
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self._send_cors_headers()
-        self.end_headers()
-        self.wfile.write(b'{"ok": true}')
+        self._send_json_ok({"ok": True})
+
+    def _handle_dispatch(self, payload: dict) -> dict:
+        from synlynk.dispatch import dispatch_agent
+
+        agent = payload.get("agent", "codex")
+        task = payload.get("task", "")
+        return dispatch_agent(agent, task, force_agent=True, context_mode="full")
+
+    def _handle_dispatch_request(self):
+        try:
+            payload = self._read_json_body()
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON")
+            return
+        if not payload.get("task"):
+            self.send_error(400, "Missing task")
+            return
+        try:
+            result = self._handle_dispatch(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_view_pref(self, payload: dict) -> dict:
+        view = payload.get("view", "graph")
+        config = {}
+        config_path = ".synlynk/config.json"
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                try:
+                    config = json.load(f)
+                except json.JSONDecodeError:
+                    config = {}
+        config.setdefault("vizor", {})["architect_map_view"] = view
+        os.makedirs(".synlynk", exist_ok=True)
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+        return {"ok": True}
+
+    def _handle_view_pref_request(self):
+        try:
+            payload = self._read_json_body()
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON")
+            return
+        result = self._handle_view_pref(payload)
+        self._send_json_ok(result)
 
     def log_message(self, format, *args):
         pass  # suppress request logs
