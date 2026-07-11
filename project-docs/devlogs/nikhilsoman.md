@@ -1,4 +1,15 @@
 
+## 2026-07-11
+### Epic #137 close-out — Fleet Dispatch Scheduler v1 shipped, v2 deferred to a tracked goal
+
+**Shipped:**
+
+- **PR #156** — Fleet dispatch scheduler v1: `stories.priority`/`readiness` columns, `synlynk story ready/draft` gate, `synlynk/scheduler.py` (`_compute_schedule_plan`, `_enqueue_plan`, fleet-level in-batch headroom accounting, `MAX_STORY_RETRIES=2` retry/reassignment), `synlynk schedule [--execute] [--max-stories N]` CLI. Implemented by Grok from an 8-task TDD plan I authored (`docs/superpowers/plans/2026-07-11-fleet-dispatch-scheduler.md`); diff + tests reviewed independently before merge. CI baseline failure signature confirmed unchanged (5 known environment-specific tests) — no regression.
+- **PR #157** — Roadmap Cross-Cutting Epics update (docs-only, separate branch per discipline): epic #137–141 marked Shipped; new "Fleet Scheduler v2 (deferred)" row created, backed by a formal `synlynk goal create` record (`goal-d38e3c83`, deadline 2026-08-10) rather than a prose TODO — bin-packing around reset windows, persistent quota-blocking history, and GOVERNS-aware readiness gate v2 are gated on 30 days of real v1 production data before being scoped into stories.
+- Blog post 52 written covering both PRs as one epic-close narrative.
+
+**Epic #137 (capability-matrix hardening) is now fully closed**: capability score (#139) → quota headroom gate (#141 base, PR #148/#151/#152/#154) → cost tie-break (#140) → batch scheduler (#141 optimizer, PR #156) are all shipped code, matching the 2026-06 token-budget design end to end.
+
 ## 2026-07-05
 ### BS-13 Live Job Observatory
 
