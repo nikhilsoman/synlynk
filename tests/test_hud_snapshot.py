@@ -9,7 +9,7 @@ SAMPLE_JOBS = [
         "id": "job-aaa",
         "agent": "codex",
         "task": "feat/bs20-deep-scan",
-        "cycle": "work",
+        "cycle": "execute",
         "status": "running",
         "started_at": "2026-07-03T10:00:00",
         "ended_at": None,
@@ -19,7 +19,7 @@ SAMPLE_JOBS = [
         "id": "job-bbb",
         "agent": "agy",
         "task": "docs/blog-post",
-        "cycle": "work",
+        "cycle": "execute",
         "status": "running",
         "started_at": "2026-07-03T10:05:00",
         "ended_at": None,
@@ -29,7 +29,7 @@ SAMPLE_JOBS = [
         "id": "job-ccc",
         "agent": "claude",
         "task": "BS-13 brainstorm",
-        "cycle": "dream",
+        "cycle": "goal",
         "status": "done",
         "started_at": "2026-07-03T08:00:00",
         "ended_at": "2026-07-03T09:30:00",
@@ -55,9 +55,9 @@ def test_active_jobs_returns_running(tmp_path):
 
 def test_active_jobs_for_cycle(tmp_path):
     snap = make_snapshot(tmp_path)
-    work_jobs = snap.active_jobs(cycle="work")
+    work_jobs = snap.active_jobs(cycle="execute")
     assert len(work_jobs) == 2
-    dream_jobs = snap.active_jobs(cycle="dream")
+    dream_jobs = snap.active_jobs(cycle="goal")
     assert dream_jobs == []
 
 
@@ -71,10 +71,10 @@ def test_recent_jobs(tmp_path):
 def test_cycle_summary(tmp_path):
     snap = make_snapshot(tmp_path)
     summary = snap.cycle_summary()
-    assert summary["work"]["running"] == 2
-    assert summary["work"]["ready"] is False
-    assert summary["dream"]["running"] == 0
-    assert summary["dream"]["ready"] is True
+    assert summary["execute"]["running"] == 2
+    assert summary["execute"]["ready"] is False
+    assert summary["goal"]["running"] == 0
+    assert summary["goal"]["ready"] is True
 
 
 def test_missing_jobs_file(tmp_path):
