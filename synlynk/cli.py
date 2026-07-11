@@ -505,6 +505,10 @@ def main() -> None:
         "--tokens", type=int, default=None, dest="estimated_tokens",
         help="Estimated token budget (set by AI planner)"
     )
+    story_create_parser.add_argument(
+        "--stack-tags", nargs="*", default=None, dest="stack_tags",
+        help="Workspace stack tags; auto-detected when omitted"
+    )
     story_sub.add_parser("list", help="List all stories")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
@@ -691,6 +695,7 @@ def main() -> None:
                     args.phase,
                     org_domain_tags=getattr(args, "org_domain_tags", []),
                     estimated_tokens=getattr(args, "estimated_tokens", None),
+                    stack_tags=getattr(args, "stack_tags", None),
                     discipline=getattr(args, "discipline", None),
                     role=getattr(args, "role", None),
                     stage=getattr(args, "stage", None),

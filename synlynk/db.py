@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -72,6 +74,38 @@ def _normalize_capability_tags(
     role_value = _validate_enum_value("role", role_value, _ROLES)
     stage_value = _validate_enum_value("stage", stage_value, _STAGES)
     return discipline_value, org_value, role_value, stage_value
+
+
+def _resolve_workspace_root() -> str:
+    """Return the git workspace root, falling back to the current directory."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return os.getcwd()
+
+
+def _normalize_stack_tags(stack_tags: list) -> list:
+    """Return a deduplicated list of stack tags with surrounding whitespace trimmed."""
+    normalized = []
+    seen = set()
+    for tag in stack_tags or []:
+        value = str(tag).strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return normalized
+
+
+def _detect_stack_tags(workspace_root: str = None) -> list:
+    """Detect stack tags via the existing repository fingerprint helper."""
+    from synlynk import fingerprint_stack
+
+    root = workspace_root or _resolve_workspace_root()
+    return _normalize_stack_tags(fingerprint_stack(root))
 
 class MigrationImportError(RuntimeError):
     pass
@@ -208,6 +242,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
     if "actual_tokens" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+    if "stack_tags" not in story_cols:
+        conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
     if "status" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
     if "goal_id" not in story_cols:
@@ -427,6 +463,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE capability_ratings ADD COLUMN {col} TEXT NOT NULL DEFAULT '{default}'")
             except sqlite3.OperationalError:
                 pass
+    if "stack_tags" not in rating_cols:
+        try:
+            conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
+        except sqlite3.OperationalError:
+            pass
     conn.execute(
         "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(engg_domain, ''), 'backend')"
     )
@@ -987,6 +1028,7 @@ def cmd_story_create(title: str, engg_domain: str = None,
                      org_domain: str = None, phase: str = "build",
                      org_domain_tags: list = None,
                      estimated_tokens: int = None,
+                     stack_tags: list = None,
                      discipline: str = None,
                      role: str = None,
                      stage: str = None) -> str:
@@ -1000,6 +1042,7 @@ def cmd_story_create(title: str, engg_domain: str = None,
     config = load_config()
     industry = config.get("industry", "unknown")
     tags_json = _json.dumps(org_domain_tags or [])
+    stack_tags_json = _json.dumps(_detect_stack_tags() if stack_tags is None else _normalize_stack_tags(stack_tags))
     discipline, org_domain, role, stage = _normalize_capability_tags(
         engg_domain,
         org_domain,
@@ -1012,9 +1055,9 @@ def cmd_story_create(title: str, engg_domain: str = None,
     conn = _get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, role, stage, "
-        "org_domain_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "org_domain_tags, stack_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (story_id, title, engg_domain, discipline, org_domain, role, stage,
-         tags_json, industry, phase, estimated_tokens)
+         tags_json, stack_tags_json, industry, phase, estimated_tokens)
     )
     conn.commit()
     conn.close()

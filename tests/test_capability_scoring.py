@@ -793,6 +793,43 @@ def test_org_domain_tags_not_used_in_routing(tmp_path, monkeypatch):
     assert result is None
 
 
+def test_migrate_db_adds_stack_tags_columns(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import sqlite3
+    import synlynk as sl
+
+    conn = sqlite3.connect(sl.DB_PATH)
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, engg_domain TEXT NOT NULL DEFAULT 'backend', "
+        "discipline TEXT NOT NULL DEFAULT 'backend', org_domain TEXT NOT NULL DEFAULT 'platform', "
+        "role TEXT NOT NULL DEFAULT 'dev', stage TEXT NOT NULL DEFAULT 'open', org_domain_tags TEXT DEFAULT '[]', "
+        "industry TEXT DEFAULT 'unknown', phase TEXT DEFAULT 'build')"
+    )
+    conn.execute(
+        "CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, story_id TEXT NOT NULL, "
+        "agent TEXT NOT NULL, model_version TEXT NOT NULL DEFAULT 'unknown', model_at_dispatch TEXT, "
+        "model_at_completion TEXT, split_model INTEGER DEFAULT 0, engg_domain TEXT NOT NULL DEFAULT 'backend', "
+        "discipline TEXT NOT NULL DEFAULT 'backend', org_domain TEXT NOT NULL DEFAULT 'platform', "
+        "role TEXT NOT NULL DEFAULT 'dev', stage TEXT NOT NULL DEFAULT 'open', org_domain_tags TEXT DEFAULT '[]', "
+        "industry TEXT NOT NULL DEFAULT 'unknown', phase TEXT NOT NULL DEFAULT 'build', signal_source TEXT NOT NULL DEFAULT 'auto', "
+        "quality REAL NOT NULL DEFAULT 0.0, quality_auto REAL, verifier_agent TEXT, verifier_model TEXT, "
+        "test_pass_rate REAL, build_success INTEGER, dispatch_rework INTEGER DEFAULT 0, micro_rework INTEGER DEFAULT 0, "
+        "duration_vs_estimate REAL, verified_by_ci INTEGER, correct INTEGER DEFAULT 1, note TEXT, ed25519_sig TEXT, "
+        "ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+    )
+
+    sl._migrate_db(conn)
+
+    story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    conn.close()
+
+    assert "stack_tags" in story_cols
+    assert "stack_tags" in rating_cols
+
+
 _BS5_DIAGRAM = Path("docs/brainstorm/bs5-diagram-impl/bs5-diagram-impl.html")
 
 

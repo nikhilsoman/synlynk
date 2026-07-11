@@ -588,6 +588,7 @@ CREATE TABLE IF NOT EXISTS stories (
     role          TEXT NOT NULL DEFAULT 'dev',
     stage         TEXT NOT NULL DEFAULT 'open',
     org_domain_tags TEXT DEFAULT '[]',
+    stack_tags    TEXT DEFAULT '[]',
     industry      TEXT DEFAULT 'unknown',
     phase         TEXT DEFAULT 'build',
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -607,6 +608,7 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     role                  TEXT NOT NULL DEFAULT 'dev',
     stage                 TEXT NOT NULL DEFAULT 'open',
     org_domain_tags       TEXT DEFAULT '[]',
+    stack_tags            TEXT DEFAULT '[]',
     industry              TEXT NOT NULL DEFAULT 'unknown',
     phase                 TEXT NOT NULL DEFAULT 'build',
     signal_source         TEXT NOT NULL DEFAULT 'auto',
@@ -1473,14 +1475,14 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     micro_rework = job.get("micro_rework", 0)
 
     story_row = conn.execute(
-        "SELECT engg_domain, discipline, org_domain, role, stage, industry, phase "
+        "SELECT engg_domain, discipline, org_domain, role, stage, industry, phase, stack_tags "
         "FROM stories WHERE story_id=?",
         (story_id,)
     ).fetchone()
     if not story_row:
         conn.close()
         return
-    story_engg_domain, story_discipline, org_domain, role, stage, industry, phase = story_row
+    story_engg_domain, story_discipline, org_domain, role, stage, industry, phase, stack_tags = story_row
     from synlynk.db import _normalize_capability_tags
     story_discipline, org_domain, role, stage = _normalize_capability_tags(
         story_engg_domain,
@@ -1536,15 +1538,15 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     conn.execute(
         """INSERT INTO capability_ratings
            (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
-            engg_domain, discipline, org_domain, role, stage, industry, phase,
+            engg_domain, discipline, org_domain, role, stage, stack_tags, industry, phase,
             signal_source, quality, quality_auto,
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework,
             duration_vs_estimate, verified_by_ci, correct, ed25519_sig)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
-         engg_domain, story_discipline, org_domain, role, stage, industry, phase,
+         engg_domain, story_discipline, org_domain, role, stage, stack_tags, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
          signals["test_pass_rate"], 1 if signals["build_success"] else 0,
@@ -2849,7 +2851,12 @@ def _reconcile_jobs() -> None:
                 with open(log_file) as f:
                     log_text = f.read()
                 job["micro_rework"] = _extract_micro_rework(log_text)
-                _write_capability_rating(job, log_text)
+                try:
+                    _write_capability_rating(job, log_text)
+                except ValueError as exc:
+                    print(
+                        f"  ⚠ capability rating skipped for job {job.get('id', '')}: {exc}"
+                    )
             else:
                 log_text = ""
 
