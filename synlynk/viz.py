@@ -1033,6 +1033,7 @@ const STAGE_STYLE = {
   engage:'background:var(--s-engage-bg);border-color:var(--s-engage-bd);color:var(--s-engage-tx)',
 };
 const dreams = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.dreams) ? window.VIZOR_DATA.dreams : [];
+const goals = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.goals) ? window.VIZOR_DATA.goals : [];
 const notes = (window.VIZOR_DATA && window.VIZOR_DATA.notes && typeof window.VIZOR_DATA.notes === 'object') ? window.VIZOR_DATA.notes : {};
 let openDrills = {};
 let currentNoteTarget = null;
@@ -1290,6 +1291,53 @@ function renderDream(dream) {
       <div class="drill" id="drill-${dream.id}"></div>`;
 }
 
+function renderGoal(goal) {
+  const deadlineHtml = goal.deadline ? `<span class="goal-deadline">📅 ${escapeHtml(goal.deadline)}</span>` : '';
+  const status = String(goal.status || 'active').trim().toLowerCase();
+  const badgeClass = status === 'active' ? 'active' : '';
+  return `
+    <div class="goal-item">
+      <div class="goal-content">
+        <div class="goal-outcome">${escapeHtml(goal.outcome)}</div>
+        <div class="goal-criterion">${escapeHtml(goal.criterion)}</div>
+      </div>
+      ${deadlineHtml}
+      <div class="goal-badge ${badgeClass}">${escapeHtml(status)}</div>
+    </div>`;
+}
+
+function toggleGoalsPanel() {
+  const panel = document.getElementById('goals-panel');
+  if (!panel) return;
+  panel.classList.toggle('open');
+}
+
+function renderGoals() {
+  const goalCount = document.getElementById('goal-count');
+  const goalSub = document.getElementById('goal-sub');
+  const goalsBody = document.getElementById('goals-body');
+
+  const activeCount = goals.filter(g => String(g.status || '').toLowerCase() === 'active').length;
+  const totalCount = goals.length;
+
+  if (goalCount) goalCount.textContent = String(activeCount);
+  if (goalSub) goalSub.textContent = activeCount + ' active / of ' + totalCount + ' goals';
+
+  if (!goalsBody) return;
+
+  if (!goals.length) {
+    goalsBody.innerHTML = `
+      <div class="empty-state">
+        <p class="empty-state-desc" style="padding: 12px 14px; font-size: 11px; color: var(--text3); margin: 0;">
+          No active goals yet. Add a goal using: <code>synlynk goal create --outcome "..." --criterion "..."</code>
+        </p>
+      </div>`;
+    return;
+  }
+
+  goalsBody.innerHTML = goals.map(renderGoal).join('');
+}
+
 function renderDreams() {
   const body = document.getElementById('gantt-body');
   const wsSub = document.getElementById('ws-sub');
@@ -1304,6 +1352,7 @@ function renderDreams() {
     if (dreamCount) dreamCount.textContent = '0';
     if (dreamSub) dreamSub.textContent = '0 stages';
     if (statusWorkspaces) statusWorkspaces.textContent = '0 dreams';
+    renderGoals();
     return;
   }
 
@@ -1315,6 +1364,7 @@ function renderDreams() {
   if (dreamCount) dreamCount.textContent = String(dreamCountValue);
   if (dreamSub) dreamSub.textContent = stageCountValue + ' stages · ' + activeDreams + ' active';
   if (statusWorkspaces) statusWorkspaces.textContent = dreamCountValue + ' dreams';
+  renderGoals();
   const firstDream = dreams[0];
   const firstStage = firstDream && Array.isArray(firstDream.stages) ? (firstDream.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstDream.stages[0]) : null;
   if (firstDream && firstStage) {
@@ -1329,6 +1379,107 @@ renderDreams();
 
     if not style_content:
         style_content = "body{font-family:monospace;background:#f6f8fa;color:#1f2328;}"
+
+    style_content += """
+/* Goals Panel Styles */
+.goals-panel {
+  max-height: 0;
+  overflow: hidden;
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
+  transition: max-height .35s cubic-bezier(.4,0,.2,1);
+  border-bottom: 0px solid var(--border);
+  margin-top: 15px;
+  border-radius: 4px;
+}
+.goals-panel.open {
+  max-height: 600px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--bg2);
+}
+.goals-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border2);
+  background: var(--bg3);
+}
+.goals-ttl {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+}
+.goals-close {
+  margin-left: auto;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 12px;
+}
+.goals-close:hover {
+  color: var(--text);
+}
+.goals-body {
+  padding: 8px 0;
+}
+.goal-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border2);
+  gap: 12px;
+}
+.goal-item:last-child {
+  border-bottom: none;
+}
+.goal-content {
+  flex: 1;
+}
+.goal-outcome {
+  font-weight: bold;
+  color: var(--text);
+  font-size: 13px;
+}
+.goal-criterion {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+.goal-deadline {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: 10px;
+  white-space: nowrap;
+}
+.goal-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  background: var(--bg3);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.goal-badge.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.empty-state {
+  padding: 18px 14px;
+  color: var(--text3);
+  font-size: 12px;
+  text-align: center;
+}
+.empty-state code {
+  background: var(--bg3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+"""
 
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -1456,6 +1607,15 @@ renderDreams();
       <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="aa-stack" style="margin-top:6px"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div><div class="aa aa-grok">G</div></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
       <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
       <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+      <div class="sc teal editable" onclick="toggleGoalsPanel()" style="cursor:pointer;"><div class="sl">Business Goals</div><div class="sv" id="goal-count">0</div><div class="ss" id="goal-sub">0 active</div><div class="pencil-wrap note-none" onclick="openNote('goals','Business Goals');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    </div>
+
+    <div class="goals-panel" id="goals-panel">
+      <div class="goals-header">
+        <div class="goals-ttl">🎯 Business Goals</div>
+        <div class="goals-close" onclick="toggleGoalsPanel()">✕ collapse</div>
+      </div>
+      <div class="goals-body" id="goals-body"></div>
     </div>
   </div>
   <div class="status-bar"><span class="sb-ok">● local · offline-ready</span><span id="status-workspaces">3 workspaces</span><div class="sb-rt">next update: ~7 min</div></div>
