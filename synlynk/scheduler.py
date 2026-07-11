@@ -181,3 +181,41 @@ def _enqueue_plan(plan: list) -> list:
     finally:
         conn.close()
     return job_ids
+
+
+def cmd_schedule(execute: bool = False, max_stories=None) -> None:
+    """Prints the batch schedule plan; with execute=True, enqueues it into
+    daemon_jobs and triggers one _dispatch_ready_jobs() pass."""
+    from synlynk import _GREEN, _RESET, _dispatch_ready_jobs
+
+    result = _compute_schedule_plan(max_stories=max_stories)
+    plan = result["plan"]
+    blocked = result["blocked"]
+
+    if not plan and not blocked:
+        print("  No ready stories to schedule. Use: synlynk story ready <story_id>")
+        return
+
+    if plan:
+        print(f"\n  {'Story':<20} {'Agent':<10} {'Score':>6} {'Model':<14} {'Headroom':>10}")
+        print("  " + "-" * 70)
+        for p in plan:
+            headroom = "unknown" if p["headroom_after"] is None else f"{p['headroom_after']:,}"
+            print(
+                f"  {p['story_id']:<20} {p['agent']:<10} {p['score']:>6.2f} "
+                f"{p['model']:<14} {headroom:>10}"
+            )
+
+    if blocked:
+        print(f"\n  Blocked ({len(blocked)}):")
+        for b in blocked:
+            print(f"    {b['story_id']:<20} {b['reason']}")
+
+    if not execute:
+        print(f"\n  Dry run — {len(plan)} would be scheduled. Re-run with --execute to dispatch.")
+        return
+
+    from synlynk.scheduler import _enqueue_plan
+    job_ids = _enqueue_plan(plan)
+    launched = _dispatch_ready_jobs()
+    print(f"\n  {_GREEN}✓{_RESET} Enqueued {len(job_ids)} job(s), launched {launched}")

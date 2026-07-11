@@ -407,3 +407,75 @@ def test_enqueue_plan_on_empty_plan_writes_nothing(scheduler_db):
     count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
     conn.close()
     assert count == 0
+
+def test_cmd_schedule_dry_run_prints_plan_and_writes_nothing(scheduler_db, capsys):
+    from synlynk import _get_db
+    from synlynk.scheduler import cmd_schedule
+
+    conn = _get_db()
+    _seed_story(conn, "story-dryrun")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_schedule(execute=False)
+
+    out = capsys.readouterr().out
+    assert "story-dryrun" in out
+    assert "grok" in out
+
+    conn = _get_db()
+    count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
+    conn.close()
+    assert count == 0
+
+
+def test_cmd_schedule_execute_enqueues_and_calls_dispatch(scheduler_db, monkeypatch):
+    from synlynk import _get_db
+    from synlynk.scheduler import cmd_schedule
+
+    conn = _get_db()
+    _seed_story(conn, "story-exec")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    called = {}
+
+    def fake_dispatch(max_parallel=4):
+        called["ran"] = True
+        return 1
+
+    monkeypatch.setattr("synlynk._dispatch_ready_jobs", fake_dispatch)
+    cmd_schedule(execute=True)
+
+    assert called.get("ran") is True
+    conn = _get_db()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM daemon_jobs WHERE story_id='story-exec'"
+    ).fetchone()[0]
+    conn.close()
+    assert count == 1
+
+
+def test_cmd_schedule_shows_blocked_stories_with_reason(scheduler_db, capsys):
+    from synlynk import _get_db
+    from synlynk.scheduler import cmd_schedule
+
+    conn = _get_db()
+    _seed_story(conn, "story-blocked", engg="mobile")
+    conn.commit()
+    conn.close()
+
+    cmd_schedule(execute=False)
+    out = capsys.readouterr().out
+    assert "story-blocked" in out
+    assert "no_capability_candidates" in out
