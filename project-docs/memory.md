@@ -73,6 +73,14 @@ Changes to agent directive files pending outcome of BS-14 brainstorm. Do not app
 - **Cron design:** One `synlynk dispatch` cron, not per-agent. Per-role frequency via multiple `schedules` entries with different `filter` values.
 - **Spec:** `docs/superpowers/specs/2026-06-07-agent-identity-dispatch-design.md`
 
+## Dispatch Reliability Fixes (decided 2026-07-11/12) [@nikhilsoman]
+- **#161 fixed (PR #163):** Codex worktree git-ref writes were blocked — `dispatch_agent()` now resolves `git rev-parse --path-format=absolute --git-common-dir` and appends `--add-dir <path>` to Codex's sandbox flags.
+- **#160 fixed (PR #164):** `synlynk dispatch --help`'s agent list was a hand-maintained string that drifted (missing `grok`). Now derived from `sorted(AGENT_CAPABILITY_BASELINES)` with `choices=` added to the argparse arg, so it can't drift again and rejects unknown agents at the CLI layer.
+- **#162 fixed (PR #165):** Added `HARNESS_TIMEOUT_PATTERNS` (mirrors `QUOTA_PATTERNS`) — dead jobs whose log matches `"timeout waiting for response"` get a `HARNESS_INTERNAL_TIMEOUT` sentinel alert instead of looking like a generic task failure. Also generalized `_check_job_stall()` from "log is empty" (`os.path.getsize(log_file) > 0` early-exit, unreachable for almost every real job) to "log stopped advancing" (mtime staleness vs. `stall_timeout_minutes`, no new config knob).
+- **Live confirmation of the bug #162 fixes:** while dispatching #162's own fix to Codex, the job died at exit -1 after ~500s — right after finishing implementation but before committing — the exact harness-internal-timeout pattern the fix targets. Work survived in the worktree; verified diff against plan and committed manually rather than losing it. First-hand evidence the failure mode isn't agy-specific.
+- **Established verification pattern** for dispatch → PR: `git diff main <dispatch-branch> --stat` + targeted diffs to confirm the diff matches the plan exactly; cross-check CI failures against `main`'s own CI history before merging (5 known baseline failures: `test_detect_install_type_pip/script/unknown`, `test_run_tc4_skips_flag_only_command_templates`, `test_upgrade_auto_installs_new_version` — env-specific, not regressions).
+- Specs: `docs/superpowers/specs/2026-07-11-codex-worktree-git-refs-design.md`, `docs/superpowers/specs/2026-07-11-dispatch-help-agent-list-design.md`, `docs/superpowers/specs/2026-07-11-harness-timeout-detection-design.md`.
+
 ## Brainstorm Session Map (updated 2026-06-27)
 - **BS-1** ✅ Done — Initial architecture / OS framing
 - **BS-2** ✅ Done — Onboarding + Mode Taxonomy
