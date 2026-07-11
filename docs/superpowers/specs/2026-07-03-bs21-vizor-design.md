@@ -175,9 +175,9 @@ A consistent shell wraps all five views:
   }
 }
 ```
-Auto-generation from codebase imports is a v2 feature.
-
-**FTUE:** If no `vizor-tube.json` exists, the Architect Map shows a placeholder prompt: "Define your architecture lines to unlock this view. Run `synlynk viz --setup-tube` to start."
+Superseded by docs/superpowers/specs/2026-07-11-vizor-architect-map-v2-design.md — the Architect
+Map is now a live workspace-repo graph generated from `.synlynk/config.json`'s workspace repo
+list, not a manually-authored tube map.
 
 ---
 
@@ -288,9 +288,6 @@ synlynk viz --generate
 
 # Open existing cache in browser without regenerating
 synlynk viz --open
-
-# Set up architecture lines interactively (creates vizor-tube.json)
-synlynk viz --setup-tube
 
 # Specify port
 synlynk viz --serve --port 9000
