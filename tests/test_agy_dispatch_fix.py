@@ -65,6 +65,17 @@ def _commit_worktree_files(worktree_path: str, files: dict, message: str) -> Non
     ], capture_output=True, check=True)
 
 
+def _fake_completed_process(stdout="", stderr="", returncode=0):
+    class Result:
+        pass
+
+    result = Result()
+    result.stdout = stdout
+    result.stderr = stderr
+    result.returncode = returncode
+    return result
+
+
 def test_dispatch_real_files_touched_via_git_diff_lists_committed_and_dirty_files(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
@@ -670,3 +681,182 @@ def test_implement_the_schemavalidation_half_of_g_write_rejects_unregistered_age
 
     with pytest.raises(ValueError, match="unregistered agent"):
         sl._write_capability_rating(job, "Build complete.")
+
+
+def test_wire_the_2_dead_auto_signals_and_add_the_pr_review_cycles_from_pr_review_api(tmp_path, monkeypatch):
+    import json
+    import synlynk as sl
+    import synlynk.sentinel as sentinel_mod
+
+    monkeypatch.chdir(tmp_path)
+    story_id = sl.cmd_story_create("Review cycles story", engg_domain="backend", org_domain="platform")
+    payload = {
+        "reviews": [
+            {"state": "CHANGES_REQUESTED", "submittedAt": "2026-07-11T10:00:00Z"},
+            {"state": "APPROVED", "submittedAt": "2026-07-11T11:00:00Z"},
+            {"state": "CHANGES_REQUESTED", "submittedAt": "2026-07-11T12:00:00Z"},
+            {"state": "APPROVED", "submittedAt": "2026-07-11T13:00:00Z"},
+        ]
+    }
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "pr", "view"]:
+            return _fake_completed_process(stdout=json.dumps(payload))
+        if cmd[:3] == ["gh", "pr", "checks"]:
+            return _fake_completed_process(stdout="no checks reported", returncode=1)
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(sentinel_mod.subprocess, "run", fake_run)
+
+    job = {
+        "story_id": story_id,
+        "agent": "claude",
+        "model_at_dispatch": "claude-3",
+        "started_at": "2026-07-11T10:00:00",
+        "ended_at": "2026-07-11T10:30:00",
+        "exit_code": 0,
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "worktree_path": str(tmp_path),
+        "worktree_branch": "feature/review-cycles",
+    }
+
+    sl._write_capability_rating(job, "Build complete.")
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT pr_review_cycles, verified_by_ci, dispatch_rework, micro_rework "
+        "FROM capability_ratings WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+
+    assert row[0] == 2
+    assert row[1] is None
+    assert row[2] == 0
+    assert row[3] == 0
+
+
+@pytest.mark.parametrize(
+    "ci_stdout, ci_returncode, expected",
+    [
+        ("no checks reported", 1, None),
+        ("✓ build passed", 0, 1),
+        ("✗ build failed", 1, 0),
+    ],
+)
+def test_wire_the_2_dead_auto_signals_and_add_the_verified_by_ci_can_be_null_true_false(
+    tmp_path,
+    monkeypatch,
+    ci_stdout,
+    ci_returncode,
+    expected,
+):
+    import json
+    import synlynk as sl
+    import synlynk.sentinel as sentinel_mod
+
+    monkeypatch.chdir(tmp_path)
+    story_id = sl.cmd_story_create("CI signal story", engg_domain="backend", org_domain="platform")
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "pr", "view"]:
+            return _fake_completed_process(stdout=json.dumps({"reviews": []}))
+        if cmd[:3] == ["gh", "pr", "checks"]:
+            return _fake_completed_process(stdout=ci_stdout, returncode=ci_returncode)
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(sentinel_mod.subprocess, "run", fake_run)
+
+    job = {
+        "story_id": story_id,
+        "agent": "claude",
+        "model_at_dispatch": "claude-3",
+        "started_at": "2026-07-11T10:00:00",
+        "ended_at": "2026-07-11T10:05:00",
+        "exit_code": 0,
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "worktree_path": str(tmp_path),
+        "worktree_branch": "feature/ci-signal",
+    }
+
+    sl._write_capability_rating(job, "Build complete.")
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT verified_by_ci FROM capability_ratings WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+
+    assert row[0] == expected
+
+
+def test_wire_the_2_dead_auto_signals_and_add_the_verifier_tier_weight_blends_with_auto_quality(
+    tmp_path,
+    monkeypatch,
+):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    story_id = sl.cmd_story_create("Verifier weight story", engg_domain="backend", org_domain="platform")
+    job = {
+        "story_id": story_id,
+        "agent": "claude",
+        "model_at_dispatch": "claude-3",
+        "started_at": "2026-07-11T10:00:00",
+        "ended_at": "2026-07-11T10:05:00",
+        "exit_code": None,
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+    }
+
+    sl._write_capability_rating(
+        job,
+        "# synlynk-meta\nquality=7\ncorrect=true\nrework_needed=false\nverifier_model=gemini-2.5-pro\n",
+    )
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT signal_source, quality_auto, quality FROM capability_ratings WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+
+    assert row[0] == "verifier"
+    assert row[1] == pytest.approx(10.0, abs=0.01)
+    assert row[2] == pytest.approx(7.45, abs=0.01)
+
+
+def test_wire_the_2_dead_auto_signals_and_add_the_dispatch_rework_and_micro_rework_stay_distinct(
+    tmp_path,
+    monkeypatch,
+):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    story_id = sl.cmd_story_create("Rework signal story", engg_domain="backend", org_domain="platform")
+    job = {
+        "story_id": story_id,
+        "agent": "claude",
+        "model_at_dispatch": "claude-3",
+        "started_at": "2026-07-11T10:00:00",
+        "ended_at": "2026-07-11T10:05:00",
+        "exit_code": None,
+        "dispatch_rework": 3,
+        "micro_rework": 7,
+    }
+
+    sl._write_capability_rating(job, "Build complete.")
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT dispatch_rework, micro_rework, quality_auto FROM capability_ratings WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+
+    assert row[0] == 3
+    assert row[1] == 7
+    assert row[2] == pytest.approx(4.0, abs=0.01)

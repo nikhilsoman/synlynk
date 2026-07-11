@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import subprocess
 import time
 from typing import Optional
 
@@ -89,14 +90,157 @@ def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
     return alerts
 
 
+def _worktree_branch_name(worktree_path):
+    """Returns the current git branch for a worktree, or None when unavailable."""
+    root = worktree_path or os.getcwd()
+    if not os.path.isdir(root):
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", root, "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+    branch = (result.stdout or "").strip()
+    return branch or None
+
+
+def _gh_pr_view_payload(worktree_path, worktree_branch):
+    """Returns gh pr view JSON payload for the active branch, or None."""
+    branch = worktree_branch or _worktree_branch_name(worktree_path)
+    if not branch:
+        return None
+    root = worktree_path or os.getcwd()
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", branch, "--json", "reviews"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=root,
+        )
+    except Exception:
+        return None
+
+    payload_text = (result.stdout or "").strip()
+    if not payload_text:
+        return None
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _extract_pr_review_cycles(worktree_path=None, worktree_branch=None):
+    """Counts review-request -> approval round trips from GH PR review data."""
+    payload = _gh_pr_view_payload(worktree_path, worktree_branch)
+    if not payload:
+        return None
+    reviews = payload.get("reviews")
+    if not isinstance(reviews, list):
+        return None
+
+    events = []
+    for review in reviews:
+        if not isinstance(review, dict):
+            continue
+        state = (review.get("state") or review.get("reviewState") or "").strip().upper()
+        if not state:
+            continue
+        ts = review.get("submittedAt") or review.get("createdAt") or ""
+        events.append((ts, state))
+
+    events.sort(key=lambda item: item[0] or "")
+    cycles = 0
+    awaiting_approval = False
+    for _, state in events:
+        if state == "CHANGES_REQUESTED":
+            awaiting_approval = True
+        elif state == "APPROVED" and awaiting_approval:
+            cycles += 1
+            awaiting_approval = False
+    return cycles
+
+
+def _extract_verified_by_ci(worktree_path=None, worktree_branch=None):
+    """Returns CI outcome for the active branch when GH status data is available."""
+    branch = worktree_branch or _worktree_branch_name(worktree_path)
+    if not branch:
+        return None
+    root = worktree_path or os.getcwd()
+
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "checks", branch],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=root,
+        )
+    except Exception:
+        result = None
+
+    if result is not None:
+        output = "\n".join(part for part in [result.stdout or "", result.stderr or ""] if part).lower()
+        if any(phrase in output for phrase in ("no pull request", "no pull requests", "no checks", "not found")):
+            return None
+        if any(phrase in output for phrase in ("fail", "failure", "errored")):
+            return False
+        if result.returncode == 0 and any(phrase in output for phrase in ("pass", "success", "succeeded")):
+            return True
+        if result.returncode == 0 and not output.strip():
+            return True
+
+    try:
+        result = subprocess.run(
+            ["gh", "run", "list", "--branch", branch, "--limit", "1", "--json", "status,conclusion"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=root,
+        )
+    except Exception:
+        return None
+
+    payload_text = (result.stdout or "").strip()
+    if not payload_text:
+        return None
+    try:
+        runs = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(runs, list) or not runs:
+        return None
+    run = runs[0]
+    if not isinstance(run, dict):
+        return None
+
+    status = str(run.get("status") or "").lower()
+    conclusion = str(run.get("conclusion") or "").lower()
+    if status and status != "completed":
+        return None
+    if conclusion in ("success", "neutral", "skipped"):
+        return True
+    if conclusion in ("failure", "cancelled", "timed_out", "action_required"):
+        return False
+    return None
+
+
 def _extract_auto_signals(log_text: str, started_at: str = None,
-                           ended_at: str = None, exit_code: int = None) -> dict:
+                           ended_at: str = None, exit_code: int = None,
+                           worktree_path=None, worktree_branch=None) -> dict:
     """Extracts objective quality signals from a completed job's log text."""
     signals = {
         "test_pass_rate": None,
         "build_success": None,
         "duration_seconds": None,
         "test_count": None,
+        "pr_review_cycles": None,
+        "verified_by_ci": None,
     }
 
     patterns = [
@@ -134,6 +278,9 @@ def _extract_auto_signals(log_text: str, started_at: str = None,
             signals["duration_seconds"] = delta.total_seconds()
         except Exception:
             pass
+
+    signals["pr_review_cycles"] = _extract_pr_review_cycles(worktree_path, worktree_branch)
+    signals["verified_by_ci"] = _extract_verified_by_ci(worktree_path, worktree_branch)
 
     return signals
 
