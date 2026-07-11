@@ -591,6 +591,8 @@ CREATE TABLE IF NOT EXISTS stories (
     stack_tags    TEXT DEFAULT '[]',
     industry      TEXT DEFAULT 'unknown',
     phase         TEXT DEFAULT 'build',
+    priority      INTEGER NOT NULL DEFAULT 5,
+    readiness     TEXT NOT NULL DEFAULT 'draft',
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -10769,5 +10771,7 @@ from synlynk.db import (  # noqa: E402
     cmd_score_attest,
     cmd_score_list,
     cmd_story_create,
+    cmd_story_draft,
     cmd_story_list,
+    cmd_story_ready,
 )

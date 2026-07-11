@@ -180,7 +180,9 @@ def main() -> None:
         cmd_shell,
         cmd_status as cmd_project_status,
         cmd_story_create,
+        cmd_story_draft,
         cmd_story_list,
+        cmd_story_ready,
         cmd_sync,
         cmd_configure_agent,
         cmd_team_status,
@@ -195,6 +197,7 @@ def main() -> None:
     )
     from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
+    from synlynk.scheduler import cmd_schedule
     _reconcile_jobs()
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
@@ -510,6 +513,12 @@ def main() -> None:
         help="Workspace stack tags; auto-detected when omitted"
     )
     story_sub.add_parser("list", help="List all stories")
+    story_ready_parser = story_sub.add_parser("ready", help="Mark a story ready for scheduling")
+    story_ready_parser.add_argument("story_id", nargs="?", default=None)
+    story_ready_parser.add_argument("--all", action="store_true", dest="all_stories",
+                                     help="Mark every draft story ready")
+    story_draft_parser = story_sub.add_parser("draft", help="Revert a story to draft")
+    story_draft_parser.add_argument("story_id")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -525,6 +534,14 @@ def main() -> None:
     attest_parser = score_sub.add_parser("attest", help="Retroactively attest model version")
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
+
+    schedule_parser = subparsers.add_parser(
+        "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
+    )
+    schedule_parser.add_argument("--execute", action="store_true",
+                                  help="Enqueue and dispatch the plan instead of a dry run")
+    schedule_parser.add_argument("--max-stories", type=int, default=None, dest="max_stories",
+                                  help="Cap how many stories to schedule this run")
 
     pr_parser = subparsers.add_parser("pr", help="PR workflow commands")
     pr_sub = pr_parser.add_subparsers(dest="pr_action")
@@ -705,6 +722,10 @@ def main() -> None:
                 sys.exit(1)
         elif args.story_action == "list":
             cmd_story_list()
+        elif args.story_action == "ready":
+            cmd_story_ready(args.story_id, all_stories=getattr(args, "all_stories", False))
+        elif args.story_action == "draft":
+            cmd_story_draft(args.story_id)
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
@@ -712,6 +733,8 @@ def main() -> None:
             cmd_score_list(engg=args.engg, org=args.org, industry=args.industry)
         elif args.score_action == "attest":
             cmd_score_attest(args.story_id, args.model)
+    elif args.command == "schedule":
+        cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
         if args.pr_action == "check":
             cmd_pr_check()

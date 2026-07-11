@@ -606,6 +606,15 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             )
         except sqlite3.OperationalError:
             pass
+    # #141 follow-up: fleet scheduler columns on stories
+    for _col, _typedef in [
+        ("priority", "INTEGER NOT NULL DEFAULT 5"),
+        ("readiness", "TEXT NOT NULL DEFAULT 'draft'"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
+        except Exception:
+            pass  # column already exists
     conn.commit()
     _seed_verb_map(conn)
 
@@ -1154,6 +1163,36 @@ def cmd_story_list() -> None:
         est = f"{r[6]:,}" if r[6] is not None else "—"
         actual = f"{r[7]:,}" if r[7] is not None else "—"
         print(f"  {r[0]:<14} {(r[1] or '')[:27]:<28} {r[2]:<12} {est:>9} {actual:>9}")
+
+def cmd_story_ready(story_id, all_stories: bool = False) -> None:
+    """Marks one story (or every draft story, with all_stories=True) as ready
+    for scheduling. Only 'ready' stories are candidates for synlynk schedule."""
+    from synlynk import _GREEN, _RESET, _get_db
+    conn = _get_db()
+    if all_stories:
+        cur = conn.execute("UPDATE stories SET readiness='ready' WHERE readiness='draft'")
+        conn.commit()
+        conn.close()
+        print(f"  {_GREEN}✓{_RESET} Marked {cur.rowcount} draft stories ready")
+        return
+    if not story_id:
+        conn.close()
+        print("  Error: story_id required unless --all is given")
+        return
+    conn.execute("UPDATE stories SET readiness='ready' WHERE story_id=?", (story_id,))
+    conn.commit()
+    conn.close()
+    print(f"  {_GREEN}✓{_RESET} Story {story_id} marked ready")
+
+
+def cmd_story_draft(story_id: str) -> None:
+    """Reverts a story to draft, excluding it from scheduling until re-readied."""
+    from synlynk import _GREEN, _RESET, _get_db
+    conn = _get_db()
+    conn.execute("UPDATE stories SET readiness='draft' WHERE story_id=?", (story_id,))
+    conn.commit()
+    conn.close()
+    print(f"  {_GREEN}✓{_RESET} Story {story_id} reverted to draft")
 
 def cmd_goal_create(outcome: str, criterion: str, deadline: str = None) -> str:
     """Creates a Business Goal record in state.db. Returns the generated goal_id."""
