@@ -886,6 +886,41 @@ def cmd_story_list() -> None:
         actual = f"{r[7]:,}" if r[7] is not None else "—"
         print(f"  {r[0]:<14} {(r[1] or '')[:27]:<28} {r[2]:<12} {est:>9} {actual:>9}")
 
+def cmd_goal_create(outcome: str, criterion: str, deadline: str = None) -> str:
+    """Creates a Business Goal record in state.db. Returns the generated goal_id."""
+    from synlynk import _GREEN, _RESET, _get_db
+    import hashlib as _hashlib
+    goal_id = "goal-" + _hashlib.md5(
+        f"{outcome}{time.time()}".encode()
+    ).hexdigest()[:8]
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, deadline) VALUES (?, ?, ?, ?)",
+        (goal_id, outcome, criterion, deadline)
+    )
+    conn.commit()
+    conn.close()
+    print(f"  {_GREEN}✓{_RESET} Goal created: {goal_id}  [{outcome}]")
+    return goal_id
+
+def cmd_goal_list() -> None:
+    """Prints all active goals in state.db."""
+    from synlynk import _get_db
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT goal_id, outcome, criterion, deadline, status "
+        "FROM goals WHERE status='active' ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    if not rows:
+        print("  No active goals. Use: synlynk goal create --outcome '...' --criterion '...'")
+        return
+    print(f"\n  {'ID':<12} {'Outcome':<40} {'Deadline':<12}")
+    print("  " + "-" * 80)
+    for r in rows:
+        deadline = r[3] or "ongoing"
+        print(f"  {r[0]:<12} {(r[1] or '')[:39]:<40} {deadline:<12}")
+
 def cmd_score_add(story_id: str, rating: float, note: str = None,
                   rework: bool = False) -> None:
     """Add a human quality rating for a story. Inserts a new 'human' row."""
