@@ -55,6 +55,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [46](./46-pr118-bs22-vizor-efficiency.md) | PR #118 — BS-22: Vizor Gets Its Eyes | [#118](https://github.com/nikhilsoman/synlynk/pull/118) | 2026-07-05 |
 | [47](./47-pr119-bs12-agent-autonomy-bridge.md) | PR #119 — BS-12: The Agent Autonomy Bridge | [#119](https://github.com/nikhilsoman/synlynk/pull/119) | 2026-07-05 |
 | **[48](./48-v011-agent-ecosystem-operational-layer.md)** | **v0.11.0 — The Agent Ecosystem Operational Layer (Named Release)** | [v0.11.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.11.0) | **2026-07-05** |
+| [49](./49-prTBD-bs8-goal-hierarchy.md) | BS-8: The Business Goal Layer | TBD | 2026-07-11 |
 
 
 ## Per-PR Post Template
