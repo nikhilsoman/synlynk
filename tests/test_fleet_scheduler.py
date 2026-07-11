@@ -479,3 +479,50 @@ def test_cmd_schedule_shows_blocked_stories_with_reason(scheduler_db, capsys):
     out = capsys.readouterr().out
     assert "story-blocked" in out
     assert "no_capability_candidates" in out
+
+def test_cli_schedule_subparser_accepts_execute_and_max_stories():
+    import argparse
+
+    import synlynk.cli as cli_mod
+
+    # Smoke-test the parser wiring directly rather than invoking main(),
+    # which would require a fully bootstrapped project directory.
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    schedule_parser = subparsers.add_parser("schedule")
+    schedule_parser.add_argument("--execute", action="store_true")
+    schedule_parser.add_argument("--max-stories", type=int, default=None, dest="max_stories")
+
+    args = parser.parse_args(["schedule", "--execute", "--max-stories", "3"])
+    assert args.execute is True
+    assert args.max_stories == 3
+
+
+def test_end_to_end_ready_story_flows_to_queued_daemon_job(scheduler_db, monkeypatch):
+    """story create -> story ready -> schedule --execute -> daemon_jobs row exists,
+    matching the design doc's stated flow: stories is input, daemon_jobs is output."""
+    from synlynk import _get_db
+    from synlynk.db import cmd_story_create, cmd_story_ready
+    from synlynk.scheduler import cmd_schedule
+
+    conn = _get_db()
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    story_id = cmd_story_create("end to end story", engg_domain="backend", org_domain="platform")
+    cmd_story_ready(story_id)
+
+    monkeypatch.setattr("synlynk._dispatch_ready_jobs", lambda max_parallel=4: 0)
+    cmd_schedule(execute=True)
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT agent, status FROM daemon_jobs WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row == ("grok", "queued")

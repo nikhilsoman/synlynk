@@ -197,6 +197,7 @@ def main() -> None:
     )
     from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
+    from synlynk.scheduler import cmd_schedule
     _reconcile_jobs()
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
@@ -534,6 +535,14 @@ def main() -> None:
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
 
+    schedule_parser = subparsers.add_parser(
+        "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
+    )
+    schedule_parser.add_argument("--execute", action="store_true",
+                                  help="Enqueue and dispatch the plan instead of a dry run")
+    schedule_parser.add_argument("--max-stories", type=int, default=None, dest="max_stories",
+                                  help="Cap how many stories to schedule this run")
+
     pr_parser = subparsers.add_parser("pr", help="PR workflow commands")
     pr_sub = pr_parser.add_subparsers(dest="pr_action")
     pr_sub.add_parser("check", help="Block PR if model versions are unattested")
@@ -724,6 +733,8 @@ def main() -> None:
             cmd_score_list(engg=args.engg, org=args.org, industry=args.industry)
         elif args.score_action == "attest":
             cmd_score_attest(args.story_id, args.model)
+    elif args.command == "schedule":
+        cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
         if args.pr_action == "check":
             cmd_pr_check()
