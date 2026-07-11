@@ -93,3 +93,14 @@ File naming: `docs/blog/NN-prN-<version-or-theme>.md` (e.g. `08-pr29-v0.4.0-trio
 Commit the blog post in the same branch as the PR. Do not wait until after merge.
 
 Always `git pull` before modifying project-docs files to avoid conflicts in team mode.
+
+## Workspace Map Update Protocol
+
+**For any PR that changes how one tracked repo relates to another** (new API call between repos,
+new shared dependency, a relationship removed), update `.synlynk/vizor-workspace-map.json` in the
+same branch as that PR — add/edit/remove the relevant entry in its `edges` array. Most PRs touch
+only one repo and don't need this step; it only applies when the PR's own description says it
+adds, removes, or changes a cross-repo relationship. This keeps Vizor's Architect Map graph
+(`docs/superpowers/specs/2026-07-11-vizor-architect-map-v2-design.md`) accurate without a manual
+audit step — same discipline as the Blog Post Protocol above, but conditional rather than
+mandatory on every PR.

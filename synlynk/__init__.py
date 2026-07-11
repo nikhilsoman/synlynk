@@ -6641,6 +6641,34 @@ def _scan_source_skeleton(root: str = ".") -> list:
     return skeleton
 
 
+def _query_repo_file_tree() -> dict:
+    """Build a nested directory tree from source_symbols for the current HEAD."""
+    conn = _get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT MAX(scanned_at) FROM source_symbols")
+        row = cur.fetchone()
+        if not row or not row[0]:
+            return {"name": ".", "dirs": {}, "files": []}
+        cur.execute(
+            "SELECT file, COUNT(*) FROM source_symbols "
+            "WHERE scanned_at = (SELECT MAX(scanned_at) FROM source_symbols) "
+            "GROUP BY file"
+        )
+        file_counts = cur.fetchall()
+    except sqlite3.OperationalError:
+        return {"name": ".", "dirs": {}, "files": []}
+
+    root = {"name": ".", "dirs": {}, "files": []}
+    for file_path, symbol_count in file_counts:
+        parts = file_path.split(os.sep) if os.sep in file_path else file_path.split("/")
+        node = root
+        for part in parts[:-1]:
+            node = node["dirs"].setdefault(part, {"name": part, "dirs": {}, "files": []})
+        node["files"].append({"name": parts[-1], "symbol_count": symbol_count})
+    return root
+
+
 def _scan_full_repo(root: str = ".") -> tuple:
     """Deep scan: extracts all symbols, writes DB + project-docs/source-map.md.
 
