@@ -1451,539 +1451,135 @@ renderDreams();
 </html>"""
 
 
-def generate_tube_html(data: dict, port: int) -> str:
-    """Generate the Architect Map view (tube map style SVG or setup prompt)."""
+_ARCHITECT_MAP_JS = "// populated in Task 5/6"
+
+_ARCHITECT_MAP_STYLE = """
+body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2328; }
+.am-header { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid #d1d5db; }
+.am-header h1 { font-size:15px; margin:0; }
+.am-switcher { display:flex; gap:6px; }
+.am-tab { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:5px 12px; font-size:12px; cursor:pointer; font-family:inherit; }
+.am-tab.active { background:#0d9e87; color:#fff; border-color:#0d9e87; }
+.am-legend { display:flex; gap:14px; padding:8px 20px; font-size:11px; }
+.legend-item { display:flex; align-items:center; gap:5px; }
+.legend-dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+.am-view { display:none; padding:10px 20px; }
+.am-view.active { display:block; }
+.am-node { cursor:pointer; }
+.am-node rect { fill:#fff; stroke:#334155; stroke-width:1.5; }
+.am-node text { font-size:11px; font-family:inherit; }
+.am-edge { stroke-width:2; fill:none; }
+.ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:999; }
+.ov.open { display:block; }
+.am-drawer { position:fixed; top:0; right:-360px; width:340px; height:100%; background:#fff; box-shadow:-2px 0 12px rgba(0,0,0,.15); z-index:1000; transition:right .2s ease; padding:16px; box-sizing:border-box; }
+.am-drawer.open { right:0; }
+.am-drawer-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:bold; margin-bottom:12px; }
+.am-drawer-header button { background:none; border:none; cursor:pointer; font-size:14px; }
+.am-drawer-body { font-size:12px; line-height:1.6; margin-bottom:16px; }
+.am-drawer-actions { display:flex; flex-direction:column; gap:8px; }
+.btn { background:#0d9e87; color:#fff; border:none; border-radius:5px; padding:7px 10px; font-size:12px; cursor:pointer; text-align:center; text-decoration:none; font-family:inherit; }
+.am-tree { font-size:12px; }
+.am-tree-dir > summary { cursor:pointer; padding:2px 0; }
+.am-tree-file { padding:2px 0 2px 18px; color:#475569; }
+"""
+
+
+def generate_architect_map_html(data: dict, port: int) -> str:
+    """Generate the Architect Map view shell."""
     import json
-    import math
 
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    updated_at = workspace.get("updated_at", "")
+    repos = workspace.get("repos") or []
+    workspace_map = data.get("workspace_map") or {"edges": [], "edge_types": {}}
+    edges = workspace_map.get("edges", [])
+    edge_types = workspace_map.get("edge_types", {})
+
+    if not repos:
+        repos = [{"path": os.getcwd(), "name": workspace_name, "stack_labels": [], "github_url": None}]
+
+    nodes_json = json.dumps([
+        {
+            "id": r["name"],
+            "label": r["name"],
+            "path": r.get("path", ""),
+            "stack_labels": r.get("stack_labels", []),
+            "github_url": r.get("github_url"),
+        }
+        for r in repos
+    ])
+    edges_json = json.dumps(edges)
+    edge_types_json = json.dumps(edge_types)
+
+    legend_html = "".join(
+        f'<div class="legend-item"><span class="legend-dot" style="background:{html.escape(et.get("color", "#94a3b8"))}"></span>{html.escape(et.get("label", key))}</div>'
+        for key, et in edge_types.items()
+    )
+
+    style_content = _ARCHITECT_MAP_STYLE
     json_data = json.dumps(data)
-    workspace_name = data.get("workspace", {}).get("name", "workspace")
-    updated_at = data.get("workspace", {}).get("updated_at", "")
-
     live_js_html = _live_js(port)
-
-    style_content = """
-    :root {
-      --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eaeef2;
-      --border:#d1d5db; --border2:#e8ebee;
-      --text:#1f2328; --text2:#57606a; --text3:#8b949e;
-      --accent:#0d9e87; --accent-bg:#e6f7f4; --accent-dim:#c0ede6;
-      --shadow:0 2px 12px rgba(0,0,0,.10);
-      /* line colors */
-      --l-invoke:#0d9e87;
-      --l-ctx:   #3b82f6;
-      --l-sent:  #f59e0b;
-      --l-init:  #7c3aed;
-      --l-vizor: #d97706;
-    }
-    [data-theme="dark"] {
-      --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
-      --border:#1e2430; --border2:#13171f;
-      --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
-      --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
-      --shadow:0 2px 20px rgba(0,0,0,.5);
-      --l-invoke:#3de0c0;
-      --l-ctx:   #60a5fa;
-      --l-sent:  #fbbf24;
-      --l-init:  #a78bfa;
-      --l-vizor: #fcd34d;
-    }
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); color:var(--text); font-size:13px; transition:background .2s,color .2s; padding: 18px 22px; }
-    .content { display:flex; flex-direction:column; }
-    .view-header { display:flex;align-items:center;gap:12px;margin-bottom:14px; }
-    .view-title { font-size:16px;font-weight:700;color:var(--text); }
-    .view-sub { font-size:12px;color:var(--text3);margin-top:2px; }
-    .view-chip { background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-dim);border-radius:12px;font-size:11px;padding:3px 10px; }
-    .toolbar { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
-    .chip { padding:3px 9px;border-radius:10px;font-size:11px;border:1px solid var(--border);color:var(--text2);cursor:pointer;background:transparent;font-family:inherit; }
-    .chip.on { background:var(--accent-bg);border-color:var(--accent);color:var(--accent); }
-    .sp { flex:1; }
-    .zbtn { padding:4px 9px;border-radius:5px;font-size:11px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-family:inherit; }
-    .tube-wrap { background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative; }
-    svg.tube { width:100%;height:auto;display:block; transition: transform 0.2s ease; }
-    /* Station tooltip */
-    .tip {
-      position:absolute;display:none;background:var(--bg2);border:1px solid var(--border);
-      border-radius:7px;padding:9px 12px;font-size:11px;color:var(--text);
-      box-shadow:var(--shadow);pointer-events:none;z-index:100;max-width:240px;
-      white-space:nowrap;
-    }
-    .tip-name { font-weight:700;color:var(--text);margin-bottom:3px; }
-    .tip-line { color:var(--text3);font-size:10px; }
-    .tip-desc { color:var(--text2);font-size:10px;margin-top:4px;white-space:normal; }
-    .legend-row { display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px; }
-    .li { display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3); }
-    .lline { width:28px;height:4px;border-radius:2px;flex-shrink:0; }
-    .lsep { color:var(--border);margin:0 4px; }
-    .aa { width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex-shrink:0;border:1.5px solid; }
-
-    /* Setup view */
-    .setup-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 80vh;
-    }
-    .setup-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 40px;
-      text-align: center;
-      max-width: 480px;
-      width: 100%;
-      box-shadow: var(--shadow);
-      transition: transform 0.3s ease, border-color 0.3s ease;
-    }
-    .setup-card:hover {
-      transform: translateY(-4px);
-      border-color: var(--accent);
-    }
-    .setup-icon {
-      font-size: 48px;
-      margin-bottom: 20px;
-    }
-    .setup-card h1 {
-      font-size: 22px;
-      font-weight: 700;
-      margin-bottom: 12px;
-      color: var(--text);
-    }
-    .setup-desc {
-      color: var(--text2);
-      font-size: 14px;
-      margin-bottom: 24px;
-      line-height: 1.5;
-    }
-    .setup-cmd {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 24px;
-    }
-    .setup-cmd code {
-      font-family: 'SF Mono', 'JetBrains Mono', monospace;
-      font-size: 13px;
-      color: var(--accent);
-    }
-    .copy-btn {
-      background: var(--accent-bg);
-      border: 1px solid var(--accent-dim);
-      color: var(--accent);
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 11px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .copy-btn:hover {
-      background: var(--accent);
-      color: #fff;
-    }
-    .setup-spec a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .setup-spec a:hover {
-      text-decoration: underline;
-    }
-    """
-
-    tube_config = data.get("tube_config")
-
-    if not tube_config:
-        template = """<!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-<meta charset="UTF-8">
-<title>synlynk Vizor — Architect Map Setup</title>
-<style>
-__STYLE_CONTENT__
-</style>
-</head>
-<body>
-<div class="setup-container">
-  <div class="setup-card">
-    <div class="setup-icon">🚇</div>
-    <h1>🚇 Architect Map</h1>
-    <p class="setup-desc">Define your architecture lines to unlock this view.</p>
-    <div class="setup-cmd">
-      <code>synlynk viz --setup-tube</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('synlynk viz --setup-tube')">Copy</button>
-    </div>
-    <div class="setup-spec">
-      <a href="file:///Users/nikhilsoman/dev/synlynk/docs/superpowers/specs/2026-07-03-bs21-vizor-design.md" target="_blank">
-        docs/superpowers/specs/2026-07-03-bs21-vizor-design.md ↗
-      </a>
-    </div>
-  </div>
-</div>
-<script>
-window.VIZOR_DATA = __JSON_DATA__;
-</script>
-__LIVE_JS_HTML__
-</body>
-</html>"""
-        return (
-            template.replace("__STYLE_CONTENT__", style_content)
-            .replace("__JSON_DATA__", json_data)
-            .replace("__LIVE_JS_HTML__", live_js_html)
-        )
-
-    stations_config = tube_config.get("stations", {})
-    lines_config = tube_config.get("lines", [])
-
-    # Compute segs per station ID
-    segs_by_station = {}
-    for station_id in stations_config:
-        segs = sum(1 for line in lines_config if station_id in line.get("stations", []))
-        segs_by_station[station_id] = segs
-
-    lines_svg_list = []
-    legend_lines_list = []
-
-    for line in lines_config:
-        line_id = line.get("id", "")
-        line_name = line.get("name", "")
-        color = line.get("color", "var(--text)")
-        stations_in_line = line.get("stations", [])
-
-        points = []
-        for station_id in stations_in_line:
-            s_info = stations_config.get(station_id)
-            if s_info and "x" in s_info and "y" in s_info:
-                points.append(f"{s_info['x']},{s_info['y']}")
-
-        if len(points) >= 2:
-            points_str = " ".join(points)
-            lines_svg_list.append(
-                f'<polyline points="{points_str}" fill="none" stroke="{color}" stroke-width="5" '
-                f'stroke-linecap="round" stroke-linejoin="round" class="tube-line line-{line_id}"/>'
-            )
-
-            # Midpoint placement for labels
-            label_x = line.get("label_x")
-            label_y = line.get("label_y")
-            if label_x is None or label_y is None:
-                valid_stations = [stations_config[s] for s in stations_in_line if s in stations_config and "x" in stations_config[s] and "y" in stations_config[s]]
-                if valid_stations:
-                    mid_idx = len(valid_stations) // 2
-                    mid_station = valid_stations[mid_idx]
-                    label_x = mid_station["x"]
-                    label_y = mid_station["y"] - 15
-
-            if label_x is not None and label_y is not None:
-                lines_svg_list.append(
-                    f'<text x="{label_x}" y="{label_y}" text-anchor="middle" font-size="10" fill="{color}" '
-                    f'font-family="SF Mono,monospace" font-weight="700" letter-spacing="1">{line_name.upper()}</text>'
-                )
-
-        legend_lines_list.append(
-            f'<div class="li"><div class="lline" style="background:{color}"></div>{line_name}</div>'
-        )
-
-    stations_svg_list = []
-    num_interchanges = 0
-
-    for s_id, s_info in stations_config.items():
-        x = s_info.get("x")
-        y = s_info.get("y")
-        if x is None or y is None:
-            continue
-        label = s_info.get("label", s_id)
-        desc = s_info.get("desc", "")
-
-        segs = segs_by_station.get(s_id, 0)
-        r = 4 + segs * 2
-
-        station_lines = []
-        for line in lines_config:
-            if s_id in line.get("stations", []):
-                station_lines.append(line.get("name", line.get("id", "")))
-        lines_str = ", ".join(station_lines)
-
-        station_elements = []
-        is_active = s_info.get("active", False)
-
-        if is_active:
-            # Find closest matching glow filter
-            line_color = "teal"
-            if segs_lines := [l for l in lines_config if s_id in l.get("stations", [])]:
-                first_color = segs_lines[0].get("color", "").lower()
-                if "#3b82f6" in first_color or "blue" in first_color:
-                    line_color = "blue"
-                elif "#d97706" in first_color or "gold" in first_color or "#f59e0b" in first_color or "amber" in first_color:
-                    line_color = "gold"
-                elif "#7c3aed" in first_color or "purple" in first_color:
-                    line_color = "purple"
-                else:
-                    line_color = "teal"
-            station_elements.append(
-                f'<circle cx="{x}" cy="{y}" r="{r + 4}" fill="#0d9e87" opacity=".12" filter="url(#glow-{line_color})"/>'
-            )
-
-        if segs > 1:
-            num_interchanges += 1
-            segs_lines = [l for l in lines_config if s_id in l.get("stations", [])]
-            R = r + 8
-            perimeter = 2 * math.pi * R
-            S = perimeter / segs
-            gap = 4
-            A = max(2.0, S - gap)
-            for i, line in enumerate(segs_lines):
-                line_color = line.get("color", "var(--text)")
-                dasharray = f"{A:.2f} {perimeter - A:.2f}"
-                dashoffset = f"-{i * S:.2f}"
-                station_elements.append(
-                    f'<circle cx="{x}" cy="{y}" r="{R}" fill="none" stroke="{line_color}" stroke-width="5" '
-                    f'stroke-dasharray="{dasharray}" stroke-dashoffset="{dashoffset}" opacity="0.8"/>'
-                )
-            station_elements.append(
-                f'<circle cx="{x}" cy="{y}" r="{r}" fill="var(--bg2)" stroke="var(--text2)" stroke-width="2.5"/>'
-            )
-        else:
-            segs_lines = [l for l in lines_config if s_id in l.get("stations", [])]
-            color = segs_lines[0].get("color", "var(--text)") if segs_lines else "var(--text)"
-            station_elements.append(
-                f'<circle cx="{x}" cy="{y}" r="{r}" fill="var(--bg2)" stroke="{color}" stroke-width="2.5"/>'
-            )
-
-        if is_active:
-            center_color = "#0d9e87"
-            if segs_lines := [l for l in lines_config if s_id in l.get("stations", [])]:
-                center_color = segs_lines[0].get("color", "#0d9e87")
-            station_elements.append(
-                f'<circle cx="{x}" cy="{y}" r="3" fill="{center_color}" opacity=".7"/>'
-            )
-
-        agent = s_info.get("agent")
-        if agent:
-            agent_mapping = {
-                "claude": {"initial": "C", "fill": "#e6f7f4", "stroke": "#0d9e87"},
-                "agy": {"initial": "A", "fill": "#e8f0fe", "stroke": "#3b82f6"},
-                "codex": {"initial": "Co", "fill": "#e6f4f0", "stroke": "#10a37f"},
-                "grok": {"initial": "G", "fill": "#f0f0f0", "stroke": "#666060"},
-            }
-            if agent.lower() in agent_mapping:
-                amp = agent_mapping[agent.lower()]
-                bx, by = x, y - r - 10
-                station_elements.append(
-                    f'<circle cx="{bx}" cy="{by}" r="9" fill="{amp["fill"]}" stroke="{amp["stroke"]}" stroke-width="1.5"/>'
-                    f'<text x="{bx}" y="{by + 3}" text-anchor="middle" font-size="8" fill="{amp["stroke"]}" font-weight="800">{amp["initial"]}</text>'
-                )
-
-        label_pos = s_info.get("label_pos", "bottom")
-        if label_pos == "top":
-            anchor = "middle"
-            lx, ly = x, y - r - 8
-            if agent:
-                ly -= 12
-        elif label_pos == "left":
-            anchor = "end"
-            lx, ly = x - r - 8, y + 4
-        elif label_pos == "right":
-            anchor = "start"
-            lx, ly = x + r + 8, y + 4
-        else:
-            anchor = "middle"
-            lx, ly = x, y + r + 14
-
-        if "\n" in label:
-            parts = label.split("\n")
-            station_elements.append(
-                "\n".join(
-                    f'<text x="{lx}" y="{ly + i * 12}" text-anchor="{anchor}" font-size="11" fill="var(--text)" '
-                    f'font-family="SF Mono,monospace">{part}</text>'
-                    for i, part in enumerate(parts)
-                )
-            )
-        else:
-            station_elements.append(
-                f'<text x="{lx}" y="{ly}" text-anchor="{anchor}" font-size="11" fill="var(--text)" '
-                f'font-family="SF Mono,monospace">{label}</text>'
-            )
-
-        elements_str = "\n".join(station_elements)
-        active_attr = ' data-active="true"' if is_active else ''
-        stations_svg_list.append(
-            f'<g class="station" data-name="{label}" data-line="{lines_str}" data-desc="{desc}"{active_attr}>\n'
-            f'{elements_str}\n'
-            f'</g>'
-        )
-
-    lines_svg = "\n".join(lines_svg_list)
-    stations_svg = "\n".join(stations_svg_list)
-    legend_lines = "\n".join(legend_lines_list)
-
-    num_lines = len(lines_config)
-    hub_suffix = "s" if num_interchanges != 1 else ""
 
     template = """<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<title>synlynk Vizor — Architect Tube Map</title>
+<title>synlynk Vizor — Architect Map</title>
 <style>
 __STYLE_CONTENT__
 </style>
 </head>
 <body>
-
-<!-- Tooltip -->
-<div class="tip" id="tip">
-  <div class="tip-name" id="tip-name"></div>
-  <div class="tip-line" id="tip-line"></div>
-  <div class="tip-desc" id="tip-desc"></div>
-</div>
-
-<div class="content">
-  <div class="view-header">
-    <div>
-      <div class="view-title">Architect Map — __WORKSPACE_NAME__</div>
-      <div class="view-sub">__NUM_LINES__ subsystem lines · __NUM_INTERCHANGES__ interchange hub__HUB_SUFFIX__ · hover any station for details</div>
-    </div>
-    <div class="view-chip">🚇 tube map</div>
-  </div>
-
-  <div class="toolbar">
-    <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Show:</span>
-    <button class="chip on">All lines</button>
-    <button class="chip">Active only</button>
-    <button class="chip">Agents</button>
-    <div class="sp"></div>
-    <button class="zbtn" id="zoom-out">− zoom</button>
-    <button class="zbtn" id="zoom-in">+ zoom</button>
-  </div>
-
-  <div class="tube-wrap">
-    <svg class="tube" id="tube-svg" viewBox="0 0 1060 580" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <!-- Glow filters for active stations -->
-        <filter id="glow-teal" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="glow-blue" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="5" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="glow-purple" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-
-      <!-- Background Grid -->
-      <rect width="1060" height="580" fill="none"/>
-      <pattern id="dotgrid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-        <circle cx="20" cy="20" r="1" fill="currentColor" opacity=".08"/>
-      </pattern>
-      <rect width="1060" height="580" fill="url(#dotgrid)" color="var(--text3)"/>
-
-      <!-- Lines -->
-      __LINES_SVG__
-
-      <!-- Stations -->
-      __STATIONS_SVG__
-    </svg>
-  </div>
-
-  <!-- Legend -->
-  <div class="legend-row">
-    __LEGEND_LINES__
-    <span class="lsep">|</span>
-    <div class="li"><div style="width:10px;height:10px;border-radius:50%;border:2px solid var(--text);background:var(--bg2)"></div>regular station</div>
-    <div class="li"><div style="width:10px;height:10px;border-radius:2px;border:2px solid var(--text3);background:var(--bg2)"></div>terminal</div>
-    <div class="li"><div style="width:14px;height:14px;border-radius:50%;border:3px solid var(--text2);background:var(--bg2)"></div>interchange ⬡</div>
-    <div class="li"><div style="width:8px;height:8px;border-radius:50%;background:#0d9e87;opacity:.7"></div>active station</div>
+<div class="am-header">
+  <h1>Architect Map — __WORKSPACE_NAME__</h1>
+  <div class="am-switcher">
+    <button class="am-tab active" data-view="graph" onclick="setArchitectView('graph')">Graph</button>
+    <button class="am-tab" data-view="tree" onclick="setArchitectView('tree')">File Tree</button>
   </div>
 </div>
-
+<div class="am-legend">__LEGEND_HTML__</div>
+<div id="am-graph-view" class="am-view active">
+  <svg id="am-svg" width="100%" height="640"></svg>
+</div>
+<div id="am-tree-view" class="am-view">
+  <div id="am-tree-root" class="am-tree"></div>
+</div>
+<div class="ov" id="am-ov" onclick="closeDrawer()"></div>
+<div class="am-drawer" id="am-drawer">
+  <div class="am-drawer-header">
+    <span id="am-drawer-title">—</span>
+    <button onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="am-drawer-body" id="am-drawer-body"></div>
+  <div class="am-drawer-actions">
+    <button class="btn" onclick="drawerDispatch()">Dispatch to this repo</button>
+    <button class="btn" onclick="drawerJumpGantt()">Jump to Gantt view</button>
+    <a class="btn" id="am-drawer-github" href="#" target="_blank" rel="noopener">Open on GitHub</a>
+  </div>
+</div>
 <script>
-/* ── THEME ───────────────────────────────────── */
-function setTheme(t) {
-  const resolved = t==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;
-  document.documentElement.setAttribute('data-theme', resolved);
-}
-setTheme(localStorage.getItem('vizor-theme')||'light');
-window.addEventListener('storage', (e) => {
-  if (e.key === 'vizor-theme') {
-    setTheme(e.newValue || 'light');
-  }
-});
-try {
-  if (window.parent && window.parent.document.documentElement.hasAttribute('data-theme')) {
-    document.documentElement.setAttribute('data-theme', window.parent.document.documentElement.getAttribute('data-theme'));
-  }
-} catch(e) {}
-
-/* ── STATION TOOLTIPS ────────────────────────── */
-const tip = document.getElementById('tip');
-document.querySelectorAll('.station').forEach(el => {
-  el.style.cursor = 'pointer';
-  el.addEventListener('mouseenter', e => {
-    document.getElementById('tip-name').textContent = el.dataset.name;
-    document.getElementById('tip-line').textContent = el.dataset.line || '';
-    document.getElementById('tip-desc').textContent = el.dataset.desc || '';
-    tip.style.display = 'block';
-    positionTip(e);
-  });
-  el.addEventListener('mousemove', positionTip);
-  el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
-});
-
-function positionTip(e) {
-  const x = e.clientX + 14;
-  const y = e.clientY - 10;
-  const tw = tip.offsetWidth;
-  const th = tip.offsetHeight;
-  tip.style.left = (x + tw > window.innerWidth - 10 ? x - tw - 20 : x) + 'px';
-  tip.style.top  = (y + th > window.innerHeight - 10 ? y - th - 10 : y) + 'px';
-}
-
-/* ── ZOOM ────────────────────────────────────── */
-let scale = 1;
-const svg = document.getElementById('tube-svg');
-if (svg) {
-  document.getElementById('zoom-in').addEventListener('click', () => {
-    scale = Math.min(scale + 0.15, 2.5);
-    svg.style.transform = `scale(${scale})`;
-    svg.style.transformOrigin = 'top left';
-  });
-  document.getElementById('zoom-out').addEventListener('click', () => {
-    scale = Math.max(scale - 0.15, 0.5);
-    svg.style.transform = `scale(${scale})`;
-    svg.style.transformOrigin = 'top left';
-  });
-}
 window.VIZOR_DATA = __JSON_DATA__;
+window.ARCHITECT_NODES = __NODES_JSON__;
+window.ARCHITECT_EDGES = __EDGES_JSON__;
+window.ARCHITECT_EDGE_TYPES = __EDGE_TYPES_JSON__;
+window.VIZOR_PORT = __PORT__;
+__ARCHITECT_MAP_JS__
 </script>
 __LIVE_JS_HTML__
 </body>
 </html>"""
-
     return (
-        template.replace("__STYLE_CONTENT__", style_content)
-        .replace("__WORKSPACE_NAME__", workspace_name)
-        .replace("__NUM_LINES__", str(num_lines))
-        .replace("__NUM_INTERCHANGES__", str(num_interchanges))
-        .replace("__HUB_SUFFIX__", hub_suffix)
-        .replace("__LINES_SVG__", lines_svg)
-        .replace("__STATIONS_SVG__", stations_svg)
-        .replace("__LEGEND_LINES__", legend_lines)
+        template
+        .replace("__STYLE_CONTENT__", style_content)
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__LEGEND_HTML__", legend_html)
         .replace("__JSON_DATA__", json_data)
+        .replace("__NODES_JSON__", nodes_json)
+        .replace("__EDGES_JSON__", edges_json)
+        .replace("__EDGE_TYPES_JSON__", edge_types_json)
+        .replace("__PORT__", str(port))
+        .replace("__ARCHITECT_MAP_JS__", _ARCHITECT_MAP_JS)
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
 
@@ -4456,7 +4052,7 @@ def _write_cache(data: dict, port: int) -> None:
     views = {
         "index.html": generate_index_html(data, port),
         "gantt.html": generate_gantt_html(data, port),
-        "tube.html": generate_tube_html(data, port),
+        "tube.html": generate_architect_map_html(data, port),
         "journeys.html": generate_journeys_html(data, port),
         "effort.html": generate_effort_html(data, port),
         "efficiency.html": generate_efficiency_html(data, port),
@@ -4674,9 +4270,10 @@ def cmd_viz(args) -> None:
             "workspace": {
                 "name": os.path.basename(os.getcwd()) or "workspace",
                 "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "repos": [],
             },
             "notes": {},
-            "tube_config": None,
+            "workspace_map": {"edges": [], "edge_types": {}},
             "observatory": build_job_observatory_snapshot(),
         }
     except Exception as e:

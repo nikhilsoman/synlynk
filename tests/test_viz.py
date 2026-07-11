@@ -169,7 +169,7 @@ def test_generate_effort_html_renders_svg_charts(tmp_path, monkeypatch):
     from synlynk.viz import generate_effort_html
 
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [
             {"id": "d1", "name": "Dream One", "status": "active", "cost_total": 120.0, "cost_est": 100.0},
             {"id": "d2", "name": "Dream Two", "status": "parked", "cost_total": 60.0, "cost_est": None},
@@ -205,7 +205,7 @@ def test_generate_effort_html_empty_state(tmp_path, monkeypatch):
     from synlynk.viz import generate_effort_html
 
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [],
         "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {},
@@ -220,55 +220,59 @@ def test_generate_effort_html_empty_state(tmp_path, monkeypatch):
     assert "No cost data yet" in html
     assert "<svg" not in html
 
-def test_generate_tube_html_no_config():
-    from synlynk.viz import generate_tube_html
-    data = {
-        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
-        "workspace_map": {"edges": [], "edge_types": {}}
-    }
-    html = generate_tube_html(data, 8721)
-    assert "🚇 Architect Map" in html
-    assert "Define your architecture lines to unlock this view." in html
-    assert "synlynk viz --setup-tube" in html
-    assert "docs/superpowers/specs/2026-07-03-bs21-vizor-design.md" in html
+def test_generate_architect_map_html_no_repos_shows_single_node():
+    from synlynk.viz import generate_architect_map_html
 
-def test_generate_tube_html_with_config():
-    from synlynk.viz import generate_tube_html
-    config = {
-        "lines": [
-            {"id": "init", "name": "Init Line", "color": "#7c3aed", "stations": ["s1", "s2"]}
-        ],
-        "stations": {
-            "s1": {"label": "Station One", "desc": "First station", "x": 100, "y": 200, "active": True, "agent": "claude"},
-            "s2": {"label": "Station Two", "desc": "Second station", "x": 300, "y": 200}
-        }
-    }
     data = {
-        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
-        "tube_config": config
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
+        "workspace_map": {"edges": [], "edge_types": {}},
     }
-    html = generate_tube_html(data, 8721)
-    assert "Station One" in html
-    assert "First station" in html
-    assert "Station Two" in html
-    assert "Second station" in html
-    assert "svg" in html
-    assert "polyline" in html
-    # check radius calculation
-    # s1 belongs to 1 line, so segs = 1. r = 4 + 1 * 2 = 6.
-    assert 'r="6"' in html
-    # check active class/dot/filter
-    assert 'filter="url(#glow-purple)"' in html
-    # check agent assignment
-    assert 'claude' in html
-    assert 'text-anchor="middle"' in html
+    html = generate_architect_map_html(data, 8721)
+    assert "🗺️ Architect Map" in html or "Architect Map" in html
+    assert "synlynk viz --setup-tube" not in html
+    assert "test-ws" in html
+
+
+def test_generate_architect_map_html_renders_repo_nodes():
+    from synlynk.viz import generate_architect_map_html
+
+    data = {
+        "workspace": {
+            "name": "test-ws",
+            "updated_at": "2026-07-03T10:00:00Z",
+            "repos": [
+                {
+                    "path": "/repo/core",
+                    "name": "synlynk-core",
+                    "stack_labels": ["python"],
+                    "github_url": "https://github.com/nikhilsoman/synlynk",
+                },
+                {
+                    "path": "/repo/web",
+                    "name": "synlynk-website",
+                    "stack_labels": ["node"],
+                    "github_url": None,
+                },
+            ],
+        },
+        "workspace_map": {
+            "edges": [{"from": "synlynk-website", "to": "synlynk-core", "type": "api-call"}],
+            "edge_types": {"api-call": {"label": "API Call", "color": "#0d9e87"}},
+        },
+    }
+    html = generate_architect_map_html(data, 8721)
+    assert "synlynk-core" in html
+    assert "synlynk-website" in html
+    assert "api-call" in html
+    assert "#0d9e87" in html
+    assert "API Call" in html
 
 
 def test_generate_gantt_html_renders_dreams_and_notes():
     from synlynk.viz import generate_gantt_html
 
     data = {
-        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [
             {
                 "id": "bs21",
@@ -309,7 +313,7 @@ def test_generate_gantt_html_empty_state():
     from synlynk.viz import generate_gantt_html
 
     data = {
-        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [],
         "notes": {},
     }
@@ -323,7 +327,7 @@ def test_generate_gantt_html_empty_state():
 def test_generate_journeys_html_empty():
     from synlynk.viz import generate_journeys_html
     data = {
-        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "journeys": []
     }
     html = generate_journeys_html(data, 8721)
@@ -334,7 +338,7 @@ def test_generate_journeys_html_empty():
 def test_generate_journeys_html_with_data():
     from synlynk.viz import generate_journeys_html
     data = {
-        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "journeys": [
             {
                 "id": "onboarding",
@@ -377,6 +381,7 @@ def test_generate_journeys_html_ftue_notice():
         "workspace": {
             "name": "test-ws",
             "updated_at": "2026-07-03T10:00:00Z",
+            "repos": [],
             "vizor_second_view": "tube"
         },
         "journeys": [
@@ -395,7 +400,7 @@ def test_write_cache_creates_all_files(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.viz import _write_cache, VIZ_CACHE_DIR
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
         "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
@@ -411,7 +416,7 @@ def test_manifest_updated_at_is_iso(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.viz import _write_cache, VIZ_CACHE_DIR
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
         "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
@@ -428,7 +433,7 @@ def test_gantt_html_contains_vizor_data(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.viz import generate_gantt_html
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [{"id": "v0.11.0", "name": "Retention", "status": "active",
                     "cost_total": 1.5, "cost_est": 2.0,
                     "stages": [{"key": "Plan", "status": "done", "agents": ["codex"],
@@ -448,7 +453,7 @@ def test_effort_html_shows_empty_state(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.viz import generate_effort_html
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
         "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
@@ -460,15 +465,15 @@ def test_effort_html_shows_empty_state(tmp_path, monkeypatch):
 def test_all_html_contain_live_js(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.viz import (generate_index_html, generate_gantt_html,
-                              generate_tube_html, generate_journeys_html,
+                              generate_architect_map_html, generate_journeys_html,
                               generate_effort_html, generate_efficiency_html)
     data = {
-        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
         "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
     }
-    for fn in [generate_index_html, generate_gantt_html, generate_tube_html,
+    for fn in [generate_index_html, generate_gantt_html, generate_architect_map_html,
                generate_journeys_html, generate_effort_html, generate_efficiency_html]:
         html = fn(data, port=8721)
         assert "checkManifest" in html, f"{fn.__name__} missing live JS"
