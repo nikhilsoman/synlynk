@@ -1,5 +1,6 @@
 # tests/test_static_scan.py
 import os
+import sqlite3
 import sys
 import pytest
 
@@ -393,6 +394,60 @@ def test_scan_full_repo_source_map_format(tmp_path, monkeypatch, isolated_db):
     assert "svc.py" in content
     assert "Service" in content
     assert "connect()" in content
+
+
+def test_query_repo_file_tree_builds_nested_structure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE source_symbols (id INTEGER PRIMARY KEY, head_sha TEXT, file TEXT, "
+        "language TEXT, symbol TEXT, symbol_type TEXT, line INTEGER, scanned_at TEXT)"
+    )
+    rows = [
+        ("abc", "synlynk/viz.py", "python", "generate_viz_data", "function", 10, "2026-07-11T00:00:00Z"),
+        ("abc", "synlynk/viz.py", "python", "VizorHandler", "class", 40, "2026-07-11T00:00:00Z"),
+        ("abc", "synlynk/__init__.py", "python", "init", "function", 1, "2026-07-11T00:00:00Z"),
+        ("abc", "tests/test_viz.py", "python", "test_x", "function", 5, "2026-07-11T00:00:00Z"),
+    ]
+    conn.executemany(
+        "INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, line, scanned_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+
+    from synlynk import _query_repo_file_tree
+    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
+    tree = _query_repo_file_tree()
+
+    assert tree["name"] == "."
+    assert "synlynk" in tree["dirs"]
+    assert "tests" in tree["dirs"]
+    synlynk_dir = tree["dirs"]["synlynk"]
+    file_names = {f["name"] for f in synlynk_dir["files"]}
+    assert file_names == {"viz.py", "__init__.py"}
+    viz_file = next(f for f in synlynk_dir["files"] if f["name"] == "viz.py")
+    assert viz_file["symbol_count"] == 2
+
+
+def test_query_repo_file_tree_empty_db_returns_empty_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE source_symbols (id INTEGER PRIMARY KEY, head_sha TEXT, file TEXT, "
+        "language TEXT, symbol TEXT, symbol_type TEXT, line INTEGER, scanned_at TEXT)"
+    )
+    conn.commit()
+    conn.close()
+
+    from synlynk import _query_repo_file_tree
+    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
+    tree = _query_repo_file_tree()
+
+    assert tree == {"name": ".", "dirs": {}, "files": []}
 
 
 # --- _check_scan_cache ---
