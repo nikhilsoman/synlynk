@@ -492,8 +492,11 @@ def main() -> None:
     story_sub = story_parser.add_subparsers(dest="story_action")
     story_create_parser = story_sub.add_parser("create", help="Create a story")
     story_create_parser.add_argument("--title", required=True)
-    story_create_parser.add_argument("--engg", default="unknown", dest="engg_domain")
-    story_create_parser.add_argument("--org", default="unknown", dest="org_domain")
+    story_create_parser.add_argument("--engg", default=None, dest="engg_domain")
+    story_create_parser.add_argument("--discipline", default=None)
+    story_create_parser.add_argument("--org", default=None, dest="org_domain")
+    story_create_parser.add_argument("--role", default=None)
+    story_create_parser.add_argument("--stage", default=None)
     story_create_parser.add_argument("--phase", default="build")
     story_create_parser.add_argument("--org-tags", nargs="*", default=[],
                                       dest="org_domain_tags",
@@ -501,6 +504,10 @@ def main() -> None:
     story_create_parser.add_argument(
         "--tokens", type=int, default=None, dest="estimated_tokens",
         help="Estimated token budget (set by AI planner)"
+    )
+    story_create_parser.add_argument(
+        "--stack-tags", nargs="*", default=None, dest="stack_tags",
+        help="Workspace stack tags; auto-detected when omitted"
     )
     story_sub.add_parser("list", help="List all stories")
 
@@ -680,9 +687,22 @@ def main() -> None:
             run_parser.print_help()
     elif args.command == "story":
         if args.story_action == "create":
-            cmd_story_create(args.title, args.engg_domain, args.org_domain, args.phase,
-                             org_domain_tags=getattr(args, "org_domain_tags", []),
-                             estimated_tokens=getattr(args, "estimated_tokens", None))
+            try:
+                cmd_story_create(
+                    args.title,
+                    args.engg_domain,
+                    args.org_domain,
+                    args.phase,
+                    org_domain_tags=getattr(args, "org_domain_tags", []),
+                    estimated_tokens=getattr(args, "estimated_tokens", None),
+                    stack_tags=getattr(args, "stack_tags", None),
+                    discipline=getattr(args, "discipline", None),
+                    role=getattr(args, "role", None),
+                    stage=getattr(args, "stage", None),
+                )
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
         elif args.story_action == "list":
             cmd_story_list()
     elif args.command == "score":

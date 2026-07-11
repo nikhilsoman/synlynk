@@ -2,6 +2,8 @@ import hashlib
 import os
 import subprocess
 
+import pytest
+
 
 def _job_id(agent: str, task: str, timestamp: float) -> str:
     return "job-" + hashlib.md5(f"{agent}{task}{timestamp}".encode()).hexdigest()[:8]
@@ -462,3 +464,209 @@ def test_dispatch_gitstateverified_job_stall_clean_worktree_still_kills(git_work
     assert result is True
     assert job["status"] == "failed"
     assert killed == [(job["pid"], signal.SIGKILL)]
+
+
+def test_followup_fix_for_open_pr_147_branch_disp_unknown_agent_warning_and_continues(tmp_path, monkeypatch, capsys):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/logs", exist_ok=True)
+
+    unknown_story = sl.cmd_story_create("Unknown agent story", engg_domain="backend")
+    known_story = sl.cmd_story_create("Known agent story", engg_domain="backend")
+
+    unknown_log = os.path.join(".synlynk", "logs", "job-unknown.log")
+    known_log = os.path.join(".synlynk", "logs", "job-known.log")
+    for path in (unknown_log, known_log):
+        with open(path, "w") as fh:
+            fh.write("# synlynk-meta\nmodel_version=claude-opus-4-8\n47 passed in 3.2s\n")
+        with open(path + ".exit", "w") as fh:
+            fh.write("0")
+
+    sl._save_jobs([
+        {
+            "id": "job-unknown",
+            "agent": "gemini",
+            "story_id": unknown_story,
+            "pid": 1,
+            "status": "running",
+            "log_file": unknown_log,
+            "prompt_file": None,
+            "worktree_path": None,
+            "worktree_branch": None,
+            "started_at": "2026-07-07T10:00:00",
+            "ended_at": None,
+            "exit_code": None,
+            "dispatch_mode": "agent",
+            "dispatch_rework": 0,
+            "micro_rework": 0,
+            "model_at_dispatch": "unknown",
+        },
+        {
+            "id": "job-known",
+            "agent": "claude",
+            "story_id": known_story,
+            "pid": 1,
+            "status": "running",
+            "log_file": known_log,
+            "prompt_file": None,
+            "worktree_path": None,
+            "worktree_branch": None,
+            "started_at": "2026-07-07T10:00:00",
+            "ended_at": None,
+            "exit_code": None,
+            "dispatch_mode": "agent",
+            "dispatch_rework": 0,
+            "micro_rework": 0,
+            "model_at_dispatch": "unknown",
+        },
+    ])
+    original_write = sl._write_capability_rating
+    call_count = {"count": 0}
+
+    def fake_write_capability_rating(job, log_text):
+        call_count["count"] += 1
+        if call_count["count"] == 1:
+            raise ValueError("boom")
+        return original_write(job, log_text)
+
+    monkeypatch.setattr(sl, "_write_capability_rating", fake_write_capability_rating)
+    monkeypatch.setattr(sl.os, "kill", lambda *_args, **_kwargs: (_ for _ in ()).throw(ProcessLookupError()))
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    assert "capability rating skipped for job job-unknown: boom" in out
+
+    conn = sl._get_db()
+    rows = conn.execute(
+        "SELECT story_id, agent FROM capability_ratings ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+    assert rows == [(known_story, "claude")]
+
+
+def test_followup_fix_for_open_pr_147_branch_disp_stack_tags_auto_detected_and_persisted(
+    tmp_path, monkeypatch
+):
+    import json
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    monkeypatch.setattr(sl, "fingerprint_stack", lambda _root: ["Python", "Docker", "Python"])
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda data: "")
+
+    story_id = sl.cmd_story_create("Stack tags story", engg_domain="backend")
+
+    conn = sl._get_db()
+    story_row = conn.execute(
+        "SELECT stack_tags FROM stories WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+
+    job = {
+        "story_id": story_id,
+        "agent": "claude",
+        "model_at_dispatch": "claude-3",
+        "started_at": "2026-07-07T10:00:00",
+        "ended_at": "2026-07-07T10:05:00",
+        "exit_code": 0,
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "# synlynk-meta\nmodel_version=claude-opus-4-8\n47 passed in 3.2s\n")
+
+    rating_row = conn.execute(
+        "SELECT stack_tags FROM capability_ratings WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+
+    assert json.loads(story_row[0]) == ["Python", "Docker"]
+    assert json.loads(rating_row[0]) == ["Python", "Docker"]
+
+
+def test_implement_the_schemavalidation_half_of_g_story_create_rejects_invalid_tags(tmp_path, monkeypatch):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs" / "todo.md").write_text("# Project Todo List\n## Active Tasks\n")
+
+    valid = dict(title="Story", engg_domain="backend", org_domain="platform", role="dev", stage="open")
+    with pytest.raises(ValueError, match="org_domain"):
+        sl.cmd_story_create(**{**valid, "org_domain": "engineering"})
+    with pytest.raises(ValueError, match="discipline"):
+        sl.cmd_story_create(**{**valid, "discipline": "cli"})
+    with pytest.raises(ValueError, match="role"):
+        sl.cmd_story_create(**{**valid, "role": "lead"})
+    with pytest.raises(ValueError, match="stage"):
+        sl.cmd_story_create(**{**valid, "stage": "design"})
+
+
+def test_implement_the_schemavalidation_half_of_g_migration_remaps_org_domain_and_warns(tmp_path, monkeypatch, capsys):
+    import synlynk as sl
+    from synlynk.db import _migrate_db as migrate_db
+
+    monkeypatch.chdir(tmp_path)
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, phase) VALUES (?,?,?,?,?)",
+        ("story-platform", "Platform story", "backend", "developer_experience", "build"),
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, phase) VALUES (?,?,?,?,?)",
+        ("story-unknown", "Unknown story", "frontend", "sales_ops", "build"),
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, signal_source, quality, quality_auto) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-platform", "claude", "claude-opus-4-8", "backend", "marketing", "ott", "build", "auto", 8.0, 8.0),
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, signal_source, quality, quality_auto) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("story-unknown", "claude", "claude-opus-4-8", "frontend", "proto", "ott", "build", "auto", 6.0, 6.0),
+    )
+    conn.commit()
+
+    migrate_db(conn)
+    out = capsys.readouterr().out
+
+    story_rows = conn.execute(
+        "SELECT story_id, org_domain FROM stories ORDER BY story_id"
+    ).fetchall()
+    rating_rows = conn.execute(
+        "SELECT story_id, org_domain FROM capability_ratings ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+
+    assert story_rows == [("story-platform", "platform"), ("story-unknown", "unknown")]
+    assert rating_rows == [("story-platform", "growth"), ("story-unknown", "unknown")]
+    assert "sales_ops" in out
+    assert "remapped to unknown" in out
+
+
+@pytest.mark.parametrize("agent_name", ["gemini", "unknown"])
+def test_implement_the_schemavalidation_half_of_g_write_rejects_unregistered_agent(tmp_path, monkeypatch, agent_name):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    story_id = sl.cmd_story_create("Agent gate story", engg_domain="backend", org_domain="platform")
+    job = {
+        "story_id": story_id,
+        "agent": agent_name,
+        "model_at_dispatch": "unknown",
+        "started_at": "2026-07-11T10:00:00",
+        "ended_at": "2026-07-11T10:01:00",
+        "exit_code": 0,
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+    }
+
+    with pytest.raises(ValueError, match="unregistered agent"):
+        sl._write_capability_rating(job, "Build complete.")

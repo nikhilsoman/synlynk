@@ -1,9 +1,111 @@
+from __future__ import annotations
+
 import json
 import os
 import re
 import sqlite3
 import subprocess
 import time
+
+from synlynk.hud import CYCLES
+
+_ORG_DOMAINS = (
+    "personalization",
+    "monetization",
+    "adtech",
+    "workflow",
+    "analytics",
+    "growth",
+    "content",
+    "platform",
+    "identity",
+)
+
+_DISCIPLINES = (
+    "architecture",
+    "frontend",
+    "backend",
+    "data",
+    "ml",
+    "testing",
+    "security",
+    "devops",
+    "docs",
+)
+
+_ROLES = ("architect", "dev", "pm", "tpm", "qa", "designer")
+_STAGES = tuple(CYCLES)
+_ORG_DOMAIN_DRIFT_MAP = {
+    "developer_experience": "platform",
+    "marketing": "growth",
+}
+
+
+def _validate_enum_value(field_name: str, value: str, allowed: tuple[str, ...]) -> str:
+    normalized = str(value).strip()
+    if normalized not in allowed:
+        allowed_list = ", ".join(allowed)
+        raise ValueError(f"Invalid {field_name} {value!r}. Allowed values: {allowed_list}")
+    return normalized
+
+
+def _normalize_capability_tags(
+    engg_domain: str | None,
+    org_domain: str | None,
+    *,
+    discipline: str | None = None,
+    role: str | None = None,
+    stage: str | None = None,
+) -> tuple[str, str, str, str, str]:
+    if discipline is not None and engg_domain is not None and discipline != engg_domain:
+        raise ValueError(
+            "engg_domain and discipline must match while engg_domain remains the legacy alias"
+        )
+
+    discipline_value = discipline if discipline is not None else engg_domain
+    if discipline_value is None:
+        discipline_value = "backend"
+    org_value = org_domain if org_domain is not None else "platform"
+    role_value = role if role is not None else "dev"
+    stage_value = stage if stage is not None else "open"
+
+    discipline_value = _validate_enum_value("discipline", discipline_value, _DISCIPLINES)
+    org_value = _validate_enum_value("org_domain", org_value, _ORG_DOMAINS)
+    role_value = _validate_enum_value("role", role_value, _ROLES)
+    stage_value = _validate_enum_value("stage", stage_value, _STAGES)
+    return discipline_value, org_value, role_value, stage_value
+
+
+def _resolve_workspace_root() -> str:
+    """Return the git workspace root, falling back to the current directory."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return os.getcwd()
+
+
+def _normalize_stack_tags(stack_tags: list) -> list:
+    """Return a deduplicated list of stack tags with surrounding whitespace trimmed."""
+    normalized = []
+    seen = set()
+    for tag in stack_tags or []:
+        value = str(tag).strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return normalized
+
+
+def _detect_stack_tags(workspace_root: str = None) -> list:
+    """Detect stack tags via the existing repository fingerprint helper."""
+    from synlynk import fingerprint_stack
+
+    root = workspace_root or _resolve_workspace_root()
+    return _normalize_stack_tags(fingerprint_stack(root))
 
 class MigrationImportError(RuntimeError):
     pass
@@ -125,10 +227,27 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     from synlynk import AGENT_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
     story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    if "discipline" not in story_cols:
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN discipline TEXT NOT NULL DEFAULT 'backend'")
+        except sqlite3.OperationalError:
+            pass
+    if "role" not in story_cols:
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN role TEXT NOT NULL DEFAULT 'dev'")
+        except sqlite3.OperationalError:
+            pass
+    if "stage" not in story_cols:
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN stage TEXT NOT NULL DEFAULT 'open'")
+        except sqlite3.OperationalError:
+            pass
     if "estimated_tokens" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
     if "actual_tokens" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+    if "stack_tags" not in story_cols:
+        conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
     if "status" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
     if "goal_id" not in story_cols:
@@ -136,6 +255,21 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE stories ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
         except sqlite3.OperationalError:
             pass
+    conn.execute(
+        "UPDATE stories SET discipline = COALESCE(NULLIF(engg_domain, ''), 'backend')"
+    )
+    conn.execute(
+        "UPDATE stories SET role = COALESCE(NULLIF(role, ''), 'dev') "
+        "WHERE role IS NULL OR role = ''"
+    )
+    conn.execute(
+        "UPDATE stories SET stage = COALESCE(NULLIF(stage, ''), 'open') "
+        "WHERE stage IS NULL OR stage = ''"
+    )
+    conn.execute(
+        "UPDATE stories SET engg_domain = COALESCE(NULLIF(engg_domain, ''), discipline, 'backend') "
+        "WHERE engg_domain IS NULL OR engg_domain = ''"
+    )
     daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     if "handoff_count" not in daemon_job_cols:
         try:
@@ -326,6 +460,56 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE roadmap_arcs ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
         except sqlite3.OperationalError:
             pass
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    for col, default in [("discipline", "backend"), ("role", "dev"), ("stage", "open")]:
+        if col not in rating_cols:
+            try:
+                conn.execute(f"ALTER TABLE capability_ratings ADD COLUMN {col} TEXT NOT NULL DEFAULT '{default}'")
+            except sqlite3.OperationalError:
+                pass
+    if "stack_tags" not in rating_cols:
+        try:
+            conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(engg_domain, ''), 'backend')"
+    )
+    conn.execute(
+        "UPDATE capability_ratings SET role = COALESCE(NULLIF(role, ''), 'dev') "
+        "WHERE role IS NULL OR role = ''"
+    )
+    conn.execute(
+        "UPDATE capability_ratings SET stage = COALESCE(NULLIF(stage, ''), 'open') "
+        "WHERE stage IS NULL OR stage = ''"
+    )
+    for table in ("stories", "capability_ratings"):
+        valid_org_values = set(_ORG_DOMAINS) | set(_ORG_DOMAIN_DRIFT_MAP) | {"unknown"}
+        placeholders = ", ".join("?" for _ in valid_org_values)
+        unknown_rows = [
+            row[0]
+            for row in conn.execute(
+                f"SELECT DISTINCT org_domain FROM {table} "
+                f"WHERE org_domain IS NOT NULL AND org_domain NOT IN ({placeholders})",
+                tuple(valid_org_values),
+            ).fetchall()
+            if row[0]
+        ]
+        for old_value, new_value in _ORG_DOMAIN_DRIFT_MAP.items():
+            conn.execute(
+                f"UPDATE {table} SET org_domain=? WHERE org_domain=?",
+                (new_value, old_value),
+            )
+        conn.execute(
+            f"UPDATE {table} SET org_domain='unknown' "
+            f"WHERE org_domain IS NULL OR org_domain = '' OR org_domain NOT IN ({placeholders})",
+            tuple(valid_org_values),
+        )
+        if unknown_rows:
+            print(
+                f"  ⚠ {table} org_domain values remapped to unknown: "
+                + ", ".join(sorted(set(unknown_rows)))
+            )
     # BS-22 introduced erroneous cycle renames; delete any rows with the wrong names
     # so they don't block migration on databases that ran the bad migration.
     for sql in [
@@ -854,10 +1038,14 @@ def _import_todo_to_stories() -> int:
     conn.close()
     return imported
 
-def cmd_story_create(title: str, engg_domain: str = "unknown",
-                     org_domain: str = "unknown", phase: str = "build",
+def cmd_story_create(title: str, engg_domain: str = None,
+                     org_domain: str = None, phase: str = "build",
                      org_domain_tags: list = None,
-                     estimated_tokens: int = None) -> str:
+                     estimated_tokens: int = None,
+                     stack_tags: list = None,
+                     discipline: str = None,
+                     role: str = None,
+                     stage: str = None) -> str:
     """Creates a story record in state.db. Returns the generated story_id."""
     from synlynk import _GREEN, _RESET, _generate_todo_md, _get_db, load_config
     import hashlib as _hashlib
@@ -868,11 +1056,22 @@ def cmd_story_create(title: str, engg_domain: str = "unknown",
     config = load_config()
     industry = config.get("industry", "unknown")
     tags_json = _json.dumps(org_domain_tags or [])
+    stack_tags_json = _json.dumps(_detect_stack_tags() if stack_tags is None else _normalize_stack_tags(stack_tags))
+    discipline, org_domain, role, stage = _normalize_capability_tags(
+        engg_domain,
+        org_domain,
+        discipline=discipline,
+        role=role,
+        stage=stage,
+    )[0:4]
+    if engg_domain is None:
+        engg_domain = discipline
     conn = _get_db()
     conn.execute(
-        "INSERT INTO stories (story_id, title, engg_domain, org_domain, "
-        "org_domain_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (story_id, title, engg_domain, org_domain, tags_json, industry, phase, estimated_tokens)
+        "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, role, stage, "
+        "org_domain_tags, stack_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (story_id, title, engg_domain, discipline, org_domain, role, stage,
+         tags_json, stack_tags_json, industry, phase, estimated_tokens)
     )
     conn.commit()
     conn.close()
@@ -998,14 +1197,14 @@ def cmd_score_add(story_id: str, rating: float, note: str = None,
         raise ValueError(f"Rating must be 0–10, got {rating}")
     conn = _get_db()
     story = conn.execute(
-        "SELECT engg_domain, org_domain, industry, phase FROM stories WHERE story_id=?",
+        "SELECT engg_domain, discipline, org_domain, role, stage, industry, phase FROM stories WHERE story_id=?",
         (story_id,)
     ).fetchone()
     if not story:
         conn.close()
         print(f"  Story '{story_id}' not found. Create it first with: synlynk story create")
         return
-    engg, org, industry, phase = story
+    engg, discipline, org, role, stage, industry, phase = story
     prev = conn.execute(
         "SELECT agent, model_version FROM capability_ratings "
         "WHERE story_id=? ORDER BY ts DESC LIMIT 1", (story_id,)
@@ -1015,11 +1214,11 @@ def cmd_score_add(story_id: str, rating: float, note: str = None,
     dispatch_rework = 1 if rework else 0
     conn.execute(
         "INSERT INTO capability_ratings "
-        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
-        " signal_source, quality, dispatch_rework, note) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (story_id, agent, model_version, engg, org, industry, phase,
-         "human", rating, dispatch_rework, note)
+        "(story_id, agent, model_version, engg_domain, discipline, org_domain, role, stage, industry, phase, "
+        " signal_source, quality, quality_auto, dispatch_rework, note) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (story_id, agent, model_version, engg, discipline, org, role, stage, industry, phase,
+         "human", rating, None, dispatch_rework, note)
     )
     conn.commit()
     conn.close()

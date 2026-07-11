@@ -2951,7 +2951,7 @@ def test_generate_task_context_out_path_writes_to_custom_location(project_dir):
     """_generate_task_context respects an explicit out_path instead of global context.md."""
     import synlynk as sl
 
-    story_id = sl.cmd_story_create("Custom path test", engg_domain="cli")
+    story_id = sl.cmd_story_create("Custom path test", engg_domain="backend")
     custom_path = str(project_dir / ".synlynk" / "contexts" / "custom.md")
     os.makedirs(str(project_dir / ".synlynk" / "contexts"), exist_ok=True)
 
@@ -4854,7 +4854,7 @@ def test_http_checkpoint_endpoint(project_dir, monkeypatch):
 def test_http_stories_endpoint(project_dir):
     import json
     # Create a story first
-    synlynk.cmd_story_create("Test story", "backend", "engineering")
+    synlynk.cmd_story_create("Test story", "backend", "platform")
     status, _, body, _ = _invoke_daemon_handler(project_dir, "GET", "/stories")
     data = json.loads(body)
     assert status == 200
