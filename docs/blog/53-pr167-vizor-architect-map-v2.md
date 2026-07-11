@@ -1,7 +1,7 @@
 # Architect Map v2 — From Static Tube Map to Live Workspace Graph
 
 **Date:** 2026-07-12
-**PR:** TBD
+**PR:** #167 (merged)
 **Branch:** `chore/vizor-architect-map-v2-design` → `main`
 
 ---
