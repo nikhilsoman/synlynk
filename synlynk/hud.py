@@ -10,15 +10,16 @@ import time
 from datetime import datetime
 from typing import Optional
 
-CYCLES = ["dream", "plan", "work", "ship", "maintain", "engage"]
+CYCLES = ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]
 
 CYCLE_COLOURS = {
-    "dream": "\033[38;5;141m",
-    "plan": "\033[38;5;75m",
-    "work": "\033[38;5;208m",
-    "ship": "\033[38;5;71m",
-    "maintain": "\033[38;5;178m",
-    "engage": "\033[38;5;43m",
+    "goal": "\033[38;5;141m",
+    "open": "\033[38;5;75m",
+    "visualize": "\033[38;5;213m",
+    "execute": "\033[38;5;208m",
+    "release": "\033[38;5;71m",
+    "notify": "\033[38;5;220m",
+    "sustain": "\033[38;5;178m",
 }
 
 RESET = "\033[0m"
@@ -128,7 +129,7 @@ class JobSnapshot:
         for job in self._load():
             if job.get("status") not in ("running", "queued"):
                 continue
-            if cycle and job.get("cycle", "work") != cycle:
+            if cycle and job.get("cycle", "execute") != cycle:
                 continue
             jobs.append({**job, "elapsed_s": _elapsed_s(job.get("started_at"))})
         jobs.sort(key=lambda job: job.get("started_at") or "", reverse=True)
@@ -139,7 +140,7 @@ class JobSnapshot:
         for job in self._load():
             if job.get("status") not in ("done", "failed", "error"):
                 continue
-            if cycle and job.get("cycle", "work") != cycle:
+            if cycle and job.get("cycle", "execute") != cycle:
                 continue
             jobs.append(job)
         jobs.sort(key=lambda job: job.get("ended_at") or "", reverse=True)
@@ -150,7 +151,7 @@ class JobSnapshot:
         for job in self._load():
             if job.get("status") not in ("running", "queued"):
                 continue
-            cycle = job.get("cycle", "work")
+            cycle = job.get("cycle", "execute")
             if cycle not in summary:
                 continue
             summary[cycle]["running"] += 1
@@ -401,14 +402,14 @@ class LiveRenderer:
                 elapsed = job.get("elapsed_s", 0)
                 mins, secs = divmod(elapsed, 60)
                 elapsed_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
-                cycle_c = CYCLE_COLOURS.get(job.get("cycle", "work"), RESET)
+                cycle_c = CYCLE_COLOURS.get(job.get("cycle", "execute"), RESET)
 
                 self.buf.set_line(row,
                     f"  {cycle_c}┌ {BOLD}{job['agent']}{RESET}{cycle_c} {'─' * 50}{RESET}")
                 self.buf.set_line(row + 1,
                     f"  │ {job.get('task', '—')}")
                 self.buf.set_line(row + 2,
-                    f"  │ {DIM}cycle: {job.get('cycle','work')}  ·  {elapsed_str}  ·  {job.get('status','—')}{RESET}")
+                    f"  │ {DIM}cycle: {job.get('cycle','execute')}  ·  {elapsed_str}  ·  {job.get('status','—')}{RESET}")
                 self.buf.set_line(row + 3,
                     f"  {cycle_c}└{'─' * 52}{RESET}")
                 row += 5
