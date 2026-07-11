@@ -195,28 +195,13 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     log_file = job.get("log_file", "")
     if not log_file or not os.path.exists(log_file):
         return False
-    if os.path.getsize(log_file) > 0:
-        return False
 
     agent = job.get("agent", "")
     global_timeout = config.get("stall_timeout_minutes", 30)
     timeout = config.get("agents", {}).get(agent, {}).get("stall_timeout_minutes", global_timeout)
 
-    started_val = job.get("started_at")
-    if isinstance(started_val, str):
-        try:
-            import datetime as _dt
-
-            started_ts = _dt.datetime.strptime(started_val, "%Y-%m-%dT%H:%M:%S").timestamp()
-        except Exception:
-            started_ts = time.time()
-    elif isinstance(started_val, (int, float)):
-        started_ts = started_val
-    else:
-        started_ts = time.time()
-
-    elapsed_minutes = (time.time() - started_ts) / 60
-    if elapsed_minutes < timeout:
+    stale_minutes = (time.time() - os.path.getmtime(log_file)) / 60
+    if stale_minutes < timeout:
         return False
 
     inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
