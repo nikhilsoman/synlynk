@@ -132,3 +132,244 @@ def test_story_retry_count_matches_failed_job_rows(scheduler_db):
     conn.commit()
     assert _story_retry_count(conn, "story-y") == 2
     conn.close()
+
+def _seed_capability(conn, agent, engg, org, industry, phase, score, model="unknown"):
+    # capability_scores is a VIEW over capability_ratings — seed the base table.
+    seed_story = f"_capseed-{agent}-{engg}-{org}-{industry}-{phase}"
+    conn.execute(
+        "INSERT OR IGNORE INTO stories (story_id, title, engg_domain, org_domain, "
+        "industry, phase, readiness) VALUES (?, ?, ?, ?, ?, ?, 'draft')",
+        (seed_story, seed_story, engg, org, industry, phase),
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality) VALUES (?, ?, ?, ?, ?, ?, ?, 'human', ?)",
+        (seed_story, agent, model, engg, org, industry, phase, score),
+    )
+
+
+def _seed_story(conn, story_id, priority=5, readiness="ready", tokens=1000,
+                 engg="backend", org="platform", industry="unknown", phase="build"):
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase, "
+        "priority, readiness, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (story_id, story_id, engg, org, industry, phase, priority, readiness, tokens),
+    )
+
+
+def test_plan_skips_draft_stories(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-draft", readiness="draft")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert result["plan"] == []
+    assert result["blocked"] == []
+
+
+def test_plan_assigns_ready_story_to_best_capability_agent(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-a")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    _seed_capability(conn, "codex", "backend", "platform", "unknown", "build", 0.4)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert len(result["plan"]) == 1
+    assert result["plan"][0]["story_id"] == "story-a"
+    assert result["plan"][0]["agent"] == "grok"
+
+
+def test_plan_blocks_story_with_no_capability_candidates(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-b", engg="mobile")
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert result["plan"] == []
+    assert result["blocked"][0]["story_id"] == "story-b"
+    assert result["blocked"][0]["reason"] == "no_capability_candidates"
+
+
+def test_plan_blocks_story_when_all_candidates_quota_exhausted(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-c", tokens=50000)
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 10000, 10000)"
+    )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert result["plan"] == []
+    assert result["blocked"][0]["story_id"] == "story-c"
+    assert result["blocked"][0]["reason"] == "quota_exhausted"
+
+
+def test_plan_respects_max_stories(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-1")
+    _seed_story(conn, "story-2")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan(max_stories=1)
+    assert len(result["plan"]) == 1
+
+
+def test_plan_decrements_fleet_headroom_across_batch_and_blocks_second_story(scheduler_db):
+    """The genuinely new piece: two ready stories, one agent, quota only covers one."""
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-1", tokens=6000, priority=1)
+    _seed_story(conn, "story-2", tokens=6000, priority=2)
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 10000, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert [p["story_id"] for p in result["plan"]] == ["story-1"]
+    assert result["blocked"][0]["story_id"] == "story-2"
+    assert result["blocked"][0]["reason"] == "quota_exhausted"
+
+
+def test_plan_excludes_agent_that_previously_failed_this_story(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-retry")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    _seed_capability(conn, "codex", "backend", "platform", "unknown", "build", 0.3)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('codex', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+        "VALUES ('djob-prev', 'grok', 'do it', 'story-retry', 'failed', '2026-01-01T00:00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert result["plan"][0]["agent"] == "codex"
+
+
+def test_plan_blocks_story_past_retry_cap(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-exhausted-retries")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+            f"VALUES ('djob-e{i}', 'grok', 'do it', 'story-exhausted-retries', 'failed', "
+            "'2026-01-01T00:00:00')"
+        )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert result["plan"] == []
+    assert result["blocked"][0]["reason"] == "retry_cap_exceeded"
+
+
+def test_plan_skips_story_with_running_daemon_job(scheduler_db):
+    """A story already mid-flight must not be double-scheduled."""
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-inflight")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+        "VALUES ('djob-running', 'grok', 'do it', 'story-inflight', 'running', "
+        "'2026-01-01T00:00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert result["plan"] == []
+    assert result["blocked"] == []
+
+
+def test_plan_dry_run_never_writes_to_daemon_jobs(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-dry")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
+    )
+    conn.commit()
+
+    _compute_schedule_plan()
+
+    count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
+    conn.close()
+    assert count == 0
+
+
+def test_plan_degraded_mode_still_produces_a_plan(scheduler_db):
+    """No agent_quotas rows at all -> degraded, non-hard-blocking per design."""
+    from synlynk import _get_db
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = _get_db()
+    _seed_story(conn, "story-degraded")
+    _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
+    conn.commit()
+    conn.close()
+
+    result = _compute_schedule_plan()
+    assert len(result["plan"]) == 1
+    assert result["plan"][0]["agent"] == "grok"

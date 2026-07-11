@@ -29,3 +29,118 @@ def _story_retry_count(conn, story_id: str) -> int:
         (story_id,),
     ).fetchone()
     return row[0] if row else 0
+
+
+def _compute_schedule_plan(max_stories=None) -> dict:
+    """Batch version of synlynk.__init__._best_agent_for_story.
+
+    Reuses the existing capability -> quota -> cost routing helpers but adds
+    fleet-level in-batch headroom accounting: as stories are assigned within
+    this one run, each agent's remaining headroom is decremented in-memory so
+    story 2 in the batch sees story 1's spend before it gets routed.
+
+    Returns {"plan": [...], "blocked": [...]}. Never writes to the database
+    (dry-run by construction) -- writing is _enqueue_plan()'s job.
+    """
+    from synlynk import (
+        _CAPABILITY_COST_TIE_GAP,
+        _capability_candidates_for_story,
+        _estimate_story_cost_usd,
+        _get_db,
+        _quota_status_for_agent,
+    )
+
+    conn = _get_db()
+    try:
+        query = (
+            "SELECT s.story_id, s.title, s.engg_domain, s.org_domain, s.industry, "
+            "s.phase, s.priority, s.estimated_tokens FROM stories s "
+            "WHERE s.readiness='ready' AND NOT EXISTS ("
+            "  SELECT 1 FROM daemon_jobs dj WHERE dj.story_id=s.story_id "
+            "  AND dj.status IN ('queued','running')"
+            ") ORDER BY s.priority ASC, s.created_at ASC"
+        )
+        if max_stories:
+            query += f" LIMIT {int(max_stories)}"
+        stories = conn.execute(query).fetchall()
+
+        plan = []
+        blocked = []
+        headroom_cache = {}  # agent -> int | None (None = degraded/unknown)
+
+        for (story_id, title, engg, org, industry, phase, priority,
+             est_tokens) in stories:
+            if _story_retry_count(conn, story_id) >= MAX_STORY_RETRIES:
+                blocked.append({"story_id": story_id, "reason": "retry_cap_exceeded"})
+                continue
+
+            candidates = _capability_candidates_for_story(conn, engg, org, industry, phase)
+            if not candidates:
+                blocked.append({"story_id": story_id, "reason": "no_capability_candidates"})
+                continue
+
+            excluded = _story_failed_agents(conn, story_id)
+            usable = [c for c in candidates if c[0] not in excluded]
+            if not usable:
+                usable = candidates  # sole-candidate exception: keep it eligible
+
+            gated = []  # (agent, score, model, headroom)
+            for agent, score, model in usable:
+                if agent not in headroom_cache:
+                    qstatus = _quota_status_for_agent(conn, agent, estimated_tokens=est_tokens)
+                    # Fleet in-batch accounting is token-denominated. Non-token
+                    # headroom (e.g. project request budget) and degraded/unknown
+                    # signals stay non-hard-blocking for token compares — matching
+                    # _best_agent_for_story's degraded-mode policy. Hard-exhausted
+                    # non-token status still blocks the agent for the batch.
+                    if qstatus["degraded"] or qstatus.get("unit") != "tokens":
+                        if qstatus["status"] == "exhausted" and not qstatus["degraded"]:
+                            headroom_cache[agent] = 0
+                        else:
+                            headroom_cache[agent] = None
+                    else:
+                        headroom_cache[agent] = qstatus["headroom"]
+                headroom = headroom_cache[agent]
+                need = int(est_tokens or 0)
+                if headroom is not None and need > 0 and headroom < need:
+                    continue  # real gate: exhausted this batch
+                gated.append((agent, score, model, headroom))
+
+            if not gated:
+                blocked.append({"story_id": story_id, "reason": "quota_exhausted"})
+                continue
+
+            top_score = gated[0][1]
+            near = [g for g in gated if (top_score - g[1]) <= _CAPABILITY_COST_TIE_GAP]
+            if len(near) == 1:
+                chosen = near[0]
+            else:
+                chosen = min(
+                    near,
+                    key=lambda g: (
+                        _estimate_story_cost_usd(g[2], est_tokens),
+                        -g[1],
+                        g[0],
+                    ),
+                )
+
+            agent, score, model, headroom = chosen
+            need = int(est_tokens or 0)
+            if headroom is not None:
+                headroom_cache[agent] = headroom - need
+
+            plan.append({
+                "story_id": story_id,
+                "title": title,
+                "agent": agent,
+                "score": score,
+                "model": model,
+                "priority": priority,
+                "estimated_tokens": est_tokens,
+                "headroom_before": headroom,
+                "headroom_after": headroom_cache[agent],
+            })
+
+        return {"plan": plan, "blocked": blocked}
+    finally:
+        conn.close()
