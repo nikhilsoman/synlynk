@@ -38,9 +38,13 @@ def _parse_roadmap_md(content: str) -> tuple:
         if arc_m:
             version = arc_m.group(1).strip()
             title = arc_m.group(2).strip() or None
+            goal_m = re.search(r'<!--\s*goal:(\S+)\s*-->', line)
+            goal_id = goal_m.group(1) if goal_m else None
+            if title:
+                title = re.sub(r'<!--\s*goal:\S+\s*-->', '', title).strip() or None
             status = ('shipped' if ('✅' in line or 'shipped' in line.lower()) else
                       'in_progress' if ('🚧' in line or 'in progress' in line.lower()) else 'planned')
-            current_arc = {'version': version, 'title': title, 'status': status}
+            current_arc = {'version': version, 'title': title, 'status': status, 'goal_id': goal_id}
             arcs.append(current_arc)
             continue
         if current_arc is None:
@@ -331,6 +335,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(sql)
         except (sqlite3.OperationalError, sqlite3.IntegrityError):
             pass
+    cycle_remap = {
+        "dream": "goal", "design": "visualize", "plan": "open",
+        "work": "execute", "build": "execute", "ship": "release",
+        "maintain": "sustain", "engage": "execute",
+    }
+    for old, new in cycle_remap.items():
+        conn.execute(
+            "UPDATE cycle_capability SET cycle=? WHERE cycle=?",
+            (new, old)
+        )
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
@@ -400,8 +414,8 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
             for a in arcs:
                 try:
                     cursor = conn.execute(
-                        "INSERT OR IGNORE INTO roadmap_arcs (version, title, status) VALUES (?,?,?)",
-                        (a["version"], a["title"], a["status"]),
+                        "INSERT OR IGNORE INTO roadmap_arcs (version, title, status, goal_id) VALUES (?,?,?,?)",
+                        (a["version"], a["title"], a["status"], a.get("goal_id")),
                     )
                     if getattr(cursor, "rowcount", 0) > 0:
                         inserted_counts["roadmap_arcs"] += 1

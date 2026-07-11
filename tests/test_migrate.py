@@ -234,6 +234,29 @@ def test_migrate_imports_all_tables(tmp_path, monkeypatch):
     conn.close()
 
 
+def test_migrate_imports_goal_id_on_roadmap_arcs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+
+    pd = _make_project_docs(tmp_path)
+    from synlynk.db import cmd_goal_create
+    goal_id = cmd_goal_create(outcome="Agent Ecosystem", criterion="Ship the thing")
+    (pd / "roadmap.md").write_text(
+        f"# Roadmap\n\n## v0.11.0 - Agent Ecosystem <!-- goal:{goal_id} -->\n\n- ship the thing [P0]\n"
+    )
+    _seed_stories("story-bs12a-roles")
+    synlynk.cmd_migrate()
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT goal_id FROM roadmap_arcs WHERE version=?", ("v0.11.0",)
+    ).fetchone()
+    conn.close()
+    assert row[0] == goal_id
+
+
 def test_migrate_copies_to_synlynk_project_docs(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))

@@ -111,7 +111,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "arch-review",
         "title": "Workspace architecture review",
         "description": "Analyse structure, patterns, tech debt. Claude writes findings to memory.md.",
-        "cycle": "dream",
+        "cycle": "visualize",
         "agent": "claude",
         "context_mode": "full",
         "prompt_template": (
@@ -132,7 +132,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "product-assessment",
         "title": "Product + opportunity assessment",
         "description": "Scope, features, market fit, growth levers. 1-page brief to memory.md.",
-        "cycle": "dream",
+        "cycle": "goal",
         "agent": "claude",
         "context_mode": "full",
         "prompt_template": (
@@ -149,15 +149,15 @@ LAUNCH_TASK_TEMPLATES = [
     },
     {
         "id": "lifecycle-setup",
-        "title": "Set up 6-cycle workflow for this repo",
-        "description": "Initialise lifecycle tracking in state.db. Label open stories by cycle.",
-        "cycle": "plan",
+        "title": "Set up 7-stage GOVERNS workflow for this repo",
+        "description": "Initialise GOVERNS lifecycle tracking in state.db. Label open stories by stage.",
+        "cycle": "open",
         "agent": "claude",
         "context_mode": "task",
         "prompt_template": (
-            "Set up the 6-cycle SDLC workflow for {workspace}. "
+            "Set up the 7-stage GOVERNS workflow for {workspace}. "
             "Run `synlynk story list` to see existing stories. "
-            "For each story, assign a cycle phase (dream/design/plan/build/ship/sustain) "
+            "For each story, assign a cycle phase (goal/open/visualize/execute/release/notify/sustain) "
             "based on its title and update it with `synlynk story update`. "
             "Then write a short SDLC setup note in "
             '.synlynk/project-docs/memory.md under "## Lifecycle Setup {date}" '
@@ -174,7 +174,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "add-tests",
         "title": "Add test coverage",
         "description": "Bootstrap a test suite for the most critical untested modules.",
-        "cycle": "plan",
+        "cycle": "execute",
         "agent": "agy",
         "context_mode": "full",
         "prompt_template": (
@@ -199,7 +199,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "setup-ci",
         "title": "Set up CI/CD pipeline",
         "description": "Create a GitHub Actions workflow for tests and linting.",
-        "cycle": "plan",
+        "cycle": "execute",
         "agent": "codex",
         "context_mode": "task",
         "prompt_template": (
@@ -219,7 +219,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "docs-audit",
         "title": "Documentation audit + gap fill",
         "description": "Audit docs coverage and write missing sections.",
-        "cycle": "design",
+        "cycle": "notify",
         "agent": "agy",
         "context_mode": "full",
         "prompt_template": (
@@ -241,7 +241,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "security-scan",
         "title": "Dependency security scan",
         "description": "Check for known CVEs and outdated dependencies.",
-        "cycle": "dream",
+        "cycle": "sustain",
         "agent": "claude",
         "context_mode": "task",
         "prompt_template": (
@@ -265,7 +265,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "perf-baseline",
         "title": "Performance baseline + profiling plan",
         "description": "Identify hot paths and draft a performance improvement plan.",
-        "cycle": "dream",
+        "cycle": "sustain",
         "agent": "claude",
         "context_mode": "full",
         "prompt_template": (
@@ -289,7 +289,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "cross-repo-map",
         "title": "Cross-repo dependency map",
         "description": "Map inter-repo dependencies for the multi-repo workspace.",
-        "cycle": "dream",
+        "cycle": "visualize",
         "agent": "claude",
         "context_mode": "full",
         "prompt_template": (
@@ -310,7 +310,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "type-safety",
         "title": "Add type annotations to public API",
         "description": "Annotate public functions and classes to improve tooling and safety.",
-        "cycle": "design",
+        "cycle": "execute",
         "agent": "codex",
         "context_mode": "full",
         "prompt_template": (
@@ -340,7 +340,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "a11y-audit",
         "title": "Accessibility audit",
         "description": "Audit the frontend for WCAG 2.1 AA compliance gaps.",
-        "cycle": "design",
+        "cycle": "release",
         "agent": "agy",
         "context_mode": "full",
         "prompt_template": (
@@ -364,7 +364,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "db-schema-review",
         "title": "Database schema review",
         "description": "Review schema design for correctness, indexes, and N+1 risks.",
-        "cycle": "dream",
+        "cycle": "visualize",
         "agent": "claude",
         "context_mode": "full",
         "prompt_template": (
@@ -385,7 +385,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "refactor-module",
         "title": "Refactor large module",
         "description": "Split monolithic source file into focused modules.",
-        "cycle": "design",
+        "cycle": "execute",
         "agent": "codex",
         "context_mode": "full",
         "prompt_template": (
@@ -410,7 +410,7 @@ LAUNCH_TASK_TEMPLATES = [
         "id": "reduce-complexity",
         "title": "Reduce complexity hotspots",
         "description": "Break down functions >50 lines into focused helpers.",
-        "cycle": "build",
+        "cycle": "execute",
         "agent": "codex",
         "context_mode": "full",
         "prompt_template": (
@@ -4472,6 +4472,10 @@ def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
 {caveat}
 **Positioning:** [Describe what {name} is building toward]
 
+## Business Goals
+[Define outcomes here with `synlynk goal create --outcome "..." --criterion "..."`.
+Each arc below can be tagged `<!-- goal:goal-xxxxxxxx -->` to link it to a goal.]
+
 | Version | Theme | Status | Target |
 | :--- | :--- | :--- | :--- |
 | v0.1.0 | Initial release | ✅ Shipped | — |
@@ -5554,15 +5558,15 @@ def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
 
     task_type = _classify_task_type(task_text or "")
     task_to_cycle = {
-        "implement": "work",
-        "review": "engage",
-        "plan": "plan",
-        "debug": "maintain",
-        "test": "maintain",
-        "docs": "maintain",
-        "default": "work",
+        "implement": "execute",
+        "review": "execute",
+        "plan": "open",
+        "debug": "sustain",
+        "test": "execute",
+        "docs": "notify",
+        "default": "execute",
     }
-    cycle = task_to_cycle.get(task_type, "work")
+    cycle = task_to_cycle.get(task_type, "execute")
 
     try:
         rows = db_conn.execute(

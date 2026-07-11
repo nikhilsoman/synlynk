@@ -95,6 +95,7 @@ def generate_viz_data() -> dict:
         observatory = build_job_observatory_snapshot()
         return {
             "workspace": {"name": _workspace_name(), "updated_at": _ts()},
+            "goals": [],
             "dreams": [],
             "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
@@ -459,6 +460,18 @@ def generate_viz_data() -> dict:
             "stages": dream_stages,
         })
 
+    try:
+        goal_rows = conn.execute(
+            "SELECT goal_id, outcome, criterion, deadline, status FROM goals WHERE status='active' "
+            "ORDER BY created_at DESC"
+        ).fetchall()
+        goals = [
+            {"id": r[0], "outcome": r[1], "criterion": r[2], "deadline": r[3], "status": r[4]}
+            for r in goal_rows
+        ]
+    except Exception:
+        goals = []
+    data["goals"] = goals
     data["dreams"] = dreams
     data["costs"] = {
         "total_usd": float(sum(float(row[2] or 0.0) for row in cost_rows)),
