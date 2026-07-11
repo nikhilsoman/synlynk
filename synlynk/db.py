@@ -525,10 +525,15 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         "maintain": "sustain", "engage": "execute",
     }
     for old, new in cycle_remap.items():
-        conn.execute(
-            "UPDATE cycle_capability SET cycle=? WHERE cycle=?",
-            (new, old)
-        )
+        try:
+            conn.execute(
+                "UPDATE cycle_capability SET cycle=? WHERE cycle=?",
+                (new, old)
+            )
+        except sqlite3.IntegrityError:
+            # A row for (agent_name, new) already exists — the old-named row
+            # is a stale duplicate now that both map to the same cycle.
+            conn.execute("DELETE FROM cycle_capability WHERE cycle=?", (old,))
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
