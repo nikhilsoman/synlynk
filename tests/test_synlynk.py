@@ -5670,12 +5670,13 @@ def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
     job_id = "job-stall-test"
     log_file = tmp_path / f"{job_id}.log"
     log_file.write_bytes(b"")  # 0 bytes — stalled
+    old_time = time.time() - 7200
+    os.utime(log_file, (old_time, old_time))
 
-    started_at = time.time() - 7200  # 2h ago
     job = {
         "id": job_id, "agent": "agy", "status": "running",
         "pid": 99999,  # non-existent PID
-        "started_at": started_at,
+        "started_at": old_time,
         "log_file": str(log_file),
     }
 

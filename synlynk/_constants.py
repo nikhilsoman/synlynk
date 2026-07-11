@@ -12,6 +12,10 @@ QUOTA_PATTERNS = [
     "RESOURCE_EXHAUSTED",
 ]
 
+HARNESS_TIMEOUT_PATTERNS = [
+    "timeout waiting for response",
+]
+
 _ROLE_PERMISSION_DEFAULTS = {
     "pm": ["read:*"],
     "review": ["read:*"],

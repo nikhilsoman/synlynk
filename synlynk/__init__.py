@@ -14,6 +14,7 @@ import sqlite3 as _sqlite3
 
 from synlynk._constants import (
     AGENT_CAPABILITY_BASELINES,
+    HARNESS_TIMEOUT_PATTERNS,
     QUOTA_PATTERNS,
     VERSION,
     _INSTALL_SCRIPT_URL,
@@ -3230,6 +3231,18 @@ def _reconcile_jobs() -> None:
             if log_file and os.path.exists(log_file):
                 with open(log_file) as f:
                     log_text = f.read()
+                if job.get("status") != "completed":
+                    log_text_lower = log_text.lower()
+                    for phrase in HARNESS_TIMEOUT_PATTERNS:
+                        if phrase in log_text_lower:
+                            _write_sentinel_alert(
+                                "CRITICAL",
+                                "HARNESS_INTERNAL_TIMEOUT",
+                                f"Job {job.get('id')} on agent '{job.get('agent')}' died from an internal "
+                                f"harness timeout (matched \"{phrase}\"), not a task failure. Consider retrying.",
+                                sentinel_path,
+                            )
+                            break
                 job["micro_rework"] = _extract_micro_rework(log_text)
                 try:
                     _write_capability_rating(job, log_text)

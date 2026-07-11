@@ -518,8 +518,10 @@ def test_dispatch_gitstateverified_job_stall_git_activity_defers_kill(git_worktr
     log_file = tmp_path / f"{job['id']}.log"
     with open(log_file, "wb"):
         pass
+    old_time = time.time() - 7200
+    os.utime(log_file, (old_time, old_time))
     job["log_file"] = str(log_file)
-    job["started_at"] = time.time() - 7200
+    job["started_at"] = old_time
 
     killed = []
 
@@ -544,8 +546,10 @@ def test_dispatch_gitstateverified_job_stall_clean_worktree_still_kills(git_work
     log_file = tmp_path / f"{job['id']}.log"
     with open(log_file, "wb"):
         pass
+    old_time = time.time() - 7200
+    os.utime(log_file, (old_time, old_time))
     job["log_file"] = str(log_file)
-    job["started_at"] = time.time() - 7200
+    job["started_at"] = old_time
 
     killed = []
 
@@ -559,6 +563,83 @@ def test_dispatch_gitstateverified_job_stall_clean_worktree_still_kills(git_work
     assert result is True
     assert job["status"] == "failed"
     assert killed == [(job["pid"], signal.SIGKILL)]
+
+
+def test_dispatch_gitstateverified_job_reconciliation_tags_harness_internal_timeout(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    os.makedirs(os.path.dirname(job["log_file"]), exist_ok=True)
+    with open(job["log_file"], "a") as f:
+        f.write("some output\nError: timeout waiting for response\n")
+
+    def fake_kill(pid, sig):
+        if sig == 0:
+            raise ProcessLookupError()
+
+    monkeypatch.setattr(sl.os, "kill", fake_kill)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *_args, **_kwargs: None)
+
+    sl._reconcile_jobs()
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+
+    assert reconciled["status"] == "failed"
+    sentinel_content = open(".synlynk/sentinel.md").read()
+    assert "HARNESS_INTERNAL_TIMEOUT" in sentinel_content
+    assert job["id"] in sentinel_content
+    assert "timeout waiting for response" in sentinel_content
+
+
+def test_dispatch_gitstateverified_job_stall_stale_nonempty_log_still_kills(git_worktree_repo, monkeypatch, tmp_path):
+    import time
+    import signal
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    log_file = tmp_path / f"{job['id']}.log"
+    log_file.write_text("some output\n")
+    old_time = time.time() - 7200
+    os.utime(log_file, (old_time, old_time))
+    job["log_file"] = str(log_file)
+    job["started_at"] = old_time
+
+    killed = []
+
+    def fake_kill(pid, sig):
+        killed.append((pid, sig))
+
+    monkeypatch.setattr(sl.os, "kill", fake_kill)
+
+    result = sl._check_job_stall(job, {"stall_timeout_minutes": 30}, ".synlynk/sentinel.md")
+
+    assert result is True
+    assert job["status"] == "failed"
+    assert killed == [(job["pid"], signal.SIGKILL)]
+
+
+def test_dispatch_gitstateverified_job_stall_fresh_nonempty_log_not_killed(git_worktree_repo, monkeypatch, tmp_path):
+    import time
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    log_file = tmp_path / f"{job['id']}.log"
+    log_file.write_text("some output\n")
+    job["log_file"] = str(log_file)
+    job["started_at"] = time.time() - 7200
+
+    killed = []
+
+    def fake_kill(pid, sig):
+        killed.append((pid, sig))
+
+    monkeypatch.setattr(sl.os, "kill", fake_kill)
+
+    result = sl._check_job_stall(job, {"stall_timeout_minutes": 30}, ".synlynk/sentinel.md")
+
+    assert result is False
+    assert job["status"] == "running"
+    assert killed == []
 
 
 def test_followup_fix_for_open_pr_147_branch_disp_unknown_agent_warning_and_continues(tmp_path, monkeypatch, capsys):
