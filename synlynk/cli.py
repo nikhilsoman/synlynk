@@ -137,6 +137,7 @@ def cmd_watch(args) -> None:
 def main() -> None:
     from synlynk import (
         VERSION,
+        AGENT_CAPABILITY_BASELINES,
         SynlynkDaemon,
         SynlynkRelay,
         _CYAN,
@@ -404,8 +405,10 @@ def main() -> None:
 
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch an agent to run a task in the background")
+    known_agents = sorted(AGENT_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
-        help="Agent name: claude, agy, codex")
+        choices=known_agents,
+        help=f"Agent name: {', '.join(known_agents)}")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
