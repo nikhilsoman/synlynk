@@ -860,3 +860,127 @@ def test_wire_the_2_dead_auto_signals_and_add_the_dispatch_rework_and_micro_rewo
     assert row[0] == 3
     assert row[1] == 7
     assert row[2] == pytest.approx(4.0, abs=0.01)
+def test_extend_tokencost_extraction_with_cache_b_sample_transcript():
+    import synlynk as sl
+
+    text = (
+        '{"model":"claude-sonnet-4-6","usage":{'
+        '"input_tokens":4821,"output_tokens":312,"cached_tokens":128},'
+        '"content":"done"}'
+    )
+
+    tokens = sl.extract_tokens(text)
+
+    assert tuple(tokens) == (4821, 312)
+    assert tokens.cache_read_tokens == 128
+
+
+def test_extend_tokencost_extraction_with_cache_b_rate_table_lookup():
+    import synlynk as sl
+
+    known = sl._model_rate_for_version("claude-opus-4-8")
+    fallback = sl._model_rate_for_version("unrecognized-model")
+
+    assert known["input"] == 0.015
+    assert known["output"] == 0.075
+    assert fallback["input"] == 0.003
+    assert fallback["output"] == 0.015
+
+
+def test_extend_tokencost_extraction_with_cache_b_update_costs_inserts_fk_columns(tmp_path, monkeypatch):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk" / "project-docs").mkdir(parents=True)
+
+    captured = {}
+
+    class FakeConn(object):
+        def execute(self, query, params=None):
+            captured["query"] = query
+            captured["params"] = params
+            return self
+
+        def commit(self):
+            captured["committed"] = True
+
+        def close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(sl, "_is_migrated", lambda: True)
+    monkeypatch.setattr(sl, "_get_db", lambda: FakeConn())
+    monkeypatch.setattr(sl, "_dr_sync", lambda _path: None)
+
+    sl.update_costs(
+        "claude --print hello",
+        1000,
+        200,
+        30.0,
+        cache_read_tokens=128,
+        model_version="claude-sonnet-4-6",
+        story_id="story-1",
+        epic_id=7,
+        phase_id=11,
+    )
+
+    assert "story_id" in captured["query"]
+    assert "epic_id" in captured["query"]
+    assert "phase_id" in captured["query"]
+    assert captured["params"][2] == "claude-sonnet-4-6"
+    assert captured["params"][5] == 128
+    assert captured["params"][8] == "story-1"
+    assert captured["params"][9] == 7
+    assert captured["params"][10] == 11
+
+
+def test_extend_tokencost_extraction_with_cache_b_update_costs_backwards_compatible_default_args(tmp_path, monkeypatch):
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk" / "project-docs").mkdir(parents=True)
+
+    calls = []
+
+    class FakeConn(object):
+        def execute(self, query, params=None):
+            calls.append((query, params))
+            return self
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(sl, "_is_migrated", lambda: True)
+    monkeypatch.setattr(sl, "_get_db", lambda: FakeConn())
+    monkeypatch.setattr(sl, "_dr_sync", lambda _path: None)
+
+    sl.update_costs("claude", 100, 50, 5.0)
+
+    assert calls
+    assert "cost_entries" in calls[0][0]
+
+
+def test_fix_a_nameerror_regression_in_your_own_prior_work_exec_command_does_not_raise(
+    tmp_path, monkeypatch
+):
+    import synlynk as sl
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(sl, "set_state", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(sl, "log_telemetry_event", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_sentinel_patterns", lambda **kw: None)
+    monkeypatch.setattr(sl, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(sl, "WatchDaemon", None)
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **kw: None)
+
+    exit_code = exec_command(["echo", "--print", "Input tokens: 10 Output tokens: 5"])
+
+    assert exit_code == 0
