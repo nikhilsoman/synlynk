@@ -144,3 +144,40 @@ def _compute_schedule_plan(max_stories=None) -> dict:
         return {"plan": plan, "blocked": blocked}
     finally:
         conn.close()
+
+
+def _enqueue_plan(plan: list) -> list:
+    """Writes each plan assignment as a 'queued' daemon_jobs row.
+
+    Mirrors the INSERT shape used by the HTTP dispatch relay in
+    synlynk/__init__.py's _handle_dispatch (job_id = 'djob-' + md5(...)).
+    Does not launch anything -- callers pass the resulting job_ids (or just
+    call _dispatch_ready_jobs()) to actually start work.
+    """
+    import hashlib
+    import time
+
+    from synlynk import _get_db
+
+    conn = _get_db()
+    job_ids = []
+    try:
+        for item in plan:
+            story_id = item["story_id"]
+            agent = item["agent"]
+            task = f"Implement {story_id}: {item.get('title') or story_id}"
+            job_id = "djob-" + hashlib.md5(
+                f"{agent}{task}{time.time()}".encode()
+            ).hexdigest()[:8]
+            conn.execute(
+                "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
+                "priority, depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?,?)",
+                (job_id, agent, task, story_id, "queued",
+                 item.get("priority", 5), "[]",
+                 time.strftime("%Y-%m-%dT%H:%M:%S")),
+            )
+            job_ids.append(job_id)
+        conn.commit()
+    finally:
+        conn.close()
+    return job_ids

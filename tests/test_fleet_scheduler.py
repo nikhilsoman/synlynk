@@ -373,3 +373,37 @@ def test_plan_degraded_mode_still_produces_a_plan(scheduler_db):
     result = _compute_schedule_plan()
     assert len(result["plan"]) == 1
     assert result["plan"][0]["agent"] == "grok"
+
+def test_enqueue_plan_writes_one_queued_daemon_job_per_assignment(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _enqueue_plan
+
+    plan = [
+        {"story_id": "story-a", "title": "story-a", "agent": "grok", "priority": 3},
+        {"story_id": "story-b", "title": "story-b", "agent": "codex", "priority": 7},
+    ]
+    job_ids = _enqueue_plan(plan)
+    assert len(job_ids) == 2
+
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT story_id, agent, status, priority FROM daemon_jobs ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+    assert rows == [
+        ("story-a", "grok", "queued", 3),
+        ("story-b", "codex", "queued", 7),
+    ]
+
+
+def test_enqueue_plan_on_empty_plan_writes_nothing(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _enqueue_plan
+
+    job_ids = _enqueue_plan([])
+    assert job_ids == []
+
+    conn = _get_db()
+    count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
+    conn.close()
+    assert count == 0
