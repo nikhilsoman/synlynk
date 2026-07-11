@@ -98,7 +98,7 @@ def test_generate_viz_data_structure(tmp_path, monkeypatch):
         json.dump({"project_name": "test-project"}, f)
 
     from synlynk.viz import generate_viz_data
-    with patch("synlynk.viz._get_db") as mock_db:
+    with patch("synlynk._get_db") as mock_db:
         mock_db.return_value = sqlite3.connect(db_path)
         data = generate_viz_data()
 
@@ -111,6 +111,33 @@ def test_generate_viz_data_structure(tmp_path, monkeypatch):
     assert "workspace_map" in data
     assert "repos" in data["workspace"]
     assert "observatory" in data
+
+
+def test_generate_viz_data_includes_file_tree(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "state.db")
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT UNIQUE, title TEXT, status TEXT DEFAULT 'active', target_date TEXT, notes TEXT);
+        CREATE TABLE roadmap_phases (id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT DEFAULT 'planned', priority TEXT, story_id TEXT, notes TEXT);
+        CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT, status TEXT DEFAULT 'open', phase TEXT DEFAULT 'build', estimated_tokens INTEGER, created_at TEXT);
+        CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT);
+        CREATE TABLE source_symbols (id INTEGER PRIMARY KEY AUTOINCREMENT, head_sha TEXT NOT NULL, file TEXT NOT NULL, language TEXT NOT NULL, symbol TEXT NOT NULL, symbol_type TEXT NOT NULL, line INTEGER, scanned_at TEXT NOT NULL);
+        INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, line, scanned_at)
+            VALUES ('abc', 'synlynk/viz.py', 'python', 'generate_gantt_html', 'function', 930, '2026-07-11T00:00:00Z');
+    """)
+    conn.commit()
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"project_name": "test-project"}, f)
+
+    from synlynk.viz import generate_viz_data
+    with patch("synlynk._get_db") as mock_db:
+        mock_db.return_value = sqlite3.connect(db_path)
+        data = generate_viz_data()
+
+    assert "file_tree" in data
+    assert "synlynk" in data["file_tree"]["dirs"]
 
 def test_dreams_populated(tmp_path, monkeypatch):
     db_path = str(tmp_path / "state.db")
@@ -226,6 +253,7 @@ def test_generate_architect_map_html_no_repos_shows_single_node():
     data = {
         "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
         "workspace_map": {"edges": [], "edge_types": {}},
+        "file_tree": {"name": ".", "dirs": {}, "files": []},
     }
     html = generate_architect_map_html(data, 8721)
     assert "🗺️ Architect Map" in html or "Architect Map" in html
@@ -259,6 +287,7 @@ def test_generate_architect_map_html_renders_repo_nodes():
             "edges": [{"from": "synlynk-website", "to": "synlynk-core", "type": "api-call"}],
             "edge_types": {"api-call": {"label": "API Call", "color": "#0d9e87"}},
         },
+        "file_tree": {"name": ".", "dirs": {}, "files": []},
     }
     html = generate_architect_map_html(data, 8721)
     assert "synlynk-core" in html
@@ -285,6 +314,7 @@ def test_generate_architect_map_html_includes_layout_and_drawer_js():
             ],
         },
         "workspace_map": {"edges": [], "edge_types": {}},
+        "file_tree": {"name": ".", "dirs": {}, "files": []},
     }
 
     html_out = generate_architect_map_html(data, 8721)
@@ -297,6 +327,19 @@ def test_generate_architect_map_html_includes_layout_and_drawer_js():
     assert "function drawerJumpGantt" in html_out
     assert "function renderTree" in html_out
     assert "if (view === 'tree' && !window._treeRendered)" in html_out
+
+
+def test_generate_architect_map_html_includes_tree_render_js():
+    from synlynk.viz import generate_architect_map_html
+
+    data = {
+        "workspace": {"name": "test-ws", "updated_at": "", "repos": []},
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "file_tree": {"name": ".", "dirs": {}, "files": []},
+    }
+    html_out = generate_architect_map_html(data, 8721)
+    assert "function renderTree" in html_out
+    assert "window.ARCHITECT_FILE_TREE" in html_out
 
 
 def test_generate_gantt_html_renders_dreams_and_notes():

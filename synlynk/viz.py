@@ -10,7 +10,7 @@ import time
 import webbrowser
 from typing import Optional
 
-from synlynk import _get_db
+from synlynk import _get_db, _query_repo_file_tree
 from synlynk.observatory import (
     build_job_observatory_snapshot,
     write_observatory_snapshot,
@@ -142,6 +142,10 @@ def generate_viz_data() -> dict:
     def _base_data() -> dict:
         config = _load_config()
         observatory = build_job_observatory_snapshot()
+        try:
+            file_tree = _query_repo_file_tree()
+        except Exception:
+            file_tree = {"name": ".", "dirs": {}, "files": []}
         return {
             "workspace": {
                 "name": _workspace_name(),
@@ -156,6 +160,7 @@ def generate_viz_data() -> dict:
             "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
             "workspace_map": _load_workspace_map(),
+            "file_tree": file_tree,
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
             "ecosystem": {},
             "observatory": observatory,
@@ -1656,6 +1661,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
     ])
     edges_json = json.dumps(edges)
     edge_types_json = json.dumps(edge_types)
+    file_tree_json = json.dumps(data.get("file_tree") or {"name": ".", "dirs": {}, "files": []})
 
     legend_html = "".join(
         f'<div class="legend-item"><span class="legend-dot" style="background:{html.escape(et.get("color", "#94a3b8"))}"></span>{html.escape(et.get("label", key))}</div>'
@@ -1708,6 +1714,7 @@ window.VIZOR_DATA = __JSON_DATA__;
 window.ARCHITECT_NODES = __NODES_JSON__;
 window.ARCHITECT_EDGES = __EDGES_JSON__;
 window.ARCHITECT_EDGE_TYPES = __EDGE_TYPES_JSON__;
+window.ARCHITECT_FILE_TREE = __FILE_TREE_JSON__;
 window.VIZOR_PORT = __PORT__;
 __ARCHITECT_MAP_JS__
 </script>
@@ -1723,6 +1730,7 @@ __LIVE_JS_HTML__
         .replace("__NODES_JSON__", nodes_json)
         .replace("__EDGES_JSON__", edges_json)
         .replace("__EDGE_TYPES_JSON__", edge_types_json)
+        .replace("__FILE_TREE_JSON__", file_tree_json)
         .replace("__PORT__", str(port))
         .replace("__ARCHITECT_MAP_JS__", _ARCHITECT_MAP_JS)
         .replace("__LIVE_JS_HTML__", live_js_html)
