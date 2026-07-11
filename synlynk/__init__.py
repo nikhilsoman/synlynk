@@ -73,6 +73,7 @@ from synlynk.dispatch import (
     dispatch_agent,
     exec_command,
 )
+from synlynk.hud import CYCLES
 
 CYCLE_NAMES = ["dream", "design", "plan", "build", "ship", "sustain"]
 
@@ -581,8 +582,11 @@ CREATE TABLE IF NOT EXISTS stories (
     title         TEXT,
     estimated_tokens INTEGER,
     actual_tokens INTEGER,
-    engg_domain   TEXT DEFAULT 'unknown',
-    org_domain    TEXT DEFAULT 'unknown',
+    engg_domain   TEXT NOT NULL DEFAULT 'backend',
+    discipline    TEXT NOT NULL DEFAULT 'backend',
+    org_domain    TEXT NOT NULL DEFAULT 'platform',
+    role          TEXT NOT NULL DEFAULT 'dev',
+    stage         TEXT NOT NULL DEFAULT 'open',
     org_domain_tags TEXT DEFAULT '[]',
     industry      TEXT DEFAULT 'unknown',
     phase         TEXT DEFAULT 'build',
@@ -597,8 +601,11 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     model_at_dispatch     TEXT,
     model_at_completion   TEXT,
     split_model           INTEGER DEFAULT 0,
-    engg_domain           TEXT NOT NULL DEFAULT 'unknown',
-    org_domain            TEXT NOT NULL DEFAULT 'unknown',
+    engg_domain           TEXT NOT NULL DEFAULT 'backend',
+    discipline            TEXT NOT NULL DEFAULT 'backend',
+    org_domain            TEXT NOT NULL DEFAULT 'platform',
+    role                  TEXT NOT NULL DEFAULT 'dev',
+    stage                 TEXT NOT NULL DEFAULT 'open',
     org_domain_tags       TEXT DEFAULT '[]',
     industry              TEXT NOT NULL DEFAULT 'unknown',
     phase                 TEXT NOT NULL DEFAULT 'build',
@@ -690,8 +697,11 @@ CREATE VIEW IF NOT EXISTS capability_scores AS
 SELECT
     agent,
     model_version,
+    discipline,
     engg_domain,
     org_domain,
+    role,
+    stage,
     industry,
     phase,
     SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
@@ -701,7 +711,7 @@ SELECT
     MAX(ts) AS last_seen
 FROM capability_ratings
 WHERE split_model = 0
-GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
+GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
 """
 
 def _get_db() -> _sqlite3.Connection:
@@ -1421,6 +1431,13 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
+    if agent not in AGENT_CAPABILITY_BASELINES:
+        conn.close()
+        known_agents = ", ".join(sorted(AGENT_CAPABILITY_BASELINES))
+        raise ValueError(
+            f"Refusing capability rating write for unregistered agent {agent!r}. "
+            f"Known agents: {known_agents}"
+        )
     # Tier 1 only — synlynk-meta header, no config fallback (agent=None prevents Tier 3 contamination)
     tier1_completion = extract_model_version(log_text, agent=None)
     model_at_dispatch = job.get("model_at_dispatch", "unknown")
@@ -1456,11 +1473,23 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     micro_rework = job.get("micro_rework", 0)
 
     story_row = conn.execute(
-        "SELECT org_domain, industry, phase FROM stories WHERE story_id=?", (story_id,)
+        "SELECT engg_domain, discipline, org_domain, role, stage, industry, phase "
+        "FROM stories WHERE story_id=?",
+        (story_id,)
     ).fetchone()
-    org_domain = story_row[0] if story_row else "unknown"
-    industry = story_row[1] if story_row else load_config().get("industry", "unknown")
-    phase = story_row[2] if story_row else "build"
+    if not story_row:
+        conn.close()
+        return
+    story_engg_domain, story_discipline, org_domain, role, stage, industry, phase = story_row
+    from synlynk.db import _normalize_capability_tags
+    story_discipline, org_domain, role, stage = _normalize_capability_tags(
+        story_engg_domain,
+        org_domain,
+        discipline=story_discipline,
+        role=role,
+        stage=stage,
+    )
+    engg_domain = story_discipline or engg_domain
 
     weighted_sum, total_weight = 0.0, 0.0
     if signals["test_pass_rate"] is not None:
@@ -1507,15 +1536,15 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     conn.execute(
         """INSERT INTO capability_ratings
            (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
-            engg_domain, org_domain, industry, phase,
+            engg_domain, discipline, org_domain, role, stage, industry, phase,
             signal_source, quality, quality_auto,
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
             dispatch_rework, micro_rework,
             duration_vs_estimate, verified_by_ci, correct, ed25519_sig)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
-         engg_domain, org_domain, industry, phase,
+         engg_domain, story_discipline, org_domain, role, stage, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
          signals["test_pass_rate"], 1 if signals["build_success"] else 0,
