@@ -316,8 +316,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
     """)
-    roadmap_arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
-    if "goal_id" not in roadmap_arc_cols:
+    arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
+    if "goal_id" not in arc_cols:
         try:
             conn.execute("ALTER TABLE roadmap_arcs ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
         except sqlite3.OperationalError:
@@ -920,6 +920,61 @@ def cmd_goal_list() -> None:
     for r in rows:
         deadline = r[3] or "ongoing"
         print(f"  {r[0]:<12} {(r[1] or '')[:39]:<40} {deadline:<12}")
+
+def cmd_goal_link(story_id: str, goal_id: str, secondary: bool = False) -> None:
+    """Links a story to a goal. Primary (default) sets stories.goal_id;
+    secondary inserts a goal_contributions row for cross-cutting traceability."""
+    from synlynk import _GREEN, _RESET, _get_db
+    conn = _get_db()
+    story = conn.execute("SELECT story_id FROM stories WHERE story_id=?", (story_id,)).fetchone()
+    goal = conn.execute("SELECT goal_id FROM goals WHERE goal_id=?", (goal_id,)).fetchone()
+    if not story:
+        conn.close()
+        print(f"  Story '{story_id}' not found.")
+        return
+    if not goal:
+        conn.close()
+        print(f"  Goal '{goal_id}' not found.")
+        return
+    if secondary:
+        conn.execute(
+            "INSERT OR IGNORE INTO goal_contributions (goal_id, story_id) VALUES (?, ?)",
+            (goal_id, story_id)
+        )
+        print(f"  {_GREEN}✓{_RESET} {story_id} linked to {goal_id} (secondary)")
+    else:
+        conn.execute("UPDATE stories SET goal_id=? WHERE story_id=?", (goal_id, story_id))
+        print(f"  {_GREEN}✓{_RESET} {story_id} linked to {goal_id} (primary)")
+    conn.commit()
+    conn.close()
+
+def cmd_goal_status() -> None:
+    """Prints a rollup of each active goal: story completion, linked arcs, deadline."""
+    from synlynk import _get_db
+    conn = _get_db()
+    goals = conn.execute(
+        "SELECT goal_id, outcome, deadline FROM goals WHERE status='active' ORDER BY created_at DESC"
+    ).fetchall()
+    if not goals:
+        conn.close()
+        print("  No active goals.")
+        return
+    print()
+    for goal_id, outcome, deadline in goals:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM stories WHERE goal_id=?", (goal_id,)
+        ).fetchone()[0]
+        done = conn.execute(
+            "SELECT COUNT(*) FROM stories WHERE goal_id=? AND status='done'", (goal_id,)
+        ).fetchone()[0]
+        arcs = conn.execute(
+            "SELECT version FROM roadmap_arcs WHERE goal_id=?", (goal_id,)
+        ).fetchall()
+        deadline_s = deadline or "ongoing"
+        arc_s = ", ".join(a[0] for a in arcs) if arcs else "—"
+        print(f"  {goal_id}  {outcome}")
+        print(f"    Stories: {done}/{total} done   Deadline: {deadline_s}   Arcs: {arc_s}\n")
+    conn.close()
 
 def cmd_score_add(story_id: str, rating: float, note: str = None,
                   rework: bool = False) -> None:

@@ -7459,6 +7459,10 @@ def _generate_context_from_db(out_path: str = None) -> str:
     top_story = conn.execute(
         "SELECT title FROM stories WHERE status='open' ORDER BY created_at ASC LIMIT 1"
     ).fetchone()
+    active_goal = conn.execute(
+        "SELECT goal_id, outcome, criterion, deadline FROM goals "
+        "WHERE status='active' ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
     recent_devlogs = conn.execute(
         "SELECT author, entry_date, session_title, body FROM devlog_entries "
         "ORDER BY entry_date DESC, id DESC LIMIT 5"
@@ -7473,6 +7477,12 @@ def _generate_context_from_db(out_path: str = None) -> str:
             f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} "
             f"| User: @{username} | Mode: {mode}\n\n"
         )
+        if active_goal:
+            goal_id, outcome, criterion, deadline = active_goal
+            deadline_s = deadline or "ongoing"
+            out.write("## Active Goal\n")
+            out.write(f"- [{goal_id}] {outcome}\n")
+            out.write(f"  Success criterion: {criterion}  ·  Deadline: {deadline_s}\n\n---\n\n")
         if top_story:
             out.write("## Next Task\n")
             out.write(f"- {top_story[0]}\n\n---\n\n")

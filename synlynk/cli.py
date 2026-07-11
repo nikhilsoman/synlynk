@@ -242,6 +242,19 @@ def main() -> None:
         help="Write the Decision record to project-docs/decisions/"
     )
 
+    goal_parser = subparsers.add_parser("goal", help="Manage Business Goals")
+    goal_sub = goal_parser.add_subparsers(dest="goal_action")
+    goal_create_parser = goal_sub.add_parser("create", help="Create a Business Goal")
+    goal_create_parser.add_argument("--outcome", required=True)
+    goal_create_parser.add_argument("--criterion", required=True)
+    goal_create_parser.add_argument("--deadline", default=None)
+    goal_sub.add_parser("list", help="List active goals")
+    goal_link_parser = goal_sub.add_parser("link", help="Link a story to a goal")
+    goal_link_parser.add_argument("story_id")
+    goal_link_parser.add_argument("--goal", required=True, dest="goal_id")
+    goal_link_parser.add_argument("--secondary", action="store_true")
+    goal_sub.add_parser("status", help="Show goal completion rollup")
+
     scan_parser = subparsers.add_parser(
         "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
     scan_parser.add_argument("--deep", action="store_true",
@@ -719,6 +732,19 @@ def main() -> None:
     elif args.command == "decide":
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
         cmd_decide(args.topic, panel=panel_members, record=args.record)
+    elif args.command == "goal":
+        from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
+        action = getattr(args, "goal_action", None)
+        if action == "create":
+            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline)
+        elif action == "list":
+            cmd_goal_list()
+        elif action == "link":
+            cmd_goal_link(args.story_id, args.goal_id, secondary=args.secondary)
+        elif action == "status" or action is None:
+            cmd_goal_status()
+        else:
+            goal_parser.print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
