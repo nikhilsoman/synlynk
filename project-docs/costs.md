@@ -10,9 +10,9 @@
 | :--- | :--- | :--- | :--- |
 | Light (~50K tokens) | 10 | ~$0.25–0.50 | ~$3.50 |
 | Medium (~150K tokens) | 12 | ~$0.65–1.50 | ~$12.00 |
-| Heavy (~400K tokens) | 8 | ~$1.75–3.00 | ~$18.00 |
+| Heavy (~400K tokens) | 9 | ~$1.75–3.00 | ~$20.25 |
 | Very Heavy / Subagent (~800K tokens) | 8 | ~$3.50–6.00 | ~$31.50 |
-| **Total** | **39** | | **~$65.50** |
+| **Total** | **40** | | **~$67.75** |
 
 ---
 
@@ -53,3 +53,4 @@
 | 2026-07-01 | nikhil | ~150 | ~320K / ~160K | ~$3.90 | BS-17 final merge (PR #89) + BS-18 full cycle: brainstorm → spec → plan → 4 agent waves (Codex T1-T7, Grok T5-T6, Agy T8) → PR #90 merged; 616 tests; state.db source of truth shipped |
 | 2026-07-04/05 | nikhil | ~200 | ~200K / ~90K | ~$4.00 | TC-2 preflight fix arc (PRs #114–116): logs summary, zombie recon, flag baseline correction, _run_tc2 root-cause fix, 837 tests · BS-13 Live Job Observatory (PR #117): observatory.py, watch --live panel, viz Observatory tab, Agy R1+R2 reviews · blog posts 42–45 with brainstorm screenshots · 11 agent dispatches (Agy ×8, Grok ×3, Codex ×1) |
 | 2026-07-11 | nikhil | ~180 | ~250K / ~110K | ~$4.50 | Epic #137 close-out: fleet dispatch scheduler design + 8-task plan authored, dispatched to Grok, diff+test review, PR #156 merged (scheduler.py, story ready/draft gate, batch headroom accounting) · PR #157 (roadmap update + deferred v2 goal `goal-d38e3c83`) merged · blog post 52 · devlog + memory housekeeping |
+| 2026-07-11/12 | nikhil | ~150 | ~230K / ~100K | ~$4.10 | Dispatch-reliability triage: #160/#161/#162 filed from rxcc handoff note, each through full brainstorm→spec→plan→dispatch→verify→merge cycle · PR #163 (Codex worktree --add-dir fix), PR #164 (dispatch --help agent list derived from AGENT_CAPABILITY_BASELINES), PR #165 (HARNESS_TIMEOUT_PATTERNS + mtime-based `_check_job_stall`) all merged · scheduled a one-shot CronCreate dispatch · live-caught #162's own bug during its fix's dispatch job (Codex died at ~500s pre-commit) and recovered the work manually · PR #166 devlog+memory housekeeping merged |
