@@ -34,6 +34,61 @@ def make_test_db(path: str):
     conn.commit()
     return conn
 
+def test_load_workspace_repos_missing_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import _load_workspace_repos
+    assert _load_workspace_repos({}) == []
+
+
+def test_load_workspace_repos_reads_default_workspace(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ws_dir = tmp_path / "fake-home" / ".synlynk" / "workspaces" / "default"
+    ws_dir.mkdir(parents=True)
+    (ws_dir / "config.json").write_text(json.dumps({
+        "workspace_name": "default",
+        "repos": [{"path": "/repo/a", "name": "repo-a", "stack_labels": ["python"]}],
+    }))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    from synlynk.viz import _load_workspace_repos
+    repos = _load_workspace_repos({})
+    assert repos == [{"path": "/repo/a", "name": "repo-a", "stack_labels": ["python"]}]
+
+
+def test_load_workspace_repos_honors_explicit_workspace_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ws_dir = tmp_path / "fake-home" / ".synlynk" / "workspaces" / "acme"
+    ws_dir.mkdir(parents=True)
+    (ws_dir / "config.json").write_text(json.dumps({
+        "workspace_name": "acme",
+        "repos": [{"path": "/repo/b", "name": "repo-b", "stack_labels": []}],
+    }))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    from synlynk.viz import _load_workspace_repos
+    repos = _load_workspace_repos({"workspace_name": "acme"})
+    assert repos == [{"path": "/repo/b", "name": "repo-b", "stack_labels": []}]
+
+
+def test_load_workspace_map_missing_returns_empty_shape(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk.viz import _load_workspace_map
+    assert _load_workspace_map() == {"edges": [], "edge_types": {}}
+
+
+def test_load_workspace_map_reads_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/vizor-workspace-map.json", "w") as f:
+        json.dump({
+            "edges": [{"from": "a", "to": "b", "type": "api-call"}],
+            "edge_types": {"api-call": {"label": "API Call", "color": "#0d9e87"}},
+        }, f)
+    from synlynk.viz import _load_workspace_map
+    result = _load_workspace_map()
+    assert result["edges"] == [{"from": "a", "to": "b", "type": "api-call"}]
+    assert result["edge_types"]["api-call"]["color"] == "#0d9e87"
+
+
 def test_generate_viz_data_structure(tmp_path, monkeypatch):
     db_path = str(tmp_path / "state.db")
     make_test_db(db_path)
@@ -53,7 +108,8 @@ def test_generate_viz_data_structure(tmp_path, monkeypatch):
     assert "agents" in data
     assert "telemetry" in data
     assert "notes" in data
-    assert "tube_config" in data
+    assert "workspace_map" in data
+    assert "repos" in data["workspace"]
     assert "observatory" in data
 
 def test_dreams_populated(tmp_path, monkeypatch):
@@ -126,7 +182,7 @@ def test_generate_effort_html_renders_svg_charts(tmp_path, monkeypatch):
         "agents": {},
         "telemetry": {"recent": [], "sentinel_alerts": []},
         "journeys": [],
-        "tube_config": None,
+        "workspace_map": {"edges": [], "edge_types": {}},
         "notes": {},
     }
 
@@ -155,7 +211,7 @@ def test_generate_effort_html_empty_state(tmp_path, monkeypatch):
         "agents": {},
         "telemetry": {"recent": [], "sentinel_alerts": []},
         "journeys": [],
-        "tube_config": None,
+        "workspace_map": {"edges": [], "edge_types": {}},
         "notes": {},
     }
 
@@ -168,7 +224,7 @@ def test_generate_tube_html_no_config():
     from synlynk.viz import generate_tube_html
     data = {
         "workspace": {"name": "test-ws", "updated_at": "2026-07-03T10:00:00Z"},
-        "tube_config": None
+        "workspace_map": {"edges": [], "edge_types": {}}
     }
     html = generate_tube_html(data, 8721)
     assert "🚇 Architect Map" in html
@@ -342,7 +398,7 @@ def test_write_cache_creates_all_files(tmp_path, monkeypatch):
         "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
-        "journeys": [], "tube_config": None, "notes": {},
+        "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
     }
     _write_cache(data, port=8721)
     expected = ["index.html", "gantt.html", "tube.html", "journeys.html",
@@ -358,7 +414,7 @@ def test_manifest_updated_at_is_iso(tmp_path, monkeypatch):
         "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
-        "journeys": [], "tube_config": None, "notes": {},
+        "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
     }
     _write_cache(data, port=8721)
     with open(os.path.join(VIZ_CACHE_DIR, "manifest.json")) as f:
@@ -380,7 +436,7 @@ def test_gantt_html_contains_vizor_data(tmp_path, monkeypatch):
                                 "cost_actual": 0.5, "cost_est": 0.5, "tasks": []}]}],
         "costs": {"total_usd": 1.5, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
-        "journeys": [], "tube_config": None, "notes": {},
+        "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
     }
     html = generate_gantt_html(data, port=8721)
     assert "VIZOR_DATA" in html
@@ -395,7 +451,7 @@ def test_effort_html_shows_empty_state(tmp_path, monkeypatch):
         "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
-        "journeys": [], "tube_config": None, "notes": {},
+        "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
     }
     html = generate_effort_html(data, port=8721)
     assert "No cost data" in html
@@ -410,7 +466,7 @@ def test_all_html_contain_live_js(tmp_path, monkeypatch):
         "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z"},
         "dreams": [], "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
         "agents": {}, "telemetry": {"recent": [], "sentinel_alerts": []},
-        "journeys": [], "tube_config": None, "notes": {},
+        "journeys": [], "workspace_map": {"edges": [], "edge_types": {}}, "notes": {},
     }
     for fn in [generate_index_html, generate_gantt_html, generate_tube_html,
                generate_journeys_html, generate_effort_html, generate_efficiency_html]:

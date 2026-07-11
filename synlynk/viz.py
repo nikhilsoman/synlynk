@@ -19,7 +19,7 @@ from synlynk.observatory import (
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
 VIZ_META_PATH = ".synlynk/viz-meta.json"
-VIZ_TUBE_PATH = ".synlynk/vizor-tube.json"
+VIZ_WORKSPACE_MAP_PATH = ".synlynk/vizor-workspace-map.json"
 DEFAULT_PORT = 8721
 
 
@@ -79,6 +79,54 @@ def _live_js(port: int) -> str:
 """.replace("\n", " ")
 
 
+def _load_workspace_repos(config: dict) -> list:
+    """Read the multi-repo list from the workspace config, defaulting to the 'default' workspace."""
+    ws_name = config.get("workspace_name") or "default"
+    ws_config_path = os.path.expanduser(f"~/.synlynk/workspaces/{ws_name}/config.json")
+    if not os.path.exists(ws_config_path):
+        ws_config_path = os.path.join(".synlynk", "workspaces", ws_name, "config.json")
+    try:
+        with open(ws_config_path) as f:
+            ws_config = json.load(f)
+        return ws_config.get("repos", [])
+    except Exception:
+        return []
+
+
+def _load_workspace_map() -> dict:
+    """Read typed edges between repos from .synlynk/vizor-workspace-map.json."""
+    try:
+        with open(VIZ_WORKSPACE_MAP_PATH) as f:
+            data = json.load(f)
+        return {"edges": data.get("edges", []), "edge_types": data.get("edge_types", {})}
+    except Exception:
+        return {"edges": [], "edge_types": {}}
+
+
+def _repo_github_url(repo_path: str) -> Optional[str]:
+    """Derive an https://github.com/<org>/<repo> URL from the repo's origin remote, if any."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        url = result.stdout.strip()
+    except Exception:
+        return None
+    if url.startswith("git@github.com:"):
+        slug = url[len("git@github.com:"):]
+    elif "github.com/" in url:
+        slug = url.split("github.com/", 1)[1]
+    else:
+        return None
+    slug = slug[:-4] if slug.endswith(".git") else slug
+    return f"https://github.com/{slug}" if slug else None
+
+
 def generate_viz_data() -> dict:
     def _ts() -> str:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -92,14 +140,22 @@ def generate_viz_data() -> dict:
         return config.get("project_name") or os.path.basename(os.getcwd()) or "workspace"
 
     def _base_data() -> dict:
+        config = _load_config()
         observatory = build_job_observatory_snapshot()
         return {
-            "workspace": {"name": _workspace_name(), "updated_at": _ts()},
+            "workspace": {
+                "name": _workspace_name(),
+                "updated_at": _ts(),
+                "repos": [
+                    {**repo, "github_url": _repo_github_url(repo["path"])}
+                    for repo in _load_workspace_repos(config)
+                ],
+            },
             "goals": [],
             "dreams": [],
             "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
-            "tube_config": _load_json_optional(VIZ_TUBE_PATH, default=None),
+            "workspace_map": _load_workspace_map(),
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
             "ecosystem": {},
             "observatory": observatory,
@@ -117,6 +173,13 @@ def generate_viz_data() -> dict:
                 return json.load(f)
         except Exception:
             return default
+
+    def _load_config() -> dict:
+        try:
+            with open(".synlynk/config.json") as f:
+                return json.load(f)
+        except Exception:
+            return {}
 
     def _normalize_stage(name: str) -> str:
         key = (name or "").strip().lower()
