@@ -140,20 +140,19 @@ def generate_viz_data() -> dict:
         return config.get("project_name") or os.path.basename(os.getcwd()) or "workspace"
 
     def _base_data() -> dict:
-        config = _load_config()
         observatory = build_job_observatory_snapshot()
         try:
             file_tree = _query_repo_file_tree()
         except Exception:
             file_tree = {"name": ".", "dirs": {}, "files": []}
+        repos = list(workspace_repos)
+        for repo in repos:
+            repo["active_dream_count"] = active_story_count if len(repos) == 1 else 0
         return {
             "workspace": {
                 "name": _workspace_name(),
                 "updated_at": _ts(),
-                "repos": [
-                    {**repo, "github_url": _repo_github_url(repo["path"])}
-                    for repo in _load_workspace_repos(config)
-                ],
+                "repos": repos,
             },
             "goals": [],
             "dreams": [],
@@ -356,10 +355,25 @@ def generate_viz_data() -> dict:
         except Exception:
             return 0
 
+    config = _load_config()
+    workspace_repos = [
+        {**repo, "github_url": _repo_github_url(repo["path"])}
+        for repo in _load_workspace_repos(config)
+    ]
+    active_story_count = 0
+
     try:
         conn = _get_db()
     except Exception:
         return _minimal_data()
+
+    if len(workspace_repos) == 1:
+        try:
+            active_story_count = conn.execute(
+                "SELECT COUNT(*) FROM stories WHERE status = 'active'"
+            ).fetchone()[0]
+        except Exception:
+            active_story_count = 0
 
     try:
         tables = {
@@ -1546,7 +1560,8 @@ function openDrawer(nodeId) {
   const stack = (node.stack_labels || []).join(', ') || 'unlabeled';
   document.getElementById('am-drawer-body').innerHTML =
     '<div>Path: <code>' + node.path + '</code></div>' +
-    '<div>Stack: ' + stack + '</div>';
+    '<div>Stack: ' + stack + '</div>' +
+    '<div>Active dreams: ' + (node.active_dream_count || 0) + '</div>';
   const githubLink = document.getElementById('am-drawer-github');
   if (node.github_url) {
     githubLink.href = node.github_url;

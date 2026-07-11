@@ -98,8 +98,10 @@ def test_generate_viz_data_structure(tmp_path, monkeypatch):
         json.dump({"project_name": "test-project"}, f)
 
     from synlynk.viz import generate_viz_data
-    with patch("synlynk._get_db") as mock_db:
-        mock_db.return_value = sqlite3.connect(db_path)
+    with patch("synlynk.viz._get_db") as mock_db, patch("synlynk._get_db") as mock_root_db:
+        conn = sqlite3.connect(db_path)
+        mock_db.return_value = conn
+        mock_root_db.return_value = conn
         data = generate_viz_data()
 
     assert "workspace" in data
@@ -132,8 +134,10 @@ def test_generate_viz_data_includes_file_tree(tmp_path, monkeypatch):
         json.dump({"project_name": "test-project"}, f)
 
     from synlynk.viz import generate_viz_data
-    with patch("synlynk._get_db") as mock_db:
-        mock_db.return_value = sqlite3.connect(db_path)
+    with patch("synlynk.viz._get_db") as mock_db, patch("synlynk._get_db") as mock_root_db:
+        conn = sqlite3.connect(db_path)
+        mock_db.return_value = conn
+        mock_root_db.return_value = conn
         data = generate_viz_data()
 
     assert "file_tree" in data
@@ -340,6 +344,85 @@ def test_generate_architect_map_html_includes_tree_render_js():
     html_out = generate_architect_map_html(data, 8721)
     assert "function renderTree" in html_out
     assert "window.ARCHITECT_FILE_TREE" in html_out
+
+
+def test_workspace_repos_include_dream_agent_counts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ws_dir = tmp_path / "fake-home" / ".synlynk" / "workspaces" / "default"
+    ws_dir.mkdir(parents=True)
+    (ws_dir / "config.json").write_text(json.dumps({
+        "workspace_name": "default",
+        "repos": [{"path": "/repo/a", "name": "repo-a", "stack_labels": []}],
+    }))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    db_path = str(tmp_path / "state.db")
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT,
+            status TEXT DEFAULT 'open', phase TEXT DEFAULT 'build',
+            estimated_tokens INTEGER, created_at TEXT);
+        INSERT INTO stories (story_id, title, status, phase) VALUES
+            ('story-1', 'Story One', 'active', 'build');
+    """)
+    conn.commit()
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({}, f)
+
+    from synlynk.viz import generate_viz_data
+    with patch("synlynk.viz._get_db") as mock_db:
+        mock_db.return_value = sqlite3.connect(db_path)
+        data = generate_viz_data()
+    repo_a = next(r for r in data["workspace"]["repos"] if r["name"] == "repo-a")
+    assert repo_a["active_dream_count"] == 1
+
+
+def test_workspace_repos_zero_dream_count_when_multiple_repos(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ws_dir = tmp_path / "fake-home" / ".synlynk" / "workspaces" / "default"
+    ws_dir.mkdir(parents=True)
+    (ws_dir / "config.json").write_text(json.dumps({
+        "workspace_name": "default",
+        "repos": [
+            {"path": "/repo/a", "name": "repo-a", "stack_labels": []},
+            {"path": "/repo/b", "name": "repo-b", "stack_labels": []},
+        ],
+    }))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    db_path = str(tmp_path / "state.db")
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT,
+            status TEXT DEFAULT 'open', phase TEXT DEFAULT 'build',
+            estimated_tokens INTEGER, created_at TEXT);
+        INSERT INTO stories (story_id, title, status, phase) VALUES
+            ('story-1', 'Story One', 'active', 'build');
+    """)
+    conn.commit()
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({}, f)
+
+    from synlynk.viz import generate_viz_data
+    with patch("synlynk._get_db") as mock_db:
+        mock_db.return_value = sqlite3.connect(db_path)
+        data = generate_viz_data()
+    for repo in data["workspace"]["repos"]:
+        assert repo["active_dream_count"] == 0
+
+
+def test_generate_architect_map_html_drawer_shows_active_dreams():
+    from synlynk.viz import generate_architect_map_html
+    data = {
+        "workspace": {"name": "test-ws", "updated_at": "", "repos": [
+            {"path": "/r/a", "name": "repo-a", "stack_labels": [], "github_url": None, "active_dream_count": 3},
+        ]},
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "file_tree": {"name": ".", "dirs": {}, "files": []},
+    }
+    html_out = generate_architect_map_html(data, 8721)
+    assert "Active dreams" in html_out
+    assert "active_dream_count" in html_out
 
 
 def test_generate_gantt_html_renders_dreams_and_notes():
