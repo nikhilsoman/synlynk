@@ -180,7 +180,9 @@ def main() -> None:
         cmd_shell,
         cmd_status as cmd_project_status,
         cmd_story_create,
+        cmd_story_draft,
         cmd_story_list,
+        cmd_story_ready,
         cmd_sync,
         cmd_configure_agent,
         cmd_team_status,
@@ -510,6 +512,12 @@ def main() -> None:
         help="Workspace stack tags; auto-detected when omitted"
     )
     story_sub.add_parser("list", help="List all stories")
+    story_ready_parser = story_sub.add_parser("ready", help="Mark a story ready for scheduling")
+    story_ready_parser.add_argument("story_id", nargs="?", default=None)
+    story_ready_parser.add_argument("--all", action="store_true", dest="all_stories",
+                                     help="Mark every draft story ready")
+    story_draft_parser = story_sub.add_parser("draft", help="Revert a story to draft")
+    story_draft_parser.add_argument("story_id")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -705,6 +713,10 @@ def main() -> None:
                 sys.exit(1)
         elif args.story_action == "list":
             cmd_story_list()
+        elif args.story_action == "ready":
+            cmd_story_ready(args.story_id, all_stories=getattr(args, "all_stories", False))
+        elif args.story_action == "draft":
+            cmd_story_draft(args.story_id)
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)

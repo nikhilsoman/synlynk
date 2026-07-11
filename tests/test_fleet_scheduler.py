@@ -48,3 +48,46 @@ def test_priority_defaults_to_5_and_readiness_defaults_to_draft(scheduler_db):
     ).fetchone()
     conn.close()
     assert row == (5, "draft")
+
+def test_cmd_story_ready_sets_readiness_to_ready(scheduler_db):
+    from synlynk.db import cmd_story_create, cmd_story_ready
+
+    story_id = cmd_story_create("readiness test", engg_domain="backend", org_domain="platform")
+    cmd_story_ready(story_id)
+
+    conn = sqlite3.connect(scheduler_db)
+    readiness = conn.execute(
+        "SELECT readiness FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert readiness == "ready"
+
+
+def test_cmd_story_ready_all_marks_every_draft_story_ready(scheduler_db):
+    from synlynk.db import cmd_story_create, cmd_story_ready
+
+    s1 = cmd_story_create("story one", engg_domain="backend", org_domain="platform")
+    s2 = cmd_story_create("story two", engg_domain="backend", org_domain="platform")
+    cmd_story_ready(None, all_stories=True)
+
+    conn = sqlite3.connect(scheduler_db)
+    rows = conn.execute(
+        "SELECT story_id, readiness FROM stories WHERE story_id IN (?, ?)", (s1, s2)
+    ).fetchall()
+    conn.close()
+    assert dict(rows) == {s1: "ready", s2: "ready"}
+
+
+def test_cmd_story_draft_reverts_readiness_to_draft(scheduler_db):
+    from synlynk.db import cmd_story_create, cmd_story_draft, cmd_story_ready
+
+    story_id = cmd_story_create("draft test", engg_domain="backend", org_domain="platform")
+    cmd_story_ready(story_id)
+    cmd_story_draft(story_id)
+
+    conn = sqlite3.connect(scheduler_db)
+    readiness = conn.execute(
+        "SELECT readiness FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert readiness == "draft"

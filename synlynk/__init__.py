@@ -10771,5 +10771,7 @@ from synlynk.db import (  # noqa: E402
     cmd_score_attest,
     cmd_score_list,
     cmd_story_create,
+    cmd_story_draft,
     cmd_story_list,
+    cmd_story_ready,
 )
