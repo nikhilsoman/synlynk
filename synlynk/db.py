@@ -439,6 +439,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             input_tokens      INTEGER,
             output_tokens     INTEGER,
             cache_read_tokens INTEGER,
+            story_id          TEXT REFERENCES stories(story_id),
+            epic_id           INTEGER REFERENCES roadmap_arcs(id),
+            phase_id          INTEGER REFERENCES roadmap_phases(id),
             total_cost_usd    REAL,
             notes             TEXT,
             recorded_at       TEXT DEFAULT (datetime('now'))
@@ -472,6 +475,17 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
         except sqlite3.OperationalError:
             pass
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    for col, typedef in [
+        ("story_id", "TEXT REFERENCES stories(story_id)"),
+        ("epic_id", "INTEGER REFERENCES roadmap_arcs(id)"),
+        ("phase_id", "INTEGER REFERENCES roadmap_phases(id)"),
+    ]:
+        if col not in cost_cols:
+            try:
+                conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
+            except sqlite3.OperationalError:
+                pass
     conn.execute(
         "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(engg_domain, ''), 'backend')"
     )
@@ -635,8 +649,9 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                     cursor = conn.execute(
                         """INSERT INTO cost_entries
                            (session_date, agent, model, input_tokens, output_tokens,
-                            cache_read_tokens, total_cost_usd, notes)
-                           VALUES (?,?,?,?,?,?,?,?)""",
+                            cache_read_tokens, story_id, epic_id, phase_id,
+                            total_cost_usd, notes)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             r["session_date"],
                             r["agent"],
@@ -644,6 +659,9 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                             r["input_tokens"],
                             r["output_tokens"],
                             r["cache_read_tokens"],
+                            r.get("story_id"),
+                            r.get("epic_id"),
+                            r.get("phase_id"),
                             r["total_cost_usd"],
                             r["notes"],
                         ),

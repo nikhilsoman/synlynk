@@ -891,6 +891,8 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
     check_sentinels = _pkg("check_sentinel_patterns")
     update_costs = _pkg("update_costs")
     extract_tokens = _pkg("extract_tokens")
+    extract_model_version = _pkg("extract_model_version")
+    model_rate_for_version = _pkg("_model_rate_for_version")
     get_username = _pkg("get_username")
     check_drift = _pkg("_check_instruction_drift", lambda: None)
     watch_daemon_cls = _pkg("WatchDaemon")
@@ -943,14 +945,33 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         print(f"\n  ✓ Execution finished in {duration:.2f}s")
 
         if extract_tokens:
-            in_tokens, out_tokens = extract_tokens(output_text)
+            token_counts = extract_tokens(output_text)
+            in_tokens, out_tokens = token_counts
+            cache_read_tokens = getattr(token_counts, "cache_read_tokens", 0)
         else:
-            in_tokens, out_tokens = 0, 0
+            in_tokens, out_tokens, cache_read_tokens = 0, 0, 0
         if in_tokens > 0:
-            est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            model_version = extract_model_version(output_text, agent=cmd_args[0]) if extract_model_version else "unknown"
+            rates = model_rate_for_version(model_version) if model_rate_for_version else {
+                "input": 0.003,
+                "output": 0.015,
+                "cache_read": 0.0000003,
+            }
+            est_cost = (
+                (in_tokens / 1000 * rates["input"]) +
+                (out_tokens / 1000 * rates["output"]) +
+                (cache_read_tokens / 1000 * rates["cache_read"])
+            )
             print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
             if update_costs:
-                update_costs(" ".join(cmd_args), in_tokens, out_tokens, duration)
+                update_costs(
+                    " ".join(cmd_args),
+                    in_tokens,
+                    out_tokens,
+                    duration,
+                    cache_read_tokens=cache_read_tokens,
+                    model_version=model_version,
+                )
         elif not _is_interactive(cmd_args):
             pass
         else:

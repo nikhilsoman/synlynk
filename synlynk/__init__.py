@@ -5826,7 +5826,16 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
     log_telemetry_event({"type": "launch", "agent": agent,
                          "story_id": story_id, "exit_code": result.returncode,
                          "duration_s": round(duration, 1)})
-    update_costs(cli, 0, 0, duration)
+    model_version = extract_model_version("", agent=agent)
+    update_costs(
+        cli,
+        0,
+        0,
+        duration,
+        cache_read_tokens=0,
+        model_version=model_version,
+        story_id=story_id,
+    )
     print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
 
 
@@ -7045,8 +7054,27 @@ def cmd_instructions_ack(file_path: str) -> None:
     print(f"  {_GREEN}✓{_RESET} Acknowledged drift for {file_path}")
 
 
+class _TokenCounts(object):
+    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens")
+
+    def __init__(self, input_tokens, output_tokens, cache_read_tokens):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cache_read_tokens = cache_read_tokens
+
+    def __iter__(self):
+        yield self.input_tokens
+        yield self.output_tokens
+
+    def __len__(self):
+        return 2
+
+
 def extract_tokens(output_text: str) -> tuple:
-    """Regex-scrapes token counts from AI CLI stdout. Returns (in_tokens, out_tokens)."""
+    """Regex-scrapes token counts from AI CLI stdout.
+
+    Returns a pair-compatible object with .cache_read_tokens for cache-aware output.
+    """
     patterns = [
         (r'Input tokens:\s*(\d+).*?Output tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
         (r'"usage"\s*:\s*\{[^}]*"input_tokens"\s*:\s*(\d+)[^}]*"output_tokens"\s*:\s*(\d+)', re.DOTALL | re.IGNORECASE),
@@ -7054,15 +7082,34 @@ def extract_tokens(output_text: str) -> tuple:
         (r'Tokens used:\s*(\d+)\s+input,\s*(\d+)\s+output', re.IGNORECASE),
         (r'prompt_tokens:\s*(\d+).*?completion_tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
     ]
+    in_tokens = 0
+    out_tokens = 0
     for pat, flags in patterns:
         m = re.search(pat, output_text, flags)
         if m:
-            return int(m.group(1)), int(m.group(2))
-    m = re.search(r'Total tokens:\s*(\d+)', output_text, re.IGNORECASE)
-    if m:
-        total = int(m.group(1))
-        return int(total * 0.8), int(total * 0.2)
-    return 0, 0
+            in_tokens = int(m.group(1))
+            out_tokens = int(m.group(2))
+            break
+    if not in_tokens and not out_tokens:
+        m = re.search(r'Total tokens:\s*(\d+)', output_text, re.IGNORECASE)
+        if m:
+            total = int(m.group(1))
+            in_tokens = int(total * 0.8)
+            out_tokens = int(total * 0.2)
+
+    cache_read_tokens = 0
+    cache_patterns = [
+        r'"(?:cached_tokens|cache_read_tokens)"\s*:\s*(\d+)',
+        r'Cache read tokens:\s*(\d+)',
+        r'Cached tokens:\s*(\d+)',
+    ]
+    for pat in cache_patterns:
+        m = re.search(pat, output_text, re.IGNORECASE)
+        if m:
+            cache_read_tokens = int(m.group(1))
+            break
+
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens)
 
 
 def extract_model_version(output_text: str, agent: str = None) -> str:
@@ -7124,10 +7171,37 @@ def extract_verifier_meta(output_text: str) -> Optional[dict]:
     return meta if "quality" in meta else None
 
 
-def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float) -> None:
+_DEFAULT_MODEL_RATE = {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}
+_MODEL_RATE_TABLE = {
+    "claude-opus-4-8": {"input": 0.015, "output": 0.075, "cache_read": 0.0000015},
+    "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    "gpt-5-codex": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    "gpt-5.4-mini": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    "gemini-2.5-pro": {"input": 0.0, "output": 0.0, "cache_read": 0.0},
+    "grok-build": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    "grok-composer-2.5-fast": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+}
+
+
+def _model_rate_for_version(model_version):
+    return _MODEL_RATE_TABLE.get(model_version, _DEFAULT_MODEL_RATE)
+
+
+def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
+                 cache_read_tokens=None, model_version=None, story_id=None,
+                 epic_id=None, phase_id=None) -> None:
     """Appends a cost row. Post-migration: writes to state.db + .synlynk/project-docs/costs.md.
-    Pre-migration: writes to project-docs/costs.md. Rates: $0.003/1K in, $0.015/1K out."""
-    est_cost = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+    Pre-migration: writes to project-docs/costs.md. Rates are model-aware, with a flat fallback."""
+    if not model_version:
+        agent = command.split()[0] if command else ""
+        model_version = extract_model_version("", agent=agent) if agent else "unknown"
+    rates = _model_rate_for_version(model_version)
+    cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
+    est_cost = (
+        (in_tokens / 1000 * rates["input"]) +
+        (out_tokens / 1000 * rates["output"]) +
+        (cache_read_tokens / 1000 * rates["cache_read"])
+    )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
     user = get_username()
@@ -7139,9 +7213,11 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float)
         try:
             conn.execute(
                 """INSERT INTO cost_entries
-                   (session_date, agent, input_tokens, output_tokens, total_cost_usd, notes)
-                   VALUES (?,?,?,?,?,?)""",
-                (ts, user, in_tokens, out_tokens, est_cost, f"exec: {short_cmd}")
+                   (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                    total_cost_usd, notes, story_id, epic_id, phase_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (ts, user, model_version, in_tokens, out_tokens, cache_read_tokens,
+                 est_cost, f"exec: {short_cmd}", story_id, epic_id, phase_id)
             )
             conn.commit()
         finally:
