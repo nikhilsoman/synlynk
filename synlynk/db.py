@@ -527,7 +527,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     for old, new in cycle_remap.items():
         try:
             conn.execute(
-                "UPDATE cycle_capability SET cycle=? WHERE cycle=?",
+                "UPDATE OR IGNORE cycle_capability SET cycle=? WHERE cycle=?",
                 (new, old)
             )
         except sqlite3.IntegrityError:
