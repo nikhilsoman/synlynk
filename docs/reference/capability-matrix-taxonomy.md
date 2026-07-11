@@ -2,7 +2,7 @@
 
 This document serves as the canonical reference for the four mandatory per-task tag dimensions of the `synlynk` Capability Matrix. Every task created or rated within the workspace must be tagged along these four dimensions. This ensures that the agent routing scheduler (`_best_agent_for_story()`) can precisely match tasks to the best-suited agent based on historical capability ratings.
 
-For details on the enforcement logic and schema, see the [Capability Matrix Hardening Design Spec](file:///Users/nikhilsoman/dev/synlynk/worktrees/job-538b20f9/docs/superpowers/specs/2026-07-11-capability-matrix-hardening-design.md).
+For details on the enforcement logic and schema, see the [Capability Matrix Hardening Design Spec](../superpowers/specs/2026-07-11-capability-matrix-hardening-design.md).
 
 ---
 
@@ -28,7 +28,9 @@ The `org_domain` dimension classifies tasks according to their functional busine
 
 The `discipline` dimension denotes the technical competency area of a task. It replaces the old, unstructured `engg_domain` field with **9 values**. 
 
-Along with the discipline, tasks are annotated with a list of `stack_tags` representing the specific technologies or languages used. The following table documents the canonical disciplines and the recommended convention values for `stack_tags` (derived from imports, shebangs, and package manifests in this repository):
+Along with the discipline, tasks can be annotated with `stack_tags` representing the specific technologies or languages used. In the schema, `stack_tags` is implemented as a free-form TEXT/JSON array column on `stories` and `capability_ratings`. Unlike the 4 mandatory enum dimensions, `stack_tags` is a non-enforced field. It is auto-populated by default from workspace language detection during `synlynk scan` or creation, and can be overridden using the `--stack-tags` CLI flag.
+
+The following table documents the canonical disciplines and recommended-by-convention values for `stack_tags` (derived from imports, shebangs, and package manifests in this repository) to serve as guidance, rather than validated enum values:
 
 | Discipline | Description | Recommended `stack_tags` (Codebase Conventions) |
 | :--- | :--- | :--- |
@@ -48,18 +50,18 @@ Along with the discipline, tasks are annotated with a list of `stack_tags` repre
 
 The `role` dimension classifies tasks according to the required persona. This prevents the static capabilities of an agent from being conflated with the runtime requirements of a specific task. It consists of **6 values**, aligned with the personas speced across the agent design documents:
 
-*   **`architect`**: Handles high-level system layout, protocol definitions, and technical spec authoring. (See the Architect role scope in the [TPM Agent Design Spec](file:///Users/nikhilsoman/dev/synlynk/worktrees/job-538b20f9/docs/superpowers/specs/2026-06-23-tpm-agent-design.md)).
+*   **`architect`**: Handles high-level system layout, protocol definitions, and technical spec authoring. (See the Architect role scope in the [TPM Agent Design Spec](../superpowers/specs/2026-06-23-tpm-agent-design.md)).
 *   **`dev`**: Implements feature sets, writes source code, modifies existing logic, and creates PRs.
 *   **`pm`**: Product manager role responsible for product intent, goals, success criteria, and user/market feedback loops (Goal and Notify stages).
-*   **`tpm`**: Technical Project Manager role coordinating parallel agent waves, resolving task dependency graphs, and managing agent quotas. (See the [TPM Agent Design Spec](file:///Users/nikhilsoman/dev/synlynk/worktrees/job-538b20f9/docs/superpowers/specs/2026-06-23-tpm-agent-design.md)).
-*   **`qa`**: Quality Assurance, corresponding to the "Verifier" persona responsible for running test suites, verifying compliance tags (such as `VERIFY_SKIP`), and investigating telemetry drops. (See the [Support Engineer Agent Design Spec](file:///Users/nikhilsoman/dev/synlynk/worktrees/job-538b20f9/docs/superpowers/specs/2026-06-21-support-engineer-agent-design.md)).
+*   **`tpm`**: Technical Project Manager role coordinating parallel agent waves, resolving task dependency graphs, and managing agent quotas. (See the [TPM Agent Design Spec](../superpowers/specs/2026-06-23-tpm-agent-design.md)).
+*   **`qa`**: Quality Assurance, corresponding to the "Verifier" persona responsible for running test suites, verifying compliance tags (such as `VERIFY_SKIP`), and investigating telemetry drops. (See the [Support Engineer Agent Design Spec](../superpowers/specs/2026-06-21-support-engineer-agent-design.md)).
 *   **`designer`**: Visual/UX designer responsible for visual interface mapping, SVG graphs, and interactive TUI overlays (such as Vizor views or HUD layouts).
 
 ---
 
 ## 4. Execution Stage (`stage`)
 
-The `stage` dimension represents the current lifecycle stage of the task. It is governed by the **7-stage GOVERNS model** (which renames `CYCLES` in [synlynk/hud.py](file:///Users/nikhilsoman/dev/synlynk/worktrees/job-538b20f9/synlynk/hud.py) to goal, open, visualize, execute, release, notify, sustain):
+The `stage` dimension represents the current lifecycle stage of the task. It is governed by the **7-stage GOVERNS model** (which renames `CYCLES` in [synlynk/hud.py](../../synlynk/hud.py) to goal, open, visualize, execute, release, notify, sustain):
 
 | Stage | Command/Context | Description |
 | :--- | :--- | :--- |
