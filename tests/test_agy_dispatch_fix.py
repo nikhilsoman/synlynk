@@ -220,7 +220,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
     assert job_a["worktree_path"] != job_b["worktree_path"]
     assert spawned == [job_a["worktree_path"], job_b["worktree_path"]]
     assert len({job_a["worktree_branch"], job_b["worktree_branch"]}) == 2
-    assert len(created) == 2
+    assert len(created) == 4
 
 
 def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(git_worktree_repo, monkeypatch):
@@ -259,6 +259,90 @@ def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(g
 
     assert raised is True
     assert spawned == []
+
+
+def test_dispatch_codex_adds_git_common_dir_as_writable(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+
+    captured = {}
+    git_common_dir = os.path.abspath(os.path.join(os.getcwd(), ".git"))
+
+    class FakeProc:
+        pid = 4242
+
+    def fake_run(cmd, **kwargs):
+        captured.setdefault("runs", []).append((cmd, kwargs))
+        if cmd == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]:
+            return _fake_completed_process(stdout=git_common_dir, returncode=0)
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+    def fake_popen(cmd, **kwargs):
+        captured["popen_cmd"] = cmd
+        captured["popen_kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "_relevant_files_for_story", lambda _story_id: [])
+    monkeypatch.setattr(sl, "_verify_contract_for_story", lambda _story_id, _task: "")
+    monkeypatch.setattr(sl, "_count_dispatch_rework", lambda _story_id: 0)
+    monkeypatch.setattr(sl.time, "time", lambda: 1_725_000_000.123)
+
+    sl.dispatch_agent("codex", "fix bug", skip_preflight=True)
+
+    shell_cmd = captured["popen_cmd"][2]
+    assert "--add-dir" in shell_cmd
+    assert f"--add-dir {git_common_dir}" in shell_cmd
+
+
+def test_dispatch_codex_skips_git_common_dir_when_git_rev_parse_fails(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+
+    captured = {}
+
+    class FakeProc:
+        pid = 4242
+
+    def fake_run(cmd, **kwargs):
+        captured.setdefault("runs", []).append((cmd, kwargs))
+        if cmd == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]:
+            return _fake_completed_process(stdout="", returncode=1)
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+    def fake_popen(cmd, **kwargs):
+        captured["popen_cmd"] = cmd
+        captured["popen_kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "_relevant_files_for_story", lambda _story_id: [])
+    monkeypatch.setattr(sl, "_verify_contract_for_story", lambda _story_id, _task: "")
+    monkeypatch.setattr(sl, "_count_dispatch_rework", lambda _story_id: 0)
+    monkeypatch.setattr(sl.time, "time", lambda: 1_725_000_000.123)
+
+    sl.dispatch_agent("codex", "fix bug", skip_preflight=True)
+
+    shell_cmd = captured["popen_cmd"][2]
+    assert "--add-dir" not in shell_cmd
 
 
 def test_migrate_transparency__failloud_on_0row_import_reports_all_failed_sources(tmp_path, monkeypatch, capsys):

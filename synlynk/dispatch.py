@@ -707,6 +707,21 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--permission-mode", "bypassPermissions"]
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
+    if agent == "codex":
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                capture_output=True,
+                text=True,
+                cwd=os.getcwd(),
+                timeout=5,
+            )
+            if result.returncode == 0:
+                git_common_dir = result.stdout.strip()
+                if git_common_dir:
+                    flags = flags + ["--add-dir", git_common_dir]
+        except Exception:
+            pass
 
     probe_model = _pkg("_probe_model_version")
     model_at_dispatch = probe_model(agent, cli) if probe_model else "unknown"
