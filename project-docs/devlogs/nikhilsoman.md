@@ -187,4 +187,24 @@ All 6 waves executed to plan. Final state:
 ## 2026-07-06 — Four-POV strategic evaluation + company roadmap
 
 - Wrote `docs/strategy/2026-07-06-four-pov-evaluation-and-company-roadmap.md` — evaluation of goals/architecture/execution from 4 POVs (AI-coding dev, AI-company exec, enterprise tech exec, systems architect) + open-core company roadmap (Epics 0–6).
+
+## 2026-07-11/12 — Dispatch reliability triage: #160, #161, #162 all shipped
+
+Reviewed the rxcc dispatch-reliability handoff note (`docs/handoffs/dispatch-reliability-rxcc-2026-07-11.md`), triaged three distinct problems into GitHub issues, and shipped fixes for all three via the full brainstorm → spec → plan → dispatch → verify → merge cycle.
+
+**#161 — Codex worktree git-ref writes blocked (PR #163):** `dispatch_agent()` now resolves `git rev-parse --path-format=absolute --git-common-dir` and appends `--add-dir <path>` to Codex's sandbox flags. Dispatched to Codex (job-27eeabde), diff matched plan exactly.
+
+**#160 — stale `dispatch --help` agent list (PR #164):** Help text and `choices=` now derive from `sorted(AGENT_CAPABILITY_BASELINES)` instead of a hand-maintained string that had drifted (missing `grok`). Brainstormed with `AskUserQuestion`, spec + plan written and committed on `chore/dispatch-help-agent-list-design`, dispatched to Codex (job-3d3596da), diff matched plan exactly.
+
+**#162 — no signal distinguishing harness-internal timeout from real stall (PR #165):** Three rxcc Agy dispatch failures all died with identical `Error: timeout waiting for response` at unrelated task stages (~500–600s) — pointed to a fixed-duration timeout inside the agy binary itself, not a task failure or synlynk's own 30-min stall detector (which never fired — the failures all had active output well before 30 min). Added `HARNESS_TIMEOUT_PATTERNS` (mirrors `QUOTA_PATTERNS`) tagging matching dead jobs with a `HARNESS_INTERNAL_TIMEOUT` sentinel alert, and generalized `_check_job_stall()` from "log is empty" to "log stopped advancing" (mtime staleness vs. `stall_timeout_minutes`, replacing the old `started_at`/`elapsed_minutes` gating that made the stall-kill path unreachable once any output existed).
+
+Two design decisions locked via `AskUserQuestion`: (1) scope = detection + stall-generalization (not full heartbeat instrumentation — declined as unjustified complexity for this issue's priority); (2) pattern-matching convention = phrase list mirroring `QUOTA_PATTERNS`, not a single hardcoded string.
+
+**Scheduled dispatch:** used `CronCreate` (one-shot, `30 0 12 7 *`) to fire the #162 dispatch at a specific future wall-clock time per user request, since the plan was ready before the user wanted it executed.
+
+**Notable: the #162 dispatch job itself hit the exact bug it fixes.** Codex's job (job-f26fa30c) died `FAILED (exit -1)` at ~500s — right after finishing the implementation and running `pytest` (956 passed, per its own log) but before committing. Work survived uncommitted in the worktree; verified the diff matched the plan exactly (`git diff main <dispatch-branch>`), ran the full suite locally (956 passed), then committed and pushed manually rather than losing the work or re-dispatching. First-hand confirmation the failure mode isn't `agy`-specific.
+
+All three PRs' CI showed only the same 5 known pre-existing baseline failures (`test_detect_install_type_pip/script/unknown`, `test_run_tc4_skips_flag_only_command_templates`, `test_upgrade_auto_installs_new_version` — env-specific, confirmed present on `main` independent of these changes) — merged all three with `--delete-branch`.
+
+**Result:** #160, #161, #162 all closed. PRs #163, #164, #165 merged.
 - Key calls: reject native-harness pivot in favor of structured-interface adapters (Agent SDK/JSON/ACP); enforcement plane before enterprise sales; CLA + license split before v1.0 GA; provisionals on sentinels/permission-translation/handoff before further blog disclosure.
