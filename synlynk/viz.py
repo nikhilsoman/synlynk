@@ -1451,7 +1451,152 @@ renderDreams();
 </html>"""
 
 
-_ARCHITECT_MAP_JS = "// populated in Task 5/6"
+_ARCHITECT_MAP_JS = """
+function layoutGraph(nodes, edges) {
+  const W = 900, H = 620, ITER = 200;
+  const positions = {};
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(nodes.length, 1);
+    positions[n.id] = { x: W / 2 + 260 * Math.cos(angle), y: H / 2 + 220 * Math.sin(angle) };
+  });
+  for (let iter = 0; iter < ITER; iter++) {
+    nodes.forEach(a => {
+      let fx = 0, fy = 0;
+      nodes.forEach(b => {
+        if (a.id === b.id) return;
+        const dx = positions[a.id].x - positions[b.id].x;
+        const dy = positions[a.id].y - positions[b.id].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const repel = 4000 / (dist * dist);
+        fx += (dx / dist) * repel;
+        fy += (dy / dist) * repel;
+      });
+      edges.forEach(e => {
+        if (e.from !== a.id && e.to !== a.id) return;
+        const otherId = e.from === a.id ? e.to : e.from;
+        if (!positions[otherId]) return;
+        const dx = positions[otherId].x - positions[a.id].x;
+        const dy = positions[otherId].y - positions[a.id].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const attract = dist * 0.01;
+        fx += (dx / dist) * attract;
+        fy += (dy / dist) * attract;
+      });
+      positions[a.id].x = Math.min(W - 70, Math.max(70, positions[a.id].x + fx));
+      positions[a.id].y = Math.min(H - 40, Math.max(40, positions[a.id].y + fy));
+    });
+  }
+  return positions;
+}
+
+function renderGraph() {
+  const svg = document.getElementById('am-svg');
+  if (!svg) return;
+  const nodes = window.ARCHITECT_NODES || [];
+  const edges = window.ARCHITECT_EDGES || [];
+  const edgeTypes = window.ARCHITECT_EDGE_TYPES || {};
+  const pos = layoutGraph(nodes, edges);
+  let markup = '';
+  edges.forEach(e => {
+    const a = pos[e.from], b = pos[e.to];
+    if (!a || !b) return;
+    const color = (edgeTypes[e.type] || {}).color || '#94a3b8';
+    markup += '<line class="am-edge" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '"></line>';
+  });
+  nodes.forEach(n => {
+    const p = pos[n.id];
+    if (!p) return;
+    const label = String(n.label || n.id || '');
+    const w = Math.max(90, label.length * 7 + 20);
+    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="openDrawer(\\'' + n.id + '\\')">' +
+      '<rect width="' + w + '" height="36" rx="8"></rect>' +
+      '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
+      '</g>';
+  });
+  svg.innerHTML = markup;
+}
+
+function setArchitectView(view) {
+  document.querySelectorAll('.am-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  document.getElementById('am-graph-view').classList.toggle('active', view === 'graph');
+  document.getElementById('am-tree-view').classList.toggle('active', view === 'tree');
+  if (view === 'tree' && !window._treeRendered) {
+    renderTree();
+    window._treeRendered = true;
+  }
+  fetch('http://localhost:' + window.VIZOR_PORT + '/architect-map/view-pref', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ view: view }),
+  }).catch(() => {});
+}
+
+let currentDrawerNode = null;
+
+function openDrawer(nodeId) {
+  const node = (window.ARCHITECT_NODES || []).find(n => n.id === nodeId);
+  if (!node) return;
+  currentDrawerNode = node;
+  document.getElementById('am-drawer-title').textContent = node.label;
+  const stack = (node.stack_labels || []).join(', ') || 'unlabeled';
+  document.getElementById('am-drawer-body').innerHTML =
+    '<div>Path: <code>' + node.path + '</code></div>' +
+    '<div>Stack: ' + stack + '</div>';
+  const githubLink = document.getElementById('am-drawer-github');
+  if (node.github_url) {
+    githubLink.href = node.github_url;
+    githubLink.style.display = 'block';
+  } else {
+    githubLink.style.display = 'none';
+  }
+  document.getElementById('am-drawer').classList.add('open');
+  document.getElementById('am-ov').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('am-drawer').classList.remove('open');
+  document.getElementById('am-ov').classList.remove('open');
+  currentDrawerNode = null;
+}
+
+async function drawerDispatch() {
+  if (!currentDrawerNode) return;
+  const task = prompt('Task to dispatch in ' + currentDrawerNode.label + ':');
+  if (!task) return;
+  await fetch('http://localhost:' + window.VIZOR_PORT + '/dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: currentDrawerNode.path, task: task }),
+  });
+  closeDrawer();
+}
+
+function drawerJumpGantt() {
+  if (!currentDrawerNode) return;
+  window.top.postMessage({ type: 'vizor-navigate', view: 'gantt', repo: currentDrawerNode.id }, '*');
+}
+
+function renderTreeNode(node) {
+  let html = '';
+  const dirNames = Object.keys(node.dirs || {}).sort();
+  dirNames.forEach(name => {
+    html += '<details class="am-tree-dir" open><summary>📁 ' + name + '</summary>' + renderTreeNode(node.dirs[name]) + '</details>';
+  });
+  (node.files || []).slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(f => {
+    html += '<div class="am-tree-file">📄 ' + f.name + ' <span style="color:#94a3b8">(' + f.symbol_count + ')</span></div>';
+  });
+  return html;
+}
+
+function renderTree() {
+  const root = document.getElementById('am-tree-root');
+  if (!root) return;
+  const tree = window.ARCHITECT_FILE_TREE || { dirs: {}, files: [] };
+  root.innerHTML = renderTreeNode(tree) || '<div class="am-tree-file">No scan data yet — run <code>synlynk scan --deep</code>.</div>';
+}
+
+renderGraph();
+"""
 
 _ARCHITECT_MAP_STYLE = """
 body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2328; }

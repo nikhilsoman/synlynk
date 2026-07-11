@@ -268,6 +268,37 @@ def test_generate_architect_map_html_renders_repo_nodes():
     assert "API Call" in html
 
 
+def test_generate_architect_map_html_includes_layout_and_drawer_js():
+    from synlynk.viz import generate_architect_map_html
+
+    data = {
+        "workspace": {
+            "name": "test-ws",
+            "updated_at": "",
+            "repos": [
+                {
+                    "path": "/r/a",
+                    "name": "repo-a",
+                    "stack_labels": [],
+                    "github_url": "https://github.com/x/a",
+                },
+            ],
+        },
+        "workspace_map": {"edges": [], "edge_types": {}},
+    }
+
+    html_out = generate_architect_map_html(data, 8721)
+
+    assert "function layoutGraph" in html_out
+    assert "function setArchitectView" in html_out
+    assert "function openDrawer" in html_out
+    assert "function closeDrawer" in html_out
+    assert "function drawerDispatch" in html_out
+    assert "function drawerJumpGantt" in html_out
+    assert "function renderTree" in html_out
+    assert "if (view === 'tree' && !window._treeRendered)" in html_out
+
+
 def test_generate_gantt_html_renders_dreams_and_notes():
     from synlynk.viz import generate_gantt_html
 
