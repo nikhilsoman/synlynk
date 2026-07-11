@@ -127,6 +127,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
     if "status" not in story_cols:
         conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+    if "goal_id" not in story_cols:
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
+        except sqlite3.OperationalError:
+            pass
     daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     if "handoff_count" not in daemon_job_cols:
         try:
@@ -311,6 +316,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
     """)
+    roadmap_arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
+    if "goal_id" not in roadmap_arc_cols:
+        try:
+            conn.execute("ALTER TABLE roadmap_arcs ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
+        except sqlite3.OperationalError:
+            pass
     # BS-22 introduced erroneous cycle renames; delete any rows with the wrong names
     # so they don't block migration on databases that ran the bad migration.
     for sql in [
