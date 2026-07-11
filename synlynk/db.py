@@ -606,6 +606,15 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             )
         except sqlite3.OperationalError:
             pass
+    # #141 follow-up: fleet scheduler columns on stories
+    for _col, _typedef in [
+        ("priority", "INTEGER NOT NULL DEFAULT 5"),
+        ("readiness", "TEXT NOT NULL DEFAULT 'draft'"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
+        except Exception:
+            pass  # column already exists
     conn.commit()
     _seed_verb_map(conn)
 
