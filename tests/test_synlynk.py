@@ -130,6 +130,22 @@ def test_dispatch_help_lists_all_known_agents(project_dir, capsys):
         assert agent_name in captured.out
 
 
+def test_dispatch_rejects_unknown_agent_before_dispatch_agent_called(project_dir, monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(synlynk, "dispatch_agent", lambda *a, **kw: calls.append((a, kw)))
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "dispatch", "nonexistent-agent", "--task", "x"]
+    try:
+        with pytest.raises(SystemExit) as exc:
+            synlynk.main()
+    finally:
+        sys.argv = old_argv
+    captured = capsys.readouterr()
+    assert exc.value.code != 0
+    assert "invalid choice" in captured.err
+    assert calls == []
+
+
 def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
