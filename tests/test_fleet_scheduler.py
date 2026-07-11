@@ -91,3 +91,44 @@ def test_cmd_story_draft_reverts_readiness_to_draft(scheduler_db):
     ).fetchone()[0]
     conn.close()
     assert readiness == "draft"
+
+def test_story_failed_agents_returns_empty_set_with_no_history(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _story_failed_agents
+
+    conn = _get_db()
+    assert _story_failed_agents(conn, "story-none") == set()
+    conn.close()
+
+
+def test_story_failed_agents_returns_agents_from_failed_daemon_jobs(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _story_failed_agents
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+        "VALUES ('djob-f1', 'grok', 'do it', 'story-x', 'failed', '2026-01-01T00:00:00')"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+        "VALUES ('djob-f2', 'codex', 'do it', 'story-x', 'done', '2026-01-01T00:00:00')"
+    )
+    conn.commit()
+    assert _story_failed_agents(conn, "story-x") == {"grok"}
+    conn.close()
+
+
+def test_story_retry_count_matches_failed_job_rows(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _story_retry_count
+
+    conn = _get_db()
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+            f"VALUES ('djob-r{i}', 'grok', 'do it', 'story-y', 'failed', '2026-01-01T00:00:00')"
+        )
+    conn.commit()
+    assert _story_retry_count(conn, "story-y") == 2
+    conn.close()
