@@ -1469,6 +1469,8 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         started_at=job.get("started_at"),
         ended_at=job.get("ended_at"),
         exit_code=job.get("exit_code"),
+        worktree_path=job.get("worktree_path"),
+        worktree_branch=job.get("worktree_branch"),
     )
     engg_domain = _infer_engg_domain(log_text)
     dispatch_rework = job.get("dispatch_rework", 0)
@@ -1495,14 +1497,21 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
 
     weighted_sum, total_weight = 0.0, 0.0
     if signals["test_pass_rate"] is not None:
-        weighted_sum += signals["test_pass_rate"] * 10 * 0.35
-        total_weight += 0.35
-    if signals["build_success"] is not None:
-        weighted_sum += (10.0 if signals["build_success"] else 0.0) * 0.30
+        weighted_sum += signals["test_pass_rate"] * 10 * 0.30
         total_weight += 0.30
+    if signals["build_success"] is not None:
+        weighted_sum += (10.0 if signals["build_success"] else 0.0) * 0.25
+        total_weight += 0.25
+    if signals.get("pr_review_cycles") is not None:
+        pr_review_score = max(0.0, 10.0 - min(float(signals["pr_review_cycles"]) * 2.0, 10.0))
+        weighted_sum += pr_review_score * 0.15
+        total_weight += 0.15
+    if signals.get("verified_by_ci") is not None:
+        weighted_sum += (10.0 if signals["verified_by_ci"] else 0.0) * 0.15
+        total_weight += 0.15
     rework_penalty = min(dispatch_rework * 2.0, 10.0)
-    weighted_sum += max(0.0, 10.0 - rework_penalty) * 0.35
-    total_weight += 0.35
+    weighted_sum += max(0.0, 10.0 - rework_penalty) * 0.15
+    total_weight += 0.15
     quality_auto = (weighted_sum / total_weight) if total_weight else 5.0
 
     # Anti-gaming: cap quality_auto at 5.0 when < 3 tests ran with perfect pass rate.
@@ -1516,7 +1525,7 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     verifier_meta = extract_verifier_meta(log_text)
     if verifier_meta:
         signal_source = "verifier"
-        quality = verifier_meta["quality"]
+        quality = (quality_auto * 0.15) + (verifier_meta["quality"] * 0.85)
         verifier_model = verifier_meta.get("verifier_model")
         verifier_agent_val = agent
         correct = 0 if verifier_meta.get("correct") is False else 1
@@ -1542,16 +1551,16 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
             signal_source, quality, quality_auto,
             verifier_agent, verifier_model,
             test_pass_rate, build_success,
-            dispatch_rework, micro_rework,
+            dispatch_rework, micro_rework, pr_review_cycles,
             duration_vs_estimate, verified_by_ci, correct, ed25519_sig)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (story_id, agent, model_version, model_at_dispatch, model_at_completion, split_model,
          engg_domain, story_discipline, org_domain, role, stage, stack_tags, industry, phase,
          signal_source, quality, quality_auto,
          verifier_agent_val, verifier_model,
-         signals["test_pass_rate"], 1 if signals["build_success"] else 0,
-         dispatch_rework, micro_rework,
-         None, None, correct, ed25519_sig)
+         signals["test_pass_rate"], signals["build_success"],
+         dispatch_rework, micro_rework, signals.get("pr_review_cycles"),
+         None, signals.get("verified_by_ci"), correct, ed25519_sig)
     )
     conn.commit()
     conn.close()

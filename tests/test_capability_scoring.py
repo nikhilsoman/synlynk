@@ -662,7 +662,7 @@ def test_write_capability_rating_sets_correct_from_verifier(tmp_path, monkeypatc
     ).fetchone()
     conn.close()
     assert row[0] == "verifier"
-    assert row[1] == 7.0
+    assert row[1] == pytest.approx(7.45, abs=0.01)
     assert row[2] == 0  # correct=false from verifier meta
 
 
