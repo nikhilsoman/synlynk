@@ -666,6 +666,23 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     previous_agents TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
+
+CREATE TABLE IF NOT EXISTS goals (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id     TEXT NOT NULL UNIQUE,
+    outcome     TEXT NOT NULL,
+    criterion   TEXT NOT NULL,
+    deadline    TEXT,
+    status      TEXT NOT NULL DEFAULT 'active',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS goal_contributions (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id  TEXT NOT NULL REFERENCES goals(goal_id),
+    story_id TEXT NOT NULL REFERENCES stories(story_id),
+    UNIQUE(goal_id, story_id)
+);
 """
 
 _DB_SCORES_VIEW = """
