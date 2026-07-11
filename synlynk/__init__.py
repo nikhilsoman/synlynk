@@ -692,6 +692,24 @@ CREATE TABLE IF NOT EXISTS goal_contributions (
     story_id TEXT NOT NULL REFERENCES stories(story_id),
     UNIQUE(goal_id, story_id)
 );
+
+-- Per-agent plan quotas (tokens or requests). quota_type is plan-driven:
+-- different harnesses reset on different windows (5h Claude plan, hourly,
+-- daily, weekly, monthly). headroom is computed as limit_tokens - used_tokens
+-- (columns named *_tokens historically; unit column disambiguates).
+CREATE TABLE IF NOT EXISTS agent_quotas (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent        TEXT NOT NULL,
+    model        TEXT NOT NULL DEFAULT 'unknown',
+    quota_type   TEXT NOT NULL,
+    unit         TEXT NOT NULL DEFAULT 'tokens',
+    limit_tokens INTEGER NOT NULL,
+    used_tokens  INTEGER NOT NULL DEFAULT 0,
+    reset_at     TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(agent, model, quota_type, unit)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
 """
 
 _DB_SCORES_VIEW = """
@@ -2730,44 +2748,395 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
             print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
 
 
-def _best_agent_for_story(story_id: str) -> Optional[str]:
-    """Returns the agent with the highest capability score for the story's coordinate.
+# Plan-driven quota windows. Harnesses reset on different cadences — not a
+# fixed shared shape. "5h" covers Claude Max/Team rolling plan windows.
+QUOTA_TYPES = ("5h", "hourly", "daily", "weekly", "monthly")
+QUOTA_UNITS = ("tokens", "requests")
+# Capability scores within this gap are considered ties → break on cost (#140).
+_CAPABILITY_COST_TIE_GAP = 0.15
 
-    Falls back through progressively wider coordinates. Returns None on cold start.
+
+def _quota_headroom(limit_tokens: int, used_tokens: int) -> int:
+    """Return remaining capacity for a quota row (never negative)."""
+    try:
+        return max(0, int(limit_tokens) - int(used_tokens or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _upsert_agent_quota(
+    agent: str,
+    quota_type: str,
+    limit_tokens: int,
+    used_tokens: int = 0,
+    *,
+    model: str = "unknown",
+    unit: str = "tokens",
+    reset_at: Optional[str] = None,
+    conn=None,
+) -> None:
+    """Insert or update an agent_quotas row. Validates quota_type and unit."""
+    if quota_type not in QUOTA_TYPES:
+        raise ValueError(
+            f"Invalid quota_type {quota_type!r}. Allowed: {', '.join(QUOTA_TYPES)}"
+        )
+    if unit not in QUOTA_UNITS:
+        raise ValueError(
+            f"Invalid unit {unit!r}. Allowed: {', '.join(QUOTA_UNITS)}"
+        )
+    own_conn = conn is None
+    if own_conn:
+        conn = _get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO agent_quotas
+                (agent, model, quota_type, unit, limit_tokens, used_tokens,
+                 reset_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(agent, model, quota_type, unit) DO UPDATE SET
+                limit_tokens = excluded.limit_tokens,
+                used_tokens  = excluded.used_tokens,
+                reset_at     = excluded.reset_at,
+                updated_at   = CURRENT_TIMESTAMP
+            """,
+            (
+                agent,
+                model or "unknown",
+                quota_type,
+                unit,
+                int(limit_tokens),
+                int(used_tokens or 0),
+                reset_at,
+            ),
+        )
+        if own_conn:
+            conn.commit()
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def _project_request_quota_from_config() -> Optional[dict]:
+    """Unify project-level budget.limit_requests with agent_quotas request unit.
+
+    Returns a synthetic quota dict, or None if config cannot be read.
+    This is the bridge between .synlynk/config.json limit_requests and the
+    per-agent request-unit rows in agent_quotas — not a substitute for
+    per-agent plan quotas, but a workspace floor when no agent-level request
+    row exists.
+    """
+    try:
+        config = load_config()
+        limit_reqs = int(config.get("budget", {}).get("limit_requests") or 0)
+    except Exception:
+        return None
+    if limit_reqs <= 0:
+        return None
+    used = 0
+    telemetry_file = ".synlynk/telemetry.json"
+    if os.path.exists(telemetry_file):
+        try:
+            with open(telemetry_file) as f:
+                data = json.load(f)
+            used = sum(1 for e in data if e.get("type") == "exec")
+        except (json.JSONDecodeError, IOError, TypeError):
+            # Degraded: cannot read usage this cycle — treat used as 0 so we
+            # don't hard-block on a missing signal (conservative headroom).
+            used = 0
+    return {
+        "agent": "*",
+        "model": "project",
+        "quota_type": "monthly",
+        "unit": "requests",
+        "limit_tokens": limit_reqs,
+        "used_tokens": used,
+        "headroom": _quota_headroom(limit_reqs, used),
+        "source": "config.budget.limit_requests",
+    }
+
+
+def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
+    """Read agent_quotas rows for an agent.
+
+    Returns:
+      - list of row dicts on success (may be empty — empty means no signal)
+      - None if the table/query failed (degraded: quota unreadable this cycle)
+
+    Degraded-mode contract (#141): callers must not hard-block when this
+    returns None or an empty list. Route conservatively (prefer agents with
+    known headroom) but keep the agent eligible.
+    """
+    try:
+        rows = conn.execute(
+            """
+            SELECT agent, model, quota_type, unit, limit_tokens, used_tokens,
+                   reset_at, updated_at
+            FROM agent_quotas
+            WHERE agent = ?
+            """,
+            (agent,),
+        ).fetchall()
+    except Exception:
+        return None
+    result = []
+    for r in rows:
+        limit_v = r[4]
+        used_v = r[5]
+        result.append({
+            "agent": r[0],
+            "model": r[1],
+            "quota_type": r[2],
+            "unit": r[3] or "tokens",
+            "limit_tokens": limit_v,
+            "used_tokens": used_v,
+            "headroom": _quota_headroom(limit_v, used_v),
+            "reset_at": r[6],
+            "updated_at": r[7],
+            "source": "agent_quotas",
+        })
+    return result
+
+
+def _quota_status_for_agent(
+    conn,
+    agent: str,
+    estimated_tokens: Optional[int] = None,
+    estimated_requests: int = 1,
+) -> dict:
+    """Stage-2 quota gate for one agent.
+
+    Returns dict with keys:
+      status: "ok" | "exhausted" | "unknown"
+      headroom: int | None  (min headroom across binding windows, tokens unit)
+      unit: "tokens" | "requests" | None
+      degraded: bool  True when signal unavailable — do not hard-block
+
+    Degraded-mode behavior (documented + implemented, #141):
+      If quota rows cannot be read this cycle, or no rows exist for the agent,
+      status="unknown" and degraded=True. The routing engine keeps the agent
+      eligible (does not hard-block) but ranks known-headroom agents first.
+    """
+    rows = _read_agent_quota_rows(conn, agent)
+    if rows is None:
+        return {
+            "status": "unknown",
+            "headroom": None,
+            "unit": None,
+            "degraded": True,
+            "reason": "quota_unreadable",
+        }
+    if not rows:
+        # No per-agent signal. Optionally fold in project request budget so
+        # limit_requests is not an orphan field relative to the quota matrix.
+        project_req = _project_request_quota_from_config()
+        if project_req is None:
+            return {
+                "status": "unknown",
+                "headroom": None,
+                "unit": None,
+                "degraded": True,
+                "reason": "no_quota_rows",
+            }
+        # Project-level requests only — still a real gate when present.
+        need = max(1, int(estimated_requests or 1))
+        if project_req["headroom"] < need:
+            return {
+                "status": "exhausted",
+                "headroom": project_req["headroom"],
+                "unit": "requests",
+                "degraded": False,
+                "reason": "project_request_budget",
+            }
+        return {
+            "status": "ok",
+            "headroom": project_req["headroom"],
+            "unit": "requests",
+            "degraded": False,
+            "reason": "project_request_budget",
+        }
+
+    need_tokens = int(estimated_tokens) if estimated_tokens else 0
+    need_requests = max(1, int(estimated_requests or 1))
+    min_token_headroom = None
+    min_request_headroom = None
+
+    for row in rows:
+        unit = row["unit"]
+        headroom = row["headroom"]
+        if unit == "tokens":
+            min_token_headroom = (
+                headroom if min_token_headroom is None
+                else min(min_token_headroom, headroom)
+            )
+            if need_tokens > 0 and headroom < need_tokens:
+                return {
+                    "status": "exhausted",
+                    "headroom": headroom,
+                    "unit": "tokens",
+                    "degraded": False,
+                    "reason": f"{row['quota_type']}_tokens",
+                }
+            if need_tokens <= 0 and headroom <= 0:
+                return {
+                    "status": "exhausted",
+                    "headroom": 0,
+                    "unit": "tokens",
+                    "degraded": False,
+                    "reason": f"{row['quota_type']}_tokens_zero",
+                }
+        elif unit == "requests":
+            min_request_headroom = (
+                headroom if min_request_headroom is None
+                else min(min_request_headroom, headroom)
+            )
+            if headroom < need_requests:
+                return {
+                    "status": "exhausted",
+                    "headroom": headroom,
+                    "unit": "requests",
+                    "degraded": False,
+                    "reason": f"{row['quota_type']}_requests",
+                }
+
+    # Prefer reporting token headroom when present; else request headroom.
+    if min_token_headroom is not None:
+        return {
+            "status": "ok",
+            "headroom": min_token_headroom,
+            "unit": "tokens",
+            "degraded": False,
+            "reason": "agent_quotas",
+        }
+    if min_request_headroom is not None:
+        return {
+            "status": "ok",
+            "headroom": min_request_headroom,
+            "unit": "requests",
+            "degraded": False,
+            "reason": "agent_quotas",
+        }
+    return {
+        "status": "unknown",
+        "headroom": None,
+        "unit": None,
+        "degraded": True,
+        "reason": "empty_after_filter",
+    }
+
+
+def _estimate_story_cost_usd(model_version: Optional[str], estimated_tokens: Optional[int]) -> float:
+    """Rough USD cost for stage-3 routing (capability → quota → cost)."""
+    tokens = int(estimated_tokens or 0)
+    if tokens <= 0:
+        tokens = 1000  # nominal unit for ranking when estimate missing
+    rates = _model_rate_for_version(model_version or "unknown")
+    # Assume ~70% input / 30% output for ranking purposes only.
+    in_tok = int(tokens * 0.7)
+    out_tok = tokens - in_tok
+    return (in_tok / 1000 * rates["input"]) + (out_tok / 1000 * rates["output"])
+
+
+def _capability_candidates_for_story(conn, engg, org, industry, phase) -> list:
+    """Return [(agent, weighted_score, model_version), ...] best-first.
+
+    Falls back through progressively wider coordinates (same as legacy
+    _best_agent_for_story single-row lookup).
+    """
+    queries = [
+        ("engg_domain=? AND org_domain=? AND industry=? AND phase=?",
+         (engg, org, industry, phase)),
+        ("engg_domain=? AND org_domain=? AND phase=?",
+         (engg, org, phase)),
+        ("engg_domain=? AND phase=?",
+         (engg, phase)),
+    ]
+    for where, params in queries:
+        rows = conn.execute(
+            f"SELECT agent, weighted_score, model_version FROM capability_scores "
+            f"WHERE {where} ORDER BY weighted_score DESC",
+            params,
+        ).fetchall()
+        if rows:
+            # Deduplicate by agent, keep highest score (first due to ORDER BY).
+            seen = set()
+            out = []
+            for agent, score, model in rows:
+                if agent in seen:
+                    continue
+                seen.add(agent)
+                out.append((agent, float(score or 0.0), model or "unknown"))
+            return out
+    return []
+
+
+def _best_agent_for_story(story_id: str) -> Optional[str]:
+    """3-stage routing: capability score → quota headroom → cost.
+
+    Stage 1 (capability, #139): rank agents by weighted capability score for
+    the story's coordinate, falling back through wider coordinates.
+    Stage 2 (quota, #141): filter agents with insufficient headroom. Real gate.
+    Degraded-mode: when quota can't be read this cycle, keep the agent eligible
+    (do not hard-block) but prefer agents with known headroom.
+    Stage 3 (cost, #140): among remaining, if top scores are within
+    _CAPABILITY_COST_TIE_GAP, pick the cheaper model; else highest capability.
+
+    Returns None on cold start (no capability data).
     """
     if not story_id:
         return None
     conn = _get_db()
-    story = conn.execute(
-        "SELECT engg_domain, org_domain, industry, phase FROM stories WHERE story_id=?",
-        (story_id,)
-    ).fetchone()
-    if not story:
-        conn.close()
-        return None
-
-    engg, org, industry, phase = story
-
-    queries = [
-        ("full",       "engg_domain=? AND org_domain=? AND industry=? AND phase=?",
-                       (engg, org, industry, phase)),
-        ("no-industry","engg_domain=? AND org_domain=? AND phase=?",
-                       (engg, org, phase)),
-        ("engg-only",  "engg_domain=? AND phase=?",
-                       (engg, phase)),
-    ]
-    for _, where, params in queries:
-        row = conn.execute(
-            f"SELECT agent FROM capability_scores WHERE {where} "
-            "ORDER BY weighted_score DESC LIMIT 1",
-            params
+    try:
+        story = conn.execute(
+            "SELECT engg_domain, org_domain, industry, phase, estimated_tokens "
+            "FROM stories WHERE story_id=?",
+            (story_id,),
         ).fetchone()
-        if row:
-            conn.close()
-            return row[0]
+        if not story:
+            return None
 
-    conn.close()
-    return None
+        engg, org, industry, phase, estimated_tokens = story
+        candidates = _capability_candidates_for_story(
+            conn, engg, org, industry, phase
+        )
+        if not candidates:
+            return None
+
+        # Stage 2 — quota headroom gate
+        gated = []  # (agent, score, model, quota_status)
+        for agent, score, model in candidates:
+            qstatus = _quota_status_for_agent(
+                conn, agent, estimated_tokens=estimated_tokens
+            )
+            if qstatus["status"] == "exhausted":
+                continue  # real gate: drop
+            gated.append((agent, score, model, qstatus))
+
+        if not gated:
+            # Every capability-eligible agent is quota-exhausted.
+            return None
+
+        # Prefer known-headroom (non-degraded) over unknown when both present.
+        known = [g for g in gated if not g[3].get("degraded")]
+        pool = known if known else gated
+
+        # Stage 3 — cost among capability-near ties
+        top_score = pool[0][1]
+        near = [g for g in pool if (top_score - g[1]) <= _CAPABILITY_COST_TIE_GAP]
+        if len(near) == 1:
+            return near[0][0]
+
+        best = min(
+            near,
+            key=lambda g: (
+                _estimate_story_cost_usd(g[2], estimated_tokens),
+                -g[1],  # higher capability as secondary
+                g[0],   # stable tie-break
+            ),
+        )
+        return best[0]
+    finally:
+        conn.close()
 
 
 def _reconcile_jobs() -> None:

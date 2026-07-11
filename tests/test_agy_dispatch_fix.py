@@ -984,3 +984,226 @@ def test_fix_a_nameerror_regression_in_your_own_prior_work_exec_command_does_not
     exit_code = exec_command(["echo", "--print", "Input tokens: 10 Output tokens: 5"])
 
     assert exit_code == 0
+
+
+# --- #141: agent_quotas base table + stage-2 quota gate -------------------
+
+def _seed_capability(conn, story_id, agent, quality, model="unknown",
+                     engg="backend", org="platform", industry="ott", phase="build"):
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (story_id, agent, model, engg, org, industry, phase, "auto", quality, quality),
+    )
+
+
+def test_build_the_base_agent_quotas_table_and_wi_table_exists_with_quota_types_and_unit(
+    tmp_path, monkeypatch
+):
+    """agent_quotas exists with 5h/daily/weekly/monthly (+hourly) and unit column."""
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    conn = sl._get_db()
+    cols = {row[1]: row[2] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
+    conn.close()
+
+    for required in (
+        "agent", "model", "quota_type", "unit",
+        "limit_tokens", "used_tokens", "reset_at", "updated_at",
+    ):
+        assert required in cols, f"missing column {required}"
+
+    # Insert every plan-driven window + both units
+    for qtype in ("5h", "hourly", "daily", "weekly", "monthly"):
+        sl._upsert_agent_quota("claude", qtype, limit_tokens=100_000, used_tokens=10,
+                               model="claude-sonnet-4-6", unit="tokens")
+    sl._upsert_agent_quota(
+        "claude", "daily", limit_tokens=50, used_tokens=5,
+        model="claude-sonnet-4-6", unit="requests",
+    )
+
+    conn = sl._get_db()
+    types = {
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT quota_type FROM agent_quotas WHERE agent='claude'"
+        )
+    }
+    units = {
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT unit FROM agent_quotas WHERE agent='claude'"
+        )
+    }
+    row = conn.execute(
+        "SELECT limit_tokens, used_tokens, unit FROM agent_quotas "
+        "WHERE agent='claude' AND quota_type='5h' AND unit='tokens'"
+    ).fetchone()
+    conn.close()
+
+    assert types == {"5h", "hourly", "daily", "weekly", "monthly"}
+    assert units == {"tokens", "requests"}
+    assert row == (100_000, 10, "tokens")
+    assert sl._quota_headroom(100_000, 10) == 99_990
+
+
+def test_build_the_base_agent_quotas_table_and_wi_unit_requests_unifies_config_limit_requests(
+    tmp_path, monkeypatch
+):
+    """unit=requests and config budget.limit_requests share one headroom model."""
+    import json
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 10},
+    }))
+    # 8 prior exec events → 2 request headroom left at project level
+    (tmp_path / ".synlynk" / "telemetry.json").write_text(json.dumps(
+        [{"type": "exec"} for _ in range(8)]
+    ))
+
+    project_q = sl._project_request_quota_from_config()
+    assert project_q is not None
+    assert project_q["unit"] == "requests"
+    assert project_q["limit_tokens"] == 10
+    assert project_q["used_tokens"] == 8
+    assert project_q["headroom"] == 2
+
+    conn = sl._get_db()
+    # Agent-level request quota is the precise gate when present
+    sl._upsert_agent_quota(
+        "codex", "daily", limit_tokens=5, used_tokens=5,
+        unit="requests", conn=conn,
+    )
+    conn.commit()
+    exhausted = sl._quota_status_for_agent(conn, "codex", estimated_requests=1)
+    ok_agent = sl._quota_status_for_agent(conn, "agy", estimated_requests=1)
+    conn.close()
+
+    assert exhausted["status"] == "exhausted"
+    assert exhausted["unit"] == "requests"
+    # No agent rows for agy → falls back to project limit_requests (headroom 2)
+    assert ok_agent["status"] == "ok"
+    assert ok_agent["unit"] == "requests"
+    assert ok_agent["headroom"] == 2
+
+
+def test_build_the_base_agent_quotas_table_and_wi_routing_filters_exhausted_quota(
+    tmp_path, monkeypatch
+):
+    """Stage 2 is a real gate: highest capability loses when quota is exhausted."""
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    # Disable project request floor so only agent_quotas rows decide
+    monkeypatch.setattr(
+        sl, "_project_request_quota_from_config", lambda: None
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO stories "
+        "(story_id, title, engg_domain, org_domain, industry, phase, estimated_tokens) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("story-quota-1", "Quota gate", "backend", "platform", "ott", "build", 40_000),
+    )
+    _seed_capability(conn, "story-quota-1", "gemini", 9.0, model="gemini-2.5-pro")
+    _seed_capability(conn, "story-quota-1", "claude", 6.0, model="claude-sonnet-4-6")
+    # gemini has more capability but only 12K headroom; story needs 40K
+    sl._upsert_agent_quota(
+        "gemini", "hourly", limit_tokens=50_000, used_tokens=38_000,
+        model="gemini-2.5-pro", unit="tokens", conn=conn,
+    )
+    sl._upsert_agent_quota(
+        "claude", "5h", limit_tokens=200_000, used_tokens=10_000,
+        model="claude-sonnet-4-6", unit="tokens", conn=conn,
+    )
+    conn.commit()
+    conn.close()
+
+    assert sl._best_agent_for_story("story-quota-1") == "claude"
+
+
+def test_build_the_base_agent_quotas_table_and_wi_routing_degraded_mode_does_not_hard_block(
+    tmp_path, monkeypatch
+):
+    """When quota can't be read / has no rows, route conservatively — do not hard-block."""
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    monkeypatch.setattr(sl, "_project_request_quota_from_config", lambda: None)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO stories "
+        "(story_id, title, engg_domain, org_domain, industry, phase, estimated_tokens) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("story-quota-2", "Degraded", "backend", "platform", "ott", "build", 10_000),
+    )
+    _seed_capability(conn, "story-quota-2", "gemini", 9.0, model="gemini-2.5-pro")
+    _seed_capability(conn, "story-quota-2", "claude", 6.0, model="claude-sonnet-4-6")
+    # Only claude has a readable quota row; gemini has none → degraded/unknown
+    sl._upsert_agent_quota(
+        "claude", "daily", limit_tokens=100_000, used_tokens=0,
+        unit="tokens", conn=conn,
+    )
+    conn.commit()
+
+    status_gemini = sl._quota_status_for_agent(conn, "gemini", estimated_tokens=10_000)
+    status_claude = sl._quota_status_for_agent(conn, "claude", estimated_tokens=10_000)
+    conn.close()
+
+    assert status_gemini["status"] == "unknown"
+    assert status_gemini["degraded"] is True
+    assert status_claude["status"] == "ok"
+    assert status_claude["degraded"] is False
+
+    # Conservative: prefer known-headroom claude over higher-scoring unknown gemini
+    assert sl._best_agent_for_story("story-quota-2") == "claude"
+
+    # Unreadable table path: still must not hard-block (return a candidate)
+    monkeypatch.setattr(sl, "_read_agent_quota_rows", lambda conn, agent: None)
+    # With both unknown/degraded, fall back to capability ranking → gemini
+    assert sl._best_agent_for_story("story-quota-2") == "gemini"
+
+
+def test_build_the_base_agent_quotas_table_and_wi_cost_tiebreak_when_capability_close(
+    tmp_path, monkeypatch
+):
+    """Stage 3: when capability gap <= 0.15, pick the cheaper model."""
+    import synlynk as sl
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    monkeypatch.setattr(sl, "_project_request_quota_from_config", lambda: None)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO stories "
+        "(story_id, title, engg_domain, org_domain, industry, phase, estimated_tokens) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("story-quota-3", "Cost tie", "backend", "platform", "ott", "build", 20_000),
+    )
+    # opus is slightly higher score but much more expensive than sonnet
+    _seed_capability(conn, "story-quota-3", "claude-opus", 8.10, model="claude-opus-4-8")
+    _seed_capability(conn, "story-quota-3", "claude", 8.00, model="claude-sonnet-4-6")
+    for agent, model in (
+        ("claude-opus", "claude-opus-4-8"),
+        ("claude", "claude-sonnet-4-6"),
+    ):
+        sl._upsert_agent_quota(
+            agent, "daily", limit_tokens=500_000, used_tokens=0,
+            model=model, unit="tokens", conn=conn,
+        )
+    conn.commit()
+    conn.close()
+
+    assert sl._best_agent_for_story("story-quota-3") == "claude"

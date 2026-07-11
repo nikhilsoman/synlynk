@@ -573,6 +573,39 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
         except Exception:
             pass  # column already exists
+    # #141: agent_quotas base table (also in _DB_SCHEMA; re-assert for older DBs)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS agent_quotas (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent        TEXT NOT NULL,
+            model        TEXT NOT NULL DEFAULT 'unknown',
+            quota_type   TEXT NOT NULL,
+            unit         TEXT NOT NULL DEFAULT 'tokens',
+            limit_tokens INTEGER NOT NULL,
+            used_tokens  INTEGER NOT NULL DEFAULT 0,
+            reset_at     TIMESTAMP,
+            updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(agent, model, quota_type, unit)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
+    )
+    quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
+    if quota_cols and "unit" not in quota_cols:
+        try:
+            conn.execute(
+                "ALTER TABLE agent_quotas ADD COLUMN unit TEXT NOT NULL DEFAULT 'tokens'"
+            )
+        except sqlite3.OperationalError:
+            pass
+    if quota_cols and "model" not in quota_cols:
+        try:
+            conn.execute(
+                "ALTER TABLE agent_quotas ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     _seed_verb_map(conn)
 
