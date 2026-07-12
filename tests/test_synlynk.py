@@ -2210,7 +2210,7 @@ def test_save_and_load_jobs_roundtrip(project_dir):
     assert loaded == [job]
 
 
-def test_reconcile_marks_dead_pid_as_failed(project_dir):
+def test_reconcile_marks_dead_pid_as_unknown(project_dir):
     # Current process PID always exists; PID 9999999 never exists
     current_pid = os.getpid()
     jobs = [
@@ -2223,7 +2223,7 @@ def test_reconcile_marks_dead_pid_as_failed(project_dir):
     alive = next(j for j in result if j["id"] == "job-alive")
     dead = next(j for j in result if j["id"] == "job-dead")
     assert alive["status"] == "running"
-    assert dead["status"] == "failed"
+    assert dead["status"] == "unknown"
     assert dead["ended_at"] is not None
 
 
@@ -2410,7 +2410,7 @@ def test_reconcile_requeues_clean_harness_internal_timeout(project_dir, monkeypa
     assert dispatched[0][0] == "codex"
     assert dispatched[0][2]["force_agent"] is True
     assert retry_job["retry_count"] == 1
-    assert original_job["status"] == "failed"
+    assert original_job["status"] == "unknown"
     assert original_job["retry_count"] == 0
     assert sentinel_calls == []
 
@@ -2506,7 +2506,7 @@ def test_reconcile_does_not_requeue_timeout_at_retry_cap(project_dir, monkeypatc
     reconciled = next(j for j in jobs if j["id"] == "job-timeout-cap")
 
     assert dispatched == []
-    assert reconciled["status"] == "failed"
+    assert reconciled["status"] == "unknown"
     assert reconciled["retry_count"] == 2
     assert sentinel_calls and sentinel_calls[0][0][1] == "HARNESS_INTERNAL_TIMEOUT"
 
@@ -2536,7 +2536,7 @@ def test_reconcile_empty_log_file_does_not_crash(project_dir):
     assert os.path.exists(sentinel), ".exit in CWD must not be consumed"
     os.remove(sentinel)
     result = synlynk._load_jobs()
-    assert result[0]["status"] == "failed"  # dead PID → failed regardless
+    assert result[0]["status"] == "unknown"
 
 
 def test_reconcile_auto_finalizes_dirty_worktree_excluding_generated_files(project_dir, monkeypatch, capsys):
@@ -5060,8 +5060,8 @@ def test_daemon_jobs_insert_and_query(project_dir):
     assert json.loads(row[4]) == []
 
 
-def test_reconcile_daemon_jobs_marks_dead_pid_failed(project_dir):
-    """A running job whose PID no longer exists gets marked failed."""
+def test_reconcile_daemon_jobs_marks_dead_pid_unknown(project_dir):
+    """A running job whose PID no longer exists gets marked unknown without an exit signal."""
     conn = synlynk._get_db()
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
@@ -5079,8 +5079,8 @@ def test_reconcile_daemon_jobs_marks_dead_pid_failed(project_dir):
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-dead",)
     ).fetchone()
     conn2.close()
-    assert row[0] == "failed"
-    assert row[1] == -1
+    assert row[0] == "unknown"
+    assert row[1] is None
 
 
 def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
