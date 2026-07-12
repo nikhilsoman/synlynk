@@ -1045,11 +1045,25 @@ def test_extend_tokencost_extraction_with_cache_b_rate_table_lookup():
 
     known = sl._model_rate_for_version("claude-opus-4-8")
     fallback = sl._model_rate_for_version("unrecognized-model")
+    gemini = sl._model_rate_for_version("gemini-2.5-pro")
 
     assert known["input"] == 0.015
     assert known["output"] == 0.075
     assert fallback["input"] == 0.003
     assert fallback["output"] == 0.015
+    assert gemini["input"] == 0.00125
+    assert gemini["output"] == 0.01
+    assert gemini["cache_read"] == 0.000125
+
+
+def test_extend_tokencost_extraction_with_cache_b_unknown_model_on_local_agent_is_zero():
+    import synlynk as sl
+
+    zero_rate = sl._model_rate_for_version("unrecognized-model", agent="/usr/local/bin/local")
+
+    assert zero_rate["input"] == 0.0
+    assert zero_rate["output"] == 0.0
+    assert zero_rate["cache_read"] == 0.0
 
 
 def test_extend_tokencost_extraction_with_cache_b_update_costs_inserts_fk_columns(tmp_path, monkeypatch):

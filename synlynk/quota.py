@@ -291,12 +291,16 @@ def _quota_status_for_agent(
     }
 
 
-def _estimate_story_cost_usd(model_version: Optional[str], estimated_tokens: Optional[int]) -> float:
+def _estimate_story_cost_usd(
+    model_version: Optional[str],
+    estimated_tokens: Optional[int],
+    agent: Optional[str] = None,
+) -> float:
     """Rough USD cost for stage-3 routing (capability → quota → cost)."""
     tokens = int(estimated_tokens or 0)
     if tokens <= 0:
         tokens = 1000  # nominal unit for ranking when estimate missing
-    rates = _pkg("_model_rate_for_version")(model_version or "unknown")
+    rates = _pkg("_model_rate_for_version")(model_version or "unknown", agent=agent)
     # Assume ~70% input / 30% output for ranking purposes only.
     in_tok = int(tokens * 0.7)
     out_tok = tokens - in_tok

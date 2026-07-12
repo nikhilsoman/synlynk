@@ -977,7 +977,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             in_tokens, out_tokens, cache_read_tokens = 0, 0, 0
         if in_tokens > 0:
             model_version = extract_model_version(output_text, agent=cmd_args[0]) if extract_model_version else "unknown"
-            rates = model_rate_for_version(model_version) if model_rate_for_version else {
+            rates = model_rate_for_version(model_version, agent=cmd_args[0]) if model_rate_for_version else {
                 "input": 0.003,
                 "output": 0.015,
                 "cache_read": 0.0000003,
@@ -996,6 +996,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     duration,
                     cache_read_tokens=cache_read_tokens,
                     model_version=model_version,
+                    agent=cmd_args[0],
                 )
         elif not _is_interactive(cmd_args):
             pass
