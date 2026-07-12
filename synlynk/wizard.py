@@ -372,10 +372,10 @@ def _run_scan_tui(results: dict, threads: list, primary_root: str = ".") -> None
     started = _time.monotonic()
     while True:
         elapsed = _time.monotonic() - started
-        _wiz_clear()
-        _render_scan_cards(results, expanded, elapsed)
+        _pkg("_wiz_clear")()
+        _pkg("_render_scan_cards")(results, expanded, elapsed)
 
-        if _kbhit():
+        if _pkg("_kbhit")():
             key = _pkg("_wiz_read_key")()
             if key in ("q", "\x03"):
                 sys.exit(0)
@@ -398,7 +398,7 @@ def _run_scan_tui(results: dict, threads: list, primary_root: str = ".") -> None
         except Exception:
             pass
 
-        updated = _pkg("_write_scan_fences")(results, root=primary_root)
+    updated = _pkg("_write_scan_fences")(results, root=primary_root)
     if updated:
         print(f"\n  {_GREEN}── Agent fences updated ──────────────────{_RESET}")
         for path in updated:
