@@ -15,41 +15,67 @@
 via oMLX, routed through the existing capability→quota→cost scheduler.
 
 **Architecture:** `local` is invoked exactly like any CLI agent — `dispatch_agent()`
-spawns `python3 -m synlynk.local_agent_runner < prompt_file`, a small stdin-reading
-script that POSTs to oMLX's OpenAI-compatible endpoint and prints the response text plus
-a `prompt_tokens: N completion_tokens: N` line to stdout. This is a refinement discovered
-during planning (see spec's "new HTTP driver path" framing): wrapping the HTTP call in a
-thin CLI-shaped runner means **zero changes** to `dispatch_agent()`'s subprocess/worktree/
-log-polling machinery, and the existing `extract_tokens()` regex (pattern 5:
-`prompt_tokens`/`completion_tokens`) already parses the runner's output with no changes
-to `costs.py`'s extraction logic — only new rate-table entries.
+spawns a real `aider` CLI subprocess pointed at oMLX as an OpenAI-compatible backend
+(`aider --openai-api-base <endpoint>/v1 --model <roster-id> --edit-format <whole|diff>
+--no-auto-commits --yes-always --message-file <prompt_file>`), inside the job's normal
+worktree. oMLX is the inference/serving layer only; Aider is the agentic editor that
+reads/plans/writes real files and is git-aware. This is a revision from the original
+single-shot-HTTP-chat-completion design (external review, Fable, 2026-07-12): a plain
+`POST /v1/chat/completions` call returns text but cannot edit files, which left nothing
+for `_write_capability_rating()` to score. Because `local` is a genuine CLI subprocess,
+**no new spawn path** is needed in `dispatch_agent()` — only two small, additive changes
+(dynamic flag assembly, a `--message-file` cmd branch) alongside the untouched
+worktree/log-polling/reconciliation machinery every other agent already uses. Cost
+accounting needs no local-specific change either — `_model_rate_for_version(...,
+agent=...)` already forces `$0.00` for any `agent == "local"` job (landed via #189).
 
-**Tech Stack:** Python 3 stdlib only (`urllib.request` for the HTTP call — no new
-dependency), SQLite (`state.db`), pytest.
+**Tech Stack:** Python 3 stdlib only for the config/preflight helpers (`urllib.request`
+for the oMLX reachability check — no new dependency), `aider` (Apache-2.0, external CLI
+dependency, not vendored) as the agentic editor, SQLite (`state.db`), pytest.
 
 **Reference spec:** `docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md`
 
 ---
 
-## Task Group 1: Driver wiring — `local` agent, `.agents/local.json`, runner script
+## Task Group 1: Driver wiring — `local` agent as an Aider subprocess over oMLX
 
 **Branch:** `feat/local-agent-1-driver-wiring`
+
+**Rewritten 2026-07-13** to match the Aider-over-oMLX architecture (design spec's
+"Two layers" section) instead of the original bespoke HTTP chat-completion driver. This
+version dispatches `local` as a real CLI subprocess (`aider ...`) exactly like `codex`/
+`agy`/`grok`, so it participates in the existing worktree/log-polling/reconciliation
+pipeline with **no new spawn path** — only additive, targeted changes to
+`dispatch_agent()`'s flag-assembly and preflight steps.
+
+**Already done, no action needed in this task group:** `synlynk/costs.py:148-152`
+(`_model_rate_for_version`) already forces `{input: 0.0, output: 0.0, cache_read: 0.0}`
+whenever `os.path.basename(agent) == "local"`, regardless of `model_version` — this
+landed as part of #189/PR194's per-model rate-table fix, before this rewrite. The
+original Task Group 1's "add 3 rows to `_MODEL_RATE_TABLE`" step is **removed** — it's
+redundant with, and narrower than, that existing agent-level override.
 
 **Files:**
 - Create: `.agents/local.json`
 - Create: `synlynk/local_agent.py`
-- Create: `synlynk/local_agent_runner.py`
-- Modify: `synlynk/_constants.py` (add `AGENT_CAPABILITY_BASELINES["local"]`, add 3 rows to `_MODEL_RATE_TABLE` — wait, rate table lives in `costs.py`, see below)
-- Modify: `synlynk/costs.py:137-145` (`_MODEL_RATE_TABLE`)
+- Modify: `synlynk/_constants.py` (add `AGENT_CAPABILITY_BASELINES["local"]`)
+- Modify: `synlynk/dispatch.py`:
+  - `_dispatch_flags_for_agent()` (line 25) — append dynamic model flags for `agent == "local"`
+  - flag/cmd assembly in `dispatch_agent()` (lines 786-801) — add a `prompt_file_flag` branch
+- Modify: `synlynk/cli.py` — `synlynk local doctor` subcommand
 - Test: `tests/test_local_agent.py`
+- Test: `tests/test_dispatch_local_agent.py`
 
-### Step 1: Write failing tests for the config loader and health check
+### Step 1: Write failing tests for the config loader and preflight helpers
 
 Create `tests/test_local_agent.py`:
 
 ```python
-"""Tests for synlynk.local_agent — config loading, health check, chat completion.
-All HTTP calls are mocked; no real oMLX instance required (standard CI tier)."""
+"""Tests for synlynk.local_agent — config loading, model/edit-format selection,
+oMLX reachability check. All HTTP calls are mocked; no real oMLX instance required
+(standard CI tier). This module does NOT talk to Aider — Aider is spawned as a CLI
+subprocess by dispatch.py (see tests/test_dispatch_local_agent.py); this module only
+owns the config/preflight helpers Aider's invocation is built from."""
 import json
 import os
 import tempfile
@@ -66,14 +92,12 @@ class TestLoadLocalConfig(unittest.TestCase):
             with open(path, "w") as f:
                 json.dump({
                     "name": "local",
-                    "driver": "http",
                     "endpoint": "http://127.0.0.1:8080",
                     "models": [
-                        {"id": "ornith-1.0-9b", "pinned": True},
-                        {"id": "qwen-coder", "pinned": False},
+                        {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
+                        {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
                     ],
                     "hardware_tier": "16gb-default",
-                    "max_concurrent": 1,
                 }, f)
             config = local_agent._load_local_config(path)
         self.assertEqual(config["endpoint"], "http://127.0.0.1:8080")
@@ -87,17 +111,25 @@ class TestLoadLocalConfig(unittest.TestCase):
 class TestPinnedModel(unittest.TestCase):
     def test_returns_pinned_model(self):
         config = {"models": [
-            {"id": "a", "pinned": False},
-            {"id": "b", "pinned": True},
+            {"id": "a", "pinned": False, "edit_format": "diff"},
+            {"id": "b", "pinned": True, "edit_format": "whole"},
         ]}
         self.assertEqual(local_agent._pinned_model(config), "b")
 
     def test_falls_back_to_first_model_when_none_pinned(self):
-        config = {"models": [{"id": "a", "pinned": False}, {"id": "b", "pinned": False}]}
+        config = {"models": [
+            {"id": "a", "pinned": False, "edit_format": "diff"},
+            {"id": "b", "pinned": False, "edit_format": "whole"},
+        ]}
         self.assertEqual(local_agent._pinned_model(config), "a")
 
 
 class TestHealthCheck(unittest.TestCase):
+    """oMLX's OpenAI-compatible /v1/models endpoint — used both by `synlynk local
+    doctor` and (via network_deps in AGENT_CAPABILITY_BASELINES) by dispatch_agent()'s
+    existing generic preflight reachability check. No local-specific preflight
+    function is needed; see Step 9."""
+
     @patch("synlynk.local_agent.urllib.request.urlopen")
     def test_health_check_ok(self, mock_urlopen):
         mock_resp = MagicMock()
@@ -118,21 +150,31 @@ class TestHealthCheck(unittest.TestCase):
         self.assertIn("connection refused", result["error"])
 
 
-class TestChatCompletion(unittest.TestCase):
-    @patch("synlynk.local_agent.urllib.request.urlopen")
-    def test_chat_completion_returns_text_and_usage(self, mock_urlopen):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "choices": [{"message": {"content": "def add(a, b): return a + b"}}],
-            "usage": {"prompt_tokens": 120, "completion_tokens": 15},
-        }).encode("utf-8")
-        mock_urlopen.return_value.__enter__.return_value = mock_resp
-        text, usage = local_agent._chat_completion(
-            "http://127.0.0.1:8080", "ornith-1.0-9b", "write an add function"
-        )
-        self.assertEqual(text, "def add(a, b): return a + b")
-        self.assertEqual(usage["prompt_tokens"], 120)
-        self.assertEqual(usage["completion_tokens"], 15)
+class TestLocalDispatchModelFlags(unittest.TestCase):
+    """The flags dispatch_agent() appends to the aider invocation, built from
+    .agents/local.json's endpoint + selected model + that model's edit_format."""
+
+    def test_builds_openai_base_model_and_edit_format_flags(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "endpoint": "http://127.0.0.1:8080",
+                    "models": [
+                        {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
+                        {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
+                    ],
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(config_path=path)
+        self.assertEqual(flags, [
+            "--openai-api-base", "http://127.0.0.1:8080/v1",
+            "--model", "ornith-1.0-9b",
+            "--edit-format", "whole",
+        ])
+
+    def test_returns_empty_list_when_config_missing(self):
+        flags = local_agent._local_dispatch_model_flags(config_path="/nonexistent/local.json")
+        self.assertEqual(flags, [])
 
 
 if __name__ == "__main__":
@@ -149,24 +191,33 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'synlynk.local_agent'`
 ```json
 {
   "name": "local",
-  "driver": "http",
   "endpoint": "http://127.0.0.1:8080",
   "models": [
-    {"id": "ornith-1.0-9b", "pinned": true},
-    {"id": "qwen-coder", "pinned": false},
-    {"id": "gemma-coder", "pinned": false}
+    {"id": "ornith-1.0-9b", "pinned": true, "edit_format": "whole"},
+    {"id": "qwen-coder", "pinned": false, "edit_format": "whole"},
+    {"id": "gemma-coder", "pinned": false, "edit_format": "diff"}
   ],
-  "hardware_tier": "16gb-default",
-  "max_concurrent": 1
+  "hardware_tier": "16gb-default"
 }
 ```
+
+`edit_format` is per-model (see design spec's "Architecture" section): `whole` for
+models that struggle with clean unified diffs, `diff` for stronger models — read by
+`_local_dispatch_model_flags()` (Step 4) to build the `aider --edit-format ...` flag.
+There is no `max_concurrent` field here — Task Group 2's concurrency guard reads
+`local_config.get("max_concurrent", 1)` from this same file with a default fallback, so
+no schema addition is required in this task group; an operator can add the key later to
+override the default of 1.
 
 ### Step 4: Create `synlynk/local_agent.py`
 
 ```python
-"""synlynk local agent: config loading, health check, and chat-completion
-helpers for the oMLX-backed 'local' dispatch agent. Shared by
-local_agent_runner.py (dispatch execution) and cmd_local_doctor (CLI health check)."""
+"""synlynk local agent: config loading and oMLX reachability helpers for the
+'local' dispatch agent. 'local' is dispatched as a real CLI subprocess (`aider`,
+pointed at oMLX as an OpenAI-compatible backend) via the existing dispatch_agent()
+machinery — this module owns only the config/flag-building helpers that invocation
+needs, and the `synlynk local doctor` health-check command. It does not talk to
+Aider or oMLX's chat-completions endpoint directly; Aider does that."""
 
 import json
 import os
@@ -186,8 +237,8 @@ def _load_local_config(path: str = _DEFAULT_CONFIG_PATH) -> dict:
         return json.load(f)
 
 
-def _pinned_model(config: dict) -> str:
-    """Returns the pinned model id, or the first roster entry if none pinned."""
+def _pinned_model(config: dict) -> dict:
+    """Returns the id of the pinned model, or the first roster entry if none pinned."""
     for m in config["models"]:
         if m.get("pinned"):
             return m["id"]
@@ -195,8 +246,8 @@ def _pinned_model(config: dict) -> str:
 
 
 def _health_check(endpoint: str, timeout: int = 5) -> dict:
-    """GETs {endpoint}/v1/models. Returns {reachable, available_models} or
-    {reachable: False, error}."""
+    """GETs {endpoint}/v1/models (oMLX's OpenAI-compatible model-list endpoint).
+    Returns {reachable, available_models} or {reachable: False, error}."""
     req = urllib.request.Request(f"{endpoint}/v1/models", method="GET")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -207,24 +258,27 @@ def _health_check(endpoint: str, timeout: int = 5) -> dict:
     return {"reachable": True, "available_models": available}
 
 
-def _chat_completion(endpoint: str, model: str, prompt_text: str, timeout: int = 300):
-    """POSTs one /v1/chat/completions request. Returns (text, usage_dict).
-    Raises urllib.error.URLError/HTTPError on failure — caller handles it."""
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": prompt_text}],
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        f"{endpoint}/v1/chat/completions",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
-    text = payload["choices"][0]["message"]["content"]
-    usage = payload.get("usage", {"prompt_tokens": 0, "completion_tokens": 0})
-    return text, usage
+def _local_dispatch_model_flags(config_path: str = _DEFAULT_CONFIG_PATH) -> list:
+    """Builds the --openai-api-base/--model/--edit-format flags for the aider
+    subprocess from .agents/local.json. Returns [] if the config is missing —
+    dispatch_agent()'s generic network_deps preflight (Step 9) already fails the
+    job with an actionable oMLX-unreachable message before flags matter in that
+    case, and _preflight_dispatch runs before _dispatch_flags_for_agent in
+    dispatch_agent()'s call order, so an empty flags list here is never the
+    reason a job fails silently."""
+    try:
+        config = _load_local_config(config_path)
+    except FileNotFoundError:
+        return []
+    endpoint = config["endpoint"]
+    model_id = _pinned_model(config)
+    model_entry = next((m for m in config["models"] if m["id"] == model_id), {})
+    edit_format = model_entry.get("edit_format", "whole")
+    return [
+        "--openai-api-base", f"{endpoint}/v1",
+        "--model", model_id,
+        "--edit-format", edit_format,
+    ]
 
 
 def cmd_local_doctor(config_path: str = _DEFAULT_CONFIG_PATH) -> int:
@@ -256,163 +310,195 @@ def cmd_local_doctor(config_path: str = _DEFAULT_CONFIG_PATH) -> int:
 ### Step 5: Run tests to verify they pass
 
 Run: `pytest tests/test_local_agent.py -v`
-Expected: PASS (all 6 tests)
+Expected: PASS (all 7 tests)
 
-### Step 6: Create `synlynk/local_agent_runner.py`
+### Step 6: Register `local` in `AGENT_CAPABILITY_BASELINES`
 
-```python
-"""Dispatch entrypoint for the 'local' agent: `python3 -m synlynk.local_agent_runner`.
-
-Reads the task prompt from stdin, sends one chat-completion request to the
-oMLX endpoint declared in .agents/local.json, and prints the response text
-followed by a `prompt_tokens: N completion_tokens: N` line. That trailing
-line matches extract_tokens()'s existing pattern 5 (synlynk/costs.py) — no
-changes to token extraction are needed for this agent.
-
-Exit code 1 (with a stderr message) on any failure — this is picked up by
-dispatch_agent()'s existing log/.exit polling exactly like a CLI agent
-failure, so oMLX being down produces a normal failed job, not a hang.
-"""
-import sys
-import urllib.error
-
-from synlynk.local_agent import _load_local_config, _pinned_model, _chat_completion
-
-
-def run(prompt_text: str, config_path: str = None) -> int:
-    try:
-        config = _load_local_config(config_path) if config_path else _load_local_config()
-    except FileNotFoundError as exc:
-        sys.stderr.write(f"local agent: {exc}\n")
-        return 1
-    endpoint = config["endpoint"]
-    model = _pinned_model(config)
-    try:
-        text, usage = _chat_completion(endpoint, model, prompt_text)
-    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
-        sys.stderr.write(f"local agent: oMLX endpoint unreachable at {endpoint}: {exc}\n")
-        return 1
-    print(text)
-    print(f"\nprompt_tokens: {usage.get('prompt_tokens', 0)} "
-          f"completion_tokens: {usage.get('completion_tokens', 0)}")
-    return 0
-
-
-def main():
-    prompt_text = sys.stdin.read()
-    sys.exit(run(prompt_text))
-
-
-if __name__ == "__main__":
-    main()
-```
-
-### Step 7: Write failing test for the runner
-
-Add to `tests/test_local_agent.py`:
-
-```python
-from synlynk import local_agent_runner
-
-
-class TestRunnerMain(unittest.TestCase):
-    @patch("synlynk.local_agent_runner._chat_completion")
-    @patch("synlynk.local_agent_runner._load_local_config")
-    def test_run_prints_text_and_token_line(self, mock_load, mock_chat, ):
-        mock_load.return_value = {
-            "endpoint": "http://127.0.0.1:8080",
-            "models": [{"id": "ornith-1.0-9b", "pinned": True}],
-        }
-        mock_chat.return_value = (
-            "print('hi')",
-            {"prompt_tokens": 50, "completion_tokens": 5},
-        )
-        import io
-        import contextlib
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            exit_code = local_agent_runner.run("write hello world")
-        output = buf.getvalue()
-        self.assertEqual(exit_code, 0)
-        self.assertIn("print('hi')", output)
-        self.assertIn("prompt_tokens: 50 completion_tokens: 5", output)
-
-    @patch("synlynk.local_agent_runner._load_local_config")
-    def test_run_returns_1_when_config_missing(self, mock_load):
-        mock_load.side_effect = FileNotFoundError(".agents/local.json not found")
-        exit_code = local_agent_runner.run("task")
-        self.assertEqual(exit_code, 1)
-```
-
-Run: `pytest tests/test_local_agent.py -v`
-Expected: FAIL — `test_run_prints_text_and_token_line` and
-`test_run_returns_1_when_config_missing` FAIL because `local_agent_runner.run` doesn't
-yet accept being imported this way (it does — re-run after step 6's file exists; if it
-still fails, check the mock patch targets match the actual import path used inside
-`local_agent_runner.py`, i.e. `_chat_completion` must be imported by name into
-`local_agent_runner`'s namespace, which it is per Step 6's `from synlynk.local_agent
-import ... _chat_completion`).
-
-### Step 8: Confirm pass
-
-Run: `pytest tests/test_local_agent.py -v`
-Expected: PASS (all 8 tests)
-
-### Step 9: Register `local` in `AGENT_CAPABILITY_BASELINES`
-
-Modify `synlynk/_constants.py`. Find the closing of the `"grok"` entry (the dict entry
-ending around where `"strengths": [...]` for grok is followed by `}`, then the next
-top-level key or the closing `}` of `AGENT_CAPABILITY_BASELINES`). Add immediately after
-the `"grok"` entry's closing `},`:
+Modify `synlynk/_constants.py`. The `AGENT_CAPABILITY_BASELINES` dict currently ends
+with the `"grok"` entry (confirmed shape as of this rewrite — `cli`, `non_interactive_flags`,
+`prompt_flag`, `prompt_via_arg`, `dispatch_flags` as a `{valid_flags, invalid_flags,
+required_flags}` dict, `network_deps` as `{required_endpoints, optional_endpoints}`,
+`roles`, `strengths`). Add immediately after `"grok"`'s closing `},`:
 
 ```python
     "local": {
-        "cli": "python3",
-        "non_interactive_flags": ["-m", "synlynk.local_agent_runner"],
-        "dispatch_flags": [],
+        "cli": "aider",
+        "non_interactive_flags": [],
+        "dispatch_flags": ["--no-auto-commits", "--yes-always"],
+        "prompt_file_flag": "--message-file",
+        "network_deps": {
+            "required_endpoints": ["127.0.0.1:8080"],
+            "optional_endpoints": [],
+        },
         "roles": ["builder"],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
 ```
 
-No `prompt_flag`/`prompt_via_arg` — this falls through `dispatch_agent()`'s existing
-`else` branch (`synlynk/dispatch.py:730-733`), which pipes the prompt file via stdin:
-`python3 -m synlynk.local_agent_runner < prompt_file > log_file 2>&1`. That's exactly
-`local_agent_runner.main()`'s expected input.
+`dispatch_flags` here is a plain list (like `codex`'s shape elsewhere in the same dict),
+not the `grok`-style dict — `_dispatch_flags_for_agent()` (Step 7) already handles both
+shapes via its `isinstance(dispatch_flags, dict)` branch. `--no-auto-commits` stops Aider
+from committing on every edit (the dispatch pipeline owns worktree commits itself, per
+the design spec). `--yes-always` makes Aider non-interactive. `prompt_file_flag` is a new
+baseline key, read by Step 8's cmd-assembly change — see there for why `local` needs a
+new branch instead of reusing the existing `prompt_via_arg` one.
 
-### Step 10: Add local model rates to `costs.py`
+`network_deps.required_endpoints` reuses `_preflight_dispatch()`'s existing generic
+TCP-reachability check (`synlynk/dispatch.py:555-571`, already used by `grok`'s
+`cli-chat-proxy.grok.com:443` entry) — **no bespoke `_preflight_local()` function is
+needed**, matching the design spec's "no special-case in `_dispatch_flags_for_agent()`
+or `_permissions_to_flags()`" framing (that framing was about *permission* flags
+specifically; the model/endpoint flags below are a separate, necessary addition since
+they carry per-job config values the static baseline dict can't hold). If oMLX isn't
+running, `_preflight_dispatch()` already returns a `HARNESS_PREFLIGHT_FAIL` sentinel with
+a "Required endpoint '127.0.0.1:8080' unreachable for agent 'local'" reason — this is
+less specific than "Start it with: omlx serve" (which only `cmd_local_doctor` prints),
+but consistent with how every other agent's unreachable-dependency case is surfaced, and
+avoids a parallel preflight code path to maintain.
 
-Modify `synlynk/costs.py:137-145`, add 3 entries to `_MODEL_RATE_TABLE`:
+### Step 7: Append dynamic model flags in `_dispatch_flags_for_agent()`
+
+Modify `synlynk/dispatch.py:25-36` (`_dispatch_flags_for_agent`). The static
+`dispatch_flags` baseline value (`["--no-auto-commits", "--yes-always"]` from Step 6)
+covers Aider's non-interactive behavior, but `--openai-api-base`/`--model`/
+`--edit-format` need config values from `.agents/local.json`, which isn't something a
+static baseline dict can hold — hence a small per-agent addition, mirroring the existing
+per-agent special-casing already present in `_permissions_to_flags()` just below it:
 
 ```python
-    "ornith-1.0-9b": {"input": 0.0, "output": 0.0, "cache_read": 0.0},
-    "qwen-coder": {"input": 0.0, "output": 0.0, "cache_read": 0.0},
-    "gemma-coder": {"input": 0.0, "output": 0.0, "cache_read": 0.0},
+def _dispatch_flags_for_agent(agent: str) -> list:
+    """Return the executable dispatch flags for an agent baseline."""
+    baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
+    baselines = baselines_map.get(agent, {})
+    dispatch_flags = baselines.get("dispatch_flags", [])
+    if isinstance(dispatch_flags, dict):
+        ordered = []
+        for flag in dispatch_flags.get("required_flags", []) or []:
+            if flag not in ordered:
+                ordered.append(flag)
+        flags = ordered
+    else:
+        flags = list(dispatch_flags or [])
+    if agent == "local":
+        from synlynk.local_agent import _local_dispatch_model_flags
+        flags = flags + _local_dispatch_model_flags()
+    return flags
 ```
 
-Add this as a test in `tests/test_local_agent.py`:
+Only the `if agent == "local":` block and the `flags = ...` refactor (previously a bare
+`return` per branch) are new; behavior for every other agent is unchanged.
+
+### Step 8: Write failing test for the flag-assembly and cmd-string change
+
+Create `tests/test_dispatch_local_agent.py`:
 
 ```python
-from synlynk.costs import _model_rate_for_version
+"""Tests dispatch.py's local-agent-specific wiring: dynamic model flags appended
+to the static baseline flags, and the new prompt_file_flag cmd-assembly branch
+that passes the prompt via `aider --message-file <path>` instead of stdin (the
+default branch other agents use) or an inline arg (the grok-style prompt_via_arg
+branch) — Aider needs a file path, not inline text or a stdin stream, to receive
+its one-shot task message non-interactively."""
+import json
+import os
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from synlynk import dispatch as dispatch_mod
 
 
-class TestLocalModelRates(unittest.TestCase):
-    def test_local_models_are_zero_cost(self):
-        for model_id in ("ornith-1.0-9b", "qwen-coder", "gemma-coder"):
-            rates = _model_rate_for_version(model_id)
-            self.assertEqual(rates["input"], 0.0)
-            self.assertEqual(rates["output"], 0.0)
-            self.assertEqual(rates["cache_read"], 0.0)
+class TestDispatchFlagsForLocalAgent(unittest.TestCase):
+    @patch("synlynk.dispatch._pkg")
+    def test_appends_dynamic_model_flags_for_local(self, mock_pkg):
+        mock_pkg.return_value = {
+            "local": {
+                "dispatch_flags": ["--no-auto-commits", "--yes-always"],
+            }
+        }
+        with tempfile.TemporaryDirectory() as d:
+            config_path = os.path.join(d, "local.json")
+            with open(config_path, "w") as f:
+                json.dump({
+                    "endpoint": "http://127.0.0.1:8080",
+                    "models": [{"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"}],
+                }, f)
+            with patch("synlynk.local_agent._DEFAULT_CONFIG_PATH", config_path):
+                flags = dispatch_mod._dispatch_flags_for_agent("local")
+        self.assertEqual(flags, [
+            "--no-auto-commits", "--yes-always",
+            "--openai-api-base", "http://127.0.0.1:8080/v1",
+            "--model", "ornith-1.0-9b",
+            "--edit-format", "whole",
+        ])
+
+    @patch("synlynk.dispatch._pkg")
+    def test_other_agents_unaffected(self, mock_pkg):
+        mock_pkg.return_value = {
+            "codex": {"dispatch_flags": {"required_flags": ["--approval-policy"]}},
+        }
+        flags = dispatch_mod._dispatch_flags_for_agent("codex")
+        self.assertEqual(flags, ["--approval-policy"])
+
+
+if __name__ == "__main__":
+    unittest.main()
 ```
 
-Run: `pytest tests/test_local_agent.py -v`
-Expected: PASS (all 9 tests)
+### Step 9: Run to verify failure
 
-### Step 11: Wire `synlynk local doctor` CLI command
+Run: `pytest tests/test_dispatch_local_agent.py -v`
+Expected: FAIL — `_dispatch_flags_for_agent` doesn't yet special-case `local` (Step 7
+not applied), and no `prompt_file_flag` cmd branch exists yet (Step 10 not applied — the
+second test above passes already since it only exercises the unaffected-codex path;
+the first test fails).
 
-Modify `synlynk/cli.py`. Find the `goal_parser` block (`subparsers.add_parser("goal", ...)`,
-around line 249) and add immediately after its block ends (after
-`goal_sub.add_parser("status", ...)`):
+### Step 10: Add the `prompt_file_flag` branch to `dispatch_agent()`'s cmd assembly
+
+Modify `synlynk/dispatch.py:786-801` (inside `dispatch_agent()`, right after `prompt` is
+written to `prompt_file`). The existing code has two branches — `prompt_via_arg` (grok:
+inline text substituted into the command string) and the stdin-redirect default (codex/
+agy/claude: `< prompt_file`). Aider needs neither — it takes a file path via
+`--message-file`. Add a third branch, checked first:
+
+```python
+    import shlex as _shlex
+    prompt_file_flag = baselines.get("prompt_file_flag")
+    prompt_via_arg = baselines.get("prompt_via_arg", False)
+    prompt_flag = baselines.get("prompt_flag")
+    if prompt_file_flag:
+        cmd_str = " ".join(
+            _shlex.quote(c) for c in [cli] + flags + [prompt_file_flag, prompt_file]
+        )
+        shell_cmd = f"{cmd_str} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
+    elif prompt_via_arg:
+        if prompt_flag:
+            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
+        else:
+            cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+        shell_cmd = (
+            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
+            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
+            f"echo $? > {_shlex.quote(log_file)}.exit"
+        )
+    else:
+        cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
+        shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
+```
+
+Only the `prompt_file_flag`/`if` branch and the reordered `elif`/`else` are new; the
+`prompt_via_arg` and default-stdin branches are byte-for-byte unchanged from what's
+already in `dispatch_agent()` today.
+
+### Step 11: Run tests to verify pass
+
+Run: `pytest tests/test_dispatch_local_agent.py -v`
+Expected: PASS (2 tests)
+
+### Step 12: Wire `synlynk local doctor` CLI command
+
+Modify `synlynk/cli.py`. Find the `goal_parser` block (`subparsers.add_parser("goal", ...)`)
+and add immediately after its block ends:
 
 ```python
     local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) agent")
@@ -420,8 +506,7 @@ around line 249) and add immediately after its block ends (after
     local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
 ```
 
-Find where `goal_action` is dispatched in the command-handling section of `cli.py`
-(search for `args.goal_action` or `elif args.command == "goal"`) and add a matching
+Find where `args.command` is dispatched to per-command handlers and add a matching
 branch:
 
 ```python
@@ -433,21 +518,22 @@ branch:
             local_parser.print_help()
 ```
 
-### Step 12: Manual verification
+### Step 13: Manual verification
 
 Run: `python3 bin/synlynk.py local doctor`
 Expected (no oMLX running): `✗ oMLX unreachable at http://127.0.0.1:8080: ...` and exit
 code 1 — confirms the command wires up and fails cleanly without a live server.
 
-### Step 13: Full test suite + commit
+### Step 14: Full test suite + commit
 
 Run: `pytest tests/ -q --tb=short`
 Expected: all tests pass, no regressions.
 
 ```bash
-git add .agents/local.json synlynk/local_agent.py synlynk/local_agent_runner.py \
-        synlynk/_constants.py synlynk/costs.py synlynk/cli.py tests/test_local_agent.py
-git commit -m "feat(local-agent): driver wiring — .agents/local.json, runner, doctor command"
+git add .agents/local.json synlynk/local_agent.py synlynk/_constants.py \
+        synlynk/dispatch.py synlynk/cli.py \
+        tests/test_local_agent.py tests/test_dispatch_local_agent.py
+git commit -m "feat(local-agent): dispatch 'local' as an Aider subprocess over oMLX"
 ```
 
 ---
@@ -719,6 +805,11 @@ git commit -m "feat(local-agent): capability envelope seeding + concurrency guar
 
 **Branch:** `feat/local-agent-3-hardware-tests`
 
+**Rewritten 2026-07-13** to exercise the real Aider-subprocess dispatch path (spawn
+`aider` for real against a live oMLX instance, same code path `dispatch_agent()` uses in
+production) instead of the original bespoke HTTP `_chat_completion()`/`local_agent_runner`
+calls, which no longer exist after Task Group 1's rewrite.
+
 **Files:**
 - Modify: `pytest.ini` (register `local_hardware` marker)
 - Create: `tests/test_local_agent_hardware.py`
@@ -737,16 +828,20 @@ markers =
 ### Step 2: Create the real-hardware test file
 
 ```python
-"""Real-inference tests against a live oMLX instance. NOT run in standard CI —
-requires oMLX running locally (`omlx serve`) with the .agents/local.json roster
-downloaded. Run explicitly: `pytest tests/test_local_agent_hardware.py -m local_hardware -v`"""
+"""Real-inference tests against a live oMLX instance + real Aider subprocess.
+NOT run in standard CI — requires oMLX running locally (`omlx serve`) with the
+.agents/local.json roster downloaded, and the `aider` CLI installed. Run explicitly:
+`pytest tests/test_local_agent_hardware.py -m local_hardware -v`"""
+import os
 import subprocess
-import sys
+import tempfile
 import unittest
 
 import pytest
 
-from synlynk.local_agent import _load_local_config, _health_check, _chat_completion
+from synlynk.local_agent import (
+    _load_local_config, _health_check, _pinned_model, _local_dispatch_model_flags,
+)
 
 
 @pytest.mark.local_hardware
@@ -759,37 +854,47 @@ class TestRealOmlxHealthCheck(unittest.TestCase):
 
     def test_pinned_model_is_available(self):
         result = _health_check(self.config["endpoint"])
-        from synlynk.local_agent import _pinned_model
         pinned = _pinned_model(self.config)
         self.assertIn(pinned, result["available_models"])
 
-    def test_chat_completion_returns_nonempty_code(self):
-        from synlynk.local_agent import _pinned_model
-        pinned = _pinned_model(self.config)
-        text, usage = _chat_completion(
-            self.config["endpoint"], pinned,
-            "Write a Python function `add(a, b)` that returns a + b. Only output the code.",
-        )
-        self.assertIn("def add", text)
-        self.assertGreater(usage["prompt_tokens"], 0)
-        self.assertGreater(usage["completion_tokens"], 0)
-
 
 @pytest.mark.local_hardware
-class TestRunnerEndToEnd(unittest.TestCase):
-    def test_runner_subprocess_via_stdin(self):
-        config = _load_local_config()
-        result = _health_check(config["endpoint"])
+class TestAiderSubprocessEndToEnd(unittest.TestCase):
+    """Spawns the real `aider` CLI against the real oMLX endpoint, mirroring
+    exactly what dispatch_agent() does for agent='local' in production (Task
+    Group 1, Steps 7 and 10): static dispatch_flags + dynamic model flags,
+    prompt delivered via --message-file, run inside a scratch git worktree
+    (Aider requires a git repo to operate in)."""
+
+    def setUp(self):
+        self.config = _load_local_config()
+        result = _health_check(self.config["endpoint"])
         if not result["reachable"]:
-            self.skipTest("oMLX not reachable")
-        proc = subprocess.run(
-            [sys.executable, "-m", "synlynk.local_agent_runner"],
-            input="Write a Python function that returns the string 'hello'. Only output the code.",
-            capture_output=True, text=True, timeout=120,
-        )
+            self.skipTest(f"oMLX not reachable at {self.config['endpoint']} — start with `omlx serve`")
+
+    def test_aider_edits_a_real_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["git", "init", "-q"], cwd=d, check=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=d, check=True)
+            subprocess.run(["git", "config", "user.name", "test"], cwd=d, check=True)
+            target = os.path.join(d, "add.py")
+            with open(target, "w") as f:
+                f.write("# implement add(a, b) below\n")
+            prompt_file = os.path.join(d, "prompt.txt")
+            with open(prompt_file, "w") as f:
+                f.write(
+                    "In add.py, implement a function add(a, b) that returns a + b. "
+                    "Only edit add.py."
+                )
+            flags = ["--no-auto-commits", "--yes-always"] + _local_dispatch_model_flags()
+            proc = subprocess.run(
+                ["aider"] + flags + ["--message-file", prompt_file, "add.py"],
+                cwd=d, capture_output=True, text=True, timeout=180,
+            )
+            with open(target) as f:
+                content = f.read()
         self.assertEqual(proc.returncode, 0)
-        self.assertIn("prompt_tokens:", proc.stdout)
-        self.assertIn("completion_tokens:", proc.stdout)
+        self.assertIn("def add", content)
 
 
 if __name__ == "__main__":
@@ -811,17 +916,17 @@ Run: `grep -rn "pytest tests" .github/workflows/ 2>/dev/null`
 
 If found, modify that line to append `-m "not local_hardware"`.
 
-### Step 4: Manual verification (if oMLX is available locally)
+### Step 4: Manual verification (if oMLX + aider are available locally)
 
 Run: `pytest tests/test_local_agent_hardware.py -m local_hardware -v`
-Expected: PASS if oMLX is running with the roster installed; otherwise clean skips with
-the "oMLX not reachable" message, not errors.
+Expected: PASS if oMLX is running with the roster installed and `aider` is on `PATH`;
+otherwise clean skips with the "oMLX not reachable" message, not errors.
 
 ### Step 5: Commit
 
 ```bash
 git add pytest.ini tests/test_local_agent_hardware.py
-git commit -m "test(local-agent): opt-in real-hardware inference tier"
+git commit -m "test(local-agent): opt-in real-hardware Aider+oMLX inference tier"
 ```
 
 (If the CI workflow file was modified in Step 3, include it in this commit.)
@@ -993,19 +1098,28 @@ git commit -m "feat(local-agent): fold local into role-split surface post-ship (
   Group 5 (role-split integration into `.synlynk/config.json`/wizard/CLAUDE.md) is
   explicitly out of the original spec's scope by user decision (2026-07-12) — added as a
   gated follow-up task, not to be dispatched until `local` has shipped and proven itself.
-- **Note (2026-07-12, post-Fable-review revision):** Task Group 1's Files/Steps sections
-  still describe the original single-shot HTTP `local_agent_runner.py` design
-  (`urllib.request`, `_chat_completion`, `_health_check` mocks). This is now stale — the
-  Architecture section above was rewritten to reflect Aider-as-agentic-editor-over-oMLX
-  (see the revised design spec), but Task Group 1's step-by-step content has NOT yet been
-  rewritten to match. Per user decision, this rewrite is deliberately held until other
-  Fable-review findings (the dispatch-path bug, the cost-accounting gap) are resolved, so
-  Task Group 1 and Task Group 3 (its mocked tests) get one consolidated rewrite instead of
-  two. **Do not dispatch Task Group 1 or Task Group 3 as currently written — they build
-  the wrong thing.**
+- **Note (2026-07-13, consolidated rewrite):** Task Group 1 and Task Group 3 have been
+  rewritten to match the Aider-over-oMLX architecture (Architecture section above,
+  unchanged since the 2026-07-12 Fable-review revision). The rewrite was deliberately
+  held until issues #189 (per-model cost accounting), #190 (dispatch queue unification),
+  and #191 (capability router `discipline` fix) merged into `main` — all three landed
+  2026-07-12 (PRs #193, #194, #195) — so this task group's design could build on the
+  corrected `dispatch_agent()`/`_dispatch_flags_for_agent()` code paths instead of the
+  pre-fix versions. One concrete benefit of waiting: #189 already added a
+  `_model_rate_for_version(model_version, agent=...)` override that forces zero cost for
+  any `agent == "local"` job regardless of model — Task Group 1's original "add rate-table
+  rows" step is now redundant and was removed. `local` is now dispatched as a real `aider`
+  CLI subprocess (no bespoke HTTP driver, no `local_agent_runner.py`), reusing the
+  existing worktree/log-polling/reconciliation pipeline with two small, additive changes
+  to `dispatch.py`: a per-agent branch in `_dispatch_flags_for_agent()` for dynamic
+  `--openai-api-base`/`--model`/`--edit-format` flags, and a new `prompt_file_flag`
+  cmd-assembly branch (alongside the existing `prompt_via_arg` and stdin-default
+  branches) so Aider receives its task via `--message-file` instead of stdin or an inline
+  arg. **Task Group 1 and Task Group 3 are ready to dispatch.**
 - **Type consistency:** `_load_local_config`, `_pinned_model`, `_health_check`,
-  `_chat_completion` are defined once in `synlynk/local_agent.py` (Task Group 1, Step 4)
-  and imported by name into `local_agent_runner.py`, `local_agent_seed.py`'s doctor
-  wiring, and both test files — no redefinition or signature drift across groups.
+  `_local_dispatch_model_flags` are defined once in `synlynk/local_agent.py` (Task Group
+  1, Step 4) and imported by name into `dispatch.py`'s `_dispatch_flags_for_agent()`,
+  `local_agent_seed.py`'s doctor wiring, and all three test files — no redefinition or
+  signature drift across groups.
 - **PR discipline:** each task group is its own branch/worktree/PR per this repo's
   global git workflow (`feat/local-agent-<n>-<slug>`), matching the spec's 4-PR sequence.
