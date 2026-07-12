@@ -103,4 +103,16 @@ AGENT_CAPABILITY_BASELINES = {
         "roles": ["builder", "architect"],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
     },
+    "local": {
+        "cli": "aider",
+        "non_interactive_flags": [],
+        "dispatch_flags": ["--no-auto-commits", "--yes-always"],
+        "prompt_file_flag": "--message-file",
+        "network_deps": {
+            "required_endpoints": ["127.0.0.1:8080"],
+            "optional_endpoints": [],
+        },
+        "roles": ["builder"],
+        "strengths": ["zero-cost inference", "on-device", "granular tasks"],
+    },
 }

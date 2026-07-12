@@ -27,13 +27,18 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
     dispatch_flags = baselines.get("dispatch_flags", [])
+    flags = []
     if isinstance(dispatch_flags, dict):
-        ordered = []
         for flag in dispatch_flags.get("required_flags", []) or []:
-            if flag not in ordered:
-                ordered.append(flag)
-        return ordered
-    return list(dispatch_flags or [])
+            if flag not in flags:
+                flags.append(flag)
+    else:
+        flags = list(dispatch_flags or [])
+    if agent == "local":
+        from synlynk.local_agent import _local_dispatch_model_flags
+
+        flags = flags + _local_dispatch_model_flags()
+    return flags
 
 
 def _load_harness_overrides(agent: str) -> dict:
@@ -784,9 +789,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         f.write(prompt)
 
     import shlex as _shlex
+    prompt_file_flag = baselines.get("prompt_file_flag")
     prompt_via_arg = baselines.get("prompt_via_arg", False)
     prompt_flag = baselines.get("prompt_flag")
-    if prompt_via_arg:
+    if prompt_file_flag:
+        cmd_str = " ".join(
+            _shlex.quote(c) for c in [cli] + flags + [prompt_file_flag, prompt_file]
+        )
+        shell_cmd = f"{cmd_str} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
+    elif prompt_via_arg:
         if prompt_flag:
             cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
         else:
