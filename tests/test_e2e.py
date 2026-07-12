@@ -305,4 +305,4 @@ def test_reconcile_runs_on_startup(cli):
     r = cli.run("jobs")
     assert r.returncode == 0
     result = json.loads(jobs_path.read_text())
-    assert result[0]["status"] == "failed"
+    assert result[0]["status"] == "unknown"
