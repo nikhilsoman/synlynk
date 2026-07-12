@@ -638,7 +638,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
                    grants: list = None,
-                   revokes: list = None) -> dict:
+                   revokes: list = None,
+                   job_id: str = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     if story_id and not force_agent:
         best_agent = _pkg("_best_agent_for_story")
@@ -714,7 +715,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         context_mode = profile.get("context_mode", "task")
 
     import hashlib as _hashlib
-    job_id = "job-" + _hashlib.md5(f"{agent}{task}{time.time()}".encode()).hexdigest()[:8]
+    if not job_id:
+        job_id = "job-" + _hashlib.md5(f"{agent}{task}{time.time()}".encode()).hexdigest()[:8]
 
     worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
     worktree_path = _create_job_worktree(job_id, agent)
@@ -847,24 +849,43 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     try:
         dconn = get_db() if get_db else None
         if dconn is not None:
-            dconn.execute(
-                "INSERT OR REPLACE INTO daemon_jobs "
-                "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    job_id,
-                    agent,
-                    task,
-                    story_id,
-                    "running",
-                    5,
-                    "[]",
-                    proc.pid,
-                    job["started_at"],
-                    job["started_at"],
-                    log_file,
-                ),
-            )
+            existing = dconn.execute(
+                "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
+            ).fetchone()
+            if existing:
+                # Preserve priority/depends_on/enqueued_at from the queue row.
+                dconn.execute(
+                    "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
+                    "log_path=?, agent=?, task=?, story_id=? WHERE job_id=?",
+                    (
+                        proc.pid,
+                        job["started_at"],
+                        log_file,
+                        agent,
+                        task,
+                        story_id,
+                        job_id,
+                    ),
+                )
+            else:
+                dconn.execute(
+                    "INSERT OR REPLACE INTO daemon_jobs "
+                    "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
+                    "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        job_id,
+                        agent,
+                        task,
+                        story_id,
+                        "running",
+                        5,
+                        "[]",
+                        proc.pid,
+                        job["started_at"],
+                        job["started_at"],
+                        log_file,
+                    ),
+                )
             dconn.commit()
     finally:
         if dconn is not None:
