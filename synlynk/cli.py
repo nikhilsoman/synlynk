@@ -259,6 +259,10 @@ def main() -> None:
     goal_link_parser.add_argument("--secondary", action="store_true")
     goal_sub.add_parser("status", help="Show goal completion rollup")
 
+    local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) agent")
+    local_sub = local_parser.add_subparsers(dest="local_action")
+    local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
+
     scan_parser = subparsers.add_parser(
         "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
     scan_parser.add_argument("--deep", action="store_true",
@@ -791,6 +795,12 @@ def main() -> None:
             cmd_goal_status()
         else:
             goal_parser.print_help()
+    elif args.command == "local":
+        from synlynk.local_agent import cmd_local_doctor
+        if args.local_action == "doctor":
+            sys.exit(cmd_local_doctor())
+        else:
+            local_parser.print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
