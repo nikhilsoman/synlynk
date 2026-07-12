@@ -794,7 +794,7 @@ def cmd_instructions_status() -> None:
     col = {"file": 38, "tool": 10, "status": 16, "checked": 12}
     header = (f"{'File':<{col['file']}}{'Tool':<{col['tool']}}"
               f"{'Status':<{col['status']}}{'Last checked':<{col['checked']}}")
-    print(f"\n{_pkg("_BOLD")}{header}{_pkg("_RESET")}")
+    print(f"\n{_pkg('_BOLD')}{header}{_pkg('_RESET')}")
     print("─" * (col["file"] + col["tool"] + col["status"] + col["checked"]))
 
     for fpath, info in sorted(manifest_data.items()):
@@ -804,14 +804,14 @@ def cmd_instructions_status() -> None:
         marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
 
         if not os.path.exists(fpath):
-            status = f"{_pkg("_YELLOW")}✗ missing{_pkg("_RESET")}"
+            status = f"{_pkg('_YELLOW')}✗ missing{_pkg('_RESET')}"
         else:
             file_content = open(fpath).read()
             section = _extract_synlynk_section(file_content, marker_style)
             if section is None:
-                status = f"{_pkg("_YELLOW")}? no markers{_pkg("_RESET")}"
+                status = f"{_pkg('_YELLOW')}? no markers{_pkg('_RESET')}"
             elif _compute_section_sha(section) != recorded_sha:
-                status = f"{_pkg("_YELLOW")}⚠ drifted{_pkg("_RESET")}"
+                status = f"{_pkg('_YELLOW')}⚠ drifted{_pkg('_RESET')}"
             else:
                 has_user = bool(re.sub(
                     r'^[ \t]*<!-- synlynk:start[^>]* -->[ \t]*$.*?^[ \t]*<!-- synlynk:end -->[ \t]*$',
@@ -820,8 +820,8 @@ def cmd_instructions_status() -> None:
                     r'^[ \t]*# synlynk:start[^\n]*$.*?^[ \t]*# synlynk:end[ \t]*$',
                     '', file_content, flags=re.DOTALL | re.MULTILINE
                 ).strip())
-                status = (f"{_pkg("_DIM")}+ user-content{_pkg("_RESET")}" if has_user
-                          else f"{_pkg("_GREEN")}✓ clean{_pkg("_RESET")}")
+                status = (f"{_pkg('_DIM')}+ user-content{_pkg('_RESET')}" if has_user
+                          else f"{_pkg('_GREEN')}✓ clean{_pkg('_RESET')}")
 
         print(f"{fpath:<{col['file']}}{tool:<{col['tool']}}"
               f"{status:<{col['status'] + 10}}{checked}")
@@ -840,14 +840,14 @@ def cmd_instructions_diff(file_path: Optional[str] = None) -> None:
             print(f"  {fpath}: not tracked in manifest")
             continue
         if not os.path.exists(fpath):
-            print(f"  {fpath}: {_pkg("_YELLOW")}missing{_pkg("_RESET")}")
+            print(f"  {fpath}: {_pkg('_YELLOW')}missing{_pkg('_RESET')}")
             continue
         info = manifest_data[fpath]
         tool = info.get("tool", "unknown")
         marker_style = _MARKER_STYLE_FOR_TOOL.get(tool, "html")
         file_content = open(fpath).read()
 
-        print(f"\n{_pkg("_BOLD")}── {fpath} (tool: {tool}) ──{_pkg("_RESET")}")
+        print(f"\n{_pkg('_BOLD')}── {fpath} (tool: {tool}) ──{_pkg('_RESET')}")
 
         if marker_style == "html":
             user_content = re.sub(
@@ -863,10 +863,10 @@ def cmd_instructions_diff(file_path: Optional[str] = None) -> None:
             user_content = ""
 
         if user_content:
-            print(f"{_pkg("_DIM")}User/tool content outside synlynk section:{_pkg("_RESET")}")
+            print(f"{_pkg('_DIM')}User/tool content outside synlynk section:{_pkg('_RESET')}")
             print(user_content)
         else:
-            print(f"{_pkg("_DIM")}No user content outside synlynk section.{_pkg("_RESET")}")
+            print(f"{_pkg('_DIM')}No user content outside synlynk section.{_pkg('_RESET')}")
 
 def cmd_instructions_update(file_path: Optional[str] = None,
                              new_content: Optional[str] = None) -> None:
@@ -912,7 +912,7 @@ def cmd_instructions_update(file_path: Optional[str] = None,
             if section:
                 updated[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
 
-        print(f"  {_pkg("_GREEN")}✓{_pkg("_RESET")} Updated {fpath}")
+        print(f"  {_pkg('_GREEN')}✓{_pkg('_RESET')} Updated {fpath}")
 
     if updated:
         _write_instruction_manifest(updated)
@@ -933,4 +933,4 @@ def cmd_instructions_ack(file_path: str) -> None:
     ]
     with open(sentinel_file, "w") as f:
         f.writelines(filtered)
-    print(f"  {_pkg("_GREEN")}✓{_pkg("_RESET")} Acknowledged drift for {file_path}")
+    print(f"  {_pkg('_GREEN')}✓{_pkg('_RESET')} Acknowledged drift for {file_path}")
