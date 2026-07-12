@@ -18,6 +18,16 @@ _YELLOW = "[33m"
 _DIM = "[2m"
 _RESET = "[0m"
 _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
+_AUTOCOMMIT_EXCLUDED_PATHS = (
+    "GEMINI.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    ".cursorrules",
+    "cursorrules",
+    ".cursor/rules/synlynk.mdc",
+    "project-docs/todo.md",
+)
+_AUTOCOMMIT_TRAILER = "Co-Authored-By: synlynk-dispatch <noreply@synlynk.dev>"
 
 
 def _pkg(name: str, default=None):
@@ -59,6 +69,307 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     if not git_state:
         return False
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
+
+
+def _normalize_worktree_relative_path(path: str) -> str:
+    normalized = (path or "").replace("\\", "/").strip()
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def _is_autocommit_excluded(path: str) -> bool:
+    normalized = _normalize_worktree_relative_path(path)
+    return normalized in _AUTOCOMMIT_EXCLUDED_PATHS
+
+
+def _collect_worktree_status_paths(worktree_path: str) -> list:
+    """Return the relative paths reported by `git status --short` in a worktree."""
+    try:
+        status_result = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return []
+
+    if status_result.returncode != 0:
+        return []
+
+    paths = []
+    for line in (status_result.stdout or "").splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip()
+        if not path:
+            continue
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1].strip()
+        if path:
+            paths.append(_normalize_worktree_relative_path(path))
+    return paths
+
+
+def _commit_subject_for_job(job: dict) -> str:
+    task = (job.get("task") or "").splitlines()[0].strip() or "auto-finalized worktree changes"
+    suffix = f" ({job.get('id', 'job-unknown')})"
+    max_task_len = max(0, 72 - len("fix: ") - len(suffix))
+    if len(task) > max_task_len:
+        task = task[:max_task_len].rstrip()
+    return f"fix: {task}{suffix}"
+
+
+def _git_rev_list_count(worktree_path: str, refspec: str) -> Optional[int]:
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_path, "rev-list", "--count", refspec],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    try:
+        return int((result.stdout or "0").strip() or "0")
+    except ValueError:
+        return None
+
+
+def _push_worktree_branch_if_needed(
+    worktree_path: str,
+    worktree_branch: Optional[str],
+    git_state: dict,
+    force_push: bool = False,
+) -> bool:
+    """Pushes the worktree branch when it is ahead of origin or we just created a commit."""
+    if not worktree_path or not worktree_branch:
+        return False
+
+    ahead_count = _git_rev_list_count(worktree_path, f"origin/{worktree_branch}..HEAD")
+    should_push = bool(
+        (ahead_count is not None and ahead_count > 0)
+        or (ahead_count is None and force_push)
+    )
+    if not should_push:
+        return False
+
+    try:
+        push_result = subprocess.run(
+            ["git", "-C", worktree_path, "push", "origin", worktree_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        print(f"  ⚠ git push skipped for {worktree_branch}: git binary not available")
+        return False
+    except Exception as exc:
+        print(f"  ⚠ git push skipped for {worktree_branch}: {exc}")
+        return False
+
+    if push_result.returncode != 0:
+        stderr = (push_result.stderr or "").strip()
+        print(
+            f"  ⚠ git push failed for {worktree_branch}: "
+            f"{stderr[:200] if stderr else 'unknown error'}"
+        )
+        return False
+
+    return True
+
+
+def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> None:
+    """Opens a PR for a finalized worktree if one does not already exist."""
+    if not worktree_path or not worktree_branch:
+        return
+
+    detect_remote_owner_repo = _pkg("detect_remote_owner_repo")
+    if not detect_remote_owner_repo:
+        return
+
+    owner, repo = detect_remote_owner_repo()
+    if not owner or not repo:
+        return
+
+    repo_slug = f"{owner}/{repo}"
+    try:
+        list_result = subprocess.run(
+            [
+                "gh", "pr", "list",
+                "--repo", repo_slug,
+                "--head", worktree_branch,
+                "--json", "number",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        print(f"  ⚠ gh pr list skipped for {worktree_branch}: gh binary not available")
+        return
+    except Exception as exc:
+        print(f"  ⚠ gh pr list skipped for {worktree_branch}: {exc}")
+        return
+
+    if list_result.returncode != 0:
+        stderr = (list_result.stderr or "").strip()
+        print(
+            f"  ⚠ gh pr list failed for {worktree_branch}: "
+            f"{stderr[:200] if stderr else 'unknown error'}"
+        )
+        return
+
+    try:
+        existing_prs = json.loads(list_result.stdout or "[]")
+    except json.JSONDecodeError:
+        print(f"  ⚠ gh pr list returned invalid JSON for {worktree_branch}; skipping PR creation")
+        return
+
+    if existing_prs:
+        return
+
+    task_line = (job.get("task") or "").splitlines()[0].strip() or "Auto-finalized worktree changes"
+    title = _commit_subject_for_job(job)
+    body = (
+        f"Auto-finalized by synlynk for job `{job.get('id', 'job-unknown')}`.\n\n"
+        f"Task: {task_line}\n\n"
+        f"This PR was created automatically by synlynk, not hand-written.\n"
+    )
+    try:
+        create_result = subprocess.run(
+            [
+                "gh", "pr", "create",
+                "--repo", repo_slug,
+                "--base", "main",
+                "--head", worktree_branch,
+                "--title", title,
+                "--body", body,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        print(f"  ⚠ gh pr create skipped for {worktree_branch}: gh binary not available")
+        return
+    except Exception as exc:
+        print(f"  ⚠ gh pr create skipped for {worktree_branch}: {exc}")
+        return
+
+    if create_result.returncode != 0:
+        stderr = (create_result.stderr or "").strip()
+        print(
+            f"  ⚠ gh pr create failed for {worktree_branch}: "
+            f"{stderr[:200] if stderr else 'unknown error'}"
+        )
+
+
+def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> None:
+    """Best-effort git finalization for a completed job with genuine work."""
+    if not job or not git_state or not _job_has_real_work_landed(git_state):
+        return
+
+    worktree_path = job.get("worktree_path")
+    worktree_branch = job.get("worktree_branch")
+    if not worktree_path or not os.path.isdir(worktree_path) or not worktree_branch:
+        return
+
+    dirty_paths = []
+    if git_state.get("dirty"):
+        dirty_paths = _collect_worktree_status_paths(worktree_path)
+        safe_paths = [path for path in dirty_paths if not _is_autocommit_excluded(path)]
+        if safe_paths:
+            try:
+                add_result = subprocess.run(
+                    ["git", "-C", worktree_path, "add", "-A", "--", *safe_paths],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except FileNotFoundError:
+                print(f"  ⚠ git add skipped for {worktree_branch}: git binary not available")
+                return
+            except Exception as exc:
+                print(f"  ⚠ git add skipped for {worktree_branch}: {exc}")
+                return
+
+            if add_result.returncode != 0:
+                stderr = (add_result.stderr or "").strip()
+                print(
+                    f"  ⚠ git add failed for {worktree_branch}: "
+                    f"{stderr[:200] if stderr else 'unknown error'}"
+                )
+                return
+
+        for excluded in _AUTOCOMMIT_EXCLUDED_PATHS:
+            try:
+                subprocess.run(
+                    ["git", "-C", worktree_path, "reset", "--", excluded],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except Exception:
+                pass
+
+    try:
+        staged_result = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--cached", "--quiet"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        staged_result = None
+
+    created_commit = False
+    if staged_result is not None and staged_result.returncode != 0:
+        try:
+            commit_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    worktree_path,
+                    "commit",
+                    "-m",
+                    _commit_subject_for_job(job),
+                    "-m",
+                    _AUTOCOMMIT_TRAILER,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            print(f"  ⚠ git commit skipped for {worktree_branch}: git binary not available")
+            return
+        except Exception as exc:
+            print(f"  ⚠ git commit skipped for {worktree_branch}: {exc}")
+            return
+
+        if commit_result.returncode != 0:
+            stderr = (commit_result.stderr or "").strip()
+            print(
+                f"  ⚠ git commit failed for {worktree_branch}: "
+                f"{stderr[:200] if stderr else 'unknown error'}"
+            )
+            return
+        created_commit = True
+
+    if created_commit or git_state.get("remote_has_activity") or git_state.get("commits_ahead", 0):
+        _push_worktree_branch_if_needed(
+            worktree_path,
+            worktree_branch,
+            git_state,
+            force_push=created_commit or git_state.get("commits_ahead", 0) > 0,
+        )
+        _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
 
 
 def _retry_internal_timeout_job(job: dict, jobs: list, git_state: Optional[dict]) -> bool:
@@ -583,6 +894,12 @@ def _reconcile_jobs() -> None:
             else:
                 job["status"] = "failed"
                 job["exit_code"] = exit_code if exit_code is not None else -1
+            if job.get("status") == "completed" and not git_state and job.get("worktree_path"):
+                git_state = _pkg("_inspect_worktree_git_state")(
+                    job.get("worktree_path"),
+                    job.get("worktree_branch"),
+                    job.get("started_at"),
+                )
             job["ended_at"] = now
             changed = True
 
@@ -661,6 +978,9 @@ def _reconcile_jobs() -> None:
                 note=summary_note,
             )
             print(summary, end="")
+
+            if job.get("status") == "completed":
+                _finalize_completed_worktree_job(job, git_state)
 
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.
