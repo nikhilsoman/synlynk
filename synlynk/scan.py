@@ -11,6 +11,8 @@ import threading
 import time
 from typing import Optional
 
+from synlynk.wizard import _run_scan_tui
+
 def _pkg(name: str, default=None):
     package = sys.modules.get("synlynk")
     if package is None:
@@ -196,7 +198,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
         thread.start()
         threads.append(thread)
 
-    _pkg("_run_scan_tui")(results_live, threads, primary_root=primary_root)
+    _run_scan_tui(results_live, threads, primary_root=primary_root)
 
 _BOLD = "\033[1m"
 
