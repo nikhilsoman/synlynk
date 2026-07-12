@@ -2486,6 +2486,300 @@ def test_reconcile_empty_log_file_does_not_crash(project_dir):
     assert result[0]["status"] == "failed"  # dead PID → failed regardless
 
 
+def test_reconcile_auto_finalizes_dirty_worktree_excluding_generated_files(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-finalize-dirty"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-finalize-dirty.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("Input tokens: 12\nOutput tokens: 7\n")
+    with open(str(log_file) + ".exit", "w") as f:
+        f.write("0\n")
+
+    job = {
+        "id": "job-finalize-dirty",
+        "agent": "codex",
+        "story_id": "",
+        "task": "fix dirty finalize path",
+        "pid": 9999996,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-finalize-dirty",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    calls = []
+    staged = {"present": False}
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+
+        if cmd[:4] == prefix + ["status"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=(
+                    " M safe.txt\n"
+                    " M GEMINI.md\n"
+                    " M CLAUDE.md\n"
+                    " M AGENTS.md\n"
+                    " M .cursorrules\n"
+                    " M project-docs/todo.md\n"
+                ),
+                stderr="",
+            )
+        if cmd[:5] == prefix + ["add", "-A"]:
+            assert "safe.txt" in cmd
+            assert "GEMINI.md" not in cmd
+            assert "CLAUDE.md" not in cmd
+            assert "AGENTS.md" not in cmd
+            assert ".cursorrules" not in cmd
+            assert "project-docs/todo.md" not in cmd
+            staged["present"] = True
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["reset", "--"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 1 if staged["present"] else 0, stdout="", stderr="")
+        if cmd[:4] == prefix + ["commit"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="commit ok\n", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/repo/pull/1\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": True, "remote_has_activity": False, "dirty": True, "commits_ahead": 0})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+
+    assert reconciled["status"] == "completed"
+    add_cmd = next(cmd for cmd in calls if cmd[:5] == ["git", "-C", str(worktree_path), "add", "-A"])
+    assert "safe.txt" in add_cmd
+    assert "GEMINI.md" not in add_cmd
+    assert "CLAUDE.md" not in add_cmd
+    assert "AGENTS.md" not in add_cmd
+    assert ".cursorrules" not in add_cmd
+    assert "project-docs/todo.md" not in add_cmd
+    assert "gh pr create" in out or any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
+
+
+def test_reconcile_auto_finalizes_clean_worktree_with_local_commits(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-finalize-clean"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-finalize-clean.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("Input tokens: 4\nOutput tokens: 2\n")
+    with open(str(log_file) + ".exit", "w") as f:
+        f.write("0\n")
+
+    job = {
+        "id": "job-finalize-clean",
+        "agent": "codex",
+        "story_id": "",
+        "task": "push local commits and open a PR",
+        "pid": 9999995,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-finalize-clean",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    calls = []
+    pr_created = {"value": False}
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+
+        if cmd[:4] == prefix + ["status"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="2\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            pr_created["value"] = True
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/repo/pull/2\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": True, "remote_has_activity": False, "dirty": False, "commits_ahead": 2})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    sl._reconcile_jobs()
+
+    commands = [" ".join(cmd) for cmd in calls]
+    assert any(cmd[:4] == ["git", "-C", str(worktree_path), "push"] for cmd in calls)
+    assert pr_created["value"] is True
+    assert not any(cmd[:4] == ["git", "-C", str(worktree_path), "commit"] for cmd in calls)
+    assert not any(cmd[:5] == ["git", "-C", str(worktree_path), "add", "-A"] for cmd in calls)
+
+
+def test_reconcile_auto_finalize_is_idempotent_when_pr_exists(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-finalize-idempotent"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-finalize-idempotent.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("Input tokens: 1\nOutput tokens: 1\n")
+
+    job = {
+        "id": "job-finalize-idempotent",
+        "agent": "codex",
+        "story_id": "",
+        "task": "already finalized worktree",
+        "pid": 9999994,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-finalize-idempotent",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+
+        if cmd[:4] == prefix + ["status"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="0\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout='[{"number": 42}]\n', stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": True, "dirty": False, "commits_ahead": 0})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    sl._reconcile_jobs()
+
+    assert not any(cmd[:4] == ["git", "-C", str(worktree_path), "commit"] for cmd in calls)
+    assert not any(cmd[:4] == ["git", "-C", str(worktree_path), "push"] for cmd in calls)
+    assert not any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
+    assert any(cmd[:3] == ["gh", "pr", "list"] for cmd in calls)
+
+
+def test_reconcile_auto_finalize_logs_gh_failure_without_crashing(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-finalize-gh-failure"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-finalize-gh-failure.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("Input tokens: 8\nOutput tokens: 3\n")
+
+    job = {
+        "id": "job-finalize-gh-failure",
+        "agent": "codex",
+        "story_id": "",
+        "task": "handle gh failure",
+        "pid": 9999993,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-finalize-gh-failure",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+
+        if cmd[:4] == prefix + ["status"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="0\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            raise FileNotFoundError("gh")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": True, "dirty": False, "commits_ahead": 0})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    assert "gh binary not available" in out
+    assert any(cmd[:3] == ["gh", "pr", "list"] for cmd in calls)
+    assert sl._load_jobs()[0]["status"] == "completed"
+
+
 def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):
     def fake_run(cmd, **kw):
         class R:
