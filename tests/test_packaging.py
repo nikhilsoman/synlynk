@@ -9,6 +9,10 @@ import synlynk
 
 
 def test_detect_install_type_pipx(monkeypatch, tmp_path):
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/synlynk")
+    monkeypatch.delenv("PIPX_HOME", raising=False)
     fake_meta = types.SimpleNamespace(
         locate_file=lambda _: tmp_path / "pipx" / "venvs" / "synlynk"
     )
@@ -17,12 +21,20 @@ def test_detect_install_type_pipx(monkeypatch, tmp_path):
 
 
 def test_detect_install_type_pip(monkeypatch, tmp_path):
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/synlynk")
+    monkeypatch.delenv("PIPX_HOME", raising=False)
     fake_meta = types.SimpleNamespace(locate_file=lambda _: tmp_path / "site-packages")
     monkeypatch.setattr(importlib_metadata, "distribution", lambda _: fake_meta)
     assert synlynk._detect_install_type() == "pip"
 
 
 def test_detect_install_type_script(monkeypatch, tmp_path):
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/synlynk")
+    monkeypatch.delenv("PIPX_HOME", raising=False)
     monkeypatch.setattr(
         importlib_metadata,
         "distribution",
@@ -39,6 +51,10 @@ def test_detect_install_type_script(monkeypatch, tmp_path):
 
 
 def test_detect_install_type_unknown(monkeypatch):
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/synlynk")
+    monkeypatch.delenv("PIPX_HOME", raising=False)
     monkeypatch.setattr(
         importlib_metadata,
         "distribution",

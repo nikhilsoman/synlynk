@@ -73,10 +73,11 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
 
 
-def test_run_tc4_skips_flag_only_command_templates():
+def test_run_tc4_skips_flag_only_command_templates(monkeypatch):
     """dispatch.model/dispatch.tools store a bare flag ("--model {model}"), not a
     full invocation. TC-4 must not try to exec the flag itself as a binary."""
     import sqlite3
+    import types
     from synlynk.probe import _run_tc4
 
     conn = sqlite3.connect(":memory:")
@@ -91,10 +92,20 @@ def test_run_tc4_skips_flag_only_command_templates():
     )
     conn.commit()
 
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd == ["claude", "--help"]:
+            return types.SimpleNamespace(returncode=0)
+        raise AssertionError(f"unexpected probe command: {cmd}")
+
+    monkeypatch.setattr("synlynk.probe.subprocess.run", fake_run)
     result = _run_tc4("claude", conn)
 
     assert result["passed"] is True
     assert "dispatch.model" not in result["failed_verbs"]
+    assert calls == [["claude", "--help"]]
 
 
 def test_run_tc4_still_reports_missing_real_binary():
@@ -1269,43 +1280,52 @@ def test_upgrade_reports_up_to_date(monkeypatch, capsys):
 
 def test_upgrade_auto_installs_new_version(monkeypatch, capsys):
     import json as _json
+    import types
     call_log = []
 
-    def fake_run(*args, **kwargs):
-        call_log.append(args[0])
-        # gh API call fails so we fall through to urllib path
-        raise Exception("no gh")
+    monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "script")
 
-    api_response = type('R', (), {
-        'read': lambda self: _json.dumps({"tag_name": "v99.0.0"}).encode(),
-        '__enter__': lambda self: self,
-        '__exit__': lambda self, *a: None,
-    })()
-    script_response = type('R', (), {
-        'read': lambda self: b'echo "install ok"',
-        '__enter__': lambda self: self,
-        '__exit__': lambda self, *a: None,
-    })()
+    class Response:
+        def __init__(self, payload: bytes):
+            self._payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return self._payload
+
+    api_response = Response(_json.dumps({"tag_name": "v99.0.0"}).encode())
+    script_response = Response(b'echo "install ok"')
 
     url_calls = [api_response, script_response]
 
     def fake_urlopen(req, **kw):
         return url_calls.pop(0)
 
-    fake_bash_result = type('R', (), {'returncode': 0})()
+    fake_gh_result = types.SimpleNamespace(returncode=0, stdout="v99.0.0\n")
+    fake_bash_result = types.SimpleNamespace(returncode=0)
 
-    def fake_run2(*args, **kwargs):
-        if args[0][0] == "bash":
+    def fake_run(cmd, **kwargs):
+        call_log.append(cmd)
+        if cmd[0] == "gh":
+            return fake_gh_result
+        if cmd[0] == "bash":
             return fake_bash_result
-        raise Exception("no gh")
+        raise AssertionError(f"unexpected subprocess call: {cmd}")
 
-    monkeypatch.setattr(synlynk.subprocess, 'run', fake_run2)
+    monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
     monkeypatch.setattr(synlynk.urllib.request, 'urlopen', fake_urlopen)
     synlynk.upgrade()
     captured = capsys.readouterr()
     assert "99.0.0" in captured.out
     assert "upgrading" in captured.out
     assert "Upgraded" in captured.out
+    assert call_log[0][0] == "gh"
+    assert call_log[-1][0] == "bash"
 
 def test_upgrade_handles_network_error(monkeypatch, capsys):
     monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
