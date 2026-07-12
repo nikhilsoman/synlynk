@@ -552,7 +552,7 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
     assert "git-state recheck recovered" in summary
 
 
-def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktree_remains_failed(git_worktree_repo, monkeypatch, capsys):
+def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktree_is_unknown(git_worktree_repo, monkeypatch, capsys):
     import synlynk as sl
 
     job = _dispatch_git_worktree_job(monkeypatch)
@@ -562,10 +562,34 @@ def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktre
     jobs = sl._load_jobs()
     reconciled = next(j for j in jobs if j["id"] == job["id"])
 
-    assert reconciled["status"] == "failed"
-    assert reconciled["exit_code"] == -1
+    assert reconciled["status"] == "unknown"
+    assert reconciled["exit_code"] is None
+    assert "UNKNOWN (exit unknown)" in out
     assert "FAILED_UNVERIFIED" not in out
     assert "worktree:" in out
+
+
+def test_dispatch_gitstateverified_job_reconciliation_uses_waitpid_without_exit_file(
+    git_worktree_repo, monkeypatch, capsys
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+
+    monkeypatch.setattr(jobs_mod.os, "waitpid", lambda pid, opts: (job["pid"], 0))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    monkeypatch.setattr(jobs_mod, "_finalize_completed_worktree_job", lambda *a, **kw: None)
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+
+    assert reconciled["status"] == "completed"
+    assert reconciled["exit_code"] == 0
+    assert "status:   OK (exit 0)" in out
 
 
 def test_dispatch_gitstateverified_job_stall_git_activity_defers_kill(git_worktree_repo, monkeypatch, tmp_path):
@@ -644,7 +668,8 @@ def test_dispatch_gitstateverified_job_reconciliation_tags_harness_internal_time
     jobs = sl._load_jobs()
     reconciled = next(j for j in jobs if j["id"] == job["id"])
 
-    assert reconciled["status"] == "failed"
+    assert reconciled["status"] == "unknown"
+    assert reconciled["exit_code"] is None
     sentinel_content = open(".synlynk/sentinel.md").read()
     assert "HARNESS_INTERNAL_TIMEOUT" in sentinel_content
     assert job["id"] in sentinel_content
@@ -1098,6 +1123,17 @@ def test_extend_tokencost_extraction_with_cache_b_sample_transcript():
 
     assert tuple(tokens) == (4821, 312)
     assert tokens.cache_read_tokens == 128
+
+
+def test_extend_tokencost_extraction_parses_multiline_total_tokens():
+    import synlynk as sl
+
+    text = "codex finished\n\ntokens used\n259,718\n"
+
+    tokens = sl.extract_tokens(text)
+
+    assert sum(tokens) == 259718
+    assert tokens.cache_read_tokens == 0
 
 
 def test_extend_tokencost_extraction_with_cache_b_rate_table_lookup():

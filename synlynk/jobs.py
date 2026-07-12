@@ -64,6 +64,15 @@ def _job_retry_count(job: dict) -> int:
         return 0
 
 
+def _exit_code_from_wait_status(wait_status: int) -> Optional[int]:
+    """Converts os.waitpid() status words into a shell-like exit code."""
+    if os.WIFEXITED(wait_status):
+        return os.WEXITSTATUS(wait_status)
+    if os.WIFSIGNALED(wait_status):
+        return -os.WTERMSIG(wait_status)
+    return None
+
+
 def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     """Returns True when the worktree or its origin branch already has real work."""
     if not git_state:
@@ -865,6 +874,103 @@ def _reconcile_jobs() -> None:
         pid = job.get("pid")
         if pid is None:
             continue
+        waitpid_exit_code = None
+        waitpid_reaped = False
+        try:
+            wpid, raw_status = os.waitpid(pid, os.WNOHANG)
+            if wpid != 0:
+                waitpid_reaped = True
+                waitpid_exit_code = _exit_code_from_wait_status(raw_status)
+        except ChildProcessError:
+            pass
+        except PermissionError:
+            # Process exists but is owned by another user — keep status as running.
+            continue
+        if waitpid_reaped:
+            log_file = job.get("log_file")
+            log_text = ""
+            if log_file and os.path.exists(log_file):
+                try:
+                    with open(log_file) as f:
+                        log_text = f.read()
+                except Exception:
+                    log_text = ""
+            git_state = None
+            if job.get("worktree_path"):
+                git_state = _pkg("_inspect_worktree_git_state")(
+                    job.get("worktree_path"),
+                    job.get("worktree_branch"),
+                    job.get("started_at"),
+                )
+            if waitpid_exit_code == 0:
+                job["status"] = "completed"
+                job["exit_code"] = 0
+            elif waitpid_exit_code is not None:
+                job["status"] = "failed"
+                job["exit_code"] = waitpid_exit_code
+            else:
+                job["status"] = "unknown"
+                job["exit_code"] = None
+            if job.get("status") != "completed" and git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
+                job["status"] = "completed"
+                job["exit_code"] = 0
+            if job.get("status") != "completed" and log_text:
+                log_text_lower = log_text.lower()
+                for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
+                    if phrase in log_text_lower:
+                        if not _retry_internal_timeout_job(job, jobs, git_state):
+                            _write_sentinel_alert(
+                                "CRITICAL",
+                                "HARNESS_INTERNAL_TIMEOUT",
+                                f"Job {job.get('id')} on agent '{job.get('agent')}' died from an internal "
+                                f"harness timeout (matched \"{phrase}\"), not a task failure. Consider retrying.",
+                                sentinel_path,
+                            )
+                        break
+            job["ended_at"] = now
+            if log_text:
+                job["micro_rework"] = _extract_micro_rework(log_text)
+                try:
+                    _pkg("_write_capability_rating")(job, log_text)
+                except ValueError as exc:
+                    print(
+                        f"  ⚠ capability rating skipped for job {job.get('id', '')}: {exc}"
+                    )
+            in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
+            cost_usd = _job_cost_usd(
+                job.get("agent", ""),
+                in_tokens,
+                out_tokens,
+                job.get("model_version") or job.get("model_at_dispatch"),
+            )
+            duration_s = None
+            try:
+                duration_s = max(0.0, time.mktime(time.strptime(job.get("ended_at"), "%Y-%m-%dT%H:%M:%S")) -
+                                 time.mktime(time.strptime(job.get("started_at"), "%Y-%m-%dT%H:%M:%S")))
+            except Exception:
+                duration_s = None
+            summary_status = None
+            if job.get("status") == "unknown":
+                summary_status = "UNKNOWN (exit unknown)"
+            summary = _pkg("_write_job_summary")(
+                job.get("id", ""),
+                job.get("agent", ""),
+                job.get("story_id"),
+                job.get("exit_code"),
+                duration_s,
+                in_tokens,
+                out_tokens,
+                cost_usd,
+                _pkg("_worktree_files_touched")(job.get("worktree_path")),
+                job.get("worktree_path"),
+                job.get("worktree_branch"),
+                status_label=summary_status,
+            )
+            print(summary, end="")
+            if job.get("status") == "completed":
+                _finalize_completed_worktree_job(job, git_state)
+            changed = True
+            continue
         try:
             os.kill(pid, 0)  # signal 0: check existence only, no actual signal
         except ProcessLookupError:
@@ -907,6 +1013,9 @@ def _reconcile_jobs() -> None:
                 pass
             elif ambiguous_exit:
                 job["status"] = "failed_unverified"
+                job["exit_code"] = None
+            elif exit_code is None:
+                job["status"] = "unknown"
                 job["exit_code"] = None
             else:
                 job["status"] = "failed"
@@ -1009,6 +1118,8 @@ def _reconcile_jobs() -> None:
                     f"— inspect before discarding (worktree: {job.get('worktree_path')})"
                 )
                 summary_status = "FAILED_UNVERIFIED (exit unknown)"
+            elif job.get("status") == "unknown":
+                summary_status = "UNKNOWN (exit unknown)"
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1062,12 +1173,9 @@ def _reconcile_daemon_jobs() -> None:
                     exited = True
 
             if exited:
-                exit_code = -1
+                exit_code = None
                 if raw_exit_status is not None:
-                    if os.WIFEXITED(raw_exit_status):
-                        exit_code = os.WEXITSTATUS(raw_exit_status)
-                    elif os.WIFSIGNALED(raw_exit_status):
-                        exit_code = -os.WTERMSIG(raw_exit_status)
+                    exit_code = _exit_code_from_wait_status(raw_exit_status)
                 elif log_path:
                     exit_file = log_path + ".exit"
                     if os.path.exists(exit_file):
@@ -1077,7 +1185,12 @@ def _reconcile_daemon_jobs() -> None:
                             os.remove(exit_file)
                         except Exception:
                             pass
-                status = "done" if exit_code == 0 else "failed"
+                if exit_code == 0:
+                    status = "done"
+                elif exit_code is None:
+                    status = "unknown"
+                else:
+                    status = "failed"
                 conn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
                     "WHERE job_id=?",
@@ -1099,9 +1212,10 @@ def _reconcile_daemon_jobs() -> None:
                         log_text = ""
                 in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens)
+                summary_status = "UNKNOWN (exit unknown)" if status == "unknown" else None
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
-                    out_tokens, cost_usd, []
+                    out_tokens, cost_usd, [], status_label=summary_status
                 )
         conn.commit()
     finally:
@@ -1269,7 +1383,11 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
         visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
         if not visible:
             completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified")])
-            print(f"No running jobs. ({completed} completed/failed — use `synlynk jobs --all` to see)")
+            unknown = len([j for j in jobs if j["status"] == "unknown"])
+            suffix = f"{completed} completed/failed"
+            if unknown:
+                suffix += f", {unknown} unknown"
+            print(f"No running jobs. ({suffix} — use `synlynk jobs --all` to see)")
             return
         header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
         print(f"{_BOLD}{header}{_RESET}")
@@ -1300,7 +1418,11 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             visible = [r for r in rows if r[3] in ("queued", "running")]
             if not visible:
                 done = sum(1 for r in rows if r[3] in ("done", "failed"))
-                print(f"  No active jobs. ({done} completed — use synlynk jobs --all)")
+                unknown = sum(1 for r in rows if r[3] == "unknown")
+                suffix = f"{done} completed"
+                if unknown:
+                    suffix += f", {unknown} unknown"
+                print(f"  No active jobs. ({suffix} — use synlynk jobs --all)")
                 return
 
         header = f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'AGE':8}  {'EXIT':4}"

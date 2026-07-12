@@ -37,38 +37,41 @@ def extract_tokens(output_text: str) -> tuple:
 
     Returns a pair-compatible object with .cache_read_tokens for cache-aware output.
     """
+    def _parse_count(value: str) -> int:
+        return int(value.replace(",", ""))
+
     patterns = [
-        (r'Input tokens:\s*(\d+).*?Output tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
-        (r'"usage"\s*:\s*\{[^}]*"input_tokens"\s*:\s*(\d+)[^}]*"output_tokens"\s*:\s*(\d+)', re.DOTALL | re.IGNORECASE),
-        (r'"input_tokens":\s*(\d+).*?"output_tokens":\s*(\d+)', re.DOTALL | re.IGNORECASE),
-        (r'Tokens used:\s*(\d+)\s+input,\s*(\d+)\s+output', re.IGNORECASE),
-        (r'prompt_tokens:\s*(\d+).*?completion_tokens:\s*(\d+)', re.DOTALL | re.IGNORECASE),
+        (r'Input tokens:\s*([\d,]+).*?Output tokens:\s*([\d,]+)', re.DOTALL | re.IGNORECASE),
+        (r'"usage"\s*:\s*\{[^}]*"input_tokens"\s*:\s*([\d,]+)[^}]*"output_tokens"\s*:\s*([\d,]+)', re.DOTALL | re.IGNORECASE),
+        (r'"input_tokens":\s*([\d,]+).*?"output_tokens":\s*([\d,]+)', re.DOTALL | re.IGNORECASE),
+        (r'Tokens used:\s*([\d,]+)\s+input,\s*([\d,]+)\s+output', re.IGNORECASE),
+        (r'prompt_tokens:\s*([\d,]+).*?completion_tokens:\s*([\d,]+)', re.DOTALL | re.IGNORECASE),
     ]
     in_tokens = 0
     out_tokens = 0
     for pat, flags in patterns:
         m = re.search(pat, output_text, flags)
         if m:
-            in_tokens = int(m.group(1))
-            out_tokens = int(m.group(2))
+            in_tokens = _parse_count(m.group(1))
+            out_tokens = _parse_count(m.group(2))
             break
     if not in_tokens and not out_tokens:
-        m = re.search(r'Total tokens:\s*(\d+)', output_text, re.IGNORECASE)
+        m = re.search(r'(?:Tokens used|Total tokens)\s*[:\n]\s*([\d,]+)', output_text, re.IGNORECASE)
         if m:
-            total = int(m.group(1))
+            total = _parse_count(m.group(1))
             in_tokens = int(total * 0.8)
-            out_tokens = int(total * 0.2)
+            out_tokens = total - in_tokens
 
     cache_read_tokens = 0
     cache_patterns = [
-        r'"(?:cached_tokens|cache_read_tokens)"\s*:\s*(\d+)',
-        r'Cache read tokens:\s*(\d+)',
-        r'Cached tokens:\s*(\d+)',
+        r'"(?:cached_tokens|cache_read_tokens)"\s*:\s*([\d,]+)',
+        r'Cache read tokens:\s*([\d,]+)',
+        r'Cached tokens:\s*([\d,]+)',
     ]
     for pat in cache_patterns:
         m = re.search(pat, output_text, re.IGNORECASE)
         if m:
-            cache_read_tokens = int(m.group(1))
+            cache_read_tokens = _parse_count(m.group(1))
             break
 
     return _TokenCounts(in_tokens, out_tokens, cache_read_tokens)
