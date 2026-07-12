@@ -732,7 +732,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     context_text = ""
     if context_mode != "none":
-        scope = f"task:{story_id}" if context_mode == "task" and story_id else "full"
+        if context_mode == "task":
+            scope = f"task:{story_id}" if story_id else "task"
+        else:
+            scope = "full"
         try:
             generate_context = _pkg("generate_context")
             context_text = generate_context(scope=scope, out_path=context_file) or ""
