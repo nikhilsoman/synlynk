@@ -209,6 +209,23 @@ All three PRs' CI showed only the same 5 known pre-existing baseline failures (`
 **Result:** #160, #161, #162 all closed. PRs #163, #164, #165 merged.
 - Key calls: reject native-harness pivot in favor of structured-interface adapters (Agent SDK/JSON/ACP); enforcement plane before enterprise sales; CLA + license split before v1.0 GA; provisionals on sentinels/permission-translation/handoff before further blog disclosure.
 
+## 2026-07-07 to 2026-07-08 — Job Lifecycle Ground-Truth Verification epic (#128, #129, #127, #126)
+
+**Design:** `docs/superpowers/specs/2026-07-07-job-lifecycle-verification-design.md` — dispatch/job layer wrote state and trusted it, with no independent check against git/process/filesystem reality. Four issues, one root cause. Sequenced dispatch, do-not-parallelize: #128 → #129 → #127 → #126.
+
+**Shipped, in order:**
+
+- **PR #130** (#128) — per-job `git worktree` isolation: `dispatch_agent()` creates `worktrees/<job_id>` on branch `dispatch/<agent>/<job_id>`, `cwd=worktree_path` instead of the shared invoking-shell cwd. First attempt regressed 49 tests by adding `git init` into the autouse `isolated_db` fixture; redispatched with root-cause diagnosis, fixed via opt-in `git_worktree_repo` fixture + autouse `stub_dispatch_worktree` stub pattern (now the template for every dispatch touching this fixture).
+- **PR #131** (#129) — `_reconcile_jobs()` cross-checks git state (`_inspect_worktree_git_state()`) instead of treating a missing exit sentinel as automatic failure; new `"failed_unverified"` status; `_check_job_stall()` extends grace period on detected git activity before SIGKILLing a silent-but-working job.
+- **PR #132** (#127) — real `files_touched` via `git diff --name-only <merge-base> HEAD` + `git status --short --porcelain`, replacing hardcoded `[]`; new shared `_resolve_worktree_base_commit()` reused by both `_worktree_files_touched()` and `_inspect_worktree_git_state()`; job summaries list up to 20 files with a "+N more" suffix.
+- **PR #133** (#126) — `cmd_migrate()` prints resolved `DB_PATH`; `_migrate_import()` fails loud (`MigrationImportError`, exit non-zero, skips `git rm --cached`/sentinel/commit) when a non-empty source lands 0 rows. **Three dispatch rounds** — two real bugs caught via manual repro before merge, not caught by the dispatched job's own tests: (1) first attempt hard-aborted on `todo.md` files with only `priority:`-tagged rows (no `gh:` tag) because it compared inserted count against raw parsed count instead of *attempted* count; (2) second attempt fixed that but the failure-detection loop raised on the first failing source only, silently omitting other simultaneously-failing sources from the error message. Third attempt fixed both, confirmed via direct repro scripts before opening the PR.
+
+**Process note:** every PR — diff independently reviewed (dispatch.py/`__init__.py`/db.py + conftest.py fixture safety check), full test suite run independently (never trusted the job's self-reported OK), CI failures cross-checked against `main`'s own baseline before merging (same 6 pre-existing/environment-specific failures every time: pipx install-type detection ×3, TC-4 template matching, upgrade auto-install, stale `test_version_is_0100`).
+
+**Follow-up:** filed **#134** — cleanup issue for the 6 pre-existing CI failures (sev3, CI hygiene only), so they stop needing a manual main-baseline diff on every future PR.
+
+**Epic complete.** All four issues shipped to main.
+
 ## 2026-07-12 — Vizor Architect Map v2: static tube map → live workspace-repo graph (PR #167)
 
 Executed the approved 8-task plan (`docs/superpowers/plans/2026-07-11-vizor-architect-map-v2.md`) via Subagent-Driven Development — fresh Codex dispatch per task, two-stage review (spec compliance then code quality) before each merge, all sequential.
