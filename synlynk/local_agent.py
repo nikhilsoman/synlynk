@@ -93,6 +93,10 @@ def cmd_local_doctor(config_path: str = None) -> int:
         print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
+    from synlynk import _get_db
+    from synlynk.local_agent_seed import seed_local_capability_envelope
+    seed_local_capability_envelope(_get_db())
+    print("  ✓ starter capability envelope seeded (docs/testing, execute stage)")
     roster_ids = [model["id"] for model in config["models"]]
     available = set(result["available_models"])
     missing = [model_id for model_id in roster_ids if model_id not in available]

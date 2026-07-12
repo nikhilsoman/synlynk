@@ -56,6 +56,15 @@ def _load_harness_overrides(agent: str) -> dict:
         return empty
 
 
+def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:
+    """True if the 'local' agent already has max_concurrent running jobs."""
+    row = conn.execute(
+        "SELECT COUNT(*) FROM daemon_jobs WHERE status='running' AND agent='local'"
+    ).fetchone()
+    running = row[0] if row else 0
+    return running >= max_concurrent
+
+
 def _resolve_dispatch_permissions(
     agent: str,
     role_list: list = None,
@@ -655,6 +664,21 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
+
+    if agent == "local":
+        get_db = _pkg("_get_db")
+        conn = get_db() if get_db else None
+        if conn is not None:
+            try:
+                local_config = json.load(open(os.path.join(".agents", "local.json")))
+            except (OSError, json.JSONDecodeError):
+                local_config = {}
+            max_concurrent = local_config.get("max_concurrent", 1)
+            if _local_concurrency_exceeded(conn, max_concurrent=max_concurrent):
+                raise RuntimeError(
+                    f"local agent at max concurrency ({max_concurrent}); "
+                    "wait for the running job to finish"
+                )
 
     baselines = baselines_map[agent]
     cli = baselines["cli"]
