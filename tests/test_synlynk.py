@@ -867,6 +867,22 @@ def test_generate_context_includes_sentinel_alerts(project_dir):
     ctx = (project_dir / ".synlynk" / "context.md").read_text()
     assert "FLATLINE" in ctx
 
+
+def test_generate_context_dedupes_repeated_sentinel_alerts(project_dir):
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "# Sentinel Alerts\n"
+        "- [WARNING] [2026-07-01 13:23] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+        "- [WARNING] [2026-07-01 13:34] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+        "- [WARNING] [2026-07-01 13:35] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+        "- [CRITICAL] [2026-07-01 14:10] HARNESS_PREFLIGHT_FAIL: Required endpoint unreachable\n"
+    )
+    synlynk.generate_context()
+    ctx = (project_dir / ".synlynk" / "context.md").read_text()
+    assert ctx.count("HARNESS_VERSION_DRIFT") == 1
+    assert "3 occurrences" in ctx
+    assert "most recent 2026-07-01 13:35" in ctx
+    assert "HARNESS_PREFLIGHT_FAIL" in ctx
+
 def test_generate_context_omits_sentinel_section_when_empty(project_dir):
     synlynk.generate_context()
     ctx = (project_dir / ".synlynk" / "context.md").read_text()
@@ -925,6 +941,43 @@ def test_generate_context_task_scope_no_teammate_devlogs(project_dir):
     sl.generate_context(scope=f"task:{story_id}")
     ctx = (project_dir / ".synlynk" / "context.md").read_text()
     assert "alice" not in ctx.lower()
+
+
+def test_dispatch_agent_task_scope_without_story_uses_reduced_context(project_dir, monkeypatch):
+    """Task context without a story_id stays smaller than full context and skips history sections."""
+    import synlynk as sl
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_git_head_sha", lambda: None)
+
+    (project_dir / "project-docs" / "devlogs" / "nikhilsoman.md").write_text(
+        "# Devlog\n"
+        "## 2026-07-01\n"
+        + ("Did a lot of work today.\n" * 80)
+    )
+    (project_dir / ".synlynk" / "sentinel.md").write_text(
+        "# Sentinel Alerts\n"
+        + "".join(
+            f"- [WARNING] [2026-07-01 13:{minute:02d}] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+            for minute in range(10)
+        )
+    )
+
+    full_context_path = project_dir / ".synlynk" / "full-context.md"
+    sl.generate_context(scope="full", out_path=str(full_context_path))
+    full_size = full_context_path.stat().st_size
+
+    job = sl.dispatch_agent("claude", "free text task", context_mode="task")
+    task_context = (project_dir / job["context_file"]).read_text()
+    task_size = (project_dir / job["context_file"]).stat().st_size
+
+    assert task_size < full_size
+    assert "Recent Devlog" not in task_context
+    assert "Sentinel Alerts" not in task_context
 
 
 def test_init_creates_project_structure(tmp_path, monkeypatch):

@@ -32,6 +32,7 @@ from synlynk.sentinel import (
     _extract_auto_signals,
     _extract_compliance_tags,
     _read_sentinel_alerts,
+    _summarize_sentinel_alerts,
     _write_sentinel_alert,
     check_sentinel_patterns,
     log_telemetry_event,

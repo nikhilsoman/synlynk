@@ -72,7 +72,7 @@ def _write_last_devlog_section(out, filepath: str) -> None:
     if sections:
         out.writelines(sections[-1])
 
-def _generate_task_context(story_id: str, out_path: str = None) -> str:
+def _generate_task_context(story_id: Optional[str], out_path: str = None) -> str:
     """Writes minimal scoped context for a single story dispatch. Returns context string.
 
     out_path: write to this path instead of the global .synlynk/context.md.
@@ -82,16 +82,18 @@ def _generate_task_context(story_id: str, out_path: str = None) -> str:
     buf = _io.StringIO()
 
     conn = _pkg("_get_db")()
-    row = conn.execute(
-        "SELECT title, engg_domain, org_domain, phase FROM stories WHERE story_id=?",
-        (story_id,)
-    ).fetchone()
+    row = None
+    if story_id:
+        row = conn.execute(
+            "SELECT title, engg_domain, org_domain, phase FROM stories WHERE story_id=?",
+            (story_id,)
+        ).fetchone()
     conn.close()
 
     buf.write("# synlynk Context Snapshot (task-scoped)\n\n")
     buf.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-    if row:
+    if story_id and row:
         buf.write("## Story\n")
         buf.write(f"**ID:** {story_id}  \n")
         buf.write(f"**Title:** {row[0] or ''}  \n")
@@ -140,7 +142,7 @@ def _generate_task_context(story_id: str, out_path: str = None) -> str:
     print(f"  ✓ Task-scoped context saved to {context_file}")
     return context_text
 
-def _generate_context_from_db(out_path: str = None) -> str:
+def _generate_context_from_db(scope: str = "full", out_path: str = None) -> str:
     """Build context.md from state.db (post-migration path)."""
     context_file = out_path if out_path else ".synlynk/context.md"
     os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
@@ -154,10 +156,12 @@ def _generate_context_from_db(out_path: str = None) -> str:
         "SELECT goal_id, outcome, criterion, deadline FROM goals "
         "WHERE status='active' ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
-    recent_devlogs = conn.execute(
-        "SELECT author, entry_date, session_title, body FROM devlog_entries "
-        "ORDER BY entry_date DESC, id DESC LIMIT 5"
-    ).fetchall()
+    recent_devlogs = []
+    if scope == "full":
+        recent_devlogs = conn.execute(
+            "SELECT author, entry_date, session_title, body FROM devlog_entries "
+            "ORDER BY entry_date DESC, id DESC LIMIT 5"
+        ).fetchall()
     memory_sections = conn.execute(
         "SELECT section, body FROM memory_entries ORDER BY updated_at DESC LIMIT 5"
     ).fetchall()
@@ -236,7 +240,7 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
     Passed through to _generate_task_context for per-job isolation in dispatch.
     """
     if _pkg("_is_migrated")():
-        return _generate_context_from_db(out_path=out_path)
+        return _generate_context_from_db(scope=scope, out_path=out_path)
 
     docs_dir = _pkg("_docs_dir")()
     context_file = out_path if out_path else ".synlynk/context.md"
@@ -248,6 +252,8 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
     if scope != "full":
         if scope.startswith("task:"):
             return _generate_task_context(scope[5:], out_path=out_path)
+        if scope == "task":
+            return _generate_task_context(None, out_path=out_path)
         print(f"  ⚠ scope='{scope}' not yet implemented, falling back to full context")
         scope = "full"
 
@@ -263,7 +269,10 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
         # Sentinel alerts at top (omit section if empty)
         if os.path.exists(sentinel_file):
             content = open(sentinel_file).read().strip()
+            summarize_alerts = _pkg("_summarize_sentinel_alerts")
             lines = [l for l in content.splitlines() if l.startswith("- [")]
+            if summarize_alerts:
+                lines = summarize_alerts(lines)
             if lines:
                 out.write("# Sentinel Alerts\n")
                 out.write("\n".join(lines) + "\n\n---\n\n")

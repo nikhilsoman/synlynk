@@ -9,6 +9,14 @@ from typing import Optional
 
 from synlynk._constants import QUOTA_PATTERNS
 
+_SENTINEL_ALERT_RE = re.compile(
+    r"^- \[(?P<severity>[A-Z]+)\] \[(?P<timestamp>[^\]]+)\] "
+    r"(?P<code>[A-Z0-9_]+): (?P<message>.*)$"
+)
+_SENTINEL_ALERT_LEGACY_RE = re.compile(
+    r"^- \[(?P<timestamp>[^\]]+)\] (?P<code>[A-Z0-9_]+): (?P<message>.*)$"
+)
+
 
 def _docs_dir() -> str:
     """Returns the configured project docs directory (defaults to 'project-docs')."""
@@ -88,6 +96,64 @@ def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
                 if m and m.group(1) == severity:
                     alerts.append(line)
     return alerts
+
+
+def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> list:
+    """Collapses repeated alerts by message content and keeps the latest alert per group."""
+    grouped = {}
+    passthrough = []
+
+    for raw_line in alert_lines:
+        line = (raw_line or "").strip()
+        if not line:
+            continue
+        match = _SENTINEL_ALERT_RE.match(line)
+        legacy = False
+        if not match:
+            match = _SENTINEL_ALERT_LEGACY_RE.match(line)
+            legacy = bool(match)
+        if not match:
+            passthrough.append(line)
+            continue
+
+        code = match.group("code")
+        message = match.group("message")
+        timestamp = match.group("timestamp")
+        severity = match.groupdict().get("severity") or "INFO"
+        key = (code, message)
+
+        bucket = grouped.get(key)
+        if bucket is None:
+            grouped[key] = {
+                "line": line,
+                "count": 1,
+                "timestamp": timestamp,
+                "severity": severity,
+                "legacy": legacy,
+            }
+            continue
+
+        bucket["count"] += 1
+        if timestamp >= bucket["timestamp"]:
+            bucket.update({
+                "line": line,
+                "timestamp": timestamp,
+                "severity": severity,
+                "legacy": legacy,
+            })
+
+    summarized = []
+    for bucket in grouped.values():
+        line = bucket["line"]
+        count = bucket["count"]
+        if count > 1:
+            line = f"{line} ({count} occurrences, most recent {bucket['timestamp']})"
+        summarized.append((bucket["timestamp"], line))
+
+    summarized.sort(key=lambda item: item[0], reverse=True)
+    deduped = [line for _, line in summarized[:max_alert_types]]
+    deduped.extend(passthrough)
+    return deduped
 
 
 def _worktree_branch_name(worktree_path):
