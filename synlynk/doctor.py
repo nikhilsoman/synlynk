@@ -129,12 +129,12 @@ def _hc_agent_profiles() -> HealthCheck:
         return HealthCheck("agent_profiles", "warn", "No agent slots configured", fix="Run: synlynk init")
     missing = [name for name in slots if not os.path.exists(os.path.join(".agents", f"{name}.json"))]
     if not missing:
-        return HealthCheck("agent_profiles", "ok", f"Agent profiles present: {'"'"', '"'"'.join(sorted(slots))}")
+        return HealthCheck("agent_profiles", "ok", f"Agent profiles present: {', '.join(sorted(slots))}")
     return HealthCheck(
         "agent_profiles",
         "warn",
-        f"Missing .agents/ profiles: {'"'"', '"'"'.join(missing)}",
-        fix=f"Run: synlynk agent configure <name> — for: {'"'"', '"'"'.join(missing)}",
+        f"Missing .agents/ profiles: {', '.join(missing)}",
+        fix=f"Run: synlynk agent configure <name> — for: {', '.join(missing)}",
     )
 
 
@@ -147,7 +147,7 @@ def _hc_instruction_files() -> HealthCheck:
     return HealthCheck(
         "instruction_files",
         "warn",
-        f"Missing instruction files: {'"'"', '"'"'.join(missing)}",
+        f"Missing instruction files: {', '.join(missing)}",
         fix="Run: synlynk init",
     )
 
@@ -311,7 +311,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 print("    TC-5 sops:    ✓")
             else:
                 for ag, missing in tc5["missing"].items():
-                    print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {'"'"', '"'"'.join(missing)}")
+                    print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
 
             if not tc1["passed"]:
                 choice = _pkg("_doctor_fix_menu")(agent, "tc1", tc1)
