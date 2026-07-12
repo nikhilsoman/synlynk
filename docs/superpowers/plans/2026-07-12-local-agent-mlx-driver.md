@@ -875,13 +875,134 @@ git commit -m "docs(local-agent): taxonomy worked example + blog post"
 
 ---
 
+## Task Group 5: Role-split integration (GATED — do not dispatch until Task Groups 1-4 have shipped and `local` is live in a release)
+
+**Why deferred:** per user decision (2026-07-12), `local` stays out of the formal
+agent-role-split surface (`.synlynk/config.json` `agent_slots`, the wizard's role
+screen, CLAUDE.md's Default Agent Role table) until it has actually shipped and proven
+itself — not speculatively wired in alongside the driver work. This task group exists so
+the follow-up isn't forgotten, not to be executed now.
+
+**Files:**
+- Modify: `synlynk/wizard.py:702-707` (`_DEFAULT_ROLES` dict in `_wiz_screen_roles`)
+- Modify: `synlynk/__init__.py:2777` and `:2846` (`known_agents` lists — both currently
+  `["claude", "agy", "codex", "grok", "gemini"]`, missing `local`)
+- Modify: `synlynk/__init__.py:3269` (fallback `agent_set` default
+  `{"claude", "agy", "codex", "grok"}`)
+- Modify: `synlynk/__init__.py:292-294` (GOVERNS stage→agent-list defaults, e.g.
+  `"build": ["agy", "codex", "grok"]`, `"sustain": [...]` — decide at execution time
+  whether `local` belongs in `build` given it's now a genuine CLI-subprocess coding
+  agent per the revised Aider-based architecture)
+- Modify: `/Users/nikhilsoman/dev/synlynk/CLAUDE.md` (Default Agent Role table — add a
+  `local` row once its role is proven, e.g. "granular implementation offload (zero-cost,
+  capability-gated)")
+- **Open question to resolve at execution time, not now:** `_agent_guards` in
+  `synlynk/__init__.py:3279` maps directive files to agents (`CLAUDE.md`→claude,
+  `GEMINI.md`→agy, `AGENTS.md`→codex, `GROK.md`→grok) — each existing agent reads its own
+  directive file for role/SOP injection. Aider does not read a fixed `AGENTS.md`-style
+  directive file the way Claude/Codex/Agy/Grok do; it supports `.aider.conf.yml` and a
+  conventions file passed via `--read`. Whoever executes this task group must decide
+  whether `local` needs its own guard file (e.g. a generated `.aider.conf.yml` with a
+  role/SOP block) or whether Aider should simply be pointed at the existing `AGENTS.md`
+  via `--read` at dispatch time. Do not guess — check Aider's current docs for the
+  supported mechanism, since Aider's config surface may have changed between now and
+  when this task group executes.
+
+- [ ] **Step 1: Confirm `local` has shipped and is live** — verify Task Groups 1-4 are
+  merged to `main`, `synlynk local doctor` passes on a real machine, and at least one
+  real dispatched job has completed successfully (not just mocked-CI tests).
+
+- [ ] **Step 2: Write the failing test for `_DEFAULT_ROLES` including `local`**
+
+```python
+def test_default_roles_includes_local_agent():
+    from synlynk import wizard
+    assert "local" in wizard._DEFAULT_ROLES
+    assert wizard._DEFAULT_ROLES["local"]  # non-empty description
+```
+
+Run: `pytest tests/test_wizard.py::test_default_roles_includes_local_agent -v`
+Expected: FAIL with `AssertionError` (key not present).
+
+- [ ] **Step 3: Add `local` to `_DEFAULT_ROLES`**
+
+```python
+_DEFAULT_ROLES = {
+    "claude": "PM · code review · deployments",
+    "agy": "implementation · testing · templates",
+    "codex": "CLI plumbing · refactoring",
+    "grok": "canvas/JS · infra scaffold · complex data structures",
+    "local": "granular implementation offload (zero-cost, capability-gated)",
+}
+```
+
+Run: `pytest tests/test_wizard.py::test_default_roles_includes_local_agent -v`
+Expected: PASS
+
+- [ ] **Step 4: Write the failing test for `known_agents` including `local`**
+
+```python
+def test_known_agents_includes_local():
+    from synlynk import known_agents  # or wherever the list is imported from in tests
+    assert "local" in known_agents
+```
+
+(Adjust the import path to match wherever `known_agents` is actually exposed at
+execution time — it is currently an inline list literal at two call sites in
+`synlynk/__init__.py`, not a named module-level constant; consider extracting it to one
+`KNOWN_AGENTS` constant as part of this step so both call sites and the test share a
+single source of truth, rather than editing two duplicated list literals.)
+
+Run the test, confirm it fails, then extract/update `known_agents` at both call sites
+(`synlynk/__init__.py:2777`, `:2846`) and the `agent_set` fallback default at `:3269` to
+include `"local"`. Re-run to confirm it passes.
+
+- [ ] **Step 5: Update CLAUDE.md's Default Agent Role table**
+
+Add a row to the table in `/Users/nikhilsoman/dev/synlynk/CLAUDE.md` under "## Default
+Agent Role" (created when the local-agent implementation shipped):
+
+```markdown
+| local (Aider + oMLX) | Granular implementation offload — zero-cost, capability-gated, starts narrow |
+```
+
+- [ ] **Step 6: Resolve the directive-file question (see Open question above), implement
+  whichever mechanism was decided, and add a test asserting it.**
+
+- [ ] **Step 7: Run the full test suite**
+
+Run: `pytest tests/ -v`
+Expected: PASS, no regressions.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add synlynk/wizard.py synlynk/__init__.py CLAUDE.md tests/test_wizard.py
+git commit -m "feat(local-agent): fold local into role-split surface post-ship (agent_slots, wizard, CLAUDE.md)"
+```
+
+---
+
 ## Self-Review Notes (for whoever executes this plan)
 
 - **Spec coverage:** Task Group 1 covers Architecture + Model Roster + `.agents/local.json`;
   Group 2 covers Capability Envelope + Cost & Quota; Group 3 covers the two-tier Testing
   section; Group 4 covers the Docs PR. The spec's "Open Risks" section (oMLX maturity,
   MLX-conversion churn, 16GB tightness) has no dedicated task — it's a monitoring
-  concern for after Task Group 3's real-hardware run, not an implementation task.
+  concern for after Task Group 3's real-hardware run, not an implementation task. Task
+  Group 5 (role-split integration into `.synlynk/config.json`/wizard/CLAUDE.md) is
+  explicitly out of the original spec's scope by user decision (2026-07-12) — added as a
+  gated follow-up task, not to be dispatched until `local` has shipped and proven itself.
+- **Note (2026-07-12, post-Fable-review revision):** Task Group 1's Files/Steps sections
+  still describe the original single-shot HTTP `local_agent_runner.py` design
+  (`urllib.request`, `_chat_completion`, `_health_check` mocks). This is now stale — the
+  Architecture section above was rewritten to reflect Aider-as-agentic-editor-over-oMLX
+  (see the revised design spec), but Task Group 1's step-by-step content has NOT yet been
+  rewritten to match. Per user decision, this rewrite is deliberately held until other
+  Fable-review findings (the dispatch-path bug, the cost-accounting gap) are resolved, so
+  Task Group 1 and Task Group 3 (its mocked tests) get one consolidated rewrite instead of
+  two. **Do not dispatch Task Group 1 or Task Group 3 as currently written — they build
+  the wrong thing.**
 - **Type consistency:** `_load_local_config`, `_pinned_model`, `_health_check`,
   `_chat_completion` are defined once in `synlynk/local_agent.py` (Task Group 1, Step 4)
   and imported by name into `local_agent_runner.py`, `local_agent_seed.py`'s doctor
