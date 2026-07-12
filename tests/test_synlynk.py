@@ -2225,6 +2225,65 @@ def test_reconcile_marks_failed_from_exit_file(project_dir):
     assert not os.path.exists(log_file + ".exit")
 
 
+def test_reconcile_attributes_origin_branch_activity_when_assigned_worktree_is_clean(project_dir, monkeypatch, capsys):
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "borrowed-worktree"
+    worktree_path.mkdir()
+    log_file = project_dir / ".synlynk" / "logs" / "job-borrowed.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("Input tokens: 120\nOutput tokens: 30\n")
+
+    job = {
+        "id": "job-borrowed",
+        "agent": "codex",
+        "story_id": "",
+        "task": "fix borrowed worktree attribution",
+        "pid": 9999999,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "chore/init-remodularization-pass2",
+        "started_at": "2026-07-07T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    synlynk._save_jobs([job])
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:4] == prefix + ["status"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["merge-base", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:4] == prefix + ["log"] and "--format=%H" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+        if cmd[:4] == prefix + ["log"] and "--name-only" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="alpha.txt\nbeta.txt\nalpha.txt\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+    jobs = synlynk._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+
+    assert reconciled["status"] == "completed"
+    assert reconciled["exit_code"] == 0
+    assert "status:   OK (exit 0)" in out
+    assert "files:    2 touched" in out
+    assert "          alpha.txt" in out
+    assert "          beta.txt" in out
+    assert "borrowed worktree detected; attributed from origin/chore/init-remodularization-pass2" in out
+
+
 def test_reconcile_survives_permission_error(project_dir, monkeypatch):
     # PermissionError from os.kill means PID exists (owned by another user) — keep as running.
     def fake_kill(pid, sig):
