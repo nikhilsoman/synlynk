@@ -44,7 +44,11 @@ def _save_jobs(jobs: list) -> None:
     with open(jobs_file, "w") as f:
         json.dump(jobs, f, indent=2)
 
-def _inspect_worktree_git_state(worktree_path: Optional[str]) -> Optional[dict]:
+def _inspect_worktree_git_state(
+    worktree_path: Optional[str],
+    worktree_branch: Optional[str] = None,
+    started_at: Optional[str] = None,
+) -> Optional[dict]:
     """Returns git evidence for a worktree, or None when it is unavailable."""
     if not worktree_path or not os.path.isdir(worktree_path):
         return None
@@ -82,6 +86,18 @@ def _inspect_worktree_git_state(worktree_path: Optional[str]) -> Optional[dict]:
             except ValueError:
                 commits_ahead = 0
 
+    remote_branch_has_activity = False
+    remote_branch_ref = None
+    remote_branch_commit_count = 0
+    remote_branch_files_touched = []
+    if not dirty and commits_ahead == 0:
+        remote_state = _inspect_origin_branch_activity(worktree_path, worktree_branch, started_at)
+        if remote_state:
+            remote_branch_has_activity = remote_state["remote_has_activity"]
+            remote_branch_ref = remote_state["remote_ref"]
+            remote_branch_commit_count = remote_state["remote_commit_count"]
+            remote_branch_files_touched = remote_state["remote_files_touched"]
+
     return {
         "worktree_path": worktree_path,
         "dirty": dirty,
@@ -89,6 +105,74 @@ def _inspect_worktree_git_state(worktree_path: Optional[str]) -> Optional[dict]:
         "base_ref": base_ref,
         "base_commit": base_commit,
         "has_activity": dirty or commits_ahead > 0,
+        "remote_ref": remote_branch_ref,
+        "remote_commit_count": remote_branch_commit_count,
+        "remote_files_touched": remote_branch_files_touched,
+        "remote_has_activity": remote_branch_has_activity,
+    }
+
+
+def _inspect_origin_branch_activity(
+    worktree_path: Optional[str],
+    worktree_branch: Optional[str],
+    started_at: Optional[str],
+) -> Optional[dict]:
+    """Returns commit/file evidence for origin/<branch> activity since started_at."""
+    if not worktree_path or not os.path.isdir(worktree_path) or not worktree_branch or not started_at:
+        return None
+
+    remote_ref = f"origin/{worktree_branch}"
+
+    try:
+        commit_result = subprocess.run(
+            ["git", "-C", worktree_path, "log", "--since", started_at, "--format=%H", remote_ref],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    if commit_result.returncode != 0:
+        return None
+
+    commits = [line.strip() for line in (commit_result.stdout or "").splitlines() if line.strip()]
+    files_touched = []
+    if commits:
+        try:
+            files_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    worktree_path,
+                    "log",
+                    "--since",
+                    started_at,
+                    "--name-only",
+                    "--pretty=format:",
+                    remote_ref,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            files_result = None
+
+        if files_result and files_result.returncode == 0:
+            seen = set()
+            for path in (files_result.stdout or "").splitlines():
+                path = path.strip()
+                if not path or path in seen:
+                    continue
+                seen.add(path)
+                files_touched.append(path)
+
+    return {
+        "remote_ref": remote_ref,
+        "remote_commit_count": len(commits),
+        "remote_files_touched": sorted(files_touched),
+        "remote_has_activity": bool(commits),
     }
 
 def _count_dispatch_rework(story_id: str) -> int:
@@ -427,13 +511,24 @@ def _reconcile_jobs() -> None:
                     except Exception:
                         pass
                 elif job.get("worktree_path"):
-                    git_state = _pkg("_inspect_worktree_git_state")(job.get("worktree_path"))
+                    git_state = _pkg("_inspect_worktree_git_state")(
+                        job.get("worktree_path"),
+                        job.get("worktree_branch"),
+                        job.get("started_at"),
+                    )
                     if git_state and git_state.get("has_activity"):
                         ambiguous_exit = True
+                    # If the assigned worktree stayed clean but origin/<branch> advanced,
+                    # the job likely ran in a borrowed worktree and still succeeded.
+                    elif git_state and git_state.get("remote_has_activity"):
+                        job["status"] = "completed"
+                        job["exit_code"] = 0
 
             if exit_code == 0:
                 job["status"] = "completed"
                 job["exit_code"] = 0
+            elif job.get("status") == "completed":
+                pass
             elif ambiguous_exit:
                 job["status"] = "failed_unverified"
                 job["exit_code"] = None
@@ -478,7 +573,16 @@ def _reconcile_jobs() -> None:
                 duration_s = None
             summary_note = None
             summary_status = None
-            if ambiguous_exit and git_state:
+            summary_files_touched = _pkg("_worktree_files_touched")(job.get("worktree_path"))
+            if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
+                summary_files_touched = git_state.get("remote_files_touched", [])
+                remote_ref = git_state.get("remote_ref")
+                remote_commit_count = git_state.get("remote_commit_count", 0)
+                summary_note = (
+                    f"borrowed worktree detected; attributed from {remote_ref} "
+                    f"with {remote_commit_count} commit(s) since {job.get('started_at')}"
+                )
+            elif ambiguous_exit and git_state:
                 commit_count = git_state.get("commits_ahead", 0)
                 dirty = git_state.get("dirty", False)
                 parts = []
@@ -501,7 +605,7 @@ def _reconcile_jobs() -> None:
                 in_tokens,
                 out_tokens,
                 cost_usd,
-                _pkg("_worktree_files_touched")(job.get("worktree_path")),
+                summary_files_touched,
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
                 status_label=summary_status,
