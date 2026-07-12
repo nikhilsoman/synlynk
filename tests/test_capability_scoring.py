@@ -452,6 +452,44 @@ def test_dispatch_returns_none_when_no_capability_data(tmp_path, monkeypatch):
     assert _best_agent_for_story("story-2") is None
 
 
+def test_capability_queries_use_discipline_not_legacy_engg_domain(
+    tmp_path, monkeypatch, isolated_db, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _best_agent_for_story, cmd_score_list
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, industry, phase) "
+        "VALUES (?,?,?,?,?,?,?)",
+        ("story-drift", "Test", "frontend", "backend", "monetization", "ott", "build"),
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, discipline, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("story-drift", "claude", "claude-opus-4-8", "frontend", "backend", "monetization",
+         "ott", "build", "auto", 9.0, 9.0),
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, discipline, org_domain, industry, phase, "
+        " signal_source, quality, quality_auto) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("story-drift", "gemini", "gemini-2.5-pro", "backend", "frontend", "monetization",
+         "ott", "build", "auto", 1.0, 1.0),
+    )
+    conn.commit()
+    conn.close()
+
+    assert _best_agent_for_story("story-drift") == "claude"
+
+    cmd_score_list(engg="backend", org="monetization", industry="ott")
+    out = capsys.readouterr().out
+    assert "claude" in out
+    assert "gemini" not in out
+
+
 # --- Task 10: score add/list ---
 
 def test_score_add_writes_human_rating(tmp_path, monkeypatch):
@@ -779,10 +817,10 @@ def test_org_domain_tags_not_used_in_routing(tmp_path, monkeypatch):
     )
     # Seed a rating for a completely different coordinate — different engg AND org
     conn.execute(
-        "INSERT INTO capability_ratings (story_id, agent, model_version, engg_domain, "
+        "INSERT INTO capability_ratings (story_id, agent, model_version, engg_domain, discipline, "
         "org_domain, industry, phase, signal_source, quality, quality_auto) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        ("s-1", "claude", "claude-opus-4-8", "frontend", "monetization", "ott",
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("s-1", "claude", "claude-opus-4-8", "frontend", "frontend", "monetization", "ott",
          "build", "auto", 9.0, 9.0)
     )
     conn.commit(); conn.close()
