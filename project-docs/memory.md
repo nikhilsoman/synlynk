@@ -202,6 +202,9 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 - ~~"Context Switchboard" framing~~ → retired 2026-06-06. Replaced by "OS for multi-agent development."
 - ~~Lite → Full progression~~ → retired. Replaced by v0.4→v1.0 staircase + Tokq cloud layer.
 
+## Active Holds
+- **Blog Post Protocol paused (2026-07-12):** No new `docs/blog/` posts or `website/src/blog/posts/` syncs until an IP assessment is done on the flagged Four-POV IP candidates (sentinel detection, permission translation, handoff protocol). Reasoning: `docs/blog/` commits don't trigger the site deploy (`.github/workflows/site.yml` only watches `website/**`), so the live synlynk.com site is already capped at post #33 (pre-dates all flagged IP work) — this hold prevents *further* disclosure, doesn't undo the ~53 posts already public in the repo (already running the US prior-art clock). Also holds item 3 of `docs/superpowers/specs/2026-07-12-release-announcement-agenda.md` (website messaging refresh). Lift this once IP assessment / licensing / CLA / trademark decisions (same agenda doc, section 6) are resolved.
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.
