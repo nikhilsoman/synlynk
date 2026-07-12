@@ -57,6 +57,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | **[48](./48-v011-agent-ecosystem-operational-layer.md)** | **v0.11.0 — The Agent Ecosystem Operational Layer (Named Release)** | [v0.11.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.11.0) | **2026-07-05** |
 | [49](./49-prTBD-bs8-goal-hierarchy.md) | BS-8: The Business Goal Layer | TBD | 2026-07-11 |
 | [50](./50-prTBD-governs-stage-rollout.md) | GOVERNS: Rolling Out the Seven-Stage Vocabulary | TBD | 2026-07-11 |
+| [51](./51-prTBD-vizor-goals-panel.md) | Vizor Gets a Goals Panel | TBD | 2026-07-11 |
 
 
 ## Per-PR Post Template
