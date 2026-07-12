@@ -372,6 +372,14 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
         _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
 
 
+def _job_cost_usd(agent: str, in_tokens: int, out_tokens: int, model_version: Optional[str] = None) -> float:
+    rates = _pkg("_model_rate_for_version")(model_version or "unknown", agent=agent)
+    return (
+        (in_tokens / 1000 * rates["input"]) +
+        (out_tokens / 1000 * rates["output"])
+    )
+
+
 def _retry_internal_timeout_job(job: dict, jobs: list, git_state: Optional[dict]) -> bool:
     """Re-dispatches a clean internal-timeout job when it is still retryable."""
     if not git_state:
@@ -790,7 +798,7 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
         best = min(
             near,
             key=lambda g: (
-                _pkg("_estimate_story_cost_usd")(g[2], estimated_tokens),
+                _pkg("_estimate_story_cost_usd")(g[2], estimated_tokens, agent=g[0]),
                 -g[1],  # higher capability as secondary
                 g[0],   # stable tie-break
             ),
@@ -832,7 +840,12 @@ def _reconcile_jobs() -> None:
                 except Exception:
                     log_text = ""
             in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
-            cost_usd = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            cost_usd = _job_cost_usd(
+                job.get("agent", ""),
+                in_tokens,
+                out_tokens,
+                job.get("model_version") or job.get("model_at_dispatch"),
+            )
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -930,7 +943,12 @@ def _reconcile_jobs() -> None:
                 log_text = ""
 
             in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
-            cost_usd = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+            cost_usd = _job_cost_usd(
+                job.get("agent", ""),
+                in_tokens,
+                out_tokens,
+                job.get("model_version") or job.get("model_at_dispatch"),
+            )
             duration_s = None
             try:
                 duration_s = max(0.0, time.mktime(time.strptime(job.get("ended_at"), "%Y-%m-%dT%H:%M:%S")) -
@@ -1051,7 +1069,7 @@ def _reconcile_daemon_jobs() -> None:
                     except Exception:
                         log_text = ""
                 in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
-                cost_usd = (in_tokens / 1000 * 0.003) + (out_tokens / 1000 * 0.015)
+                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
                     out_tokens, cost_usd, []

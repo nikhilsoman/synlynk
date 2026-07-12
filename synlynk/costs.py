@@ -139,25 +139,28 @@ _MODEL_RATE_TABLE = {
     "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
     "gpt-5-codex": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
     "gpt-5.4-mini": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gemini-2.5-pro": {"input": 0.0, "output": 0.0, "cache_read": 0.0},
+    "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
     "grok-build": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
     "grok-composer-2.5-fast": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
 }
 
 
-def _model_rate_for_version(model_version):
+def _model_rate_for_version(model_version, agent=None):
+    normalized_agent = os.path.basename(agent or "")
+    if normalized_agent == "local":
+        return {"input": 0.0, "output": 0.0, "cache_read": 0.0}
     return _MODEL_RATE_TABLE.get(model_version, _DEFAULT_MODEL_RATE)
 
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
-                 epic_id=None, phase_id=None) -> None:
+                 epic_id=None, phase_id=None, agent=None) -> None:
     """Appends a cost row. Post-migration: writes to state.db + .synlynk/project-docs/costs.md.
     Pre-migration: writes to project-docs/costs.md. Rates are model-aware, with a flat fallback."""
+    agent_name = agent or (command.split()[0] if command else "")
     if not model_version:
-        agent = command.split()[0] if command else ""
-        model_version = extract_model_version("", agent=agent) if agent else "unknown"
-    rates = _model_rate_for_version(model_version)
+        model_version = extract_model_version("", agent=agent_name) if agent_name else "unknown"
+    rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
     est_cost = (
         (in_tokens / 1000 * rates["input"]) +

@@ -118,7 +118,7 @@ def _compute_schedule_plan(max_stories=None) -> dict:
                 chosen = min(
                     near,
                     key=lambda g: (
-                        _estimate_story_cost_usd(g[2], est_tokens),
+                        _estimate_story_cost_usd(g[2], est_tokens, agent=g[0]),
                         -g[1],
                         g[0],
                     ),

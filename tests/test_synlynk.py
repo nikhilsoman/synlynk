@@ -5060,6 +5060,49 @@ def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
     assert not os.path.exists(exit_path), ".exit file should have been deleted by reconcile"
 
 
+def test_reconcile_jobs_uses_model_rate_table_for_completed_job_cost(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    log_path = project_dir / ".synlynk" / "logs" / "job-rate.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("Input tokens: 1000 Output tokens: 200\n")
+
+    job = {
+        "id": "job-rate",
+        "agent": "codex",
+        "story_id": "",
+        "task": "rate check",
+        "pid": 9999996,
+        "log_file": str(log_path),
+        "worktree_path": "",
+        "worktree_branch": "",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "claude-opus-4-8",
+    }
+    sl._save_jobs([job])
+
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    captured = {}
+
+    def fake_write_job_summary(*args, **kwargs):
+        captured["cost_usd"] = args[7]
+        return ""
+
+    monkeypatch.setattr(sl, "_write_job_summary", fake_write_job_summary)
+
+    sl._reconcile_jobs()
+
+    assert captured["cost_usd"] == pytest.approx((1000 / 1000 * 0.015) + (200 / 1000 * 0.075))
+
+
 def test_dispatch_ready_jobs_respects_max_parallel(project_dir, monkeypatch):
     """Does not launch more jobs than max_parallel."""
     import json
