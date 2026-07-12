@@ -256,7 +256,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass
     conn.execute(
-        "UPDATE stories SET discipline = COALESCE(NULLIF(engg_domain, ''), 'backend')"
+        "UPDATE stories SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
+        "WHERE discipline IS NULL OR discipline = ''"
     )
     conn.execute(
         "UPDATE stories SET role = COALESCE(NULLIF(role, ''), 'dev') "
@@ -487,7 +488,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass
     conn.execute(
-        "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(engg_domain, ''), 'backend')"
+        "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
+        "WHERE discipline IS NULL OR discipline = ''"
     )
     conn.execute(
         "UPDATE capability_ratings SET role = COALESCE(NULLIF(role, ''), 'dev') "
@@ -1323,12 +1325,12 @@ def cmd_score_add(story_id: str, rating: float, note: str = None,
         print(f"    Note: {note}")
 
 def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> None:
-    """Display capability_scores for a domain coordinate."""
+    """Display capability_scores for a discipline coordinate."""
     from synlynk import _get_db
     conn = _get_db()
     where_parts, params = [], []
     if engg:
-        where_parts.append("engg_domain=?"); params.append(engg)
+        where_parts.append("discipline=?"); params.append(engg)
     if org:
         where_parts.append("org_domain=?"); params.append(org)
     if industry:

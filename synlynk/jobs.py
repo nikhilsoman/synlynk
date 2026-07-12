@@ -699,19 +699,19 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     conn.commit()
     conn.close()
 
-def _capability_candidates_for_story(conn, engg, org, industry, phase) -> list:
+def _capability_candidates_for_story(conn, discipline, org, industry, phase) -> list:
     """Return [(agent, weighted_score, model_version), ...] best-first.
 
     Falls back through progressively wider coordinates (same as legacy
     _best_agent_for_story single-row lookup).
     """
     queries = [
-        ("engg_domain=? AND org_domain=? AND industry=? AND phase=?",
-         (engg, org, industry, phase)),
-        ("engg_domain=? AND org_domain=? AND phase=?",
-         (engg, org, phase)),
-        ("engg_domain=? AND phase=?",
-         (engg, phase)),
+        ("discipline=? AND org_domain=? AND industry=? AND phase=?",
+         (discipline, org, industry, phase)),
+        ("discipline=? AND org_domain=? AND phase=?",
+         (discipline, org, phase)),
+        ("discipline=? AND phase=?",
+         (discipline, phase)),
     ]
     for where, params in queries:
         rows = conn.execute(
@@ -749,16 +749,16 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
     conn = _pkg("_get_db")()
     try:
         story = conn.execute(
-            "SELECT engg_domain, org_domain, industry, phase, estimated_tokens "
+            "SELECT discipline, org_domain, industry, phase, estimated_tokens "
             "FROM stories WHERE story_id=?",
             (story_id,),
         ).fetchone()
         if not story:
             return None
 
-        engg, org, industry, phase, estimated_tokens = story
+        discipline, org, industry, phase, estimated_tokens = story
         candidates = _capability_candidates_for_story(
-            conn, engg, org, industry, phase
+            conn, discipline, org, industry, phase
         )
         if not candidates:
             return None
