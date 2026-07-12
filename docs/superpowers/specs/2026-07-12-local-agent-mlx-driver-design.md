@@ -24,9 +24,13 @@ exactly like every other agent.
 
 ## Non-Goals (this spec)
 
-- **Linux/Windows support.** oMLX/MLX is Apple-Silicon-only. Cross-platform is a future
-  driver (most likely llama.cpp, since Ornith/Gemma-Coder/Qwen-Coder all ship GGUF too)
-  behind the same interface — not built here.
+- **A dedicated Linux/Windows inference driver.** Not needed as a separate future-work
+  item: Aider talks to any OpenAI-compatible endpoint, so v1 is already cross-platform at
+  the dispatch/agent layer. The only Apple-Silicon-specific piece is oMLX itself (the
+  inference server) — a Linux/Windows dev just points `.agents/local.json`'s `endpoint`
+  at a different OpenAI-compatible local server (e.g. `llama.cpp`'s server mode) and
+  nothing else changes. Documenting and testing that swap is still out of scope for this
+  spec, but no new driver code is required to support it later.
 - **Dev-onboarding TUI wizard.** Explicitly deferred by the user to a later goal, tracked
   as a side-goal on autonomy of the current instruction-to-release loop. This spec's
   onboarding surface is a CLI health-check command only (`synlynk local doctor`), not a
@@ -52,46 +56,68 @@ a code change — just a config edit.
 
 ## Architecture
 
-### Dispatch: new HTTP driver path, not a CLI subprocess
+### Two layers: oMLX (inference) + Aider (agentic editor) — not a bespoke HTTP driver
 
-Every existing agent (`claude`, `codex`, `agy`, `grok`) is dispatched as a CLI subprocess
-(`dispatch_agent()` in `synlynk/dispatch.py`, spawning `claude --print`, `codex exec -`,
-etc.). `local` has no CLI to spawn — it's a long-running local HTTP server. This needs a
-genuinely new branch, not a new set of `dispatch_flags`:
+**Revised after external review (Fable, 2026-07-12) surfaced a blocker in the original
+single-shot-HTTP-call design: a plain `POST /v1/chat/completions` call returns text but
+cannot edit files, which meant `_write_capability_rating()` had no real outcome to score
+and the whole "self-widening envelope" premise had nothing to widen from.**
+
+oMLX's role is unchanged from the original design — it is the inference/serving layer:
+runs `omlx serve`, swaps/pins models across the Ornith-9B/Qwen-Coder/Gemma-Coder roster,
+owns the tiered RAM+SSD KV cache. It does no editing.
+
+[Aider](https://github.com/Aider-AI/aider) (verified via GitHub API: Apache-2.0, active,
+47K stars, last push 2026-05-22) sits in front of it as the agentic editor: reads files,
+plans edits, writes files, git-aware — talking to oMLX purely as an OpenAI-compatible
+model backend, exactly as it would talk to any other OpenAI-compatible provider. Aider
+does no inference; oMLX does no editing. Neither replaces the other.
+
+Critically, this means `local` is dispatched as a **CLI subprocess**, exactly like
+`claude`, `codex`, `agy`, and `grok` already are — there is no new "HTTP driver" branch
+in `dispatch.py` at all:
 
 ```
 dispatch_agent(agent="local", ...)
-  → _preflight_local()          # GET /v1/models on the oMLX endpoint; fail fast if down
-  → _format_prompt_for_agent()  # reuse existing generic fallback branch — plain
-                                 #  instruction-following, no local-specific formatting
-                                 #  needed at launch
-  → POST {endpoint}/v1/chat/completions
-        {"model": <pinned or story-selected roster name>, "messages": [...]}
-  → capture response text, token usage from the OpenAI-shaped response body
-       (no regex scraping needed — extract_tokens() gets a direct-JSON fast path)
+  → _preflight_local()          # GET oMLX /v1/models; fail fast with an actionable
+                                 #  message if oMLX isn't running (Aider itself would
+                                 #  otherwise surface a raw connection error)
+  → _format_prompt_for_agent()  # existing generic fallback branch, unchanged
+  → spawn `aider` as a subprocess inside the job's worktree, pointed at the oMLX
+        endpoint + pinned/selected roster model:
+        aider --openai-api-base {endpoint}/v1 --model <roster-name>
+              --edit-format <per-model, from .agents/local.json>
+              --no-auto-commits --yes-always <other non-interactive flags>
+  → Aider reads/edits/writes real files in the worktree; capture stdout for
+        token/cost extraction, exit code for success/failure
   → everything downstream (worktree creation, verify, job summary) is unchanged
 ```
 
-`AGENT_CAPABILITY_BASELINES["local"]` (`synlynk/_constants.py`) gets a `driver: "http"`
-marker instead of `cli`/`dispatch_flags`, so `_dispatch_flags_for_agent()` and
-`_permissions_to_flags()` short-circuit to empty for this agent (permissions are enforced
-by oMLX running with filesystem access scoped to the job's worktree, passed as a
-working-directory hint in the prompt, same pattern already used for `agy`).
+`--no-auto-commits` is required: Aider's default behavior is to commit after each edit,
+which would fight the dispatch pipeline's own worktree-commit ownership. `--edit-format`
+is set per-model rather than globally, because Aider's `whole` format (full-file
+replacement) is documented as more reliable for smaller/weaker models that struggle to
+produce clean unified diffs, while stronger models in the roster can use `diff`.
+
+`AGENT_CAPABILITY_BASELINES["local"]` (`synlynk/_constants.py`) follows the exact same
+shape as `codex`/`agy`/`grok` — `cli: "aider"`, `non_interactive_flags`, `dispatch_flags`
+— no `driver` marker, no special-case in `_dispatch_flags_for_agent()` or
+`_permissions_to_flags()`. Permissions/scope are enforced by Aider itself (its edits are
+confined to the worktree it's launched in, same containment as every other agent).
 
 ### `.agents/local.json`
 
-Same file-per-agent pattern as `.agents/support.json`, but describing driver config
-instead of investigator/fixer signals:
+Same file-per-agent pattern as `.agents/support.json`, now describing both layers of the
+stack — the oMLX roster/endpoint, and the Aider invocation config per model:
 
 ```json
 {
   "name": "local",
-  "driver": "http",
   "endpoint": "http://127.0.0.1:8080",
   "models": [
-    {"id": "ornith-1.0-9b", "pinned": true},
-    {"id": "qwen-coder", "pinned": false},
-    {"id": "gemma-coder", "pinned": false}
+    {"id": "ornith-1.0-9b", "pinned": true, "edit_format": "whole"},
+    {"id": "qwen-coder", "pinned": false, "edit_format": "whole"},
+    {"id": "gemma-coder", "pinned": false, "edit_format": "diff"}
   ],
   "hardware_tier": "16gb-default"
 }
@@ -99,6 +125,8 @@ instead of investigator/fixer signals:
 
 `pinned: true` models stay resident in oMLX's RAM tier; others load on demand and can be
 evicted under memory pressure — this is oMLX's own behavior, synlynk just declares intent.
+`edit_format` is read by the dispatch layer to build the `aider --edit-format ...` flag
+per job.
 
 ## Capability Envelope (granular-tasks-first rollout)
 
@@ -149,8 +177,9 @@ if not (this *is* the onboarding surface for this spec; the guided wizard is fut
 Implementation dispatches to Codex/Agy/Grok per the locked role split (Claude: design,
 review, git integration only). Planned as 4 PRs:
 
-1. **Driver interface + `.agents/local.json` + dispatch HTTP path** — `_preflight_local()`,
-   the new dispatch branch, `AGENT_CAPABILITY_BASELINES["local"]`, `synlynk local doctor`.
+1. **Agent registration + `.agents/local.json` + Aider CLI wiring** — `_preflight_local()`,
+   `AGENT_CAPABILITY_BASELINES["local"]` (`cli: "aider"`, same shape as codex/agy/grok),
+   `synlynk local doctor`.
 2. **Capability-score seeding + quota concurrency guard** — starter whitelist rows,
    `local_concurrency` quota type.
 3. **Tests** — mocked CI tier + `local_hardware`-marked real tier.
@@ -166,9 +195,27 @@ one worktree per branch, off `main`).
 
 - **oMLX is a young (~5 month old at time of writing), single-maintainer project.** It's
   Apache-2.0 and verifiably real/active, but not Apple-official — API surface or the
-  tiered-cache behavior could change. Mitigation: the driver interface is thin
-  specifically so a switch to plain `mlx_lm` or llama.cpp later is a config/driver-file
-  change, not a `dispatch.py` rewrite.
+  tiered-cache behavior could change. Mitigation: oMLX is only ever addressed through its
+  OpenAI-compatible endpoint (by Aider, and by `_preflight_local()`'s health check) — a
+  switch to plain `mlx_lm` or another OpenAI-compatible server later is a config change
+  to `.agents/local.json`, not a `dispatch.py` rewrite.
+- **Aider is a large, actively-maintained project (verified via GitHub API: Apache-2.0,
+  47K stars, last push 2026-05-22) but still a third-party dependency synlynk doesn't
+  control.** Apache-2.0 permits forking/modifying it if a synlynk-specific patch is ever
+  needed (no copyleft obligation — see license note below). Its default auto-commit
+  behavior must be disabled (`--no-auto-commits`) to avoid fighting the dispatch
+  pipeline's own commit ownership; this is a documented Aider flag, not a patch.
+- **License note (Apache-2.0, both oMLX and Aider):** permits forking, modifying, and
+  private/internal use with no requirement to publish changes. Only obligations are
+  preserving the copyright/license notice and noting which files were changed if
+  redistributed. No patent or trademark concerns for internal use. Confirmed sufficient
+  for this project's needs (2026-07-12).
+- **Small local models (7-9B) are the weak link for agentic editing, not the model access
+  path.** Aider's edit-format selection (`whole` vs `diff`) mitigates but doesn't
+  eliminate this — a model can still misunderstand instructions or produce broken code.
+  This is an acceptable and expected failure mode: `_write_capability_rating()` scores it
+  down naturally, same as any other agent's bad output, and the granular-tasks-first
+  starter whitelist limits blast radius while the envelope is still narrow.
 - **MLX conversions of newly-released models (like Ornith) can lag or disappear** if the
   community maintainer stops updating. Mitigation: roster is config (`.agents/local.json`),
   not hardcoded — swapping a model requires no code change.
