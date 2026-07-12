@@ -5109,13 +5109,25 @@ def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
     launched = []
     class FakeProc:
         pid = 55555
+        returncode = 0
+        stdout = ""
+        stderr = ""
+        def communicate(self, *a, **kw):
+            return ("", "")
+        def wait(self, *a, **kw):
+            return 0
+        def poll(self):
+            return 0
     def fake_popen(cmd, **kwargs):
         launched.append(cmd)
         return FakeProc()
 
     monkeypatch.setattr(synlynk.subprocess, "Popen", fake_popen)
     synlynk._dispatch_ready_jobs(max_parallel=4)
-    assert len(launched) == 1
+    # Only the agent shell spawn counts; dispatch_agent may also Popen via
+    # subprocess.run for probe/git helpers on the same code path.
+    shell_launches = [c for c in launched if c and c[0] == "sh"]
+    assert len(shell_launches) == 1
 
     conn2 = synlynk._get_db()
     row = conn2.execute(
@@ -5261,6 +5273,15 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
 
     class FakeProc:
         pid = 33333
+        returncode = 0
+        stdout = ""
+        stderr = ""
+        def communicate(self, *a, **kw):
+            return ("", "")
+        def wait(self, *a, **kw):
+            return 0
+        def poll(self):
+            return 0
 
     monkeypatch.setattr(synlynk.subprocess, "Popen", lambda *a, **kw: FakeProc())
 
@@ -5274,6 +5295,93 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
     # Each job should produce exactly one commit with an UPDATE before it
     assert all(c >= 1 for c in commits_after_update if c > 0), \
         "Expected at least one commit with a preceding UPDATE per job"
+
+
+def test_dispatch_ready_jobs_creates_worktree_and_applies_dispatch_flags(
+    project_dir, monkeypatch
+):
+    """#190: queue-path launch goes through dispatch_agent (worktree + dispatch_flags).
+
+    A queued daemon_jobs row launched via _dispatch_ready_jobs must get an
+    isolated job worktree and agent dispatch/permission flags — not a bare
+    sh -c in the daemon cwd with non_interactive_flags only.
+    """
+    import synlynk as sl
+    from synlynk.dispatch import _job_worktree_details
+
+    job_id = "djob-iso-190"
+    agent = "claude"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+        (job_id, agent, "implement isolation fix", "queued", 5, "[]",
+         "2026-07-12T10:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    captured = []
+
+    class FakeProc:
+        pid = 424242
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+        def communicate(self, *a, **kw):
+            return ("", "")
+
+        def wait(self, *a, **kw):
+            return 0
+
+        def poll(self):
+            return 0
+
+    def fake_popen(cmd, **kwargs):
+        captured.append({"cmd": cmd, "kwargs": kwargs})
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True, "sentinel": None, "reason": None,
+        },
+    )
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+
+    launched = sl._dispatch_ready_jobs(max_parallel=4)
+    assert launched == 1
+
+    expected_wt, expected_branch = _job_worktree_details(job_id, agent)
+    # Stub fixture returns worktrees/<job_id>; dispatch still lays down logs/prompts under it.
+    assert os.path.isdir(os.path.join(expected_wt, ".synlynk", "logs"))
+    assert os.path.isdir(os.path.join(expected_wt, ".synlynk", "prompts"))
+
+    shell = [c for c in captured if c["cmd"] and c["cmd"][0] == "sh"]
+    assert len(shell) == 1
+    shell_cmd = shell[0]["cmd"][2]
+    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--print" in shell_cmd
+    assert shell[0]["kwargs"].get("cwd") == expected_wt
+
+    jobs = sl._load_jobs()
+    match = [j for j in jobs if j.get("id") == job_id]
+    assert len(match) == 1
+    assert match[0]["worktree_path"] == expected_wt
+    assert match[0]["worktree_branch"] == expected_branch
+
+    conn2 = sl._get_db()
+    row = conn2.execute(
+        "SELECT status, pid, log_path FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "running"
+    assert row[1] == 424242
+    assert job_id in (row[2] or "")
 
 
 # ── SynlynkDaemon unit tests ────────────────────────────────────────────────

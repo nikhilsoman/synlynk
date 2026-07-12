@@ -1061,9 +1061,14 @@ def _reconcile_daemon_jobs() -> None:
         conn.close()
 
 def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
-    """Launches queued daemon_jobs up to max_parallel concurrently. Returns count launched."""
+    """Launches queued daemon_jobs up to max_parallel concurrently. Returns count launched.
+
+    Scheduling logic (priority order, dependency gating, concurrency caps) stays here.
+    Per-job execution (worktree, preflight, dispatch/permission flags, spawn) is
+    delegated to dispatch_agent() so the queue path cannot silently diverge from
+    the interactive dispatch path (#190).
+    """
     import json as _json
-    import shlex as _shlex
     conn = _pkg("_get_db")()
     try:
         running_count = conn.execute(
@@ -1103,54 +1108,38 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 if done_ids != set(deps):
                     continue
 
-            if not log_path:
-                os.makedirs(_pkg("LOGS_DIR"), exist_ok=True)
-                log_path = os.path.join(_pkg("LOGS_DIR"), f"{job_id}.log")
-
-            baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
-            cli = baselines.get("cli", agent)
-            flags = baselines.get("non_interactive_flags", [])
-            prompt_via_arg = baselines.get("prompt_via_arg", False)
-            prompt_flag = baselines.get("prompt_flag")
-            prompt_file = os.path.join(_pkg("PROMPTS_DIR"), f"{job_id}.md")
-            os.makedirs(_pkg("PROMPTS_DIR"), exist_ok=True)
-            context_text = ""
-            context_path = ".synlynk/context.md"
-            if os.path.exists(context_path):
-                with open(context_path) as f:
-                    context_text = f.read()
-            prompt = _pkg("_format_prompt_for_agent")(
-                agent, context_text, story_id or "", task, "", ""
-            )
-            with open(prompt_file, "w") as pf:
-                pf.write(prompt)
-
-            if prompt_via_arg and prompt_flag:
-                cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags + [prompt_flag])
-            else:
-                cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
-            if prompt_via_arg:
-                shell_cmd = (
-                    f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
-                    f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_path)} 2>&1; "
-                    f"echo $? > {_shlex.quote(log_path)}.exit"
+            dispatch_fn = _pkg("dispatch_agent")
+            if dispatch_fn is None:
+                continue
+            try:
+                job = dispatch_fn(
+                    agent,
+                    task,
+                    story_id=story_id,
+                    force_agent=True,
+                    job_id=job_id,
                 )
-            else:
-                shell_cmd = (
-                    f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_path)} 2>&1; "
-                    f"echo $? > {_shlex.quote(log_path)}.exit"
+            except (RuntimeError, ValueError):
+                # Preflight/worktree/unknown-agent failures: fail the queue row so
+                # the daemon does not spin forever on an unlaunchable job.
+                conn.execute(
+                    "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
+                    (now, job_id),
                 )
+                conn.commit()
+                continue
 
-            proc = subprocess.Popen(
-                ["sh", "-c", shell_cmd],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            # dispatch_agent updates daemon_jobs when the row already exists; re-apply
+            # on this connection so the per-job commit contract remains visible here.
             conn.execute(
                 "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, log_path=? "
                 "WHERE job_id=?",
-                (proc.pid, now, log_path, job_id)
+                (
+                    job.get("pid"),
+                    job.get("started_at") or now,
+                    job.get("log_file") or log_path,
+                    job_id,
+                ),
             )
             conn.commit()
             launched += 1
