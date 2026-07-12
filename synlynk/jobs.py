@@ -1020,7 +1020,7 @@ def _reconcile_jobs() -> None:
             else:
                 job["status"] = "failed"
                 job["exit_code"] = exit_code if exit_code is not None else -1
-            if job.get("status") == "failed" and not exit_file_found and job.get("worktree_path"):
+            if job.get("status") in ("failed", "unknown") and not exit_file_found and job.get("worktree_path"):
                 recovered_git_state = _pkg("_inspect_worktree_git_state")(
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
