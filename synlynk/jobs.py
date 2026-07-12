@@ -858,11 +858,15 @@ def _reconcile_jobs() -> None:
             # PID is dead. Check if wrapper wrote an exit code.
             log_file = job.get("log_file")
             exit_code = None
+            exit_file_found = False
             ambiguous_exit = False
             git_state = None
+            recovered_git_state = None
+            reclassified_failed_unverified = False
             if log_file:
                 exit_file = log_file + ".exit"
                 if os.path.exists(exit_file):
+                    exit_file_found = True
                     try:
                         with open(exit_file) as f:
                             exit_code = int(f.read().strip())
@@ -894,6 +898,17 @@ def _reconcile_jobs() -> None:
             else:
                 job["status"] = "failed"
                 job["exit_code"] = exit_code if exit_code is not None else -1
+            if job.get("status") == "failed" and not exit_file_found and job.get("worktree_path"):
+                recovered_git_state = _pkg("_inspect_worktree_git_state")(
+                    job.get("worktree_path"),
+                    job.get("worktree_branch"),
+                    job.get("started_at"),
+                )
+                if recovered_git_state and _job_has_real_work_landed(recovered_git_state):
+                    git_state = recovered_git_state
+                    job["status"] = "failed_unverified"
+                    job["exit_code"] = None
+                    reclassified_failed_unverified = True
             if job.get("status") == "completed" and not git_state and job.get("worktree_path"):
                 git_state = _pkg("_inspect_worktree_git_state")(
                     job.get("worktree_path"),
@@ -948,6 +963,20 @@ def _reconcile_jobs() -> None:
                     f"borrowed worktree detected; attributed from {remote_ref} "
                     f"with {remote_commit_count} commit(s) since {job.get('started_at')}"
                 )
+            elif reclassified_failed_unverified:
+                commit_count = recovered_git_state.get("commits_ahead", 0)
+                dirty = recovered_git_state.get("dirty", False)
+                parts = []
+                if commit_count:
+                    parts.append(f"{commit_count} commit(s)")
+                if dirty:
+                    parts.append("uncommitted changes")
+                details = " and ".join(parts) if parts else "git activity"
+                summary_note = (
+                    f"job exited ambiguously, but a git-state recheck recovered {details} "
+                    f"in the worktree (worktree: {job.get('worktree_path')})"
+                )
+                summary_status = "FAILED_UNVERIFIED (exit unknown)"
             elif ambiguous_exit and git_state:
                 commit_count = git_state.get("commits_ahead", 0)
                 dirty = git_state.get("dirty", False)

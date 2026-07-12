@@ -492,6 +492,66 @@ def test_dispatch_gitstateverified_job_reconciliation_marks_ambiguous_exit_with_
     assert "inspect before discarding" in out
 
 
+def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_late_git_activity(git_worktree_repo, monkeypatch, capsys):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    with open(os.path.join(job["worktree_path"], "late-write.txt"), "w") as f:
+        f.write("late write\n")
+
+    inspect_calls = {"count": 0}
+
+    def fake_inspect(worktree_path, worktree_branch=None, started_at=None):
+        inspect_calls["count"] += 1
+        if inspect_calls["count"] == 1:
+            return {
+                "worktree_path": worktree_path,
+                "dirty": False,
+                "commits_ahead": 0,
+                "base_ref": None,
+                "base_commit": None,
+                "has_activity": False,
+                "remote_ref": None,
+                "remote_commit_count": 0,
+                "remote_files_touched": [],
+                "remote_has_activity": False,
+            }
+        return {
+            "worktree_path": worktree_path,
+            "dirty": True,
+            "commits_ahead": 0,
+            "base_ref": None,
+            "base_commit": None,
+            "has_activity": True,
+            "remote_ref": None,
+            "remote_commit_count": 0,
+            "remote_files_touched": [],
+            "remote_has_activity": False,
+        }
+
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", fake_inspect)
+    monkeypatch.setattr(sl.os, "kill", lambda *_args, **_kwargs: (_ for _ in ()).throw(ProcessLookupError()))
+
+    sl._reconcile_jobs()
+    out = capsys.readouterr().out
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == job["id"])
+    summary_path = os.path.join(".synlynk", "logs", f"{job['id']}.summary")
+
+    assert inspect_calls["count"] >= 2
+    assert reconciled["status"] == "failed_unverified"
+    assert reconciled["exit_code"] is None
+    assert "FAILED_UNVERIFIED (exit unknown)" in out
+
+    with open(summary_path) as f:
+        summary = f.read()
+
+    assert "status:   FAILED_UNVERIFIED (exit unknown)" in summary
+    assert "files:    1 touched" in summary
+    assert "late-write.txt" in summary
+    assert "git-state recheck recovered" in summary
+
+
 def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktree_remains_failed(git_worktree_repo, monkeypatch, capsys):
     import synlynk as sl
 
