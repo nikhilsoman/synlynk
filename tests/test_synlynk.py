@@ -554,18 +554,17 @@ def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, mon
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     inputs = iter(["1"])
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: next(inputs))
-    monkeypatch.setattr(
-        synlynk,
-        "AGENT_CAPABILITY_BASELINES",
-        {
-            "agy": {
-                "cli": "agy",
-                "dispatch_flags": {},
-                "network_deps": {"required_endpoints": []},
-                "headless_contract": {},
-            }
-        },
-    )
+    patched_baselines = {
+        "agy": {
+            "cli": "agy",
+            "dispatch_flags": {},
+            "network_deps": {"required_endpoints": []},
+            "headless_contract": {},
+        }
+    }
+    monkeypatch.setattr("synlynk.AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr("synlynk._constants.AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr("synlynk.doctor.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})

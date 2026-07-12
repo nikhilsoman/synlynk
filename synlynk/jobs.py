@@ -9,6 +9,7 @@ import time
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
+from synlynk._constants import AGENT_CAPABILITY_BASELINES
 
 
 _BOLD = "[1m"
@@ -124,9 +125,9 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
-    if agent not in _pkg("AGENT_CAPABILITY_BASELINES"):
+    if agent not in AGENT_CAPABILITY_BASELINES:
         conn.close()
-        known_agents = ", ".join(sorted(_pkg("AGENT_CAPABILITY_BASELINES")))
+        known_agents = ", ".join(sorted(AGENT_CAPABILITY_BASELINES))
         raise ValueError(
             f"Refusing capability rating write for unregistered agent {agent!r}. "
             f"Known agents: {known_agents}"
@@ -633,7 +634,7 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 os.makedirs(_pkg("LOGS_DIR"), exist_ok=True)
                 log_path = os.path.join(_pkg("LOGS_DIR"), f"{job_id}.log")
 
-            baselines = _pkg("AGENT_CAPABILITY_BASELINES").get(agent, {})
+            baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
             cli = baselines.get("cli", agent)
             flags = baselines.get("non_interactive_flags", [])
             prompt_via_arg = baselines.get("prompt_via_arg", False)

@@ -118,7 +118,7 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
     """Run an agent synchronously and return its stdout. Returns '' on any failure."""
     import tempfile as _tmp
 
-    baselines = _pkg("AGENT_CAPABILITY_BASELINES")
+    baselines = AGENT_CAPABILITY_BASELINES
     if agent not in baselines:
         print(f"  ⚠ Unknown agent '{agent}' — skipping")
         return ""

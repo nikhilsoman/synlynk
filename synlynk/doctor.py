@@ -11,7 +11,7 @@ import urllib.request
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
-from synlynk._constants import VERSION
+from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION
 from synlynk.dispatch import dispatch_agent
 from synlynk.probe import (
     _compute_capability_hash,
@@ -227,7 +227,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
 
     agent_filter = getattr(args, "agent", None) if args is not None else None
     db_conn = _pkg("_get_db")()
-    baselines = _pkg("AGENT_CAPABILITY_BASELINES")
+    baselines = AGENT_CAPABILITY_BASELINES
     agents = [agent_filter] if agent_filter else list(baselines.keys())
     any_failed = False
     try:
