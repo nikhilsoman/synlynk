@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 import webbrowser
-from typing import Optional
+from typing import Optional, Tuple
 
 from synlynk import _get_db, _query_repo_file_tree
 from synlynk.observatory import (
@@ -2737,7 +2737,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         except Exception:
             return 0.0
 
-    def _avatar(name: str) -> tuple[str, str]:
+    def _avatar(name: str) -> Tuple[str, str]:
         key = (name or "").strip().lower()
         if key.startswith("claude"):
             return "C", "claude"
