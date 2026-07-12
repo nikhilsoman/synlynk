@@ -16,6 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Guard against __init__.py regrowth
+        run: |
+          LINES=$(wc -l < synlynk/__init__.py)
+          echo "synlynk/__init__.py is ${LINES} lines"
+          if [ "$LINES" -gt 4000 ]; then
+            echo "::error::synlynk/__init__.py is ${LINES} lines (limit 4000). New code belongs in a module, not __init__.py. See docs/superpowers/specs/2026-07-12-init-remodularization-design.md."
+            exit 1
+          fi
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
