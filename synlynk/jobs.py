@@ -17,6 +17,7 @@ _GREEN = "[32m"
 _YELLOW = "[33m"
 _DIM = "[2m"
 _RESET = "[0m"
+_HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
 
 
 def _pkg(name: str, default=None):
@@ -43,6 +44,52 @@ def _save_jobs(jobs: list) -> None:
     os.makedirs(os.path.dirname(jobs_file), exist_ok=True)
     with open(jobs_file, "w") as f:
         json.dump(jobs, f, indent=2)
+
+
+def _job_retry_count(job: dict) -> int:
+    """Returns the current retry count for a job, defaulting to zero."""
+    try:
+        return max(0, int(job.get("retry_count", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
+    """Returns True when the worktree or its origin branch already has real work."""
+    if not git_state:
+        return False
+    return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
+
+
+def _retry_internal_timeout_job(job: dict, jobs: list, git_state: Optional[dict]) -> bool:
+    """Re-dispatches a clean internal-timeout job when it is still retryable."""
+    if not git_state:
+        return False
+    if _job_has_real_work_landed(git_state):
+        return False
+
+    retry_count = _job_retry_count(job)
+    if retry_count >= _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP:
+        return False
+
+    dispatch = _pkg("dispatch_agent")
+    if not dispatch:
+        return False
+
+    retry_job = dispatch(
+        job.get("agent", ""),
+        job.get("task", ""),
+        story_id=job.get("story_id") or None,
+        force_agent=True,
+        context_mode=job.get("context_mode"),
+        cycle=job.get("cycle", "work"),
+    )
+    if not isinstance(retry_job, dict):
+        return False
+
+    retry_job["retry_count"] = retry_count + 1
+    jobs.append(retry_job)
+    return True
 
 def _inspect_worktree_git_state(
     worktree_path: Optional[str],
@@ -455,6 +502,7 @@ def _reconcile_jobs() -> None:
     for job in jobs:
         if job.get("status") not in ("running",):
             continue
+        job["retry_count"] = _job_retry_count(job)
         if _pkg("_check_job_stall")(job, config, sentinel_path):
             ended_at = job.get("ended_at") or now
             started_at = job.get("started_at")
@@ -545,13 +593,14 @@ def _reconcile_jobs() -> None:
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
                         if phrase in log_text_lower:
-                            _write_sentinel_alert(
-                                "CRITICAL",
-                                "HARNESS_INTERNAL_TIMEOUT",
-                                f"Job {job.get('id')} on agent '{job.get('agent')}' died from an internal "
-                                f"harness timeout (matched \"{phrase}\"), not a task failure. Consider retrying.",
-                                sentinel_path,
-                            )
+                            if not _retry_internal_timeout_job(job, jobs, git_state):
+                                _write_sentinel_alert(
+                                    "CRITICAL",
+                                    "HARNESS_INTERNAL_TIMEOUT",
+                                    f"Job {job.get('id')} on agent '{job.get('agent')}' died from an internal "
+                                    f"harness timeout (matched \"{phrase}\"), not a task failure. Consider retrying.",
+                                    sentinel_path,
+                                )
                             break
                 job["micro_rework"] = _extract_micro_rework(log_text)
                 try:

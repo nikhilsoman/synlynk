@@ -831,6 +831,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "dispatch_mode": dispatch_mode,
         "dispatch_rework": _pkg("_count_dispatch_rework")(story_id or "") if _pkg("_count_dispatch_rework") else 0,
         "micro_rework": 0,
+        "retry_count": 0,
         "model_at_dispatch": model_at_dispatch,
     }
 

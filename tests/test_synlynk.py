@@ -2284,6 +2284,180 @@ def test_reconcile_attributes_origin_branch_activity_when_assigned_worktree_is_c
     assert "borrowed worktree detected; attributed from origin/chore/init-remodularization-pass2" in out
 
 
+def test_reconcile_requeues_clean_harness_internal_timeout(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-clean-timeout"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-clean-timeout.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("timeout waiting for response\n")
+
+    job = {
+        "id": "job-clean-timeout",
+        "agent": "codex",
+        "story_id": "story-184",
+        "task": "repair retry loop",
+        "pid": 9999999,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-clean-timeout",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    dispatched = []
+    sentinel_calls = []
+
+    def fake_dispatch(agent, task, **kwargs):
+        dispatched.append((agent, task, kwargs))
+        return {
+            "id": "job-clean-timeout-retry",
+            "agent": agent,
+            "story_id": kwargs.get("story_id") or "",
+            "task": task,
+            "cycle": kwargs.get("cycle", "work"),
+            "pid": 12345,
+            "log_file": str(project_dir / ".synlynk" / "logs" / "job-clean-timeout-retry.log"),
+            "prompt_file": "",
+            "context_file": "",
+            "worktree_path": str(project_dir / "worktrees" / "job-clean-timeout-retry"),
+            "worktree_branch": "dispatch/codex/job-clean-timeout-retry",
+            "started_at": "2026-07-12T10:01:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+            "dispatch_mode": "agent",
+            "dispatch_rework": 0,
+            "micro_rework": 0,
+            "retry_count": 0,
+            "model_at_dispatch": "unknown",
+        }
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(jobs_mod, "_write_sentinel_alert", lambda *a, **kw: sentinel_calls.append((a, kw)))
+
+    sl._reconcile_jobs()
+
+    jobs = sl._load_jobs()
+    retry_job = next(j for j in jobs if j["id"] == "job-clean-timeout-retry")
+    original_job = next(j for j in jobs if j["id"] == "job-clean-timeout")
+
+    assert len(dispatched) == 1
+    assert dispatched[0][0] == "codex"
+    assert dispatched[0][2]["force_agent"] is True
+    assert retry_job["retry_count"] == 1
+    assert original_job["status"] == "failed"
+    assert original_job["retry_count"] == 0
+    assert sentinel_calls == []
+
+
+def test_reconcile_does_not_requeue_timeout_with_real_work(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-work-landing"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-work-landing.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("timeout waiting for response\n")
+
+    job = {
+        "id": "job-work-landing",
+        "agent": "agy",
+        "story_id": "story-184",
+        "task": "preserve landed work",
+        "pid": 9999998,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/agy/job-work-landing",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    dispatched = []
+    sentinel_calls = []
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: dispatched.append((a, kw)))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": True, "remote_has_activity": False})
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(jobs_mod, "_write_sentinel_alert", lambda *a, **kw: sentinel_calls.append((a, kw)))
+
+    sl._reconcile_jobs()
+
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == "job-work-landing")
+
+    assert dispatched == []
+    assert reconciled["status"] == "failed_unverified"
+    assert sentinel_calls and sentinel_calls[0][0][1] == "HARNESS_INTERNAL_TIMEOUT"
+
+
+def test_reconcile_does_not_requeue_timeout_at_retry_cap(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-timeout-cap"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-timeout-cap.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("timeout waiting for response\n")
+
+    job = {
+        "id": "job-timeout-cap",
+        "agent": "codex",
+        "story_id": "story-184",
+        "task": "cap retry attempts",
+        "pid": 9999997,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-timeout-cap",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "dispatch_rework": 0,
+        "micro_rework": 0,
+        "retry_count": 2,
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+
+    dispatched = []
+    sentinel_calls = []
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: dispatched.append((a, kw)))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(jobs_mod, "_write_sentinel_alert", lambda *a, **kw: sentinel_calls.append((a, kw)))
+
+    sl._reconcile_jobs()
+
+    jobs = sl._load_jobs()
+    reconciled = next(j for j in jobs if j["id"] == "job-timeout-cap")
+
+    assert dispatched == []
+    assert reconciled["status"] == "failed"
+    assert reconciled["retry_count"] == 2
+    assert sentinel_calls and sentinel_calls[0][0][1] == "HARNESS_INTERNAL_TIMEOUT"
+
+
 def test_reconcile_survives_permission_error(project_dir, monkeypatch):
     # PermissionError from os.kill means PID exists (owned by another user) — keep as running.
     def fake_kill(pid, sig):
