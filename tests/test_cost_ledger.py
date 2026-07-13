@@ -260,6 +260,68 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
     assert row[0] == "claude"
 
 
+def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.costs import _TokenCounts
+
+    class _FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = _FakeStdout()
+
+        def wait(self):
+            return 0
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(synlynk, "generate_context", lambda scope="full", out_path=None: None)
+    monkeypatch.setattr(synlynk, "check_budgets", lambda: None)
+    monkeypatch.setattr(synlynk, "set_state", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(synlynk, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(synlynk, "check_sentinel_patterns", lambda **_kwargs: None)
+    monkeypatch.setattr(synlynk, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(synlynk, "log_telemetry_event", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    monkeypatch.setattr(synlynk, "_dr_sync", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        synlynk,
+        "_synlynk_project_docs_dir",
+        lambda: os.path.join(project_dir, ".synlynk", "project-docs"),
+    )
+    monkeypatch.setattr(synlynk, "extract_tokens", lambda _text: _TokenCounts(0, 0, 0, "none"))
+    monkeypatch.setattr(
+        synlynk,
+        "extract_model_version",
+        lambda _text, agent=None: "claude-sonnet-4-6",
+    )
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: _FakeProcess())
+
+    exit_code = dispatch_mod.exec_command(["claude", "-p", "hi"])
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT cost_source, input_tokens, output_tokens FROM cost_entries"
+    ).fetchone()
+    conn.close()
+
+    assert exit_code == 0
+    assert row is not None
+    assert row[0] == "estimated_tshirt"
+    assert row[1] > 0
+    assert row[2] > 0
+
+
 def test_update_costs_zero_tokens_still_writes_tshirt_row(project_dir, monkeypatch):
     import synlynk
 
