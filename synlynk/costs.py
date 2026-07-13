@@ -141,22 +141,64 @@ def extract_verifier_meta(output_text: str) -> Optional[dict]:
 
 
 _DEFAULT_MODEL_RATE = {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}
-_MODEL_RATE_TABLE = {
-    "claude-opus-4-8": {"input": 0.015, "output": 0.075, "cache_read": 0.0000015},
-    "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gpt-5-codex": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gpt-5.4-mini": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
-    "grok-build": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "grok-composer-2.5-fast": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+_EXPECTED_RATE_UNIT = "usd_per_1k_tokens"
+_HARDCODED_FALLBACK_RATES = {
+    "rates_updated_at": None,
+    "unit": _EXPECTED_RATE_UNIT,
+    "models": {
+        "claude-opus-4-8": {"input": 0.015, "output": 0.075, "cache_read": 0.0000015},
+        "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gpt-5-codex": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gpt-5.4-mini": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
+        "grok-build": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "grok-composer-2.5-fast": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    },
+    "default": _DEFAULT_MODEL_RATE,
+    "billing_mode": {"default": "subscription", "local": "actual"},
 }
+_RATES_PATH = "synlynk/model_rates.json"
+
+
+def _load_model_rates() -> dict:
+    """Loads synlynk/model_rates.json and falls back to hardcoded rates when needed."""
+    if not os.path.exists(_RATES_PATH):
+        return _HARDCODED_FALLBACK_RATES
+    try:
+        with open(_RATES_PATH) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        print(f"WARNING: {_RATES_PATH} is unreadable; falling back to hardcoded default rates")
+        return _HARDCODED_FALLBACK_RATES
+    if data.get("unit") != _EXPECTED_RATE_UNIT:
+        print(
+            f"WARNING: {_RATES_PATH} has missing or unexpected 'unit' "
+            f"(expected {_EXPECTED_RATE_UNIT!r}, got {data.get('unit')!r}); "
+            "falling back to hardcoded default rates to avoid a pricing unit mismatch"
+        )
+        return _HARDCODED_FALLBACK_RATES
+    data.setdefault("default", _DEFAULT_MODEL_RATE)
+    data.setdefault("models", {})
+    data.setdefault("billing_mode", {"default": "subscription", "local": "actual"})
+    return data
+
+
+def _resolve_billing_mode(agent: str) -> str:
+    """Resolves billing mode for an agent; local is always actual."""
+    normalized_agent = os.path.basename(agent or "")
+    if normalized_agent == "local":
+        return "actual"
+    rates = _load_model_rates()
+    billing_mode = rates.get("billing_mode", {})
+    return billing_mode.get(normalized_agent, billing_mode.get("default", "subscription"))
 
 
 def _model_rate_for_version(model_version, agent=None):
     normalized_agent = os.path.basename(agent or "")
     if normalized_agent == "local":
         return {"input": 0.0, "output": 0.0, "cache_read": 0.0}
-    return _MODEL_RATE_TABLE.get(model_version, _DEFAULT_MODEL_RATE)
+    rates = _load_model_rates()
+    return rates["models"].get(model_version, rates["default"])
 
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
