@@ -260,6 +260,39 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
     assert row[0] == "claude"
 
 
+def test_reconcile_daemon_jobs_writes_cost_row(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, pid, status, started_at, enqueued_at, log_path) "
+        "VALUES ('job-recon-1', 'claude', 'reconcile test', NULL, 999999, 'running', '2026-07-13T00:00:00', "
+        "'2026-07-13T00:00:00', ?)",
+        (os.path.join(project_dir, "job-recon-1.log"),),
+    )
+    conn.commit()
+    conn.close()
+
+    with open(os.path.join(project_dir, "job-recon-1.log"), "w") as f:
+        f.write("Input tokens: 500\nOutput tokens: 200\n")
+
+    monkeypatch.setattr(jobs_mod.os, "waitpid", lambda pid, opts: (pid, 0))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda pid, sig: None)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT cost_source, input_tokens FROM cost_entries WHERE job_id='job-recon-1'"
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[1] == 500
+
+
 def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):
     import synlynk
     import synlynk.dispatch as dispatch_mod
