@@ -445,6 +445,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             phase_id          INTEGER REFERENCES roadmap_phases(id),
             total_cost_usd    REAL,
             notes             TEXT,
+            cost_source       TEXT NOT NULL,
+            estimate_basis    TEXT,
+            job_id            TEXT,
             recorded_at       TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS devlog_entries (
@@ -487,6 +490,56 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
             except sqlite3.OperationalError:
                 pass
+    if "cost_source" not in cost_cols:
+        conn.execute("ALTER TABLE cost_entries RENAME TO cost_entries_pre_provenance")
+        conn.execute("""
+            CREATE TABLE cost_entries (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_date      TEXT NOT NULL,
+                agent             TEXT,
+                model             TEXT,
+                input_tokens      INTEGER,
+                output_tokens     INTEGER,
+                cache_read_tokens INTEGER,
+                story_id          TEXT REFERENCES stories(story_id),
+                epic_id           INTEGER REFERENCES roadmap_arcs(id),
+                phase_id          INTEGER REFERENCES roadmap_phases(id),
+                total_cost_usd    REAL,
+                notes             TEXT,
+                cost_source       TEXT NOT NULL,
+                estimate_basis    TEXT,
+                job_id            TEXT,
+                recorded_at       TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        old_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries_pre_provenance)")}
+        select_cols = ", ".join(
+            c if c in old_cols else "NULL"
+            for c in (
+                "session_date", "agent", "model", "input_tokens", "output_tokens",
+                "cache_read_tokens", "story_id", "epic_id", "phase_id",
+                "total_cost_usd", "notes"
+            )
+        )
+        conn.execute(f"""
+            INSERT INTO cost_entries
+                (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                 story_id, epic_id, phase_id, total_cost_usd, notes, cost_source,
+                 estimate_basis, job_id, recorded_at)
+            SELECT {select_cols}, 'legacy_unknown', NULL, NULL, recorded_at
+            FROM cost_entries_pre_provenance
+        """)
+        conn.execute("DROP TABLE cost_entries_pre_provenance")
+        cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "job_id" not in cost_cols:
+        try:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_job_id "
+        "ON cost_entries(job_id) WHERE job_id IS NOT NULL"
+    )
     conn.execute(
         "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
         "WHERE discipline IS NULL OR discipline = ''"
@@ -694,8 +747,8 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         """INSERT INTO cost_entries
                            (session_date, agent, model, input_tokens, output_tokens,
                             cache_read_tokens, story_id, epic_id, phase_id,
-                            total_cost_usd, notes)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                            total_cost_usd, notes, cost_source, estimate_basis, job_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             r["session_date"],
                             r["agent"],
@@ -708,6 +761,9 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                             r.get("phase_id"),
                             r["total_cost_usd"],
                             r["notes"],
+                            "legacy_unknown",
+                            None,
+                            None,
                         ),
                     )
                     if getattr(cursor, "rowcount", 0) > 0:
