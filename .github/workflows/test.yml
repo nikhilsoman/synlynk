@@ -37,4 +37,4 @@ jobs:
         run: python -m py_compile bin/synlynk.py
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v -m "not local_hardware"
