@@ -1013,15 +1013,6 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             in_tokens, out_tokens, cache_read_tokens, basis = 0, 0, 0, "none"
 
         if not _is_interactive(cmd_args):
-            is_migrated = _pkg("_is_migrated", lambda: False)()
-            if update_costs and not is_migrated:
-                migrated_marker = os.path.join(".synlynk", ".synlynk_migrated")
-                try:
-                    os.makedirs(os.path.dirname(migrated_marker), exist_ok=True)
-                    with open(migrated_marker, "a"):
-                        pass
-                except OSError:
-                    pass
             model_version = extract_model_version(output_text, agent=cmd_args[0]) if extract_model_version else "unknown"
             if update_costs:
                 update_costs(
