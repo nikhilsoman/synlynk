@@ -70,3 +70,77 @@ def test_migration_backfills_existing_rows_as_legacy_unknown(project_dir, monkey
     ).fetchone()
     conn.close()
     assert row == ("legacy_unknown", None)
+
+
+def test_insert_cost_row_rejects_invalid_cost_source(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    with pytest.raises(ValueError):
+        _insert_cost_row(
+            session_date="2026-07-13",
+            agent="claude",
+            model="claude-sonnet-4-6",
+            input_tokens=100,
+            output_tokens=50,
+            cache_read_tokens=0,
+            cost_source="made_up_tier",
+            total_cost_usd=0.01,
+        )
+
+
+def test_insert_cost_row_writes_a_row(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    _insert_cost_row(
+        session_date="2026-07-13",
+        agent="claude",
+        model="claude-sonnet-4-6",
+        input_tokens=100,
+        output_tokens=50,
+        cache_read_tokens=0,
+        cost_source="actual",
+        total_cost_usd=0.01,
+    )
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT agent, cost_source FROM cost_entries").fetchone()
+    conn.close()
+    assert row == ("claude", "actual")
+
+
+def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    _insert_cost_row(
+        session_date="2026-07-13",
+        agent="claude",
+        model="claude-sonnet-4-6",
+        input_tokens=100,
+        output_tokens=50,
+        cache_read_tokens=0,
+        cost_source="estimated_tshirt",
+        total_cost_usd=0.01,
+        job_id="job-abc123",
+    )
+    _insert_cost_row(
+        session_date="2026-07-13",
+        agent="claude",
+        model="claude-sonnet-4-6",
+        input_tokens=200,
+        output_tokens=80,
+        cache_read_tokens=0,
+        cost_source="actual",
+        total_cost_usd=0.02,
+        job_id="job-abc123",
+    )
+    conn = synlynk._get_db()
+    rows = conn.execute(
+        "SELECT input_tokens, cost_source FROM cost_entries WHERE job_id='job-abc123'"
+    ).fetchall()
+    conn.close()
+    assert rows == [(200, "actual")]
