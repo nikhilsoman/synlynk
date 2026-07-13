@@ -26,6 +26,7 @@
 | `.synlynk/model_rates.json` | New file, created by `synlynk init` (not this plan's `synlynk/__init__.py` init path — see Task 11) with `unit`, `billing_mode`, `models`, `default` keys |
 | `/Users/nikhilsoman/dev/synlynk/CLAUDE.md` | New "Cost Capture Protocol" section (§9 of the spec) |
 | `tests/test_cost_ledger.py` | New test file — all Phase 1 tests live here rather than scattered, since they share fixtures and test one cohesive subsystem |
+| `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md` | §7 coverage table gets a `probe`/`doctor` row per Task 19 (documentation-only closure) |
 
 No files are deleted. `synlynk/team.py` is **not modified** — `_actual_tokens_for_story()` stays as-is (display-only, telemetry-sourced); the historical-average fallback tier reads `cost_entries` directly instead, per spec §5.1.
 
@@ -1863,6 +1864,48 @@ git commit -m "docs: add Cost Capture Protocol to CLAUDE.md"
 
 ---
 
+## Task 19: Close the `probe`/`doctor` coverage gap (documentation-only)
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md` (§7 coverage table)
+- No `synlynk/*.py` changes — this task's job is to confirm and document, not wire anything.
+
+Agy's external review flagged `synlynk probe` and `synlynk doctor` as an omitted execution surface — both shell out to the wrapped-agent CLIs and could plausibly consume billable tokens. This needs a verdict, not a guess, before it can be marked closed.
+
+- [ ] **Step 1: Confirm empirically that `probe`/`doctor` never send a billable prompt**
+
+Every `subprocess` call site in `synlynk/probe.py` was read in full during plan review. All of them invoke metadata/capability-check flags only, never a prompted generation:
+
+| Call site | Command invoked | Purpose |
+|---|---|---|
+| `_scan_command_palette` (line 100) | `[agent_name, "--help"]` | enumerate CLI subcommands |
+| line 345 | `[agent_name, "--version"]` | version string |
+| `_run_tc1` (line 526) | `[agent_name, non_interactive_flag]` (defaults to `--version`) | headless stdout contract check |
+| `_run_tc2` (line 554) | `[agent_name, "--help"]` | flag compliance check |
+| `_run_tc4` (line 601) | `[cmd, "--help"]` | verb-map validation |
+| `_probe_model_version` (line 728) | `claude /status`, `agy --version`, `codex --version`, `grok -v` | active model version string |
+
+None of these pass a prompt, task, or `-p`/task-body argument — they are all `--help`/`--version`/`/status`/`-v` invocations that return static CLI metadata, not model-generated text. `synlynk/doctor.py` (confirmed via read, lines 260-309) does not invoke its own subprocess calls for TC-1..TC-4 — it calls the same `probe.py` helper functions listed above. There is no separate model call anywhere in either file.
+
+This confirms: **`probe`/`doctor` are correctly out of scope for cost-ledger coverage** — there is no cost to capture, not a gap in capture.
+
+- [ ] **Step 2: Update the spec's §7 coverage table**
+
+In `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md`, locate the §7 "Coverage Closure" table and add a row (or a footnote directly beneath the table, matching whatever row format §7 already uses):
+
+```markdown
+| `synlynk probe` / `synlynk doctor` | N/A — no cost incurred | Both commands invoke wrapped-CLI `--help`/`--version`/`/status` flags only (capability/version metadata queries), never a prompted generation. Confirmed by reading every `subprocess` call site in `probe.py`/`doctor.py` (2026-07-13 review). Explicitly out of scope, not a gap. |
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md
+git commit -m "docs(spec): close probe/doctor coverage gap — confirmed no billable model calls"
+```
+
+---
+
 ## Self-Review
 
 **1. Spec coverage** (against `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md`):
@@ -1879,7 +1922,7 @@ git commit -m "docs: add Cost Capture Protocol to CLAUDE.md"
 | §5.1.1 Always write a row + `job_id` idempotency | Task 2 (idempotency), Task 6/8 (always-write), Task 9 (reconcile wiring) |
 | §5.2 `synlynk cost log` | Task 12 |
 | §6 Rate file, `unit` validation, `cost_entries.agent` bug fix | Task 4 (rate file), Task 6 (agent bug fix) |
-| §7 Coverage closure (all 8 rows) | Task 8 (exec/dispatch), Task 9 (jobs.py reconcile), Task 10 (launch), Task 11 (support_engineer), Task 12 (dream/plan via cost log), Task 13 (release) |
+| §7 Coverage closure (all rows) | Task 8 (exec/dispatch), Task 9 (jobs.py reconcile), Task 10 (launch), Task 11 (support_engineer), Task 12 (dream/plan via cost log), Task 13 (release), Task 19 (probe/doctor — confirmed non-billable, documented as explicitly out of scope) |
 | §8 Reporting (`[est]`/`[legacy]`, parser fix, budget-noise mitigation) | Task 6 (write format), Task 14 (parsers), Task 16 (budget noise) |
 | §9 CLAUDE.md protocol | Task 18 |
 | §10 Testing approach (16 items) | Distributed across Tasks 1-17; call-site audit explicitly in Task 17 |
