@@ -250,14 +250,47 @@ def _estimate_tshirt_tokens(story_id: str = None, discipline: str = None, phase:
         conn.close()
 
 
+def _resolve_cost_tier(agent: str, basis: str) -> tuple:
+    """Maps an extraction basis + billing mode to (cost_source, estimate_basis).
+
+    Returns (None, None) for basis == 'none' - caller must run the t-shirt
+    fallback chain (_estimate_tshirt_tokens) instead.
+    """
+    if basis in ("regex_pair", "structured_output"):
+        billing_mode = _resolve_billing_mode(agent)
+        if billing_mode == "actual":
+            return "actual", None
+        return "estimated_token_rate", basis
+    if basis == "total_split":
+        return "estimated_tshirt", "total_split"
+    return None, None
+
+
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
-                 epic_id=None, phase_id=None, agent=None) -> None:
-    """Appends a cost row. Post-migration: writes to state.db + .synlynk/project-docs/costs.md.
-    Pre-migration: writes to project-docs/costs.md. Rates are model-aware, with a flat fallback."""
+                 epic_id=None, phase_id=None, agent=None, basis="none",
+                 job_id=None, discipline=None, phase=None) -> None:
+    """Resolves a provenance tier and writes exactly one cost_entries row via
+    the _insert_cost_row chokepoint.
+
+    Never skips a write - a zero-token or unextractable result falls through to
+    the estimated_tshirt chain.
+    """
     agent_name = agent or (command.split()[0] if command else "")
     if not model_version:
         model_version = extract_model_version("", agent=agent_name) if agent_name else "unknown"
+
+    cost_source, estimate_basis = _resolve_cost_tier(agent_name, basis)
+    if cost_source is None:
+        if in_tokens > 0 or out_tokens > 0:
+            cost_source = "estimated_token_rate"
+            estimate_basis = None
+        else:
+            in_tokens, out_tokens, estimate_basis = _estimate_tshirt_tokens(
+                story_id=story_id, discipline=discipline, phase=phase
+            )
+            cost_source = "estimated_tshirt"
+
     rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
     est_cost = (
@@ -267,26 +300,19 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
     )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
-    user = _pkg("get_username")()
-    entry = (f"| {ts} | {user} | 1 | {in_tokens}/{out_tokens} "
+    entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
              f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
 
+    from synlynk.db import _insert_cost_row
+
     if _pkg("_is_migrated")():
-        conn = _pkg("_get_db")()
-        try:
-            conn.execute(
-                """INSERT INTO cost_entries
-                   (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                    total_cost_usd, notes, story_id, epic_id, phase_id,
-                    cost_source, estimate_basis, job_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (ts, user, model_version, in_tokens, out_tokens, cache_read_tokens,
-                 est_cost, f"exec: {short_cmd}", story_id, epic_id, phase_id,
-                 "actual", None, None)
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        _insert_cost_row(
+            session_date=ts, agent=agent_name, model=model_version,
+            input_tokens=in_tokens, output_tokens=out_tokens, cache_read_tokens=cache_read_tokens,
+            cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
+            notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
+            job_id=job_id,
+        )
         costs_file = os.path.join(_pkg("_synlynk_project_docs_dir")(), "costs.md")
         os.makedirs(os.path.dirname(costs_file), exist_ok=True)
         with open(costs_file, "a") as f:

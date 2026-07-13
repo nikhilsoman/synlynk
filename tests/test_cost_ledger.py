@@ -219,6 +219,60 @@ def test_load_model_rates_missing_unit_falls_back(project_dir, capsys):
     assert "unit" in captured.out.lower() or "unit" in captured.err.lower()
 
 
+from synlynk.costs import _resolve_cost_tier, update_costs
+
+
+def test_resolve_cost_tier_regex_pair_subscription():
+    cost_source, basis = _resolve_cost_tier(agent="claude", basis="regex_pair")
+    assert (cost_source, basis) == ("estimated_token_rate", "regex_pair")
+
+
+def test_resolve_cost_tier_regex_pair_local_is_actual():
+    cost_source, basis = _resolve_cost_tier(agent="local", basis="regex_pair")
+    assert cost_source == "actual"
+    assert basis is None
+
+
+def test_resolve_cost_tier_total_split_always_tshirt():
+    cost_source, basis = _resolve_cost_tier(agent="claude", basis="total_split")
+    assert (cost_source, basis) == ("estimated_tshirt", "total_split")
+
+
+def test_resolve_cost_tier_none_returns_none():
+    cost_source, basis = _resolve_cost_tier(agent="claude", basis="none")
+    assert cost_source is None
+
+
+def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
+    """Regression test for the cost_entries agent-stores-username bug (Grok's review)."""
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    update_costs(
+        "claude -p 'do the thing'", 1000, 500, 12.3,
+        model_version="claude-sonnet-4-6", agent="claude",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT agent FROM cost_entries").fetchone()
+    conn.close()
+    assert row[0] == "claude"
+
+
+def test_update_costs_zero_tokens_still_writes_tshirt_row(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    update_costs("claude -p 'x'", 0, 0, 5.0, model_version="claude-sonnet-4-6", agent="claude")
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT cost_source, input_tokens FROM cost_entries").fetchone()
+    conn.close()
+    assert row[0] == "estimated_tshirt"
+    assert row[1] > 0
+
+
 def test_load_model_rates_missing_file_uses_hardcoded_default(project_dir):
     from synlynk.costs import _load_model_rates
 

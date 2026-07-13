@@ -1203,9 +1203,9 @@ def test_extend_tokencost_extraction_with_cache_b_update_costs_inserts_fk_column
     assert "phase_id" in captured["query"]
     assert captured["params"][2] == "claude-sonnet-4-6"
     assert captured["params"][5] == 128
-    assert captured["params"][8] == "story-1"
-    assert captured["params"][9] == 7
-    assert captured["params"][10] == 11
+    assert captured["params"][10] == "story-1"
+    assert captured["params"][11] == 7
+    assert captured["params"][12] == 11
 
 
 def test_extend_tokencost_extraction_with_cache_b_update_costs_backwards_compatible_default_args(tmp_path, monkeypatch):
