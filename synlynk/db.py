@@ -673,6 +673,109 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     conn.commit()
     _seed_verb_map(conn)
 
+
+_VALID_COST_SOURCES = {
+    "actual",
+    "estimated_token_rate",
+    "estimated_tshirt",
+    "estimated_manual",
+    "legacy_unknown",
+}
+
+
+def _insert_cost_row(
+    session_date: str,
+    agent: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cost_source: str,
+    total_cost_usd: float,
+    notes: str = None,
+    story_id: str = None,
+    epic_id: int = None,
+    phase_id: int = None,
+    estimate_basis: str = None,
+    job_id: str = None,
+) -> None:
+    """Insert or update a cost_entries row through the single sanctioned path."""
+    from synlynk import _get_db
+
+    if cost_source not in _VALID_COST_SOURCES:
+        raise ValueError(
+            f"Invalid cost_source: {cost_source!r}, must be one of {_VALID_COST_SOURCES}"
+        )
+
+    conn = _get_db()
+    try:
+        if job_id is not None:
+            existing = conn.execute(
+                "SELECT id FROM cost_entries WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE cost_entries SET
+                        session_date=?,
+                        agent=?,
+                        model=?,
+                        input_tokens=?,
+                        output_tokens=?,
+                        cache_read_tokens=?,
+                        cost_source=?,
+                        estimate_basis=?,
+                        total_cost_usd=?,
+                        notes=?,
+                        story_id=?,
+                        epic_id=?,
+                        phase_id=?
+                    WHERE job_id=?""",
+                    (
+                        session_date,
+                        agent,
+                        model,
+                        input_tokens,
+                        output_tokens,
+                        cache_read_tokens,
+                        cost_source,
+                        estimate_basis,
+                        total_cost_usd,
+                        notes,
+                        story_id,
+                        epic_id,
+                        phase_id,
+                        job_id,
+                    ),
+                )
+                conn.commit()
+                return
+        conn.execute(
+            """INSERT INTO cost_entries
+                (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                 cost_source, estimate_basis, total_cost_usd, notes, story_id, epic_id, phase_id, job_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_date,
+                agent,
+                model,
+                input_tokens,
+                output_tokens,
+                cache_read_tokens,
+                cost_source,
+                estimate_basis,
+                total_cost_usd,
+                notes,
+                story_id,
+                epic_id,
+                phase_id,
+                job_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
 def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     """Parse flat files in docs_dir -> state.db. Prints import summary."""
     from synlynk import _get_db, _parse_costs_md, _parse_devlog_file, _parse_memory_md, _parse_roadmap_md, _parse_todo_metadata
