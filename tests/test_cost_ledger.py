@@ -144,3 +144,34 @@ def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
     ).fetchall()
     conn.close()
     assert rows == [(200, "actual")]
+
+
+def test_extract_tokens_basis_regex_pair():
+    from synlynk.costs import extract_tokens
+
+    result = extract_tokens("Input tokens: 1,200\nOutput tokens: 340\n")
+    assert (result.input_tokens, result.output_tokens) == (1200, 340)
+    assert result.basis == "regex_pair"
+
+
+def test_extract_tokens_basis_total_split():
+    from synlynk.costs import extract_tokens
+
+    result = extract_tokens("Total tokens: 1000")
+    assert result.basis == "total_split"
+
+
+def test_extract_tokens_basis_none():
+    from synlynk.costs import extract_tokens
+
+    result = extract_tokens("no token info in this output at all")
+    assert result.input_tokens == 0
+    assert result.output_tokens == 0
+    assert result.basis == "none"
+
+
+def test_extract_tokens_still_unpacks_as_pair():
+    from synlynk.costs import extract_tokens
+
+    in_tokens, out_tokens = extract_tokens("Input tokens: 10\nOutput tokens: 5\n")
+    assert (in_tokens, out_tokens) == (10, 5)
