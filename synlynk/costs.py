@@ -17,12 +17,13 @@ def _pkg(name: str, default=None):
 
 
 class _TokenCounts(object):
-    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens")
+    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens", "basis")
 
-    def __init__(self, input_tokens, output_tokens, cache_read_tokens):
+    def __init__(self, input_tokens, output_tokens, cache_read_tokens, basis="none"):
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cache_read_tokens = cache_read_tokens
+        self.basis = basis
 
     def __iter__(self):
         yield self.input_tokens
@@ -49,11 +50,13 @@ def extract_tokens(output_text: str) -> tuple:
     ]
     in_tokens = 0
     out_tokens = 0
+    basis = "none"
     for pat, flags in patterns:
         m = re.search(pat, output_text, flags)
         if m:
             in_tokens = _parse_count(m.group(1))
             out_tokens = _parse_count(m.group(2))
+            basis = "regex_pair"
             break
     if not in_tokens and not out_tokens:
         m = re.search(r'(?:Tokens used|Total tokens)\s*[:\n]\s*([\d,]+)', output_text, re.IGNORECASE)
@@ -61,6 +64,7 @@ def extract_tokens(output_text: str) -> tuple:
             total = _parse_count(m.group(1))
             in_tokens = int(total * 0.8)
             out_tokens = total - in_tokens
+            basis = "total_split"
 
     cache_read_tokens = 0
     cache_patterns = [
@@ -74,7 +78,7 @@ def extract_tokens(output_text: str) -> tuple:
             cache_read_tokens = _parse_count(m.group(1))
             break
 
-    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens)
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, basis)
 
 
 def extract_model_version(output_text: str, agent: str = None) -> str:
