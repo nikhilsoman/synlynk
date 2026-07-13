@@ -157,11 +157,11 @@ _HARDCODED_FALLBACK_RATES = {
     "default": _DEFAULT_MODEL_RATE,
     "billing_mode": {"default": "subscription", "local": "actual"},
 }
-_RATES_PATH = "synlynk/model_rates.json"
+_RATES_PATH = ".synlynk/model_rates.json"
 
 
 def _load_model_rates() -> dict:
-    """Loads synlynk/model_rates.json and falls back to hardcoded rates when needed."""
+    """Loads .synlynk/model_rates.json and falls back to hardcoded rates when needed."""
     if not os.path.exists(_RATES_PATH):
         return _HARDCODED_FALLBACK_RATES
     try:

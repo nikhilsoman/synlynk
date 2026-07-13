@@ -181,8 +181,8 @@ def test_extract_tokens_still_unpacks_as_pair():
 def test_load_model_rates_valid_file(project_dir):
     from synlynk.costs import _load_model_rates
 
-    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
-    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    os.makedirs(os.path.join(project_dir, ".synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, ".synlynk", "model_rates.json")
     with open(rates_path, "w") as f:
         json.dump(
             {
@@ -203,8 +203,8 @@ def test_load_model_rates_valid_file(project_dir):
 def test_load_model_rates_missing_unit_falls_back(project_dir, capsys):
     from synlynk.costs import _load_model_rates
 
-    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
-    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    os.makedirs(os.path.join(project_dir, ".synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, ".synlynk", "model_rates.json")
     with open(rates_path, "w") as f:
         json.dump(
             {"models": {}, "default": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}},
@@ -228,8 +228,8 @@ def test_load_model_rates_missing_file_uses_hardcoded_default(project_dir):
 def test_resolve_billing_mode_local_hardcoded_actual(project_dir):
     from synlynk.costs import _resolve_billing_mode
 
-    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
-    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    os.makedirs(os.path.join(project_dir, ".synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, ".synlynk", "model_rates.json")
     with open(rates_path, "w") as f:
         json.dump(
             {
@@ -247,8 +247,8 @@ def test_resolve_billing_mode_local_hardcoded_actual(project_dir):
 def test_resolve_billing_mode_falls_back_to_default(project_dir):
     from synlynk.costs import _resolve_billing_mode
 
-    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
-    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    os.makedirs(os.path.join(project_dir, ".synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, ".synlynk", "model_rates.json")
     with open(rates_path, "w") as f:
         json.dump(
             {
