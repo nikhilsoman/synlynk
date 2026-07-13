@@ -3389,6 +3389,7 @@ from synlynk.db import (  # noqa: E402
     _import_todo_to_stories,
     _migrate_db,
     _migrate_import,
+    _insert_cost_row,
     _parse_costs_md,
     _parse_devlog_file,
     _parse_memory_md,

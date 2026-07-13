@@ -418,3 +418,9 @@ def test_estimate_tshirt_ignores_estimated_tshirt_rows_in_history(project_dir, m
     in_t, out_t, basis = _estimate_tshirt_tokens(story_id=None, discipline="frontend", phase="build")
     assert basis == "fixed_default"
     assert in_t != 9999
+
+
+def test_insert_cost_row_reachable_via_pkg_lookup():
+    import synlynk
+
+    assert hasattr(synlynk, "_insert_cost_row")
