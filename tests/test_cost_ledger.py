@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 
@@ -175,3 +176,88 @@ def test_extract_tokens_still_unpacks_as_pair():
 
     in_tokens, out_tokens = extract_tokens("Input tokens: 10\nOutput tokens: 5\n")
     assert (in_tokens, out_tokens) == (10, 5)
+
+
+def test_load_model_rates_valid_file(project_dir):
+    from synlynk.costs import _load_model_rates
+
+    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    with open(rates_path, "w") as f:
+        json.dump(
+            {
+                "rates_updated_at": "2026-07-13",
+                "unit": "usd_per_1k_tokens",
+                "models": {"claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}},
+                "default": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+                "billing_mode": {"default": "subscription", "local": "actual"},
+            },
+            f,
+        )
+    os.chdir(project_dir)
+    rates = _load_model_rates()
+    assert rates["models"]["claude-sonnet-4-6"]["input"] == 0.003
+    assert rates["billing_mode"]["default"] == "subscription"
+
+
+def test_load_model_rates_missing_unit_falls_back(project_dir, capsys):
+    from synlynk.costs import _load_model_rates
+
+    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    with open(rates_path, "w") as f:
+        json.dump(
+            {"models": {}, "default": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}},
+            f,
+        )
+    os.chdir(project_dir)
+    rates = _load_model_rates()
+    assert rates["default"] == {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}
+    captured = capsys.readouterr()
+    assert "unit" in captured.out.lower() or "unit" in captured.err.lower()
+
+
+def test_load_model_rates_missing_file_uses_hardcoded_default(project_dir):
+    from synlynk.costs import _load_model_rates
+
+    os.chdir(project_dir)
+    rates = _load_model_rates()
+    assert rates["default"]["input"] == 0.003
+
+
+def test_resolve_billing_mode_local_hardcoded_actual(project_dir):
+    from synlynk.costs import _resolve_billing_mode
+
+    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    with open(rates_path, "w") as f:
+        json.dump(
+            {
+                "unit": "usd_per_1k_tokens",
+                "models": {},
+                "default": {"input": 0.003, "output": 0.015, "cache_read": 0.0},
+                "billing_mode": {"default": "subscription", "local": "subscription"},
+            },
+            f,
+        )
+    os.chdir(project_dir)
+    assert _resolve_billing_mode("local") == "actual"
+
+
+def test_resolve_billing_mode_falls_back_to_default(project_dir):
+    from synlynk.costs import _resolve_billing_mode
+
+    os.makedirs(os.path.join(project_dir, "synlynk"), exist_ok=True)
+    rates_path = os.path.join(project_dir, "synlynk", "model_rates.json")
+    with open(rates_path, "w") as f:
+        json.dump(
+            {
+                "unit": "usd_per_1k_tokens",
+                "models": {},
+                "default": {"input": 0.003, "output": 0.015, "cache_read": 0.0},
+                "billing_mode": {"default": "subscription"},
+            },
+            f,
+        )
+    os.chdir(project_dir)
+    assert _resolve_billing_mode("codex") == "subscription"
