@@ -2,7 +2,7 @@
 title: "PR #204/#205/#207 — Local Agent: oMLX Driver, Capability Seeding, and Real-Hardware Tests"
 date: 2026-07-13
 series: "Building the OS for Multi-Agent Development"
-post: 53
+post: 55
 pr: "#204/#205/#207"
 merged: 2026-07-13
 ---
