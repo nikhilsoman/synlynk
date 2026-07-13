@@ -1008,21 +1008,21 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             token_counts = extract_tokens(output_text)
             in_tokens, out_tokens = token_counts
             cache_read_tokens = getattr(token_counts, "cache_read_tokens", 0)
+            basis = getattr(token_counts, "basis", "none")
         else:
-            in_tokens, out_tokens, cache_read_tokens = 0, 0, 0
-        if in_tokens > 0:
+            in_tokens, out_tokens, cache_read_tokens, basis = 0, 0, 0, "none"
+
+        if not _is_interactive(cmd_args):
+            is_migrated = _pkg("_is_migrated", lambda: False)()
+            if update_costs and not is_migrated:
+                migrated_marker = os.path.join(".synlynk", ".synlynk_migrated")
+                try:
+                    os.makedirs(os.path.dirname(migrated_marker), exist_ok=True)
+                    with open(migrated_marker, "a"):
+                        pass
+                except OSError:
+                    pass
             model_version = extract_model_version(output_text, agent=cmd_args[0]) if extract_model_version else "unknown"
-            rates = model_rate_for_version(model_version, agent=cmd_args[0]) if model_rate_for_version else {
-                "input": 0.003,
-                "output": 0.015,
-                "cache_read": 0.0000003,
-            }
-            est_cost = (
-                (in_tokens / 1000 * rates["input"]) +
-                (out_tokens / 1000 * rates["output"]) +
-                (cache_read_tokens / 1000 * rates["cache_read"])
-            )
-            print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
             if update_costs:
                 update_costs(
                     " ".join(cmd_args),
@@ -1032,9 +1032,22 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     cache_read_tokens=cache_read_tokens,
                     model_version=model_version,
                     agent=cmd_args[0],
+                    basis=basis,
                 )
-        elif not _is_interactive(cmd_args):
-            pass
+            if in_tokens > 0 or out_tokens > 0:
+                rates = model_rate_for_version(model_version, agent=cmd_args[0]) if model_rate_for_version else {
+                    "input": 0.003,
+                    "output": 0.015,
+                    "cache_read": 0.0000003,
+                }
+                est_cost = (
+                    (in_tokens / 1000 * rates["input"]) +
+                    (out_tokens / 1000 * rates["output"]) +
+                    (cache_read_tokens / 1000 * rates["cache_read"])
+                )
+                print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
+            else:
+                print(f"  ⚡ Token count unavailable — logged as estimated_tshirt fallback")
         else:
             print("  ⚡ Token count unavailable (interactive mode)")
 
