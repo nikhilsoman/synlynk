@@ -201,6 +201,55 @@ def _model_rate_for_version(model_version, agent=None):
     return rates["models"].get(model_version, rates["default"])
 
 
+_FIXED_DEFAULT_TOKENS_IN = 5000
+_FIXED_DEFAULT_TOKENS_OUT = 2000
+_HISTORICAL_AVG_MIN_SAMPLES = 3
+_HISTORICAL_AVG_LOOKBACK = 20
+
+
+def _estimate_tshirt_tokens(story_id: str = None, discipline: str = None, phase: str = None) -> tuple:
+    """Fallback chain for estimated_tshirt token counts.
+
+    Returns (in_tokens, out_tokens, estimate_basis).
+    Tier 1: story's estimated_tokens column, split evenly in/out.
+    Tier 2: historical average from cost_entries actual/estimated_token_rate rows,
+            same discipline+phase, with at least 3 samples.
+    Tier 3: fixed conservative default.
+    """
+    conn = _pkg("_get_db")()
+    try:
+        if story_id:
+            row = conn.execute(
+                "SELECT estimated_tokens FROM stories WHERE story_id=?",
+                (story_id,),
+            ).fetchone()
+            if row and row[0]:
+                total_tokens = int(row[0])
+                half = total_tokens // 2
+                return half, total_tokens - half, "story_estimate"
+
+        if discipline and phase:
+            rows = conn.execute(
+                """SELECT cost_entries.input_tokens, cost_entries.output_tokens
+                   FROM cost_entries
+                   JOIN stories ON cost_entries.story_id = stories.story_id
+                   WHERE stories.discipline = ?
+                     AND stories.phase = ?
+                     AND cost_entries.cost_source IN ('actual', 'estimated_token_rate')
+                   ORDER BY cost_entries.id DESC
+                   LIMIT ?""",
+                (discipline, phase, _HISTORICAL_AVG_LOOKBACK),
+            ).fetchall()
+            if len(rows) >= _HISTORICAL_AVG_MIN_SAMPLES:
+                avg_in = sum((row[0] or 0) for row in rows) // len(rows)
+                avg_out = sum((row[1] or 0) for row in rows) // len(rows)
+                return avg_in, avg_out, "historical_avg"
+
+        return _FIXED_DEFAULT_TOKENS_IN, _FIXED_DEFAULT_TOKENS_OUT, "fixed_default"
+    finally:
+        conn.close()
+
+
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
                  epic_id=None, phase_id=None, agent=None) -> None:
