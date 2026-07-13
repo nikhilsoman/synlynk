@@ -97,3 +97,13 @@ synlynk story create \
 *   **`--discipline`**: Maps to the `backend` technical competency (will be validated against the 9-value discipline enum).
 *   **`--role`**: Declares that the task requires the developer (`dev`) persona.
 *   **`--stage`**: Specifies that the task is ready for building and execution (`execute`).
+
+### Local Agent Worked Example
+
+The `local` agent (oMLX/MLX, zero marginal cost) is routed through the same four
+dimensions as every other agent — no special-cased taxonomy. Its capability envelope
+starts narrow by design: `synlynk local doctor` seeds two starter coordinates
+(`discipline=docs`, `discipline=testing`, both `stage=execute`) with a moderate
+calibration score, so `_best_agent_for_story()` only surfaces it for small, granular
+tasks until real job completions widen the envelope. See
+`docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md` for the full design.
