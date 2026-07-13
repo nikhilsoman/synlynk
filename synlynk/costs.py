@@ -300,8 +300,9 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
     )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
+    flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
     entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
-             f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
+             f"| {flag}${est_cost:.4f} | exec: {short_cmd} |\n")
 
     from synlynk.db import _insert_cost_row
 
