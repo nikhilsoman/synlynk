@@ -273,6 +273,33 @@ def test_update_costs_zero_tokens_still_writes_tshirt_row(project_dir, monkeypat
     assert row[1] > 0
 
 
+def test_update_costs_costs_md_includes_provenance_prefix(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+
+    costs_path = project_dir / ".synlynk" / "project-docs" / "costs.md"
+
+    update_costs("claude -p 'x'", 0, 0, 5.0, model_version="claude-sonnet-4-6", agent="claude")
+    estimated_line = costs_path.read_text().strip().splitlines()[-1]
+    assert "[est] $" in estimated_line
+
+    update_costs(
+        "local -p 'x'",
+        100,
+        50,
+        5.0,
+        model_version="claude-sonnet-4-6",
+        agent="local",
+        basis="regex_pair",
+    )
+    actual_line = costs_path.read_text().strip().splitlines()[-1]
+    assert "| $" in actual_line
+    assert "[est] $" not in actual_line
+    assert "[legacy] $" not in actual_line
+
+
 def test_load_model_rates_missing_file_uses_hardcoded_default(project_dir):
     from synlynk.costs import _load_model_rates
 
