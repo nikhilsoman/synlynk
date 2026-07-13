@@ -3612,6 +3612,12 @@ def test_exec_grok_headless_appends_rules_flags(project_dir, monkeypatch):
         def wait(self):
             return 0
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
     def fake_popen(cmd, **kw):
         if cmd and cmd[0] == "grok":
             captured["cmd"] = cmd
@@ -3672,8 +3678,15 @@ def test_exec_grok_skips_missing_rules_files(tmp_path, monkeypatch):
     class FakeProc:
         returncode = 0
         stdout = FakeStdout()
+
         def wait(self):
             return 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
 
     def fake_popen(cmd, **kw):
         if cmd and cmd[0] == "grok":
