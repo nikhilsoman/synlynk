@@ -4,6 +4,8 @@ import sqlite3
 
 import pytest
 
+from synlynk.costs import _estimate_tshirt_tokens
+
 
 def test_cost_entries_has_provenance_columns(project_dir, monkeypatch):
     import synlynk
@@ -261,3 +263,77 @@ def test_resolve_billing_mode_falls_back_to_default(project_dir):
         )
     os.chdir(project_dir)
     assert _resolve_billing_mode("codex") == "subscription"
+
+def test_estimate_tshirt_tier1_story_estimate(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, discipline, phase, estimated_tokens) "
+        "VALUES ('story-1', 'Test', 'backend', 'build', 4000)"
+    )
+    conn.commit()
+    conn.close()
+    in_t, out_t, basis = _estimate_tshirt_tokens(story_id="story-1", discipline="backend", phase="build")
+    assert basis == "story_estimate"
+    assert in_t + out_t == 4000
+
+
+def test_estimate_tshirt_tier2_historical_avg(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    conn = synlynk._get_db()
+    for i in range(3):
+        conn.execute(
+            "INSERT INTO stories (story_id, title, discipline, phase) VALUES (?, 'T', 'backend', 'build')",
+            (f"story-hist-{i}",),
+        )
+    conn.commit()
+    conn.close()
+    for i in range(3):
+        _insert_cost_row(
+            session_date="2026-07-01", agent="claude", model="claude-sonnet-4-6",
+            input_tokens=1000, output_tokens=500, cache_read_tokens=0,
+            cost_source="actual", total_cost_usd=0.01, story_id=f"story-hist-{i}",
+        )
+    in_t, out_t, basis = _estimate_tshirt_tokens(story_id=None, discipline="backend", phase="build")
+    assert basis == "historical_avg"
+    assert (in_t, out_t) == (1000, 500)
+
+
+def test_estimate_tshirt_tier3_fixed_default(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    in_t, out_t, basis = _estimate_tshirt_tokens(story_id=None, discipline="backend", phase="build")
+    assert basis == "fixed_default"
+    assert in_t > 0 and out_t > 0
+
+
+def test_estimate_tshirt_ignores_estimated_tshirt_rows_in_history(project_dir, monkeypatch):
+    """Historical averaging must not recycle guessed rows into future guesses (Grok's finding)."""
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    conn = synlynk._get_db()
+    for i in range(3):
+        conn.execute(
+            "INSERT INTO stories (story_id, title, discipline, phase) VALUES (?, 'T', 'frontend', 'build')",
+            (f"story-guess-{i}",),
+        )
+    conn.commit()
+    conn.close()
+    for i in range(3):
+        _insert_cost_row(
+            session_date="2026-07-01", agent="claude", model="claude-sonnet-4-6",
+            input_tokens=9999, output_tokens=9999, cache_read_tokens=0,
+            cost_source="estimated_tshirt", estimate_basis="fixed_default",
+            total_cost_usd=0.01, story_id=f"story-guess-{i}",
+        )
+    in_t, out_t, basis = _estimate_tshirt_tokens(story_id=None, discipline="frontend", phase="build")
+    assert basis == "fixed_default"
+    assert in_t != 9999
