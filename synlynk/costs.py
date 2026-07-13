@@ -182,10 +182,12 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             conn.execute(
                 """INSERT INTO cost_entries
                    (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                    total_cost_usd, notes, story_id, epic_id, phase_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    total_cost_usd, notes, story_id, epic_id, phase_id,
+                    cost_source, estimate_basis, job_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (ts, user, model_version, in_tokens, out_tokens, cache_read_tokens,
-                 est_cost, f"exec: {short_cmd}", story_id, epic_id, phase_id)
+                 est_cost, f"exec: {short_cmd}", story_id, epic_id, phase_id,
+                 "actual", None, None)
             )
             conn.commit()
         finally:
