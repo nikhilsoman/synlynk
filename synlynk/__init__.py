@@ -3320,6 +3320,15 @@ def init(force: bool = False, agents: list = None,
             with open(config_path, "w") as f:
                 f.write(config_json_content)
 
+    rates_path = os.path.join(".synlynk", "model_rates.json")
+    if not os.path.exists(rates_path):
+        from synlynk.costs import _HARDCODED_FALLBACK_RATES
+        rates_seed = dict(_HARDCODED_FALLBACK_RATES)
+        rates_seed["rates_updated_at"] = time.strftime("%Y-%m-%d")
+        with open(rates_path, "w") as f:
+            json.dump(rates_seed, f, indent=2)
+        print(f"  ✓ Created {rates_path}")
+
     # ── Step 4: LLM enrichment offer ────────────────────────────────────────
     _print_step(4, "LLM enrichment (optional)")
     if functional:

@@ -221,6 +221,20 @@ def test_load_model_rates_missing_unit_falls_back(project_dir, capsys):
     assert "unit" in captured.out.lower() or "unit" in captured.err.lower()
 
 
+def test_init_writes_model_rates_json(tmp_path, monkeypatch):
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    synlynk.init()
+    rates_path = tmp_path / ".synlynk" / "model_rates.json"
+    assert rates_path.exists()
+    data = json.loads(rates_path.read_text())
+    assert data["unit"] == "usd_per_1k_tokens"
+    assert data["billing_mode"]["local"] == "actual"
+
+
 from synlynk.costs import _resolve_cost_tier, update_costs
 
 
