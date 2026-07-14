@@ -33,11 +33,46 @@ class _TokenCounts(object):
         return 2
 
 
-def extract_tokens(output_text: str) -> tuple:
-    """Regex-scrapes token counts from AI CLI stdout.
+def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parses codex exec --json's newline-delimited event stream.
+
+    Returns the cumulative turn_completed usage object, or None on any failure.
+    """
+    usage = None
+    for line in output_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(event, dict) and event.get("type") == "turn_completed":
+            candidate = event.get("usage")
+            if isinstance(candidate, dict):
+                usage = candidate
+    if usage is None:
+        return None
+    try:
+        in_tokens = int(usage["input_tokens"])
+        out_tokens = int(usage["output_tokens"]) + int(usage.get("reasoning_output_tokens", 0))
+        cache_read_tokens = int(usage.get("cached_input_tokens", 0))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+
+
+def extract_tokens(output_text: str, agent: str = None) -> tuple:
+    """Regex-scrapes token counts from AI CLI stdout, or delegates to a
+    per-agent structured-output adapter when one exists.
 
     Returns a pair-compatible object with .cache_read_tokens for cache-aware output.
     """
+    if agent == "codex":
+        structured = _extract_codex_structured(output_text)
+        if structured is not None:
+            return structured
+
     def _parse_count(value: str) -> int:
         return int(value.replace(",", ""))
 
