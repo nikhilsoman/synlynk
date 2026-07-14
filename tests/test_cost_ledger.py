@@ -408,6 +408,107 @@ def test_extract_codex_structured_last_turn_completed_wins():
     assert result.output_tokens == 888
 
 
+def test_extract_claude_structured_single_turn():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        '{"type":"system","subtype":"init","cwd":"/tmp"}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}\n'
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"hello",'
+        '"total_cost_usd":0.1175592,"usage":{"input_tokens":2,"cache_creation_input_tokens":18810,'
+        '"cache_read_input_tokens":15444,"output_tokens":4}}\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 2 + 18810
+    assert result.output_tokens == 4
+    assert result.cache_read_tokens == 15444
+    assert result.basis == "structured_output"
+
+
+def test_extract_claude_structured_multi_turn_tool_call_cumulative():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        '{"type":"system","subtype":"init","cwd":"/tmp"}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":['
+        '{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}\n'
+        '{"type":"user","message":{"role":"user","content":['
+        '{"type":"tool_result","tool_use_id":"toolu_1","content":"a.txt\\nb.txt"}]}}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}\n'
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"done",'
+        '"total_cost_usd":0.10485,"usage":{"input_tokens":4,"cache_creation_input_tokens":14177,'
+        '"cache_read_input_tokens":55170,"output_tokens":215}}\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 4 + 14177
+    assert result.output_tokens == 215
+    assert result.cache_read_tokens == 55170
+    assert result.basis == "structured_output"
+
+
+def test_extract_claude_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_claude_structured
+
+    assert _extract_claude_structured("") is None
+
+
+def test_extract_claude_structured_no_result_event_returns_none():
+    from synlynk.costs import _extract_claude_structured
+
+    output = '{"type":"system","subtype":"init","cwd":"/tmp"}\n{"type":"assistant","message":{}}\n'
+    assert _extract_claude_structured(output) is None
+
+
+def test_extract_claude_structured_garbage_lines_mixed_with_valid_event():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        'not json at all\n'
+        '\n'
+        '   \n'
+        '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
+        'trailing garbage after the stream\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_claude_structured_missing_cache_fields_default_zero():
+    from synlynk.costs import _extract_claude_structured
+
+    output = '{"type":"result","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_claude_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_claude_structured
+
+    output = '{"type":"result","usage":{"input_tokens":"not-a-number","output_tokens":5}}\n'
+    assert _extract_claude_structured(output) is None
+
+
+def test_extract_claude_structured_last_result_wins():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        '{"type":"result","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '{"type":"result","usage":{"input_tokens":999,"output_tokens":888}}\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 999
+    assert result.output_tokens == 888
+
+
 def test_extract_tokens_agent_codex_uses_structured_output():
     from synlynk.costs import extract_tokens
 
