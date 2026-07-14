@@ -1212,6 +1212,71 @@ def test_render_codex_log_line_unparseable_prints_as_is():
     assert _render_codex_log_line(line) == line
 
 
+def test_render_claude_log_line_text_block():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello there"}]}}'
+    assert _render_claude_log_line(line) == "Hello there\n\n"
+
+
+def test_render_claude_log_line_tool_use_block():
+    from synlynk import _render_claude_log_line
+
+    line = (
+        '{"type":"assistant","message":{"role":"assistant","content":['
+        '{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls -la"}}]}}'
+    )
+    assert _render_claude_log_line(line) == '$ Bash({"command":"ls -la"})\n\n'
+
+
+def test_render_claude_log_line_multiple_content_blocks_concatenated():
+    from synlynk import _render_claude_log_line
+
+    line = (
+        '{"type":"assistant","message":{"role":"assistant","content":['
+        '{"type":"text","text":"Running it now."},'
+        '{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}'
+    )
+    assert _render_claude_log_line(line) == '$ Bash({"command":"ls"})\n\n'.join(
+        ["Running it now.\n\n", ""]
+    )
+
+
+def test_render_claude_log_line_system_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"system","subtype":"init","cwd":"/tmp"}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_rate_limit_event_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_result_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"result","subtype":"success","result":"done","usage":{"input_tokens":10,"output_tokens":5}}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_user_tool_result_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"a.txt"}]}}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_unparseable_prints_as_is():
+    from synlynk import _render_claude_log_line
+
+    line = "unrecognized flag: --output-format"
+    assert _render_claude_log_line(line) == line
+
+
 def test_cmd_logs_renders_codex_jsonl(project_dir, monkeypatch, tmp_path, capsys):
     import synlynk
 
