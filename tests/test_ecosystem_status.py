@@ -326,7 +326,7 @@ def test_exec_command_telemetry_enrichment(monkeypatch, tmp_path):
     monkeypatch.setattr(synlynk, "set_state", lambda *_a, **_kw: None)
     monkeypatch.setattr(synlynk, "_check_costs_freshness", lambda: None)
     monkeypatch.setattr(synlynk, "update_costs", lambda *a, **kw: None, raising=False)
-    monkeypatch.setattr(synlynk, "extract_tokens", lambda text: (0, 0), raising=False)
+    monkeypatch.setattr(synlynk, "extract_tokens", lambda text, agent=None: (0, 0), raising=False)
     monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
     monkeypatch.setattr(synlynk, "check_sentinel_patterns", lambda **kw: None)
     monkeypatch.setattr(synlynk, "_check_instruction_drift", lambda: None)
