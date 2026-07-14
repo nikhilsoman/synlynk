@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — Measurement Ledger Hardening Phase 1: No Number Lies About Where It Came From"
+title: "PR #236 — Measurement Ledger Hardening Phase 1: No Number Lies About Where It Came From"
 date: 2026-07-14
 series: "Building the OS for Multi-Agent Development"
 post: 56
-pr: "#TBD"
+pr: "#236"
 issue: "#210 (Phase 1 of 2)"
 merged: status: open
 ---
