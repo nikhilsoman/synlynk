@@ -406,7 +406,12 @@ def parse_costs_md() -> tuple:
             parts = [p.strip() for p in line.split("|")]
             if len(parts) < 8:
                 continue
-            cost_str = parts[5].lstrip("$")
+            cost_str = parts[5]
+            for prefix in ("[est] ", "[legacy] ", "~"):
+                if cost_str.startswith(prefix):
+                    cost_str = cost_str[len(prefix):]
+                    break
+            cost_str = cost_str.lstrip("$")
             try:
                 total_usd += float(cost_str)
                 total_requests += 1

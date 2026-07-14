@@ -5,6 +5,8 @@ import sqlite3
 import pytest
 
 from synlynk.costs import _estimate_tshirt_tokens
+from synlynk.costs import parse_costs_md as costs_parse_costs_md
+from synlynk.db import _parse_costs_md as db_parse_costs_md
 
 
 def test_cost_entries_has_provenance_columns(project_dir, monkeypatch):
@@ -258,6 +260,28 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
     row = conn.execute("SELECT agent FROM cost_entries").fetchone()
     conn.close()
     assert row[0] == "claude"
+
+
+def test_costs_py_parse_costs_md_handles_est_prefix(project_dir, monkeypatch):
+    import synlynk
+
+    docs_dir = os.path.join(project_dir, "project-docs")
+    os.makedirs(docs_dir, exist_ok=True)
+    monkeypatch.setattr(synlynk, "_docs_dir", lambda: docs_dir)
+    with open(os.path.join(docs_dir, "costs.md"), "w") as f:
+        f.write("| 2026-07-13 10:00 | claude | 1 | 1000/500 | [est] $0.0270 | exec: claude -p |\n")
+        f.write("| 2026-07-13 10:05 | claude | 1 | 800/400 | [legacy] $0.0100 | exec: claude -p |\n")
+        f.write("| 2026-07-13 10:10 | claude | 1 | 200/100 | $0.0050 | exec: claude -p |\n")
+    total_usd, total_requests = costs_parse_costs_md()
+    assert total_requests == 3
+    assert round(total_usd, 4) == round(0.0270 + 0.0100 + 0.0050, 4)
+
+
+def test_db_parse_costs_md_handles_prefixed_cost_column():
+    content = "| 2026-07-13 | claude | claude-sonnet-4-6 | 1000 | 500 | 0 | [est] $0.0270 | note |\n"
+    rows = db_parse_costs_md(content)
+    assert len(rows) == 1
+    assert rows[0]["total_cost_usd"] == 0.0270
 
 
 from synlynk.db import cmd_cost_log
