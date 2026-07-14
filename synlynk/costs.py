@@ -62,6 +62,38 @@ def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
 
 
+def _extract_claude_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parses claude -p --output-format stream-json --verbose's event stream.
+
+    Returns the cumulative result-event usage object, or None on any failure.
+    cache_creation_input_tokens is folded into input_tokens (both are
+    non-cache-read, billable token pools in the CLI's own accounting; the
+    rate table has no separate cache-write tier).
+    """
+    usage = None
+    for line in output_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(event, dict) and event.get("type") == "result":
+            candidate = event.get("usage")
+            if isinstance(candidate, dict):
+                usage = candidate
+    if usage is None:
+        return None
+    try:
+        in_tokens = int(usage["input_tokens"]) + int(usage.get("cache_creation_input_tokens", 0))
+        out_tokens = int(usage["output_tokens"])
+        cache_read_tokens = int(usage.get("cache_read_input_tokens", 0))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+
+
 def extract_tokens(output_text: str, agent: str = None) -> tuple:
     """Regex-scrapes token counts from AI CLI stdout, or delegates to a
     per-agent structured-output adapter when one exists.
@@ -70,6 +102,10 @@ def extract_tokens(output_text: str, agent: str = None) -> tuple:
     """
     if agent == "codex":
         structured = _extract_codex_structured(output_text)
+        if structured is not None:
+            return structured
+    if agent == "claude":
+        structured = _extract_claude_structured(output_text)
         if structured is not None:
             return structured
 

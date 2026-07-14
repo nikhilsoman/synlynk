@@ -274,6 +274,39 @@ def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
     assert "--json" in captured_flags["shell_cmd"]
 
 
+def test_dispatch_agent_claude_flags_include_stream_json_verbose(project_dir, monkeypatch):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    captured_flags = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured_flags["shell_cmd"] = cmd[2]
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_create_job_worktree", lambda job_id, agent: str(project_dir / "worktree"), raising=False)
+    monkeypatch.setattr(synlynk, "_job_worktree_details", lambda job_id, agent: ("", "branch"), raising=False)
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [], raising=False)
+    monkeypatch.setattr(synlynk, "_save_jobs", lambda jobs: None, raising=False)
+    monkeypatch.setattr(synlynk, "_get_db", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "_load_agent_profile", lambda agent: {}, raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda **kwargs: "", raising=False)
+    monkeypatch.setattr(synlynk, "_format_prompt_for_agent", lambda *a, **k: "prompt", raising=False)
+    monkeypatch.setattr(synlynk, "_warn_context_size", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda agent, cli: "unknown", raising=False)
+
+    dispatch_mod.dispatch_agent("claude", "do a thing", skip_preflight=True, job_id="job-test456")
+
+    assert "--output-format" in captured_flags["shell_cmd"]
+    assert "stream-json" in captured_flags["shell_cmd"]
+    assert "--verbose" in captured_flags["shell_cmd"]
+
+
 def test_extract_tokens_basis_regex_pair():
     from synlynk.costs import extract_tokens
 
@@ -408,6 +441,107 @@ def test_extract_codex_structured_last_turn_completed_wins():
     assert result.output_tokens == 888
 
 
+def test_extract_claude_structured_single_turn():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        '{"type":"system","subtype":"init","cwd":"/tmp"}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}\n'
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"hello",'
+        '"total_cost_usd":0.1175592,"usage":{"input_tokens":2,"cache_creation_input_tokens":18810,'
+        '"cache_read_input_tokens":15444,"output_tokens":4}}\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 2 + 18810
+    assert result.output_tokens == 4
+    assert result.cache_read_tokens == 15444
+    assert result.basis == "structured_output"
+
+
+def test_extract_claude_structured_multi_turn_tool_call_cumulative():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        '{"type":"system","subtype":"init","cwd":"/tmp"}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":['
+        '{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}\n'
+        '{"type":"user","message":{"role":"user","content":['
+        '{"type":"tool_result","tool_use_id":"toolu_1","content":"a.txt\\nb.txt"}]}}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}\n'
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"done",'
+        '"total_cost_usd":0.10485,"usage":{"input_tokens":4,"cache_creation_input_tokens":14177,'
+        '"cache_read_input_tokens":55170,"output_tokens":215}}\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 4 + 14177
+    assert result.output_tokens == 215
+    assert result.cache_read_tokens == 55170
+    assert result.basis == "structured_output"
+
+
+def test_extract_claude_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_claude_structured
+
+    assert _extract_claude_structured("") is None
+
+
+def test_extract_claude_structured_no_result_event_returns_none():
+    from synlynk.costs import _extract_claude_structured
+
+    output = '{"type":"system","subtype":"init","cwd":"/tmp"}\n{"type":"assistant","message":{}}\n'
+    assert _extract_claude_structured(output) is None
+
+
+def test_extract_claude_structured_garbage_lines_mixed_with_valid_event():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        'not json at all\n'
+        '\n'
+        '   \n'
+        '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
+        'trailing garbage after the stream\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_claude_structured_missing_cache_fields_default_zero():
+    from synlynk.costs import _extract_claude_structured
+
+    output = '{"type":"result","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_claude_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_claude_structured
+
+    output = '{"type":"result","usage":{"input_tokens":"not-a-number","output_tokens":5}}\n'
+    assert _extract_claude_structured(output) is None
+
+
+def test_extract_claude_structured_last_result_wins():
+    from synlynk.costs import _extract_claude_structured
+
+    output = (
+        '{"type":"result","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '{"type":"result","usage":{"input_tokens":999,"output_tokens":888}}\n'
+    )
+    result = _extract_claude_structured(output)
+    assert result is not None
+    assert result.input_tokens == 999
+    assert result.output_tokens == 888
+
+
 def test_extract_tokens_agent_codex_uses_structured_output():
     from synlynk.costs import extract_tokens
 
@@ -436,6 +570,34 @@ def test_extract_tokens_non_codex_agent_never_uses_structured_path():
     assert result.basis == "regex_pair"
     assert result.input_tokens == 100
     assert result.output_tokens == 50
+
+
+def test_extract_tokens_agent_claude_uses_structured_output():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="claude")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_agent_claude_falls_back_to_regex_on_plain_text():
+    from synlynk.costs import extract_tokens
+
+    output = "Input tokens: 10\nOutput tokens: 5\n"
+    result = extract_tokens(output, agent="claude")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_tokens_non_claude_agent_never_uses_claude_structured_path():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="codex")
+    assert result.basis != "structured_output"
 
 
 def test_extract_tokens_default_agent_none_unchanged_behavior():
@@ -1050,6 +1212,71 @@ def test_render_codex_log_line_unparseable_prints_as_is():
     assert _render_codex_log_line(line) == line
 
 
+def test_render_claude_log_line_text_block():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello there"}]}}'
+    assert _render_claude_log_line(line) == "Hello there\n\n"
+
+
+def test_render_claude_log_line_tool_use_block():
+    from synlynk import _render_claude_log_line
+
+    line = (
+        '{"type":"assistant","message":{"role":"assistant","content":['
+        '{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls -la"}}]}}'
+    )
+    assert _render_claude_log_line(line) == '$ Bash({"command":"ls -la"})\n\n'
+
+
+def test_render_claude_log_line_multiple_content_blocks_concatenated():
+    from synlynk import _render_claude_log_line
+
+    line = (
+        '{"type":"assistant","message":{"role":"assistant","content":['
+        '{"type":"text","text":"Running it now."},'
+        '{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}'
+    )
+    assert _render_claude_log_line(line) == '$ Bash({"command":"ls"})\n\n'.join(
+        ["Running it now.\n\n", ""]
+    )
+
+
+def test_render_claude_log_line_system_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"system","subtype":"init","cwd":"/tmp"}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_rate_limit_event_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_result_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"result","subtype":"success","result":"done","usage":{"input_tokens":10,"output_tokens":5}}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_user_tool_result_omitted():
+    from synlynk import _render_claude_log_line
+
+    line = '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"a.txt"}]}}'
+    assert _render_claude_log_line(line) is None
+
+
+def test_render_claude_log_line_unparseable_prints_as_is():
+    from synlynk import _render_claude_log_line
+
+    line = "unrecognized flag: --output-format"
+    assert _render_claude_log_line(line) == line
+
+
 def test_cmd_logs_renders_codex_jsonl(project_dir, monkeypatch, tmp_path, capsys):
     import synlynk
 
@@ -1086,3 +1313,24 @@ def test_cmd_logs_non_codex_agent_unchanged(project_dir, monkeypatch, tmp_path, 
     out = capsys.readouterr().out
     assert "plain text transcript" in out
     assert "more output" in out
+
+
+def test_cmd_logs_renders_claude_stream_json(project_dir, monkeypatch, tmp_path, capsys):
+    import synlynk
+
+    log_file = tmp_path / "job-claude2.log"
+    log_file.write_text(
+        '{"type":"system","subtype":"init","cwd":"/tmp"}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done"}]}}\n'
+        '{"type":"result","subtype":"success","result":"Done","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    )
+    job = {"id": "job-claude2", "agent": "claude", "log_file": str(log_file)}
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(synlynk, "_job_summary_path", lambda job_id: "/nonexistent", raising=False)
+
+    synlynk.cmd_logs("job-claude2")
+
+    out = capsys.readouterr().out
+    assert "Done" in out
+    assert '"type":"system"' not in out
+    assert '"type":"result"' not in out

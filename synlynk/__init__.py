@@ -2002,6 +2002,47 @@ def _render_codex_log_line(line: str):
     return line
 
 
+def _render_claude_log_line(line: str):
+    """Renders one line of a Claude --output-format stream-json log into
+    human-readable text."""
+    stripped = line.strip()
+    if not stripped:
+        return line
+    try:
+        event = json.loads(stripped)
+    except (ValueError, TypeError):
+        return line
+    if not isinstance(event, dict):
+        return line
+    event_type = event.get("type")
+    if event_type in {"system", "rate_limit_event", "result", "user"}:
+        return None
+    if event_type == "assistant":
+        message = event.get("message", {})
+        content = message.get("content", []) if isinstance(message, dict) else []
+        if not isinstance(content, list):
+            return None
+        rendered_parts = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "text":
+                text = block.get("text", "")
+                if text:
+                    rendered_parts.append(f"{text}\n\n")
+            elif block_type == "tool_use":
+                tool_name = block.get("name", "")
+                tool_input = block.get("input", {})
+                try:
+                    args = json.dumps(tool_input, separators=(",", ":"))
+                except (TypeError, ValueError):
+                    args = str(tool_input)
+                rendered_parts.append(f"$ {tool_name}({args})\n\n")
+        return "".join(rendered_parts) if rendered_parts else None
+    return line
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
@@ -2018,8 +2059,14 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
         lines = f.readlines()
     display_lines = lines[-tail:]
     if job.get("agent") == "codex":
+        renderer = _render_codex_log_line
+    elif job.get("agent") == "claude":
+        renderer = _render_claude_log_line
+    else:
+        renderer = None
+    if renderer is not None:
         for line in display_lines:
-            rendered = _render_codex_log_line(line)
+            rendered = renderer(line)
             if rendered is not None:
                 print(rendered, end="")
     else:
