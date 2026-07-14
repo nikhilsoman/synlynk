@@ -539,6 +539,34 @@ def test_extract_tokens_non_codex_agent_never_uses_structured_path():
     assert result.output_tokens == 50
 
 
+def test_extract_tokens_agent_claude_uses_structured_output():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="claude")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_agent_claude_falls_back_to_regex_on_plain_text():
+    from synlynk.costs import extract_tokens
+
+    output = "Input tokens: 10\nOutput tokens: 5\n"
+    result = extract_tokens(output, agent="claude")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_tokens_non_claude_agent_never_uses_claude_structured_path():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="codex")
+    assert result.basis != "structured_output"
+
+
 def test_extract_tokens_default_agent_none_unchanged_behavior():
     from synlynk.costs import extract_tokens
 
