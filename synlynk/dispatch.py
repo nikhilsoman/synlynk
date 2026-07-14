@@ -41,6 +41,21 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return flags
 
 
+def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
+    if context_mode != "full":
+        return None
+    has_code_fence = "```" in task
+    has_exact_commit = re.search(r"commit\s+-m|commit message", task, re.IGNORECASE) is not None
+    if has_code_fence and has_exact_commit:
+        return (
+            "[context-mode hint] Task text looks fully self-contained "
+            "(includes code + an exact commit message) — full project context "
+            "may not be needed. Consider --context-mode task or none to reduce "
+            "implementer token usage."
+        )
+    return None
+
+
 def _load_harness_overrides(agent: str) -> dict:
     """Read per-project harness overrides from .agents/<agent>.json."""
     empty = {"dispatch_flags": {}, "env": {}, "network_deps": []}
@@ -742,6 +757,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     model_at_dispatch = probe_model(agent, cli) if probe_model else "unknown"
     if context_mode is None:
         context_mode = profile.get("context_mode", "task")
+    hint = _context_mode_hint(context_mode, task)
+    if hint:
+        print(f"    {hint}")
 
     import hashlib as _hashlib
     if not job_id:
