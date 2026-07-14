@@ -104,3 +104,11 @@ adds, removes, or changes a cross-repo relationship. This keeps Vizor's Architec
 (`docs/superpowers/specs/2026-07-11-vizor-architect-map-v2-design.md`) accurate without a manual
 audit step — same discipline as the Blog Post Protocol above, but conditional rather than
 mandatory on every PR.
+
+## Cost Capture Protocol
+
+**For every PR, before merging:** confirm all dispatched/wrapped work in this PR is auto-captured (nothing to do — it already is via `dispatch_agent()`/`synlynk exec`), and any native/PM-session work (brainstorming, design docs, manual fixes) not tied to a dispatched job has a corresponding `synlynk cost log` entry. If genuinely zero cost was incurred outside dispatched work, note that explicitly in the PR rather than skipping the check silently.
+
+`synlynk release` sessions use `synlynk cost log` the same way — there is no automatic capture for native CLI invocations of `gh release create` / release tooling.
+
+Enforced by discipline (Claude/PM checks it as part of PR housekeeping), not CI — matches how the Blog Post Protocol already operates. Not a blocking CI gate.
