@@ -195,6 +195,46 @@ def test_exec_command_passes_agent_to_extract_tokens(project_dir, monkeypatch, t
     assert captured["agent"] == "echo"
 
 
+def test_jobs_stall_path_passes_agent_to_extract_tokens(monkeypatch):
+    from synlynk import jobs as jobs_mod
+    import synlynk
+
+    captured = {}
+
+    def fake_extract_tokens(text, agent=None):
+        captured["agent"] = agent
+        from synlynk.costs import _TokenCounts
+
+        return _TokenCounts(0, 0, 0, "none")
+
+    monkeypatch.setattr(synlynk, "extract_tokens", fake_extract_tokens, raising=False)
+    monkeypatch.setattr(synlynk, "update_costs", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "_check_job_stall", lambda *a, **k: True, raising=False)
+    monkeypatch.setattr(synlynk, "_write_job_summary", lambda *a, **k: "", raising=False)
+    monkeypatch.setattr(synlynk, "_worktree_files_touched", lambda *a, **k: [], raising=False)
+    monkeypatch.setattr(
+        synlynk,
+        "load_config",
+        lambda: {"budget": {"limit_usd": 100, "limit_requests": 100}},
+        raising=False,
+    )
+
+    job = {
+        "id": "job-1",
+        "agent": "codex",
+        "status": "running",
+        "started_at": "2026-07-14T00:00:00",
+        "ended_at": None,
+        "log_file": "",
+    }
+    monkeypatch.setattr(jobs_mod, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(jobs_mod, "_job_retry_count", lambda j: 0, raising=False)
+
+    jobs_mod._reconcile_jobs()
+
+    assert captured["agent"] == "codex"
+
+
 def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
     import synlynk
     from synlynk import dispatch as dispatch_mod
