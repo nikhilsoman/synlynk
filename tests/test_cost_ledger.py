@@ -541,6 +541,31 @@ def test_update_costs_zero_tokens_still_writes_tshirt_row(project_dir, monkeypat
     assert row[1] > 0
 
 
+def test_update_costs_failed_job_marker_survives_short_cmd_truncation(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+
+    long_command = "claude -p some-long-task-description-that-is-way-over-twenty-chars"
+    update_costs(
+        "[failed job] " + long_command,
+        0,
+        0,
+        5.0,
+        model_version="claude-sonnet-4-6",
+        agent="claude",
+    )
+
+    conn = synlynk._get_db()
+    notes = conn.execute("SELECT notes FROM cost_entries").fetchone()[0]
+    conn.close()
+
+    assert len(long_command) > 20
+    assert "failed job" in notes
+    assert notes.startswith("exec: [failed job] ")
+
+
 def test_update_costs_costs_md_includes_provenance_prefix(project_dir, monkeypatch):
     import synlynk
 

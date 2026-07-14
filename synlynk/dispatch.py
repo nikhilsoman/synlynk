@@ -1017,7 +1017,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             if update_costs:
                 cmd_label = " ".join(cmd_args)
                 if exit_code != 0 and in_tokens == 0 and out_tokens == 0:
-                    cmd_label += " [failed job]"
+                    cmd_label = "[failed job] " + cmd_label
                 update_costs(
                     cmd_label,
                     in_tokens,
