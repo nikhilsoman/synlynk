@@ -260,6 +260,51 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
     assert row[0] == "claude"
 
 
+from synlynk.db import cmd_cost_log
+
+
+def test_cmd_cost_log_writes_estimated_manual_row(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    cmd_cost_log(agent="claude", tokens_in=2000, tokens_out=800, story_id=None, note="brainstorm session")
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT cost_source, estimate_basis, input_tokens, output_tokens, phase_id, notes FROM cost_entries"
+    ).fetchone()
+    conn.close()
+    assert row[0] == "estimated_manual"
+    assert row[1] == "cli_manual_entry"
+    assert (row[2], row[3]) == (2000, 800)
+    assert row[5] == "brainstorm session"
+
+
+def test_cmd_cost_log_with_story_id(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    conn = synlynk._get_db()
+    conn.execute("INSERT INTO stories (story_id, title, discipline, phase) VALUES ('story-9', 'T', 'backend', 'build')")
+    conn.commit()
+    conn.close()
+    cmd_cost_log(agent="claude", tokens_in=500, tokens_out=200, story_id="story-9", note=None)
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT story_id FROM cost_entries").fetchone()
+    conn.close()
+    assert row[0] == "story-9"
+
+
+def test_cmd_cost_log_rejects_negative_tokens(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    with pytest.raises(ValueError):
+        cmd_cost_log(agent="claude", tokens_in=-1, tokens_out=200, story_id=None, note=None)
+
+
 def test_run_investigation_writes_one_cost_row(project_dir, monkeypatch):
     import re
     from types import SimpleNamespace

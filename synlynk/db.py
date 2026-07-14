@@ -1513,6 +1513,61 @@ def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> N
         print(f"  {r[0]:<10} {r[1]:<22} {r[2]:<12} {r[3]:<14} "
               f"{r[4]:<12} {r[5]:<10} {score_str:>6} {r[7]:>4}")
 
+def cmd_cost_log(
+    agent: str,
+    tokens_in: int,
+    tokens_out: int,
+    story_id: str = None,
+    note: str = None,
+) -> None:
+    """Log a manually reported cost row for native/unwrapped sessions."""
+    from synlynk import (
+        _GREEN,
+        _RESET,
+        _get_db,
+        _insert_cost_row,
+        extract_model_version,
+    )
+    from synlynk.costs import _model_rate_for_version
+
+    if tokens_in < 0 or tokens_out < 0:
+        raise ValueError("tokens-in and tokens-out must be non-negative")
+
+    conn = _get_db()
+    phase = None
+    if story_id:
+        row = conn.execute(
+            "SELECT discipline, phase FROM stories WHERE story_id=?",
+            (story_id,),
+        ).fetchone()
+        if row:
+            _, phase = row
+    conn.close()
+
+    model_version = extract_model_version("", agent=agent)
+    rates = _model_rate_for_version(model_version, agent=agent)
+    est_cost = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
+    ts = time.strftime("%Y-%m-%d %H:%M")
+
+    _insert_cost_row(
+        session_date=ts,
+        agent=agent,
+        model=model_version,
+        input_tokens=tokens_in,
+        output_tokens=tokens_out,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=est_cost,
+        notes=note,
+        story_id=story_id,
+    )
+    label = f"story {story_id}" if story_id else f"phase={phase or 'dream/plan'} (no story)"
+    print(
+        f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
+        f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
+    )
+
 def cmd_pr_check() -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'.
 
