@@ -47,7 +47,7 @@ def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
             event = json.loads(line)
         except (ValueError, TypeError):
             continue
-        if isinstance(event, dict) and event.get("type") == "turn_completed":
+        if isinstance(event, dict) and event.get("type") == "turn.completed":
             candidate = event.get("usage")
             if isinstance(candidate, dict):
                 usage = candidate
