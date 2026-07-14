@@ -219,7 +219,15 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         return False
 
     inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
-    git_state = inspect_worktree_git_state(job.get("worktree_path")) if inspect_worktree_git_state else None
+    git_state = (
+        inspect_worktree_git_state(
+            job.get("worktree_path"),
+            job.get("worktree_branch"),
+            job.get("started_at"),
+        )
+        if inspect_worktree_git_state
+        else None
+    )
     if git_state and git_state.get("has_activity"):
         worktree_path = job.get("worktree_path")
         commit_count = git_state.get("commits_ahead", 0)
@@ -233,6 +241,14 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         print(
             f"  Stall check extended for job {job.get('id')}: git activity detected in "
             f"{worktree_path} ({details})."
+        )
+        return False
+    if git_state and git_state.get("remote_has_activity"):
+        remote_ref = git_state.get("remote_ref")
+        remote_commit_count = git_state.get("remote_commit_count", 0)
+        print(
+            f"  Stall check extended for job {job.get('id')}: remote activity detected on "
+            f"{remote_ref} ({remote_commit_count} commit(s) since {job.get('started_at')})."
         )
         return False
 
