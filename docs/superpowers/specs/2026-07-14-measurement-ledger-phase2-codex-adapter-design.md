@@ -21,9 +21,10 @@ Confirmed by reading `origin/main`'s current `synlynk/costs.py` and `synlynk/dis
 
 - `_resolve_cost_tier(agent, basis)` in `synlynk/costs.py` **already** handles `basis in ("regex_pair", "structured_output")` identically — both map to `estimated_token_rate` (or `actual`, if `_resolve_billing_mode(agent)` returns `"actual"`). **No changes needed to `_resolve_cost_tier()` or `update_costs()` for this design.** The extensibility point Phase 1 promised is real.
 - `extract_tokens(output_text)` returns a `_TokenCounts` object (`input_tokens`, `output_tokens`, `cache_read_tokens`, `basis`) via a fixed regex-pattern list, with no `agent` parameter today.
-- Two distinct call paths read job output and call `extract_tokens()`:
+- Three distinct call paths read job output and call `extract_tokens()`:
   - `dispatch.py:exec_command()` — the foreground `synlynk exec <agent>` path. Spawns the process itself via `subprocess.Popen(..., stdout=PIPE)`, tees output live to the terminal and an in-memory buffer via `_tee_process()`, then calls `extract_tokens(output_text)` on the accumulated buffer after the process exits.
   - `jobs.py:_reconcile_jobs()` (4 call sites) — the background `synlynk dispatch` path used for real implementation work. The job process is launched via a **raw shell redirect**: `f"{cmd_str} > {log_file} 2>&1"`, so the log file *is* the process's raw stdout/stderr, with no Python-side interception while it runs. Reconciliation later reads the log file's text and calls `extract_tokens(log_text)`.
+  - `support_engineer.py`'s investigate flow (1 call site) — a synchronous `subprocess.run(["sh", "-c", shell_cmd], timeout=300)` for support-engineer cost investigations, same shell-redirect-to-log-file shape as the `jobs.py` path. `agent` is already a function parameter in scope at this call site.
 - Codex is currently invoked (both paths) via `codex exec - -s workspace-write --add-dir <git-common-dir>` — no `--json` flag anywhere today.
 - `codex exec --json` is a real, working flag (verified by running it locally). It switches Codex's stdout from a human-readable colored transcript to newline-delimited JSON events. Verified schema from two live runs:
   ```json
@@ -56,6 +57,7 @@ Future agents (Claude, Gemini, Grok) plug into the same `if agent == "<name>": .
 **Call site changes** (mechanical, `agent` is already available at every one of these):
 - `dispatch.py:exec_command()` — already computes `agent=cmd_args[0]` for `update_costs()`; pass the same value to `extract_tokens()`.
 - `jobs.py:_reconcile_jobs()` (4 call sites) — each already has `job.get("agent")` in scope (used elsewhere in the same function, e.g. `_check_job_stall`). Pass `agent=job.get("agent")`.
+- `support_engineer.py`'s investigate flow (1 call site) — `agent` is already a function parameter in scope; pass `agent=agent`.
 
 ### 3.2 Codex usage extraction: `_extract_codex_structured()`
 
