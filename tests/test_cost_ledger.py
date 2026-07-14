@@ -1010,3 +1010,79 @@ def test_only_insert_cost_row_writes_to_cost_entries():
                 if "INSERT INTO cost_entries" in line or "UPDATE cost_entries" in line:
                     violations.append(f"{rel_path}:{lineno}")
     assert violations == [], f"Direct cost_entries writes outside db.py: {violations}"
+
+
+def test_render_codex_log_line_agent_message():
+    from synlynk import _render_codex_log_line
+
+    line = '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Hello there"}}'
+    assert _render_codex_log_line(line) == "Hello there\n\n"
+
+
+def test_render_codex_log_line_command_execution():
+    from synlynk import _render_codex_log_line
+
+    line = (
+        '{"type":"item.completed","item":{"id":"item_1","type":"command_execution",'
+        '"command":"ls -la","aggregated_output":"a.txt\\nb.txt\\n","exit_code":0}}'
+    )
+    assert _render_codex_log_line(line) == "$ ls -la\na.txt\nb.txt\n\n"
+
+
+def test_render_codex_log_line_item_started_omitted():
+    from synlynk import _render_codex_log_line
+
+    line = '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"ls"}}'
+    assert _render_codex_log_line(line) is None
+
+
+def test_render_codex_log_line_turn_completed_omitted():
+    from synlynk import _render_codex_log_line
+
+    line = '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}'
+    assert _render_codex_log_line(line) is None
+
+
+def test_render_codex_log_line_unparseable_prints_as_is():
+    from synlynk import _render_codex_log_line
+
+    line = "unrecognized flag: --json"
+    assert _render_codex_log_line(line) == line
+
+
+def test_cmd_logs_renders_codex_jsonl(project_dir, monkeypatch, tmp_path, capsys):
+    import synlynk
+
+    log_file = tmp_path / "job-codex1.log"
+    log_file.write_text(
+        '{"type":"thread.started","thread_id":"x"}\n'
+        '{"type":"turn.started"}\n'
+        '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Done"}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    )
+    job = {"id": "job-codex1", "agent": "codex", "log_file": str(log_file)}
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(synlynk, "_job_summary_path", lambda job_id: "/nonexistent", raising=False)
+
+    synlynk.cmd_logs("job-codex1")
+
+    out = capsys.readouterr().out
+    assert "Done" in out
+    assert '"type":"thread.started"' not in out
+    assert '"type":"turn.completed"' not in out
+
+
+def test_cmd_logs_non_codex_agent_unchanged(project_dir, monkeypatch, tmp_path, capsys):
+    import synlynk
+
+    log_file = tmp_path / "job-claude1.log"
+    log_file.write_text("plain text transcript\nmore output\n")
+    job = {"id": "job-claude1", "agent": "claude", "log_file": str(log_file)}
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(synlynk, "_job_summary_path", lambda job_id: "/nonexistent", raising=False)
+
+    synlynk.cmd_logs("job-claude1")
+
+    out = capsys.readouterr().out
+    assert "plain text transcript" in out
+    assert "more output" in out
