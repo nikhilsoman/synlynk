@@ -420,7 +420,7 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
         log_text = open(log_file).read()
 
     duration_s = time.time() - _investigation_start
-    token_counts = _pkg("extract_tokens")(log_text)
+    token_counts = _pkg("extract_tokens")(log_text, agent=agent)
     in_tokens, out_tokens = token_counts
     basis = getattr(token_counts, "basis", "none")
     model_version = _pkg("extract_model_version")(log_text, agent=agent)

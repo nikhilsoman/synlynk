@@ -152,6 +152,128 @@ def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
     assert rows == [(200, "actual")]
 
 
+def test_exec_command_passes_agent_to_extract_tokens(project_dir, monkeypatch, tmp_path):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_extract_tokens(output_text, agent=None):
+        captured["agent"] = agent
+        from synlynk.costs import _TokenCounts
+
+        return _TokenCounts(0, 0, 0, "none")
+
+    class _FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = _FakeStdout()
+
+        def wait(self):
+            return 0
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(synlynk, "extract_tokens", fake_extract_tokens, raising=False)
+    monkeypatch.setattr(synlynk, "update_costs", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "check_budgets", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "set_state", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(dispatch_mod, "_check_pre_exec_gate", lambda force=False: True, raising=False)
+    monkeypatch.setattr(synlynk, "extract_model_version", lambda *a, **k: "unknown", raising=False)
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: _FakeProcess())
+
+    dispatch_mod.exec_command(["echo", "--print", "hi"], force=True)
+
+    assert captured["agent"] == "echo"
+
+
+def test_jobs_stall_path_passes_agent_to_extract_tokens(monkeypatch):
+    from synlynk import jobs as jobs_mod
+    import synlynk
+
+    captured = {}
+
+    def fake_extract_tokens(text, agent=None):
+        captured["agent"] = agent
+        from synlynk.costs import _TokenCounts
+
+        return _TokenCounts(0, 0, 0, "none")
+
+    monkeypatch.setattr(synlynk, "extract_tokens", fake_extract_tokens, raising=False)
+    monkeypatch.setattr(synlynk, "update_costs", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "_check_job_stall", lambda *a, **k: True, raising=False)
+    monkeypatch.setattr(synlynk, "_write_job_summary", lambda *a, **k: "", raising=False)
+    monkeypatch.setattr(synlynk, "_worktree_files_touched", lambda *a, **k: [], raising=False)
+    monkeypatch.setattr(
+        synlynk,
+        "load_config",
+        lambda: {"budget": {"limit_usd": 100, "limit_requests": 100}},
+        raising=False,
+    )
+
+    job = {
+        "id": "job-1",
+        "agent": "codex",
+        "status": "running",
+        "started_at": "2026-07-14T00:00:00",
+        "ended_at": None,
+        "log_file": "",
+    }
+    monkeypatch.setattr(jobs_mod, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(jobs_mod, "_job_retry_count", lambda j: 0, raising=False)
+
+    jobs_mod._reconcile_jobs()
+
+    assert captured["agent"] == "codex"
+
+
+def test_support_engineer_investigate_passes_agent_to_extract_tokens():
+    import inspect
+    from synlynk import support_engineer as se_mod
+
+    source = inspect.getsource(se_mod)
+    assert '_pkg("extract_tokens")(log_text, agent=agent)' in source
+
+
+def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    captured_flags = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured_flags["shell_cmd"] = cmd[2]
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_create_job_worktree", lambda job_id, agent: str(project_dir / "worktree"), raising=False)
+    monkeypatch.setattr(synlynk, "_job_worktree_details", lambda job_id, agent: ("", "branch"), raising=False)
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [], raising=False)
+    monkeypatch.setattr(synlynk, "_save_jobs", lambda jobs: None, raising=False)
+    monkeypatch.setattr(synlynk, "_get_db", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "_load_agent_profile", lambda agent: {}, raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda **kwargs: "", raising=False)
+    monkeypatch.setattr(synlynk, "_format_prompt_for_agent", lambda *a, **k: "prompt", raising=False)
+    monkeypatch.setattr(synlynk, "_warn_context_size", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda agent, cli: "unknown", raising=False)
+
+    dispatch_mod.dispatch_agent("codex", "do a thing", skip_preflight=True, job_id="job-test123")
+
+    assert "--json" in captured_flags["shell_cmd"]
+
+
 def test_extract_tokens_basis_regex_pair():
     from synlynk.costs import extract_tokens
 
@@ -181,6 +303,148 @@ def test_extract_tokens_still_unpacks_as_pair():
 
     in_tokens, out_tokens = extract_tokens("Input tokens: 10\nOutput tokens: 5\n")
     assert (in_tokens, out_tokens) == (10, 5)
+
+
+def test_extract_codex_structured_single_turn():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        '{"type":"thread.started","thread_id":"019f609a-abc"}\n'
+        '{"type":"turn.started"}\n'
+        '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Hello"}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":39286,"cached_input_tokens":29824,'
+        '"output_tokens":167,"reasoning_output_tokens":42}}\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 39286
+    assert result.output_tokens == 167 + 42
+    assert result.cache_read_tokens == 29824
+    assert result.basis == "structured_output"
+
+
+def test_extract_codex_structured_multi_tool_call_cumulative():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        '{"type":"thread.started","thread_id":"019f609a-def"}\n'
+        '{"type":"turn.started"}\n'
+        '{"type":"item.started","item":{"id":"item_1","type":"command_execution",'
+        '"command":"ls","aggregated_output":"","exit_code":null,"status":"in_progress"}}\n'
+        '{"type":"item.completed","item":{"id":"item_1","type":"command_execution",'
+        '"command":"ls","aggregated_output":"a.txt\\n","exit_code":0,"status":"completed"}}\n'
+        '{"type":"item.started","item":{"id":"item_2","type":"command_execution",'
+        '"command":"cat a.txt","aggregated_output":"","exit_code":null,"status":"in_progress"}}\n'
+        '{"type":"item.completed","item":{"id":"item_2","type":"command_execution",'
+        '"command":"cat a.txt","aggregated_output":"hi\\n","exit_code":0,"status":"completed"}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":51000,"cached_input_tokens":40000,'
+        '"output_tokens":300,"reasoning_output_tokens":10}}\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 51000
+    assert result.output_tokens == 310
+    assert result.cache_read_tokens == 40000
+    assert result.basis == "structured_output"
+
+
+def test_extract_codex_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_codex_structured
+
+    assert _extract_codex_structured("") is None
+
+
+def test_extract_codex_structured_no_turn_completed_returns_none():
+    from synlynk.costs import _extract_codex_structured
+
+    output = '{"type":"thread.started","thread_id":"x"}\n{"type":"turn.started"}\n'
+    assert _extract_codex_structured(output) is None
+
+
+def test_extract_codex_structured_garbage_lines_mixed_with_valid_event():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        'not json at all\n'
+        '\n'
+        '   \n'
+        '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}\n'
+        'trailing garbage after the stream\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_codex_structured_missing_reasoning_tokens_defaults_zero():
+    from synlynk.costs import _extract_codex_structured
+
+    output = '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.output_tokens == 5
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_codex_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_codex_structured
+
+    output = '{"type":"turn.completed","usage":{"input_tokens":"not-a-number","output_tokens":5}}\n'
+    assert _extract_codex_structured(output) is None
+
+
+def test_extract_codex_structured_last_turn_completed_wins():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":999,"output_tokens":888}}\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 999
+    assert result.output_tokens == 888
+
+
+def test_extract_tokens_agent_codex_uses_structured_output():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="codex")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_agent_codex_falls_back_to_regex_on_plain_text():
+    from synlynk.costs import extract_tokens
+
+    output = "Input tokens: 10\nOutput tokens: 5\n"
+    result = extract_tokens(output, agent="codex")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_tokens_non_codex_agent_never_uses_structured_path():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="claude")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_default_agent_none_unchanged_behavior():
+    from synlynk.costs import extract_tokens
+
+    result = extract_tokens("Input tokens: 10\nOutput tokens: 5\n")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
 
 
 def test_load_model_rates_valid_file(project_dir):
@@ -505,7 +769,11 @@ def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, mon
         "_synlynk_project_docs_dir",
         lambda: os.path.join(project_dir, ".synlynk", "project-docs"),
     )
-    monkeypatch.setattr(synlynk, "extract_tokens", lambda _text: _TokenCounts(0, 0, 0, "none"))
+    monkeypatch.setattr(
+        synlynk,
+        "extract_tokens",
+        lambda _text, agent=None: _TokenCounts(0, 0, 0, "none"),
+    )
     monkeypatch.setattr(
         synlynk,
         "extract_model_version",
@@ -742,3 +1010,79 @@ def test_only_insert_cost_row_writes_to_cost_entries():
                 if "INSERT INTO cost_entries" in line or "UPDATE cost_entries" in line:
                     violations.append(f"{rel_path}:{lineno}")
     assert violations == [], f"Direct cost_entries writes outside db.py: {violations}"
+
+
+def test_render_codex_log_line_agent_message():
+    from synlynk import _render_codex_log_line
+
+    line = '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Hello there"}}'
+    assert _render_codex_log_line(line) == "Hello there\n\n"
+
+
+def test_render_codex_log_line_command_execution():
+    from synlynk import _render_codex_log_line
+
+    line = (
+        '{"type":"item.completed","item":{"id":"item_1","type":"command_execution",'
+        '"command":"ls -la","aggregated_output":"a.txt\\nb.txt\\n","exit_code":0}}'
+    )
+    assert _render_codex_log_line(line) == "$ ls -la\na.txt\nb.txt\n\n"
+
+
+def test_render_codex_log_line_item_started_omitted():
+    from synlynk import _render_codex_log_line
+
+    line = '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"ls"}}'
+    assert _render_codex_log_line(line) is None
+
+
+def test_render_codex_log_line_turn_completed_omitted():
+    from synlynk import _render_codex_log_line
+
+    line = '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}'
+    assert _render_codex_log_line(line) is None
+
+
+def test_render_codex_log_line_unparseable_prints_as_is():
+    from synlynk import _render_codex_log_line
+
+    line = "unrecognized flag: --json"
+    assert _render_codex_log_line(line) == line
+
+
+def test_cmd_logs_renders_codex_jsonl(project_dir, monkeypatch, tmp_path, capsys):
+    import synlynk
+
+    log_file = tmp_path / "job-codex1.log"
+    log_file.write_text(
+        '{"type":"thread.started","thread_id":"x"}\n'
+        '{"type":"turn.started"}\n'
+        '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Done"}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    )
+    job = {"id": "job-codex1", "agent": "codex", "log_file": str(log_file)}
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(synlynk, "_job_summary_path", lambda job_id: "/nonexistent", raising=False)
+
+    synlynk.cmd_logs("job-codex1")
+
+    out = capsys.readouterr().out
+    assert "Done" in out
+    assert '"type":"thread.started"' not in out
+    assert '"type":"turn.completed"' not in out
+
+
+def test_cmd_logs_non_codex_agent_unchanged(project_dir, monkeypatch, tmp_path, capsys):
+    import synlynk
+
+    log_file = tmp_path / "job-claude1.log"
+    log_file.write_text("plain text transcript\nmore output\n")
+    job = {"id": "job-claude1", "agent": "claude", "log_file": str(log_file)}
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(synlynk, "_job_summary_path", lambda job_id: "/nonexistent", raising=False)
+
+    synlynk.cmd_logs("job-claude1")
+
+    out = capsys.readouterr().out
+    assert "plain text transcript" in out
+    assert "more output" in out

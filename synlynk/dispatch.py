@@ -754,6 +754,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
     if agent == "codex":
+        flags = flags + ["--json"]
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -1039,7 +1040,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         print(f"\n  ✓ Execution finished in {duration:.2f}s")
 
         if extract_tokens:
-            token_counts = extract_tokens(output_text)
+            token_counts = extract_tokens(output_text, agent=cmd_args[0])
             in_tokens, out_tokens = token_counts
             cache_read_tokens = getattr(token_counts, "cache_read_tokens", 0)
             basis = getattr(token_counts, "basis", "none")

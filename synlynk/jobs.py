@@ -848,7 +848,7 @@ def _reconcile_jobs() -> None:
                         log_text = f.read()
                 except Exception:
                     log_text = ""
-            token_counts = _pkg("extract_tokens")(log_text)
+            token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
             in_tokens, out_tokens = token_counts
             basis = getattr(token_counts, "basis", "none")
             model_version = job.get("model_version") or job.get("model_at_dispatch")
@@ -950,7 +950,7 @@ def _reconcile_jobs() -> None:
                     print(
                         f"  ⚠ capability rating skipped for job {job.get('id', '')}: {exc}"
                     )
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
+            in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
@@ -1080,7 +1080,7 @@ def _reconcile_jobs() -> None:
             else:
                 log_text = ""
 
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
+            in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
@@ -1225,7 +1225,7 @@ def _reconcile_daemon_jobs() -> None:
                             log_text = f.read()
                     except Exception:
                         log_text = ""
-                token_counts = _pkg("extract_tokens")(log_text)
+                token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
                 basis = getattr(token_counts, "basis", "none")
                 model_version = _pkg("extract_model_version")(log_text, agent=agent)

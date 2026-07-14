@@ -1975,6 +1975,33 @@ def cmd_configure_agent(
 
 
 
+def _render_codex_log_line(line: str):
+    """Renders one line of a Codex --json log into human-readable text."""
+    stripped = line.strip()
+    if not stripped:
+        return line
+    try:
+        event = json.loads(stripped)
+    except (ValueError, TypeError):
+        return line
+    if not isinstance(event, dict):
+        return line
+    event_type = event.get("type")
+    if event_type in {"thread.started", "turn.started", "item.started", "turn.completed"}:
+        return None
+    if event_type == "item.completed":
+        item = event.get("item", {})
+        if not isinstance(item, dict):
+            return line
+        item_type = item.get("type")
+        if item_type == "agent_message":
+            return f"{item.get('text', '')}\n\n"
+        if item_type == "command_execution":
+            output = (item.get("aggregated_output") or "").rstrip("\n")
+            return f"$ {item.get('command', '')}\n{output}\n\n"
+    return line
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
@@ -1989,8 +2016,15 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
     print(f"{_BOLD}── logs: {job_id} ({job['agent']}) ─────────────────────────{_RESET}")
     with open(log_file) as f:
         lines = f.readlines()
-    for line in lines[-tail:]:
-        print(line, end="")
+    display_lines = lines[-tail:]
+    if job.get("agent") == "codex":
+        for line in display_lines:
+            rendered = _render_codex_log_line(line)
+            if rendered is not None:
+                print(rendered, end="")
+    else:
+        for line in display_lines:
+            print(line, end="")
     if len(lines) > tail:
         print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
     summary_path = _job_summary_path(job_id)
