@@ -195,6 +195,37 @@ def test_exec_command_passes_agent_to_extract_tokens(project_dir, monkeypatch, t
     assert captured["agent"] == "echo"
 
 
+def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    captured_flags = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured_flags["shell_cmd"] = cmd[2]
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_create_job_worktree", lambda job_id, agent: str(project_dir / "worktree"), raising=False)
+    monkeypatch.setattr(synlynk, "_job_worktree_details", lambda job_id, agent: ("", "branch"), raising=False)
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [], raising=False)
+    monkeypatch.setattr(synlynk, "_save_jobs", lambda jobs: None, raising=False)
+    monkeypatch.setattr(synlynk, "_get_db", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "_load_agent_profile", lambda agent: {}, raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda **kwargs: "", raising=False)
+    monkeypatch.setattr(synlynk, "_format_prompt_for_agent", lambda *a, **k: "prompt", raising=False)
+    monkeypatch.setattr(synlynk, "_warn_context_size", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda agent, cli: "unknown", raising=False)
+
+    dispatch_mod.dispatch_agent("codex", "do a thing", skip_preflight=True, job_id="job-test123")
+
+    assert "--json" in captured_flags["shell_cmd"]
+
+
 def test_extract_tokens_basis_regex_pair():
     from synlynk.costs import extract_tokens
 

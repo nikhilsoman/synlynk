@@ -754,6 +754,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
     if agent == "codex":
+        flags = flags + ["--json"]
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
