@@ -753,6 +753,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--permission-mode", "bypassPermissions"]
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
+    if agent == "claude":
+        flags = flags + ["--output-format", "stream-json", "--verbose"]
     if agent == "codex":
         flags = flags + ["--json"]
         try:
