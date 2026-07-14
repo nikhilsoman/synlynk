@@ -260,6 +260,53 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
     assert row[0] == "claude"
 
 
+def test_run_investigation_writes_one_cost_row(project_dir, monkeypatch):
+    import re
+    from types import SimpleNamespace
+
+    import synlynk
+    import synlynk.support_engineer as se_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "generate_context", lambda scope=None: None)
+    monkeypatch.setattr(synlynk, "LOGS_DIR", str(project_dir))
+    monkeypatch.setattr(synlynk, "PROMPTS_DIR", str(project_dir))
+
+    def fake_run(cmd, **kwargs):
+        shell_cmd = cmd[2]
+        match = re.search(r">\s*(?P<log>\S+)\s+2>&1", shell_cmd)
+        assert match is not None
+        log_path = match.group("log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "w") as f:
+            f.write(
+                "Input tokens: 12\n"
+                "Output tokens: 8\n"
+                "# synlynk-meta\n"
+                "model_version = claude-sonnet-4-6\n"
+            )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(se_mod.subprocess, "run", fake_run)
+
+    finding = {
+        "signal_hash": "abc123",
+        "type": "flatline",
+        "severity": "high",
+        "detail": "3 consecutive failures",
+        "summary": "flatline detected",
+    }
+    agent_cfg = {"investigator": "claude"}
+
+    se_mod._run_investigation(finding, agent_cfg)
+
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT cost_source FROM cost_entries").fetchall()
+    conn.close()
+    assert len(rows) == 1
+
+
 def test_cmd_launch_writes_estimated_tshirt_not_bare_zero(project_dir, monkeypatch):
     import synlynk
 
