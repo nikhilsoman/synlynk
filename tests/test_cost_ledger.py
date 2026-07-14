@@ -183,6 +183,148 @@ def test_extract_tokens_still_unpacks_as_pair():
     assert (in_tokens, out_tokens) == (10, 5)
 
 
+def test_extract_codex_structured_single_turn():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        '{"type":"thread_started","thread_id":"019f609a-abc"}\n'
+        '{"type":"turn_started"}\n'
+        '{"type":"item_completed","item":{"id":"item_0","type":"agent_message","text":"Hello"}}\n'
+        '{"type":"turn_completed","usage":{"input_tokens":39286,"cached_input_tokens":29824,'
+        '"output_tokens":167,"reasoning_output_tokens":42}}\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 39286
+    assert result.output_tokens == 167 + 42
+    assert result.cache_read_tokens == 29824
+    assert result.basis == "structured_output"
+
+
+def test_extract_codex_structured_multi_tool_call_cumulative():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        '{"type":"thread_started","thread_id":"019f609a-def"}\n'
+        '{"type":"turn_started"}\n'
+        '{"type":"item_started","item":{"id":"item_1","type":"command_execution",'
+        '"command":"ls","aggregated_output":"","exit_code":null,"status":"in_progress"}}\n'
+        '{"type":"item_completed","item":{"id":"item_1","type":"command_execution",'
+        '"command":"ls","aggregated_output":"a.txt\\n","exit_code":0,"status":"completed"}}\n'
+        '{"type":"item_started","item":{"id":"item_2","type":"command_execution",'
+        '"command":"cat a.txt","aggregated_output":"","exit_code":null,"status":"in_progress"}}\n'
+        '{"type":"item_completed","item":{"id":"item_2","type":"command_execution",'
+        '"command":"cat a.txt","aggregated_output":"hi\\n","exit_code":0,"status":"completed"}}\n'
+        '{"type":"turn_completed","usage":{"input_tokens":51000,"cached_input_tokens":40000,'
+        '"output_tokens":300,"reasoning_output_tokens":10}}\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 51000
+    assert result.output_tokens == 310
+    assert result.cache_read_tokens == 40000
+    assert result.basis == "structured_output"
+
+
+def test_extract_codex_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_codex_structured
+
+    assert _extract_codex_structured("") is None
+
+
+def test_extract_codex_structured_no_turn_completed_returns_none():
+    from synlynk.costs import _extract_codex_structured
+
+    output = '{"type":"thread_started","thread_id":"x"}\n{"type":"turn_started"}\n'
+    assert _extract_codex_structured(output) is None
+
+
+def test_extract_codex_structured_garbage_lines_mixed_with_valid_event():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        'not json at all\n'
+        '\n'
+        '   \n'
+        '{"type":"turn_completed","usage":{"input_tokens":100,"output_tokens":50}}\n'
+        'trailing garbage after the stream\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_codex_structured_missing_reasoning_tokens_defaults_zero():
+    from synlynk.costs import _extract_codex_structured
+
+    output = '{"type":"turn_completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.output_tokens == 5
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_codex_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_codex_structured
+
+    output = '{"type":"turn_completed","usage":{"input_tokens":"not-a-number","output_tokens":5}}\n'
+    assert _extract_codex_structured(output) is None
+
+
+def test_extract_codex_structured_last_turn_completed_wins():
+    from synlynk.costs import _extract_codex_structured
+
+    output = (
+        '{"type":"turn_completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '{"type":"turn_completed","usage":{"input_tokens":999,"output_tokens":888}}\n'
+    )
+    result = _extract_codex_structured(output)
+    assert result is not None
+    assert result.input_tokens == 999
+    assert result.output_tokens == 888
+
+
+def test_extract_tokens_agent_codex_uses_structured_output():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"turn_completed","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="codex")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_agent_codex_falls_back_to_regex_on_plain_text():
+    from synlynk.costs import extract_tokens
+
+    output = "Input tokens: 10\nOutput tokens: 5\n"
+    result = extract_tokens(output, agent="codex")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_tokens_non_codex_agent_never_uses_structured_path():
+    from synlynk.costs import extract_tokens
+
+    output = '{"type":"turn_completed","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="claude")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_default_agent_none_unchanged_behavior():
+    from synlynk.costs import extract_tokens
+
+    result = extract_tokens("Input tokens: 10\nOutput tokens: 5\n")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
 def test_load_model_rates_valid_file(project_dir):
     from synlynk.costs import _load_model_rates
 
