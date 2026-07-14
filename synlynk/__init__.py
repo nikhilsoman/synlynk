@@ -2063,6 +2063,7 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
         model_version=model_version,
         story_id=story_id,
         agent=agent,
+        basis="none",
     )
     print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
 
