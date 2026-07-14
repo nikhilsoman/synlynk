@@ -260,6 +260,24 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
     assert row[0] == "claude"
 
 
+def test_cmd_launch_writes_estimated_tshirt_not_bare_zero(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "generate_context", lambda scope=None: None)
+    monkeypatch.setattr(synlynk.subprocess, "run", lambda *a, **k: type("R", (), {"returncode": 0})())
+    monkeypatch.setattr(synlynk, "log_telemetry_event", lambda e: None)
+
+    synlynk.cmd_launch("claude", story_id=None)
+
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT cost_source, input_tokens FROM cost_entries").fetchone()
+    conn.close()
+    assert row[0] == "estimated_tshirt"
+    assert row[1] > 0
+
+
 def test_reconcile_daemon_jobs_writes_cost_row(project_dir, monkeypatch):
     import synlynk
     import synlynk.jobs as jobs_mod
