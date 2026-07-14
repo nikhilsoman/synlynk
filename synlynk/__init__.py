@@ -3397,6 +3397,7 @@ from synlynk.db import (  # noqa: E402
     _parse_roadmap_md,
     _parse_todo_metadata,
     cmd_devlog_append,
+    cmd_cost_log,
     cmd_memory_add,
     cmd_migrate,
     cmd_pr_check,
