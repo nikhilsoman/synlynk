@@ -6444,3 +6444,92 @@ def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
     assert job["status"] == "failed"
     assert len(killed) > 0
     assert "STALL_NO_OUTPUT" in sentinel_path.read_text()
+
+
+def test_check_job_stall_extends_on_remote_activity(tmp_path, monkeypatch):
+    import os
+    import time
+    import synlynk as sl
+
+    job_id = "job-stall-remote-activity"
+    log_file = tmp_path / f"{job_id}.log"
+    log_file.write_bytes(b"")
+    old_time = time.time() - 7200
+    os.utime(log_file, (old_time, old_time))
+
+    job = {
+        "id": job_id,
+        "agent": "agy",
+        "status": "running",
+        "pid": 99999,
+        "started_at": old_time,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path / "worktree"),
+        "worktree_branch": "dispatch/codex/job-xyz",
+    }
+
+    monkeypatch.setattr(
+        sl,
+        "_inspect_worktree_git_state",
+        lambda *a, **kw: {
+            "has_activity": False,
+            "remote_has_activity": True,
+            "remote_ref": "origin/dispatch/codex/job-xyz",
+            "remote_commit_count": 2,
+            "dirty": False,
+            "commits_ahead": 0,
+        },
+    )
+
+    result = sl._check_job_stall(
+        job,
+        {"stall_timeout_minutes": 0},
+        str(tmp_path / "sentinel.md"),
+    )
+
+    assert result is False
+    assert job["status"] == "running"
+
+
+def test_check_job_stall_still_kills_on_zero_activity(tmp_path, monkeypatch):
+    import os
+    import time
+    import synlynk as sl
+
+    job_id = "job-stall-zero-activity"
+    log_file = tmp_path / f"{job_id}.log"
+    log_file.write_bytes(b"")
+    old_time = time.time() - 7200
+    os.utime(log_file, (old_time, old_time))
+
+    job = {
+        "id": job_id,
+        "agent": "agy",
+        "status": "running",
+        "pid": 99999,
+        "started_at": old_time,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path / "worktree"),
+        "worktree_branch": "dispatch/codex/job-xyz",
+    }
+
+    monkeypatch.setattr(
+        sl,
+        "_inspect_worktree_git_state",
+        lambda *a, **kw: {
+            "has_activity": False,
+            "remote_has_activity": False,
+            "dirty": False,
+            "commits_ahead": 0,
+        },
+    )
+
+    result = sl._check_job_stall(
+        job,
+        {"stall_timeout_minutes": 0},
+        str(tmp_path / "sentinel.md"),
+    )
+
+    assert result is True
+    assert job["status"] == "failed"
+    assert job["exit_code"] == -1
