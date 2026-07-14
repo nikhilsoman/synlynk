@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from synlynk.costs import _estimate_tshirt_tokens
+from synlynk.costs import check_budgets
 from synlynk.costs import parse_costs_md as costs_parse_costs_md
 from synlynk.db import _parse_costs_md as db_parse_costs_md
 
@@ -257,6 +258,30 @@ def test_resolve_cost_tier_total_split_always_tshirt():
 def test_resolve_cost_tier_none_returns_none():
     cost_source, basis = _resolve_cost_tier(agent="claude", basis="none")
     assert cost_source is None
+
+
+def test_check_budgets_reports_failed_job_placeholders_separately(project_dir, monkeypatch, capsys):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "load_config", lambda: {
+        "budget": {"limit_usd": 1000.0, "limit_requests": 1000}
+    })
+    monkeypatch.setattr(synlynk.costs, "parse_costs_md", lambda: (0.5, 3))
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, model, input_tokens, output_tokens, "
+        "total_cost_usd, cost_source, estimate_basis, notes) VALUES "
+        "('2026-07-13', 'claude', 'claude-sonnet-4-6', 5000, 2000, 0.1, 'estimated_tshirt', "
+        "'fixed_default', 'exec: failed job, exit 1')"
+    )
+    conn.commit()
+    conn.close()
+
+    check_budgets()
+    captured = capsys.readouterr()
+    assert "failed-job placeholder" in captured.out.lower()
 
 
 def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):

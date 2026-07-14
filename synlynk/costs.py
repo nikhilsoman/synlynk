@@ -391,6 +391,22 @@ def check_budgets() -> None:
     elif total_reqs >= limit_reqs * 0.8:
         print(f"\n⚠️  [Budget Warning] 80% of request limit ({total_reqs} / {limit_reqs}).")
 
+    conn = _pkg("_get_db")()
+    try:
+        failed_row = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(total_cost_usd), 0) FROM cost_entries "
+            "WHERE cost_source = 'estimated_tshirt' AND estimate_basis = 'fixed_default' "
+            "AND notes LIKE '%failed job%'"
+        ).fetchone()
+    finally:
+        conn.close()
+    failed_count, failed_usd = failed_row
+    if failed_count:
+        print(
+            f"  ℹ️  {failed_count} failed-job placeholder estimates, ${failed_usd:.2f} "
+            "(not blended into the spend total above)"
+        )
+
 
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""

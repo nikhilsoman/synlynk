@@ -1015,8 +1015,11 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         if not _is_interactive(cmd_args):
             model_version = extract_model_version(output_text, agent=cmd_args[0]) if extract_model_version else "unknown"
             if update_costs:
+                cmd_label = " ".join(cmd_args)
+                if exit_code != 0 and in_tokens == 0 and out_tokens == 0:
+                    cmd_label += " [failed job]"
                 update_costs(
-                    " ".join(cmd_args),
+                    cmd_label,
                     in_tokens,
                     out_tokens,
                     duration,
