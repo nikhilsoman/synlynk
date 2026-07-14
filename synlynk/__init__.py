@@ -2059,8 +2059,14 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
         lines = f.readlines()
     display_lines = lines[-tail:]
     if job.get("agent") == "codex":
+        renderer = _render_codex_log_line
+    elif job.get("agent") == "claude":
+        renderer = _render_claude_log_line
+    else:
+        renderer = None
+    if renderer is not None:
         for line in display_lines:
-            rendered = _render_codex_log_line(line)
+            rendered = renderer(line)
             if rendered is not None:
                 print(rendered, end="")
     else:

@@ -1313,3 +1313,24 @@ def test_cmd_logs_non_codex_agent_unchanged(project_dir, monkeypatch, tmp_path, 
     out = capsys.readouterr().out
     assert "plain text transcript" in out
     assert "more output" in out
+
+
+def test_cmd_logs_renders_claude_stream_json(project_dir, monkeypatch, tmp_path, capsys):
+    import synlynk
+
+    log_file = tmp_path / "job-claude2.log"
+    log_file.write_text(
+        '{"type":"system","subtype":"init","cwd":"/tmp"}\n'
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done"}]}}\n'
+        '{"type":"result","subtype":"success","result":"Done","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    )
+    job = {"id": "job-claude2", "agent": "claude", "log_file": str(log_file)}
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [job], raising=False)
+    monkeypatch.setattr(synlynk, "_job_summary_path", lambda job_id: "/nonexistent", raising=False)
+
+    synlynk.cmd_logs("job-claude2")
+
+    out = capsys.readouterr().out
+    assert "Done" in out
+    assert '"type":"system"' not in out
+    assert '"type":"result"' not in out
