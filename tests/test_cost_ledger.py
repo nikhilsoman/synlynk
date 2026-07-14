@@ -235,6 +235,14 @@ def test_jobs_stall_path_passes_agent_to_extract_tokens(monkeypatch):
     assert captured["agent"] == "codex"
 
 
+def test_support_engineer_investigate_passes_agent_to_extract_tokens():
+    import inspect
+    from synlynk import support_engineer as se_mod
+
+    source = inspect.getsource(se_mod)
+    assert '_pkg("extract_tokens")(log_text, agent=agent)' in source
+
+
 def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
     import synlynk
     from synlynk import dispatch as dispatch_mod
