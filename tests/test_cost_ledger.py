@@ -692,3 +692,28 @@ def test_insert_cost_row_reachable_via_pkg_lookup():
     import synlynk
 
     assert hasattr(synlynk, "_insert_cost_row")
+
+
+def test_only_insert_cost_row_writes_to_cost_entries():
+    """Every INSERT/UPDATE against cost_entries in the source tree must go
+    through _insert_cost_row - no other call site is allowed to write directly.
+    """
+
+    allowed_files_with_direct_sql = {
+        "synlynk/db.py",
+    }
+    repo_root = os.path.join(os.path.dirname(__file__), "..")
+    violations = []
+    for dirpath, _, filenames in os.walk(os.path.join(repo_root, "synlynk")):
+        for fname in filenames:
+            if not fname.endswith(".py"):
+                continue
+            rel_path = os.path.relpath(os.path.join(dirpath, fname), repo_root)
+            with open(os.path.join(dirpath, fname)) as f:
+                content = f.read()
+            if rel_path in allowed_files_with_direct_sql:
+                continue
+            for lineno, line in enumerate(content.splitlines(), 1):
+                if "INSERT INTO cost_entries" in line or "UPDATE cost_entries" in line:
+                    violations.append(f"{rel_path}:{lineno}")
+    assert violations == [], f"Direct cost_entries writes outside db.py: {violations}"
