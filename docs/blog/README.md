@@ -59,6 +59,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [50](./50-prTBD-governs-stage-rollout.md) | GOVERNS: Rolling Out the Seven-Stage Vocabulary | TBD | 2026-07-11 |
 | [51](./51-prTBD-vizor-goals-panel.md) | Vizor Gets a Goals Panel | TBD | 2026-07-11 |
 | [54](./54-prTBD-fix-dispatch-ready-jobs-unification.md) | Queue Path Uses Shared `dispatch_agent` (#190) | TBD | 2026-07-12 |
+| [56](./56-prTBD-measurement-ledger-hardening-phase1.md) | Measurement Ledger Hardening Phase 1 — No Number Lies About Where It Came From | TBD | 2026-07-14 |
 
 
 ## Per-PR Post Template
