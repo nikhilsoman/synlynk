@@ -152,6 +152,49 @@ def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
     assert rows == [(200, "actual")]
 
 
+def test_exec_command_passes_agent_to_extract_tokens(project_dir, monkeypatch, tmp_path):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_extract_tokens(output_text, agent=None):
+        captured["agent"] = agent
+        from synlynk.costs import _TokenCounts
+
+        return _TokenCounts(0, 0, 0, "none")
+
+    class _FakeStdout:
+        def readline(self):
+            return b""
+
+        def close(self):
+            return None
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = _FakeStdout()
+
+        def wait(self):
+            return 0
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(synlynk, "extract_tokens", fake_extract_tokens, raising=False)
+    monkeypatch.setattr(synlynk, "update_costs", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "check_budgets", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "set_state", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(dispatch_mod, "_check_pre_exec_gate", lambda force=False: True, raising=False)
+    monkeypatch.setattr(synlynk, "extract_model_version", lambda *a, **k: "unknown", raising=False)
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: _FakeProcess())
+
+    dispatch_mod.exec_command(["echo", "--print", "hi"], force=True)
+
+    assert captured["agent"] == "echo"
+
+
 def test_extract_tokens_basis_regex_pair():
     from synlynk.costs import extract_tokens
 
@@ -647,7 +690,11 @@ def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, mon
         "_synlynk_project_docs_dir",
         lambda: os.path.join(project_dir, ".synlynk", "project-docs"),
     )
-    monkeypatch.setattr(synlynk, "extract_tokens", lambda _text: _TokenCounts(0, 0, 0, "none"))
+    monkeypatch.setattr(
+        synlynk,
+        "extract_tokens",
+        lambda _text, agent=None: _TokenCounts(0, 0, 0, "none"),
+    )
     monkeypatch.setattr(
         synlynk,
         "extract_model_version",
