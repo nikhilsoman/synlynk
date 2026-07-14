@@ -177,6 +177,10 @@ def _parse_costs_md(content: str) -> list:
             try: return int(v.replace(',', ''))
             except: return None
         def _float(v):
+            for prefix in ("[est] ", "[legacy] "):
+                if v.startswith(prefix):
+                    v = v[len(prefix):]
+                    break
             try: return float(v.replace('$', '').replace(',', ''))
             except: return None
         rows.append({'session_date': date,
@@ -445,6 +449,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             phase_id          INTEGER REFERENCES roadmap_phases(id),
             total_cost_usd    REAL,
             notes             TEXT,
+            cost_source       TEXT NOT NULL,
+            estimate_basis    TEXT,
+            job_id            TEXT,
             recorded_at       TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS devlog_entries (
@@ -487,6 +494,56 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
             except sqlite3.OperationalError:
                 pass
+    if "cost_source" not in cost_cols:
+        conn.execute("ALTER TABLE cost_entries RENAME TO cost_entries_pre_provenance")
+        conn.execute("""
+            CREATE TABLE cost_entries (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_date      TEXT NOT NULL,
+                agent             TEXT,
+                model             TEXT,
+                input_tokens      INTEGER,
+                output_tokens     INTEGER,
+                cache_read_tokens INTEGER,
+                story_id          TEXT REFERENCES stories(story_id),
+                epic_id           INTEGER REFERENCES roadmap_arcs(id),
+                phase_id          INTEGER REFERENCES roadmap_phases(id),
+                total_cost_usd    REAL,
+                notes             TEXT,
+                cost_source       TEXT NOT NULL,
+                estimate_basis    TEXT,
+                job_id            TEXT,
+                recorded_at       TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        old_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries_pre_provenance)")}
+        select_cols = ", ".join(
+            c if c in old_cols else "NULL"
+            for c in (
+                "session_date", "agent", "model", "input_tokens", "output_tokens",
+                "cache_read_tokens", "story_id", "epic_id", "phase_id",
+                "total_cost_usd", "notes"
+            )
+        )
+        conn.execute(f"""
+            INSERT INTO cost_entries
+                (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                 story_id, epic_id, phase_id, total_cost_usd, notes, cost_source,
+                 estimate_basis, job_id, recorded_at)
+            SELECT {select_cols}, 'legacy_unknown', NULL, NULL, recorded_at
+            FROM cost_entries_pre_provenance
+        """)
+        conn.execute("DROP TABLE cost_entries_pre_provenance")
+        cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "job_id" not in cost_cols:
+        try:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_job_id "
+        "ON cost_entries(job_id) WHERE job_id IS NOT NULL"
+    )
     conn.execute(
         "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
         "WHERE discipline IS NULL OR discipline = ''"
@@ -620,6 +677,109 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     conn.commit()
     _seed_verb_map(conn)
 
+
+_VALID_COST_SOURCES = {
+    "actual",
+    "estimated_token_rate",
+    "estimated_tshirt",
+    "estimated_manual",
+    "legacy_unknown",
+}
+
+
+def _insert_cost_row(
+    session_date: str,
+    agent: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cost_source: str,
+    total_cost_usd: float,
+    notes: str = None,
+    story_id: str = None,
+    epic_id: int = None,
+    phase_id: int = None,
+    estimate_basis: str = None,
+    job_id: str = None,
+) -> None:
+    """Insert or update a cost_entries row through the single sanctioned path."""
+    from synlynk import _get_db
+
+    if cost_source not in _VALID_COST_SOURCES:
+        raise ValueError(
+            f"Invalid cost_source: {cost_source!r}, must be one of {_VALID_COST_SOURCES}"
+        )
+
+    conn = _get_db()
+    try:
+        if job_id is not None:
+            existing = conn.execute(
+                "SELECT id FROM cost_entries WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE cost_entries SET
+                        session_date=?,
+                        agent=?,
+                        model=?,
+                        input_tokens=?,
+                        output_tokens=?,
+                        cache_read_tokens=?,
+                        cost_source=?,
+                        estimate_basis=?,
+                        total_cost_usd=?,
+                        notes=?,
+                        story_id=?,
+                        epic_id=?,
+                        phase_id=?
+                    WHERE job_id=?""",
+                    (
+                        session_date,
+                        agent,
+                        model,
+                        input_tokens,
+                        output_tokens,
+                        cache_read_tokens,
+                        cost_source,
+                        estimate_basis,
+                        total_cost_usd,
+                        notes,
+                        story_id,
+                        epic_id,
+                        phase_id,
+                        job_id,
+                    ),
+                )
+                conn.commit()
+                return
+        conn.execute(
+            """INSERT INTO cost_entries
+                (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                 cost_source, estimate_basis, total_cost_usd, notes, story_id, epic_id, phase_id, job_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_date,
+                agent,
+                model,
+                input_tokens,
+                output_tokens,
+                cache_read_tokens,
+                cost_source,
+                estimate_basis,
+                total_cost_usd,
+                notes,
+                story_id,
+                epic_id,
+                phase_id,
+                job_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
 def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     """Parse flat files in docs_dir -> state.db. Prints import summary."""
     from synlynk import _get_db, _parse_costs_md, _parse_devlog_file, _parse_memory_md, _parse_roadmap_md, _parse_todo_metadata
@@ -694,8 +854,8 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         """INSERT INTO cost_entries
                            (session_date, agent, model, input_tokens, output_tokens,
                             cache_read_tokens, story_id, epic_id, phase_id,
-                            total_cost_usd, notes)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                            total_cost_usd, notes, cost_source, estimate_basis, job_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             r["session_date"],
                             r["agent"],
@@ -708,6 +868,9 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                             r.get("phase_id"),
                             r["total_cost_usd"],
                             r["notes"],
+                            "legacy_unknown",
+                            None,
+                            None,
                         ),
                     )
                     if getattr(cursor, "rowcount", 0) > 0:
@@ -1353,6 +1516,61 @@ def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> N
         score_str = f"{r[6]:.2f}" if r[6] is not None else "  n/a"
         print(f"  {r[0]:<10} {r[1]:<22} {r[2]:<12} {r[3]:<14} "
               f"{r[4]:<12} {r[5]:<10} {score_str:>6} {r[7]:>4}")
+
+def cmd_cost_log(
+    agent: str,
+    tokens_in: int,
+    tokens_out: int,
+    story_id: str = None,
+    note: str = None,
+) -> None:
+    """Log a manually reported cost row for native/unwrapped sessions."""
+    from synlynk import (
+        _GREEN,
+        _RESET,
+        _get_db,
+        _insert_cost_row,
+        extract_model_version,
+    )
+    from synlynk.costs import _model_rate_for_version
+
+    if tokens_in < 0 or tokens_out < 0:
+        raise ValueError("tokens-in and tokens-out must be non-negative")
+
+    conn = _get_db()
+    phase = None
+    if story_id:
+        row = conn.execute(
+            "SELECT discipline, phase FROM stories WHERE story_id=?",
+            (story_id,),
+        ).fetchone()
+        if row:
+            _, phase = row
+    conn.close()
+
+    model_version = extract_model_version("", agent=agent)
+    rates = _model_rate_for_version(model_version, agent=agent)
+    est_cost = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
+    ts = time.strftime("%Y-%m-%d %H:%M")
+
+    _insert_cost_row(
+        session_date=ts,
+        agent=agent,
+        model=model_version,
+        input_tokens=tokens_in,
+        output_tokens=tokens_out,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=est_cost,
+        notes=note,
+        story_id=story_id,
+    )
+    label = f"story {story_id}" if story_id else f"phase={phase or 'dream/plan'} (no story)"
+    print(
+        f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
+        f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
+    )
 
 def cmd_pr_check() -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'.

@@ -848,12 +848,26 @@ def _reconcile_jobs() -> None:
                         log_text = f.read()
                 except Exception:
                     log_text = ""
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
+            token_counts = _pkg("extract_tokens")(log_text)
+            in_tokens, out_tokens = token_counts
+            basis = getattr(token_counts, "basis", "none")
+            model_version = job.get("model_version") or job.get("model_at_dispatch")
+            _pkg("update_costs")(
+                f"{job.get('agent', '')} job {job.get('id', '')}",
+                in_tokens,
+                out_tokens,
+                duration_s or 0,
+                model_version=model_version,
+                story_id=job.get("story_id"),
+                agent=job.get("agent", ""),
+                basis=basis,
+                job_id=job.get("id"),
+            )
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
                 out_tokens,
-                job.get("model_version") or job.get("model_at_dispatch"),
+                model_version,
             )
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -1196,6 +1210,7 @@ def _reconcile_daemon_jobs() -> None:
                     "WHERE job_id=?",
                     (status, exit_code, now, job_id)
                 )
+                conn.commit()
                 duration_s = None
                 try:
                     end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))
@@ -1210,8 +1225,22 @@ def _reconcile_daemon_jobs() -> None:
                             log_text = f.read()
                     except Exception:
                         log_text = ""
-                in_tokens, out_tokens = _pkg("extract_tokens")(log_text)
-                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens)
+                token_counts = _pkg("extract_tokens")(log_text)
+                in_tokens, out_tokens = token_counts
+                basis = getattr(token_counts, "basis", "none")
+                model_version = _pkg("extract_model_version")(log_text, agent=agent)
+                _pkg("update_costs")(
+                    f"{agent} job {job_id}",
+                    in_tokens,
+                    out_tokens,
+                    duration_s or 0,
+                    model_version=model_version,
+                    story_id=story_id,
+                    agent=agent,
+                    basis=basis,
+                    job_id=job_id,
+                )
+                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
                 summary_status = "UNKNOWN (exit unknown)" if status == "unknown" else None
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,

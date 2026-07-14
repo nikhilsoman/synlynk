@@ -9,7 +9,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+**Measurement Ledger Hardening Phase 1 (progress toward #210)**
+- `cost_entries` gained explicit provenance columns: `cost_source TEXT NOT NULL` (`actual` | `estimated_token_rate` | `estimated_tshirt` | `estimated_manual` | `legacy_unknown`, no default — every `INSERT` must pass it explicitly) and `estimate_basis TEXT`. Migration rebuilds the table and backfills historical rows as `legacy_unknown`.
+- `_insert_cost_row()` (`synlynk/db.py`) is now the sole sanctioned writer to `cost_entries`, replacing four independently-drifting direct-SQL write sites in `dispatch.py`, `jobs.py` (×2), and `support_engineer.py`. Upserts by `job_id` when present. Enforced by a call-site audit test that fails the suite if any other file writes to `cost_entries` directly.
+- `extract_tokens()` now tags a `.basis` (`regex_pair` | `total_split` | `none`) distinguishing a real per-field token extraction from an 80/20 heuristic guess.
+- `.synlynk/model_rates.json` (scaffolded by `synlynk init`) is now the source of truth for per-model rates and `billing_mode`, replacing a hardcoded table; falls back to hardcoded rates on missing/invalid file.
+- New 3-tier t-shirt-size token fallback (`_estimate_tshirt_tokens()`) for surfaces with no real token count: story's `estimated_tokens` column → historical average from `cost_entries` (same discipline+phase, ≥3 samples) → fixed conservative default.
+- **`synlynk cost log`** — manually log a cost row for native/unwrapped PM or brainstorming sessions with no CLI token data, tagged `estimated_manual`.
+- Cost coverage closed across every surface identified in the design spec's audit: `dispatch_agent()`'s exec wrapper (no longer gated on `in_tokens > 0`), `jobs.py`'s reconcile and daemon-reconcile paths, `cmd_launch()`, and `support_engineer.py`'s investigation runs (previously zero cost-write calls in that file). `synlynk release`, `synlynk probe`, and `synlynk doctor` audited and confirmed correctly out of ledger scope.
+- `check_budgets()` gained a dedicated sub-line surfacing failed-job placeholder estimates separately from the headline spend total. `costs.md` and budget parsers now tolerate `[est] `/`[legacy] `/`~` prefixes.
+- New "Cost Capture Protocol" section in `CLAUDE.md` — PR housekeeping check, enforced by discipline, not CI.
+- Design spec: `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md`. Phase 2 (structured-output extraction adapters, closing the rest of #210) is deferred to a follow-up plan.
+
 ### Fixed
+
+**`[failed job]` marker lost to `short_cmd` truncation (found in final review of the above)**
+- `dispatch.py`'s zero-token-failure cost label appended `" [failed job]"` to the command string, but `update_costs()` truncates its `command` argument to 20 characters before writing `cost_entries.notes` — since real commands are almost always longer than 20 characters, the appended marker never survived, making `check_budgets()`'s failed-job sub-line dead code in production despite its own unit test passing (that test bypassed `update_costs()` and inserted the marker directly). Fixed by prepending the marker instead of appending it, so it survives the truncation. New regression test exercises the real `update_costs()` write path with a >20-character command.
 
 **Dispatch job isolation (#128)**
 - `dispatch_agent()` now creates a dedicated `git worktree` per dispatched job (`worktrees/<job_id>`, branch `dispatch/<agent>/<job_id>`) instead of running every job in the invoking shell's shared `cwd`. Concurrent dispatches no longer collide or interleave uncommitted writes in one working directory.

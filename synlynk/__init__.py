@@ -2063,6 +2063,7 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
         model_version=model_version,
         story_id=story_id,
         agent=agent,
+        basis="none",
     )
     print(f"\n{_DIM}Returned from {agent}. Duration: {duration:.0f}s{_RESET}")
 
@@ -3319,6 +3320,15 @@ def init(force: bool = False, agents: list = None,
             with open(config_path, "w") as f:
                 f.write(config_json_content)
 
+    rates_path = os.path.join(".synlynk", "model_rates.json")
+    if not os.path.exists(rates_path):
+        from synlynk.costs import _HARDCODED_FALLBACK_RATES
+        rates_seed = dict(_HARDCODED_FALLBACK_RATES)
+        rates_seed["rates_updated_at"] = time.strftime("%Y-%m-%d")
+        with open(rates_path, "w") as f:
+            json.dump(rates_seed, f, indent=2)
+        print(f"  ✓ Created {rates_path}")
+
     # ── Step 4: LLM enrichment offer ────────────────────────────────────────
     _print_step(4, "LLM enrichment (optional)")
     if functional:
@@ -3389,12 +3399,14 @@ from synlynk.db import (  # noqa: E402
     _import_todo_to_stories,
     _migrate_db,
     _migrate_import,
+    _insert_cost_row,
     _parse_costs_md,
     _parse_devlog_file,
     _parse_memory_md,
     _parse_roadmap_md,
     _parse_todo_metadata,
     cmd_devlog_append,
+    cmd_cost_log,
     cmd_memory_add,
     cmd_migrate,
     cmd_pr_check,

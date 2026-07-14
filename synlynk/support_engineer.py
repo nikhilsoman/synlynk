@@ -409,6 +409,7 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
             f"echo $? > {_shlex.quote(log_file)}.exit"
         )
 
+    _investigation_start = time.time()
     try:
         subprocess.run(["sh", "-c", shell_cmd], timeout=300)
     except subprocess.TimeoutExpired:
@@ -417,6 +418,23 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
     log_text = ""
     if os.path.exists(log_file):
         log_text = open(log_file).read()
+
+    duration_s = time.time() - _investigation_start
+    token_counts = _pkg("extract_tokens")(log_text)
+    in_tokens, out_tokens = token_counts
+    basis = getattr(token_counts, "basis", "none")
+    model_version = _pkg("extract_model_version")(log_text, agent=agent)
+    _pkg("update_costs")(
+        f"{agent} investigate {job_id}",
+        in_tokens,
+        out_tokens,
+        duration_s,
+        model_version=model_version,
+        story_id=story_id,
+        agent=agent,
+        basis=basis,
+        job_id=job_id,
+    )
 
     import re as _re
     fix_signal = "# FIX:" in log_text or bool(

@@ -17,12 +17,13 @@ def _pkg(name: str, default=None):
 
 
 class _TokenCounts(object):
-    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens")
+    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens", "basis")
 
-    def __init__(self, input_tokens, output_tokens, cache_read_tokens):
+    def __init__(self, input_tokens, output_tokens, cache_read_tokens, basis="none"):
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cache_read_tokens = cache_read_tokens
+        self.basis = basis
 
     def __iter__(self):
         yield self.input_tokens
@@ -49,11 +50,13 @@ def extract_tokens(output_text: str) -> tuple:
     ]
     in_tokens = 0
     out_tokens = 0
+    basis = "none"
     for pat, flags in patterns:
         m = re.search(pat, output_text, flags)
         if m:
             in_tokens = _parse_count(m.group(1))
             out_tokens = _parse_count(m.group(2))
+            basis = "regex_pair"
             break
     if not in_tokens and not out_tokens:
         m = re.search(r'(?:Tokens used|Total tokens)\s*[:\n]\s*([\d,]+)', output_text, re.IGNORECASE)
@@ -61,6 +64,7 @@ def extract_tokens(output_text: str) -> tuple:
             total = _parse_count(m.group(1))
             in_tokens = int(total * 0.8)
             out_tokens = total - in_tokens
+            basis = "total_split"
 
     cache_read_tokens = 0
     cache_patterns = [
@@ -74,7 +78,7 @@ def extract_tokens(output_text: str) -> tuple:
             cache_read_tokens = _parse_count(m.group(1))
             break
 
-    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens)
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, basis)
 
 
 def extract_model_version(output_text: str, agent: str = None) -> str:
@@ -137,32 +141,156 @@ def extract_verifier_meta(output_text: str) -> Optional[dict]:
 
 
 _DEFAULT_MODEL_RATE = {"input": 0.003, "output": 0.015, "cache_read": 0.0000003}
-_MODEL_RATE_TABLE = {
-    "claude-opus-4-8": {"input": 0.015, "output": 0.075, "cache_read": 0.0000015},
-    "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gpt-5-codex": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gpt-5.4-mini": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
-    "grok-build": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
-    "grok-composer-2.5-fast": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+_EXPECTED_RATE_UNIT = "usd_per_1k_tokens"
+_HARDCODED_FALLBACK_RATES = {
+    "rates_updated_at": None,
+    "unit": _EXPECTED_RATE_UNIT,
+    "models": {
+        "claude-opus-4-8": {"input": 0.015, "output": 0.075, "cache_read": 0.0000015},
+        "claude-sonnet-4-6": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gpt-5-codex": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gpt-5.4-mini": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "gemini-2.5-pro": {"input": 0.00125, "output": 0.01, "cache_read": 0.000125},
+        "grok-build": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+        "grok-composer-2.5-fast": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    },
+    "default": _DEFAULT_MODEL_RATE,
+    "billing_mode": {"default": "subscription", "local": "actual"},
 }
+_RATES_PATH = ".synlynk/model_rates.json"
+
+
+def _load_model_rates() -> dict:
+    """Loads .synlynk/model_rates.json and falls back to hardcoded rates when needed."""
+    if not os.path.exists(_RATES_PATH):
+        return _HARDCODED_FALLBACK_RATES
+    try:
+        with open(_RATES_PATH) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        print(f"WARNING: {_RATES_PATH} is unreadable; falling back to hardcoded default rates")
+        return _HARDCODED_FALLBACK_RATES
+    if data.get("unit") != _EXPECTED_RATE_UNIT:
+        print(
+            f"WARNING: {_RATES_PATH} has missing or unexpected 'unit' "
+            f"(expected {_EXPECTED_RATE_UNIT!r}, got {data.get('unit')!r}); "
+            "falling back to hardcoded default rates to avoid a pricing unit mismatch"
+        )
+        return _HARDCODED_FALLBACK_RATES
+    data.setdefault("default", _DEFAULT_MODEL_RATE)
+    data.setdefault("models", {})
+    data.setdefault("billing_mode", {"default": "subscription", "local": "actual"})
+    return data
+
+
+def _resolve_billing_mode(agent: str) -> str:
+    """Resolves billing mode for an agent; local is always actual."""
+    normalized_agent = os.path.basename(agent or "")
+    if normalized_agent == "local":
+        return "actual"
+    rates = _load_model_rates()
+    billing_mode = rates.get("billing_mode", {})
+    return billing_mode.get(normalized_agent, billing_mode.get("default", "subscription"))
 
 
 def _model_rate_for_version(model_version, agent=None):
     normalized_agent = os.path.basename(agent or "")
     if normalized_agent == "local":
         return {"input": 0.0, "output": 0.0, "cache_read": 0.0}
-    return _MODEL_RATE_TABLE.get(model_version, _DEFAULT_MODEL_RATE)
+    rates = _load_model_rates()
+    return rates["models"].get(model_version, rates["default"])
+
+
+_FIXED_DEFAULT_TOKENS_IN = 5000
+_FIXED_DEFAULT_TOKENS_OUT = 2000
+_HISTORICAL_AVG_MIN_SAMPLES = 3
+_HISTORICAL_AVG_LOOKBACK = 20
+
+
+def _estimate_tshirt_tokens(story_id: str = None, discipline: str = None, phase: str = None) -> tuple:
+    """Fallback chain for estimated_tshirt token counts.
+
+    Returns (in_tokens, out_tokens, estimate_basis).
+    Tier 1: story's estimated_tokens column, split evenly in/out.
+    Tier 2: historical average from cost_entries actual/estimated_token_rate rows,
+            same discipline+phase, with at least 3 samples.
+    Tier 3: fixed conservative default.
+    """
+    conn = _pkg("_get_db")()
+    try:
+        if story_id:
+            row = conn.execute(
+                "SELECT estimated_tokens FROM stories WHERE story_id=?",
+                (story_id,),
+            ).fetchone()
+            if row and row[0]:
+                total_tokens = int(row[0])
+                half = total_tokens // 2
+                return half, total_tokens - half, "story_estimate"
+
+        if discipline and phase:
+            rows = conn.execute(
+                """SELECT cost_entries.input_tokens, cost_entries.output_tokens
+                   FROM cost_entries
+                   JOIN stories ON cost_entries.story_id = stories.story_id
+                   WHERE stories.discipline = ?
+                     AND stories.phase = ?
+                     AND cost_entries.cost_source IN ('actual', 'estimated_token_rate')
+                   ORDER BY cost_entries.id DESC
+                   LIMIT ?""",
+                (discipline, phase, _HISTORICAL_AVG_LOOKBACK),
+            ).fetchall()
+            if len(rows) >= _HISTORICAL_AVG_MIN_SAMPLES:
+                avg_in = sum((row[0] or 0) for row in rows) // len(rows)
+                avg_out = sum((row[1] or 0) for row in rows) // len(rows)
+                return avg_in, avg_out, "historical_avg"
+
+        return _FIXED_DEFAULT_TOKENS_IN, _FIXED_DEFAULT_TOKENS_OUT, "fixed_default"
+    finally:
+        conn.close()
+
+
+def _resolve_cost_tier(agent: str, basis: str) -> tuple:
+    """Maps an extraction basis + billing mode to (cost_source, estimate_basis).
+
+    Returns (None, None) for basis == 'none' - caller must run the t-shirt
+    fallback chain (_estimate_tshirt_tokens) instead.
+    """
+    if basis in ("regex_pair", "structured_output"):
+        billing_mode = _resolve_billing_mode(agent)
+        if billing_mode == "actual":
+            return "actual", None
+        return "estimated_token_rate", basis
+    if basis == "total_split":
+        return "estimated_tshirt", "total_split"
+    return None, None
 
 
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
-                 epic_id=None, phase_id=None, agent=None) -> None:
-    """Appends a cost row. Post-migration: writes to state.db + .synlynk/project-docs/costs.md.
-    Pre-migration: writes to project-docs/costs.md. Rates are model-aware, with a flat fallback."""
+                 epic_id=None, phase_id=None, agent=None, basis="none",
+                 job_id=None, discipline=None, phase=None) -> None:
+    """Resolves a provenance tier and writes exactly one cost_entries row via
+    the _insert_cost_row chokepoint.
+
+    Never skips a write - a zero-token or unextractable result falls through to
+    the estimated_tshirt chain.
+    """
     agent_name = agent or (command.split()[0] if command else "")
     if not model_version:
         model_version = extract_model_version("", agent=agent_name) if agent_name else "unknown"
+
+    cost_source, estimate_basis = _resolve_cost_tier(agent_name, basis)
+    if cost_source is None:
+        if in_tokens > 0 or out_tokens > 0:
+            cost_source = "estimated_token_rate"
+            estimate_basis = None
+        else:
+            in_tokens, out_tokens, estimate_basis = _estimate_tshirt_tokens(
+                story_id=story_id, discipline=discipline, phase=phase
+            )
+            cost_source = "estimated_tshirt"
+
     rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
     est_cost = (
@@ -172,24 +300,20 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
     )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
-    user = _pkg("get_username")()
-    entry = (f"| {ts} | {user} | 1 | {in_tokens}/{out_tokens} "
-             f"| ${est_cost:.4f} | exec: {short_cmd} |\n")
+    flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
+    entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
+             f"| {flag}${est_cost:.4f} | exec: {short_cmd} |\n")
+
+    from synlynk.db import _insert_cost_row
 
     if _pkg("_is_migrated")():
-        conn = _pkg("_get_db")()
-        try:
-            conn.execute(
-                """INSERT INTO cost_entries
-                   (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                    total_cost_usd, notes, story_id, epic_id, phase_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                (ts, user, model_version, in_tokens, out_tokens, cache_read_tokens,
-                 est_cost, f"exec: {short_cmd}", story_id, epic_id, phase_id)
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        _insert_cost_row(
+            session_date=ts, agent=agent_name, model=model_version,
+            input_tokens=in_tokens, output_tokens=out_tokens, cache_read_tokens=cache_read_tokens,
+            cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
+            notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
+            job_id=job_id,
+        )
         costs_file = os.path.join(_pkg("_synlynk_project_docs_dir")(), "costs.md")
         os.makedirs(os.path.dirname(costs_file), exist_ok=True)
         with open(costs_file, "a") as f:
@@ -267,6 +391,22 @@ def check_budgets() -> None:
     elif total_reqs >= limit_reqs * 0.8:
         print(f"\n⚠️  [Budget Warning] 80% of request limit ({total_reqs} / {limit_reqs}).")
 
+    conn = _pkg("_get_db")()
+    try:
+        failed_row = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(total_cost_usd), 0) FROM cost_entries "
+            "WHERE cost_source = 'estimated_tshirt' AND estimate_basis = 'fixed_default' "
+            "AND notes LIKE '%failed job%'"
+        ).fetchone()
+    finally:
+        conn.close()
+    failed_count, failed_usd = failed_row
+    if failed_count:
+        print(
+            f"  ℹ️  {failed_count} failed-job placeholder estimates, ${failed_usd:.2f} "
+            "(not blended into the spend total above)"
+        )
+
 
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md column 6."""
@@ -282,7 +422,12 @@ def parse_costs_md() -> tuple:
             parts = [p.strip() for p in line.split("|")]
             if len(parts) < 8:
                 continue
-            cost_str = parts[5].lstrip("$")
+            cost_str = parts[5]
+            for prefix in ("[est] ", "[legacy] ", "~"):
+                if cost_str.startswith(prefix):
+                    cost_str = cost_str[len(prefix):]
+                    break
+            cost_str = cost_str.lstrip("$")
             try:
                 total_usd += float(cost_str)
                 total_requests += 1

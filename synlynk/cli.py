@@ -175,6 +175,7 @@ def main() -> None:
         cmd_roles,
         cmd_run_trio,
         cmd_scan,
+        cmd_cost_log,
         cmd_score_add,
         cmd_score_attest,
         cmd_score_list,
@@ -542,6 +543,15 @@ def main() -> None:
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
 
+    cost_parser = subparsers.add_parser("cost", help="Manage the cost ledger")
+    cost_sub = cost_parser.add_subparsers(dest="cost_action")
+    cost_log_parser = cost_sub.add_parser("log", help="Log a manual cost entry for native/unwrapped sessions")
+    cost_log_parser.add_argument("--agent", required=True)
+    cost_log_parser.add_argument("--tokens-in", type=int, required=True, dest="tokens_in")
+    cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
+    cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
+    cost_log_parser.add_argument("--note", default=None)
+
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
     )
@@ -740,6 +750,15 @@ def main() -> None:
             cmd_score_list(engg=args.engg, org=args.org, industry=args.industry)
         elif args.score_action == "attest":
             cmd_score_attest(args.story_id, args.model)
+    elif args.command == "cost":
+        if args.cost_action == "log":
+            cmd_cost_log(
+                args.agent,
+                args.tokens_in,
+                args.tokens_out,
+                story_id=args.story_id,
+                note=args.note,
+            )
     elif args.command == "schedule":
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
