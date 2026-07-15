@@ -64,6 +64,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [60](./60-pr256-measurement-ledger-phase2-agy-adapter.md) | Measurement Ledger Phase 2: The Agy (Gemini) Structured-Output Adapter | [#256](https://github.com/nikhilsoman/synlynk/pull/256) | 2026-07-15 |
 | [61](./61-pr257-measurement-ledger-phase2-grok-adapter.md) | Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210) | [#257](https://github.com/nikhilsoman/synlynk/pull/257) | 2026-07-15 |
 | [62](./62-pr258-vizor-cost-flagging.md) | Closing Epic #210: Flagging Estimated vs. Actual Cost in the Vizor Effort & Cost Tab | [#258](https://github.com/nikhilsoman/synlynk/pull/258) | 2026-07-15 |
+| [63](./63-pr259-status-rates-updated-at.md) | Closing v0.12.0: Surfacing rates_updated_at in synlynk status | [#259](https://github.com/nikhilsoman/synlynk/pull/259) | 2026-07-15 |
+| **[64](./64-v012-measurement-and-reliability.md)** | **v0.12.0 — Measurement & Reliability (Named Release)** | [v0.12.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.12.0) | **2026-07-15** |
+| [65](./65-whats-new-v012-getting-started.md) | What's New in v0.12.0 — And How to Get Started | — | 2026-07-15 |
 
 
 ## Per-PR Post Template
