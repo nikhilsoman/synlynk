@@ -678,6 +678,146 @@ def test_extract_agy_structured_truncated_json_returns_none():
     output = '{"status":"SUCCESS","usage":{"input_tokens":10,"outp'
     assert _extract_agy_structured(output) is None
 
+def test_extract_grok_structured_basic():
+    from synlynk.costs import _extract_grok_structured
+
+    output = (
+        '{\n'
+        '  "text": "Hi there.",\n'
+        '  "stopReason": "EndTurn",\n'
+        '  "sessionId": "019f6431-b20a-7060-bece-8ef68badf264",\n'
+        '  "requestId": "4a07d1bf-9834-482b-88d5-af7072581354",\n'
+        '  "thought": "The user wants a simple greeting.",\n'
+        '  "usage": {\n'
+        '    "input_tokens": 10118,\n'
+        '    "cache_read_input_tokens": 11136,\n'
+        '    "output_tokens": 29,\n'
+        '    "reasoning_tokens": 22,\n'
+        '    "total_tokens": 21283\n'
+        '  },\n'
+        '  "num_turns": 1,\n'
+        '  "modelUsage": {"grok-4.5": {"inputTokens": 10118, "outputTokens": 29}}\n'
+        '}\n'
+    )
+    result = _extract_grok_structured(output)
+    assert result is not None
+    assert result.input_tokens == 10118
+    assert result.output_tokens == 29 + 22
+    assert result.cache_read_tokens == 11136
+    assert result.basis == "structured_output"
+
+
+def test_extract_grok_structured_tool_use_sample():
+    from synlynk.costs import _extract_grok_structured
+
+    output = (
+        '{\n'
+        '  "text": "Here is what is in the directory.",\n'
+        '  "stopReason": "EndTurn",\n'
+        '  "sessionId": "019f6431-e8be-7e82-8cfa-0badf0b4bbf5",\n'
+        '  "requestId": "81d3e406-f05f-46f6-9832-eeacd85a4c60",\n'
+        '  "thought": "The user wants a file listing.",\n'
+        '  "usage": {\n'
+        '    "input_tokens": 11139,\n'
+        '    "cache_read_input_tokens": 32256,\n'
+        '    "output_tokens": 603,\n'
+        '    "reasoning_tokens": 338,\n'
+        '    "total_tokens": 43998\n'
+        '  },\n'
+        '  "num_turns": 2,\n'
+        '  "modelUsage": {"grok-4.5": {"inputTokens": 11139, "outputTokens": 603, "modelCalls": 2}}\n'
+        '}\n'
+    )
+    result = _extract_grok_structured(output)
+    assert result is not None
+    assert result.input_tokens == 11139
+    assert result.output_tokens == 603 + 338
+    assert result.cache_read_tokens == 32256
+    assert result.basis == "structured_output"
+
+
+def test_extract_grok_structured_cache_read_kept_separate_not_folded():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{"usage": {"input_tokens": 100, "cache_read_input_tokens": 9000, "output_tokens": 20}}\n'
+    result = _extract_grok_structured(output)
+    assert result is not None
+    assert result.input_tokens == 100
+    assert result.cache_read_tokens == 9000
+
+
+def test_extract_grok_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_grok_structured
+
+    assert _extract_grok_structured("") is None
+
+
+def test_extract_grok_structured_single_line_json_also_parses():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{"usage": {"input_tokens": 10, "output_tokens": 5}}\n'
+    result = _extract_grok_structured(output)
+    assert result is not None
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_grok_structured_error_response_returns_none():
+    from synlynk.costs import _extract_grok_structured
+
+    output = (
+        '{"type":"error","message":"Couldn\'t set model \'bad-model\': '
+        'Invalid params: \\"unknown model id\\"."}\n'
+    )
+    assert _extract_grok_structured(output) is None
+
+
+def test_extract_grok_structured_missing_usage_returns_none():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{"text": "hi", "stopReason": "EndTurn"}\n'
+    assert _extract_grok_structured(output) is None
+
+
+def test_extract_grok_structured_missing_reasoning_tokens_defaults_zero():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{"usage": {"input_tokens": 10, "output_tokens": 5}}\n'
+    result = _extract_grok_structured(output)
+    assert result is not None
+    assert result.output_tokens == 5
+
+
+def test_extract_grok_structured_missing_cache_read_defaults_zero():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{"usage": {"input_tokens": 10, "output_tokens": 5}}\n'
+    result = _extract_grok_structured(output)
+    assert result is not None
+    assert result.cache_read_tokens == 0
+
+
+def test_extract_grok_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{"usage": {"input_tokens": "not-a-number", "output_tokens": 5}}\n'
+    assert _extract_grok_structured(output) is None
+
+
+def test_extract_grok_structured_malformed_json_returns_none():
+    from synlynk.costs import _extract_grok_structured
+
+    output = 'not json at all\n'
+    assert _extract_grok_structured(output) is None
+
+
+def test_extract_grok_structured_truncated_json_returns_none():
+    from synlynk.costs import _extract_grok_structured
+
+    output = '{\n  "usage": {\n    "input_tokens": 10,\n    "outp'
+    assert _extract_grok_structured(output) is None
+
+
 
 def test_extract_tokens_agent_codex_uses_structured_output():
     from synlynk.costs import extract_tokens

@@ -126,6 +126,41 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
 
 
+def _extract_grok_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parses grok -p --output-format json's single, pretty-printed JSON object.
+
+    Unlike Codex/Claude (newline-delimited event streams) or Agy (single-line
+    JSON), grok emits one multi-line pretty-printed JSON object per invocation,
+    so the entire captured text is parsed as one document rather than scanned
+    line by line. reasoning_tokens is folded into output_tokens (mirrors
+    Codex's reasoning_output_tokens and Agy's thinking_tokens treatment).
+    cache_read_input_tokens is kept as its own tier rather than folded into
+    input_tokens: live testing confirmed total_tokens == input_tokens +
+    cache_read_input_tokens + output_tokens across three separate runs, so
+    it is a genuine additive pool (like Claude's cache_read_input_tokens),
+    not a subset of input_tokens (unlike Codex's cached_input_tokens). A
+    failure response (`{"type": "error", ...}`) has no "usage" key, so a
+    missing or malformed usage object is the extraction-failure signal —
+    there is no explicit status field to check on success.
+    """
+    try:
+        event = json.loads(output_text.strip())
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(event, dict):
+        return None
+    usage = event.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    try:
+        in_tokens = int(usage["input_tokens"])
+        out_tokens = int(usage["output_tokens"]) + int(usage.get("reasoning_tokens", 0))
+        cache_read_tokens = int(usage.get("cache_read_input_tokens", 0))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+
+
 def extract_tokens(output_text: str, agent: str = None) -> tuple:
     """Regex-scrapes token counts from AI CLI stdout, or delegates to a
     per-agent structured-output adapter when one exists.
