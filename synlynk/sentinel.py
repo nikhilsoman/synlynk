@@ -16,6 +16,9 @@ _SENTINEL_ALERT_RE = re.compile(
 _SENTINEL_ALERT_LEGACY_RE = re.compile(
     r"^- \[(?P<timestamp>[^\]]+)\] (?P<code>[A-Z0-9_]+): (?P<message>.*)$"
 )
+_SENTINEL_VERSION_DRIFT_AGENT_RE = re.compile(
+    r"^Agent ['\"](?P<agent>[^'\"]+)['\"] version changed:"
+)
 
 
 def _docs_dir() -> str:
@@ -154,6 +157,18 @@ def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> 
     deduped = [line for _, line in summarized[:max_alert_types]]
     deduped.extend(passthrough)
     return deduped
+
+
+def _extract_sentinel_agent(line: str) -> Optional[str]:
+    """Returns the agent name embedded in a structured alert message, when present."""
+    match = _SENTINEL_ALERT_RE.match(line) or _SENTINEL_ALERT_LEGACY_RE.match(line)
+    if not match:
+        return None
+    message = match.group("message")
+    drift = _SENTINEL_VERSION_DRIFT_AGENT_RE.match(message)
+    if drift:
+        return drift.group("agent")
+    return None
 
 
 def _worktree_branch_name(worktree_path):
@@ -452,12 +467,11 @@ def sentinel_list() -> None:
         print(f"    {a}")
 
 
-def sentinel_clear(severity: Optional[str] = None, code: Optional[str] = None) -> None:
-    """Removes matching alerts from sentinel.md. No args = clear all structured alerts."""
-    sentinel_file = ".synlynk/sentinel.md"
+def _clear_sentinel_alerts(severity: Optional[str] = None, code: Optional[str] = None,
+                           agent: Optional[str] = None, sentinel_file: str = ".synlynk/sentinel.md") -> int:
+    """Removes matching alerts from sentinel.md and returns the number removed."""
     if not os.path.exists(sentinel_file):
-        print("  No sentinel file found.")
-        return
+        return 0
     with open(sentinel_file) as f:
         lines = f.readlines()
 
@@ -479,8 +493,23 @@ def sentinel_clear(severity: Optional[str] = None, code: Optional[str] = None) -
         if code and code not in stripped:
             kept.append(line)
             continue
+        if agent and _extract_sentinel_agent(stripped) != agent:
+            kept.append(line)
+            continue
         removed += 1
 
-    with open(sentinel_file, "w") as f:
-        f.writelines(kept)
+    if removed > 0:
+        with open(sentinel_file, "w") as f:
+            f.writelines(kept)
+    return removed
+
+
+def sentinel_clear(severity: Optional[str] = None, code: Optional[str] = None,
+                   agent: Optional[str] = None) -> None:
+    """Removes matching alerts from sentinel.md. No args = clear all structured alerts."""
+    sentinel_file = ".synlynk/sentinel.md"
+    if not os.path.exists(sentinel_file):
+        print("  No sentinel file found.")
+        return
+    removed = _clear_sentinel_alerts(severity=severity, code=code, agent=agent, sentinel_file=sentinel_file)
     print(f"  Cleared {removed} alert(s).")
