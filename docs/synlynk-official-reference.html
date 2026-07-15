@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Synlynk Official Reference — v0.9.4</title>
+<title>Synlynk Official Reference — v0.12.0</title>
 <!--
   MAINTENANCE: Update this document after each release.
   Official Reference: update version tag, add features page, update changelog + commands + comparison matrix.
   Command Reference: update commands section for any new/changed commands.
   Quick Start Guide: update version tag only unless UX flow changed.
-  Last updated: v0.9.4 (2026-06-24)
+  Last updated: v0.12.0 (2026-07-15)
 -->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -582,13 +582,13 @@
 
   <div class="cover-logo">SYNL<span>Y</span>NK</div>
   <div class="cover-tagline">The OS for Multi-Agent Development</div>
-  <div class="cover-version">v0.9.4 · SQLite Canon · Agent Profiles · Relay</div>
+  <div class="cover-version">v0.12.0 · Measurement &amp; Reliability</div>
 
   <div class="cover-command">
     <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">curl -fsSL synlynk.com/install.sh | sh</span></div>
     <div style="color:#3a3a3c; margin: 3px 0;">───────────────────────────────</div>
-    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">synlynk 0.9.4 installed to ~/.synlynk/bin</span></div>
-    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">3 agents discovered  (claude · agy · codex)</span></div>
+    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">synlynk 0.12.0 installed to ~/.synlynk/bin</span></div>
+    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">4 agents discovered  (claude · agy · codex · grok)</span></div>
     <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">SQLite canon · relay broker · daemon ready</span></div>
     <div style="color:#3a3a3c; margin: 3px 0;">───────────────────────────────</div>
     <div><span style="color:#ffd60a;">→</span> <span style="color:#8e8e93;">synlynk init && synlynk exec claude</span></div>
@@ -632,7 +632,7 @@
     <div class="fa">→</div>
     <div class="fn"><span class="fn-ico">🧠</span><div class="fn-lbl">Context</div><div class="fn-sub">memory · scan</div></div>
     <div class="fa">→</div>
-    <div class="fn act"><span class="fn-ico">🤖</span><div class="fn-lbl">AI Agent</div><div class="fn-sub">claude · agy · codex</div></div>
+    <div class="fn act"><span class="fn-ico">🤖</span><div class="fn-lbl">AI Agent</div><div class="fn-sub">claude · agy · codex · grok</div></div>
     <div class="fa">→</div>
     <div class="fn"><span class="fn-ico">📊</span><div class="fn-lbl">Telemetry</div><div class="fn-sub">cost · sentinel</div></div>
   </div>
@@ -712,7 +712,7 @@
       <div><span class="t-p">$ </span><span class="t-c">git clone</span> <span class="t-a">https://github.com/nikhilsoman/synlynk</span> <span class="t-p">&amp;&amp;</span> <span class="t-c">cd</span> <span class="t-a">synlynk</span> <span class="t-p">&amp;&amp;</span> <span class="t-c">./install.sh</span></div>
       <div><span class="t-s">✓</span> <span class="t-o">Installed synlynk/ package to ~/.synlynk/lib/</span></div>
       <div><span class="t-s">✓</span> <span class="t-o">Installed binary to ~/.synlynk/bin/synlynk  ·  PATH updated in ~/.zshrc</span></div>
-      <div><span class="t-s">✓</span> <span class="t-o">synlynk 0.9.4 ready</span></div>
+      <div><span class="t-s">✓</span> <span class="t-o">synlynk 0.12.0 ready</span></div>
     </div>
   </div>
 
@@ -1260,13 +1260,60 @@
 </div>
 
 
-<!-- PAGE 10 — v0.9.4 FEATURES (NEW) -->
+<!-- PAGE 10 — v0.12.0 FEATURES -->
 <div class="page">
 <div class="cp">
   <div class="page-header">
-    <div class="ph-title">Chapter 09 — What's New in v0.9.4</div>
+    <div class="ph-title">Chapter 09 — What's New in v0.12.0</div>
     <div class="ph-logo">SYNL<span>Y</span>NK</div>
     <div class="ph-num">10</div>
+  </div>
+
+  <div class="sec-label">v0.12.0 · Measurement &amp; Reliability</div>
+  <h1 class="ch">Trustworthy fleet.<br>Measured costs.</h1>
+
+  <p style="margin-bottom:6px;">v0.12.0 makes the agent fleet trustworthy: dispatched jobs finish their own git steps instead of leaving commits unfinished, story routing becomes a real 3-stage scoring engine (capability, quota headroom, cost tie-break) with a fleet batch scheduler to clear backlogs unattended, and every cost figure synlynk reports is now either structurally measured or visibly flagged as an estimate.</p>
+
+  <div class="c2" style="margin-top:4px;">
+    <div>
+      <h2 class="sec" style="margin-top:2px;">✅ Dispatch git-finalization</h2>
+      <p style="font-size:10px;">When a job transitions from running to terminal, synlynk stages, commits, pushes, and opens a PR if needed — once, idempotently. Agents no longer have to remember the last mile.</p>
+    </div>
+    <div>
+      <h2 class="sec" style="margin-top:2px;">📊 Cost provenance</h2>
+      <p style="font-size:10px;">Every <code>cost_entries</code> row carries <code>cost_source</code> (<code>actual</code>, estimate tiers, or <code>legacy_unknown</code>). Manual sessions use <code>synlynk cost log</code>. Estimates are visibly flagged in status and Vizor.</p>
+    </div>
+  </div>
+
+  <h2 class="sec">🧭 3-stage routing + schedule</h2>
+  <p style="font-size:10px;"><code>_best_agent_for_story()</code> scores capability, hard-gates on quota headroom, then cost-tie-breaks. <code>synlynk schedule [--execute] [--max-stories N]</code> batch-assigns ready stories with in-batch headroom accounting.</p>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">schedule</div></div>
+    <div class="tb" style="font-size:9.5px;">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk schedule</span> <span class="t-f">--execute</span> <span class="t-f">--max-stories</span> <span class="t-a">5</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">5 ready stories · scored · dispatched</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-new">
+    <div class="ci">⬡</div>
+    <div class="cb">
+      <div class="ct">Why it matters</div>
+      <div class="cx">Finished git steps mean dispatch output is merge-ready, not abandoned worktrees. Real routing clears backlogs without babysitting. Provenance means budget numbers are accountable — not mystery arithmetic.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 11 — v0.9.4 FEATURES -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Chapter 10 — What's New in v0.9.4</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">11</div>
   </div>
 
   <div class="sec-label">v0.9.4 · Context, Dispatch &amp; Relay</div>
@@ -1335,23 +1382,26 @@
 </div>
 
 
-<!-- PAGE 11 — CHANGELOG (NEW) -->
+<!-- PAGE 12 — CHANGELOG -->
 <div class="page">
 <div class="cp">
   <div class="page-header">
-    <div class="ph-title">Chapter 10 — Changelog</div>
+    <div class="ph-title">Chapter 11 — Changelog</div>
     <div class="ph-logo">SYNL<span>Y</span>NK</div>
-    <div class="ph-num">11</div>
+    <div class="ph-num">12</div>
   </div>
 
   <div class="sec-label">Release History</div>
   <h1 class="ch">Every release,<br>in plain language.</h1>
 
   <div style="margin-top:4px;">
-    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.9.4</div><div class="cl-body"><strong>Tasks live in SQLite now</strong> — todo.md is generated, never hand-maintained. Agents get per-profile context budgets. A new relay broadcast channel connects your workgroup in real time.</div></div>
-    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.9.3</div><div class="cl-body"><strong>synlynk can run as a system service</strong> — an always-on daemon with a job queue, priority chains, and crash-safe restarts. Set it once with <code>--install-service</code>.</div></div>
-    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.9.2</div><div class="cl-body"><strong>Teams ship faster when onboarding is automatic.</strong> <code>synlynk join</code> seeds a new member from git history. <code>synlynk decide</code> runs a multi-agent consensus panel in one command.</div></div>
-    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.9.1</div><div class="cl-body"><strong>The install was broken for repos not in the source tree — fixed.</strong> Init now migrates existing docs rather than overwriting them.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.12.0</div><div class="cl-body"><strong>Dispatched jobs now finish their own git steps</strong> — commit, push, and PR happen automatically once work is verified complete. Story routing gets real capability + quota + cost scoring, plus a fleet batch scheduler. Every cost number is now measured or flagged as an estimate.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.11.0</div><div class="cl-body"><strong>Agent Autonomy Bridge + live observatory.</strong> Per-task permission grants, stalled-job handoff, interactive <code>doctor</code> fix wizard, <code>synlynk watch --live</code>, and full SOP blocks in every agent directive at init.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.10.0</div><div class="cl-body"><strong>Developer Preview:</strong> pipx install, <code>init --wizard</code> FTUE, <code>synlynk viz</code> browser dashboard, <code>launch</code> task picker, <code>migrate</code> to state.db, and <code>release</code> ship-cycle stub.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.9.4</div><div class="cl-body"><strong>Tasks live in SQLite now</strong> — todo.md is generated, never hand-maintained. Agents get per-profile context budgets. A new relay broadcast channel connects your workgroup in real time.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.9.3</div><div class="cl-body"><strong>synlynk can run as a system service</strong> — an always-on daemon with a job queue, priority chains, and crash-safe restarts. Set it once with <code>--install-service</code>.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.9.2</div><div class="cl-body"><strong>Teams ship faster when onboarding is automatic.</strong> <code>synlynk join</code> seeds a new member from git history. <code>synlynk decide</code> runs a multi-agent consensus panel in one command.</div></div>
+    <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.9.1</div><div class="cl-body"><strong>The install was broken for repos not in the source tree — fixed.</strong> Init now migrates existing docs rather than overwriting them.</div></div>
     <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.9.0</div><div class="cl-body"><strong>Dispatches used to inject 100KB of full context for a 5-line task.</strong> Now they inject ~400 bytes of story-scoped context. 60% token reduction in practice.</div></div>
     <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.8.0</div><div class="cl-body"><strong>The Support Engineer agent monitors your repo</strong> for failing tests, flaky tests, stale deps, and open issues — filing GitHub issues and draft PRs automatically.</div></div>
     <div class="cl-row"><div class="cl-ver" style="color:var(--blue);">v0.7.0</div><div class="cl-body"><strong>Every exec session includes a ## Source Architecture snapshot</strong> from your actual codebase — agents understand your file tree without you explaining it.</div></div>
@@ -1374,13 +1424,13 @@
 </div>
 
 
-<!-- PAGE 12 — COMMAND REFERENCE -->
+<!-- PAGE 13 — COMMAND REFERENCE -->
 <div class="page">
 <div class="cp">
   <div class="page-header">
-    <div class="ph-title">Chapter 11 — Command Reference</div>
+    <div class="ph-title">Chapter 12 — Command Reference</div>
     <div class="ph-logo">SYNL<span>Y</span>NK</div>
-    <div class="ph-num">12</div>
+    <div class="ph-num">13</div>
   </div>
 
   <div class="sec-label">All Commands</div>
@@ -1396,6 +1446,14 @@
       <tr><td>checkpoint</td><td>Snapshot docs + telemetry for a safe rollback point.</td></tr>
       <tr><td>status [--json]</td><td>Dashboard: costs, alerts, jobs, team digest.</td></tr>
       <tr><td>upgrade · --version</td><td>Apply latest release · print installed version.</td></tr>
+      <tr><td>doctor</td><td>Run health checks (TC-1–5) with interactive fix wizard. <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
+      <tr><td>probe [--agent]</td><td>Probe harness capability / version drift; record compatibility. <span class="tag tg-new" style="vertical-align:middle;">v0.11.0</span></td></tr>
+      <tr><td>repair · sync · exit</td><td>Re-init from config · propagate artifacts · remove onboarding. Dry-run default. <span class="tag tg-new" style="vertical-align:middle;">v0.9.8</span></td></tr>
+      <tr><td>cost log</td><td>Log a manual cost entry for native/unwrapped sessions. <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></td></tr>
+      <tr><td>roles [--fix]</td><td>Show agent role table; optionally write missing role fences. <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
+      <tr><td>instructions status|diff|update|ack</td><td>Manage synlynk-managed instruction sections across AI tools.</td></tr>
+      <tr><td>viz [--serve|--generate|--open|--stop|--port]</td><td>Local browser workspace dashboard (Vizor). <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
+      <tr><td>release [--dry-run] [--version] [--minor]</td><td>Cut a named release (VERSION, CHANGELOG, blog stub). <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
     </tbody>
   </table>
 
@@ -1405,8 +1463,10 @@
     <tbody>
       <tr><td>dispatch &lt;agent&gt;</td><td>Background job. Accepts <code>--task</code>, <code>--story</code>, <code>--context-mode none|task|full</code>. Pre-flight gated.</td></tr>
       <tr><td>jobs [--all] [--watch]</td><td>List jobs from SQLite. <code>--watch</code> follows live.</td></tr>
+      <tr><td>jobs handoff &lt;job-id&gt; [--to agent]</td><td>Transfer a stalled job to another agent. <span class="tag tg-new" style="vertical-align:middle;">v0.11.0</span></td></tr>
       <tr><td>logs --job &lt;id&gt; [--tail N]</td><td>Tail a specific job's output log.</td></tr>
-      <tr><td>shell · launch · run --trio</td><td>REPL · interactive launcher · dispatch to all three agents in parallel.</td></tr>
+      <tr><td>shell · launch · run --trio</td><td>REPL · interactive launcher · dispatch agents in parallel.</td></tr>
+      <tr><td>schedule [--execute] [--max-stories N]</td><td>Batch-assign ready stories (dry-run default). <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></td></tr>
       <tr><td>daemon start|stop|status</td><td>Control the always-on service. <span class="tag tg-new" style="vertical-align:middle;">v0.9.3</span></td></tr>
       <tr><td>daemon install-service</td><td>Install as launchd / systemd service. Context server on :27471.</td></tr>
     </tbody>
@@ -1421,6 +1481,8 @@
       <tr><td>agent configure &lt;name&gt;</td><td>Edit <code>.agents/&lt;name&gt;.json</code> (context_mode, context_max_bytes). <span class="tag tg-new" style="vertical-align:middle;">v0.9.4</span></td></tr>
       <tr><td>join · team status · decide</td><td>Onboard from git history · team dashboard · multi-agent consensus.</td></tr>
       <tr><td>story create|list|show</td><td>Manage tracked work items (SQLite canon). <code>--title</code>, <code>--tokens</code>, domain flags.</td></tr>
+      <tr><td>goal create|list|link|status</td><td>Business goals: create, list, link stories, completion rollup. <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></td></tr>
+      <tr><td>pr check</td><td>Block PR if model versions are unattested.</td></tr>
       <tr><td>score list|attest · identity init</td><td>Capability scores · Ed25519-sign a score · create signing key.</td></tr>
       <tr><td>sentinel list|clear</td><td>Manage alerts. Clear by <code>--severity</code> or <code>--code</code>.</td></tr>
     </tbody>
@@ -1430,13 +1492,13 @@
 </div>
 
 
-<!-- PAGE 13 — FEATURE COMPARISON -->
+<!-- PAGE 14 — FEATURE COMPARISON -->
 <div class="page">
 <div class="cp">
   <div class="page-header">
-    <div class="ph-title">Chapter 12 — Feature Comparison</div>
+    <div class="ph-title">Chapter 13 — Feature Comparison</div>
     <div class="ph-logo">SYNL<span>Y</span>NK</div>
-    <div class="ph-num">13</div>
+    <div class="ph-num">14</div>
   </div>
 
   <div class="sec-label">Feature Matrix</div>
@@ -1466,12 +1528,14 @@
       <tr><td>Budget enforcement</td><td>v0.1</td><td>No guard — runaway spend possible</td><td><span class="fc">✓</span> Hard block at configured limit</td></tr>
       <tr><td>Flatline / loop detection</td><td>v0.1</td><td>Discover after burning tokens</td><td><span class="fc">✓</span> FLATLINE alert at 3rd failure</td></tr>
       <tr><td>Verification gap detection</td><td>v0.9.4</td><td><span class="fx">✗</span> None</td><td><span class="fc">✓</span> VERIFY_SKIP sentinel</td></tr>
+      <tr><td>Cost provenance</td><td>v0.12.0</td><td><span class="fx">✗</span> Hardcoded per-token estimates</td><td><span class="fc">✓</span> Structurally sourced or visibly flagged</td></tr>
 
       <tr class="fgh"><td colspan="4">⚡ Dispatch &amp; Autonomy</td></tr>
       <tr><td>Background agent dispatch</td><td>v0.4</td><td>nohup hacks, manual PID tracking</td><td><span class="fc">✓</span> First-class job store + logs</td></tr>
       <tr><td>Parallel multi-agent trio</td><td>v0.4</td><td>3 separate shell windows</td><td><span class="fc">✓</span> <code>synlynk run --trio</code></td></tr>
       <tr><td>Scoped task context (60% less)</td><td>v0.9</td><td>Full context every dispatch</td><td><span class="fc">✓</span> Story-filtered domain slice</td></tr>
       <tr><td>Always-on daemon + job queue</td><td>v0.9.3</td><td><span class="fx">✗</span> None</td><td><span class="fc">✓</span> launchd/systemd, priority chains</td></tr>
+      <tr><td>Dispatch git-finalization</td><td>v0.12.0</td><td><span class="fx">✗</span> Agent must remember to commit/push/PR</td><td><span class="fc">✓</span> synlynk finishes it automatically</td></tr>
 
       <tr class="fgh"><td colspan="4">👥 Teams, Relay &amp; Identity</td></tr>
       <tr><td>Per-user devlogs</td><td>v0.2</td><td>One shared log or nothing</td><td><span class="fc">✓</span> <code>devlogs/username.md</code></td></tr>
@@ -1493,7 +1557,7 @@
 </div>
 
 
-<!-- PAGE 14 — ROADMAP + BACK COVER -->
+<!-- PAGE 15 — ROADMAP + BACK COVER -->
 <div class="page">
 <div class="back-cover">
   <div class="cover-accent"></div>
@@ -1557,7 +1621,7 @@
     SYNL<span style="color:var(--blue);">Y</span>NK
   </div>
   <div style="font-size:10px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:4px;">
-    The OS for Multi-Agent Development · v0.9.4
+    The OS for Multi-Agent Development · v0.12.0
   </div>
 
 </div>
