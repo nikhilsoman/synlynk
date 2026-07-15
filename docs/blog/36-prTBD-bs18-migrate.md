@@ -4,7 +4,7 @@ date: 2026-07-01
 series: "Building the OS for Multi-Agent Development"
 post: 36
 pr: "#TBD"
-merged: status: open
+merged: —
 ---
 
 # PR #TBD — v0.10.0: synlynk migrate — state.db Source of Truth
