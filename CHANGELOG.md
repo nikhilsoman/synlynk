@@ -9,6 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`synlynk migrate` false-positive `MigrationImportError` on idempotent re-runs (#276):**
+  the loud-fail check treated `INSERT OR IGNORE` with `rowcount == 0` as a hard failure
+  whenever a non-empty source landed zero *new* rows. On a project that had already been
+  migrated, natural-key collisions (especially `roadmap_arcs.version` UNIQUE) correctly
+  no-op the insert, so re-import / `--recover` raised
+  `MigrationImportError: 0 rows inserted … roadmap_arcs (N parsed/attempted, 0 inserted)`
+  even when every expected row was already present. `_migrate_import()` now checks natural
+  keys before insert (`memory_entries.section`, `roadmap_arcs.version`,
+  `roadmap_phases(arc_version, phase_title)`, cost fingerprint, `devlog` author+date+title,
+  `todo` `gh_issue` already set) and only fails loud when zero rows were inserted *and*
+  not all attempted rows were already present. Genuine 0-of-N write failures still raise
+  with the same error message prefix.
+
 ## [0.12.0] - 2026-07-15
 
 **Release pitch:** the operational backbone gets provably reliable and provably accounted for — dispatched jobs finish their own git steps, a 5th zero-cost local agent joins the fleet, story routing gets real capability+quota+cost scoring with a fleet batch scheduler, and every dollar synlynk reports is now either structurally sourced or visibly flagged as an estimate.

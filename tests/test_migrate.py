@@ -292,6 +292,111 @@ def test_migrate_idempotent(tmp_path, monkeypatch, capsys):
     assert "Already migrated" in out
 
 
+def test_migrate_import_first_time_inserts_and_succeeds(tmp_path, monkeypatch):
+    """First-time import on empty DB still inserts rows and does not raise (#276)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+
+    # Should not raise MigrationImportError
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    assert conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM roadmap_arcs").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM roadmap_phases").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM devlog_entries").fetchone()[0] == 1
+    gh = conn.execute(
+        "SELECT gh_issue FROM stories WHERE story_id=?", ("story-bs12a-roles",)
+    ).fetchone()[0]
+    conn.close()
+    assert gh == "#79"
+
+
+def test_migrate_import_idempotent_rerun_does_not_raise(tmp_path, monkeypatch):
+    """Re-import when natural keys already exist is a no-op success, not MigrationImportError (#276).
+
+    Regression for roadmap_arcs (UNIQUE on version): INSERT OR IGNORE returns
+    rowcount 0 for every existing version, which previously tripped the loud-fail
+    check even though data was already present and correct.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+
+    synlynk._migrate_import(str(docs))
+    conn = synlynk._get_db()
+    arcs_after_first = conn.execute("SELECT COUNT(*) FROM roadmap_arcs").fetchone()[0]
+    mem_after_first = conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0]
+    costs_after_first = conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0]
+    conn.close()
+    assert arcs_after_first == 2
+
+    # Second import of the same sources — must not raise
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    assert conn.execute("SELECT COUNT(*) FROM roadmap_arcs").fetchone()[0] == arcs_after_first
+    assert conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0] == mem_after_first
+    assert conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0] == costs_after_first
+    conn.close()
+
+
+def test_migrate_import_genuine_zero_insert_still_raises(tmp_path, monkeypatch):
+    """Genuine write failures (no rows present) still raise MigrationImportError (#276 / #126)."""
+    from synlynk.db import MigrationImportError
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = _make_project_docs(tmp_path)
+
+    class FakeConn:
+        def execute(self, sql, params=()):
+            sql_u = sql.lstrip().upper()
+            # SELECT existence checks return empty → not already present
+            if sql_u.startswith("SELECT"):
+
+                class EmptyCursor:
+                    def fetchone(self):
+                        return None
+
+                return EmptyCursor()
+            if sql_u.startswith(("INSERT", "UPDATE")):
+                raise RuntimeError("forced write failure")
+
+            class Cursor:
+                rowcount = 0
+
+            return Cursor()
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(synlynk, "_get_db", lambda: FakeConn())
+
+    raised = None
+    try:
+        synlynk._migrate_import(str(docs))
+    except MigrationImportError as exc:
+        raised = exc
+
+    assert raised is not None
+    msg = str(raised)
+    assert "0 rows inserted for non-empty source file(s):" in msg
+    assert "memory_entries" in msg
+    assert "roadmap_arcs" in msg
+    assert "roadmap_phases" in msg
+
+
 def test_migrate_recover_reimports(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
