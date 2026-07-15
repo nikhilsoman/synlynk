@@ -127,7 +127,7 @@ Replace the current documentation-dump homepage with a product-story-led experie
 | Isometric diagram (standalone) | `docs/brainstorm/bs5-website-redesign/diagram-isometric.html` |
 | Compact motherboard | `docs/brainstorm/bs5-website-redesign/diagram-motherboard-compact.html` |
 | Agy diagram directions | `docs/brainstorm/bs5-website-redesign/diagram-directions.html` |
-| Quick Start style reference | `docs/synlynk-quickstart-apple.html` |
+| Quick Start style reference | `docs/synlynk-quickstart-guide.html` |
 
 ---
 
