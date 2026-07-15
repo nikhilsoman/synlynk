@@ -190,7 +190,7 @@ def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
 def test_sync_repair_sops_injects_missing_sections(tmp_path, isolated_db, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
-    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm", "review"]}}')
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm", "review"]}, "workgroup_agents": ["claude"]}')
     (tmp_path / ".agents").mkdir()
     (tmp_path / ".agents" / "claude.json").write_text("{}")
     (tmp_path / "CLAUDE.md").write_text("# Claude Instructions\n\n## PR Review Discipline\nsome content\n")
@@ -206,7 +206,7 @@ def test_sync_repair_sops_injects_missing_sections(tmp_path, isolated_db, monkey
 def test_sync_repair_sops_preserves_existing_fence_body(tmp_path, isolated_db, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
-    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}}')
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}, "workgroup_agents": ["claude"]}')
     (tmp_path / ".agents").mkdir()
     (tmp_path / ".agents" / "claude.json").write_text("{}")
     (tmp_path / "CLAUDE.md").write_text(
@@ -229,7 +229,7 @@ def test_sync_repair_sops_preserves_existing_fence_body(tmp_path, isolated_db, m
 def test_sync_repair_sops_is_idempotent(tmp_path, isolated_db, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
-    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}}')
+    (tmp_path / ".synlynk" / "config.json").write_text('{"roles": {"claude": ["pm"]}, "workgroup_agents": ["claude"]}')
     (tmp_path / ".agents").mkdir()
     (tmp_path / ".agents" / "claude.json").write_text("{}")
     (tmp_path / "CLAUDE.md").write_text("# Instructions\n")

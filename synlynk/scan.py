@@ -19,6 +19,40 @@ def _pkg(name: str, default=None):
         return default
     return getattr(package, name, default)
 
+
+_HARNESS_PATH_NAMES = ("claude", "agy", "codex", "grok", "gemini", "aider")
+
+
+def _detect_harnesses_on_path(names: tuple = None) -> list:
+    """Return PATH-resolved harness metadata for known CLI agents."""
+    import shutil as _shutil
+
+    harnesses = []
+    for name in names or _HARNESS_PATH_NAMES:
+        cli_path = _shutil.which(name)
+        if not cli_path:
+            continue
+        version = "unknown"
+        try:
+            proc = subprocess.run(
+                [name, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            output = (proc.stdout or proc.stderr or "").strip().splitlines()
+            if output:
+                version = output[0]
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError, TypeError, ValueError, AttributeError):
+            pass
+        harnesses.append({
+            "name": name,
+            "cli": name,
+            "version": version,
+            "path": cli_path,
+        })
+    return harnesses
+
 def cmd_scan(deep: bool = False, status: bool = False,
              refresh: bool = False, add_path: str = None,
              remove_path: str = None, dry_run: bool = False,
@@ -1175,30 +1209,7 @@ def run_workspace_scan(roots: list = None, workspace_name: str = None,
     else:
         topology = "single"
 
-    harnesses = []
-    for name in ("claude", "agy", "codex", "grok", "gemini", "aider"):
-        cli_path = _shutil.which(name)
-        if not cli_path:
-            continue
-        version = "unknown"
-        try:
-            proc = subprocess.run(
-                [name, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            output = (proc.stdout or proc.stderr or "").strip().splitlines()
-            if output:
-                version = output[0]
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            pass
-        harnesses.append({
-            "name": name,
-            "cli": name,
-            "version": version,
-            "path": cli_path,
-        })
+    harnesses = _detect_harnesses_on_path()
 
     try:
         agents = _pkg("discover_agents")()

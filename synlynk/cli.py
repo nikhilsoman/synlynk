@@ -148,6 +148,7 @@ def main() -> None:
         _reconcile_jobs,
         _update_config,
         checkpoint,
+        cmd_agent_add,
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
@@ -347,6 +348,8 @@ def main() -> None:
 
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
+    agent_add_parser = agent_sub.add_parser("add", help="Retrofit an on-PATH agent into this project")
+    agent_add_parser.add_argument("name", help="Agent binary name on PATH")
     agent_configure_parser = agent_sub.add_parser(
         "configure", help="Interactively write .agents/<name>.json context profile"
     )
@@ -778,7 +781,9 @@ def main() -> None:
             instructions_parser.print_help()
     elif args.command == "agent":
         action = getattr(args, "agent_action", None)
-        if action == "configure":
+        if action == "add":
+            cmd_agent_add(args.name)
+        elif action == "configure":
             cmd_agent_configure(args.name)
         elif action == "run":
             cmd_agent_run(

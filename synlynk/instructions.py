@@ -620,6 +620,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "repo": repo,
             "project_id": project_id,
             "agent_slots": _agent_slots,
+            "workgroup_agents": [],
+            "last_housekeeping_date": None,
             "team": None,
             "sync_endpoint": None,
             "exec_timeout_minutes": 30,

@@ -8,6 +8,7 @@ import time
 import json
 import re
 import threading
+import tempfile
 import urllib.request
 from typing import Optional, Tuple
 import sqlite3 as _sqlite3
@@ -215,6 +216,7 @@ from synlynk.scan import (
     _save_scan_meta,
     _scan_full_repo,
     _scan_repo_for_docs,
+    _detect_harnesses_on_path,
     _scan_source_skeleton,
     _scan_stage_arch,
     _scan_stage_complexity,
@@ -1057,21 +1059,18 @@ def cmd_roles(fix: bool = False) -> None:
 
     With --fix, regenerate role fences.
     """
-    _DIRECTIVE_MAP = {
-        "claude": "CLAUDE.md",
-        "agy": "GEMINI.md",
-        "grok": "GROK.md",
-        "codex": "AGENTS.md",
-    }
     cfg = load_config()
     roles = cfg.get("roles", {})
+    workgroup_agents = cfg.get("workgroup_agents", []) or []
+    visible_agents = [agent for agent in workgroup_agents if agent]
 
     print(f"\n  {_BOLD}synlynk roles{_RESET}\n")
     print(f"  {'agent':<10}  {'roles':<40}  {'directive file':<12}  fence")
     print(f"  {'─' * 10}  {'─' * 40}  {'─' * 12}  {'─' * 10}")
 
-    for agent, role_list in roles.items():
-        fname = _DIRECTIVE_MAP.get(agent, f"{agent}.md")
+    for agent in visible_agents:
+        role_list = roles.get(agent, [])
+        fname = _directive_file_for_agent(agent)
         roles_str = ", ".join(role_list) if isinstance(role_list, list) else str(role_list)
         file_exists = os.path.exists(fname)
         fence_present = False
@@ -1100,13 +1099,15 @@ def cmd_roles(fix: bool = False) -> None:
     print()
     if not fix:
         missing = [
-            _DIRECTIVE_MAP.get(a, f"{a}.md")
-            for a, _ in roles.items()
-            if os.path.exists(_DIRECTIVE_MAP.get(a, f"{a}.md"))
-            and not _fence_exists(_DIRECTIVE_MAP.get(a, f"{a}.md"))
+            _directive_file_for_agent(a)
+            for a in visible_agents
+            if os.path.exists(_directive_file_for_agent(a))
+            and not _fence_exists(_directive_file_for_agent(a))
         ]
         if missing:
             print(f"  {_DIM}Run `synlynk roles --fix` to write missing role fences{_RESET}\n")
+    if not visible_agents:
+        print(f"  {_DIM}No agents in workgroup_agents to display{_RESET}\n")
 
 
 
@@ -1248,6 +1249,52 @@ AGENT_DISCOVERY_DEFAULTS = {
     "grok": os.path.expanduser("~/.grok"),
 }
 
+_AGENT_DIRECTIVE_FILES = {
+    "claude": "CLAUDE.md",
+    "agy": "GEMINI.md",
+    "grok": "GROK.md",
+    "codex": "AGENTS.md",
+}
+
+
+def _default_roles_for_agent(agent: str) -> list:
+    """Return the default onboarded role list for an agent."""
+    return {
+        "claude": ["pm", "review", "deploy"],
+        "agy": ["implement", "test", "css", "templates", "content"],
+        "grok": ["implement", "test", "canvas", "js", "infra"],
+        "codex": ["implement", "test", "refactor"],
+    }.get(agent, [])
+
+
+def _default_roles_map() -> dict:
+    """Return the default role mapping for supported agents."""
+    return {name: _default_roles_for_agent(name) for name in _AGENT_DIRECTIVE_FILES}
+
+
+def _directive_file_for_agent(agent: str) -> str:
+    return _AGENT_DIRECTIVE_FILES.get(agent, f"{agent}.md")
+
+
+def _write_json_atomic(path: str, payload: dict) -> None:
+    """Write a JSON file atomically within the current workspace."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp.", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(payload, f, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
 # ANSI helpers used by the wizard.
 _BOLD = "\033[1m"
 _GREEN = "\033[32m"
@@ -1290,17 +1337,14 @@ def load_config() -> dict:
         "project_id": None,
         "project_docs_dir": "project-docs",
         "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
+        "workgroup_agents": [],
+        "last_housekeeping_date": None,
         "team": None,
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
         "stall_timeout_minutes": 30,
         "agents": {},
-        "roles": {
-            "claude": ["pm", "review", "deploy"],
-            "agy": ["implement", "test", "css", "templates", "content"],
-            "grok": ["implement", "test", "canvas", "js", "infra"],
-            "codex": ["implement", "test", "refactor"],
-        },
+        "roles": _default_roles_map(),
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -1324,9 +1368,7 @@ def cmd_config_set(key: str, value: str) -> None:
     config_path = ".synlynk/config.json"
     config = load_config()
     config[key] = value
-    os.makedirs(".synlynk", exist_ok=True)
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
+    _write_json_atomic(config_path, config)
     print(f"  ✓ {key} = {value!r} saved to .synlynk/config.json")
 
 
@@ -1666,8 +1708,9 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
         "codex": "AGENTS.md",
         "grok": "GROK.md",
     }
-    cfg_roles = load_config().get("roles", {})
-    agent_names = [agent_name] if agent_name else list(cfg_roles)
+    cfg = load_config()
+    cfg_agents = list(cfg.get("workgroup_agents") or [])
+    agent_names = [agent_name] if agent_name else cfg_agents
     for agent in agent_names:
         fpath = directive_files.get(agent)
         if not fpath or not os.path.exists(fpath):
@@ -1901,6 +1944,148 @@ def cmd_agent_configure(agent_name: str) -> None:
         _json.dump(profile, f, indent=2)
         f.write("\n")
     print(f"\n  {_GREEN}✓{_RESET} Written {path}")
+
+
+def cmd_agent_add(agent_name: str) -> None:
+    """Retrofit an on-PATH agent into the current project."""
+    if agent_name not in AGENT_CAPABILITY_BASELINES:
+        print(f"  Error: unknown agent '{agent_name}'. Known: {', '.join(sorted(AGENT_CAPABILITY_BASELINES))}")
+        return
+
+    cli_path = shutil.which(agent_name)
+    if not cli_path:
+        print(f"  Error: agent binary '{agent_name}' is not on PATH.")
+        return
+
+    config_path = ".synlynk/config.json"
+    config = load_config()
+    workgroup_agents = list(config.get("workgroup_agents") or [])
+    directive_path = _directive_file_for_agent(agent_name)
+    fence_present = _fence_exists(directive_path)
+
+    if agent_name in workgroup_agents and fence_present:
+        print(f"  {agent_name} is already fully onboarded — no changes made.")
+        return
+
+    created_directive = False
+    if not os.path.exists(directive_path):
+        templates = _build_templates()
+        template_body = templates.get(os.path.basename(directive_path), "")
+        if not template_body:
+            template_body = f"# synlynk {agent_name} instructions\n"
+        with open(directive_path, "w") as f:
+            f.write(template_body.rstrip("\n") + "\n")
+        created_directive = True
+
+    probe_results = cmd_probe(agent_name, write_fence=False) or []
+    probe_result = probe_results[0] if probe_results else {}
+
+    role_list = _default_roles_for_agent(agent_name)
+    _upsert_harness_fence(
+        directive_path,
+        harness_version="roles",
+        body=f"## Your Role\n{', '.join(role_list) if role_list else 'general'}\n",
+    )
+
+    if agent_name not in workgroup_agents:
+        workgroup_agents.append(agent_name)
+
+    agent_slots = dict(config.get("agent_slots") or {})
+    agent_slots[agent_name] = agent_name
+
+    roles = dict(config.get("roles") or {})
+    if not roles.get(agent_name):
+        roles[agent_name] = role_list
+
+    config["workgroup_agents"] = workgroup_agents
+    config["agent_slots"] = agent_slots
+    config["roles"] = roles
+    _write_json_atomic(config_path, config)
+
+    print(f"  {_GREEN}✓{_RESET} added {agent_name} to workgroup_agents")
+    print(f"  {_GREEN}✓{_RESET} added {agent_name} to agent_slots")
+    if created_directive:
+        print(f"  {_GREEN}✓{_RESET} created {directive_path} from template")
+    else:
+        print(f"  {_GREEN}✓{_RESET} updated {directive_path}")
+    print(f"  {_GREEN}✓{_RESET} wrote role fence to {directive_path}")
+    if probe_result:
+        status = "skipped (up to date)" if probe_result.get("skipped") else probe_result.get("status", "unknown")
+        print(f"  {_GREEN}✓{_RESET} probe [{agent_name}] {probe_result.get('version', 'unknown')} → {status}")
+    print(f"  {_GREEN}✓{_RESET} onboarded {agent_name} from {cli_path}")
+
+
+def _run_daily_housekeeping() -> None:
+    """Run the once-per-day drift check triggered by exec flow."""
+    config_path = ".synlynk/config.json"
+    if not os.path.exists(config_path):
+        return
+
+    config = load_config()
+    today = time.strftime("%Y-%m-%d")
+    if config.get("last_housekeeping_date") == today:
+        return
+
+    workgroup_agents = [a for a in (config.get("workgroup_agents") or []) if a in AGENT_CAPABILITY_BASELINES]
+    known_on_path = {
+        harness["name"]
+        for harness in _detect_harnesses_on_path()
+        if harness.get("name") in AGENT_CAPABILITY_BASELINES
+    }
+    onboarded = set(workgroup_agents)
+    new_agents = sorted(known_on_path - onboarded)
+
+    printed = False
+    for agent_name in new_agents:
+        print(f"  New agent detected on PATH: {agent_name} — run `synlynk agent add {agent_name}` to onboard it")
+        printed = True
+
+    db_conn = None
+    try:
+        if workgroup_agents:
+            db_conn = _get_db()
+        for agent_name in workgroup_agents:
+            try:
+                before = db_conn.execute(
+                    "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+                    (agent_name,),
+                ).fetchone()
+                result = _probe_agent(agent_name, db_conn, write_fence=False)
+                after = db_conn.execute(
+                    "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+                    (agent_name,),
+                ).fetchone()
+            except Exception as exc:
+                print(f"  Housekeeping probe failed for {agent_name}: {exc}")
+                printed = True
+                continue
+            if before != after:
+                before_version = before[0] if before else "none"
+                after_version = after[0] if after else result.get("version", "unknown")
+                status = result.get("status", "unknown")
+                print(f"  Probe drift for {agent_name}: {before_version} → {after_version} ({status})")
+                baseline = AGENT_CAPABILITY_BASELINES.get(agent_name)
+                if baseline is not None:
+                    baseline["last_probe_snapshot"] = {
+                        "installed_version": after_version,
+                        "capability_hash": after[1] if after else "",
+                        "status": status,
+                    }
+                printed = True
+            try:
+                _repair_sops_only(agent_name=agent_name, dry_run=False)
+            except Exception as exc:
+                print(f"  Housekeeping repair failed for {agent_name}: {exc}")
+                printed = True
+    finally:
+        if db_conn is not None:
+            db_conn.close()
+
+    config["last_housekeeping_date"] = today
+    _write_json_atomic(config_path, config)
+
+    if not printed:
+        return
 
 
 def cmd_configure_agent(
@@ -2226,8 +2411,7 @@ def _update_config(updates: dict) -> None:
         return
     config = load_config()
     config.update(updates)
-    with open(config_file, "w") as f:
-        json.dump(config, f, indent=2)
+    _write_json_atomic(config_file, config)
 
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction

@@ -1003,6 +1003,9 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         check_budgets()
 
     check_gate = _pkg("_check_pre_exec_gate", _check_pre_exec_gate)
+    run_housekeeping = _pkg("_run_daily_housekeeping", lambda: None)
+    if run_housekeeping:
+        run_housekeeping()
     if not check_gate(force=force):
         return 1
 
