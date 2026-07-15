@@ -19,7 +19,9 @@ This plan is one of 4 independent, parallel-dispatchable plans derived from `doc
 **Files:**
 - Modify: `docs/synlynk-quickstart-guide.html`
 
-Per its own `MAINTENANCE` comment (line 11): "Quick Start Guide: update version tag only unless UX flow changed." The agent count changed (3→5, adding grok and local since v0.9.4), which is a UX-flow-relevant fact shown on the cover — so this pass touches the version tag AND the agent-count pill.
+Per its own `MAINTENANCE` comment (line 11): "Quick Start Guide: update version tag only unless UX flow changed." The agent count changed (3→4, adding grok since v0.9.4), which is a UX-flow-relevant fact shown on the cover — so this pass touches the version tag AND the agent-count pill.
+
+**Scope note:** the `local` (on-device oMLX) agent has shipped in code but is intentionally **excluded** from every doc surface in this pass — it's being trialed before a public announcement. Do not reference it anywhere in any of the 3 HTML files, and do not count it in any "N agents" figure below (roster shown throughout this task is claude/codex/agy/grok = 4, not 5).
 
 - [ ] **Step 1: Read current state of every location the version string `v0.9.4` / `0.9.4` appears**
 
@@ -42,7 +44,7 @@ Expected hits (verify against actual output, adapt line numbers if the file has 
 | MAINTENANCE comment | `Last updated: v0.9.4 (2026-06-24)` | `Last updated: v0.12.0 (2026-07-15)` |
 | `.cover-version` | `v0.9.4 · SQLite Canon · Agent Profiles · Relay` | `v0.12.0 · Measurement & Reliability` |
 | terminal mock (cover) | `synlynk 0.9.4 installed to ~/.synlynk/bin` | `synlynk 0.12.0 installed to ~/.synlynk/bin` |
-| `.cover-pill` | `🤖 3 Agents` | `🤖 5 Agents` |
+| `.cover-pill` | `🤖 3 Agents` | `🤖 4 Agents` |
 | terminal mock (body) | `synlynk 0.9.4 ready` | `synlynk 0.12.0 ready` |
 | footer | `v0.9.4 · synlynk.com` | `v0.12.0 · synlynk.com` |
 
@@ -50,7 +52,7 @@ Expected hits (verify against actual output, adapt line numbers if the file has 
 
 Run: `grep -n -i "codex\|claude\|agy\|grok\|local agent\|three agents\|agent.*profile" docs/synlynk-quickstart-guide.html`
 
-If the flow text anywhere enumerates the agent roster (e.g., "Claude, Codex, and AGY"), extend it to mention all 5 (Claude, Codex, Agy, Grok, local) — read the surrounding paragraph first with `sed -n 'N-3,N+3p' docs/synlynk-quickstart-guide.html` to match its exact tone/structure before editing. If no such enumeration exists beyond the cover pill already fixed in Step 2, no further change needed — this file's mandate is version-tag-only per its own MAINTENANCE comment, don't add new sections.
+If the flow text anywhere enumerates the agent roster (e.g., "Claude, Codex, and AGY"), extend it to mention Claude, Codex, Agy, and Grok — **do not include `local`** (out of scope for this release per the scope note above) — read the surrounding paragraph first with `sed -n 'N-3,N+3p' docs/synlynk-quickstart-guide.html` to match its exact tone/structure before editing. If no such enumeration exists beyond the cover pill already fixed in Step 2, no further change needed — this file's mandate is version-tag-only per its own MAINTENANCE comment, don't add new sections.
 
 - [ ] **Step 4: Commit the HTML change**
 
@@ -99,7 +101,6 @@ Run: `grep -n "0.9.4" docs/synlynk-command-reference.html` and update `<title>`,
 
 Based on the current sections seen in Step 1 (Core, Dispatch/Jobs/Daemon, Relay/Team/Stories/Identity, and others further in the file — read the full file to find all sections via the `sec-label`/`sec` grep from Step 1), add rows for every v0.11.0/v0.12.0-era command missing from the file. At minimum, based on the spine, these are very likely absent and need adding (verify each against Step 1's actual current content before assuming — the file may already have some):
 
-- `synlynk local doctor` — under a "Local Agent" section (new `sec-label`, follow the existing pattern e.g. `<div class="sec-label">Local Agent <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></div>`)
 - `synlynk schedule [--execute] [--max-stories N]` — under Team/Stories section, tag `v0.12.0`
 - `synlynk cost log` — under a Cost/Ledger section or alongside `status`, tag `v0.12.0`
 - `synlynk goal create|list|link|status` — under Team/Stories section
@@ -114,9 +115,9 @@ Based on the current sections seen in Step 1 (Core, Dispatch/Jobs/Daemon, Relay/
 
 Use the file's existing `<table class="ctbl"><thead>...</thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>` structure and the `<span class="tag tg-new" style="vertical-align:middle;">vX.Y.Z</span>` version-tag convention already used throughout the file (see the existing `daemon start|stop|status` row for the exact pattern to copy). Determine each command's actual first-shipped version via `grep -n "<command-name>" CHANGELOG.md` rather than guessing.
 
-- [ ] **Step 5: Cross-check `--agents claude,agy,codex` mentions for the local/grok agents**
+- [ ] **Step 5: Cross-check `--agents claude,agy,codex` mentions for the grok agent**
 
-Run: `grep -n "claude,agy,codex\|3 agents\|three agents" docs/synlynk-command-reference.html`. If found, update the flag example to include the full current roster where accurate (init's `--agents` flag per `README.md`'s existing documentation only supports `claude,agy,codex` for instruction-file generation — verify current accepted values via `grep -n "agents.*claude\|choices=" synlynk/cli.py | grep -i agent` before changing; do not add agents to this flag's example unless they're actually accepted).
+Run: `grep -n "claude,agy,codex\|3 agents\|three agents" docs/synlynk-command-reference.html`. If found, update the flag example to include the full current roster where accurate (init's `--agents` flag per `README.md`'s existing documentation only supports `claude,agy,codex` for instruction-file generation — verify current accepted values via `grep -n "agents.*claude\|choices=" synlynk/cli.py | grep -i agent` before changing; do not add agents to this flag's example unless they're actually accepted). **Do not add `local` to this flag's example** — out of scope for this release per the scope note above.
 
 - [ ] **Step 6: Self-verify — grep every command name in the updated file against `cli.py`**
 
@@ -171,7 +172,7 @@ Content for the new chapter (adapt exact HTML tag structure from the v0.9.4 chap
 ```
 Chapter title: "What's New in v0.12.0"
 Section label: "v0.12.0 · Measurement & Reliability"
-Body: "v0.12.0 makes the agent fleet trustworthy: dispatched jobs finish their own git steps instead of leaving commits unfinished, a 5th zero-cost local agent joins the roster over on-device oMLX inference, story routing becomes a real 3-stage scoring engine (capability, quota headroom, cost tie-break) with a fleet batch scheduler to clear backlogs unattended, and every cost figure synlynk reports is now either structurally measured or visibly flagged as an estimate."
+Body: "v0.12.0 makes the agent fleet trustworthy: dispatched jobs finish their own git steps instead of leaving commits unfinished, story routing becomes a real 3-stage scoring engine (capability, quota headroom, cost tie-break) with a fleet batch scheduler to clear backlogs unattended, and every cost figure synlynk reports is now either structurally measured or visibly flagged as an estimate."
 ```
 
 - [ ] **Step 3: Update the Changelog chapter**
@@ -183,14 +184,14 @@ Prepend new `.cl-row` entries above the existing `v0.9.4` row, one per named rel
 Example row to prepend (adapt wording from actual `CHANGELOG.md [0.12.0]` content — do not use this verbatim if it doesn't match):
 
 ```html
-<div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.12.0</div><div class="cl-body"><strong>Dispatched jobs now finish their own git steps</strong> — commit, push, and PR happen automatically once work is verified complete. A 5th agent, <code>local</code>, runs free on-device inference. Every cost number is now measured or flagged as an estimate.</div></div>
+<div class="cl-row"><div class="cl-ver" style="color:var(--green);">v0.12.0</div><div class="cl-body"><strong>Dispatched jobs now finish their own git steps</strong> — commit, push, and PR happen automatically once work is verified complete. Story routing gets real capability + quota + cost scoring, plus a fleet batch scheduler. Every cost number is now measured or flagged as an estimate.</div></div>
 ```
 
 - [ ] **Step 4: Update the Commands appendix table**
 
 Run: `sed -n '1390,1470p' docs/synlynk-official-reference.html` to see the full current appendix table structure (multiple `<table class="ctbl">` sections by category, same pattern as Task 2's Command Reference file but condensed).
 
-Add the same set of missing commands identified in Task 2 Step 4 (local doctor, schedule, cost log, goal, pr check, instructions, roles, viz, release, doctor, probe, repair, sync, exit, jobs handoff) to their matching category tables here, using this file's existing `<tr><td>command</td><td>description <span class="tag tg-new" ...>vX.Y.Z</span></td></tr>` pattern. Keep descriptions terser than the Command Reference file's — this appendix is already condensed (compare row lengths in the existing content to match tone).
+Add the same set of missing commands identified in Task 2 Step 4 (schedule, cost log, goal, pr check, instructions, roles, viz, release, doctor, probe, repair, sync, exit, jobs handoff — excluding `local doctor`, out of scope for this release) to their matching category tables here, using this file's existing `<tr><td>command</td><td>description <span class="tag tg-new" ...>vX.Y.Z</span></td></tr>` pattern. Keep descriptions terser than the Command Reference file's — this appendix is already condensed (compare row lengths in the existing content to match tone).
 
 - [ ] **Step 5: Update the comparison matrix**
 
