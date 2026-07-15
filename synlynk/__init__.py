@@ -82,7 +82,10 @@ from synlynk.quota import (
     _quota_headroom,
     _quota_status_for_agent,
     _read_agent_quota_rows,
+    _refresh_agent_quotas_from_telemetry,
     _upsert_agent_quota,
+    cmd_quota,
+    refresh_agent_quotas_from_telemetry,
 )
 from synlynk.costs import (
     _TokenCounts,

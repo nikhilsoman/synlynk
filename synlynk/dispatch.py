@@ -1116,6 +1116,15 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                 "rescue_agent": None,
                 "output_velocity_bpm": output_velocity_bpm,
             })
+            # #291: roll exec usage into agent_quotas so stage-2 headroom is live
+            refresh_quotas = _pkg("_refresh_agent_quotas_from_telemetry") or _pkg(
+                "refresh_agent_quotas_from_telemetry"
+            )
+            if refresh_quotas:
+                try:
+                    refresh_quotas()
+                except Exception:
+                    pass
         if check_sentinels:
             check_sentinels(output_text=output_text, exit_code=exit_code, cmd=" ".join(cmd_args))
         if check_drift:
