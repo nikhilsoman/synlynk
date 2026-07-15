@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-623%20passing-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.10.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-1140%20passing-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.12.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects scoped project context into every agent dispatch, routes tasks to the best available agent using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.10.0:** FTUE onboarding with terminal-based Scan + Wizard, `state.db` centralized SQLite primary source of truth, one-shot project migration, direct `pipx` packaging, and updated capability tracking. 623 tests passing.
+**v0.12.0:** Measurement & Reliability — dispatch git-finalization (agents no longer need to remember to commit/push/PR), fleet batch scheduling (`synlynk schedule`), model-aware capability routing with quota headroom gating, and full cost-provenance tracking (every dollar shown is measured or flagged as an estimate). 1140 tests passing.
 
 ## Documentation
 
@@ -98,32 +98,82 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/cont
 
 ## Commands
 
+Commands are grouped by where you'll reach for them in a typical project lifecycle.
+
+### Getting Started
+
 | Command | Description |
 | --- | --- |
-| `synlynk init [--force] [--wizard]` | Runs the FTUE typeform-style TUI wizard (8 screens) to discover agents, configure workspace topology, and bootstrap project state. |
-| `synlynk exec <cmd>` | Run any AI CLI with context injection and telemetry |
-| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch an agent job to run in the background |
-| `synlynk scan [--refresh] [--add path] [--remove path] [--dry-run] [--deep] [--status]` | Re-runnable repository analysis that scans the source tree and updates the source architecture context |
-| `synlynk migrate [--dry-run] [--recover] [--setup-dr]` | One-shot import to migrate existing flat-file `project-docs/` to `state.db` |
-| `synlynk memory add <section> <body>` | Add a memory/convention entry to `state.db` with write-through to the flat file |
-| `synlynk devlog append <author> <date> <body>` | Append a devlog entry to `state.db` with write-through to the flat file |
-| `synlynk agent configure <name>` | Write `.agents/<name>.json` context profile interactively |
-| `synlynk relay start [--port N]` | Start HTTP SSE relay broker in foreground (port 27472) |
-| `synlynk relay broadcast <body> [--kind motd\|wellness\|message\|joke\|custom]` | Publish a broadcast event to the relay |
-| `synlynk jobs [--all] [--watch]` | List jobs from SQLite (`--watch` refreshes every 2s) |
-| `synlynk logs --job <id> [--tail N]` | Tail a job's stdout log |
-| `synlynk shell [--story <id>]` | Open an interactive agent shell with story context |
-| `synlynk launch <agent> [--story <id>]` | Prompt for task, then dispatch interactively |
-| `synlynk run --trio <task>` | Dispatch the same task to all functional agents in parallel |
-| `synlynk watch start\|stop\|status` | Background daemon that regenerates `context.md` on file changes (Unix only) |
-| `synlynk checkpoint` | Archive completed `[x]` tasks to devlog, refresh context, emit telemetry |
-| `synlynk status [--json]` | Dashboard: active tasks, budget, sentinel alerts, watcher state |
-| `synlynk sentinel list\|clear [--severity] [--code]` | View or dismiss sentinel alerts |
-| `synlynk identity init` | Create `~/.synlynk/identity.key` (Ed25519) and print public key |
-| `synlynk upgrade` | Check GitHub releases for a newer version |
+| `synlynk init [--force] [--wizard]` | Initialize synlynk in a repository |
+| `synlynk doctor` | Run health checks on your synlynk installation |
+| `synlynk probe` | Probe agent harness capability and record compatibility |
+| `synlynk exec <cmd>` | Execute an AI CLI with synlynk context |
+| `synlynk status [--json] [--platform]` | Show project state dashboard |
+| `synlynk upgrade` | Check for and apply updates |
+
+### Daily Use
+
+| Command | Description |
+| --- | --- |
+| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch an agent to run a task in the background |
+| `synlynk jobs [--all] [--watch] [--stalled]` | List dispatched background jobs |
+| `synlynk jobs handoff <job-id> <agent>` | Transfer a stalled job to another agent |
+| `synlynk watch [--live]` | Live workspace HUD (synlynk watch) |
+| `synlynk launch [--dry-run] [--list]` | Pick your first task and dispatch it (FTUE task picker) |
+| `synlynk run --trio <task>` | Dispatch all functional agents in parallel (not the sequential Trio pipeline) |
+| `synlynk checkpoint` | Archive done tasks, refresh context, emit telemetry |
+| `synlynk logs --job <id> [--tail N]` | Tail the output log of a job |
+| `synlynk shell [--story <id>]` | Spawn a subshell with synlynk context injected |
+| `synlynk open <agent> [--story <id>]` | Open an agent CLI interactively with pre-loaded context |
+| `synlynk config set <key> <value>` | Set a config key |
+| `synlynk sentinel list\|clear [--severity] [--code]` | View and manage sentinel alerts |
+| `synlynk cost log` | Log a manual cost entry for native/unwrapped sessions |
+
+### Team / PM
+
+| Command | Description |
+| --- | --- |
+| `synlynk join` | Onboard as a new member to an existing project |
+| `synlynk team status` | Show team digest: members, stories, budget |
+| `synlynk decide <topic> --panel <agents> [--record]` | Convene a multi-agent panel and optionally record a Decision |
+| `synlynk goal create\|list\|link\|status` | Manage Business Goals |
+| `synlynk story create\|list\|ready\|draft` | Manage stories |
+| `synlynk score add\|list\|attest` | Manage capability scores |
+| `synlynk schedule [--execute] [--max-stories N]` | Batch-assign ready stories to agents (dry-run by default) |
+| `synlynk relay start [--port N]` | Start relay broker (foreground) |
+| `synlynk relay broadcast <body> [--kind motd\|wellness\|message\|joke\|custom]` | Send a broadcast event to the relay |
+| `synlynk instructions status\|diff\|update\|ack` | Manage synlynk instruction files across AI tools |
+| `synlynk pr check` | Block PR if model versions are unattested |
+| `synlynk roles [--fix]` | Show agent role table and directive file fence status |
+
+### Advanced / Operate
+
+| Command | Description |
+| --- | --- |
+| `synlynk agent configure\|run\|list` | Manage and run autopilot agents |
+| `synlynk identity init` | Create local Ed25519 identity key |
+| `synlynk scan [--refresh] [--add PATH] [--remove PATH] [--dry-run] [--workspace WORKSPACE] [--no-tui] [--deep] [--status]` | Scan workspace environment (repos, harnesses, agents, skills) |
+| `synlynk migrate [--dry-run] [--recover] [--setup-dr]` | Migrate project-docs markdown into state.db and .synlynk/project-docs |
+| `synlynk repair [--confirm]` | Remove and re-initialize synlynk using current configuration |
+| `synlynk sync [--confirm] [--repair-sops]` | Propagate updated synlynk artifacts without full re-init |
+| `synlynk exit [--confirm] [--remove-docs]` | Remove synlynk from this repository (reversible via repair) |
+| `synlynk release [--dry-run] [--version VERSION] [--minor]` | Cut a named release |
+| `synlynk viz [--serve\|--generate\|--open\|--stop\|--port PORT]` | Open local browser workspace dashboard |
+| `synlynk daemon [start\|stop\|status\|restart] [--install-service] [--uninstall-service]` | Manage the always-on context daemon |
 | `synlynk --version` | Print current version |
 
 > **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux. `synlynk dispatch` works on all platforms.
+
+## Upgrading?
+
+If you installed synlynk before 2026-07, here's what's new:
+
+- `synlynk schedule` — fleet batch dispatch, dry-run by default
+- `synlynk cost log` — manual cost entries for native/PM-session work
+- `synlynk status` now shows a `RATES` line (rate-table staleness)
+- `synlynk viz` — local web HUD (Architect Map, Effort & Cost tab, Business Goals Panel)
+
+Run `synlynk upgrade` to get the latest, then `synlynk doctor` to verify.
 
 ## synlynk init flags
 
