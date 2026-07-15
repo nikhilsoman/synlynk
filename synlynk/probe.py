@@ -82,6 +82,8 @@ SOP_BLOCKS = [
     _REPO_HYGIENE_SOP,
 ]
 
+_VERSION_TOKEN_PATTERN = re.compile(r"\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b")
+
 
 def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     import hashlib as _hashlib
@@ -337,13 +339,24 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     import socket as _sock
     import time as _time
 
+    def _extract_installed_version(text: str) -> str:
+        text = text.strip()
+        if not text:
+            return "unknown"
+
+        match = _VERSION_TOKEN_PATTERN.search(text)
+        if match:
+            return match.group(0)
+
+        return text.split()[-1]
+
     harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     harness_name = harness_map.get(agent_name, agent_name)
     baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
 
     try:
         result = subprocess.run([agent_name, "--version"], capture_output=True, text=True, timeout=5)
-        installed_version = result.stdout.strip().split()[-1] if result.stdout.strip() else "unknown"
+        installed_version = _extract_installed_version(result.stdout or "")
     except (FileNotFoundError, subprocess.TimeoutExpired):
         installed_version = "unavailable"
     version_detected = installed_version not in {"unknown", "unavailable"}
