@@ -61,3 +61,8 @@
 | 2026-07-15 15:07 | codex | 1 | 751784/8342 | [est] $2.3805 | exec: codex job job-48d58a... |
 | 2026-07-15 | nikhil | ~90 | ~90K / ~20K | ~$0.57 | Issue #259: brainstorm+design spec (rates_updated_at surfacing), implementation plan authoring, self-review, independent diff+test verification of dispatched Task 1 (Codex job-48d58abb), full-suite regression pass, blog post 63 |
 | 2026-07-15 | nikhil | ~40 | ~110K / ~35K | ~$0.86 | v0.12.0 release prep: PR #267 CI verify + merge, roadmap-shipped memory sync, gh-authoritative audit of 71 PRs merged since v0.11.0 (`gh pr list`, caught merge-commit PRs a commit-subject grep missed), VERSION bump 0.11.0→0.12.0, full CHANGELOG [0.12.0] entry rewrite (5 epics, dedup of old detail blocks), full-suite regression pass (1140 passed/2 skipped), release blog post 64 |
+| 2026-07-15 19:32 | agy | 1 | 453303/32863 | [est] $1.8529 | exec: agy job job-a1ef0192 |
+| 2026-07-15 19:32 | grok | 1 | 48960/8627 | [est] $0.2763 | exec: grok job job-dbfc48c... |
+| 2026-07-15 19:32 | agy | 1 | 242381/18525 | [est] $1.0050 | exec: agy job job-0b627f6f |
+| 2026-07-15 19:50 | codex | 1 | 6223528/119074 | [est] $20.4567 | exec: codex job job-f9804c... |
+| 2026-07-15 20:01 | grok | 1 | 81218/27634 | [est] $0.6582 | exec: grok job job-2327f65... |

@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Synlynk Command Reference — v0.9.4</title>
+<title>Synlynk Command Reference — v0.12.0</title>
 <!--
   MAINTENANCE: Update this document after each release.
   Official Reference: update version tag, add features page, update changelog + commands + comparison matrix.
   Command Reference: update commands section for any new/changed commands.
   Quick Start Guide: update version tag only unless UX flow changed.
-  Last updated: v0.9.4 (2026-06-24)
+  Last updated: v0.12.0 (2026-07-15)
 -->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -573,7 +573,7 @@
 
   <div class="cover-logo">SYNL<span>Y</span>NK</div>
   <div class="cover-tagline">Every command. Every flag. Every scenario.</div>
-  <div class="cover-version">v0.9.4 · Complete CLI Reference</div>
+  <div class="cover-version">v0.12.0 · Complete CLI Reference</div>
 
   <div class="cover-command">
     <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">synlynk</span> <span style="color:#8e8e93;">--help</span></div>
@@ -661,7 +661,7 @@
     <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">setup flow</div></div>
     <div class="tb">
       <div><span class="t-p">~/api $ </span><span class="t-c">synlynk init</span> <span class="t-f">--mode</span> <span class="t-a">team</span> <span class="t-f">--docs-dir</span> <span class="t-a">.</span></div>
-      <div><span class="t-s">  ✓</span> <span class="t-o">Migrated roadmap.md · memory.md · 3 agents discovered</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Migrated roadmap.md · memory.md · 4 agents discovered (claude · agy · codex · grok)</span></div>
       <div><span class="t-p">~/api $ </span><span class="t-c">synlynk scan</span> <span class="t-f">--deep</span></div>
       <div><span class="t-s">  ✓</span> <span class="t-o">284 files · 1,024 symbols · source-map.md written</span></div>
       <div><span class="t-p">~/api $ </span><span class="t-c">synlynk status</span></div>
@@ -1080,7 +1080,7 @@
       <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
       <tbody>
         <tr><td>--topic "..."</td><td>The decision question put to the panel.</td></tr>
-        <tr><td>--agents a,b,c</td><td>Which agents sit on the panel (defaults to all functional agents).</td></tr>
+        <tr><td>--panel claude,agy,codex,grok</td><td>Which agents sit on the panel (defaults to all functional agents).</td></tr>
       </tbody>
     </table>
   </div>
@@ -1094,11 +1094,12 @@
       <div><span class="t-o">  Digest: nikhil (relay broker) · arjun (capability routing)</span></div>
       <div><span class="t-p">~/api $ </span><span class="t-c">synlynk team status</span></div>
       <div><span class="t-o">  3 members · 12 open stories · 2 active jobs</span></div>
-      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk decide</span> <span class="t-f">--topic</span> <span style="color:#c8c8ca;">"Postgres or SQLite for the ledger?"</span> <span class="t-f">--agents</span> <span class="t-a">claude,agy,codex</span></div>
+      <div><span class="t-p">~/api $ </span><span class="t-c">synlynk decide</span> <span class="t-f">--topic</span> <span style="color:#c8c8ca;">"Postgres or SQLite for the ledger?"</span> <span class="t-f">--panel</span> <span class="t-a">claude,agy,codex,grok</span></div>
       <div><span style="color:#bf5af2;">  claude ›</span> <span class="t-o">SQLite — zero ops</span></div>
       <div><span style="color:#64d2ff;">  agy ›</span> <span class="t-o">SQLite</span></div>
       <div><span class="t-o">  codex › SQLite</span></div>
-      <div><span class="t-s">  ✓</span> <span class="t-o">Consensus: SQLite (3/3) · logged to memory.md [@priya]</span></div>
+      <div><span style="color:#30d158;">  grok ›</span> <span class="t-o">SQLite</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Consensus: SQLite (4/4) · logged to memory.md [@priya]</span></div>
     </div>
   </div>
 
@@ -1154,7 +1155,7 @@
     <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
     <tbody>
       <tr><td>--force</td><td>Overwrite synlynk-managed files instead of skipping existing ones.</td></tr>
-      <tr><td>--agents a,b,c</td><td>Restrict discovery to a specific set of agents.</td></tr>
+      <tr><td>--agents claude,agy,codex,grok</td><td>Restrict discovery to a specific set of agents.</td></tr>
       <tr><td>--mode single|team</td><td>Single user, or team mode (per-user devlogs + pull guard).</td></tr>
       <tr><td>--org &lt;name&gt;</td><td>Org slug baked into agent instruction files.</td></tr>
       <tr><td>--repo &lt;name&gt;</td><td>Repo slug baked into agent instruction files.</td></tr>
@@ -1176,7 +1177,54 @@
   </div>
 
   <div style="margin-top:auto; padding-top:8px; text-align:center; font-size:9px; color:var(--muted); letter-spacing:0.08em;">
-    SYNL<span style="color:var(--blue); font-weight:800;">Y</span>NK · Command Reference · v0.9.4 · synlynk.com
+    SYNL<span style="color:var(--blue); font-weight:800;">Y</span>NK · Command Reference · v0.12.0 · synlynk.com
+  </div>
+
+</div>
+<!-- PAGE 10 — MAINTENANCE -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Reference 09 — Maintenance</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">10</div>
+  </div>
+
+  <div class="sec-label">Maintenance &amp; Governance</div>
+  <h1 class="ch">Ship, audit,<br>and keep it honest.</h1>
+
+  <p>These commands cover release hygiene, measurement, and repo maintenance. They are the surfaces that keep the CLI itself current as the platform evolves.</p>
+
+  <table class="ctbl">
+    <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>goal create|list|link|status</td><td>Manage business goals and story links. <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></td></tr>
+      <tr><td>schedule [--execute] [--max-stories N]</td><td>Batch ready stories into agent assignments. <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></td></tr>
+      <tr><td>cost log</td><td>Write a manual cost row for native or unwrapped sessions. <span class="tag tg-new" style="vertical-align:middle;">v0.12.0</span></td></tr>
+      <tr><td>pr check</td><td>Block a PR when attestation or acceptance criteria are missing. <span class="tag tg-new" style="vertical-align:middle;">v0.6.0</span></td></tr>
+      <tr><td>instructions status|diff|update|ack</td><td>Inspect, diff, refresh, or acknowledge tracked instruction files. <span class="tag tg-new" style="vertical-align:middle;">v0.6.1</span></td></tr>
+      <tr><td>roles [--fix]</td><td>Show the role table or repair missing directive fences. <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
+      <tr><td>viz [--serve|--generate|--open|--stop|--port]</td><td>Open or manage the local browser dashboard. <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
+      <tr><td>release [--dry-run] [--version] [--minor]</td><td>Cut a release, update VERSION and changelog, and stub the blog. <span class="tag tg-new" style="vertical-align:middle;">v0.10.0</span></td></tr>
+      <tr><td>doctor</td><td>Run health checks and directive/SOP validation. <span class="tag tg-new" style="vertical-align:middle;">v0.11.0</span></td></tr>
+      <tr><td>probe</td><td>Probe agent harness compatibility and capacity baselines. <span class="tag tg-new" style="vertical-align:middle;">v0.11.0</span></td></tr>
+      <tr><td>jobs handoff &lt;job_id&gt; [--to &lt;agent&gt;]</td><td>Reassign a stalled job to another agent. <span class="tag tg-new" style="vertical-align:middle;">v0.11.0</span></td></tr>
+      <tr><td>repair</td><td>Remove and reinitialize synlynk from current config. <span class="tag tg-new" style="vertical-align:middle;">v0.9.8</span></td></tr>
+      <tr><td>sync</td><td>Propagate updated synlynk artifacts in place. <span class="tag tg-new" style="vertical-align:middle;">v0.9.8</span></td></tr>
+      <tr><td>exit</td><td>Remove synlynk-managed artifacts from the repo. <span class="tag tg-new" style="vertical-align:middle;">v0.9.8</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout c-tip" style="margin-top:6px;">
+    <div class="ci">🧾</div>
+    <div class="cb">
+      <div class="ct">Maintenance rule of thumb</div>
+      <div class="cx">When a command changes the repo shape, add it here with the first shipped version. When it only changes a story or job, keep it in the chapter where users already look for that workflow.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:auto; padding-top:8px; text-align:center; font-size:9px; color:var(--muted); letter-spacing:0.08em;">
+    SYNL<span style="color:var(--blue); font-weight:800;">Y</span>NK · Command Reference · v0.12.0 · synlynk.com
   </div>
 
 </div>
