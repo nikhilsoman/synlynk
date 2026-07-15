@@ -60,15 +60,15 @@ _COST_VISIBILITY_SOP = """\
 ## Cost Visibility
 1. Log estimated_cost in the job context header before dispatch.
 2. Check `synlynk status` for current burn rate.
-3. Flag to Claude if a single job is estimated > $2.
+3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.
 4. Append actual cost to `project-docs/costs.md`.
 """
 
 _REPO_HYGIENE_SOP = """\
 ## Repo Hygiene
 1. Do not commit directly to main or master.
-2. Use branch naming pattern: `feat/<agent>/<desc>`.
-3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: AGY <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
+2. Use task-scoped branch naming: `feat/<description>`, `fix/<description>`, `chore/<description>`.
+3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
 4. Use worktree per feature with `git worktree add`.
 5. Run `git branch --show-current` before committing to verify branch.
 """

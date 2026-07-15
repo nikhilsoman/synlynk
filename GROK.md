@@ -98,3 +98,50 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - Run `synlynk status` and include the output in your closing message
 
 <!-- synlynk:end -->
+
+<!-- synlynk:harness vsop-repair verified:2026-07-15T19:50:56Z -->
+# Harness Instructions (synlynk-managed — do not edit)
+
+## Your Role
+implement, test, canvas, js, infra
+## PR Review Discipline
+1. Assign a non-authoring agent to review the PR.
+2. The reviewer must run `synlynk pr check <pr#>`.
+3. The reviewer alone must merge the PR.
+4. If the reviewer is unavailable, escalate to Claude.
+
+## Brainstorm-First Policy
+1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
+2. Run the brainstorm using Claude via `synlynk dispatch`.
+3. Spec is approved only when committed to the branch and Nikhil signs off.
+
+## Design → Plan → Build Sequence
+1. Design: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+2. Plan: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+3. Build: Code implementation
+- Spec not committed = do not write plan.
+- Plan not committed = do not dispatch tasks.
+
+## Capability-Based Task Allocation
+| Role | Agent | Tasks |
+| :--- | :--- | :--- |
+| Python/CLI/tests | Codex | Python, CLI, tests |
+| HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
+| canvas/JS/infra | Grok | canvas, JS, infra |
+| PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
+Do not start a task outside your role column without explicit Claude approval.
+
+## Cost Visibility
+1. Log estimated_cost in the job context header before dispatch.
+2. Check `synlynk status` for current burn rate.
+3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.
+4. Append actual cost to `project-docs/costs.md`.
+
+## Repo Hygiene
+1. Do not commit directly to main or master.
+2. Use task-scoped branch naming: `feat/<description>`, `fix/<description>`, `chore/<description>`.
+3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
+4. Use worktree per feature with `git worktree add`.
+5. Run `git branch --show-current` before committing to verify branch.
+
+<!-- /synlynk:harness -->

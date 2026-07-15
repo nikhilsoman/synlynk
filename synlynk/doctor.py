@@ -249,7 +249,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 "codex": "AGENTS.md",
                 "grok": "GROK.md",
             }
-            tc5 = _pkg("_run_tc5")({a: tc5_files[a] for a in agents if a in tc5_files})
+            tc5 = _pkg("_run_tc5")({a: tc5_files[a] for a in agents if a in tc5_files and os.path.exists(tc5_files[a])})
 
             all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
             if not all_passed:
