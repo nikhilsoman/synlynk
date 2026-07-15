@@ -94,6 +94,38 @@ def _extract_claude_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
 
 
+def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parses agy -p --output-format json's single JSON object response.
+
+    Unlike Codex/Claude, agy emits exactly one JSON object per invocation,
+    not a newline-delimited event stream, so only the last non-empty line
+    needs parsing. thinking_tokens is folded into output_tokens (billable
+    output, mirrors Codex's reasoning_output_tokens treatment). No
+    cache-read concept exists in agy's usage shape, so cache_read_tokens
+    is always 0. A non-"SUCCESS" status is treated as extraction failure
+    (falls back to the regex chain) since no failure-mode schema has been
+    observed live.
+    """
+    lines = [line.strip() for line in output_text.splitlines() if line.strip()]
+    if not lines:
+        return None
+    try:
+        event = json.loads(lines[-1])
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(event, dict) or event.get("status") != "SUCCESS":
+        return None
+    usage = event.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    try:
+        in_tokens = int(usage["input_tokens"])
+        out_tokens = int(usage["output_tokens"]) + int(usage.get("thinking_tokens", 0))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
+
+
 def extract_tokens(output_text: str, agent: str = None) -> tuple:
     """Regex-scrapes token counts from AI CLI stdout, or delegates to a
     per-agent structured-output adapter when one exists.

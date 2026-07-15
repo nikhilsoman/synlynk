@@ -542,6 +542,111 @@ def test_extract_claude_structured_last_result_wins():
     assert result.output_tokens == 888
 
 
+def test_extract_agy_structured_basic():
+    from synlynk.costs import _extract_agy_structured
+
+    output = (
+        '{"conversation_id":"c1","status":"SUCCESS","response":"hello",'
+        '"duration_seconds":12.34,"num_turns":1,'
+        '"usage":{"input_tokens":80648,"output_tokens":2390,'
+        '"thinking_tokens":1922,"total_tokens":83038}}\n'
+    )
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.input_tokens == 80648
+    assert result.output_tokens == 2390 + 1922
+    assert result.cache_read_tokens == 0
+    assert result.basis == "structured_output"
+
+
+def test_extract_agy_structured_tool_use_sample():
+    from synlynk.costs import _extract_agy_structured
+
+    output = (
+        '{"conversation_id":"c2","status":"SUCCESS","response":"there are 5 files",'
+        '"duration_seconds":18.02,"num_turns":1,'
+        '"usage":{"input_tokens":84375,"output_tokens":3294,'
+        '"thinking_tokens":2632,"total_tokens":87669}}\n'
+    )
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.input_tokens == 84375
+    assert result.output_tokens == 3294 + 2632
+    assert result.cache_read_tokens == 0
+    assert result.basis == "structured_output"
+
+
+def test_extract_agy_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    assert _extract_agy_structured("") is None
+
+
+def test_extract_agy_structured_trailing_blank_lines_still_parses():
+    from synlynk.costs import _extract_agy_structured
+
+    output = (
+        '{"status":"SUCCESS","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '\n'
+        '   \n'
+    )
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_agy_structured_status_not_success_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"FAILED","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_missing_status_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"usage":{"input_tokens":10,"output_tokens":5}}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_missing_usage_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","response":"hi"}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_missing_thinking_tokens_defaults_zero():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.output_tokens == 5
+
+
+def test_extract_agy_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":"not-a-number","output_tokens":5}}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_malformed_json_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = 'not json at all\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_truncated_json_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":10,"outp'
+    assert _extract_agy_structured(output) is None
+
+
 def test_extract_tokens_agent_codex_uses_structured_output():
     from synlynk.costs import extract_tokens
 
