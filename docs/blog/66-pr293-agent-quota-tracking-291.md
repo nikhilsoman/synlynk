@@ -1,9 +1,9 @@
 ---
-title: "PR TBD — agent_quotas finally gets real usage (#291)"
+title: "PR #293 — agent_quotas finally gets real usage (#291)"
 date: 2026-07-16
 series: "Building the OS for Multi-Agent Development"
 post: 66
-pr: "TBD"
+pr: "#293"
 merged: pending
 ---
 
