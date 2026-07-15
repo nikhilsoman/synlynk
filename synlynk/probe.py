@@ -713,73 +713,103 @@ def _spawn_with_pty_fallback_probe(cmd, env, cwd):
     return None, b""
 
 
+def _read_toml_string_value(path: str, key: str, section: Optional[str] = None) -> Optional[str]:
+    """Read a string key from a simple TOML config (stdlib only; no tomllib dep).
+
+    Supports top-level ``key = "value"`` or a single ``[section]`` table.
+    Used for agent home configs (~/.codex/config.toml, ~/.grok/config.toml).
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+
+    # Prefer tomllib when available (3.11+) for nested/quoted edge cases.
+    try:
+        import tomllib  # type: ignore[attr-defined]
+
+        data = tomllib.loads(text)
+        if section:
+            nested = data.get(section) if isinstance(data, dict) else None
+            val = nested.get(key) if isinstance(nested, dict) else None
+        else:
+            val = data.get(key) if isinstance(data, dict) else None
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        return None
+    except Exception:
+        pass
+
+    if section:
+        sec_match = re.search(
+            rf"^\[{re.escape(section)}\]\s*$", text, re.MULTILINE
+        )
+        if not sec_match:
+            return None
+        rest = text[sec_match.end() :]
+        next_sec = re.search(r"^\[", rest, re.MULTILINE)
+        if next_sec:
+            rest = rest[: next_sec.start()]
+        search_text = rest
+    else:
+        next_sec = re.search(r"^\[", text, re.MULTILINE)
+        search_text = text[: next_sec.start()] if next_sec else text
+
+    for quote in ('"', "'"):
+        m = re.search(
+            rf"^{re.escape(key)}\s*=\s*{quote}([^{quote}]+){quote}",
+            search_text,
+            re.MULTILINE,
+        )
+        if m:
+            return m.group(1).strip()
+    return None
+
+
 def _probe_model_version(agent_name: str, cli: str) -> str:
-    """Tier 2: probe the agent's active model from its statusline before dispatch."""
-    probe_cmds = {
-        "claude": [cli, "/status"],
-        "agy":    [cli, "--version"],
-        "codex":  [cli, "--version"],
-        "grok":   [cli, "-v"],
-    }
-    cmd = probe_cmds.get(agent_name, [cli, "--version"])
-    patterns = [
-        r"(claude-[\d.a-z-]*(?:opus|sonnet|haiku)[\w.-]*)",
-        r"(agy-[\w.-]+)",
-        r"(gemini-[\w.-]+)",
-        r"(gpt-[\d.]+-[\w.-]+)",
-        r"(codex-[\w-]+)",
-        r"(grok-[\w.-]+)",
-    ]
+    """Tier 2: resolve the agent's configured model from its own config files.
 
-    def _extract_version(text: str) -> str:
-        for pat in patterns:
-            m = re.search(pat, text, re.IGNORECASE)
-            if m:
-                return m.group(1).lower()
-        return "unknown"
+    CLI ``--version`` / ``/status`` probes only surface harness/CLI version (or
+    require an interactive session), so this reads each agent's home config:
 
-    try:
-        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
-        contract = baseline.get("headless_contract", {})
-        env = os.environ.copy()
-        for var in contract.get("env_vars_required", []):
-            if "=" in var:
-                k, v = var.split("=", 1)
-                env[k] = v
+    - codex: ``~/.codex/config.toml`` top-level ``model``
+    - grok:  ``~/.grok/config.toml`` ``[models] default``
+    - claude: ``~/.claude/settings.json`` ``model`` (absent → built-in default)
+    - agy: no persistent model config (session-scoped ``--model`` only)
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=3,
-            env=env,
-            cwd=os.getcwd(),
+    ``cli`` is retained for call-site compatibility; config-path probes do not
+    invoke the binary.
+    """
+    del cli  # signature retained for dispatch_agent(agent, cli) callers
+
+    if agent_name == "agy":
+        return "session-scoped, no fixed default"
+
+    if agent_name == "codex":
+        model = _read_toml_string_value(
+            os.path.expanduser("~/.codex/config.toml"), "model"
         )
-        text = "\n".join(
-            part for part in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
-            if part
-        )
-        version = _extract_version(text)
-        if version != "unknown":
-            return version
-    except Exception:
-        pass
+        return model if model else "unknown"
 
-    try:
-        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
-        contract = baseline.get("headless_contract", {})
-        env = os.environ.copy()
-        for var in contract.get("env_vars_required", []):
-            if "=" in var:
-                k, v = var.split("=", 1)
-                env[k] = v
-        package = sys.modules.get("synlynk")
-        pty_fallback = getattr(package, "_spawn_with_pty_fallback", _spawn_with_pty_fallback_probe)
-        _proc, out = pty_fallback(cmd, env, os.getcwd())
-        text = out.decode("utf-8", errors="ignore") if out else ""
-        version = _extract_version(text)
-        if version != "unknown":
-            return version
-    except Exception:
-        pass
+    if agent_name == "grok":
+        model = _read_toml_string_value(
+            os.path.expanduser("~/.grok/config.toml"),
+            "default",
+            section="models",
+        )
+        return model if model else "unknown"
+
+    if agent_name == "claude":
+        settings_path = os.path.expanduser("~/.claude/settings.json")
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            model = data.get("model") if isinstance(data, dict) else None
+            if isinstance(model, str) and model.strip():
+                return model.strip()
+        except (OSError, json.JSONDecodeError, TypeError, AttributeError):
+            pass
+        return "uses Claude Code's built-in default, no override"
+
     return "unknown"

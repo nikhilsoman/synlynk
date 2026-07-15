@@ -529,30 +529,58 @@ def test_score_add_rejects_out_of_range(tmp_path, monkeypatch):
 
 # --- Task 11: statusline probe ---
 
-def test_probe_model_version_parses_claude_statusline(monkeypatch):
+def test_probe_model_version_parses_claude_settings(tmp_path, monkeypatch):
+    """#287: claude model comes from ~/.claude/settings.json, not /status scrape."""
+    import json
+    import os
     from synlynk import _probe_model_version
-    import subprocess
-    fake = type("R", (), {"stdout": "claude-opus-4-8 | ctx: 45%", "returncode": 0})()
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: fake)
+
+    home = tmp_path / "home"
+    claude = home / ".claude"
+    claude.mkdir(parents=True)
+    (claude / "settings.json").write_text(json.dumps({"model": "claude-opus-4-8"}))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(
+        os.path, "expanduser",
+        lambda p: str(home / p[2:]) if p.startswith("~/") else (str(home) if p == "~" else p),
+    )
     result = _probe_model_version("claude", "claude")
     assert result == "claude-opus-4-8"
 
-def test_probe_model_version_returns_unknown_on_failure(monkeypatch):
-    from synlynk import _probe_model_version
-    import subprocess
-    def raise_exc(*a, **k): raise Exception("timeout")
-    monkeypatch.setattr(subprocess, "run", raise_exc)
-    result = _probe_model_version("claude", "claude")
-    assert result == "unknown"
 
-def test_probe_model_version_flexible_pattern(monkeypatch):
+def test_probe_model_version_claude_built_in_default_without_settings(tmp_path, monkeypatch):
+    """#287: missing settings.json → built-in default message, not 'unknown'."""
+    import os
     from synlynk import _probe_model_version
-    import subprocess
-    # Covers "claude-3-5-sonnet" format (version before family name)
-    fake = type("R", (), {"stdout": "claude-3-5-sonnet | ctx: 20%", "returncode": 0, "stderr": ""})()
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: fake)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(
+        os.path, "expanduser",
+        lambda p: str(home / p[2:]) if p.startswith("~/") else (str(home) if p == "~" else p),
+    )
     result = _probe_model_version("claude", "claude")
-    assert "sonnet" in result
+    assert result == "uses Claude Code's built-in default, no override"
+
+
+def test_probe_model_version_codex_reads_config_not_cli_name(tmp_path, monkeypatch):
+    """#287: codex must return configured model id, not 'codex-cli' from --version."""
+    import os
+    from synlynk import _probe_model_version
+
+    home = tmp_path / "home"
+    codex = home / ".codex"
+    codex.mkdir(parents=True)
+    (codex / "config.toml").write_text('model = "gpt-5.4-mini"\n')
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(
+        os.path, "expanduser",
+        lambda p: str(home / p[2:]) if p.startswith("~/") else (str(home) if p == "~" else p),
+    )
+    result = _probe_model_version("codex", "codex")
+    assert result == "gpt-5.4-mini"
+    assert result != "codex-cli"
 
 
 # --- Task 12: verifier meta parsing ---
