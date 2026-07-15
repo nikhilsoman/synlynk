@@ -9,49 +9,74 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-15
+
+**Release pitch:** the operational backbone gets provably reliable and provably accounted for — dispatched jobs finish their own git steps, a 5th zero-cost local agent joins the fleet, story routing gets real capability+quota+cost scoring with a fleet batch scheduler, and every dollar synlynk reports is now either structurally sourced or visibly flagged as an estimate.
+
 ### Added
 
-**Measurement Ledger Hardening Phase 1 (progress toward #210)**
+**Measurement Ledger Hardening — Phase 1 + Phase 2 + display layer (epic #210, PRs #236/#241/#242/#244/#245/#246/#252/#256/#257/#264/#266/#267)**
+
+*Phase 1 — provenance-tagged cost tracking (PR #236):*
 - `cost_entries` gained explicit provenance columns: `cost_source TEXT NOT NULL` (`actual` | `estimated_token_rate` | `estimated_tshirt` | `estimated_manual` | `legacy_unknown`, no default — every `INSERT` must pass it explicitly) and `estimate_basis TEXT`. Migration rebuilds the table and backfills historical rows as `legacy_unknown`.
 - `_insert_cost_row()` (`synlynk/db.py`) is now the sole sanctioned writer to `cost_entries`, replacing four independently-drifting direct-SQL write sites in `dispatch.py`, `jobs.py` (×2), and `support_engineer.py`. Upserts by `job_id` when present. Enforced by a call-site audit test that fails the suite if any other file writes to `cost_entries` directly.
 - `extract_tokens()` now tags a `.basis` (`regex_pair` | `total_split` | `none`) distinguishing a real per-field token extraction from an 80/20 heuristic guess.
 - `.synlynk/model_rates.json` (scaffolded by `synlynk init`) is now the source of truth for per-model rates and `billing_mode`, replacing a hardcoded table; falls back to hardcoded rates on missing/invalid file.
 - New 3-tier t-shirt-size token fallback (`_estimate_tshirt_tokens()`) for surfaces with no real token count: story's `estimated_tokens` column → historical average from `cost_entries` (same discipline+phase, ≥3 samples) → fixed conservative default.
 - **`synlynk cost log`** — manually log a cost row for native/unwrapped PM or brainstorming sessions with no CLI token data, tagged `estimated_manual`.
-- Cost coverage closed across every surface identified in the design spec's audit: `dispatch_agent()`'s exec wrapper (no longer gated on `in_tokens > 0`), `jobs.py`'s reconcile and daemon-reconcile paths, `cmd_launch()`, and `support_engineer.py`'s investigation runs (previously zero cost-write calls in that file). `synlynk release`, `synlynk probe`, and `synlynk doctor` audited and confirmed correctly out of ledger scope.
+- Cost coverage closed across every surface identified in the design spec's audit: `dispatch_agent()`'s exec wrapper (no longer gated on `in_tokens > 0`), `jobs.py`'s reconcile and daemon-reconcile paths, `cmd_launch()`, and `support_engineer.py`'s investigation runs. `synlynk release`, `synlynk probe`, and `synlynk doctor` audited and confirmed correctly out of ledger scope.
 - `check_budgets()` gained a dedicated sub-line surfacing failed-job placeholder estimates separately from the headline spend total. `costs.md` and budget parsers now tolerate `[est] `/`[legacy] `/`~` prefixes.
-- New "Cost Capture Protocol" section in `CLAUDE.md` — PR housekeeping check, enforced by discipline, not CI.
-- Design spec: `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md`. Phase 2 (structured-output extraction adapters, closing the rest of #210) is deferred to a follow-up plan.
+- New "Cost Capture Protocol" section in `CLAUDE.md`.
+- `[failed job]` marker fix: `dispatch.py`'s zero-token-failure cost label now prepends (not appends) the marker so it survives `update_costs()`'s 20-character command truncation, restoring `check_budgets()`'s failed-job sub-line to live code.
+
+*Phase 2 — structured-output token adapters, one per dispatch CLI (PRs #244, #252, #256, #257):* replaces the 80/20 heuristic split with a real per-field structured-JSON extraction path for each vendor CLI — Codex, Claude, Agy (Gemini), and Grok all shipped, closing epic #210's adapter scope.
+
+*Display layer (PRs #264, #266):* Vizor's Effort & Cost tab now visually flags estimated-vs-measured cost rows; `synlynk status` gained a `RATES` line (and JSON `rates_updated_at` key) showing when the model rate table was last updated, warning `⚠ never updated` when no rate file exists.
+
+Design spec: `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md`. Roadmap arc + epic #210 marked shipped (PR #267). Deferred follow-ups filed as issues, out of scope for this release: #260 (Savings Ledger), #261 (dispatch-path unification), #262 (surface consolidation), #263 (stage constants staleness).
+
+**Local Agent — 5th dispatch agent, zero-cost on-device inference (PRs #200/#204/#205/#207/#208/#209)**
+- `local` joins claude/codex/agy/grok as a dispatchable agent, running as an `aider` CLI subprocess against an on-device oMLX OpenAI-compatible endpoint — zero per-token cost.
+- Capability envelope seeding + concurrency guard so `local` starts with a conservative starter whitelist that self-widens with verified results.
+- Real-hardware opt-in pytest tier (`tests/test_local_agent_hardware.py`) exercises actual Aider+oMLX end-to-end, correctly skipped when no local hardware is running.
+- Capability-matrix taxonomy worked example + blog post documenting the integration.
+
+**Capability Matrix Hardening — 3-stage routing engine + fleet batch scheduler (epic #137, PRs #139/#140/#141/#147/#148/#150/#151/#152/#154/#156)**
+- `_best_agent_for_story()` now scores candidates across three real stages: weighted capability score (VERIFIER tier, dead-signal handling, `pr_review_cycles`/`verified_by_ci` signals), a hard quota-headroom gate (`agent_quotas` table across 5h/hourly/daily/weekly/monthly windows, degraded-mode fallback when quota signal is missing), and a cost tie-break (cheaper model wins when top scores are within 0.15).
+- New `synlynk/scheduler.py`: `stories.priority`/`readiness` columns, `synlynk story ready/draft` gate, fleet-level in-batch headroom accounting (story N in a batch sees story 1..N-1's projected spend), retry/reassignment capped at 2 attempts, `synlynk schedule [--execute] [--max-stories N]` CLI.
+- GOVERNS seven-stage vocabulary rollout replaces the old CYCLES/CYCLE_COLOURS naming across the capability taxonomy and HUD.
+- Capability tag enum enforcement + taxonomy reference doc; `cycle_capability` row dedup migration fix.
+- Deferred v2 (reset-timing-aware bin-packing, persistent quota-blocking history, GOVERNS-aware readiness gate) tracked as a goal, gated on 30 days of v1 production data (deadline 2026-08-10) rather than scoped into stories now.
+
+**Job Lifecycle Ground-Truth Verification (#126, #127, #128, #129, PRs #130/#131/#132/#133/#135)**
+- `dispatch_agent()` creates a dedicated `git worktree` per dispatched job (`worktrees/<job_id>`, branch `dispatch/<agent>/<job_id>`) instead of sharing the invoking shell's `cwd` — concurrent dispatches no longer collide.
+- `_reconcile_jobs()` cross-checks git state when a job's exit sentinel is missing, instead of treating an ambiguous exit as automatic failure; new `"failed_unverified"` status flags "inspect before discarding."
+- `files_touched` is real (via `git diff --name-only <merge-base> HEAD` + `git status --short --porcelain`), no longer hardcoded to `[]`.
+- `cmd_migrate()` prints the resolved `DB_PATH` and fails loud with `MigrationImportError` on a 0-row import from a non-empty source, instead of a silent green banner.
+
+**Vizor**
+- **Architect Map v2** (PR #167): replaces the static tube-map SVG with a live force-directed graph of workspace repos and typed cross-repo edges, a side drawer (path/stack/GitHub/dispatch/Gantt-jump/active-dream-count), and an IDE-style file-tree sub-view.
+- **Business Goals Panel** (PR #153): surfaces `goals`/`stories` rollups in the HUD.
+- `__init__.py` re-modularized a second pass — 11 focused modules extracted (`synlynk/db.py`, `jobs.py`, `dispatch.py`, `context.py`, `sentinel.py`, `scheduler.py`, etc.), no more single-file monolith (PR #180).
 
 ### Fixed
 
-**`[failed job]` marker lost to `short_cmd` truncation (found in final review of the above)**
-- `dispatch.py`'s zero-token-failure cost label appended `" [failed job]"` to the command string, but `update_costs()` truncates its `command` argument to 20 characters before writing `cost_entries.notes` — since real commands are almost always longer than 20 characters, the appended marker never survived, making `check_budgets()`'s failed-job sub-line dead code in production despite its own unit test passing (that test bypassed `update_costs()` and inserted the marker directly). Fixed by prepending the marker instead of appending it, so it survives the truncation. New regression test exercises the real `update_costs()` write path with a >20-character command.
+**Dispatch git-finalization reliability chain (#182/#184/#185/#189/#190/#191/#196/#198, PRs #186/#187/#192/#193/#194/#195/#199/#201)**
+- Dispatched agents (Codex/Agy) frequently completed real, tested work but didn't reliably finish their own git steps (commit/push/PR). synlynk now performs git finalization itself once, gated on a job's `running`→terminal transition (idempotent by construction) — stages everything except a hard-exclusion list, commits, pushes, opens a PR via `gh pr create` if none exists.
+- Borrowed-worktree completions attributed via `origin/<branch>` state instead of being misread as zero-work.
+- `HARNESS_INTERNAL_TIMEOUT` jobs now auto-retry (cap 2) instead of landing as a dead failure.
+- A job that raced its own disk writes and landed `failed` with `0 touched` is re-inspected once and reclassified `failed_unverified` rather than staying permanently stale.
+- Cost accounting no longer bypasses the per-model rate table in 3 places (including a hardcoded `gemini-2.5-pro` $0 bug); `local` gets an explicit $0.0 override regardless of model version.
+- Capability router now filters on canonical `discipline`, not the legacy `engg_domain` column.
+- Daemon queue launch unified through `dispatch_agent()` so worktree/preflight/permission-flags/concurrency-guard logic isn't duplicated across two divergent paths.
+- Harness no longer misreports completed jobs as `FAILED` with fabricated token counts.
 
-**Dispatch job isolation (#128)**
-- `dispatch_agent()` now creates a dedicated `git worktree` per dispatched job (`worktrees/<job_id>`, branch `dispatch/<agent>/<job_id>`) instead of running every job in the invoking shell's shared `cwd`. Concurrent dispatches no longer collide or interleave uncommitted writes in one working directory.
-- Job dicts persist `worktree_path`/`worktree_branch`; job summaries (`synlynk jobs --summary <id>`) surface the worktree location so completed work is discoverable. Worktrees are not auto-deleted on job completion.
-- Worktree creation fails loudly (`RuntimeError`) rather than silently falling back to the shared cwd.
-- First step of the Job Lifecycle Ground-Truth Verification epic (`docs/superpowers/specs/2026-07-07-job-lifecycle-verification-design.md`); tracks #126, #127, #129 as sequenced follow-ons.
-
-**Git-state-verified job reconciliation (#129)**
-- `_reconcile_jobs()` no longer trusts a missing exit sentinel as an automatic hard failure. When a dispatched job's exit file is absent, reconciliation now cross-checks git state (`_inspect_worktree_git_state()`) in the job's worktree — commits ahead of `main`/`master` or uncommitted changes are evidence the agent did real work despite the ambiguous signal.
-- New `"failed_unverified"` job status distinguishes "exited ambiguously but the worktree shows activity — inspect before discarding" from a genuine `"failed"` (dead process, clean worktree, no git evidence of work). The job summary prints a note pointing at the worktree.
-- `_check_job_stall()`'s zero-output stall-killer now checks for git activity in the job's worktree before killing a silent job — a job with no log output but real commits/uncommitted changes gets its grace period extended instead of being SIGKILLed as a false positive.
-- Second step of the Job Lifecycle Ground-Truth Verification epic; #127 (real `files_touched`) and #126 (migrate transparency) remain as sequenced follow-ons.
-
-**Real `files_touched` via git diff (#127)**
-- `files_touched` is no longer hardcoded to `[]`. New `_worktree_files_touched()` computes the actual set of changed files in a job's worktree via `git diff --name-only <merge-base> HEAD` plus `git status --short --porcelain` (so uncommitted/dirty changes are counted too, with rename lines handled correctly).
-- Reuses the merge-base search extracted into a new shared `_resolve_worktree_base_commit()` helper (also used by `_inspect_worktree_git_state()`, which now exposes `base_commit` instead of recomputing it) so the two code paths don't run duplicate `git merge-base` searches.
-- Job summaries now list up to 20 touched file paths (with a `+N more` suffix beyond that) instead of just a bare count.
-- Third step of the Job Lifecycle Ground-Truth Verification epic; #126 (migrate transparency) remains as the final sequenced follow-on.
-
-**Migrate transparency + fail-loud on 0-row imports (#126)**
-- `cmd_migrate()` now prints the resolved `DB_PATH` on every invocation, so "is my data there" checks target the real centralized `~/.synlynk/projects/<hash>/state.db` instead of a nonexistent local path.
-- `_migrate_import()` tracks *inserted* row counts separately from *parsed* row counts per source (memory.md, roadmap.md, costs.md, devlogs/, todo.md). If a non-empty source has rows to insert but 0 of them land, it raises a new `MigrationImportError` naming every failing source (not just the first one found) instead of silently printing a green "Imported: N" banner.
-- `cmd_migrate()` catches `MigrationImportError`, prints the failure, and exits non-zero — skipping the destructive `git rm --cached` / `.gitignore` write / sentinel write / `git commit` steps entirely so a failed import never looks committed.
-- `todo.md` rows without a `gh:` issue tag (priority-only rows — the common case before a GitHub issue is filed) are correctly excluded from the fail-loud check: they're parsed but never attempted for insert, so they don't count as a failure.
-- Final step of the Job Lifecycle Ground-Truth Verification epic; all four issues (#128, #129, #127, #126) are now shipped.
+**Misc dispatch/CI hardening (PRs #163/#164/#165/#171/#173/#238/#240)**
+- Codex sandbox gets `--add-dir <git-common-dir>` so it can write git refs inside a worktree.
+- `dispatch --help`'s agent list now derives from `AGENT_CAPABILITY_BASELINES` instead of a stale hardcoded list.
+- Stall-killer generalized to detect harness-internal timeouts and checks remote branch activity before hard-failing a silent job.
+- 3 baseline CI flakes isolated from runner environment state; Python 3.8 compat fix for a `tuple[str, str]` annotation.
+- `dispatch --context-mode full` now warns when used on a task that's already self-contained.
 
 ---
 
