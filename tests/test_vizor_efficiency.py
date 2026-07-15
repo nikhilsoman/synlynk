@@ -24,7 +24,8 @@ def make_test_db(path: str):
         CREATE TABLE cost_entries (
             id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT,
             model TEXT, input_tokens INTEGER, output_tokens INTEGER,
-            cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT
+            cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT,
+            cost_source TEXT DEFAULT 'actual'
         );
         INSERT INTO roadmap_arcs (version, title, status) VALUES ('v0.11.0', 'Retention Layer', 'active');
         INSERT INTO roadmap_phases (arc_version, phase_title, status, notes)
@@ -32,8 +33,8 @@ def make_test_db(path: str):
                    ('v0.11.0', 'Build', 'active', '[agent:agy,codex]');
         INSERT INTO stories (story_id, title, status, phase, estimated_tokens)
             VALUES ('story-bs21-shell', 'Shell layout', 'done', 'build', 60000);
-        INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes)
-            VALUES ('2026-07-01', 'agy', 1.20, 'story-bs21-shell');
+        INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes, cost_source)
+            VALUES ('2026-07-01', 'agy', 1.20, 'story-bs21-shell', 'actual');
     """)
     conn.commit()
     return conn

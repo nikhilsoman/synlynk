@@ -20,7 +20,8 @@ def make_test_db(path: str):
         CREATE TABLE cost_entries (
             id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT,
             model TEXT, input_tokens INTEGER, output_tokens INTEGER,
-            cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT
+            cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT,
+            cost_source TEXT DEFAULT 'actual'
         );
         INSERT INTO roadmap_arcs (version, title, status) VALUES ('v0.11.0', 'Retention Layer', 'active');
         INSERT INTO roadmap_phases (arc_version, phase_title, status, notes)
@@ -28,8 +29,8 @@ def make_test_db(path: str):
                    ('v0.11.0', 'Build', 'active', '[agent:agy,codex]');
         INSERT INTO stories (story_id, title, status, phase, estimated_tokens)
             VALUES ('story-bs21-shell', 'Shell layout', 'done', 'build', 60000);
-        INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes)
-            VALUES ('2026-07-01', 'agy', 1.20, 'story-bs21-shell');
+        INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes, cost_source)
+            VALUES ('2026-07-01', 'agy', 1.20, 'story-bs21-shell', 'actual');
     """)
     conn.commit()
     return conn
@@ -122,7 +123,7 @@ def test_generate_viz_data_includes_file_tree(tmp_path, monkeypatch):
         CREATE TABLE roadmap_arcs (id INTEGER PRIMARY KEY, version TEXT UNIQUE, title TEXT, status TEXT DEFAULT 'active', target_date TEXT, notes TEXT);
         CREATE TABLE roadmap_phases (id INTEGER PRIMARY KEY, arc_version TEXT, phase_title TEXT, status TEXT DEFAULT 'planned', priority TEXT, story_id TEXT, notes TEXT);
         CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT, status TEXT DEFAULT 'open', phase TEXT DEFAULT 'build', estimated_tokens INTEGER, created_at TEXT);
-        CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT);
+        CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, total_cost_usd REAL, notes TEXT, cost_source TEXT DEFAULT 'actual');
         CREATE TABLE source_symbols (id INTEGER PRIMARY KEY AUTOINCREMENT, head_sha TEXT NOT NULL, file TEXT NOT NULL, language TEXT NOT NULL, symbol TEXT NOT NULL, symbol_type TEXT NOT NULL, line INTEGER, scanned_at TEXT NOT NULL);
         INSERT INTO source_symbols (head_sha, file, language, symbol, symbol_type, line, scanned_at)
             VALUES ('abc', 'synlynk/viz.py', 'python', 'generate_gantt_html', 'function', 930, '2026-07-11T00:00:00Z');
@@ -164,6 +165,80 @@ def test_dreams_populated(tmp_path, monkeypatch):
     assert dream["stages"][0]["key"] == "Plan"
     assert dream["stages"][0]["agents"] == ["codex"]
     assert dream["stages"][1]["agents"] == ["agy", "codex"]
+
+
+def test_generate_viz_data_splits_cost_source_by_agent(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "state.db")
+    conn = make_test_db(db_path)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes, cost_source) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("2026-07-02", "agy", 2.50, "story-bs21-shell", "estimated_token_rate"),
+    )
+    conn.commit()
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({}, f)
+
+    from synlynk.viz import generate_viz_data
+    with patch("synlynk.viz._get_db") as mock_db:
+        mock_db.return_value = sqlite3.connect(db_path)
+        data = generate_viz_data()
+
+    by_agent = data["costs"]["by_agent"]
+    assert by_agent["agy"]["actual"] == pytest.approx(1.20)
+    assert by_agent["agy"]["estimated"] == pytest.approx(2.50)
+    assert data["costs"]["total_usd"] == pytest.approx(3.70)
+    assert data["costs"]["total_usd_estimated"] == pytest.approx(2.50)
+
+
+def test_generate_viz_data_null_cost_source_counts_as_estimated(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "state.db")
+    conn = make_test_db(db_path)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes, cost_source) "
+        "VALUES (?, ?, ?, ?, NULL)",
+        ("2026-07-02", "codex", 4.00, "story-bs21-shell"),
+    )
+    conn.commit()
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({}, f)
+
+    from synlynk.viz import generate_viz_data
+    with patch("synlynk.viz._get_db") as mock_db:
+        mock_db.return_value = sqlite3.connect(db_path)
+        data = generate_viz_data()
+
+    by_agent = data["costs"]["by_agent"]
+    assert by_agent["codex"]["actual"] == pytest.approx(0.0)
+    assert by_agent["codex"]["estimated"] == pytest.approx(4.00)
+
+
+def test_dream_cost_total_estimated_split(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "state.db")
+    conn = make_test_db(db_path)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, total_cost_usd, notes, cost_source) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("2026-07-02", "codex", 3.00, "v0.11.0 story-bs21-shell", "estimated_tshirt"),
+    )
+    conn.commit()
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({}, f)
+
+    from synlynk.viz import generate_viz_data
+    with patch("synlynk.viz._get_db") as mock_db:
+        mock_db.return_value = sqlite3.connect(db_path)
+        data = generate_viz_data()
+
+    dream = data["dreams"][0]
+    assert dream["cost_total"] == pytest.approx(3.00)
+    assert dream["cost_total_estimated"] == pytest.approx(3.00)
 
 def test_graceful_degradation_no_db(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -250,6 +325,75 @@ def test_generate_effort_html_empty_state(tmp_path, monkeypatch):
 
     assert "No cost data yet" in html
     assert "<svg" not in html
+
+
+def test_generate_effort_html_flags_estimated_rows(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import generate_effort_html
+
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
+        "dreams": [
+            {
+                "id": "d1", "name": "Dream One", "status": "active",
+                "cost_total": 120.0, "cost_total_estimated": 20.0, "cost_est": 100.0,
+            },
+        ],
+        "costs": {
+            "total_usd": 120.0,
+            "total_usd_estimated": 20.0,
+            "by_agent": {
+                "claude": {"actual": 100.0, "estimated": 20.0},
+                "agy": {"actual": 0.0, "estimated": 0.0},
+            },
+            "by_stage": {"build": {"actual": 100.0, "estimated": 20.0}},
+        },
+        "agents": {},
+        "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [],
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "notes": {},
+    }
+
+    html = generate_effort_html(data, port=8721)
+
+    assert "~Estimated" in html
+    assert "$20.00 (17%)" in html
+    assert "(est: $20.00)" in html
+    assert 'fill-opacity="0.4"' in html
+
+
+def test_generate_effort_html_no_estimate_suffix_when_fully_actual(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import generate_effort_html
+
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
+        "dreams": [
+            {
+                "id": "d1", "name": "Dream One", "status": "active",
+                "cost_total": 120.0, "cost_total_estimated": 0.0, "cost_est": 100.0,
+            },
+        ],
+        "costs": {
+            "total_usd": 120.0,
+            "total_usd_estimated": 0.0,
+            "by_agent": {"claude": {"actual": 120.0, "estimated": 0.0}},
+            "by_stage": {"build": {"actual": 120.0, "estimated": 0.0}},
+        },
+        "agents": {},
+        "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [],
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "notes": {},
+    }
+
+    html = generate_effort_html(data, port=8721)
+
+    assert "(est:" not in html
+    assert "~Estimated" in html
+    assert "$0.00 (0%)" in html
+
 
 def test_generate_architect_map_html_no_repos_shows_single_node():
     from synlynk.viz import generate_architect_map_html
