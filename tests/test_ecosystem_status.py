@@ -161,6 +161,24 @@ def test_format_status_terminal_structure(db):
     assert "SENTINELS" in output
 
 
+def test_format_status_terminal_shows_rates_updated_date():
+    from synlynk.status import _format_status_terminal
+
+    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
+    cycle_map = {"claude": {c: "full" for c in ["dream", "plan", "work", "ship", "maintain", "engage"]}}
+    output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0, rates_updated_at="2026-07-13")
+    assert "RATES   updated 2026-07-13" in output
+
+
+def test_format_status_terminal_shows_rates_never_updated_warning():
+    from synlynk.status import _format_status_terminal
+
+    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
+    cycle_map = {"claude": {c: "full" for c in ["dream", "plan", "work", "ship", "maintain", "engage"]}}
+    output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
+    assert "RATES   never updated ⚠ (hardcoded defaults)" in output
+
+
 def test_format_status_json_valid():
     from synlynk.status import _format_status_terminal
 
@@ -170,6 +188,15 @@ def test_format_status_json_valid():
     assert data["fleet"]["dispatch_mode"] == "eco"
     assert data["sentinels_active"] == 2
     assert "headless_efficiency" in data
+
+
+def test_format_status_json_includes_rates_updated_at():
+    from synlynk.status import _format_status_terminal
+
+    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": None, "installed_version": "1.2.3", "latest_version": None}]
+    output = _format_status_terminal(rows, {}, 1.0, "eco", 2, json_output=True, rates_updated_at="2026-07-13")
+    data = json.loads(output)
+    assert data["rates_updated_at"] == "2026-07-13"
 
 
 def test_cmd_status_outputs_sections(tmp_path, monkeypatch, db):
@@ -207,6 +234,50 @@ def test_cmd_status_json_output(tmp_path, monkeypatch, db):
     data = json.loads(buf.getvalue())
     assert data["fleet"]["dispatch_mode"] == "eco"
     assert "cycle_capability" in data
+
+
+def test_cmd_status_json_output_reads_rates_from_file(tmp_path, monkeypatch, db):
+    from synlynk.status import cmd_status
+
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path)
+    os.makedirs(tmp_path / ".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "model_rates.json").write_text(
+        json.dumps({
+            "rates_updated_at": "2026-07-13",
+            "unit": "usd_per_1k_tokens",
+            "models": {},
+            "default": {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+            "billing_mode": {"default": "subscription", "local": "actual"},
+        })
+    )
+    db.execute(
+        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        ("claude", 1, "1.2.3"),
+    )
+    db.commit()
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cmd_status(db_conn=db, json_output=True)
+    data = json.loads(buf.getvalue())
+    assert data["rates_updated_at"] == "2026-07-13"
+
+
+def test_cmd_status_json_output_rates_null_when_no_file(tmp_path, monkeypatch, db):
+    from synlynk.status import cmd_status
+
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path)
+    db.execute(
+        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        ("claude", 1, "1.2.3"),
+    )
+    db.commit()
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cmd_status(db_conn=db, json_output=True)
+    data = json.loads(buf.getvalue())
+    assert data["rates_updated_at"] is None
 
 
 def test_preflight_blocks_input_overflow(db, tmp_path, monkeypatch):

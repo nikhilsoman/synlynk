@@ -56,3 +56,7 @@
 | 2026-07-11/12 | nikhil | ~150 | ~230K / ~100K | ~$4.10 | Dispatch-reliability triage: #160/#161/#162 filed from rxcc handoff note, each through full brainstorm→spec→plan→dispatch→verify→merge cycle · PR #163 (Codex worktree --add-dir fix), PR #164 (dispatch --help agent list derived from AGENT_CAPABILITY_BASELINES), PR #165 (HARNESS_TIMEOUT_PATTERNS + mtime-based `_check_job_stall`) all merged · scheduled a one-shot CronCreate dispatch · live-caught #162's own bug during its fix's dispatch job (Codex died at ~500s pre-commit) and recovered the work manually · PR #166 devlog+memory housekeeping merged |
 | 2026-07-15 13:39 | codex | 1 | 5000/2000 | [est] $0.0450 | exec: codex job job-52aea3... |
 | 2026-07-15 13:39 | agy | 1 | 5000/2000 | [est] $0.0450 | exec: agy job job-ca4f171c |
+| 2026-07-15 15:04 | codex | 1 | 5000/2000 | [est] $0.0450 | exec: codex job job-3c6aeb... |
+| 2026-07-15 15:04 | agy | 1 | 5000/2000 | [est] $0.0450 | exec: agy job job-837c036c |
+| 2026-07-15 15:07 | codex | 1 | 751784/8342 | [est] $2.3805 | exec: codex job job-48d58a... |
+| 2026-07-15 | nikhil | ~90 | ~90K / ~20K | ~$0.57 | Issue #259: brainstorm+design spec (rates_updated_at surfacing), implementation plan authoring, self-review, independent diff+test verification of dispatched Task 1 (Codex job-48d58abb), full-suite regression pass, blog post 63 |
