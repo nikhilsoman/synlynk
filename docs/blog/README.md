@@ -62,7 +62,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [56](./56-pr244-measurement-ledger-phase2-codex-adapter.md) | PR #244 — Measurement Ledger Phase 2: The Codex Structured-Output Adapter | [#244](https://github.com/nikhilsoman/synlynk/pull/244) | 2026-07-14 |
 | [59](./59-pr252-measurement-ledger-phase2-claude-adapter.md) | PR #252 — Measurement Ledger Phase 2: The Claude Structured-Output Adapter | [#252](https://github.com/nikhilsoman/synlynk/pull/252) | 2026-07-15 |
 | [60](./60-pr256-measurement-ledger-phase2-agy-adapter.md) | Measurement Ledger Phase 2: The Agy (Gemini) Structured-Output Adapter | [#256](https://github.com/nikhilsoman/synlynk/pull/256) | 2026-07-15 |
-| [61](./61-prTBD-measurement-ledger-phase2-grok-adapter.md) | Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210) | TBD | 2026-07-15 |
+| [61](./61-pr257-measurement-ledger-phase2-grok-adapter.md) | Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210) | [#257](https://github.com/nikhilsoman/synlynk/pull/257) | 2026-07-15 |
 
 
 ## Per-PR Post Template

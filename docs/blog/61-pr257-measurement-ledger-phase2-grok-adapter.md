@@ -3,7 +3,7 @@ title: "Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Clos
 date: 2026-07-15
 series: "Building the OS for Multi-Agent Development"
 post: 61
-pr: "TBD"
+pr: "#257"
 merged: pending
 ---
 
