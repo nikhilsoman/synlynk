@@ -3,7 +3,7 @@ title: "Measurement Ledger Phase 2: The Agy (Gemini) Structured-Output Adapter"
 date: 2026-07-15
 series: "Building the OS for Multi-Agent Development"
 post: 60
-pr: "TBD"
+pr: "#256"
 merged: pending
 ---
 
