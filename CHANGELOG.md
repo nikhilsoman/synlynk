@@ -23,6 +23,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `todo` `gh_issue` already set) and only fails loud when zero rows were inserted *and*
   not all attempted rows were already present. Genuine 0-of-N write failures still raise
   with the same error message prefix.
+- **Dispatch auto-PR branch detection (#280):** `_finalize_completed_worktree_job()` re-derives the worktree's actual current branch via `git branch --show-current` instead of trusting the pre-recorded `dispatch/<agent>/<job_id>` name. When an agent commits on a custom branch (the encouraged human-readable pattern), push and `gh pr create --head` now target that branch; the job record is updated so `synlynk jobs` reports the real name. Detached HEAD falls back to the recorded branch without erroring.
 
 ## [0.12.0] - 2026-07-15
 
