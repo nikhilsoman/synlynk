@@ -699,16 +699,14 @@ def _wiz_screen_roles(scan: dict) -> dict:
     print(f"  {_DIM}agent knows its lane from token one.{_RESET}\n")
 
     agents = [a for a in scan.get("agents", []) if a.get("functional")]
-    _DEFAULT_ROLES = {
-        "claude": "PM · code review · deployments",
-        "agy": "implementation · testing · templates",
-        "codex": "CLI plumbing · refactoring",
-        "grok": "canvas/JS · infra scaffold · complex data structures",
-    }
     roles = {}
     for a in agents:
         name = a["name"]
-        existing = _DEFAULT_ROLES.get(name, ", ".join(a.get("roles", [])) or "general")
+        default_roles = _pkg("_default_roles_for_agent")(name) or []
+        if default_roles:
+            existing = " · ".join(default_roles)
+        else:
+            existing = ", ".join(a.get("roles", [])) or "general"
         roles[name] = existing
         print(f"  {_CYAN}{name:12}{_RESET} {_DIM}→{_RESET}  {existing}")
 

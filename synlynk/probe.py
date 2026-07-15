@@ -332,7 +332,7 @@ def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
 {endpoints or '- None required'}"""
 
 
-def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
+def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fence: bool = True) -> dict:
     import json as _json
     import socket as _sock
     import time as _time
@@ -497,7 +497,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
         "codex": "AGENTS.md",
     }
     instr_file = _INSTRUCTION_FILES.get(agent_name)
-    if instr_file and os.path.exists(instr_file):
+    if write_fence and instr_file and os.path.exists(instr_file):
         body = _build_fence_body_from_record(agent_name, db_conn)
         _upsert_harness_fence(instr_file, installed_version, body)
 
@@ -619,16 +619,17 @@ def _run_tc5(directive_files: dict) -> dict:
     return {"passed": not missing, "missing": missing}
 
 
-def cmd_probe(agent: str = None) -> None:
+def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
     agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
     package = sys.modules.get("synlynk")
     get_db = getattr(package, "_get_db", None)
     if get_db is None:
         raise RuntimeError("synlynk package DB helper unavailable")
     db_conn = get_db()
+    results = []
     try:
         for agent_name in agents:
-            result = _probe_agent(agent_name, db_conn)
+            result = _probe_agent(agent_name, db_conn, write_fence=write_fence)
             if result.get("version_detected"):
                 _clear_sentinel_alerts(
                     code="HARNESS_VERSION_DRIFT",
@@ -636,8 +637,10 @@ def cmd_probe(agent: str = None) -> None:
                 )
             status = "skipped (up to date)" if result["skipped"] else result["status"]
             print(f"  probe [{agent_name}] {result['version']} → {status}")
+            results.append({"agent": agent_name, **result})
     finally:
         db_conn.close()
+    return results
 
 
 def _fence_exists(file_path: str) -> bool:
