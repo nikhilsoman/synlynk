@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `synlynk probe` now clears `HARNESS_VERSION_DRIFT` alerts for the specific agent it just re-probed, so the warning disappears once the recorded `installed_version` matches the live binary again. Fixes #281.
+
 ## [0.12.0] - 2026-07-15
 
 **Release pitch:** the operational backbone gets provably reliable and provably accounted for — dispatched jobs finish their own git steps, a 5th zero-cost local agent joins the fleet, story routing gets real capability+quota+cost scoring with a fleet batch scheduler, and every dollar synlynk reports is now either structurally sourced or visibly flagged as an estimate.
