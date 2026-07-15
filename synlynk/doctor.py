@@ -184,6 +184,40 @@ def _hc_version_current() -> HealthCheck:
     except Exception:
         return HealthCheck("version_current", "warn", "Version check failed (unexpected error)")
 
+def _hc_model_rates() -> HealthCheck:
+    from synlynk.costs import _load_model_rates
+    rates = _load_model_rates()
+    rates_updated_at = rates.get("rates_updated_at")
+    if not rates_updated_at:
+        return HealthCheck(
+            "model_rates",
+            "warn",
+            "Model rates have never been updated (using hardcoded defaults)",
+            fix="Run 'synlynk init' to seed '.synlynk/model_rates.json'",
+        )
+    try:
+        t_parsed = time.mktime(time.strptime(rates_updated_at, "%Y-%m-%d"))
+        age_days = (time.time() - t_parsed) / 86400
+    except (ValueError, TypeError):
+        return HealthCheck(
+            "model_rates",
+            "warn",
+            f"Model rates have invalid timestamp: {rates_updated_at}",
+            fix="Update 'rates_updated_at' to YYYY-MM-DD in '.synlynk/model_rates.json'",
+        )
+    if age_days > 90:
+        return HealthCheck(
+            "model_rates",
+            "warn",
+            f"Model rates are stale (updated {rates_updated_at}, {int(age_days)} days ago)",
+            fix="Update the rates_updated_at timestamp or re-run 'synlynk init' to refresh '.synlynk/model_rates.json'",
+        )
+    return HealthCheck(
+        "model_rates",
+        "ok",
+        f"Model rates are fresh (updated {rates_updated_at})",
+    )
+
 
 HEALTH_CHECKS = [
     _hc_python_version,
@@ -192,6 +226,7 @@ HEALTH_CHECKS = [
     _hc_identity_key,
     _hc_agent_profiles,
     _hc_instruction_files,
+    _hc_model_rates,
     _hc_version_current,
 ]
 
