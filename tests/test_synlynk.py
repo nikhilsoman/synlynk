@@ -2579,6 +2579,10 @@ def test_reconcile_auto_finalizes_dirty_worktree_excluding_generated_files(proje
         calls.append(cmd)
         prefix = ["git", "-C", str(worktree_path)]
 
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="dispatch/codex/job-finalize-dirty\n", stderr=""
+            )
         if cmd[:4] == prefix + ["status"]:
             return subprocess.CompletedProcess(
                 cmd,
@@ -2681,6 +2685,10 @@ def test_reconcile_auto_finalizes_clean_worktree_with_local_commits(project_dir,
         calls.append(cmd)
         prefix = ["git", "-C", str(worktree_path)]
 
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="dispatch/codex/job-finalize-clean\n", stderr=""
+            )
         if cmd[:4] == prefix + ["status"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
@@ -2748,6 +2756,10 @@ def test_reconcile_auto_finalize_is_idempotent_when_pr_exists(project_dir, monke
         calls.append(cmd)
         prefix = ["git", "-C", str(worktree_path)]
 
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="dispatch/codex/job-finalize-idempotent\n", stderr=""
+            )
         if cmd[:4] == prefix + ["status"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
@@ -2809,6 +2821,10 @@ def test_reconcile_auto_finalize_logs_gh_failure_without_crashing(project_dir, m
         calls.append(cmd)
         prefix = ["git", "-C", str(worktree_path)]
 
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="dispatch/codex/job-finalize-gh-failure\n", stderr=""
+            )
         if cmd[:4] == prefix + ["status"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
@@ -2831,6 +2847,238 @@ def test_reconcile_auto_finalize_logs_gh_failure_without_crashing(project_dir, m
     assert "gh binary not available" in out
     assert any(cmd[:3] == ["gh", "pr", "list"] for cmd in calls)
     assert sl._load_jobs()[0]["status"] == "completed"
+
+
+def test_finalize_uses_default_dispatch_branch_when_unchanged(tmp_path, monkeypatch):
+    """(a) Worktree still on dispatch/<agent>/<job_id> — finalize/PR use that name (no regression)."""
+    import subprocess
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "worktrees" / "job-default-branch"
+    worktree_path.mkdir(parents=True)
+    recorded = "dispatch/codex/job-default-branch"
+    job = {
+        "id": "job-default-branch",
+        "agent": "codex",
+        "task": "stay on default dispatch branch",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": recorded,
+    }
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{recorded}\n", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/repo/pull/9\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+
+    jobs_mod._finalize_completed_worktree_job(
+        job,
+        {"has_activity": True, "remote_has_activity": False, "dirty": False, "commits_ahead": 1},
+    )
+
+    assert job["worktree_branch"] == recorded
+    push_cmd = next(cmd for cmd in calls if cmd[:4] == ["git", "-C", str(worktree_path), "push"])
+    assert recorded in push_cmd
+    list_cmd = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "list"])
+    assert recorded in list_cmd
+    create_cmd = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert recorded in create_cmd
+
+
+def test_finalize_detects_custom_branch_for_push_and_pr(tmp_path, monkeypatch):
+    """(b) Agent switched mid-task — finalize uses custom branch, not stale dispatch name."""
+    import subprocess
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "worktrees" / "job-custom-branch"
+    worktree_path.mkdir(parents=True)
+    recorded = "dispatch/codex/job-custom-branch"
+    custom = "fix/dispatch-autopr-branch-detection"
+    job = {
+        "id": "job-custom-branch",
+        "agent": "codex",
+        "task": "use custom branch for PR",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": recorded,
+    }
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{custom}\n", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            # Push decision uses origin/<branch>..HEAD — must match custom branch.
+            assert cmd[5] == f"origin/{custom}..HEAD"
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/repo/pull/10\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+
+    jobs_mod._finalize_completed_worktree_job(
+        job,
+        {"has_activity": True, "remote_has_activity": False, "dirty": False, "commits_ahead": 1},
+    )
+
+    # (c) job record updated to the real branch
+    assert job["worktree_branch"] == custom
+    push_cmd = next(cmd for cmd in calls if cmd[:4] == ["git", "-C", str(worktree_path), "push"])
+    assert custom in push_cmd and recorded not in push_cmd
+    list_cmd = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "list"])
+    assert "--head" in list_cmd and custom in list_cmd and recorded not in list_cmd
+    create_cmd = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert "--head" in create_cmd and custom in create_cmd and recorded not in create_cmd
+
+
+def test_finalize_detached_head_falls_back_to_recorded_branch(tmp_path, monkeypatch):
+    """(d) Detached HEAD → fall back to recorded worktree_branch without crashing."""
+    import subprocess
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "worktrees" / "job-detached"
+    worktree_path.mkdir(parents=True)
+    recorded = "dispatch/codex/job-detached"
+    job = {
+        "id": "job-detached",
+        "agent": "codex",
+        "task": "detached head fallback",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": recorded,
+    }
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            # Empty stdout = detached HEAD
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            assert cmd[5] == f"origin/{recorded}..HEAD"
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/repo/pull/11\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+
+    jobs_mod._finalize_completed_worktree_job(
+        job,
+        {"has_activity": True, "remote_has_activity": False, "dirty": False, "commits_ahead": 1},
+    )
+
+    assert job["worktree_branch"] == recorded
+    push_cmd = next(cmd for cmd in calls if cmd[:4] == ["git", "-C", str(worktree_path), "push"])
+    assert recorded in push_cmd
+    create_cmd = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert recorded in create_cmd
+
+
+def test_finalize_pr_dedupe_uses_real_custom_branch(tmp_path, monkeypatch):
+    """(e) gh pr list dedupe runs against the real branch — no double-create when PR exists."""
+    import subprocess
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "worktrees" / "job-dedupe-custom"
+    worktree_path.mkdir(parents=True)
+    recorded = "dispatch/codex/job-dedupe-custom"
+    custom = "fix/some-description"
+    job = {
+        "id": "job-dedupe-custom",
+        "agent": "codex",
+        "task": "dedupe PR on custom branch",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": recorded,
+    }
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{custom}\n", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="0\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            assert custom in cmd and recorded not in cmd
+            return subprocess.CompletedProcess(cmd, 0, stdout='[{"number": 77}]\n', stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+
+    jobs_mod._finalize_completed_worktree_job(
+        job,
+        {"has_activity": False, "remote_has_activity": True, "dirty": False, "commits_ahead": 0},
+    )
+
+    assert job["worktree_branch"] == custom
+    assert any(cmd[:3] == ["gh", "pr", "list"] for cmd in calls)
+    assert not any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
+    assert not any(cmd[:4] == ["git", "-C", str(worktree_path), "push"] for cmd in calls)
+
+
+def test_resolve_finalize_worktree_branch_updates_job_record(tmp_path, monkeypatch):
+    """(c) Direct unit coverage: job record reflects the real branch after resolve."""
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "wt"
+    worktree_path.mkdir()
+    job = {"worktree_branch": "dispatch/agy/job-xyz"}
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        if cmd[:5] == ["git", "-C", str(worktree_path), "branch", "--show-current"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="feat/real-branch\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    resolved = jobs_mod._resolve_finalize_worktree_branch(job, str(worktree_path))
+    assert resolved == "feat/real-branch"
+    assert job["worktree_branch"] == "feat/real-branch"
 
 
 def test_check_agent_functional_returns_version_for_present_tool(monkeypatch):

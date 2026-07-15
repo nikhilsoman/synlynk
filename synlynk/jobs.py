@@ -279,14 +279,47 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         )
 
 
+def _resolve_finalize_worktree_branch(job: dict, worktree_path: str) -> Optional[str]:
+    """Prefer the worktree's actual current branch over the pre-recorded dispatch name.
+
+    Agents commonly check out a human-readable branch mid-task (e.g. fix/foo). When
+    that happens, push/PR must target the real branch — not the stale
+    dispatch/<agent>/<job_id> name recorded at spawn. Detached HEAD (empty
+    ``git branch --show-current``) falls back to the recorded worktree_branch.
+    Updates job['worktree_branch'] in place when the actual branch differs so
+    subsequent job-store persistence reports the real branch.
+    """
+    recorded = job.get("worktree_branch") if job else None
+    actual = None
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_path, "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        actual = (result.stdout or "").strip() or None
+    except Exception:
+        actual = None
+    if actual:
+        if job is not None and actual != recorded:
+            job["worktree_branch"] = actual
+        return actual
+    return recorded
+
+
 def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> None:
     """Best-effort git finalization for a completed job with genuine work."""
     if not job or not git_state or not _job_has_real_work_landed(git_state):
         return
 
     worktree_path = job.get("worktree_path")
-    worktree_branch = job.get("worktree_branch")
-    if not worktree_path or not os.path.isdir(worktree_path) or not worktree_branch:
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return
+
+    # Re-derive from the live worktree so push/PR follow wherever the agent committed.
+    worktree_branch = _resolve_finalize_worktree_branch(job, worktree_path)
+    if not worktree_branch:
         return
 
     dirty_paths = []
