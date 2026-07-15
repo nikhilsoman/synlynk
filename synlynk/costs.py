@@ -179,6 +179,10 @@ def extract_tokens(output_text: str, agent: str = None) -> tuple:
         structured = _extract_agy_structured(output_text)
         if structured is not None:
             return structured
+    if agent == "grok":
+        structured = _extract_grok_structured(output_text)
+        if structured is not None:
+            return structured
 
     def _parse_count(value: str) -> int:
         return int(value.replace(",", ""))
