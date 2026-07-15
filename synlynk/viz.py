@@ -156,7 +156,7 @@ def generate_viz_data() -> dict:
             },
             "goals": [],
             "dreams": [],
-            "costs": {"total_usd": 0.0, "by_agent": {}, "by_stage": {}},
+            "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
             "workspace_map": _load_workspace_map(),
             "file_tree": file_tree,
@@ -331,15 +331,23 @@ def generate_viz_data() -> dict:
             return 0.0
         return float(rows[0] or 0.0) if rows else 0.0
 
-    def _dream_cost_actual(conn, dream_id: str) -> float:
+    def _dream_cost_breakdown(conn, dream_id: str) -> tuple:
         try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries WHERE notes LIKE ?",
+            rows = conn.execute(
+                "SELECT COALESCE(SUM(total_cost_usd), 0), cost_source FROM cost_entries "
+                "WHERE notes LIKE ? GROUP BY cost_source",
                 (f"%{dream_id}%",),
-            ).fetchone()
+            ).fetchall()
         except Exception:
-            return 0.0
-        return float(row[0] or 0.0) if row else 0.0
+            return 0.0, 0.0
+        total = 0.0
+        prov_estimated = 0.0
+        for amount, cost_source in rows:
+            amount = float(amount or 0.0)
+            total += amount
+            if cost_source != "actual":
+                prov_estimated += amount
+        return total, prov_estimated
 
     def _story_cost_est(tokens) -> Optional[float]:
         if tokens is None:
@@ -398,8 +406,8 @@ def generate_viz_data() -> dict:
         return _minimal_data()
 
     data = _read_support_files()
-    by_agent = {name: 0.0 for name in ("claude", "agy", "codex", "grok")}
-    by_stage = {name: 0.0 for name in ("design", "plan", "build", "ship", "sustain")}
+    by_agent = {name: {"actual": 0.0, "estimated": 0.0} for name in ("claude", "agy", "codex", "grok")}
+    by_stage = {name: {"actual": 0.0, "estimated": 0.0} for name in ("design", "plan", "build", "ship", "sustain")}
     agents = {}
     agent_runs = {}
 
@@ -415,7 +423,7 @@ def generate_viz_data() -> dict:
             "SELECT story_id, title, status, phase, estimated_tokens FROM stories ORDER BY id"
         ).fetchall()
         cost_rows = conn.execute(
-            "SELECT session_date, agent, total_cost_usd, notes FROM cost_entries ORDER BY id"
+            "SELECT session_date, agent, total_cost_usd, notes, cost_source FROM cost_entries ORDER BY id"
         ).fetchall()
     except Exception:
         try:
@@ -434,6 +442,7 @@ def generate_viz_data() -> dict:
             "status": status or "open",
             "cost_est": _story_cost_est(estimated_tokens),
             "cost_actual": 0.0,
+            "cost_prov_estimated": 0.0,
             "note": data["notes"].get(story_id) if isinstance(data["notes"], dict) else None,
         }
         stories_by_id[story_id] = story
@@ -443,17 +452,22 @@ def generate_viz_data() -> dict:
         agent = row[1] or ""
         amount = float(row[2] or 0.0)
         notes = row[3] or ""
+        cost_source = row[4] or ""
+        bucket_key = "actual" if cost_source == "actual" else "estimated"
         if agent:
-            by_agent.setdefault(agent, 0.0)
-            by_agent[agent] += amount
+            by_agent.setdefault(agent, {"actual": 0.0, "estimated": 0.0})
+            by_agent[agent][bucket_key] += amount
             agents.setdefault(agent, _empty_agent_bucket())
         for story_id, story in stories_by_id.items():
             if story_id and story_id in notes:
                 story["cost_actual"] += amount
+                if cost_source != "actual":
+                    story["cost_prov_estimated"] += amount
 
     for agent in list(by_agent):
         agents.setdefault(agent, _empty_agent_bucket())
-        agents[agent]["total_usd"] = float(by_agent.get(agent, 0.0))
+        bucket = by_agent.get(agent) or {"actual": 0.0, "estimated": 0.0}
+        agents[agent]["total_usd"] = float(bucket.get("actual", 0.0)) + float(bucket.get("estimated", 0.0))
 
     for row in data["telemetry"]["recent"]:
         agent = row.get("agent") or ""
@@ -513,6 +527,7 @@ def generate_viz_data() -> dict:
                 seen_task_ids.add(task["id"])
                 deduped_tasks.append(task)
             stage_cost_actual = sum(float(task["cost_actual"] or 0.0) for task in deduped_tasks)
+            stage_cost_prov_estimated = sum(float(task["cost_prov_estimated"] or 0.0) for task in deduped_tasks)
             stage_cost_est = sum(float(task["cost_est"] or 0.0) for task in deduped_tasks) or None
             dream_tasks_cost_actual += stage_cost_actual
             if stage_cost_est is not None:
@@ -531,13 +546,15 @@ def generate_viz_data() -> dict:
                 "tasks": deduped_tasks,
             })
             if phase_key.lower() in by_stage:
-                by_stage[phase_key.lower()] += stage_cost_actual
-        dream_cost_actual = _dream_cost_actual(conn, dream_id)
+                by_stage[phase_key.lower()]["estimated"] += stage_cost_prov_estimated
+                by_stage[phase_key.lower()]["actual"] += (stage_cost_actual - stage_cost_prov_estimated)
+        dream_cost_total, dream_cost_prov_estimated = _dream_cost_breakdown(conn, dream_id)
         dreams.append({
             "id": dream_id,
             "name": dream_name or "",
             "status": dream_status or "planned",
-            "cost_total": float(dream_cost_actual),
+            "cost_total": float(dream_cost_total),
+            "cost_total_estimated": float(dream_cost_prov_estimated),
             "cost_est": dream_tasks_cost_est or None,
             "stages": dream_stages,
         })
@@ -557,6 +574,9 @@ def generate_viz_data() -> dict:
     data["dreams"] = dreams
     data["costs"] = {
         "total_usd": float(sum(float(row[2] or 0.0) for row in cost_rows)),
+        "total_usd_estimated": float(
+            sum(float(row[2] or 0.0) for row in cost_rows if (row[4] or "") != "actual")
+        ),
         "by_agent": by_agent,
         "by_stage": by_stage,
     }
