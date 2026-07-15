@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `synlynk agent add <name>` to retroactively onboard a newly available CLI agent on `$PATH`, generating its directive file, writing its role fence, wiring `workgroup_agents` / `agent_slots` / `roles`, and seeding a capability baseline. Fixes #277.
+- Lazy daily housekeeping on the first `synlynk exec` of a new calendar day, detecting new PATH agents, re-probing onboarded agents for drift, repairing directive fences, and recording `last_housekeeping_date`. Fixes #277.
+
 ### Fixed
 
 - **`synlynk migrate` false-positive `MigrationImportError` on idempotent re-runs (#276):**
