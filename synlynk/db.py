@@ -781,12 +781,20 @@ def _insert_cost_row(
         conn.close()
 
 def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
-    """Parse flat files in docs_dir -> state.db. Prints import summary."""
+    """Parse flat files in docs_dir -> state.db. Prints import summary.
+
+    Loud-fail (MigrationImportError) when a non-empty source lands zero new rows
+    *and* none of the attempted rows already exist under their natural keys.
+    Idempotent re-runs (INSERT OR IGNORE no-ops on already-present keys) are
+    treated as success — see #276.
+    """
     from synlynk import _get_db, _parse_costs_md, _parse_devlog_file, _parse_memory_md, _parse_roadmap_md, _parse_todo_metadata
     conn = _get_db()
     counts = {}
     inserted_counts = {}
     attempted_counts = {}
+    # Rows whose natural key already exists — not a failure on re-run (#276).
+    already_present_counts = {}
 
     memory_path = os.path.join(docs_dir, "memory.md")
     if os.path.exists(memory_path):
@@ -795,9 +803,18 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
         counts["memory_entries"] = len(sections)
         attempted_counts["memory_entries"] = len(sections)
         inserted_counts["memory_entries"] = 0
+        already_present_counts["memory_entries"] = 0
         if not dry_run:
             for s in sections:
                 try:
+                    # Natural key: section title (cmd_memory_add treats it as unique).
+                    existing = conn.execute(
+                        "SELECT 1 FROM memory_entries WHERE section=? LIMIT 1",
+                        (s["section"],),
+                    ).fetchone()
+                    if existing:
+                        already_present_counts["memory_entries"] += 1
+                        continue
                     cursor = conn.execute(
                         "INSERT OR IGNORE INTO memory_entries (section, body, author) VALUES (?,?,?)",
                         (s["section"], s["body"], s["author"]),
@@ -817,9 +834,19 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
         attempted_counts["roadmap_phases"] = len(phases)
         inserted_counts["roadmap_arcs"] = 0
         inserted_counts["roadmap_phases"] = 0
+        already_present_counts["roadmap_arcs"] = 0
+        already_present_counts["roadmap_phases"] = 0
         if not dry_run:
             for a in arcs:
                 try:
+                    # Natural key: version (UNIQUE on roadmap_arcs).
+                    existing = conn.execute(
+                        "SELECT 1 FROM roadmap_arcs WHERE version=? LIMIT 1",
+                        (a["version"],),
+                    ).fetchone()
+                    if existing:
+                        already_present_counts["roadmap_arcs"] += 1
+                        continue
                     cursor = conn.execute(
                         "INSERT OR IGNORE INTO roadmap_arcs (version, title, status, goal_id) VALUES (?,?,?,?)",
                         (a["version"], a["title"], a["status"], a.get("goal_id")),
@@ -830,6 +857,15 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                     print(f"  ⚠ roadmap arc skipped: {e}")
             for p in phases:
                 try:
+                    # Natural key: (arc_version, phase_title).
+                    existing = conn.execute(
+                        "SELECT 1 FROM roadmap_phases "
+                        "WHERE arc_version=? AND phase_title=? LIMIT 1",
+                        (p["arc_version"], p["phase_title"]),
+                    ).fetchone()
+                    if existing:
+                        already_present_counts["roadmap_phases"] += 1
+                        continue
                     cursor = conn.execute(
                         "INSERT OR IGNORE INTO roadmap_phases "
                         "(arc_version, phase_title, status, priority) VALUES (?,?,?,?)",
@@ -847,9 +883,32 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
         counts["cost_entries"] = len(rows)
         attempted_counts["cost_entries"] = len(rows)
         inserted_counts["cost_entries"] = 0
+        already_present_counts["cost_entries"] = 0
         if not dry_run:
             for r in rows:
                 try:
+                    # Legacy cost rows have no stable unique key (job_id is null).
+                    # Match a prior import by the flat-file fingerprint fields.
+                    existing = conn.execute(
+                        "SELECT 1 FROM cost_entries "
+                        "WHERE session_date=? AND IFNULL(agent,'')=IFNULL(?, '') "
+                        "AND IFNULL(model,'')=IFNULL(?, '') "
+                        "AND IFNULL(input_tokens, -1)=IFNULL(?, -1) "
+                        "AND IFNULL(output_tokens, -1)=IFNULL(?, -1) "
+                        "AND IFNULL(notes,'')=IFNULL(?, '') "
+                        "LIMIT 1",
+                        (
+                            r["session_date"],
+                            r["agent"],
+                            r["model"],
+                            r["input_tokens"],
+                            r["output_tokens"],
+                            r["notes"],
+                        ),
+                    ).fetchone()
+                    if existing:
+                        already_present_counts["cost_entries"] += 1
+                        continue
                     cursor = conn.execute(
                         """INSERT INTO cost_entries
                            (session_date, agent, model, input_tokens, output_tokens,
@@ -882,6 +941,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     devlog_count = 0
     inserted_counts["devlog_entries"] = 0
     attempted_counts["devlog_entries"] = 0
+    already_present_counts["devlog_entries"] = 0
     if os.path.isdir(devlogs_dir):
         for fname in sorted(os.listdir(devlogs_dir)):
             if not fname.endswith(".md") or fname == "README.md":
@@ -894,6 +954,17 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
             if not dry_run:
                 for e in entries:
                     try:
+                        # Natural key: author + date + session title.
+                        existing = conn.execute(
+                            "SELECT 1 FROM devlog_entries "
+                            "WHERE author=? AND entry_date=? "
+                            "AND IFNULL(session_title,'')=IFNULL(?, '') "
+                            "LIMIT 1",
+                            (e["author"], e["entry_date"], e["session_title"]),
+                        ).fetchone()
+                        if existing:
+                            already_present_counts["devlog_entries"] += 1
+                            continue
                         cursor = conn.execute(
                             "INSERT OR IGNORE INTO devlog_entries "
                             "(author, entry_date, session_title, body) VALUES (?,?,?,?)",
@@ -909,6 +980,7 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     todo_sync_count = 0
     inserted_counts["todo_metadata"] = 0
     attempted_counts["todo_metadata"] = 0
+    already_present_counts["todo_metadata"] = 0
     if os.path.exists(todo_path):
         with open(todo_path) as f:
             meta_rows = _parse_todo_metadata(f.read())
@@ -919,6 +991,13 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                     continue
                 attempted_counts["todo_metadata"] += 1
                 try:
+                    existing = conn.execute(
+                        "SELECT gh_issue FROM stories WHERE story_id=?",
+                        (m["story_id"],),
+                    ).fetchone()
+                    if existing is not None and existing[0] == m["gh_issue"]:
+                        already_present_counts["todo_metadata"] += 1
+                        continue
                     cursor = conn.execute(
                         "UPDATE stories SET gh_issue=? WHERE story_id=?",
                         (m["gh_issue"], m["story_id"]),
@@ -956,7 +1035,10 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     for key, parsed_total in counts.items():
         attempted_total = attempted_counts.get(key, parsed_total)
         inserted_total = inserted_counts.get(key, 0)
-        if attempted_total > 0 and inserted_total == 0:
+        already_total = already_present_counts.get(key, 0)
+        # Genuine 0-of-N failure: rows were attempted, none inserted, and not every
+        # attempted row was already present (idempotent no-op). #276
+        if attempted_total > 0 and inserted_total == 0 and already_total < attempted_total:
             if key == "todo_metadata":
                 failures.append(
                     f"{key} ({parsed_total} parsed, {attempted_total} attempted, 0 inserted)"
