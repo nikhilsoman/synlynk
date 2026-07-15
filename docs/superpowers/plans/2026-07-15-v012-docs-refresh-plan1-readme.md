@@ -63,7 +63,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 | Command | Description |
 | --- | --- |
-| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch a task to an agent in the background (claude, codex, agy, grok) |
+| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch a task to an agent in the background (claude, codex, agy, grok, local) |
 | `synlynk jobs [--all] [--watch]` | List dispatched background jobs |
 | `synlynk jobs handoff <job-id> <agent>` | Transfer a stalled job to another agent |
 | `synlynk watch` | Live workspace HUD |
@@ -100,6 +100,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 | --- | --- |
 | `synlynk agent configure\|run\|list` | Manage and run autopilot agents |
 | `synlynk identity init` | Create `~/.synlynk/identity.key` (Ed25519) and print public key |
+| `synlynk local doctor` | Check oMLX endpoint reachability and model roster (5th agent, on-device) |
 | `synlynk scan [--refresh] [--add path] [--remove path] [--dry-run] [--deep] [--status]` | Re-runnable repository analysis that scans the source tree and updates the source architecture context |
 | `synlynk migrate [--dry-run] [--recover] [--setup-dr]` | One-shot import to migrate existing flat-file `project-docs/` to `state.db` |
 | `synlynk repair` | Repair inconsistent state.db records |
@@ -118,6 +119,7 @@ If you installed synlynk before 2026-07, here's what's new:
 
 - `synlynk schedule` — fleet batch dispatch, dry-run by default
 - `synlynk cost log` — manual cost entries for native/PM-session work
+- `local` agent — 5th dispatch target, zero-cost on-device inference via oMLX
 - `synlynk status` now shows a `RATES` line (rate-table staleness)
 - `synlynk viz` — local web HUD (Architect Map, Effort & Cost tab, Business Goals Panel)
 
@@ -131,10 +133,8 @@ Where any `help=` text you read in Step 2 differs from the wording above, use th
 Run: `sed -n '1,18p' README.md` to see current state. Update the version badge (`https://img.shields.io/badge/version-0.10.0-blue`) to read `version-0.12.0-blue`, and update the `**v0.10.0:**` callout line (line 17) to summarize v0.12.0 instead — e.g.:
 
 ```markdown
-**v0.12.0:** Measurement & Reliability — dispatch git-finalization (agents no longer need to remember to commit/push/PR), fleet batch scheduling (`synlynk schedule`), model-aware capability routing with quota headroom gating, and full cost-provenance tracking (every dollar shown is measured or flagged as an estimate). 1140 tests passing.
+**v0.12.0:** Measurement & Reliability — dispatch git-finalization (agents no longer need to remember to commit/push/PR), a 5th zero-cost `local` agent over on-device oMLX, fleet batch scheduling (`synlynk schedule`), and full cost-provenance tracking (every dollar shown is measured or flagged as an estimate). 1140 tests passing.
 ```
-
-Note: the `local` (on-device oMLX) agent has shipped in code but is intentionally **not** announced in this docs pass — it's still being trialed before a public announcement. Do not reference it anywhere in README.md (commands table, tagline, or Upgrading section).
 
 Also update the tests badge (`tests-623%20passing-brightgreen`) to `tests-1140%20passing-brightgreen` if it is still showing a stale count — verify the true current count first with `python3 -m pytest --collect-only -q | tail -1` before writing it.
 

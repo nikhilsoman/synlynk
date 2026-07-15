@@ -62,19 +62,18 @@ synlynk schedule --execute</code></pre>
 <div class="docs-quick-ref">
   <h3>Advanced / Operate</h3>
   <pre><code>synlynk agent run &lt;name&gt;
+synlynk local doctor
 synlynk scan --deep
 synlynk viz --serve</code></pre>
 </div>
 
 <div class="docs-quick-ref">
   <h3>Upgrading?</h3>
-  <p>If you installed synlynk before 2026-07, here's what's new: <code>synlynk schedule</code> (fleet batch dispatch), <code>synlynk cost log</code> (manual cost entries), a <code>RATES</code> line in <code>synlynk status</code>, and <code>synlynk viz</code> (local web HUD).</p>
+  <p>If you installed synlynk before 2026-07, here's what's new: <code>synlynk schedule</code> (fleet batch dispatch), <code>synlynk cost log</code> (manual cost entries), the <code>local</code> agent (5th dispatch target, zero-cost on-device inference), a <code>RATES</code> line in <code>synlynk status</code>, and <code>synlynk viz</code> (local web HUD).</p>
   <pre><code>synlynk upgrade
 synlynk doctor</code></pre>
 </div>
 ```
-
-**Scope note:** the `local` (on-device oMLX) agent has shipped in code but is intentionally excluded from this pass — it's being trialed before a public announcement. Do not add a `synlynk local doctor` row or otherwise reference it anywhere on this page.
 
 Use the class name `docs-quick-ref` for each new block since that's the existing convention in this file — do not invent a new class unless a check of `website/src/` CSS shows `docs-quick-ref` styling won't reasonably extend to multiple stacked blocks (check with `grep -rn "docs-quick-ref" website/src/ website/*.css website/src/**/*.css 2>/dev/null`). If the CSS only expects one instance of this block and stacking looks visually broken in a local build preview, keep the class name but confirm via Step 5's build check rather than guessing.
 

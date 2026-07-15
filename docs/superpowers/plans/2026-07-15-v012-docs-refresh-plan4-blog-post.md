@@ -30,9 +30,7 @@ As of this plan's authoring, the highest numbered post is `64-v012-measurement-a
 
 - [ ] **Step 1: Cross-check command names used in the post against `synlynk/cli.py`**
 
-Run: `grep -n 'add_parser(' synlynk/cli.py` before writing, to confirm exact command names (`schedule`, `cost log`, `status`, `viz`, `upgrade`, `doctor`, `init`) referenced below still exist under those exact names.
-
-**Scope note:** the `local` (on-device oMLX) agent has shipped in code but is intentionally excluded from this post — it's being trialed before a public announcement. Do not mention `local` or `local doctor` anywhere in the post below; the agent roster referenced in this post is Claude, Codex, Agy, and Grok only.
+Run: `grep -n 'add_parser(' synlynk/cli.py` before writing, to confirm exact command names (`schedule`, `cost log`, `local doctor`, `status`, `viz`, `upgrade`, `doctor`, `init`) referenced below still exist under those exact names.
 
 - [ ] **Step 2: Write the file**
 
@@ -52,7 +50,7 @@ merged: "—"
 
 ## The one-sentence version
 
-synlynk is a CLI that keeps your AI coding tools — Claude, Codex, Gemini (Agy), and Grok — in sync with a shared project state, so you can dispatch work to whichever agent fits, track what it cost, and trust that the numbers you're seeing are real.
+synlynk is a CLI that keeps your AI coding tools — Claude, Codex, Gemini (Agy), Grok, and now a free on-device model (local) — in sync with a shared project state, so you can dispatch work to whichever agent fits, track what it cost, and trust that the numbers you're seeing are real.
 
 ## If you're new here
 
@@ -75,6 +73,7 @@ v0.12.0 shipped 71 PRs since v0.11.0 (2026-07-05 → 2026-07-15), and the theme 
 Five things worth knowing about if you haven't upgraded recently:
 
 - **Dispatched jobs finish themselves.** synlynk used to leave commit/push/PR steps to the agent, and agents didn't reliably do them. Now synlynk does it — the moment a job's work is verifiably complete, it stages, commits, pushes, and opens the PR for you.
+- **A 5th agent, and it's free.** `local` runs against an on-device oMLX endpoint via `aider` — zero token cost, useful for small mechanical tasks you don't want to burn API budget on. Check it's reachable with `synlynk local doctor`.
 - **Routing got smarter.** Dispatch used to be close to first-match. Now it scores agents on capability, checks quota headroom across five time windows, and tie-breaks on cost — and if you have a backlog, `synlynk schedule --execute` will clear it unattended.
 - **Costs are provably real.** Every number in `synlynk status` and the Vizor dashboard (`synlynk viz`) is now tagged as either a structurally-sourced measurement or a visibly-flagged estimate — no more silent guesses dressed up as facts. If you're logging cost for work synlynk didn't wrap directly (a native session, a manual fix), `synlynk cost log` records it properly.
 - **`synlynk status` has a new `RATES` line** showing when the pricing table was last refreshed, with a warning if it's gone stale.
