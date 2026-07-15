@@ -2526,6 +2526,17 @@ def generate_effort_html(data: dict, port: int) -> str:
     by_agent = dict(costs.get("by_agent") or {})
     by_stage = dict(costs.get("by_stage") or {})
     total_usd = float(costs.get("total_usd") or 0.0)
+    total_usd_estimated = float(costs.get("total_usd_estimated") or 0.0)
+
+    def _bucket_total(bucket) -> float:
+        if isinstance(bucket, dict):
+            return float(bucket.get("actual", 0.0)) + float(bucket.get("estimated", 0.0))
+        return float(bucket or 0.0)
+
+    def _bucket_estimated(bucket) -> float:
+        if isinstance(bucket, dict):
+            return float(bucket.get("estimated", 0.0))
+        return 0.0
 
     data_json = _viz_json(data)
 
@@ -2616,21 +2627,23 @@ def generate_effort_html(data: dict, port: int) -> str:
         for dream in dreams_sorted
         if dream.get("cost_est") is not None and float(dream.get("cost_total") or 0.0) > float(dream.get("cost_est") or 0.0)
     )
-    top_agent = max(by_agent.items(), key=lambda item: float(item[1] or 0.0))[0] if by_agent else "—"
+    top_agent = max(by_agent.items(), key=lambda item: _bucket_total(item[1]))[0] if by_agent else "—"
 
     def build_summary_cards() -> str:
+        est_pct = (total_usd_estimated / total_usd * 100.0) if total_usd else 0.0
         cards = [
             ("Total Spend", _fmt_usd(total_usd)),
             ("Dreams In Flight", str(dreams_in_flight)),
             ("Over Budget", str(over_budget)),
             ("Top Agent", _svg_text(top_agent)),
+            ("~Estimated", f"{_fmt_usd(total_usd_estimated)} ({_fmt_pct(est_pct)})"),
         ]
         return "".join(
             f'<div class="stat"><span>{label}</span><strong>{value}</strong></div>'
             for label, value in cards
         )
 
-    def render_bar_chart(rows, title, value_key, color_fn, label_fn, empty_text, max_value=None) -> str:
+    def render_bar_chart(rows, title, value_key, color_fn, label_fn, empty_text, max_value=None, estimated_key=None) -> str:
         rows = list(rows)
         row_count = max(len(rows), 1)
         svg_height = 54 + row_count * 30
@@ -2639,13 +2652,22 @@ def generate_effort_html(data: dict, port: int) -> str:
         if rows:
             for idx, row in enumerate(rows):
                 value = float(row.get(value_key) or 0.0)
+                estimated_val = float(row.get(estimated_key) or 0.0) if estimated_key else 0.0
+                actual_val = max(value - estimated_val, 0.0)
                 y = 18 + idx * 30
-                width = (value / max_value) * 380 if max_value else 0.0
                 bar_color = color_fn(row, value)
                 label = label_fn(row, value)
+                actual_width = (actual_val / max_value) * 380 if max_value else 0.0
+                bar_svg = f'<rect x="110" y="{y}" width="{actual_width:.2f}" height="18" rx="9" fill="{bar_color}"></rect>'
+                if estimated_val > 0:
+                    est_width = (estimated_val / max_value) * 380 if max_value else 0.0
+                    bar_svg += (
+                        f'<rect x="{110 + actual_width:.2f}" y="{y}" width="{est_width:.2f}" '
+                        f'height="18" fill="{bar_color}" fill-opacity="0.4"></rect>'
+                    )
                 svg_rows.append(
                     f'<text x="0" y="{y + 7}" class="y-label">{_svg_text(row.get("label") or row.get("name") or row.get("key") or "")}</text>'
-                    f'<rect x="110" y="{y}" width="{width:.2f}" height="18" rx="9" fill="{bar_color}"></rect>'
+                    f'{bar_svg}'
                     f'<text x="495" y="{y + 7}" text-anchor="end" class="value-label">{_svg_text(label)}</text>'
                 )
         else:
@@ -2667,23 +2689,32 @@ def generate_effort_html(data: dict, port: int) -> str:
             "label": dream.get("name") or dream.get("id") or "Unnamed dream",
             "name": dream.get("name") or dream.get("id") or "Unnamed dream",
             "value": float(dream.get("cost_total") or 0.0),
+            "estimated": float(dream.get("cost_total_estimated") or 0.0),
             "cost_est": dream.get("cost_est"),
             "cost_total": float(dream.get("cost_total") or 0.0),
         }
         for dream in dreams_sorted
     ]
 
-    agent_rows = [
-        {"label": agent, "name": agent, "value": float(spend or 0.0), "spend": float(spend or 0.0)}
-        for agent, spend in sorted(by_agent.items(), key=lambda item: float(item[1] or 0.0), reverse=True)
-        if float(spend or 0.0) > 0
-    ]
+    agent_rows = []
+    for agent, bucket in sorted(by_agent.items(), key=lambda item: _bucket_total(item[1]), reverse=True):
+        total = _bucket_total(bucket)
+        if total <= 0:
+            continue
+        agent_rows.append({
+            "label": agent, "name": agent, "value": total, "spend": total,
+            "estimated": _bucket_estimated(bucket),
+        })
 
-    stage_rows = [
-        {"label": stage, "name": stage, "value": float(spend or 0.0), "spend": float(spend or 0.0)}
-        for stage, spend in sorted(by_stage.items(), key=lambda item: float(item[1] or 0.0), reverse=True)
-        if float(spend or 0.0) > 0
-    ]
+    stage_rows = []
+    for stage, bucket in sorted(by_stage.items(), key=lambda item: _bucket_total(item[1]), reverse=True):
+        total = _bucket_total(bucket)
+        if total <= 0:
+            continue
+        stage_rows.append({
+            "label": stage, "name": stage, "value": total, "spend": total,
+            "estimated": _bucket_estimated(bucket),
+        })
 
     def dream_color(row, value):
         est = row.get("cost_est")
@@ -2693,9 +2724,13 @@ def generate_effort_html(data: dict, port: int) -> str:
 
     def dream_label(row, value):
         est = row.get("cost_est")
+        prov_estimated = row.get("estimated") or 0.0
+        base = _fmt_usd(value)
+        if prov_estimated > 0:
+            base = f"{base} (est: {_fmt_usd(prov_estimated)})"
         if est is None:
-            return _fmt_usd(value)
-        return f"{_fmt_usd(value)} / est {_fmt_usd(est)}"
+            return base
+        return f"{base} / est {_fmt_usd(est)}"
 
     def agent_color(row, value):
         agent = (row.get("label") or "").strip().lower()
@@ -2708,11 +2743,19 @@ def generate_effort_html(data: dict, port: int) -> str:
 
     def agent_label(row, value):
         pct = (value / total_usd * 100.0) if total_usd else 0.0
-        return f"{_fmt_usd(value)} ({_fmt_pct(pct)})"
+        base = f"{_fmt_usd(value)} ({_fmt_pct(pct)})"
+        prov_estimated = row.get("estimated") or 0.0
+        if prov_estimated > 0:
+            base = f"{base} (est: {_fmt_usd(prov_estimated)})"
+        return base
 
     def stage_label(row, value):
         pct = (value / total_usd * 100.0) if total_usd else 0.0
-        return f"{_fmt_usd(value)} ({_fmt_pct(pct)})"
+        base = f"{_fmt_usd(value)} ({_fmt_pct(pct)})"
+        prov_estimated = row.get("estimated") or 0.0
+        if prov_estimated > 0:
+            base = f"{base} (est: {_fmt_usd(prov_estimated)})"
+        return base
 
     def stage_color(row, value):
         return _stage_color(row.get("label") or row.get("name") or "")
@@ -2786,7 +2829,7 @@ def generate_effort_html(data: dict, port: int) -> str:
     .subtle {{ color: var(--muted); margin-top: 6px; font-size: 14px; }}
     .summary {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 14px;
       margin-bottom: 18px;
     }}
@@ -2831,7 +2874,7 @@ def generate_effort_html(data: dict, port: int) -> str:
     .value-label {{ fill: var(--muted); font-size: 12px; dominant-baseline: middle; }}
     .empty-label {{ fill: var(--muted); font-size: 14px; dominant-baseline: middle; }}
     @media (max-width: 980px) {{
-      .summary {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .summary {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
     }}
     @media (max-width: 700px) {{
       .wrap {{ width: min(100vw - 20px, 100%); }}
@@ -2846,7 +2889,7 @@ def generate_effort_html(data: dict, port: int) -> str:
     <header class="hero">
       <div>
         <h1>Effort & Cost</h1>
-        <div class="subtle">Workspace spend, dream overruns, and agent allocation at a glance.</div>
+        <div class="subtle">Workspace spend, dream overruns, and agent allocation at a glance. Faded segments indicate estimated (non-structural) cost.</div>
       </div>
     </header>
     <section class="summary">{build_summary_cards()}</section>
@@ -2858,6 +2901,7 @@ def generate_effort_html(data: dict, port: int) -> str:
         dream_label,
         "No dreams found",
         max_dream_cost,
+        estimated_key="estimated",
     )}
     {render_bar_chart(
         agent_rows,
@@ -2866,6 +2910,7 @@ def generate_effort_html(data: dict, port: int) -> str:
         agent_color,
         agent_label,
         "No agent spend yet",
+        estimated_key="estimated",
     )}
     {render_bar_chart(
         stage_rows,
@@ -2874,6 +2919,7 @@ def generate_effort_html(data: dict, port: int) -> str:
         stage_color,
         stage_label,
         "No stage spend yet",
+        estimated_key="estimated",
     )}
   </main>
   {_live_js(port)}

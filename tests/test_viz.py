@@ -326,6 +326,75 @@ def test_generate_effort_html_empty_state(tmp_path, monkeypatch):
     assert "No cost data yet" in html
     assert "<svg" not in html
 
+
+def test_generate_effort_html_flags_estimated_rows(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import generate_effort_html
+
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
+        "dreams": [
+            {
+                "id": "d1", "name": "Dream One", "status": "active",
+                "cost_total": 120.0, "cost_total_estimated": 20.0, "cost_est": 100.0,
+            },
+        ],
+        "costs": {
+            "total_usd": 120.0,
+            "total_usd_estimated": 20.0,
+            "by_agent": {
+                "claude": {"actual": 100.0, "estimated": 20.0},
+                "agy": {"actual": 0.0, "estimated": 0.0},
+            },
+            "by_stage": {"build": {"actual": 100.0, "estimated": 20.0}},
+        },
+        "agents": {},
+        "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [],
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "notes": {},
+    }
+
+    html = generate_effort_html(data, port=8721)
+
+    assert "~Estimated" in html
+    assert "$20.00 (17%)" in html
+    assert "(est: $20.00)" in html
+    assert 'fill-opacity="0.4"' in html
+
+
+def test_generate_effort_html_no_estimate_suffix_when_fully_actual(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.viz import generate_effort_html
+
+    data = {
+        "workspace": {"name": "test", "updated_at": "2026-07-03T10:00:00Z", "repos": []},
+        "dreams": [
+            {
+                "id": "d1", "name": "Dream One", "status": "active",
+                "cost_total": 120.0, "cost_total_estimated": 0.0, "cost_est": 100.0,
+            },
+        ],
+        "costs": {
+            "total_usd": 120.0,
+            "total_usd_estimated": 0.0,
+            "by_agent": {"claude": {"actual": 120.0, "estimated": 0.0}},
+            "by_stage": {"build": {"actual": 120.0, "estimated": 0.0}},
+        },
+        "agents": {},
+        "telemetry": {"recent": [], "sentinel_alerts": []},
+        "journeys": [],
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "notes": {},
+    }
+
+    html = generate_effort_html(data, port=8721)
+
+    assert "(est:" not in html
+    assert "~Estimated" in html
+    assert "$0.00 (0%)" in html
+
+
 def test_generate_architect_map_html_no_repos_shows_single_node():
     from synlynk.viz import generate_architect_map_html
 
