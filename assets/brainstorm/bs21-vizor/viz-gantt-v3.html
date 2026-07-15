@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Gantt v3 (drill-down)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'JetBrains Mono', monospace; background: #0d0f14; color: #c9d1d9; font-size: 13px; padding: 20px; }
+
+  h2 { font-size: 15px; color: #e6edf3; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #4a5568; margin-bottom: 20px; }
+
+  /* ── AGENT AVATARS ──────────────────────────────── */
+  .agent-avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; flex-shrink: 0;
+    border: 1.5px solid; cursor: default; position: relative;
+  }
+  .agent-claude { background: #0d2a2a; border-color: #3de0c0; color: #3de0c0; }
+  .agent-agy    { background: #0d1a3a; border-color: #4285f4; color: #4285f4; }
+  .agent-codex  { background: #0a1f18; border-color: #10a37f; color: #10a37f; font-size: 8px; }
+  .agent-grok   { background: #1a1a1a; border-color: #e0e0e0; color: #e0e0e0; }
+  .agent-stack  { display: flex; align-items: center; gap: 3px; }
+
+  /* Larger avatar for task rows */
+  .agent-avatar.lg { width: 24px; height: 24px; font-size: 10px; }
+
+  /* ── NOTE TRIGGER — 📝 ─────────────────────────── */
+  .editable { position: relative; }
+  .note-btn {
+    opacity: 0; position: absolute; top: 4px; right: 6px;
+    font-size: 15px; cursor: pointer; z-index: 20;
+    transition: opacity 0.15s;
+    background: #13171f; border: 1px solid #1e2430;
+    border-radius: 4px; padding: 2px 5px; line-height: 1;
+    user-select: none;
+  }
+  .editable:hover .note-btn { opacity: 1; }
+  .note-btn:hover { background: #2d2500; border-color: #5a4a00; }
+
+  /* Note indicator (has note) */
+  .note-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #2d2500; border: 1px solid #5a4a00;
+    border-radius: 4px; font-size: 10px; color: #d4b800;
+    padding: 2px 6px; cursor: pointer; margin-left: 6px;
+  }
+  .note-chip:hover { background: #3d3000; }
+
+  /* ── NOTE MODAL ────────────────────────────────── */
+  .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; }
+  .overlay.open { display:block; }
+  .note-modal {
+    display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:#13171f; border:1px solid #1e2430; border-radius:10px;
+    padding:18px; width:400px; z-index:1000; box-shadow:0 20px 60px rgba(0,0,0,.6);
+  }
+  .note-modal.open { display:block; }
+  .note-modal-title { font-size:12px; color:#8b949e; margin-bottom:10px; }
+  .note-modal textarea {
+    width:100%; background:#0a0c10; border:1px solid #1e2430; border-radius:6px;
+    color:#c9d1d9; font-family:inherit; font-size:12px; padding:8px 10px;
+    resize:none; outline:none; height:80px;
+  }
+  .note-modal textarea:focus { border-color:#3de0c0; }
+  .action-row { display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .action-label { font-size:11px; color:#4a5568; flex-shrink:0; }
+  .action-chip {
+    padding:3px 9px; border-radius:10px; font-size:11px;
+    border:1px solid #1e2430; color:#8b949e; cursor:pointer;
+    background:transparent; font-family:inherit;
+  }
+  .action-chip:hover { border-color:#3de0c0; color:#3de0c0; background:#0d2137; }
+  .action-chip.on { border-color:#f0883e; color:#f0883e; background:#2d1a00; }
+  .modal-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .btn { padding:6px 14px; border-radius:5px; cursor:pointer; font-family:inherit; font-size:12px; border:1px solid; }
+  .btn-cancel { background:transparent; border-color:#1e2430; color:#6a737d; }
+  .btn-save   { background:#0a3050; border-color:#3de0c0; color:#3de0c0; }
+
+  /* ── TOOLBAR ───────────────────────────────────── */
+  .toolbar { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .lbl { font-size:11px; color:#4a5568; text-transform:uppercase; letter-spacing:.8px; }
+  .chip {
+    padding:3px 9px; border-radius:10px; font-size:11px;
+    border:1px solid #1e2430; color:#8b949e; cursor:pointer; background:transparent; font-family:inherit;
+  }
+  .chip.on { background:#0d2137; border-color:#3de0c0; color:#3de0c0; }
+  .sp { flex:1; }
+  .zbtn {
+    padding:4px 9px; border-radius:5px; font-size:11px;
+    background:#13171f; border:1px solid #1e2430; color:#8b949e; cursor:pointer; font-family:inherit;
+  }
+
+  /* ── GANTT OUTER ───────────────────────────────── */
+  .gantt-wrap { overflow-x:auto; }
+  .gantt {
+    min-width:960px; background:#0a0c10;
+    border:1px solid #1e2430; border-radius:8px; overflow:hidden;
+  }
+
+  /* Header */
+  .g-head {
+    display:grid; grid-template-columns:260px repeat(10,1fr);
+    border-bottom:1px solid #1e2430; background:#111520;
+  }
+  .g-head-lbl { padding:7px 14px; font-size:11px; color:#4a5568; border-right:1px solid #1e2430; text-transform:uppercase; letter-spacing:.5px; }
+  .g-week { padding:7px 4px; font-size:10px; color:#4a5568; text-align:center; border-right:1px solid #13171f; }
+  .g-week.now { color:#3de0c0; font-weight:700; }
+
+  /* Dream row (collapsed) */
+  .dream-row {
+    display:grid; grid-template-columns:260px 1fr;
+    border-bottom:1px solid #1e2430; background:#0a0c10;
+  }
+  .dream-row.expanded { background:#0d1017; }
+  .dream-row:last-child:not(.drill-row) { border-bottom:none; }
+
+  .dream-lbl {
+    padding:9px 14px; border-right:1px solid #1e2430;
+    display:flex; flex-direction:column; justify-content:center; gap:5px;
+    position:relative; cursor:pointer;
+  }
+  .dream-lbl:hover { background:#0d1017; }
+  .dream-top { display:flex; align-items:center; gap:8px; }
+  .dream-name { font-size:12px; color:#c9d1d9; font-weight:600; }
+  .expand-arrow { font-size:11px; color:#4a5568; transition:transform .2s; }
+  .expanded .expand-arrow { transform:rotate(90deg); color:#3de0c0; }
+  .dream-bottom { display:flex; align-items:center; gap:8px; }
+  .cost { font-size:10px; }
+  .cost.ok { color:#3de0c0; }
+  .cost.over { color:#f85149; }
+  .cost.na { color:#4a5568; }
+
+  /* Timeline cells area */
+  .dream-bars {
+    position:relative; display:flex; align-items:center;
+    /* 10 columns */
+    display:grid; grid-template-columns:repeat(10,1fr);
+  }
+  .bars-inner { position:absolute; inset:0; display:flex; align-items:center; pointer-events:none; }
+
+  .stage-bar {
+    position:absolute; height:28px; border-radius:5px;
+    display:flex; align-items:center; padding:0 8px;
+    font-size:10px; font-weight:600; gap:6px;
+    cursor:pointer; transition:filter .15s;
+    pointer-events:all;
+  }
+  .stage-bar:hover { filter:brightness(1.25); }
+  .stage-bar.selected { outline:2px solid #fff4; }
+
+  .s-dream  { background:#2d1f5e; color:#a78bfa; border:1px solid #4a3f80; }
+  .s-plan   { background:#1e3a5a; color:#60a5fa; border:1px solid #3a6090; }
+  .s-work   { background:#1a4a2e; color:#4ade80; border:1px solid #2a7040; }
+  .s-ship   { background:#5a3a00; color:#fb923c; border:1px solid #8a5a00; }
+  .s-maint  { background:#1e2a4a; color:#818cf8; border:1px solid #3a4a80; }
+  .s-engage { background:#3a1a3a; color:#f472b6; border:1px solid #6a2a6a; }
+
+  .s-work.live { background:linear-gradient(90deg,#1a4a2e,#2a6a3e,#1a4a2e); background-size:200% 100%; animation:sh 2s infinite; }
+  .s-plan.live { background:linear-gradient(90deg,#1e3a5a,#2e5a8a,#1e3a5a); background-size:200% 100%; animation:sh 2s infinite; }
+  @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .stage-bar.dim { opacity:.35; }
+
+  /* Stage agent mini-stack on bar */
+  .bar-agents { display:flex; gap:2px; }
+  .bar-agents .agent-avatar { width:14px; height:14px; font-size:7px; border-width:1px; }
+
+  .today-line {
+    position:absolute; top:0; bottom:0; width:2px;
+    background:#3de0c0; opacity:.5; pointer-events:none; z-index:5;
+  }
+  .today-line::before {
+    content:'today'; position:absolute; top:-16px; left:-10px;
+    font-size:9px; color:#3de0c0; white-space:nowrap;
+  }
+
+  /* ── DRILL-DOWN ROW ─────────────────────────────── */
+  .drill-row {
+    border-bottom:1px solid #1e2430;
+    background:#080b10;
+    display:none;
+  }
+  .drill-row.open { display:block; }
+
+  .drill-header {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px 8px;
+    border-bottom:1px solid #13171f;
+    background:#0a0e14;
+  }
+  .drill-stage-pill {
+    padding:3px 10px; border-radius:10px; font-size:11px; font-weight:700;
+  }
+  .drill-title { font-size:12px; color:#8b949e; }
+  .drill-close { margin-left:auto; color:#4a5568; cursor:pointer; font-size:14px; }
+  .drill-close:hover { color:#c9d1d9; }
+
+  /* Task table */
+  .task-table { width:100%; border-collapse:collapse; }
+  .task-table th {
+    padding:6px 14px; font-size:10px; color:#4a5568;
+    text-transform:uppercase; letter-spacing:.5px;
+    text-align:left; border-bottom:1px solid #13171f;
+    font-weight:400;
+  }
+  .task-table td { padding:9px 14px; border-bottom:1px solid #13171f; vertical-align:middle; }
+  .task-table tr:last-child td { border-bottom:none; }
+  .task-table tr:hover td { background:#0d1017; }
+
+  .task-id { font-size:10px; color:#4a5568; white-space:nowrap; }
+  .task-name { font-size:12px; color:#c9d1d9; }
+  .task-name.has-note::after { content:' 📌'; font-size:11px; }
+
+  /* Status pills */
+  .status-pill {
+    display:inline-block; padding:2px 8px; border-radius:8px;
+    font-size:10px; font-weight:600; white-space:nowrap;
+  }
+  .st-done    { background:#122a1a; color:#4ade80; border:1px solid #2a5a30; }
+  .st-active  { background:#1a4a2e; color:#4ade80; border:1px solid #2a7040; animation:pulse-g 2s infinite; }
+  .st-queued  { background:#1e2430; color:#6a737d; border:1px solid #2a3040; }
+  .st-blocked { background:#3a1a1a; color:#f85149; border:1px solid #6a2a2a; }
+  @keyframes pulse-g { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+  /* Cost cells */
+  .cost-cell { font-size:11px; white-space:nowrap; }
+  .cost-cell .est { color:#4a5568; }
+  .cost-cell .actual.ok   { color:#3de0c0; }
+  .cost-cell .actual.over { color:#f85149; }
+  .cost-cell .actual.na   { color:#4a5568; }
+
+  /* ── LEGEND ─────────────────────────────────────── */
+  .legend { display:flex; align-items:center; gap:12px; margin-top:14px; flex-wrap:wrap; }
+  .li { display:flex; align-items:center; gap:5px; font-size:11px; color:#6a737d; }
+  .ld { width:10px; height:10px; border-radius:3px; }
+  .ls { color:#1e2430; }
+
+  .agent-legend { display:flex; align-items:center; gap:14px; margin-top:8px; }
+  .ali { display:flex; align-items:center; gap:6px; font-size:11px; color:#6a737d; }
+
+  /* ── SUMMARY ─────────────────────────────────────── */
+  .summary-row { display:flex; gap:10px; margin-top:18px; }
+  .sc {
+    flex:1; background:#0a0c10; border:1px solid #1e2430;
+    border-radius:7px; padding:11px 13px; position:relative;
+  }
+  .sc .sl { font-size:10px; color:#4a5568; text-transform:uppercase; letter-spacing:.5px; }
+  .sc .sv { font-size:20px; font-weight:700; color:#e6edf3; margin:4px 0 2px; }
+  .sc .ss { font-size:11px; color:#4a5568; }
+  .sc.teal .sv { color:#3de0c0; }
+  .sc.blue .sv { color:#60a5fa; }
+  .sc.org  .sv { color:#fb923c; }
+  .sc.purp .sv { color:#a78bfa; }
+  .wow { display:inline-block; margin-top:4px; background:#1a4a2e; color:#4ade80; border:1px solid #2a6a3e; border-radius:10px; font-size:10px; padding:2px 8px; }
+</style>
+</head>
+<body>
+
+<!-- OVERLAY + MODAL -->
+<div class="overlay" id="ov" onclick="closeNote()"></div>
+<div class="note-modal" id="nm">
+  <div class="note-modal-title" id="nt">Note on <strong>—</strong></div>
+  <textarea placeholder="Add a note, reminder, or instruction for next Vizor run…" id="ntxt"></textarea>
+  <div class="action-row">
+    <span class="action-label">Action tag:</span>
+    <button class="action-chip" onclick="this.classList.toggle('on')">↺ Redo stage</button>
+    <button class="action-chip" onclick="this.classList.toggle('on')">⇄ Reassign agent</button>
+    <button class="action-chip" onclick="this.classList.toggle('on')">⏸ Defer</button>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-cancel" onclick="closeNote()">Cancel</button>
+    <button class="btn btn-save" onclick="closeNote()">Save note</button>
+  </div>
+</div>
+
+<h2>📅 Gantt — Dreams in flight</h2>
+<p class="subtitle">synlynk-core · 5 Dreams · click any stage bar to drill down into tasks · hover for 📝</p>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <span class="lbl">Filter:</span>
+  <button class="chip on">All Dreams</button>
+  <button class="chip">In Progress</button>
+  <button class="chip">Blocked</button>
+  <button class="chip">Ships soon</button>
+  <div class="sp"></div>
+  <button class="zbtn">← 4w</button>
+  <button class="zbtn" style="border-color:#3de0c0;color:#3de0c0">10w ✓</button>
+  <button class="zbtn">26w →</button>
+</div>
+
+<!-- GANTT -->
+<div class="gantt-wrap"><div class="gantt">
+
+  <!-- HEADER -->
+  <div class="g-head">
+    <div class="g-head-lbl">Dream / Epic</div>
+    <div class="g-week">Jul W1</div>
+    <div class="g-week">Jul W2</div>
+    <div class="g-week now">Jul W3 ▾</div>
+    <div class="g-week">Jul W4</div>
+    <div class="g-week">Aug W1</div>
+    <div class="g-week">Aug W2</div>
+    <div class="g-week">Aug W3</div>
+    <div class="g-week">Aug W4</div>
+    <div class="g-week">Sep W1</div>
+    <div class="g-week">Sep W2</div>
+  </div>
+
+  <!-- ═══ DREAM 1: BS-21 Vizor (EXPANDED) ═══════════════════════════════ -->
+  <div class="dream-row expanded" id="row-bs21">
+    <!-- Label -->
+    <div class="dream-lbl editable" onclick="toggleDrill('bs21','Plan','s-plan','#1e3a5a','#60a5fa')">
+      <div class="dream-top">
+        <span class="expand-arrow">▶</span>
+        <div class="dream-name">BS-21 · Vizor</div>
+        <span class="note-chip" onclick="openNote('BS-21 Vizor'); event.stopPropagation()">📌</span>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-agy" title="Agy (Gemini)">A</div>
+          <div class="agent-avatar agent-codex" title="Codex (OpenAI)">Co</div>
+        </div>
+        <span class="cost ok">$4.20 / est $6</span>
+      </div>
+      <span class="note-btn" onclick="openNote('BS-21 Vizor'); event.stopPropagation()">📝</span>
+    </div>
+    <!-- Bars -->
+    <div class="dream-bars" style="position:relative;height:52px">
+      <div class="today-line" style="left:19%"></div>
+      <div class="bars-inner">
+        <div class="stage-bar s-dream dim" style="left:0%;width:10%" onclick="openDrill('bs21','Dream','s-dream','#2d1f5e','#a78bfa')">✦ Dream</div>
+        <div class="stage-bar s-plan live selected" style="left:10%;width:12%" onclick="openDrill('bs21','Plan','s-plan','#1e3a5a','#60a5fa')">
+          ⊡ Plan
+          <div class="bar-agents">
+            <div class="agent-avatar agent-agy" title="Agy">A</div>
+            <div class="agent-avatar agent-codex" title="Codex">Co</div>
+          </div>
+        </div>
+        <div class="stage-bar s-work dim" style="left:22%;width:30%" onclick="openDrill('bs21','Work','s-work','#1a4a2e','#4ade80')">⚙ Work</div>
+        <div class="stage-bar s-ship dim" style="left:52%;width:10%" onclick="openDrill('bs21','Ship','s-ship','#5a3a00','#fb923c')">▲ Ship</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRILL-DOWN for BS-21 (Plan stage open) -->
+  <div class="drill-row open" id="drill-bs21">
+    <div class="drill-header">
+      <div class="drill-stage-pill" style="background:#1e3a5a;color:#60a5fa;border:1px solid #3a6090" id="drill-bs21-pill">⊡ Plan stage</div>
+      <div class="drill-title" id="drill-bs21-title">BS-21 · Vizor — 3 tasks</div>
+      <div class="drill-close" onclick="closeDrill('bs21')">✕</div>
+    </div>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th style="width:110px">Story ID</th>
+          <th>Task</th>
+          <th style="width:52px">Agent</th>
+          <th style="width:90px">Status</th>
+          <th style="width:130px">Cost (est → actual)</th>
+          <th style="width:40px"></th>
+        </tr>
+      </thead>
+      <tbody id="tasks-bs21">
+        <!-- populated by JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ DREAM 2: BS-20 Deep Scan ════════════════════════════════════════ -->
+  <div class="dream-row" id="row-bs20">
+    <div class="dream-lbl editable" onclick="toggleDrill('bs20','Work','s-work','#1a4a2e','#4ade80')">
+      <div class="dream-top">
+        <span class="expand-arrow">▶</span>
+        <div class="dream-name">BS-20 · Deep Scan</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack"><div class="agent-avatar agent-codex" title="Codex">Co</div></div>
+        <span class="cost ok">$11.40 / est $14</span>
+      </div>
+      <span class="note-btn" onclick="openNote('BS-20 Deep Scan'); event.stopPropagation()">📝</span>
+    </div>
+    <div class="dream-bars" style="position:relative;height:52px">
+      <div class="today-line" style="left:19%"></div>
+      <div class="bars-inner">
+        <div class="stage-bar s-dream dim" style="left:0%;width:8%;opacity:.4">✦</div>
+        <div class="stage-bar s-plan dim" style="left:8%;width:10%;opacity:.4">⊡</div>
+        <div class="stage-bar s-work live" style="left:18%;width:24%" onclick="openDrill('bs20','Work','s-work','#1a4a2e','#4ade80')">
+          ⚙ Work
+          <div class="bar-agents"><div class="agent-avatar agent-codex" title="Codex">Co</div></div>
+        </div>
+        <div class="stage-bar s-ship dim" style="left:42%;width:10%">▲ Ship</div>
+        <div class="stage-bar s-maint dim" style="left:52%;width:20%">↺ Maintain</div>
+      </div>
+    </div>
+  </div>
+  <div class="drill-row" id="drill-bs20"></div>
+
+  <!-- ═══ DREAM 3: v1.0 Community Layer ═══════════════════════════════════ -->
+  <div class="dream-row" id="row-v100">
+    <div class="dream-lbl editable" onclick="toggleDrill('v100','Dream','s-dream','#2d1f5e','#a78bfa')">
+      <div class="dream-top">
+        <span class="expand-arrow">▶</span>
+        <div class="dream-name">v1.0 · Community Layer</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack">
+          <div class="agent-avatar agent-agy" title="Agy">A</div>
+          <div class="agent-avatar agent-grok" title="Grok">G</div>
+          <div class="agent-avatar agent-codex" title="Codex">Co</div>
+        </div>
+        <span class="cost na">est $38 · not started</span>
+      </div>
+      <span class="note-btn" onclick="openNote('v1.0 Community Layer'); event.stopPropagation()">📝</span>
+    </div>
+    <div class="dream-bars" style="position:relative;height:52px">
+      <div class="bars-inner">
+        <div class="stage-bar s-dream dim" style="left:30%;width:10%">✦ Dream</div>
+        <div class="stage-bar s-plan dim" style="left:40%;width:12%">⊡ Plan</div>
+        <div class="stage-bar s-work dim" style="left:52%;width:30%">⚙ Work</div>
+      </div>
+    </div>
+  </div>
+  <div class="drill-row" id="drill-v100"></div>
+
+  <!-- ═══ DREAM 4: BS-5 Website ════════════════════════════════════════════ -->
+  <div class="dream-row" id="row-bs5">
+    <div class="dream-lbl editable" onclick="toggleDrill('bs5','Work','s-work','#1a4a2e','#4ade80')">
+      <div class="dream-top">
+        <span class="expand-arrow">▶</span>
+        <div class="dream-name has-note">BS-5 · Website</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack"><div class="agent-avatar agent-agy" title="Agy">A</div></div>
+        <span class="cost over">$9.80 / est $8 ↑</span>
+      </div>
+      <span class="note-btn" onclick="openNote('BS-5 Website'); event.stopPropagation()">📝</span>
+    </div>
+    <div class="dream-bars" style="position:relative;height:52px">
+      <div class="today-line" style="left:19%"></div>
+      <div class="bars-inner">
+        <div class="stage-bar s-dream dim" style="left:0%;width:6%;opacity:.4">✦</div>
+        <div class="stage-bar s-plan dim" style="left:6%;width:8%;opacity:.4">⊡</div>
+        <div class="stage-bar s-work live" style="left:14%;width:18%" onclick="openDrill('bs5','Work','s-work','#1a4a2e','#4ade80')">
+          ⚙ Work
+          <div class="bar-agents"><div class="agent-avatar agent-agy" title="Agy">A</div></div>
+        </div>
+        <div class="stage-bar s-ship dim" style="left:32%;width:8%">▲ Ship</div>
+        <div class="stage-bar s-engage dim" style="left:40%;width:14%">♡ Engage</div>
+      </div>
+    </div>
+  </div>
+  <div class="drill-row" id="drill-bs5"></div>
+
+  <!-- ═══ DREAM 5: Module Extraction ═══════════════════════════════════════ -->
+  <div class="dream-row" id="row-mod">
+    <div class="dream-lbl editable" onclick="toggleDrill('mod','Work','s-work','#1a4a2e','#4ade80')">
+      <div class="dream-top">
+        <span class="expand-arrow">▶</span>
+        <div class="dream-name">Module Extraction</div>
+      </div>
+      <div class="dream-bottom">
+        <div class="agent-stack"><div class="agent-avatar agent-codex" title="Codex">Co</div></div>
+        <span class="cost ok">$3.10 / est $5</span>
+      </div>
+      <span class="note-btn" onclick="openNote('Module Extraction'); event.stopPropagation()">📝</span>
+    </div>
+    <div class="dream-bars" style="position:relative;height:52px">
+      <div class="today-line" style="left:19%"></div>
+      <div class="bars-inner">
+        <div class="stage-bar s-dream dim" style="left:0%;width:5%;opacity:.4">✦</div>
+        <div class="stage-bar s-work live" style="left:5%;width:14%" onclick="openDrill('mod','Work','s-work','#1a4a2e','#4ade80')">
+          ⚙ Work
+          <div class="bar-agents"><div class="agent-avatar agent-codex" title="Codex">Co</div></div>
+        </div>
+        <div class="stage-bar s-ship dim" style="left:19%;width:6%">▲</div>
+      </div>
+    </div>
+  </div>
+  <div class="drill-row" id="drill-mod"></div>
+
+</div></div><!-- /gantt -->
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="li"><div class="ld" style="background:#2d1f5e;border:1px solid #4a3f80"></div>✦ Dream</div>
+  <div class="li"><div class="ld" style="background:#1e3a5a;border:1px solid #3a6090"></div>⊡ Plan</div>
+  <div class="li"><div class="ld" style="background:#1a4a2e;border:1px solid #2a7040"></div>⚙ Work</div>
+  <div class="li"><div class="ld" style="background:#5a3a00;border:1px solid #8a5a00"></div>▲ Ship</div>
+  <div class="li"><div class="ld" style="background:#1e2a4a;border:1px solid #3a4a80"></div>↺ Maintain</div>
+  <div class="li"><div class="ld" style="background:#3a1a3a;border:1px solid #6a2a6a"></div>♡ Engage</div>
+  <span class="ls">|</span>
+  <div class="li" style="opacity:.5"><div class="ld" style="background:#1a4a2e"></div>upcoming</div>
+  <div class="li" style="color:#3de0c0;font-style:italic">~ animated = in progress</div>
+  <span class="ls">|</span>
+  <div class="li">click stage bar → drill into tasks</div>
+</div>
+
+<div class="agent-legend">
+  <span class="lbl">Agents:</span>
+  <div class="ali"><div class="agent-avatar agent-claude">C</div> Claude</div>
+  <div class="ali"><div class="agent-avatar agent-agy">A</div> Agy (Gemini)</div>
+  <div class="ali"><div class="agent-avatar agent-codex">Co</div> Codex (OpenAI)</div>
+  <div class="ali"><div class="agent-avatar agent-grok">G</div> Grok (xAI)</div>
+</div>
+
+<!-- SUMMARY -->
+<div class="summary-row">
+  <div class="sc teal editable"><div class="sl">Dreams in flight</div><div class="sv">5</div><div class="ss">across 2 workspaces</div><div class="wow">⚡ 3 parallel</div><span class="note-btn" onclick="openNote('summary')">📝</span></div>
+  <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="agent-stack" style="margin-top:6px"><div class="agent-avatar agent-agy">A</div><div class="agent-avatar agent-codex">Co</div><div class="agent-avatar agent-grok">G</div></div><span class="note-btn" onclick="openNote('agents summary')">📝</span></div>
+  <div class="sc org editable"><div class="sl">Total spend · est</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><span class="note-btn" onclick="openNote('cost summary')">📝</span></div>
+  <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><span class="note-btn" onclick="openNote('next ship')">📝</span></div>
+</div>
+
+<script>
+// ── Task data per dream/stage ───────────────────────────────────────────────
+const TASKS = {
+  'bs21-Plan': [
+    { id:'story-bs21-shell', name:'Shell + left-nav layout', agent:'agy', status:'done', est:1.20, actual:1.10 },
+    { id:'story-bs21-gantt', name:'Gantt view implementation', agent:'codex', status:'active', est:1.80, actual:1.40, note:true },
+    { id:'story-bs21-fences','name':'Agent directive fence writer', agent:'agy', status:'queued', est:0.90, actual:null },
+  ],
+  'bs21-Dream': [
+    { id:'story-bs21-bs', name:'Brainstorm — synlynk viz concept', agent:'agy', status:'done', est:0.80, actual:0.70 },
+  ],
+  'bs21-Work': [
+    { id:'story-bs21-tube', name:'Architect tube-map HLD view', agent:'agy', status:'queued', est:3.00, actual:null },
+    { id:'story-bs21-effort', name:'Effort & Cost view', agent:'codex', status:'queued', est:1.50, actual:null },
+    { id:'story-bs21-eff', name:'Efficiency / agent report card', agent:'codex', status:'queued', est:1.80, actual:null },
+    { id:'story-bs21-sched', name:'Scheduled pilot + local notify', agent:'codex', status:'queued', est:2.00, actual:null },
+  ],
+  'bs21-Ship': [
+    { id:'story-bs21-release', name:'synlynk viz v1 release + docs', agent:'agy', status:'queued', est:0.60, actual:null },
+  ],
+  'bs20-Work': [
+    { id:'story-bs20-stages', name:'6 scan stage functions', agent:'codex', status:'done', est:3.00, actual:2.80 },
+    { id:'story-bs20-tui',   name:'_run_scan_tui() cards', agent:'codex', status:'active', est:2.50, actual:1.90, note:true },
+    { id:'story-bs20-fences','name':'_write_scan_fences()', agent:'codex', status:'queued', est:1.50, actual:null },
+    { id:'story-bs20-launch','name':'LAUNCH_TASK_TEMPLATES upgrade', agent:'codex', status:'queued', est:1.20, actual:null },
+  ],
+  'bs5-Work': [
+    { id:'story-bs5-hero',  name:'Hero section + isometric diagram', agent:'agy', status:'done', est:2.00, actual:2.40, note:true },
+    { id:'story-bs5-pages', name:'All site pages implementation', agent:'agy', status:'active', est:3.00, actual:3.80 },
+    { id:'story-bs5-blog',  name:'Blog image strategy', agent:'agy', status:'queued', est:1.00, actual:null },
+  ],
+  'mod-Work': [
+    { id:'story-mod-cli',name:'Extract main() → synlynk/cli.py', agent:'codex', status:'done', est:1.50, actual:1.20 },
+    { id:'story-mod-db', name:'Extract DB layer → synlynk/db.py', agent:'codex', status:'active', est:2.00, actual:1.90 },
+  ],
+};
+
+const AGENTS = {
+  agy:   { cls:'agent-agy',   lbl:'A',  name:'Agy (Gemini)'  },
+  codex: { cls:'agent-codex', lbl:'Co', name:'Codex (OpenAI)' },
+  grok:  { cls:'agent-grok',  lbl:'G',  name:'Grok (xAI)'    },
+  claude:{ cls:'agent-claude',lbl:'C',  name:'Claude'         },
+};
+
+const STATUS = {
+  done:    { cls:'st-done',    txt:'✓ done'   },
+  active:  { cls:'st-active',  txt:'⚙ active' },
+  queued:  { cls:'st-queued',  txt:'· queued' },
+  blocked: { cls:'st-blocked', txt:'⚠ blocked'},
+};
+
+function renderTasks(dreamId, stage) {
+  const key = dreamId + '-' + stage;
+  const tasks = TASKS[key] || [];
+  const tbody = document.getElementById('tasks-' + dreamId);
+  if (!tbody) return;
+  if (tasks.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:#4a5568;padding:12px 14px;font-size:11px">No tasks defined for this stage yet. <span style="color:#3de0c0;cursor:pointer" onclick="openNote(\'' + dreamId + ' ' + stage + ' new task\')">📝 Add note for pilot</span></td></tr>';
+    return;
+  }
+  tbody.innerHTML = tasks.map(t => {
+    const ag = AGENTS[t.agent] || AGENTS.codex;
+    const st = STATUS[t.status] || STATUS.queued;
+    const actual = t.actual != null
+      ? `<span class="actual ${t.actual > (t.est||0) ? 'over' : 'ok'}">$${t.actual.toFixed(2)}</span>`
+      : `<span class="actual na">—</span>`;
+    const noteFlag = t.note ? ' 📌' : '';
+    return `<tr>
+      <td class="task-id">${t.id}</td>
+      <td><div class="task-name${t.note?' has-note':''}">${t.name}${noteFlag}</div></td>
+      <td><div class="agent-avatar lg ${ag.cls}" title="${ag.name}">${ag.lbl}</div></td>
+      <td><span class="status-pill ${st.cls}">${st.txt}</span></td>
+      <td class="cost-cell"><span class="est">$${(t.est||0).toFixed(2)}</span> → ${actual}</td>
+      <td><span class="note-btn" style="position:static;opacity:.6;font-size:14px;cursor:pointer;padding:1px 3px" onclick="openNote('${t.id}')">📝</span></td>
+    </tr>`;
+  }).join('');
+}
+
+let activeDrills = {};
+
+function openDrill(dreamId, stage, stageCls, bgColor, textColor) {
+  const dr = document.getElementById('drill-' + dreamId);
+  const row = document.getElementById('row-' + dreamId);
+  if (!dr) return;
+
+  // Build drill row HTML if not built for this dream yet
+  if (!dr.innerHTML || dr.dataset.stage !== stage) {
+    dr.innerHTML = `
+      <div class="drill-header">
+        <div class="drill-stage-pill" style="background:${bgColor}33;color:${textColor};border:1px solid ${bgColor}66">${stageIcon(stage)} ${stage} stage</div>
+        <div class="drill-title">${dreamId.toUpperCase().replace('BS21','BS-21').replace('BS20','BS-20').replace('BS5','BS-5').replace('V100','v1.0').replace('MOD','Module Extraction')} — ${(TASKS[dreamId+'-'+stage]||[]).length} tasks</div>
+        <div class="drill-close" onclick="closeDrill('${dreamId}')">✕</div>
+      </div>
+      <table class="task-table">
+        <thead><tr>
+          <th style="width:140px">Story ID</th>
+          <th>Task</th>
+          <th style="width:52px">Agent</th>
+          <th style="width:90px">Status</th>
+          <th style="width:130px">Cost (est → actual)</th>
+          <th style="width:40px"></th>
+        </tr></thead>
+        <tbody id="tasks-${dreamId}"></tbody>
+      </table>`;
+    dr.dataset.stage = stage;
+    renderTasks(dreamId, stage);
+  }
+
+  dr.classList.add('open');
+  row.classList.add('expanded');
+  activeDrills[dreamId] = true;
+}
+
+function closeDrill(dreamId) {
+  const dr = document.getElementById('drill-' + dreamId);
+  const row = document.getElementById('row-' + dreamId);
+  if (dr) dr.classList.remove('open');
+  if (row) row.classList.remove('expanded');
+  delete activeDrills[dreamId];
+}
+
+function toggleDrill(dreamId, stage, stageCls, bgColor, textColor) {
+  const dr = document.getElementById('drill-' + dreamId);
+  if (dr && dr.classList.contains('open') && dr.dataset.stage === stage) {
+    closeDrill(dreamId);
+  } else {
+    openDrill(dreamId, stage, stageCls, bgColor, textColor);
+  }
+}
+
+function stageIcon(s) {
+  return {Dream:'✦',Plan:'⊡',Work:'⚙',Ship:'▲',Maintain:'↺',Engage:'♡'}[s] || '·';
+}
+
+// Pre-open BS-21 Plan drill
+openDrill('bs21','Plan','s-plan','#1e3a5a','#60a5fa');
+
+// Notes
+function openNote(target) {
+  document.getElementById('nt').innerHTML = 'Note on <strong>' + target + '</strong>';
+  document.getElementById('ntxt').value = '';
+  document.getElementById('nm').classList.add('open');
+  document.getElementById('ov').classList.add('open');
+  document.getElementById('ntxt').focus();
+  document.querySelectorAll('.action-chip').forEach(c => c.classList.remove('on'));
+}
+function closeNote() {
+  document.getElementById('nm').classList.remove('open');
+  document.getElementById('ov').classList.remove('open');
+}
+</script>
+</body>
+</html>

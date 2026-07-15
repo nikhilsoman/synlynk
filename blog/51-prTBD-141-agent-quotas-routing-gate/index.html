@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>#141 — agent_quotas Base Table + Stage-2 Quota Gate</h1>
+<p><strong>Date:</strong> 2026-07-11<br>
+<strong>PR:</strong> TBD<br>
+<strong>Branch:</strong> <code>dispatch/grok/job-8876c978</code> → <code>main</code><br>
+<strong>Tracks:</strong> #141 (part of #137 capability-matrix hardening)</p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>#139 wired dead capability signals and the VERIFIER tier into weighted scoring.
+#140 made token/cost extraction model-aware (cache tokens, rate table, story/epic/phase FKs).
+Routing still had only one real stage: pick the highest <code>capability_scores</code> row. The
+token-budget brainstorm's three-stage sequence (capability → quota headroom → cost) was
+still one-stage in code — <code>agent_quotas</code> had been designed in 2026-06 and never created.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>Scope stayed the <strong>base matrix only</strong> from the epic design
+(<code>docs/superpowers/specs/2026-07-11-capability-matrix-hardening-design.md</code> §#141). The
+optimizer/scheduler design (maximize fleet output across plan windows) stays a Claude
+architect follow-up — no code here.</p>
+<p>Two design refinements from the issue body landed in the schema:</p>
+<ol>
+<li><strong><code>quota_type</code> is plan-driven</strong>, not a fixed shared shape — includes Claude's <strong>5h</strong>
+rolling window alongside hourly/daily/weekly/monthly.</li>
+<li><strong><code>unit</code> column (<code>tokens</code> | <code>requests</code>)</strong> — unifies with <code>.synlynk/config.json</code>
+<code>budget.limit_requests</code> instead of assuming every harness caps on tokens.</li>
+</ol>
+<hr>
+<h2>What Shipped</h2>
+<h3>Schema</h3>
+<p><code>agent_quotas</code> in <code>_DB_SCHEMA</code> + additive <code>_migrate_db</code> path:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agent</code>, <code>model</code></td>
+<td>Per-harness / per-model plan row</td>
+</tr>
+<tr>
+<td><code>quota_type</code></td>
+<td><code>5h</code> | <code>hourly</code> | <code>daily</code> | <code>weekly</code> | <code>monthly</code></td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td><code>tokens</code> | <code>requests</code></td>
+</tr>
+<tr>
+<td><code>limit_tokens</code>, <code>used_tokens</code></td>
+<td>Capacity in the row's unit (historical names)</td>
+</tr>
+<tr>
+<td><code>reset_at</code>, <code>updated_at</code></td>
+<td>Window boundary + freshness</td>
+</tr>
+<tr>
+<td>UNIQUE</td>
+<td><code>(agent, model, quota_type, unit)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Headroom is computed as <code>max(0, limit_tokens - used_tokens)</code>.</p>
+<h3>Routing (<code>_best_agent_for_story</code>)</h3>
+<ol>
+<li><strong>Capability</strong> — rank candidates for the story coordinate (same fallback ladder as before).</li>
+<li><strong>Quota headroom</strong> — <strong>real gate</strong>: drop agents whose binding window cannot cover
+<code>estimated_tokens</code> / one request. Empty or unreadable quota signal → <strong>degraded mode</strong>:
+keep the agent eligible (do not hard-block), prefer agents with known headroom.</li>
+<li><strong>Cost</strong> — when top remaining scores sit within 0.15, pick the cheaper model via
+<code>_model_rate_for_version</code>.</li>
+</ol>
+<p>Helpers: <code>_upsert_agent_quota</code>, <code>_quota_status_for_agent</code>, <code>_project_request_quota_from_config</code>,
+<code>_capability_candidates_for_story</code>.</p>
+<h3>Tests</h3>
+<p>Five acceptance tests under
+<code>test_build_the_base_agent_quotas_table_and_wi_*</code> in <code>tests/test_agy_dispatch_fix.py</code>.</p>
+<hr>
+<h2>On Track to Multi-Agent Dispatch</h2>
+<p>With capability scores, costs, and quota headroom all real inputs, the routing engine
+finally matches the 2026-06 token-budget design. The next goalpost is not more gating —
+it is the <strong>optimizer design doc</strong> (Claude): load-balance and sequence the job queue to
+maximize useful output across uneven per-harness plan windows, using this matrix as a
+trusted signal rather than a diagnostic label.</p>
+<hr>
+<h2>New Goalpost</h2>
+<ul>
+<li>Probe path that <em>writes</em> <code>agent_quotas</code> from each harness's own usage reporting.</li>
+<li>Optimizer design doc (#141 follow-up, architect-owned).</li>
+<li>Optional: surface <code>block_reason='quota'</code> on stories when every candidate is exhausted.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

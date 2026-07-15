@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.11.0 — The Agent Ecosystem Operational Layer</h1>
+<p><strong>Date:</strong> 2026-07-05
+<strong>Tag:</strong> <a href="https://github.com/nikhilsoman/synlynk/releases/tag/v0.11.0">v0.11.0</a>
+<strong>PRs:</strong> #110, #113–#119</p>
+<hr>
+<p><strong>One sentence:</strong> synlynk v0.11.0 is the Agent Ecosystem Operational Layer — every dispatch now carries permissions and recovery paths, your terminal shows a live fleet of agents in real time, and the full workflow discipline is baked into every agent directive file at init.</p>
+<hr>
+<h2>What v0.11.0 Is</h2>
+<p>v0.10.0 gave you a usable tool: install with pipx, run the wizard, dispatch agents, watch costs. v0.11.0 turns that tool into a system you can trust to run unsupervised.</p>
+<p>Six interrelated milestones shipped:</p>
+<ol>
+<li><strong>Modularise-init</strong> — the 11,000-line <code>__init__.py</code> split into focused modules. This was the prerequisite that unblocked everything else.</li>
+<li><strong>BS-16 Ecosystem Status</strong> — <code>synlynk status</code> shows what your agent fleet can actually do: capacity bars, cycle coverage, dispatch mode gates.</li>
+<li><strong>TC-2 fix arc</strong> — eliminated the false-positive that was blocking all Agy dispatches from projects with a prior probe run.</li>
+<li><strong>BS-13 Live Job Observatory</strong> — <code>synlynk watch --live</code> and a new Vizor tab that shows every running agent, in real time, from one screen.</li>
+<li><strong>BS-22 Vizor Efficiency</strong> — the Efficiency tab got real data: R/W/T budget bars, a 6×4 cycle capability matrix, per-agent radar hexagons.</li>
+<li><strong>BS-12 Agent Autonomy Bridge</strong> — the trust boundary. Permissions, per-project harness config, handoff protocol, a doctor wizard with a Claude escalation escape, and six SOP blocks injected into every directive file.</li>
+</ol>
+<hr>
+<h2>The Milestones</h2>
+<h3>Modularise-init</h3>
+<p>The first thing we did was split <code>synlynk/__init__.py</code>. At 11,268 lines, it had become unreadable and unextendable. Five modules extracted: <code>probe.py</code>, <code>sentinel.py</code>, <code>upgrade.py</code>, <code>dispatch.py</code>, <code>_constants.py</code>. <code>__init__.py</code> dropped to ~1,500 lines of CLI surface and orchestration.</p>
+<p>This wasn't user-facing. It was the structural unlock that made BS-16 reviewable and BS-12 extensible.</p>
+<h3>BS-16: Ecosystem Status + Capacity</h3>
+<pre><code>synlynk status
+synlynk status --json
+</code></pre>
+<p>The terminal <code>status</code> command shows you the state of your agent fleet: which agents are installed, what their harness compliance is, and how much of their R/W/T capacity budget is available. The <code>--json</code> flag emits a machine-readable snapshot — this is the data contract Vizor consumes for all live ecosystem data.</p>
+<p>Three dispatch modes added: <code>eco</code> (respects R/W/T budget gates), <code>daily-grind</code> (default, current behaviour), <code>perf</code> (no gates, maximum throughput). Three new <code>_preflight_dispatch()</code> gates: <code>CAPACITY_EXCEEDED_INPUT</code>, <code>CAPACITY_EXCEEDED_OUTPUT</code>, <code>TOOL_PRESSURE</code>.</p>
+<p>New <code>state.db</code> tables: <code>harness_status</code>, <code>cycle_capability</code>. <code>synlynk probe</code> now seeds Tier 1 capacity baselines into these tables on first run.</p>
+<h3>TC-2 Fix Arc (PRs #114–116)</h3>
+<p>Three PRs in one day to close a painful false-positive. <code>_run_tc2</code> was seeding Agy's <code>--non-interactive</code> flag into the failed-flags list on first scan, then blocking every subsequent Agy dispatch in any project that had been probed. The fix: correct per-agent flag baseline maps, scope the validator to flags valid for that agent's CLI, and add the TC-2 preflight gate result to <code>synlynk logs</code> output.</p>
+<h3>BS-13: Live Job Observatory</h3>
+<pre><code>synlynk watch --live
+</code></pre>
+<p>Fullscreen terminal board: every running and recent job, with agent label, status, elapsed time, cost, and output tail. Auto-refreshes every 3s. The Vizor Observatory tab mirrors this in the browser — job fleet table via JS polling, per-agent status badges, cost rollup, and a job output drawer that opens on click.</p>
+<p>Before this, observing a multi-agent run meant tail-following four separate log files. Now there's one surface.</p>
+<h3>BS-22: Vizor Efficiency Enrichment</h3>
+<p>The Efficiency tab went from placeholder cards to a genuine capability dashboard:</p>
+<ul>
+<li><strong>R/W/T budget bars</strong> — each agent card shows Read, Write, Test utilisation as a percentage of TIER1_CAPACITY</li>
+<li><strong>Cycle × Agent matrix</strong> — 6×4 table (dream/plan/work/ship/maintain/engage × all four agents) with full/partial/none badges</li>
+<li><strong>Radar hexagons</strong> — 80×80px SVG on each card, 6-axis polygon; at a glance you can see which agent has broad cycle coverage vs. deep specialization in one area</li>
+</ul>
+<h3>BS-12: Agent Autonomy Bridge</h3>
+<p>The largest single PR in v0.11.0. Five scopes:</p>
+<p><strong>Scope A — Permission Grants.</strong> Role entries in <code>.synlynk/config.json</code> now carry default permission sets. <code>synlynk dispatch --grant &lt;perm&gt; --revoke &lt;perm&gt;</code> overrides per-task. The resolved set translates to <code>--allowedTools</code> for Claude, <code>--approval-policy</code> for Codex, and a <code>## Permissions</code> header section for Agy.</p>
+<p><strong>Scope B — Per-Project Harness Config.</strong> <code>synlynk configure agent &lt;name&gt;</code> writes overrides to <code>.agents/&lt;agent&gt;.json</code>. <code>dispatch_agent()</code> now merges at call time: baseline → project overrides → task grant/revoke. No more editing source to adjust a flag for a specific repo.</p>
+<p><strong>Scope C — Handoff Protocol.</strong> When a job hits STALL_NO_OUTPUT, FLATLINE, or QUOTA_EXHAUSTED, synlynk writes a <code>HANDOFF_PENDING</code> sentinel and surfaces it in <code>synlynk jobs --stalled</code>. The stalled view shows the recommended next agent. <code>synlynk jobs handoff &lt;job_id&gt; [--to &lt;agent&gt;]</code> transfers: appends a handoff note to the context file, increments <code>handoff_count</code>, launches a new dispatch with the full context, clears the sentinel.</p>
+<p><strong>Scope D — Doctor Guided Fix Wizard.</strong> <code>synlynk doctor</code> no longer just prints failures and exits. After each TC failure it shows a numbered fix menu — specific fix paths for TC-1 through TC-5. The last option, always available: &quot;I'm stuck&quot; — assembles TC results + agent config + last 5 telemetry rows and dispatches Claude to diagnose it conversationally from your terminal.</p>
+<p><strong>Scope E — SOP Codification.</strong> Six SOP blocks injected into all four directive files at <code>synlynk init</code> and <code>synlynk sync</code> time: PR Review Discipline, Brainstorm-First Policy, Design→Plan→Build Sequence, Capability-Based Task Allocation, Cost Visibility, Repo Hygiene. TC-5 in <code>synlynk doctor</code> checks their presence. <code>synlynk sync --repair-sops</code> re-injects any that are missing.</p>
+<hr>
+<h2>Test Count</h2>
+<table>
+<thead>
+<tr>
+<th>Milestone</th>
+<th>Tests</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v0.10.0 (tag)</td>
+<td>616</td>
+</tr>
+<tr>
+<td>After modularise-init</td>
+<td>616 (no new tests, refactor only)</td>
+</tr>
+<tr>
+<td>After BS-16</td>
+<td>837</td>
+</tr>
+<tr>
+<td>After BS-12</td>
+<td>868</td>
+</tr>
+<tr>
+<td><strong>v0.11.0</strong></td>
+<td><strong>868</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>What's Next</h2>
+<p>The operational layer is complete. The next milestone is replacing the <code>is_placeholder</code> data paths in Vizor with live BS-16 telemetry (the <code>harness_status</code> and <code>cycle_capability</code> tables are now populated — Vizor just needs to read them). After that, the D1 daily brief mode in <code>synlynk launch</code> for returning users, and the scan delta surfacing in job summaries.</p>
+<p>The v1.0.0 GA push begins with the website (BS-5) and the community layer design. Target: September 2026.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

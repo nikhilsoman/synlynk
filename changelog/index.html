@@ -40,6 +40,185 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<div class="changelog-version-header"><span class="changelog-version">v0.12.0</span><span class="changelog-date">2026-07-15</span></div>
+<p><strong>Release pitch:</strong> the operational backbone gets provably reliable and provably accounted for — dispatched jobs finish their own git steps, a 5th zero-cost local agent joins the fleet, story routing gets real capability+quota+cost scoring with a fleet batch scheduler, and every dollar synlynk reports is now either structurally sourced or visibly flagged as an estimate.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>Measurement Ledger Hardening — Phase 1 + Phase 2 + display layer (epic #210, PRs #236/#241/#242/#244/#245/#246/#252/#256/#257/#264/#266/#267)</strong></p>
+<p><em>Phase 1 — provenance-tagged cost tracking (PR #236):</em></p>
+<ul>
+<li><code>cost_entries</code> gained explicit provenance columns: <code>cost_source TEXT NOT NULL</code> (<code>actual</code> | <code>estimated_token_rate</code> | <code>estimated_tshirt</code> | <code>estimated_manual</code> | <code>legacy_unknown</code>, no default — every <code>INSERT</code> must pass it explicitly) and <code>estimate_basis TEXT</code>. Migration rebuilds the table and backfills historical rows as <code>legacy_unknown</code>.</li>
+<li><code>_insert_cost_row()</code> (<code>synlynk/db.py</code>) is now the sole sanctioned writer to <code>cost_entries</code>, replacing four independently-drifting direct-SQL write sites in <code>dispatch.py</code>, <code>jobs.py</code> (×2), and <code>support_engineer.py</code>. Upserts by <code>job_id</code> when present. Enforced by a call-site audit test that fails the suite if any other file writes to <code>cost_entries</code> directly.</li>
+<li><code>extract_tokens()</code> now tags a <code>.basis</code> (<code>regex_pair</code> | <code>total_split</code> | <code>none</code>) distinguishing a real per-field token extraction from an 80/20 heuristic guess.</li>
+<li><code>.synlynk/model_rates.json</code> (scaffolded by <code>synlynk init</code>) is now the source of truth for per-model rates and <code>billing_mode</code>, replacing a hardcoded table; falls back to hardcoded rates on missing/invalid file.</li>
+<li>New 3-tier t-shirt-size token fallback (<code>_estimate_tshirt_tokens()</code>) for surfaces with no real token count: story's <code>estimated_tokens</code> column → historical average from <code>cost_entries</code> (same discipline+phase, ≥3 samples) → fixed conservative default.</li>
+<li><strong><code>synlynk cost log</code></strong> — manually log a cost row for native/unwrapped PM or brainstorming sessions with no CLI token data, tagged <code>estimated_manual</code>.</li>
+<li>Cost coverage closed across every surface identified in the design spec's audit: <code>dispatch_agent()</code>'s exec wrapper (no longer gated on <code>in_tokens &gt; 0</code>), <code>jobs.py</code>'s reconcile and daemon-reconcile paths, <code>cmd_launch()</code>, and <code>support_engineer.py</code>'s investigation runs. <code>synlynk release</code>, <code>synlynk probe</code>, and <code>synlynk doctor</code> audited and confirmed correctly out of ledger scope.</li>
+<li><code>check_budgets()</code> gained a dedicated sub-line surfacing failed-job placeholder estimates separately from the headline spend total. <code>costs.md</code> and budget parsers now tolerate <code>[est] </code>/<code>[legacy] </code>/<code>~</code> prefixes.</li>
+<li>New &quot;Cost Capture Protocol&quot; section in <code>CLAUDE.md</code>.</li>
+<li><code>[failed job]</code> marker fix: <code>dispatch.py</code>'s zero-token-failure cost label now prepends (not appends) the marker so it survives <code>update_costs()</code>'s 20-character command truncation, restoring <code>check_budgets()</code>'s failed-job sub-line to live code.</li>
+</ul>
+<p><em>Phase 2 — structured-output token adapters, one per dispatch CLI (PRs #244, #252, #256, #257):</em> replaces the 80/20 heuristic split with a real per-field structured-JSON extraction path for each vendor CLI — Codex, Claude, Agy (Gemini), and Grok all shipped, closing epic #210's adapter scope.</p>
+<p><em>Display layer (PRs #264, #266):</em> Vizor's Effort &amp; Cost tab now visually flags estimated-vs-measured cost rows; <code>synlynk status</code> gained a <code>RATES</code> line (and JSON <code>rates_updated_at</code> key) showing when the model rate table was last updated, warning <code>⚠ never updated</code> when no rate file exists.</p>
+<p>Design spec: <code>docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-design.md</code>. Roadmap arc + epic #210 marked shipped (PR #267). Deferred follow-ups filed as issues, out of scope for this release: #260 (Savings Ledger), #261 (dispatch-path unification), #262 (surface consolidation), #263 (stage constants staleness).</p>
+<p><strong>Local Agent — 5th dispatch agent, zero-cost on-device inference (PRs #200/#204/#205/#207/#208/#209)</strong></p>
+<ul>
+<li><code>local</code> joins claude/codex/agy/grok as a dispatchable agent, running as an <code>aider</code> CLI subprocess against an on-device oMLX OpenAI-compatible endpoint — zero per-token cost.</li>
+<li>Capability envelope seeding + concurrency guard so <code>local</code> starts with a conservative starter whitelist that self-widens with verified results.</li>
+<li>Real-hardware opt-in pytest tier (<code>tests/test_local_agent_hardware.py</code>) exercises actual Aider+oMLX end-to-end, correctly skipped when no local hardware is running.</li>
+<li>Capability-matrix taxonomy worked example + blog post documenting the integration.</li>
+</ul>
+<p><strong>Capability Matrix Hardening — 3-stage routing engine + fleet batch scheduler (epic #137, PRs #139/#140/#141/#147/#148/#150/#151/#152/#154/#156)</strong></p>
+<ul>
+<li><code>_best_agent_for_story()</code> now scores candidates across three real stages: weighted capability score (VERIFIER tier, dead-signal handling, <code>pr_review_cycles</code>/<code>verified_by_ci</code> signals), a hard quota-headroom gate (<code>agent_quotas</code> table across 5h/hourly/daily/weekly/monthly windows, degraded-mode fallback when quota signal is missing), and a cost tie-break (cheaper model wins when top scores are within 0.15).</li>
+<li>New <code>synlynk/scheduler.py</code>: <code>stories.priority</code>/<code>readiness</code> columns, <code>synlynk story ready/draft</code> gate, fleet-level in-batch headroom accounting (story N in a batch sees story 1..N-1's projected spend), retry/reassignment capped at 2 attempts, <code>synlynk schedule [--execute] [--max-stories N]</code> CLI.</li>
+<li>GOVERNS seven-stage vocabulary rollout replaces the old CYCLES/CYCLE_COLOURS naming across the capability taxonomy and HUD.</li>
+<li>Capability tag enum enforcement + taxonomy reference doc; <code>cycle_capability</code> row dedup migration fix.</li>
+<li>Deferred v2 (reset-timing-aware bin-packing, persistent quota-blocking history, GOVERNS-aware readiness gate) tracked as a goal, gated on 30 days of v1 production data (deadline 2026-08-10) rather than scoped into stories now.</li>
+</ul>
+<p><strong>Job Lifecycle Ground-Truth Verification (#126, #127, #128, #129, PRs #130/#131/#132/#133/#135)</strong></p>
+<ul>
+<li><code>dispatch_agent()</code> creates a dedicated <code>git worktree</code> per dispatched job (<code>worktrees/&lt;job_id&gt;</code>, branch <code>dispatch/&lt;agent&gt;/&lt;job_id&gt;</code>) instead of sharing the invoking shell's <code>cwd</code> — concurrent dispatches no longer collide.</li>
+<li><code>_reconcile_jobs()</code> cross-checks git state when a job's exit sentinel is missing, instead of treating an ambiguous exit as automatic failure; new <code>&quot;failed_unverified&quot;</code> status flags &quot;inspect before discarding.&quot;</li>
+<li><code>files_touched</code> is real (via <code>git diff --name-only &lt;merge-base&gt; HEAD</code> + <code>git status --short --porcelain</code>), no longer hardcoded to <code>[]</code>.</li>
+<li><code>cmd_migrate()</code> prints the resolved <code>DB_PATH</code> and fails loud with <code>MigrationImportError</code> on a 0-row import from a non-empty source, instead of a silent green banner.</li>
+</ul>
+<p><strong>Vizor</strong></p>
+<ul>
+<li><strong>Architect Map v2</strong> (PR #167): replaces the static tube-map SVG with a live force-directed graph of workspace repos and typed cross-repo edges, a side drawer (path/stack/GitHub/dispatch/Gantt-jump/active-dream-count), and an IDE-style file-tree sub-view.</li>
+<li><strong>Business Goals Panel</strong> (PR #153): surfaces <code>goals</code>/<code>stories</code> rollups in the HUD.</li>
+<li><code>__init__.py</code> re-modularized a second pass — 11 focused modules extracted (<code>synlynk/db.py</code>, <code>jobs.py</code>, <code>dispatch.py</code>, <code>context.py</code>, <code>sentinel.py</code>, <code>scheduler.py</code>, etc.), no more single-file monolith (PR #180).</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3>
+<p><strong>Dispatch git-finalization reliability chain (#182/#184/#185/#189/#190/#191/#196/#198, PRs #186/#187/#192/#193/#194/#195/#199/#201)</strong></p>
+<ul>
+<li>Dispatched agents (Codex/Agy) frequently completed real, tested work but didn't reliably finish their own git steps (commit/push/PR). synlynk now performs git finalization itself once, gated on a job's <code>running</code>→terminal transition (idempotent by construction) — stages everything except a hard-exclusion list, commits, pushes, opens a PR via <code>gh pr create</code> if none exists.</li>
+<li>Borrowed-worktree completions attributed via <code>origin/&lt;branch&gt;</code> state instead of being misread as zero-work.</li>
+<li><code>HARNESS_INTERNAL_TIMEOUT</code> jobs now auto-retry (cap 2) instead of landing as a dead failure.</li>
+<li>A job that raced its own disk writes and landed <code>failed</code> with <code>0 touched</code> is re-inspected once and reclassified <code>failed_unverified</code> rather than staying permanently stale.</li>
+<li>Cost accounting no longer bypasses the per-model rate table in 3 places (including a hardcoded <code>gemini-2.5-pro</code> $0 bug); <code>local</code> gets an explicit $0.0 override regardless of model version.</li>
+<li>Capability router now filters on canonical <code>discipline</code>, not the legacy <code>engg_domain</code> column.</li>
+<li>Daemon queue launch unified through <code>dispatch_agent()</code> so worktree/preflight/permission-flags/concurrency-guard logic isn't duplicated across two divergent paths.</li>
+<li>Harness no longer misreports completed jobs as <code>FAILED</code> with fabricated token counts.</li>
+</ul>
+<p><strong>Misc dispatch/CI hardening (PRs #163/#164/#165/#171/#173/#238/#240)</strong></p>
+<ul>
+<li>Codex sandbox gets <code>--add-dir &lt;git-common-dir&gt;</code> so it can write git refs inside a worktree.</li>
+<li><code>dispatch --help</code>'s agent list now derives from <code>AGENT_CAPABILITY_BASELINES</code> instead of a stale hardcoded list.</li>
+<li>Stall-killer generalized to detect harness-internal timeouts and checks remote branch activity before hard-failing a silent job.</li>
+<li>3 baseline CI flakes isolated from runner environment state; Python 3.8 compat fix for a <code>tuple[str, str]</code> annotation.</li>
+<li><code>dispatch --context-mode full</code> now warns when used on a task that's already self-contained.</li>
+</ul>
+<hr>
+<div class="changelog-version-header"><span class="changelog-version">v0.11.0</span><span class="changelog-date">2026-07-05</span></div>
+<p><strong>Release pitch:</strong> synlynk v0.11.0 is the Agent Ecosystem Operational Layer — every dispatch now carries permissions and recovery paths, your terminal shows a live fleet of agents in real time, and the full workflow discipline is baked into every agent directive file at init.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>Agent Autonomy Bridge (BS-12, PR #119)</strong></p>
+<ul>
+<li><strong><code>synlynk dispatch --grant &lt;perm&gt; --revoke &lt;perm&gt;</code></strong> — per-task permission overrides; role defaults in <code>.synlynk/config.json</code> map 12 roles (pm, review, implement, test, css, infra, etc.) to capability tiers. Resolved set translates to <code>--allowedTools</code> (Claude), <code>--approval-policy</code> (Codex), or a <code>## Permissions</code> context header (Agy).</li>
+<li><strong><code>synlynk configure agent &lt;name&gt; [--flag k=v] [--env K=V] [--network-dep host:port]</code></strong> — write per-project harness overrides to <code>.agents/&lt;agent&gt;.json</code>; <code>dispatch_agent()</code> merges at call time: baseline → per-project overrides → per-task grant/revoke.</li>
+<li><strong><code>synlynk jobs --stalled</code></strong> — list jobs with <code>HANDOFF_PENDING</code> sentinel (set when a job accumulates STALL_NO_OUTPUT, FLATLINE, or QUOTA_EXHAUSTED). Shows job ID, agent, failure sentinel, elapsed time, and recommended next agent.</li>
+<li><strong><code>synlynk jobs handoff &lt;job_id&gt; [--to &lt;agent&gt;]</code></strong> — transfer a stalled job to a new agent; appends <code>## Handoff Note</code> to the job context file, increments <code>handoff_count</code>, updates <code>previous_agents</code> (JSON array), launches new dispatch with full context, clears <code>HANDOFF_PENDING</code>.</li>
+<li><strong><code>synlynk doctor</code> TC-5</strong> — scans each directive file for all 6 required SOP section headers; warns (non-blocking) if any are absent. Interactive fix wizard runs after each TC failure with structured fix paths (TC-1–5) and an &quot;I'm stuck&quot; escape that assembles failure context and dispatches Claude for conversational diagnosis.</li>
+<li><strong><code>synlynk sync --repair-sops</code></strong> — re-injects missing SOP sections into directive files without touching existing harness fence content. Idempotent.</li>
+<li><strong>6 SOP blocks</strong> written into CLAUDE.md, GEMINI.md, AGENTS.md, and GROK.md at <code>synlynk init</code> and <code>synlynk sync</code> time: PR Review Discipline · Brainstorm-First Policy · Design → Plan → Build Sequence · Capability-Based Task Allocation · Cost Visibility · Repo Hygiene.</li>
+<li><strong><code>daemon_jobs</code> schema additions</strong>: <code>handoff_count INTEGER DEFAULT 0</code>, <code>previous_agents TEXT</code> (JSON array). Migration applied automatically on first access.</li>
+</ul>
+<p><strong>Live Job Observatory (BS-13, PR #117)</strong></p>
+<ul>
+<li><strong><code>synlynk watch --live</code></strong> — fullscreen live job board: all running/recent jobs with agent, status, elapsed time, cost, and output tail; auto-refreshes every 3s; Ctrl-C to exit.</li>
+<li><strong>Vizor Observatory tab</strong> — fifth tab in <code>synlynk viz</code> browser dashboard: real-time job fleet table (JS polling), per-agent status badges, cost rollup, job output drawer.</li>
+</ul>
+<p><strong>Vizor Efficiency Enrichment (BS-22, PRs #113, #118)</strong></p>
+<ul>
+<li><strong>R/W/T budget bars</strong> — per-agent card shows Read, Write, Test utilisation as percentage of TIER1_CAPACITY.</li>
+<li><strong>Cycle × Agent capability matrix</strong> — <code>6 × 4</code> table (dream/plan/work/ship/maintain/engage × Claude/Agy/Codex/Grok) with full/partial/none badges (<code>cap-full</code>, <code>cap-partial</code>, <code>cap-none</code> CSS classes).</li>
+<li><strong>Per-agent radar hexagon SVGs</strong> — 80×80px SVG radar on each agent card; 6-axis polygon filled at 30% opacity with agent theme colour; axis score maps <code>full</code>→1.0, <code>partial</code>→0.5, <code>none</code>→0.0.</li>
+</ul>
+<p><strong>Ecosystem Status + Capacity (BS-16, PR #110)</strong></p>
+<ul>
+<li><strong><code>synlynk status</code></strong> — terminal platform health: harness compliance table, agent availability, budget pulse (R/W/T capacity bars per agent), 6-cycle capability matrix.</li>
+<li><strong><code>synlynk status --json</code></strong> — machine-readable ecosystem snapshot consumed by Vizor as its live data contract.</li>
+<li><strong>Three dispatch modes</strong>: <code>eco</code> (respects R/W/T budget gates), <code>daily-grind</code> (default), <code>perf</code> (no budget gates).</li>
+<li><strong>Three new <code>_preflight_dispatch()</code> gates</strong>: <code>CAPACITY_EXCEEDED_INPUT</code>, <code>CAPACITY_EXCEEDED_OUTPUT</code>, <code>TOOL_PRESSURE</code>.</li>
+<li><strong>New <code>state.db</code> tables</strong>: <code>harness_status</code>, <code>cycle_capability</code>; <code>probe</code> command extended to seed Tier 1 capacity baselines.</li>
+<li><strong><code>synlynk/status.py</code></strong> new module; <code>HarnessSnapshot</code> dataclass in <code>hud.py</code>.</li>
+</ul>
+<p><strong>Modularisation (chore, PRs #103–#109)</strong></p>
+<ul>
+<li>Extracted <code>synlynk/__init__.py</code> (11,268L) into five focused modules: <code>synlynk/probe.py</code>, <code>synlynk/sentinel.py</code>, <code>synlynk/upgrade.py</code>, <code>synlynk/dispatch.py</code>, <code>synlynk/_constants.py</code>. <code>__init__.py</code> reduced to ~1,500L of orchestration and CLI surface.</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3>
+<p><strong>TC-2 dispatch fix arc (PRs #114–#116)</strong></p>
+<ul>
+<li>Fixed false-positive TC-2 failures caused by Agy <code>dispatch_flags</code> baseline including <code>--non-interactive</code> (valid for Agy but flagged as invalid by harness validator). Corrected per-agent flag baseline maps.</li>
+<li>Fixed <code>_run_tc2</code> seeding invalid flags into the passed list on first scan, blocking all subsequent Agy dispatches.</li>
+<li><code>synlynk logs</code> now shows exit summary + TC-2 preflight gate result per dispatch.</li>
+</ul>
+<p><strong>BS-12 review fixes</strong></p>
+<ul>
+<li><code>--repair-sops</code> now merges missing SOP blocks into existing harness fence body instead of replacing the entire fence.</li>
+<li>TC-5 result wired into <code>all_passed</code> in <code>cmd_doctor</code>; doctor now exits non-zero when SOPs are missing.</li>
+<li>Handoff note included in <code>handoff_task</code> sent to new agent (was reading context before append).</li>
+<li>TC-5 fix menu scoped to agents with missing sections only (was firing for all agents in loop).</li>
+<li><code>--flag KEY</code> (boolean flag without <code>=</code>) in <code>configure agent</code> now uses <code>partition</code> instead of crashing with <code>ValueError</code>.</li>
+</ul>
+<p><strong>BS-22 review fixes</strong></p>
+<ul>
+<li>Removed <code>is_placeholder</code> short-circuit in SVG circles matrix that contradicted the new text capability matrix.</li>
+<li>CSS class <code>cap-{support}</code> now normalised to lowercase; prevents unstyled cells from mixed-case DB values.</li>
+<li>Removed unreachable dead-code fallback block in <code>get_capability_level()</code>.</li>
+</ul>
+<h3 class="tag-changed">Changed</h3>
+- `synlynk doctor` interactive fix wizard replaces silent print-and-exit after TC failures.
+- `_check_job_stall()` now also writes `HANDOFF_PENDING` sentinel on STALL_NO_OUTPUT / FLATLINE / QUOTA_EXHAUSTED.
+- `dispatch_agent()` merge layer: baseline → `.agents/<agent>.json` harness overrides → per-call `--grant`/`--revoke`.
+<hr>
+<div class="changelog-version-header"><span class="changelog-version">v0.10.0</span><span class="changelog-date">2026-07-03</span></div>
+<p><strong>Release pitch:</strong> synlynk v0.10.0 is the Developer Preview — install it via pipx, set up your workspace in 60 seconds with the terminal wizard, and get a live browser dashboard that shows exactly what your agent team is doing.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>FTUE + Onboarding</strong></p>
+<ul>
+<li><strong><code>synlynk init --wizard</code></strong> — FTUE typeform-style TUI wizard (6 screens: home harness detection, workspace topology, skills scan, agent fleet, role assignment, launch cheat sheet). Mandatory Phase 0 silent scan; writes workspace config, state.db, and role blocks into each agent's directive file. Ctrl-C before completion leaves no state.</li>
+<li><strong><code>synlynk scan</code></strong> — re-runnable repo analysis: detects topology (single/mono/multi), fingerprints stack per repo/package via 14 file-presence heuristics, parses CLAUDE.md/GEMINI.md/AGENTS.md, maps to workspace in state.db, regenerates structured context.md. Flags: <code>--refresh</code>, <code>--add &lt;path&gt;</code>, <code>--remove &lt;path&gt;</code>, <code>--dry-run</code>.</li>
+<li><strong><code>synlynk launch</code></strong> — FTUE task picker TUI with 6-cycle SDLC view (Dream · Plan · Work · Ship · Maintain · Engage); 12 scan-triggered launch templates (3 core + 9 stack-aware); dispatch preview screen; <code>synlynk open</code> replaces old <code>synlynk launch &lt;agent&gt;</code> for direct agent open. (BS-19, PR #94)</li>
+<li><strong><code>synlynk roles</code></strong> — print current agent role table from <code>.synlynk/config.json</code>; <code>synlynk init</code> and <code>synlynk doctor</code> now generate per-agent directive role blocks (<code>## Your Role</code> in CLAUDE.md, GEMINI.md, AGENTS.md). (BS-12a, PR #95)</li>
+</ul>
+<p><strong>State + Migration</strong></p>
+<ul>
+<li><strong><code>synlynk migrate</code></strong> — one-shot atomic import of <code>project-docs/</code> markdown into state.db (8 steps: import → copy to <code>.synlynk/project-docs/</code> → <code>git rm</code> → <code>.gitignore</code> → sentinel → commit). After migration, every DB write immediately mirrors to <code>.synlynk/project-docs/</code> as a local backup (write-through). Flags: <code>--dry-run</code>, <code>--recover</code> (re-import from backup after DB loss), <code>--setup-dr</code> (configure cloud-synced DR folder).</li>
+<li><strong><code>synlynk memory add</code></strong> / <strong><code>synlynk devlog append</code></strong> — write memory entries and devlog sessions to state.db with immediate flat-file write-through.</li>
+<li><strong>5 new state.db tables</strong>: <code>memory_entries</code>, <code>roadmap_arcs</code>, <code>roadmap_phases</code>, <code>cost_entries</code>, <code>devlog_entries</code>; <code>gh_issue</code> column on <code>stories</code>.</li>
+<li><strong>DR sync</strong> — configurable <code>dr_sync_path</code> in <code>.synlynk/config.json</code>; every write-through copy is also synced to a cloud-synced local folder (iCloud/GDrive/OneDrive). No OAuth, no new deps.</li>
+</ul>
+<p><strong>Deep Scan</strong></p>
+<ul>
+<li><strong><code>synlynk scan</code> (deep mode)</strong> — 6-stage pipeline: repo fingerprint, dependency graph, test coverage ratio, doc coverage, CI health, churn density. Stage Cards TUI with progress indicators; scan fences written to state.db; <code>synlynk launch</code> templates upgrade automatically from scan signal data. 6 new scan fields: <code>test_ratio</code>, <code>readme_word_count</code>, <code>has_ci</code>, <code>has_docs</code>, <code>has_type_hints</code>, <code>has_orm</code>. (BS-20, PR #96)</li>
+</ul>
+<p><strong>Daily-Driver Commands</strong></p>
+<ul>
+<li><strong><code>synlynk jobs --summary &lt;id&gt;</code></strong> — after every job closes, print structured summary: files touched, exit status, cost, tokens, duration; append to <code>.synlynk/logs/&lt;job_id&gt;.summary</code>; readable via <code>synlynk jobs --summary &lt;id&gt;</code>. (PR #97)</li>
+<li><strong><code>synlynk release</code></strong> — Ship cycle stub: bump VERSION, generate CHANGELOG entry from merged stories since last tag, write blog post stub in <code>docs/blog/</code>; <code>--dry-run</code> previews without writing. (PR #98)</li>
+<li><strong><code>synlynk status --platform</code></strong> — infrastructure health view: harness compliance (last probe, any DRIFT sentinels), agent availability table (installed/version/TC status), budget pulse (daily/weekly burn rate). (PR #99)</li>
+</ul>
+<p><strong>Browser Dashboard</strong></p>
+<ul>
+<li><strong><code>synlynk viz</code></strong> — 5-view local browser dashboard generated from <code>state.db</code>, served at <code>http://localhost:8721</code>. Views: Gantt (accordion drill-down, stage bars, pencil notes), User Journeys (split-pane, <code>docs/journeys/*.md</code>), Architect Map (tube map SVG from <code>vizor-tube.json</code>), Effort &amp; Cost (SVG bar charts), Efficiency (agent report cards + sentinel timeline). Sticky note system: <code>POST /note</code> → <code>viz-notes.json</code> → injected into <code>generate_context()</code> (visual annotation → AI context loop). Live JS polling + browser notifications. Zero new deps. (BS-21, PR #101)</li>
+</ul>
+<p><strong>Packaging</strong></p>
+<ul>
+<li><strong>pipx packaging</strong> — <code>pyproject.toml</code> with <code>[project.scripts]</code> entry point; VERSION is the single source of truth in <code>synlynk/__init__.py</code> (pyproject.toml reads it via dynamic attr). Install via <code>pipx install git+https://github.com/nikhilsoman/synlynk</code>.</li>
+<li><strong><code>_detect_install_type()</code></strong> — detects pipx vs pip vs script install; <code>synlynk upgrade</code> routes to <code>pipx upgrade synlynk</code> when installed via pipx.</li>
+</ul>
+<h3 class="tag-changed">Changed</h3>
+- **`generate_context()`** routes to `_generate_context_from_db()` when `.synlynk/.synlynk_migrated` sentinel is present; reads from state.db (top story, recent devlog entries, recent memory sections).
+- **`install.sh`** derives VERSION dynamically from `synlynk/__init__.py` instead of hardcoding.
+- **Python requirement** raised from 3.8+ to 3.9+.
+- **Refactor:** `main()` extracted to `synlynk/cli.py`; data-layer functions extracted to `synlynk/db.py`. Single-file `bin/synlynk.py` is now a thin dispatcher.
+- README fully overhauled: pipx install, badge strip, wizard-first 60-second quickstart, state.db architecture, all new commands documented.
+<h3>Tests</h3>
+<ul>
+<li><strong>747 tests</strong> (up from 588 at v0.9.8); 28 new migrate tests, 28 launch/FTUE tests, 21 Vizor tests, 7 packaging tests, 40 deep-scan tests, full E2E round-trips.</li>
+</ul>
 <hr>
 <div class="changelog-version-header"><span class="changelog-version">v0.9.8</span><span class="changelog-date">2026-06-27</span></div>
 <h3 class="tag-added">Added</h3>

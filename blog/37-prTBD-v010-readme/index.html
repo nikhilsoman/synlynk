@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — v0.10.0: README Overhaul &amp; Documentation Alignment | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 01, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — v0.10.0: README Overhaul &amp; Documentation Alignment</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #TBD — v0.10.0: README Overhaul &amp; Documentation Alignment</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the end of PR #91 (packaging), synlynk was successfully packaged to be installable via <code>pipx</code>, and its version tracking was single-sourced. However, the root <code>README.md</code> was still describing the older v0.9.4 release. With the v0.10.0 named release approaching rapidly, having outdated documentation that pointed to obsolete install methods and omitted critical commands created a major gap in public visibility and user onboarding.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The strategic shift in this PR was to close the gap between implementation and documentation before cutting the v0.10.0 named release. Rather than leaving the documentation as an afterthought, we overhauled the README to elevate the new First-Time User Experience (FTUE) wizard, document the <code>state.db</code> SQLite-centralized storage architecture, and align all CLI command references with what actually shipped.</p>
+<h2>What This PR Shipped</h2>
+<h3>1. Unified Badge Strip &amp; Platform Requirements</h3>
+<ul>
+<li>Added a centered badge strip at the top of the README linking to the GitHub repository, showing:
+<ul>
+<li><strong>Tests:</strong> 623 passing</li>
+<li><strong>Version:</strong> 0.9.8 (pre-release)</li>
+<li><strong>License:</strong> MIT</li>
+<li><strong>Python:</strong> 3.9+ (matching <code>pyproject.toml</code> requirements, updated from Python 3.8+).</li>
+</ul>
+</li>
+</ul>
+<h3>2. Modernized Installation Flow</h3>
+<ul>
+<li>Reorganized the <strong>Install</strong> section to feature <code>pipx</code> as the primary, recommended global installation method:<pre><code class="language-bash">pipx install git+https://github.com/nikhilsoman/synlynk
+</code></pre>
+</li>
+<li>Retained the <code>curl | bash</code> script fallback and direct execution option.</li>
+</ul>
+<h3>3. Interactive Quick Start (60-Second Flow)</h3>
+<ul>
+<li>Rewrote the <strong>Quick Start</strong> instructions as a step-by-step 60-second walkthrough highlighting the new FTUE wizard, repository scanning, and migration subcommands:
+<ul>
+<li><code>synlynk init --wizard</code>: Scans agents and bootstraps project state.</li>
+<li><code>synlynk scan</code>: Runs codebase analysis.</li>
+<li><code>synlynk migrate</code>: Performs one-shot migration for older workspaces.</li>
+<li><code>synlynk dispatch</code>: Dispatches jobs to background agents.</li>
+</ul>
+</li>
+</ul>
+<h3>4. Database-Centric &quot;How It Works&quot; &amp; Layout</h3>
+<ul>
+<li>Documented the <code>state.db</code> architecture detailing SQLite as the permanent source of truth.</li>
+<li>Explained the write-through backup mechanism to <code>project-docs/</code> flat files on every database write.</li>
+<li>Described how <code>generate_context()</code> dynamically reads from <code>state.db</code> (for migrated workspaces) or falls back to flat files.</li>
+<li>Updated the <strong>Project Layout</strong> section to reflect the post-migrate structure under the <code>.synlynk/</code> folder, adding clarifying notes about pre-migration locations.</li>
+</ul>
+<h3>5. Exhaustive Command Reference Table</h3>
+<ul>
+<li>Restructured the commands catalog to document all recently added and updated subcommands, including:
+<ul>
+<li><code>synlynk init --wizard</code>: Runs the 8-screen TUI wizard.</li>
+<li><code>synlynk scan</code>: Supports <code>--refresh</code>, <code>--add</code>, <code>--remove</code>, and <code>--dry-run</code>.</li>
+<li><code>synlynk migrate</code>: Imports flat files to <code>state.db</code> with <code>--dry-run</code>, <code>--recover</code>, and <code>--setup-dr</code> support.</li>
+<li><code>synlynk memory add</code>: Writes new memory entries to <code>state.db</code> + write-through.</li>
+<li><code>synlynk devlog append</code>: Appends developer journal entries.</li>
+</ul>
+</li>
+</ul>
+<h3>6. Corrected Roadmap &amp; Spend Tracking</h3>
+<ul>
+<li>Updated the <strong>Roadmap</strong> table, marking all <code>v0.9.x</code> items as <strong>Shipped</strong>.</li>
+<li>Updated the <code>v0.10.0</code> target theme to focus on FTUE Scan + Wizard + state.db Migration + Packaging + README, marking its status as <strong>In progress</strong> (to be completed when this PR merges).</li>
+<li>Removed the obsolete &quot;Multi-Repo Workspace&quot; roadmap entry.</li>
+<li>Updated <strong>Budget Tracking</strong> details to explain that spend is recorded in the <code>cost_entries</code> table in <code>state.db</code> and written through to <code>costs.md</code>.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>No visual brainstorm files were created for this PR, as the changes focused on updating and aligning the project's markdown documentation.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<ol>
+<li><strong>Clear Onboarding Gateways:</strong> Outlining a 60-second wizard-driven flow makes it trivial for developers (and synthetic agents) to boot up synlynk correctly on any new codebase.</li>
+<li><strong>Architecture Transparency:</strong> Explicitly documenting the <code>state.db</code> source of truth and backup boundaries ensures that both human developers and autonomous agents understand where state is stored and how context is built.</li>
+</ol>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the README overhauled, all implementation features for the v0.10.0 cycle are fully aligned with the public-facing documentation.</p>
+<p>The next strategic goalpost is to <strong>cut the v0.10.0 named release</strong>. This will involve:</p>
+<ol>
+<li>Creating a <code>CHANGELOG.md</code> entry.</li>
+<li>Bumping the <code>VERSION</code> number.</li>
+<li>Running <code>gh release create</code> to tag and publish the release.</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

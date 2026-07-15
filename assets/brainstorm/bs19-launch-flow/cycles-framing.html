@@ -1,0 +1,126 @@
+<h2>The 6 Cycles — which framing fits?</h2>
+<p class="subtitle">Both have 6 stages. The difference is whether "Design/Brainstorm" is its own cycle or absorbed into Plan.</p>
+
+<div class="split" style="gap:2rem;margin-top:1.5rem">
+
+  <div class="mockup" data-choice="a" onclick="toggleSelect(this)" style="cursor:pointer;flex:1">
+    <div class="mockup-header">Option A — Current model (Dream · Plan · Work · Ship · Maintain · Engage)</div>
+    <div class="mockup-body" style="padding:1.2rem">
+      <div style="display:flex;flex-direction:column;gap:0.75rem">
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">1</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Dream</div>
+            <div style="font-size:0.82rem;color:#94a3b8">What's worth building? Fix a bug, refactor, modernise a feature</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">2</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Plan <span style="font-size:0.78rem;color:#6366f1;font-weight:400">(absorbs brainstorm + spec)</span></div>
+            <div style="font-size:0.82rem;color:#94a3b8">Brainstorm → spec/UX → break into stories → assign agents</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">3</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Work</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Dispatch agents, run jobs, review diffs, iterate</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">4</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Ship</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Cut release, changelog, publish</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">5</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Maintain</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Monitor, patch, keep the lights on</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">6</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Engage</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Users, community, docs, support</div>
+          </div>
+        </div>
+
+      </div>
+      <div style="margin-top:1.2rem;padding:0.75rem;background:#1e293b;border-radius:6px;font-size:0.8rem;color:#64748b">
+        ✓ Already in codebase · cycle_capability table uses these names · less disruption
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup" data-choice="b" onclick="toggleSelect(this)" style="cursor:pointer;flex:1">
+    <div class="mockup-header">Option B — Explicit Design cycle (Dream · Design · Plan · Build · Ship · Sustain)</div>
+    <div class="mockup-body" style="padding:1.2rem">
+      <div style="display:flex;flex-direction:column;gap:0.75rem">
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">1</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Dream</div>
+            <div style="font-size:0.82rem;color:#94a3b8">What's worth building? Fix a bug, refactor, modernise a feature</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">2</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Design <span style="font-size:0.78rem;color:#10b981;font-weight:400">(new explicit stage)</span></div>
+            <div style="font-size:0.82rem;color:#94a3b8">Brainstorm → spec → UX/wireframe → agent roles for this feature</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">3</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Plan</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Implementation plan, story breakdown, wave schedule</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">4</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Build</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Dispatch agents, run jobs, review diffs, iterate</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">5</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Ship</div>
+            <div style="font-size:0.82rem;color:#94a3b8">Cut release, changelog, publish</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:0.9rem">
+          <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">6</div>
+          <div>
+            <div style="font-weight:600;color:#e2e8f0">Sustain <span style="font-size:0.78rem;color:#10b981;font-weight:400">(Maintain + Engage combined)</span></div>
+            <div style="font-size:0.82rem;color:#94a3b8">Monitor, patch, community, docs, support</div>
+          </div>
+        </div>
+
+      </div>
+      <div style="margin-top:1.2rem;padding:0.75rem;background:#1e293b;border-radius:6px;font-size:0.8rem;color:#64748b">
+        ✓ Matches your described flow exactly · more honest about what AI does best · requires renaming cycle_capability
+      </div>
+    </div>
+  </div>
+
+</div>

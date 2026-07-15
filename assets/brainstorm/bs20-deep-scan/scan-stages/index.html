@@ -1,0 +1,90 @@
+<h2>Deep Scan — Stage Coverage</h2>
+<p class="subtitle">Six parallel stages. Select which are must-have for v1 (can pick multiple).</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="stack" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Stack &amp; Environment</h3>
+      <p>Language + version, frameworks, package manager, CI config, test runner, linter, dependency count. Already partially done — this version goes deeper: reads every dep file, detects dev vs. prod deps, flags outdated lockfiles.</p>
+      <div style="margin-top:8px;font-size:12px;background:#0f1117;padding:8px 10px;border-radius:5px;font-family:monospace;color:#94a3b8;line-height:1.6;">
+        <span style="color:#4ade80;">Python 3.11</span> · pytest · pyproject.toml<br>
+        CI: GitHub Actions (4 workflows)<br>
+        Deps: 0 prod · 8 dev · lockfile: <span style="color:#4ade80;">fresh</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="source" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Source Structure <span style="font-size:11px;color:#60a5fa;font-weight:normal;">AST-powered</span></h3>
+      <p>AST-parse every source file. Per-file: line count, function count, class count, docstring coverage %, type hint coverage %, largest functions by line. Produces the file map that feeds architect-grade launch tasks.</p>
+      <div style="margin-top:8px;font-size:12px;background:#0f1117;padding:8px 10px;border-radius:5px;font-family:monospace;color:#94a3b8;line-height:1.6;">
+        <span style="color:#f87171;">synlynk/__init__.py</span>  10,651 lines  432 fns  34% typed  28% docstrings<br>
+        <span style="color:#fbbf24;">tests/test_wizard.py</span>   847 lines   61 fns<br>
+        <span style="color:#e2e8f0;">… 42 more files</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="complexity" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Complexity Hotspots</h3>
+      <p>Files &gt;500 lines, functions &gt;50 lines (by AST node count), TODO/FIXME/HACK/XXX density per file, duplicate code blocks (hash-based). Ranks by severity. This is the "tech debt radar" card.</p>
+      <div style="margin-top:8px;font-size:12px;background:#0f1117;padding:8px 10px;border-radius:5px;font-family:monospace;color:#94a3b8;line-height:1.6;">
+        <span style="color:#f87171;">⚠ wizard_init()</span>  312 lines  (in __init__.py:9836)<br>
+        <span style="color:#f87171;">⚠ cmd_doctor()</span>   189 lines  (in __init__.py:3053)<br>
+        <span style="color:#fbbf24;">○ 14 TODO</span>  3 FIXME  1 HACK
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="tests" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Test Coverage Map</h3>
+      <p>Per-file pairing: does a test file exist for each source module? Per-function gap detection: which public functions have no test calling them (by name-matching heuristic). Produces the coverage map that powers "add tests" launch tasks.</p>
+      <div style="margin-top:8px;font-size:12px;background:#0f1117;padding:8px 10px;border-radius:5px;font-family:monospace;color:#94a3b8;line-height:1.6;">
+        <span style="color:#4ade80;">✓</span> cmd_scan · cmd_roles · wizard_init · …39 covered<br>
+        <span style="color:#f87171;">✗</span> cmd_probe · _dispatch_flags_for_agent · …8 gaps<br>
+        Overall: <span style="color:#fbbf24;">39%</span> test-to-source ratio
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="git" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Git Churn</h3>
+      <p>Most-changed files in last 30 commits (<code>git log --name-only</code>), commit frequency by file, days since last touch per file, largest recent diffs. Surfaces hot files (risk) and cold files (dead code candidates).</p>
+      <div style="margin-top:8px;font-size:12px;background:#0f1117;padding:8px 10px;border-radius:5px;font-family:monospace;color:#94a3b8;line-height:1.6;">
+        <span style="color:#f87171;">🔥 __init__.py</span>  47 commits · last: 2h ago<br>
+        <span style="color:#fbbf24;">warm  GEMINI.md</span>  12 commits · last: 1d ago<br>
+        <span style="color:#94a3b8;">cold  install.sh</span>   2 commits · last: 14d ago
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="arch" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>Architecture Signals</h3>
+      <p>Entry points (CLI commands, <code>if __name__ == "__main__"</code>, routes), import graph (which modules import which), dead code candidates (files with zero inbound imports), public API surface (all exported functions/classes). Produces the "big picture" context for agent fences.</p>
+      <div style="margin-top:8px;font-size:12px;background:#0f1117;padding:8px 10px;border-radius:5px;font-family:monospace;color:#94a3b8;line-height:1.6;">
+        <span style="color:#a78bfa;">12 CLI entry points</span>  (main → argparse → cmd_*)<br>
+        <span style="color:#60a5fa;">Pattern:</span> monolith · stdlib-only · single entry<br>
+        <span style="color:#94a3b8;">No dead modules detected</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:20px;padding:12px 16px;background:#1e293b;border-radius:8px;font-size:12px;color:#94a3b8;font-family:monospace;">
+  <span style="color:#e2e8f0;">All 6 run in parallel threads.</span> Each card reveals as its stage completes.<br>
+  Typical time: Stack ~0.5s · Source ~2s · Complexity ~1s · Tests ~0.5s · Git ~1s · Arch ~2s<br>
+  Total wall-clock: <span style="color:#4ade80;">~2–3s</span> (bottleneck: Source + Arch AST parse)
+</div>

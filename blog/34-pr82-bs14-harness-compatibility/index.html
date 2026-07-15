@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+          <span class="blog-post-pr">PR #82</span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #82 — BS-14 Harness Compatibility System</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the close of the BS-5 website sprint (PRs #78–#81), synlynk had a working four-agent dispatch loop — Claude, Agy, Grok, Codex — with sentinel observability and a growing test suite. The stated goal was a <strong>Developer Preview (v0.10.0)</strong>: pipx packaging, README, and <code>synlynk viz</code>. LIVE-1 changed the priority order.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>LIVE-1 (#81) exposed a class of failure that made the Developer Preview untenable: Agy jobs were silently hanging for 6+ hours with zero output, and Grok was receiving <code>--always-approve</code> — a flag its CLI actively rejects — on every dispatch. Both failures were invisible to the sentinel system. No alert, no kill, no retry. The user discovered them manually.</p>
+<p>The insight: synlynk worked well when Claude was the harness. In every other harness it was brittle in different ways. That's the opposite of a composable dispatch layer.</p>
+<p>BS-14 was pulled forward from its pre-GA slot to become the immediate priority: build the infrastructure that makes synlynk behaviour consistent regardless of which agent CLI is running. Not polishing the wrapper — hardening the contract between synlynk and each harness.</p>
+<h2>What This PR Shipped</h2>
+<h3>Phase 1 — v0.10.1: LIVE-1 Fixes</h3>
+<p><strong>Agy baseline correction.</strong> The root cause of the 6h hang: <code>AGENT_CAPABILITY_BASELINES[&quot;agy&quot;]</code> had <code>required_flags: [&quot;--non-interactive&quot;]</code> — a flag that doesn't exist in the Agy CLI. Every Agy job launched and crashed silently before producing any output. Fixed by removing <code>--non-interactive</code> from <code>required_flags</code>, adding it to <code>invalid_flags</code>, and documenting that Agy's non-interactive mode is <code>-p</code>/<code>--print</code> (already handled via the existing <code>prompt_via_arg: True</code> + <code>prompt_flag: &quot;-p&quot;</code> path). <code>headless_contract</code> updated with <code>requires_pty: False</code>, <code>stdout_flush_method: unbuffered</code>, <code>env_vars_required: [&quot;PYTHONUNBUFFERED=1&quot;]</code>.</p>
+<p><strong>Grok baseline correction.</strong> <code>--always-approve</code> moved from the dispatch path to <code>invalid_flags</code>. <code>network_deps</code> added with <code>required_endpoints: [&quot;cli-chat-proxy.grok.com:443&quot;]</code> — Grok's CLI proxy endpoint that every dispatch depends on.</p>
+<p><strong><code>_check_job_stall()</code> — STALL_NO_OUTPUT sentinel.</strong> Replaces the old global <code>check_stall()</code> (job-global, state-file-based) with a per-job log-byte check inside <code>_reconcile_jobs()</code>. If a running job's log file is still 0 bytes after a configurable timeout (<code>stall_timeout_minutes</code>, global default 30, per-agent override in <code>.synlynk/config.json</code>), the job process receives SIGKILL and the <code>STALL_NO_OUTPUT</code> sentinel fires. The 6h Agy hang would have been caught at 30 minutes.</p>
+<p><strong><code>_preflight_dispatch()</code> — HARNESS_PREFLIGHT_FAIL sentinel.</strong> Called at the top of every <code>dispatch_agent()</code> invocation, before any subprocess is spawned. Two checks: (1) flag validation — any flag in the agent's <code>invalid_flags</code> set blocks dispatch immediately; (2) network reachability — TCP connect (2s timeout) to every <code>required_endpoint</code>. Returns <code>{&quot;passed&quot;: bool, &quot;sentinel&quot;: str, &quot;reason&quot;: str}</code>. If not passed: writes sentinel, raises <code>RuntimeError</code> — no subprocess spawned. Adds ~2s worst case when a network endpoint is unreachable; fast-path exits in &lt;1ms on flag failures.</p>
+<h3>Phase 2 — v0.11.0: Full Harness Compatibility System</h3>
+<p><strong>Five new <code>state.db</code> tables via <code>_migrate_db()</code>.</strong> All idempotent (<code>CREATE TABLE IF NOT EXISTS</code>, <code>INSERT OR IGNORE</code>):</p>
+<ul>
+<li><code>harness_baselines</code> — curated capability snapshots keyed by <code>(harness_name, cli_version)</code></li>
+<li><code>harness_records</code> — live per-agent state: <code>installed_version</code>, <code>compliance_status</code>, <code>active_contract</code>, <code>capability_hash</code>, <code>last_probe_at</code></li>
+<li><code>harness_verb_map</code> — cross-harness interoperability matrix (see below)</li>
+<li><code>harness_command_palette</code> — full <code>--help</code> tree per harness, with <code>first_seen_version</code> / <code>last_seen_version</code> for removal detection</li>
+<li><code>harness_version_history</code> — append-only log of <code>version_change</code>, <code>drift_detected</code>, <code>doctor_run</code> events</li>
+</ul>
+<p><strong><code>harness</code> + <code>model</code> fields in <code>.agents/&lt;agent&gt;.json</code>.</strong> <code>_load_agent_profile()</code> updated to <code>setdefault(&quot;harness&quot;, agent_name)</code> and <code>setdefault(&quot;model&quot;, &quot;unknown&quot;)</code>. <code>.agents/claude.json</code>, <code>.agents/codex.json</code> created. <code>.agents/agy.json</code> and <code>.agents/grok.json</code> already existed from Phase 1.</p>
+<p><strong><code>_probe_agent()</code> + <code>synlynk probe</code>.</strong> The probe trigger chain:</p>
+<ol>
+<li>Run <code>agent --version</code> (5s timeout) to fingerprint installed CLI</li>
+<li>Fast-path: if <code>harness_records</code> shows matching version + capability hash → <code>{&quot;skipped&quot;: True}</code> (no further work)</li>
+<li>Full probe: compute <code>_compute_capability_hash()</code> (SHA256[:16] of <code>headless_contract</code> + <code>dispatch_flags</code>), run network preflight, upsert <code>harness_records</code>, append <code>harness_version_history</code> on <code>version_change</code> or <code>drift_detected</code>, scan command palette, write instruction fence</li>
+<li><code>synlynk probe [--agent NAME]</code> CLI subcommand</li>
+</ol>
+<p><strong><code>_compute_capability_hash()</code>.</strong> 16-char SHA256 of <code>{&quot;contract&quot;: headless_contract, &quot;flags&quot;: dispatch_flags}</code> JSON (keys sorted). Stable fingerprint for fast-path skip and drift detection.</p>
+<p><strong><code>synlynk doctor</code> TC-1–TC-4 compliance suite.</strong> Four checks per agent:</p>
+<ul>
+<li>TC-1 (<code>_run_tc1</code>): Spawn agent with non-interactive flag in pipe mode; if <code>communicate()</code> times out → <code>requires_pty: True</code>, <code>passed: False</code></li>
+<li>TC-2 (<code>_run_tc2</code>): Check <code>invalid_flags</code> list + grep <code>--help</code> output for <code>valid_flags</code> presence; failed flags returned</li>
+<li>TC-3 (<code>_run_tc3</code>): TCP connect to each <code>required_endpoint</code>; unreachable list returned</li>
+<li>TC-4 (<code>_run_tc4</code>): For each active verb in <code>harness_verb_map</code>, verify the mapped command exists (<code>--help</code> reachable); failed verbs returned</li>
+</ul>
+<p>Results update <code>harness_records.compliance_status</code> and append a <code>doctor_run</code> history row.</p>
+<p><strong><code>_VERB_MAP_SEED</code> — 64-row Command Interoperability Matrix.</strong> Full synlynk verb surface mapped across all four agents across five categories:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Verbs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dispatch</td>
+<td><code>dispatch.task</code>, <code>dispatch.headless</code>, <code>dispatch.resume</code>, <code>dispatch.approve</code>, <code>dispatch.model</code>, <code>dispatch.tools</code>, <code>dispatch.context</code></td>
+</tr>
+<tr>
+<td>observability</td>
+<td><code>jobs</code>, <code>status</code>, <code>telemetry</code>, <code>costs</code></td>
+</tr>
+<tr>
+<td>harness</td>
+<td><code>probe</code>, <code>doctor</code></td>
+</tr>
+<tr>
+<td>pm</td>
+<td><code>story</code>, <code>epic</code>, <code>decide</code></td>
+</tr>
+<tr>
+<td>workspace</td>
+<td><code>workspace</code>, <code>upgrade</code></td>
+</tr>
+</tbody>
+</table>
+<p>Each cell is <code>full</code> / <code>partial</code> (with notes) / <code>none</code>. <code>none</code> blocks; <code>partial</code> warns. <code>_check_verb_support(verb, agent_name, db)</code> returns the lookup result. Extension opportunities — verbs where a harness has a native command but synlynk has no mapping — surface as <code>synlynk_verb IS NULL</code> rows from palette scan.</p>
+<p><strong><code>_scan_command_palette()</code>.</strong> Parses <code>agent --help</code> stdout+stderr with two regex patterns: flags (<code>--flag  description</code>) and subcommands (<code>word word  description</code>). Inserts new commands with <code>first_seen_version</code>; marks removed commands (previously active, now absent) with <code>last_seen_version = current_version</code>. Called from <code>_probe_agent()</code> after <code>harness_records</code> upsert.</p>
+<p><strong>Instruction fence — <code>_upsert_harness_fence()</code>.</strong> Idempotent managed section in agent instruction files (CLAUDE.md, GEMINI.md, AGENTS.md, GROK.md). Format:</p>
+<pre><code>&lt;!-- synlynk:harness v{version} verified:{ts} --&gt;
+# Harness Instructions (synlynk-managed — do not edit)
+
+## Headless Execution Contract
+...
+&lt;!-- /synlynk:harness --&gt;
+</code></pre>
+<p>Regex-replaces the existing fence block if present; appends if absent. Byte-preserves all content outside the fence. Human-authored content above and below is never touched. <code>_build_fence_body_from_record()</code> populates the block from <code>harness_records</code> (falls back to <code>AGENT_CAPABILITY_BASELINES</code> if no DB record yet). Called from <code>_probe_agent()</code>.</p>
+<p><strong><code>HARNESS_VERSION_DRIFT</code> sentinel.</strong> Wired into <code>_preflight_dispatch()</code>. On every dispatch, if <code>harness_records.last_probe_at</code> is &gt;1hr stale: spawn <code>agent --version</code> (3s timeout), compare to recorded version. If different: fire <code>WARNING HARNESS_VERSION_DRIFT</code> (non-blocking — dispatch continues). Instructs the user to run <code>synlynk probe</code>.</p>
+<h3>Code review findings (fixed in same PR)</h3>
+<p>One post-implementation review finding: <code>dispatch_agent()</code> had a <code>try/except TypeError</code> fallback to a single-arg <code>_preflight_dispatch(agent)</code> call — a migration artifact from an earlier partial implementation. Removed. All 29 test monkeypatches updated from <code>lambda agent: None</code> to <code>lambda agent_name, dispatch_flags, db_conn=None: {&quot;passed&quot;: True, ...}</code>.</p>
+<h3>Test surface</h3>
+<ul>
+<li><code>tests/test_harness_compatibility.py</code> — new file, 13 tests covering: probe fast-path, harness_records upsert, version_change history, TC-1–TC-3, palette scan + removal, fence upsert (replace / append / skip missing / byte-preservation), drift sentinel</li>
+<li><code>tests/test_synlynk.py</code> — 18 new tests for grok/agy baselines, stall detection, preflight flag + network blocking, agent-json roundtrip</li>
+<li><strong>503 tests passing</strong> total</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>Full visual brainstorm companion run at session start (2026-06-30). HTML files local-only (<code>.superpowers/brainstorm/</code> is gitignored). Key decisions informed by the visual session: hybrid approach (curated baselines + dynamic discovery), agent-vs-harness naming separation, managed fence ownership model, full verb surface scope for the interop matrix.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Before this PR, any autonomous dispatch to Agy would silently hang for hours. Any dispatch to Grok would fail at CLI startup. The system appeared to work because Claude-as-harness masked the incompatibilities.</p>
+<p>BS-14 establishes the <strong>contract layer</strong> between synlynk and each agent harness: explicit headless execution contracts, validated flag maps, live network preflight, and a compliance test suite that runs on every probe. The instruction fence means agents now receive harness-specific execution guidance that synlynk manages automatically — it updates when the harness changes, not when a human remembers to update it.</p>
+<p>The verb interoperability matrix is the first step toward capability-aware routing: knowing which verbs work on which harness at what fidelity is the prerequisite for synlynk deciding &quot;this task should go to Codex, not Agy, because Agy has no <code>dispatch.resume</code> support.&quot;</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The harness contract layer is in place. v0.9.9 is shipped. The next work items are:</p>
+<ul>
+<li><strong>v0.9.8 Health Pulse + Lifecycle</strong> (PR #70, open): <code>synlynk doctor</code> registry-based health checks, lifecycle commands — this ships before Developer Preview</li>
+<li><strong>v0.10.0 Developer Preview</strong>: pipx packaging, pyproject.toml, README, <code>synlynk viz</code> (BS-6) — the launch milestone</li>
+<li><strong>BS-13 Live Job Observatory</strong>: real-time SSE job streaming dashboard</li>
+<li><strong>BS-15 Native Harness</strong>: synlynk as its own dispatch harness (no dependency on Claude CLI in the loop)</li>
+</ul>
+<p>The four-agent fleet now dispatches correctly from any harness. Autonomous operation — where synlynk itself decides routing, monitors compliance, and repairs drift without human intervention — is structurally closer than it was yesterday.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

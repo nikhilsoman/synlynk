@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRs #114–#116 — The TC-2 Agent Dispatch Fix Arc | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 05, 2026</span>
+        
+          <span class="blog-post-pr">PR #114–#116</span>
+        
+      </div>
+      <h1 class="blog-post-title">PRs #114–#116 — The TC-2 Agent Dispatch Fix Arc</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>With the integration of ecosystem status in Vizor (PR #113), synlynk had a functional dashboard displaying fleet health and capabilities. However, as soon as this instrument panel was turned on, it revealed a critical failure: all dispatches to the <code>agy</code> agent were failing immediately at the preflight stage.</p>
+<p>The broader goal was to make agent dispatch reliable and self-healing when agent CLI tools drift. But when the drift detection gates were first activated, they didn't just warn us—they locked down the entire dispatch pipeline.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The &quot;TC-2 Saga&quot; represents a major milestone in synlynk's maturity: the harness is now <strong>self-aware of its contracts</strong>.</p>
+<p>Historically, if a vendor CLI changed its flags, synlynk would blindly invoke it, resulting in silent hangs or obscure stderr exits that required manual debugging. TC-2 (the CLI flag compliance check) was designed to catch this. But the saga proved that contract enforcement is a double-edged sword: a bug in the enforcement code itself can result in a false-positive lockout.</p>
+<p>Strategically, this arc forced us to build bypass paths (<code>--skip-preflight</code>), improve zombie process reclamation, and establish a multi-agent review process to resolve layered, multi-component bugs without breaking the main branch.</p>
+<h2>The Arc Narrative: Three Layered Bugs</h2>
+<p>The issue was first reported by <code>Claude@rxcc</code> (a guest agent operating on the workspace), who noted that every attempt to dispatch work to <code>agy</code> failed during preflight. Investigating this led down a rabbit hole of three separate bugs layered on top of each other, requiring three distinct PRs to resolve:</p>
+<h3>1. The Preflight &amp; Observability Gap (PR #114)</h3>
+<p>The first layer was a lack of visibility: when a preflight check failed, the job was aborted, but the command logs didn't cleanly explain why, and the process was left in a zombie state.</p>
+<ul>
+<li><strong>The Fix</strong>: Appended <code>.summary</code> content to the end of <code>cmd_logs()</code> output so that failed preflight exits are immediately visible. Wired zombie job reconciliation into <code>cmd_jobs()</code> via <code>.exit</code> file checks to clean up orphaned PIDs.</li>
+<li><strong>Preflight Gate</strong>: Hooked the TC-2 check (<code>_run_tc2</code>) directly into the <code>_preflight_dispatch</code> pipeline to ensure invalid flags fail preflight <em>before</em> triggering network calls. Added the <code>--skip-preflight</code> bypass flag for emergency overrides.</li>
+</ul>
+<h3>2. Incorrect Flag Baselines (PR #115)</h3>
+<p>The second layer was that the baseline flags defined for <code>agy</code> in <code>_constants.py</code> did not match the installed binary (version 1.0.16).</p>
+<ul>
+<li><strong>The Fix</strong>: Removed the non-existent <code>--output-format</code> and <code>--always-approve</code> flags. Moved <code>--dangerously-skip-permissions</code> out of the invalid flags list (since it is a valid flag), and added the required <code>--sandbox</code> flag. Ran <code>synlynk probe agy</code> to regenerate the harness configuration fence in <code>GEMINI.md</code>.</li>
+</ul>
+<h3>3. The Root Cause: Seeding <code>failed</code> with <code>invalid_flags</code> (PR #116)</h3>
+<p>The deepest layer was a logical error in the TC-2 validator itself inside <code>synlynk/probe.py</code>.</p>
+<ul>
+<li><strong>The Fix</strong>: In <code>_run_tc2()</code>, the validator was initializing the list of failed flags as <code>failed = list(invalid_flags)</code>. However, <code>invalid_flags</code> are dispatch-time guards (&quot;do not pass these flags to the CLI&quot;), not flags that need to be supported by the CLI's <code>--help</code> menu. By seeding the list this way, any agent with defined invalid flags would <em>always</em> fail TC-2 validation. Changed this to initialize <code>failed = []</code>, so TC-2 only fails when required or valid flags are missing from the CLI help output.</li>
+</ul>
+<h2>Test Approach</h2>
+<p>The fix arc was validated with a comprehensive test suite across three modules:</p>
+<ul>
+<li>Added 6 new integration tests in <code>tests/test_agy_dispatch_fix.py</code> covering preflight bypass, log summary appending, and zombie job cleanup.</li>
+<li>Updated the main test suite (<code>tests/test_synlynk.py</code>) to mock the TC-2 gate during network preflight testing (since TC-2 now runs first).</li>
+<li>Corrected the TC-2 validator tests in <code>tests/test_harness_compatibility.py</code> to assert that <code>invalid_flags</code> do not populate the <code>failed_flags</code> list.</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The resolution of the TC-2 saga establishes a robust contract negotiation layer between the OS and guest agents:</p>
+<ol>
+<li><strong>Self-Aware Contracts</strong>: The harness can now successfully detect when an agent's command-line interface changes and block execution <em>before</em> a failure occurs, rather than crashing mid-job.</li>
+<li><strong>Zombie Reclamation</strong>: The scheduler automatically detects and reclaims zombie processes whose PIDs are dead but whose status remained &quot;running&quot; in the DB.</li>
+<li><strong>Resilient Failure Paths</strong>: By appending summaries to logs and offering a preflight bypass, human operators have the tools needed to debug and override the harness when automated gates fail.</li>
+</ol>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the dispatch loop stabilized and the agent fleet fully verified against its CLI contracts, the core execution engine is healthy. The next phase of the roadmap focuses on <strong>agent collaboration and handoff protocols</strong> (BS-12). We need to define how agents securely request permissions, share workspace state during multi-agent dispatches, and hand off tasks to one another without human intervention.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

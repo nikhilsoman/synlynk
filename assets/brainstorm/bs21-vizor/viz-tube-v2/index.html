@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Architect Tube Map v2 (rxcc)</title>
+<style>
+:root {
+  --bg:#f6f8fa; --bg2:#ffffff; --bg3:#eaeef2;
+  --border:#d1d5db; --border2:#e8ebee;
+  --text:#1f2328; --text2:#57606a; --text3:#8b949e;
+  --accent:#0d9e87; --accent-bg:#e6f7f4; --accent-dim:#c0ede6;
+  --shadow:0 2px 12px rgba(0,0,0,.10);
+}
+[data-theme="dark"] {
+  --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
+  --border:#1e2430; --border2:#13171f;
+  --text:#c9d1d9; --text2:#8b949e; --text3:#4a5568;
+  --accent:#3de0c0; --accent-bg:#0d2137; --accent-dim:#0a3050;
+  --shadow:0 2px 20px rgba(0,0,0,.5);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); color:var(--text); font-size:13px; }
+
+.shell { display:flex; height:100vh; overflow:hidden; }
+.sidenav { width:220px;min-width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column; }
+.nav-header { padding:12px 14px 10px;border-bottom:1px solid var(--border); }
+.nav-logo { font-size:14px;font-weight:800;color:var(--accent);letter-spacing:-.5px; }
+.nav-logo span { color:var(--text3);font-weight:400;font-size:13px; }
+.nav-section { flex:1;overflow-y:auto;padding:4px 0; }
+.nav-sec-label { font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding:7px 14px 3px; }
+.nav-item { padding:5px 10px 5px 14px;display:flex;align-items:center;gap:7px;cursor:pointer;border-radius:5px;margin:1px 6px;color:var(--text2);font-size:12px; }
+.nav-item:hover { background:var(--bg3);color:var(--text); }
+.nav-item.active { background:var(--accent-bg);color:var(--accent); }
+.repo-item { padding:4px 10px 4px 30px;display:flex;align-items:center;gap:6px;cursor:pointer;margin:0 6px;color:var(--text3);font-size:11px;border-radius:4px; }
+.repo-item.active { color:var(--accent); }
+.rdot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+.nav-footer { border-top:1px solid var(--border);padding:10px 12px; }
+.theme-label { font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px; }
+.theme-sw { display:flex;gap:4px; }
+.theme-btn { flex:1;padding:5px 0;border-radius:5px;font-size:10px;text-align:center;cursor:pointer;border:1px solid var(--border);color:var(--text3);background:transparent;font-family:inherit; }
+.theme-btn:hover { border-color:var(--accent);color:var(--accent); }
+.theme-btn.active { background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:700; }
+
+.main { flex:1;display:flex;flex-direction:column;overflow:hidden; }
+.view-tabs { background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:stretch;padding:0 20px;flex-shrink:0; }
+.vtab { padding:10px 16px 8px;font-size:12px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px;white-space:nowrap; }
+.vtab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.tab-sp { flex:1; }
+.tab-meta { display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);padding:0 4px; }
+.live-dot { width:6px;height:6px;border-radius:50%;background:#16a34a;box-shadow:0 0 5px #16a34a88; }
+.content { flex:1;overflow:auto;padding:16px 20px; }
+
+/* ── CONTROLS ───────────────────────────────── */
+.ctrl-row { display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap; }
+.ctrl-label { font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--text3); }
+.style-group { display:flex;gap:0; }
+.style-btn {
+  padding:6px 14px;font-size:11px;font-family:inherit;cursor:pointer;
+  border:1px solid var(--border);color:var(--text2);background:transparent;
+  transition:all .15s;
+}
+.style-btn:first-child { border-radius:5px 0 0 5px; }
+.style-btn:last-child  { border-radius:0 5px 5px 0; }
+.style-btn.active { background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:700;z-index:1; }
+.style-btn:hover:not(.active) { background:var(--bg3);color:var(--text); }
+.sep { width:1px;background:var(--border);margin:0 6px;align-self:stretch; }
+.sp { flex:1; }
+
+/* ── TUBE CANVAS ────────────────────────────── */
+.tube-wrap { background:var(--bg2);border:1px solid var(--border);border-radius:8px;position:relative;overflow:hidden; }
+#tube-svg { display:block;width:100%;height:auto; }
+
+/* ── TOOLTIP ────────────────────────────────── */
+.tip {
+  position:fixed;display:none;background:var(--bg2);border:1px solid var(--border);
+  border-radius:7px;padding:10px 13px;font-size:11px;color:var(--text);
+  box-shadow:var(--shadow);pointer-events:none;z-index:999;max-width:260px;
+}
+.tip-head { display:flex;align-items:center;gap:7px;margin-bottom:5px; }
+.tip-name { font-weight:700;font-size:12px; }
+.tip-segs { font-size:10px;color:var(--text3);margin-left:auto;white-space:nowrap; }
+.tip-lines { display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px; }
+.tip-line-chip { border-radius:8px;font-size:10px;padding:1px 7px;font-weight:600; }
+.tip-desc { color:var(--text2);font-size:10px;line-height:1.5; }
+
+/* ── LEGEND ─────────────────────────────────── */
+.legend-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px; }
+.legend-block { background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px; }
+.legend-title { font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);margin-bottom:8px; }
+.leg-row { display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;color:var(--text2); }
+.leg-line { width:26px;height:4px;border-radius:2px;flex-shrink:0; }
+.leg-dot-group { display:flex;align-items:center;gap:6px; }
+.leg-dot { border-radius:50%;display:inline-block;flex-shrink:0; }
+
+.status-bar { background:var(--bg2);border-top:1px solid var(--border);padding:5px 20px;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text3);flex-shrink:0; }
+</style>
+</head>
+<body>
+<div class="tip" id="tip">
+  <div class="tip-head">
+    <div class="tip-name" id="tip-name"></div>
+    <div class="tip-segs" id="tip-segs"></div>
+  </div>
+  <div class="tip-lines" id="tip-lines"></div>
+  <div class="tip-desc" id="tip-desc"></div>
+</div>
+
+<div class="shell">
+<div class="sidenav">
+  <div class="nav-header"><div class="nav-logo">S<span>ynlynk</span> <span style="color:var(--accent)">viz</span></div></div>
+  <div class="nav-section">
+    <div class="nav-sec-label">Workspaces</div>
+    <div class="nav-item"><span>▸</span> synlynk-core</div>
+    <div class="nav-item active"><span>▾</span> rxcc</div>
+    <div class="repo-item active"><div class="rdot" style="background:var(--accent)"></div>rxcc (main)</div>
+    <div class="repo-item"><div class="rdot" style="background:#f59e0b"></div>rxcc-infra</div>
+    <div class="nav-sec-label" style="margin-top:8px">Views</div>
+    <div class="nav-item">📅 Gantt</div>
+    <div class="nav-item">🗺 User Journeys</div>
+    <div class="nav-item active">🚇 Architect Map</div>
+    <div class="nav-item">💰 Effort & Cost</div>
+  </div>
+  <div class="nav-footer">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#0b7a60);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">N</div>
+      <div style="font-size:11px;color:var(--text2)">nikhilsoman</div>
+    </div>
+    <div class="theme-label">Theme</div>
+    <div class="theme-sw">
+      <button class="theme-btn active" id="btn-light" onclick="setTheme('light')">☀ Light</button>
+      <button class="theme-btn" id="btn-dark"  onclick="setTheme('dark')">☾ Dark</button>
+      <button class="theme-btn" id="btn-sys"   onclick="setTheme('system')">⊙ Sys</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="view-tabs">
+    <div class="vtab">📅 Gantt</div>
+    <div class="vtab">🗺 User Journeys</div>
+    <div class="vtab active">🚇 Architect Map</div>
+    <div class="vtab">💰 Effort & Cost</div>
+    <div class="tab-sp"></div>
+    <div class="tab-meta"><div class="live-dot"></div>rxcc · main</div>
+  </div>
+  <div class="content">
+    <!-- CONTROLS -->
+    <div class="ctrl-row">
+      <span class="ctrl-label">Line weight:</span>
+      <div class="style-group">
+        <button class="style-btn" id="s-thin"   onclick="setStyle('thin')">Thin</button>
+        <button class="style-btn active" id="s-std" onclick="setStyle('std')">Standard</button>
+        <button class="style-btn" id="s-bold"   onclick="setStyle('bold')">Bold</button>
+      </div>
+      <div class="sep"></div>
+      <span class="ctrl-label">Station shape:</span>
+      <div class="style-group">
+        <button class="style-btn active" id="sh-circle" onclick="setShape('circle')">Circle</button>
+        <button class="style-btn" id="sh-rect" onclick="setShape('rect')">Rounded rect</button>
+      </div>
+      <div class="sep"></div>
+      <span style="font-size:11px;color:var(--text3)">station size ∝ connections</span>
+      <div class="sp"></div>
+      <button onclick="zoomAdj(-0.15)" style="padding:4px 9px;border-radius:5px;font-size:11px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-family:inherit">−</button>
+      <button onclick="zoomAdj(+0.15)" style="padding:4px 9px;border-radius:5px;font-size:11px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-family:inherit">+</button>
+    </div>
+
+    <div class="tube-wrap">
+      <svg id="tube-svg" viewBox="0 0 1060 480" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="glow-sm"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="glow-md"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="glow-lg"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <pattern id="dotgrid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+            <circle cx="20" cy="20" r="1" fill="currentColor" opacity=".07"/>
+          </pattern>
+        </defs>
+        <rect width="1060" height="480" fill="url(#dotgrid)" color="var(--text2)"/>
+        <!-- Lines and stations injected by JS -->
+        <g id="lines-layer"></g>
+        <g id="stations-layer"></g>
+        <g id="labels-layer"></g>
+        <g id="badges-layer"></g>
+      </svg>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend-grid">
+      <div class="legend-block">
+        <div class="legend-title">Lines</div>
+        <div class="leg-row"><div class="leg-line" style="background:#0d9e87"></div>Request Line — user → CDN → app → API → DB</div>
+        <div class="leg-row"><div class="leg-line" style="background:#7c3aed"></div>Auth Line — session management → PostgreSQL</div>
+        <div class="leg-row"><div class="leg-line" style="background:#16a34a"></div>AI / Doc Line — upload → S3 → ECS → Claude → DB</div>
+        <div class="leg-row"><div class="leg-line" style="background:#f59e0b;height:4px;border-top:2px dashed #f59e0b;background:transparent"></div>CDN / Storage Line — S3 → CloudFront → edge</div>
+        <div class="leg-row"><div class="leg-line" style="background:#dc2626"></div>Persistence Line — DB → backup / export</div>
+      </div>
+      <div class="legend-block">
+        <div class="legend-title">Station size = connections through it</div>
+        <div class="leg-dot-group" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+            <svg width="30" height="30"><circle cx="15" cy="15" r="5" fill="none" stroke="#8b949e" stroke-width="2"/></svg>1 seg<br>terminal
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+            <svg width="34" height="34"><circle cx="17" cy="17" r="7" fill="none" stroke="#8b949e" stroke-width="2"/></svg>2 segs<br>pass-thru
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+            <svg width="40" height="40"><circle cx="20" cy="20" r="10" fill="none" stroke="#8b949e" stroke-width="2"/></svg>3 segs<br>junction
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+            <svg width="48" height="48"><circle cx="24" cy="24" r="13" fill="none" stroke="#0d9e87" stroke-width="2.5"/></svg>4 segs<br>interchange
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+            <svg width="58" height="58"><circle cx="29" cy="29" r="17" fill="none" stroke="#0d9e87" stroke-width="3"/></svg>5+ segs<br>hub
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status-bar"><span style="color:#16a34a">● local · offline-ready</span><span>rxcc workspace</span><div style="margin-left:auto">updated 2m ago</div></div>
+</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════
+   DATA
+══════════════════════════════════════════════ */
+
+// segs = distinct line-segments touching this station
+// (terminal=1, pass-thru=2, branch junction=3, interchange=4, major hub=5+)
+const STATIONS = {
+  // Request Line
+  'browser':   {x:60,  y:240, segs:1, label:['Browser'],               desc:'Patient / prescriber HTTPS entry. SPA loaded from CloudFront.',  lines:['request'],              lx:60,  ly:224, anchor:'middle', active:false},
+  'cf-web':    {x:220, y:240, segs:4, label:['CloudFront','(web+media)'],desc:'CDN for Next.js static assets and media. OAC → S3. SPA routing via CF Function. Also serves AI-processed documents.',lines:['request','cdn'],lx:220,ly:224,anchor:'middle',active:true},
+  'nextjs':    {x:400, y:240, segs:3, label:['Next.js','App'],           desc:'Static export on S3+CloudFront. Client-side SPA. Auth-gated routes. Calls API routes on ECS API server.', lines:['request','auth'],lx:400,ly:224,anchor:'middle',active:true},
+  'api':       {x:540, y:240, segs:2, label:['API Routes','(ECS)'],      desc:'Node/Next API running on ECS Fargate. JWT middleware. Rate limiting. Calls PostgreSQL RDS.',  lines:['request'],lx:560,ly:224,anchor:'start',active:false},
+  'postgres':  {x:700, y:240, segs:5, label:['PostgreSQL','(RDS)'],      desc:'Central data store. Tables: patients, prescriptions, rx_events, audit_log, user_sessions. Multi-AZ RDS. Source of truth.', lines:['request','auth','ai','persistence'], lx:720,ly:228,anchor:'start',active:true},
+
+  // Auth Line
+  'auth-mw':   {x:380, y:140, segs:2, label:['Auth','Middleware'],       desc:'JWT verification on every API request. Checks session blacklist in Redis. Rate limits by user ID. Attaches user context.', lines:['auth'],lx:365,ly:126,anchor:'end',active:true},
+  'jwt':       {x:520, y:140, segs:2, label:['JWT / Session','(Redis)'], desc:'Short-lived JWT (15m) + refresh token (7d). Refresh stored in httpOnly cookie. Session blacklist in Redis. Invalidated on logout.', lines:['auth'],lx:535,ly:126,anchor:'start',active:false},
+
+  // AI / Document Line
+  'doc-upload':{x:60,  y:360, segs:1, label:['Document','Upload'],       desc:'Patient uploads Rx images, insurance cards directly to S3 via presigned URL. Browser → S3 PUT. No server in upload path.', lines:['ai'],lx:60,ly:376,anchor:'middle',active:false},
+  's3':        {x:220, y:360, segs:3, label:['S3','(documents)'],        desc:'Encrypted at rest (SSE-S3). Presigned URLs for upload (PUT) and read (GET). S3 event → SQS → ECS Batch AI job. Also origin for CloudFront CDN.', lines:['ai','cdn'],lx:220,ly:376,anchor:'middle',active:false},
+  'ecs-batch': {x:400, y:360, segs:2, label:['ECS Batch','(AI jobs)'],   desc:'Spot capacity. SPOT_CAPACITY_OPTIMIZED. min_vcpus=0. SQS event source. Pulls S3 document, sends to Claude, writes structured data back.', lines:['ai'],lx:385,ly:376,anchor:'end',active:false},
+  'claude':    {x:560, y:360, segs:2, label:['Claude API','(extract)'],  desc:'Document → structured Rx data. Extracts: drug name, dosage, prescriber, patient, dates, refills. Returns JSON. Validated before DB write.', lines:['ai'],lx:575,ly:376,anchor:'start',active:false},
+
+  // CDN/Storage (terminal, right)
+  'cdn-edge':  {x:940, y:140, segs:1, label:['CDN Edge','(media)'],      desc:'CloudFront distribution serving processed documents and patient photos. Signed URLs. Cache-Control: 1y. HIPAA: no PII in URL params.', lines:['cdn'],lx:955,ly:130,anchor:'start',active:false},
+
+  // Persistence (terminal, right)
+  'rds-backup':{x:940, y:360, segs:1, label:['RDS Backup','/ DR'],       desc:'Automated daily snapshots. Point-in-time recovery (7d). Cross-region replica (us-west-2) for DR. Retention: 30d compliance.', lines:['persistence'],lx:955,ly:350,anchor:'start',active:false},
+};
+
+// LINE_PATHS: explicit waypoints (x,y) including bend points (no station)
+// All bends are 0°, 45°, or 90° only
+const LINE_PATHS = {
+  'request': {
+    color:'#0d9e87', name:'Request Line', width:5,
+    points:[[60,240],[220,240],[400,240],[540,240],[700,240]],
+    stations:['browser','cf-web','nextjs','api','postgres'],
+  },
+  'auth': {
+    color:'#7c3aed', name:'Auth Line', width:5,
+    // Next.js(400,240) → 45° up-left bend at (320,160) → horizontal → jwt(520,140) → 45° down to postgres
+    // Bend: (400,240)→(320,160): Δx=-80,Δy=-80 ✓45°
+    // (580,140)→(700,240):  Δx=120,Δy=100 — not quite 45°. Adjust: start bend at (580,140)
+    // For 45°: postgres(700,240) → bend at (700-100,240-100)=(600,140). So bend at (600,140)
+    // (600,140)→(700,240): Δx=100,Δy=100 ✓45°
+    points:[[400,240],[320,160],[380,140],[520,140],[600,140],[700,240]],
+    stations:['nextjs','auth-mw','jwt','postgres'],  // nextjs+postgres appear on other lines too
+    stationPts:[1,2,3,5],  // indices in points[] where named stations sit (after bends)
+  },
+  'ai': {
+    color:'#16a34a', name:'AI / Doc Line', width:5,
+    // doc-upload(60,360)→s3(220,360)→ecs(400,360)→claude(560,360)→bend(600,360)→45°→postgres(700,240)
+    // (600,360)→(700,240): Δx=100,Δy=-120. Not 45°.
+    // For 45°: from postgres(700,240) down-left: (700-120,240+120)=(580,360). Bend at (580,360).
+    // (580,360)→(700,240): Δx=120,Δy=-120 ✓45°
+    points:[[60,360],[220,360],[400,360],[560,360],[580,360],[700,240]],
+    stations:['doc-upload','s3','ecs-batch','claude','postgres'],
+    stationPts:[0,1,2,3,5],
+  },
+  'cdn': {
+    color:'#f59e0b', name:'CDN / Storage Line', width:4,
+    dash:'8 5',
+    // S3(220,360)→vertical→cf-web(220,240)→45°up→(300,160)→45°up→(380,80)→horizontal→cdn-edge(940,140)
+    // Adjust: from cf-web(220,240) → (300,160): Δx=80,Δy=-80 ✓45°
+    // (300,160)→(380,80): Δx=80,Δy=-80 ✓45°
+    // But cdn-edge is at y=140, not y=80. Let me do:
+    // cf-web(220,240) → (300,160) → horizontal at y=160 → cdn-edge(940,160)?? But cdn-edge label says y=140.
+    // Let's put cdn-edge at y=160 for cleaner routing:
+    // cf-web(220,240) → bend (300,160) → horizontal (940,160) cdn-edge
+    points:[[220,360],[220,240],[300,160],[940,160]],
+    stations:['s3','cf-web','cdn-edge'],
+    stationPts:[0,1,3],
+  },
+  'persistence': {
+    color:'#dc2626', name:'Persistence Line', width:4,
+    dash:'6 4',
+    // postgres(700,240)→45°down-right→(780,320)→horizontal→rds-backup(940,360)
+    // (700,240)→(780,320): Δx=80,Δy=80 ✓45°
+    // (780,320)→(940,360): Δx=160,Δy=40 — not 45°. Let me adjust:
+    // (700,240)→(820,360): Δx=120,Δy=120 ✓45° → (940,360)horizontal
+    points:[[700,240],[820,360],[940,360]],
+    stations:['postgres','rds-backup'],
+    stationPts:[0,2],
+  },
+};
+
+/* ══════════════════════════════════════════════
+   STYLE PRESETS
+   r(segs) = base + segs * factor
+══════════════════════════════════════════════ */
+const STYLES = {
+  thin:   {lw:2.5, base:3.5, factor:1.4, interchangeLabelSize:10, labelSize:10, terminalSize:11, strokeWidth:2},
+  std:    {lw:5,   base:5,   factor:2.4, interchangeLabelSize:11, labelSize:11, terminalSize:12, strokeWidth:2.5},
+  bold:   {lw:8,   base:7,   factor:3.8, interchangeLabelSize:12, labelSize:12, terminalSize:13, strokeWidth:3.5},
+};
+let currentStyle = 'std';
+let currentShape = 'circle'; // 'circle' | 'rect'
+let svgScale = 1;
+
+function stationR(segs) {
+  const s = STYLES[currentStyle];
+  return s.base + segs * s.factor;
+}
+
+/* ══════════════════════════════════════════════
+   RENDER
+══════════════════════════════════════════════ */
+function renderMap() {
+  const svg = document.getElementById('tube-svg');
+  const bg = document.documentElement.getAttribute('data-theme') === 'dark';
+  const bgFill = bg ? '#0a0c10' : '#ffffff';
+  const textFill = bg ? '#c9d1d9' : '#1f2328';
+  const text3 = bg ? '#4a5568' : '#8b949e';
+  const border = bg ? '#1e2430' : '#d1d5db';
+
+  let linesHTML = '';
+  let stationsHTML = '';
+  let labelsHTML = '';
+  let badgesHTML = '';
+
+  const s = STYLES[currentStyle];
+
+  // ── LINES ──────────────────────────────────
+  Object.entries(LINE_PATHS).forEach(([id, line]) => {
+    const pts = line.points.map(p => p.join(',')).join(' ');
+    const dashAttr = line.dash ? `stroke-dasharray="${line.dash}"` : '';
+    const lw = id === 'cdn' || id === 'persistence' ? s.lw * 0.8 : s.lw;
+    linesHTML += `<polyline points="${pts}" fill="none" stroke="${line.color}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" ${dashAttr} opacity="${id==='cdn'||id==='persistence'?'0.85':'1'}"/>`;
+
+    // Line name label at midpoint
+    const mid = Math.floor(line.points.length / 2);
+    const mp = line.points[mid];
+    labelsHTML += `<text x="${mp[0]}" y="${mp[1]-s.lw*1.8}" text-anchor="middle" font-size="9" fill="${line.color}" font-family="SF Mono,monospace" font-weight="700" letter-spacing="0.8" opacity="0.7">${line.name.toUpperCase()}</text>`;
+  });
+
+  // ── STATIONS ───────────────────────────────
+  // Track which stations we've drawn (avoid duplicates on multi-line interchange)
+  const drawn = new Set();
+
+  Object.entries(STATIONS).forEach(([id, st]) => {
+    if (drawn.has(id)) return;
+    drawn.add(id);
+
+    const r = stationR(st.segs);
+    const isInterchange = st.segs >= 4;
+    const isHub = st.segs >= 5;
+    const isTerminal = st.segs === 1;
+
+    // Glow filter for active stations
+    const glowFilter = st.active ? (isHub ? 'url(#glow-lg)' : isInterchange ? 'url(#glow-md)' : 'url(#glow-sm)') : '';
+
+    if (currentShape === 'rect') {
+      // Rounded rect
+      const rw = r * 2.2;
+      const rh = r * 1.6;
+      const rx = st.x - rw/2;
+      const ry = st.y - rh/2;
+      const corner = Math.max(3, r * 0.35);
+
+      if (isHub || isInterchange) {
+        // Multi-ring for interchanges
+        const primaryColor = LINE_PATHS[st.lines[0]]?.color || '#888';
+        stationsHTML += `<rect x="${rx-2}" y="${ry-2}" width="${rw+4}" height="${rh+4}" rx="${corner+2}" fill="none" stroke="${primaryColor}" stroke-width="${s.strokeWidth+1}" opacity="0.5" ${glowFilter ? `filter="${glowFilter}"` : ''}/>`;
+      }
+      stationsHTML += `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" rx="${corner}" fill="${bgFill}" stroke="${isInterchange||isHub ? border : (LINE_PATHS[st.lines[0]]?.color||border)}" stroke-width="${isInterchange||isHub ? s.strokeWidth+0.5 : s.strokeWidth}" ${st.active ? `filter="${glowFilter}"` : ''}/>`;
+      if (st.active) {
+        // Inner dot for active
+        stationsHTML += `<rect x="${st.x-r*0.22}" y="${st.y-r*0.22}" width="${r*0.44}" height="${r*0.44}" rx="2" fill="${LINE_PATHS[st.lines[0]]?.color||'#888'}" opacity="0.7"/>`;
+      }
+    } else {
+      // Circle
+      if (isHub || isInterchange) {
+        // Draw colored arc segments for each line
+        const numLines = st.lines.length;
+        const arcLen = (2 * Math.PI * r) / numLines;
+        let offset = 0;
+        const totalCirc = 2 * Math.PI * r;
+        st.lines.forEach((lineId, li) => {
+          const lineColor = LINE_PATHS[lineId]?.color || '#888';
+          const dashLen = totalCirc / numLines - 3;
+          const gapLen = totalCirc - dashLen;
+          stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r+2}" fill="none" stroke="${lineColor}" stroke-width="${s.strokeWidth+1.5}" stroke-dasharray="${dashLen} ${gapLen}" stroke-dashoffset="${-offset}" opacity="0.75"/>`;
+          offset += totalCirc / numLines;
+        });
+        stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r}" fill="${bgFill}" stroke="${border}" stroke-width="${s.strokeWidth}" ${st.active ? `filter="${glowFilter}"` : ''}/>`;
+        if (st.active) {
+          stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r*0.28}" fill="${LINE_PATHS[st.lines[0]]?.color||'#888'}" opacity="0.8"/>`;
+          // Pulse ring
+          stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r}" fill="none" stroke="${LINE_PATHS[st.lines[0]]?.color||'#888'}" stroke-width="1.5" opacity="0"><animate attributeName="r" values="${r};${r+14};${r}" dur="2.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite"/></circle>`;
+        }
+      } else {
+        // Regular station
+        const lineColor = LINE_PATHS[st.lines[0]]?.color || '#888';
+        if (st.active) {
+          stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r}" fill="${lineColor}" opacity="0.15" filter="${glowFilter}"/>`;
+        }
+        stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r}" fill="${bgFill}" stroke="${lineColor}" stroke-width="${isTerminal ? s.strokeWidth+0.5 : s.strokeWidth}"/>`;
+        if (st.active) {
+          stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r*0.38}" fill="${lineColor}" opacity="0.75"/>`;
+        }
+        if (isTerminal) {
+          // Tick mark to indicate terminal
+          stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${r+3}" fill="none" stroke="${lineColor}" stroke-width="1" opacity="0.35"/>`;
+        }
+      }
+    }
+
+    // ── LABEL ────────────────────────────────
+    const fs = isHub ? s.interchangeLabelSize : (isInterchange ? s.interchangeLabelSize : s.labelSize);
+    const fw = (isHub || isInterchange) ? '700' : '500';
+    const fc = isHub ? textFill : (isInterchange ? textFill : text3);
+    st.label.forEach((line, i) => {
+      const lineY = st.ly + i * (fs * 1.3);
+      labelsHTML += `<text x="${st.lx}" y="${lineY}" text-anchor="${st.anchor}" font-size="${fs}" fill="${fc}" font-family="SF Mono,monospace" font-weight="${fw}">${line}</text>`;
+    });
+
+    // ── INTERACTIVE HITBOX ───────────────────
+    const hr = Math.max(r + 8, 16);
+    stationsHTML += `<circle cx="${st.x}" cy="${st.y}" r="${hr}" fill="transparent" class="station-hit" data-id="${id}" style="cursor:pointer"/>`;
+  });
+
+  document.getElementById('lines-layer').innerHTML = linesHTML;
+  document.getElementById('stations-layer').innerHTML = stationsHTML;
+  document.getElementById('labels-layer').innerHTML = labelsHTML;
+  document.getElementById('badges-layer').innerHTML = badgesHTML;
+
+  // Re-bind tooltips
+  bindTooltips();
+}
+
+/* ── TOOLTIP ──────────────────────────────── */
+const tip = document.getElementById('tip');
+function bindTooltips() {
+  document.querySelectorAll('.station-hit').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const st = STATIONS[el.dataset.id];
+      if (!st) return;
+      document.getElementById('tip-name').textContent = st.label.join(' ');
+      document.getElementById('tip-segs').textContent = `${st.segs} segment${st.segs!==1?'s':''}`;
+      // Line chips
+      const chipsEl = document.getElementById('tip-lines');
+      chipsEl.innerHTML = st.lines.map(lid => {
+        const l = LINE_PATHS[lid];
+        return l ? `<span class="tip-line-chip" style="background:${l.color}22;color:${l.color};border:1px solid ${l.color}55">${l.name}</span>` : '';
+      }).join('');
+      document.getElementById('tip-desc').textContent = st.desc;
+      tip.style.display = 'block';
+      positionTip(e);
+    });
+    el.addEventListener('mousemove', positionTip);
+    el.addEventListener('mouseleave', () => tip.style.display = 'none');
+  });
+}
+function positionTip(e) {
+  const x = e.clientX + 14, y = e.clientY - 10;
+  tip.style.left = (x + tip.offsetWidth > window.innerWidth - 8 ? x - tip.offsetWidth - 20 : x) + 'px';
+  tip.style.top  = (y + tip.offsetHeight > window.innerHeight - 8 ? y - tip.offsetHeight : y) + 'px';
+}
+
+/* ── CONTROLS ─────────────────────────────── */
+function setStyle(s) {
+  currentStyle = s;
+  ['thin','std','bold'].forEach(id => document.getElementById('s-'+id).classList.toggle('active', id===s));
+  renderMap();
+}
+function setShape(sh) {
+  currentShape = sh;
+  ['circle','rect'].forEach(id => document.getElementById('sh-'+id).classList.toggle('active', id===sh));
+  renderMap();
+}
+function zoomAdj(d) {
+  svgScale = Math.max(0.5, Math.min(2.5, svgScale + d));
+  const el = document.getElementById('tube-svg');
+  el.style.transform = `scale(${svgScale})`;
+  el.style.transformOrigin = 'top left';
+}
+
+/* ── THEME ────────────────────────────────── */
+function setTheme(t) {
+  const resolved = t==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):t;
+  document.documentElement.setAttribute('data-theme', resolved);
+  ['light','dark','sys'].forEach(id => document.getElementById('btn-'+id).classList.toggle('active', id===t));
+  localStorage.setItem('vizor-theme', t);
+  renderMap();
+}
+
+// Init
+setTheme(localStorage.getItem('vizor-theme') || 'light');
+renderMap();
+</script>
+</body>
+</html>

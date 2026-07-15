@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #113 — BS-22 Vizor Efficiency Tab | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #113</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #113 — BS-22 Vizor Efficiency Tab</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>With PR #110 (BS-16), the harness gained a comprehensive instrument panel inside the SQLite data layer and the terminal output of <code>synlynk status</code>. However, this capacity data was trapped inside the terminal and JSON serializers.</p>
+<p>The broader target was to integrate this data into the browser-based workspace dashboard—<strong>Vizor</strong> (<code>synlynk viz</code>). For Vizor to serve as a complete project management and orchestration dashboard, it needed to present not just a history of what happened (Gantt and Cost views), but a forward-looking representation of whether the agent fleet is structurally prepared for the next task.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>The Vizor design sessions produced two foundational views — the Gantt timeline and the architect tube map — which defined the dashboard's dual-mode identity (timeline for PMs, topology for architects):</p>
+<p><img src="images/v011/bs21-gantt-v5.png" alt="BS-21 Vizor — Gantt v5 timeline view"></p>
+<p><img src="images/v011/bs21-tube-v2.png" alt="BS-21 Vizor — Architect tube map v2"></p>
+<p>Full brainstorm HTML: <a href="../brainstorm/bs21-vizor/"><code>docs/brainstorm/bs21-vizor/</code></a></p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Vizor is evolving from a retrospective event logger into a <strong>predictive scheduler dashboard</strong>.</p>
+<p>Before PR #113, the <em>Efficiency</em> tab in Vizor displayed post-hoc metrics: success rates, run times, and token cost curves. By enriching the dashboard with BS-16 capacity and capability data, the user is now presented with a clear visual representation of fleet readiness. It answers the critical orchestration question: <em>If I dispatch a Work or Ship task right now, which agent has the budget, version alignment, and cycle capability to execute it?</em></p>
+<h2>What This PR Shipped</h2>
+<p>This PR bridged the database status tables to the browser UI and resolved multiple critical bugs caught during the integration:</p>
+<ul>
+<li><strong>Enriched Vizor Efficiency Tab (<code>synlynk/viz.py</code>)</strong>: Added multiple frontend components built with vanilla CSS and inline SVG elements:
+<ul>
+<li><strong>Headless Efficiency Banner</strong>: Shows a large multiplier (e.g., <code>2.4x</code>) comparing headless run efficiency against interactive session baselines, complete with skeleton placeholder states.</li>
+<li><strong>Fleet Header Card</strong>: Displays the current active dispatch mode pill (e.g., <code>Mode: daily-grind</code> or <code>Mode: autopilot</code>) and the attached count badge (<code>3/4 attached</code>).</li>
+<li><strong>Capacity Progress Bars</strong>: Visualizes read, write, tool, and context budgets for all four primary agents (Claude, Agy, Codex, Grok) as relative progress bars normalized against the highest value in the fleet.</li>
+<li><strong>Cycle Capability Matrix</strong>: Renders a visually clean matrix showing support levels for all 6 SDLC phases using custom inline SVGs (green filled circles for <code>full</code> support, orange half-filled circles for <code>partial</code> support, and empty circles for <code>none</code>).</li>
+</ul>
+</li>
+<li><strong>Stable CLI Subprocess Integration</strong>: Wired <code>viz.py</code>'s data extraction pipeline to query <code>synlynk status --json</code> as a stable contract, decoupled from terminal-formatting layouts.</li>
+<li><strong>HarnessSnapshot Utility (<code>synlynk/hud.py</code>)</strong>: Implemented the <code>HarnessSnapshot</code> class to mirror <code>JobSnapshot</code>. It provides a clean, read-only interface to extract <code>harness_status</code> records from <code>state.db</code> for the terminal monitor.</li>
+</ul>
+<h3>Three Key Bugs Fixed in This PR</h3>
+<ul>
+<li><strong>UNIQUE Constraint Migration Crash (<code>synlynk/db.py</code>)</strong>: A previous migration attempt by Agy attempted to rename cycle values (e.g. renaming <code>plan</code> to <code>design</code>, <code>work</code> to <code>plan</code>). Because of overlapping names, this triggered SQLite <code>UNIQUE constraint failed</code> errors during migrations. This was fixed by removing the renames, keeping the original cycle names (Dream, Plan, Work, Ship, Maintain, Engage) clean.</li>
+<li><strong>Cycle Capability All-None Fallback Bug (<code>synlynk/status.py</code>)</strong>: <code>_compute_cycle_capability()</code> was reading <code>row[&quot;support&quot;]</code> (the BS-16 column, which was NULL for old migrated rows) and failing to fall back to <code>row[&quot;supported&quot;]</code> (the original column). This resulted in all capabilities displaying as <code>none</code> for existing rows. Corrected the conditional logic to fall back to <code>row[&quot;supported&quot;]</code>.</li>
+<li><strong>Status Command Crash</strong>: Resolved an edge-case crash in the status CLI where incomplete telemetry or empty tables would crash during rendering.</li>
+</ul>
+<h2>Test Approach</h2>
+<p>We added 7 comprehensive tests in <code>tests/test_vizor_efficiency.py</code> validating the HTML generator and API endpoints:</p>
+<ul>
+<li>Verifying the presence of the headless efficiency banner, capacity bars, and capability matrices in the rendered Vizor template.</li>
+<li>Asserting correct handling of placeholder states when database records are missing.</li>
+<li>Ensuring <code>generate_viz_data()</code> correctly extracts and packs the <code>ecosystem</code> dictionary.</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>By rendering fleet capacity and cycle capability directly on the visual dashboard, we have created a human-in-the-loop audit screen for the autonomous dispatch loop:</p>
+<ol>
+<li><strong>Fleet Readiness at a Glance</strong>: Users can visually audit which agents are suffering from version drift (warning badges) or are missing capabilities for specific SDLC phases.</li>
+<li><strong>Predictive Budget Auditing</strong>: With capacity bars, developers can see if their local token limits are near exhaustion before launching a large-scale story decomposition.</li>
+<li><strong>Robust Migration Path</strong>: Fixing the UNIQUE constraint bug secures the migration path from older versions of synlynk, ensuring state is preserved across releases.</li>
+</ol>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Now that Vizor displays fleet capability and the status checks are live, we must address the robustness of the dispatch loop itself. As agents are upgraded (e.g. Agy moving from version 1.0.0 to 2.0.0), CLI flags change. We need the dispatch loop to be self-aware of these changes—triggering preflight gate failures if an agent's CLI contract has drifted, and resolving the resulting &quot;TC-2&quot; dispatch failures.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

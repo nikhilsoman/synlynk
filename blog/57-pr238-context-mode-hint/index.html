@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #238 — A Dispatch Habit, Not a Bad Default: Warning on Redundant --context-mode full | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 14, 2026</span>
+        
+          <span class="blog-post-pr">PR #238</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #238 — A Dispatch Habit, Not a Bad Default: Warning on Redundant --context-mode full</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #236 (Measurement Ledger Hardening Phase 1, still open at the time) closed the loop on <em>what a cost row says about itself</em> — every write now carries explicit provenance. Reviewing the roadmap for what would strengthen that same &quot;trust the numbers&quot; theme turned up a smaller, adjacent waste: <code>synlynk dispatch</code> callers (including this project's own PM workflow) kept passing <code>--context-mode full</code> out of habit, even when a task prompt was already fully self-contained — exact code, exact file paths, exact commit message. Full-context dispatches inject the whole roadmap/memory/todo snapshot into the implementer's prompt, burning tokens the task didn't need.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>None — this and #202 (next post) were explicitly sequenced by the user (&quot;take up #237 first, then #202&quot;) as two independent, additive pieces of the same v0.12.0 &quot;Trust &amp; Cost-Aware Routing&quot; release theme, not a change in direction.</p>
+<p>Worth noting what this PR is <em>not</em>: it's not fixing a bad CLI default. <code>synlynk cli.py</code> already defaults <code>--context-mode</code> to <code>&quot;task&quot;</code> — confirmed before writing any code. This is purely about catching an explicit, unnecessary override.</p>
+<h2>What This PR Shipped</h2>
+<p><strong><code>_context_mode_hint(context_mode, task)</code></strong> — a pure, unit-testable heuristic in <code>synlynk/dispatch.py</code>. It only fires when <code>context_mode == &quot;full&quot;</code>, and only when the task text shows two independent self-containedness signals at once: a code fence (<code>```</code>) and something that looks like an exact commit message (<code>re.search(r&quot;commit\s+-m|commit message&quot;, task, re.IGNORECASE)</code>). Both signals together are a reasonable proxy for &quot;this prompt doesn't need project background&quot; — either alone (code with no commit message, or a commit message with no code) isn't a strong enough signal to warn on.</p>
+<p><strong>Non-blocking by design.</strong> The hint prints to stdout right after <code>dispatch_agent()</code> resolves <code>context_mode</code>:</p>
+<pre><code class="language-python">hint = _context_mode_hint(context_mode, task)
+if hint:
+    print(f&quot;    {hint}&quot;)
+</code></pre>
+<p>It never changes behavior or dispatch outcome — a caller who wants full context anyway (e.g. deliberately, for an agent that benefits from broader project awareness even on a spec'd task) is not stopped.</p>
+<p><strong>Tests target the pure function, not the side-effecting one.</strong> <code>dispatch_agent()</code> has heavy side effects (git worktree creation, subprocess spawning, preflight checks), so the six new tests in <code>tests/test_dispatch_context_mode_hint.py</code> exercise <code>_context_mode_hint()</code> directly: all four combinations of code-fence/commit-message presence at <code>context_mode=&quot;full&quot;</code>, plus confirmation the hint never fires at <code>&quot;task&quot;</code> or <code>&quot;none&quot;</code> even when both signals are present.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — pure logic fix, no visual/UI decisions.</p>
+<h2>Practicing What It Preaches</h2>
+<p>The dispatch prompt used to implement this fix (written to the scratchpad, then handed to <code>codex</code> via <code>synlynk dispatch codex --context-mode task</code>) was itself fully self-contained: exact diff blocks, exact test cases, exact commit message template. <code>--context-mode task</code> was chosen deliberately over <code>full</code> — the same discipline the fix now nudges other callers toward. Cost: 26,016 in / 6,504 out tokens (~$0.18), 161s, first-pass with no rework.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A small, compounding token-efficiency win: every dispatch this hint successfully steers away from <code>full</code> context saves the implementer agent a roadmap/memory/todo injection it didn't need, on every future dispatch that pattern-matches. It's a much smaller piece of the &quot;every number and every dispatch is deliberate, not habitual&quot; theme than PR #236, but it's the same theme.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Merged into <code>main</code> directly (squash merge, explicit user authorization). Next up in the same sequence: #202 (stall-killer status bug), covered in the next post. Both feed the still-open v0.12.0 &quot;Trust &amp; Cost-Aware Routing&quot; release, which also depends on PR #236 landing.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

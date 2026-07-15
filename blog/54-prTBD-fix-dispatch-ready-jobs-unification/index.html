@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — One Dispatch Path: Queue Launcher Stops Reimplementing Spawn | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 12, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — One Dispatch Path: Queue Launcher Stops Reimplementing Spawn</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Fable's external review (blog-adjacent strategy doc, PR #188) laid out a multi-year arc for synlynk as the OS for multi-agent development. One concrete finding was independent of the local-agent MLX work: the daemon/scheduler queue path and the interactive <code>dispatch</code> path had silently forked. Fleet scheduler v1 (<code>synlynk schedule --execute</code>) is designed to call <code>_dispatch_ready_jobs</code> as its execution primitive — so any isolation or flag gap there becomes a fleet-wide failure class, not a niche daemon bug.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No goalpost move. The review agreed we should <strong>not</strong> delete <code>_dispatch_ready_jobs</code> (it owns priority ordering, dependency gating, and concurrency caps that <code>dispatch_agent</code> correctly does not absorb). The fix is collapse-to-one-execution-implementation: keep the scheduler brain, delete the second spawn body.</p>
+<p>Cost-accounting hardcoding at the reconcile path remains out of scope (#189).</p>
+<h2>What This PR Shipped</h2>
+<h3><code>dispatch_agent(..., job_id=None)</code></h3>
+<p>Optional <code>job_id</code> lets the queue path hand the pre-existing <code>daemon_jobs</code> primary key into the shared launcher. When the row already exists, the DB write is an <code>UPDATE</code> (preserves <code>priority</code>, <code>depends_on</code>, <code>enqueued_at</code>) instead of <code>INSERT OR REPLACE</code> defaults.</p>
+<h3><code>_dispatch_ready_jobs</code> delegates spawn</h3>
+<p>The inline block that built <code>cli + non_interactive_flags</code> only, skipped <code>_preflight_dispatch</code>, and <code>Popen</code>'d <code>sh -c</code> with no <code>cwd</code> is gone. Per ready queue row it now calls:</p>
+<pre><code class="language-python">dispatch_agent(agent, task, story_id=story_id, force_agent=True, job_id=job_id)
+</code></pre>
+<p>Scheduling logic (priority <code>ORDER BY</code>, failed/unmet <code>depends_on</code>, <code>max_parallel</code> slots) is unchanged. Preflight/worktree failures mark the queue row <code>failed</code> so the daemon does not spin forever.</p>
+<h3>Regression test</h3>
+<p><code>test_dispatch_ready_jobs_creates_worktree_and_applies_dispatch_flags</code> asserts that a queued row launched via <code>_dispatch_ready_jobs</code>:</p>
+<ul>
+<li>creates the job worktree layout (<code>worktrees/&lt;job_id&gt;/.synlynk/{logs,prompts}</code>)</li>
+<li>applies Claude <code>dispatch_flags</code> (<code>--dangerously-skip-permissions</code>)</li>
+<li>sets <code>Popen(..., cwd=worktree_path)</code></li>
+<li>records <code>worktree_path</code> / <code>worktree_branch</code> on the jobs.json entry under the <strong>same</strong> <code>job_id</code></li>
+</ul>
+<p>Priority / dependency / concurrency tests continue to pass.</p>
+<h2>On Track Toward Full Autonomous Multi-Agent Dispatch</h2>
+<p>The scheduler and the interactive CLI no longer have two half-copies of &quot;how to run an agent.&quot; When fleet dispatch launches concurrent cross-agent jobs, each one gets worktree isolation and the same permission/dispatch flag translation as a human <code>synlynk dispatch</code>. That is a prerequisite for safe parallel execution under <code>synlynk schedule --execute</code>.</p>
+<h2>New Goalpost</h2>
+<ul>
+<li>Land #190; confirm daemon + schedule paths dogfood the unified launcher.</li>
+<li>#189 still open for cost-accounting rate-table bypasses (including the reconcile path next to this code).</li>
+<li>Local-agent / MLX driver work can assume queue isolation is real rather than re-litigating it.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

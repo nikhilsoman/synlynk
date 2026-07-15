@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #118 — BS-22: Vizor Gets Its Eyes</h1>
+<p><strong>Date:</strong> 2026-07-05
+<strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/118">#118</a>
+<strong>Branch:</strong> <code>feat/bs22-vizor-efficiency</code> → <code>main</code></p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>After the Live Job Observatory (BS-13, PR #117), synlynk could watch a live multi-agent fleet in real time — which agent was running, what it cost, how long it had been running. The next target was agent autonomy and permissions (BS-12). But before we locked in that scope, a smaller, unblocked improvement was ready to ship: making the Vizor <strong>Efficiency tab</strong> actually informative.</p>
+<p>The Efficiency tab existed. It had agent cards. But it showed structural skeleton data without telling you anything meaningful about how work was actually being distributed across the team.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>BS-22 was originally deferred because it consumed data from <code>eco.agents[agent].capacity</code> and <code>eco.cycle_capability</code> — keys that BS-16 (Ecosystem Status) was responsible for populating. But BS-16 shipped a safe <code>is_placeholder</code> fallback in <code>viz.py</code> that already modelled those keys with realistic dummy values. That unblocked BS-22 entirely: the Efficiency tab could be enriched immediately without waiting for live capacity telemetry.</p>
+<p>The strategic priority also sharpened: with Developer Preview approaching, every partially-visible feature needed to be complete, not skeletal. A tab with agent cards and empty bars communicates &quot;work in progress&quot; to anyone who opens it. That's a bad first impression at exactly the wrong moment.</p>
+<hr>
+<h2>What Shipped</h2>
+<h3>R/W/T Budget Bars on Agent Cards</h3>
+<p>Each agent card in the Efficiency tab now shows three utilisation bars: <strong>Read</strong>, <strong>Write</strong>, and <strong>Test</strong> budget consumption expressed as a percentage of <code>TIER1_CAPACITY</code>. This is the most direct answer to &quot;is this agent loaded or idle?&quot; visible at a glance.</p>
+<p>Implementation: new <code>.rwt-section</code> and <code>.rwt-row</code> CSS classes in <code>generate_efficiency_html()</code> in <code>synlynk/viz.py</code>. Each bar renders as a percentage-width <code>div</code> inside a fixed-width track. Colours match the agent's theme (Claude blue, Agy green, Codex amber, Grok purple).</p>
+<h3>Cycle × Agent Capability Matrix</h3>
+<p>Below the agent cards, a full <code>6 × 4</code> table shows which agent has <strong>full</strong>, <strong>partial</strong>, or <strong>none</strong> support for each of the six workflow cycles: <code>dream</code>, <code>plan</code>, <code>work</code>, <code>ship</code>, <code>maintain</code>, <code>engage</code>.</p>
+<p>Each cell shows a badge: <code>.cap-full</code> (solid), <code>.cap-partial</code> (hatched), <code>.cap-none</code> (greyed). The matrix answers at a glance which agents can cover which phases of the work cycle — essential information when routing a new story.</p>
+<p>Data source: <code>get_capability_level(agent, cycle, eco)</code> — a new function that resolves support level from the ecosystem data or the placeholder dict in order. Live data overrides placeholder; missing data renders as <code>none</code>.</p>
+<h3>Per-Agent Radar Hexagon SVGs</h3>
+<p>Each agent card gets a <code>80×80 px</code> SVG radar hexagon with six axes (one per cycle). Axis score maps support level to a 0.0–1.0 scale: <code>full</code> → 1.0, <code>partial</code> → 0.5, <code>none</code> → 0.0. The polygon fills with the agent's theme colour at 30% opacity.</p>
+<p>This gives an at-a-glance capability fingerprint per agent — two agents with the same total capacity but different cycle coverage are immediately distinguishable.</p>
+<h3>Review Fixes Applied</h3>
+<p>A code review after the initial implementation caught three issues, all fixed before merge:</p>
+<ol>
+<li><strong>Blocking:</strong> The old SVG circles matrix hard-coded <code>support = &quot;none&quot;</code> for every cell when <code>is_placeholder=True</code>, contradicting the new text matrix which correctly showed the placeholder cycle data. Fix: removed the <code>is_placeholder</code> short-circuit.</li>
+<li><strong>Warning:</strong> CSS class <code>cap-{support}</code> was built from a raw DB string with no case normalisation. Added <code>.lower()</code> to prevent silent styling breaks from mixed-case DB values.</li>
+<li><strong>Warning:</strong> The third fallback block in <code>get_capability_level()</code> was dead code — both data sources use lowercase keys, so it never executed. Removed.</li>
+</ol>
+<hr>
+<h2>What This Achieved</h2>
+<p>The Efficiency tab went from a structural placeholder to a genuine information surface. Any team member opening Vizor can now answer:</p>
+<ul>
+<li>Which agents are capacity-constrained right now?</li>
+<li>Which agents can cover the <code>ship</code> cycle vs. just <code>dream</code>?</li>
+<li>Which agent has the best cycle coverage breadth?</li>
+</ul>
+<p>This matters for routing decisions when allocating new stories, and for understanding where bottlenecks form as the workgroup scales.</p>
+<hr>
+<h2>The New Goalpost</h2>
+<p>With the Efficiency tab complete, the visible surface of Vizor is coherent for Developer Preview. The next — and larger — milestone is the <strong>Agent Autonomy Bridge (BS-12, PR #119)</strong>: permission grants, per-project harness config, agent handoff protocol, a doctor-guided fix wizard, and SOP codification across all directive files. That's the scaffolding for agents that can operate independently without requiring human intervention at every decision point.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

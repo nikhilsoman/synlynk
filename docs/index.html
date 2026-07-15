@@ -73,6 +73,44 @@
   <pre><code>curl -fsSL install.synlynk.com | bash</code></pre>
 </div>
 
+<div class="docs-quick-ref">
+  <h3>Getting Started</h3>
+  <pre><code>synlynk init --wizard
+synlynk doctor
+synlynk exec claude
+synlynk status</code></pre>
+</div>
+
+<div class="docs-quick-ref">
+  <h3>Daily Use</h3>
+  <pre><code>synlynk dispatch codex --task "..." --force-agent
+synlynk jobs --watch
+synlynk logs --job &lt;id&gt;
+synlynk checkpoint</code></pre>
+</div>
+
+<div class="docs-quick-ref">
+  <h3>Team / PM</h3>
+  <pre><code>synlynk join
+synlynk team status
+synlynk story create ...
+synlynk schedule --execute</code></pre>
+</div>
+
+<div class="docs-quick-ref">
+  <h3>Advanced / Operate</h3>
+  <pre><code>synlynk agent run &lt;name&gt;
+synlynk scan --deep
+synlynk viz --serve</code></pre>
+</div>
+
+<div class="docs-quick-ref">
+  <h3>Upgrading?</h3>
+  <p>If you installed synlynk before 2026-07, here's what's new: <code>synlynk schedule</code> (fleet batch dispatch), <code>synlynk cost log</code> (manual cost entries), a <code>RATES</code> line in <code>synlynk status</code>, and <code>synlynk viz</code> (local web HUD).</p>
+  <pre><code>synlynk upgrade
+synlynk doctor</code></pre>
+</div>
+
   </main>
 
   <!-- Footer stub -->

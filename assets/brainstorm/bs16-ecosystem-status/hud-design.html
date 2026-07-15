@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-16: Ecosystem HUD</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #080a10;
+  color: #e2e8f0;
+  font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  padding: 1.5rem;
+  font-size: 12px;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.hud-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #1a1f2e;
+}
+.hud-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.15em; color: #475569; }
+.hud-title span { color: #7c3aed; font-weight: bold; }
+.hud-meta { font-size: 10px; color: #334155; }
+.dispatch-mode {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: #0f1520; border: 1px solid #1e3a5f; border-radius: 20px;
+  padding: 0.3rem 0.75rem; font-size: 10px; color: #60a5fa;
+}
+.mode-dot { width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── EFFICIENCY BANNER ── */
+.efficiency-banner {
+  background: linear-gradient(135deg, #0f1a0f 0%, #0a1520 100%);
+  border: 1px solid #166534;
+  border-radius: 10px;
+  padding: 0.9rem 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.eff-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #4ade80; margin-bottom: 0.2rem; }
+.eff-value { font-size: 1.6rem; font-weight: bold; color: #10b981; line-height: 1; }
+.eff-sub { font-size: 10px; color: #475569; margin-top: 0.2rem; }
+.eff-stats { display: flex; gap: 2rem; }
+.eff-stat { text-align: center; }
+.eff-stat .v { font-size: 1rem; font-weight: bold; color: #e2e8f0; }
+.eff-stat .l { font-size: 10px; color: #475569; }
+.eff-insight { font-size: 11px; color: #86efac; max-width: 320px; line-height: 1.5; }
+.eff-insight strong { color: #4ade80; }
+
+/* ── AGENT GRID ── */
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.agent-card {
+  background: #0c0e16;
+  border: 1px solid #1a1f2e;
+  border-radius: 12px;
+  padding: 1rem;
+  position: relative;
+  transition: border-color 0.2s;
+}
+.agent-card:hover { border-color: #334155; }
+.agent-card.ref { border-color: #1d3a5f; }
+.agent-card.degraded { border-color: #451a03; }
+
+/* status dot */
+.status-dot {
+  position: absolute; top: 0.75rem; right: 0.75rem;
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.status-dot.up { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.status-dot.deg { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+.status-dot.down { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+/* agent icon */
+.agent-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; margin-bottom: 0.6rem;
+}
+.icon-claude  { background: #1a1030; color: #a78bfa; }
+.icon-agy     { background: #0a1a10; color: #34d399; }
+.icon-codex   { background: #0a0f1a; color: #60a5fa; }
+.icon-grok    { background: #1a1000; color: #fbbf24; }
+
+.agent-name { font-size: 0.82rem; font-weight: bold; color: #e2e8f0; margin-bottom: 2px; }
+.agent-ver  { font-size: 10px; color: #334155; margin-bottom: 0.75rem; }
+.agent-ref-badge { font-size: 9px; color: #3b82f6; background: #0f1f3f; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+
+/* attach rate */
+.attach-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+.attach-label { font-size: 10px; color: #475569; width: 44px; flex-shrink: 0; }
+.attach-pct { font-size: 11px; font-weight: bold; width: 34px; text-align: right; flex-shrink: 0; }
+.attach-spark { flex: 1; height: 20px; }
+
+/* token budgets */
+.budgets { margin-bottom: 0.75rem; }
+.budget-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 4px; }
+.budget-icon { font-size: 10px; width: 12px; flex-shrink: 0; }
+.budget-bar-wrap { flex: 1; background: #1a1f2e; border-radius: 2px; height: 5px; }
+.budget-bar { height: 100%; border-radius: 2px; }
+.budget-val { font-size: 9px; width: 34px; text-align: right; flex-shrink: 0; }
+.b-input  .budget-bar { background: #7c3aed; }
+.b-output .budget-bar { background: #06b6d4; }
+.b-tools  .budget-bar { background: #d97706; }
+.b-input  .budget-val { color: #a78bfa; }
+.b-output .budget-val { color: #06b6d4; }
+.b-tools  .budget-val { color: #d97706; }
+
+/* gauges row */
+.gauges { display: flex; gap: 0.5rem; }
+.gauge-wrap { flex: 1; text-align: center; }
+.gauge-wrap svg { display: block; margin: 0 auto; }
+.gauge-label { font-size: 9px; color: #475569; margin-top: 2px; }
+.gauge-val { font-size: 10px; font-weight: bold; color: #e2e8f0; }
+
+/* ── HARNESS COMPAT MATRIX ── */
+.matrix-wrap { margin-bottom: 1.5rem; }
+.matrix-grid {
+  display: grid;
+  grid-template-columns: 80px repeat(4, 1fr);
+  gap: 4px;
+}
+.matrix-cell {
+  background: #0c0e16;
+  border-radius: 6px;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 10px;
+}
+.matrix-header { background: transparent; color: #475569; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+.matrix-from { background: transparent; color: #64748b; font-size: 10px; display: flex; align-items: center; }
+.compat-100 { background: #0a1f12; border: 1px solid #166534; }
+.compat-90  { background: #0a1a10; border: 1px solid #14532d; }
+.compat-78  { background: #1a1400; border: 1px solid #78350f; }
+.compat-61  { background: #1a0a00; border: 1px solid #7c2d12; }
+.compat-self { background: #0f1117; border: 1px solid #1e293b; color: #334155; }
+.compat-val { font-size: 11px; font-weight: bold; display: block; margin-bottom: 2px; }
+.compat-note { font-size: 9px; color: #475569; line-height: 1.3; }
+.compat-100 .compat-val { color: #10b981; }
+.compat-90  .compat-val { color: #34d399; }
+.compat-78  .compat-val { color: #f59e0b; }
+.compat-61  .compat-val { color: #ef4444; }
+
+/* ── SENTINELS + BOTTOM ── */
+.bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.panel { background: #0c0e16; border: 1px solid #1a1f2e; border-radius: 10px; padding: 0.9rem; }
+.panel h4 { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #334155; margin-bottom: 0.6rem; }
+.sentinel-empty { color: #1e4620; font-size: 11px; }
+.eco-alert { background: #0a1a10; border: 1px solid #166534; border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 11px; color: #4ade80; display: flex; align-items: center; gap: 0.5rem; }
+.eco-icon { font-size: 14px; }
+
+/* sparkline helper via SVG polyline */
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hud-header">
+  <div>
+    <div class="hud-title"><span>synlynk</span> ecosystem status</div>
+    <div class="hud-meta">2026-07-01 · 14:23:07 · workspace: synlynk · 3/4 attached</div>
+  </div>
+  <div class="dispatch-mode">
+    <div class="mode-dot"></div>
+    daily-grind
+  </div>
+</div>
+
+<!-- EFFICIENCY BANNER -->
+<div class="efficiency-banner">
+  <div>
+    <div class="eff-label">Headless Efficiency</div>
+    <div class="eff-value">4.2×</div>
+    <div class="eff-sub">tokens doing work vs. interactive baseline</div>
+  </div>
+  <div class="eff-stats">
+    <div class="eff-stat">
+      <div class="v" style="color:#10b981">847K</div>
+      <div class="l">tokens saved<br>this session</div>
+    </div>
+    <div class="eff-stat">
+      <div class="v" style="color:#a78bfa">23</div>
+      <div class="l">jobs dispatched<br>headlessly</div>
+    </div>
+    <div class="eff-stat">
+      <div class="v" style="color:#06b6d4">$0.34</div>
+      <div class="l">saved vs.<br>interactive</div>
+    </div>
+  </div>
+  <div class="eff-insight">
+    <strong>Why this matters:</strong> Each headless dispatch starts with a clean context. No conversation history accumulating — every token goes to the task. synlynk keeps your fleet efficient.
+  </div>
+</div>
+
+<!-- AGENT GRID -->
+<div class="agent-grid">
+
+  <!-- CLAUDE -->
+  <div class="agent-card ref">
+    <div class="status-dot up"></div>
+    <div class="agent-icon icon-claude">◈</div>
+    <div class="agent-name">claude <span class="agent-ref-badge">ref</span></div>
+    <div class="agent-ver">v1.2.3 · claude-sonnet-4-6 · max</div>
+
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#10b981">100%</span>
+      <svg class="attach-spark" viewBox="0 0 60 20">
+        <polyline points="0,15 5,12 10,14 15,10 20,8 25,10 30,6 35,8 40,5 45,7 50,4 55,5 60,3"
+          fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.8"/>
+        <circle cx="60" cy="3" r="2" fill="#10b981"/>
+      </svg>
+    </div>
+
+    <div class="budgets">
+      <div class="budget-row b-input">
+        <span class="budget-icon">↓</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:20%"></div></div>
+        <span class="budget-val">200K</span>
+      </div>
+      <div class="budget-row b-output">
+        <span class="budget-icon">↑</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div>
+        <span class="budget-val">32K</span>
+      </div>
+      <div class="budget-row b-tools">
+        <span class="budget-icon">⚙</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:40%"></div></div>
+        <span class="budget-val">~200</span>
+      </div>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-dasharray="57 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#10b981" font-size="8" font-family="monospace" font-weight="bold">99%</text>
+        </svg>
+        <div class="gauge-label">complete</div>
+      </div>
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#334155" stroke-width="4" stroke-linecap="round" stroke-dasharray="57 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#475569" font-size="8" font-family="monospace">ref</text>
+        </svg>
+        <div class="gauge-label">adherence</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGY -->
+  <div class="agent-card degraded">
+    <div class="status-dot deg"></div>
+    <div class="agent-icon icon-agy">◇</div>
+    <div class="agent-name">agy</div>
+    <div class="agent-ver">v3.2.0 · gemini-2.0-flash · pro</div>
+
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#ef4444">61%</span>
+      <svg class="attach-spark" viewBox="0 0 60 20">
+        <polyline points="0,5 5,8 10,4 15,12 20,6 25,14 30,10 35,16 40,8 45,14 50,10 55,16 60,13"
+          fill="none" stroke="#ef4444" stroke-width="1.5" opacity="0.8"/>
+        <circle cx="60" cy="13" r="2" fill="#ef4444"/>
+      </svg>
+    </div>
+
+    <div class="budgets">
+      <div class="budget-row b-input">
+        <span class="budget-icon">↓</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div>
+        <span class="budget-val">1,000K</span>
+      </div>
+      <div class="budget-row b-output">
+        <span class="budget-icon">↑</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:25%"></div></div>
+        <span class="budget-val">8K</span>
+      </div>
+      <div class="budget-row b-tools">
+        <span class="budget-icon">⚙</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div>
+        <span class="budget-val">~500</span>
+      </div>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-dasharray="38 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#ef4444" font-size="8" font-family="monospace" font-weight="bold">67%</text>
+        </svg>
+        <div class="gauge-label">complete</div>
+      </div>
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-dasharray="25 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#ef4444" font-size="8" font-family="monospace" font-weight="bold">43%</text>
+        </svg>
+        <div class="gauge-label">adherence</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CODEX -->
+  <div class="agent-card">
+    <div class="status-dot up"></div>
+    <div class="agent-icon icon-codex">⬡</div>
+    <div class="agent-name">codex</div>
+    <div class="agent-ver">v1.1.0 · gpt-4o · plus</div>
+
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#10b981">94%</span>
+      <svg class="attach-spark" viewBox="0 0 60 20">
+        <polyline points="0,8 5,6 10,7 15,5 20,7 25,4 30,6 35,3 40,5 45,4 50,3 55,4 60,3"
+          fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.8"/>
+        <circle cx="60" cy="3" r="2" fill="#10b981"/>
+      </svg>
+    </div>
+
+    <div class="budgets">
+      <div class="budget-row b-input">
+        <span class="budget-icon">↓</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:13%"></div></div>
+        <span class="budget-val">128K</span>
+      </div>
+      <div class="budget-row b-output">
+        <span class="budget-icon">↑</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div>
+        <span class="budget-val">16K</span>
+      </div>
+      <div class="budget-row b-tools">
+        <span class="budget-icon">⚙</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:26%"></div></div>
+        <span class="budget-val">~128</span>
+      </div>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-dasharray="52 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#10b981" font-size="8" font-family="monospace" font-weight="bold">92%</text>
+        </svg>
+        <div class="gauge-label">complete</div>
+      </div>
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-dasharray="50 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#10b981" font-size="8" font-family="monospace" font-weight="bold">87%</text>
+        </svg>
+        <div class="gauge-label">adherence</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GROK -->
+  <div class="agent-card">
+    <div class="status-dot deg"></div>
+    <div class="agent-icon icon-grok">✦</div>
+    <div class="agent-name">grok</div>
+    <div class="agent-ver">v2.0.1 · grok-3 · ?</div>
+
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#f59e0b">78%</span>
+      <svg class="attach-spark" viewBox="0 0 60 20">
+        <polyline points="0,5 5,4 10,3 15,6 20,4 25,8 30,5 35,10 40,7 45,12 50,9 55,13 60,11"
+          fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.8"/>
+        <circle cx="60" cy="11" r="2" fill="#f59e0b"/>
+      </svg>
+    </div>
+
+    <div class="budgets">
+      <div class="budget-row b-input">
+        <span class="budget-icon">↓</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:13%"></div></div>
+        <span class="budget-val">131K</span>
+      </div>
+      <div class="budget-row b-output">
+        <span class="budget-icon">↑</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div>
+        <span class="budget-val">16K</span>
+      </div>
+      <div class="budget-row b-tools">
+        <span class="budget-icon">⚙</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:20%"></div></div>
+        <span class="budget-val">~100</span>
+      </div>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" stroke-dasharray="46 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#f59e0b" font-size="8" font-family="monospace" font-weight="bold">81%</text>
+        </svg>
+        <div class="gauge-label">complete</div>
+      </div>
+      <div class="gauge-wrap">
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#1a1f2e" stroke-width="4" stroke-linecap="round"/>
+          <path d="M4,24 A18,18 0 0,1 40,24" fill="none" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" stroke-dasharray="40 57" stroke-dashoffset="0"/>
+          <text x="22" y="22" text-anchor="middle" fill="#f59e0b" font-size="8" font-family="monospace" font-weight="bold">71%</text>
+        </svg>
+        <div class="gauge-label">adherence</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- HARNESS COMPAT MATRIX -->
+<h3 style="margin-bottom:0.6rem">Harness compatibility — from × to</h3>
+<div class="matrix-wrap">
+  <div class="matrix-grid">
+    <div class="matrix-header" style="font-size:9px;color:#334155">FROM ↓ TO →</div>
+    <div class="matrix-header">◈ claude</div>
+    <div class="matrix-header">◇ agy</div>
+    <div class="matrix-header">⬡ codex</div>
+    <div class="matrix-header">✦ grok</div>
+
+    <div class="matrix-from">◈ claude</div>
+    <div class="matrix-cell compat-self"><span class="compat-val">—</span><span class="compat-note">home</span></div>
+    <div class="matrix-cell compat-61"><span class="compat-val">61%</span><span class="compat-note">headless unreliable</span></div>
+    <div class="matrix-cell compat-90"><span class="compat-val">94%</span><span class="compat-note">resume ✗</span></div>
+    <div class="matrix-cell compat-78"><span class="compat-val">78%</span><span class="compat-note">network degraded</span></div>
+
+    <div class="matrix-from">◇ agy</div>
+    <div class="matrix-cell compat-90"><span class="compat-val">91%</span><span class="compat-note">fence respected</span></div>
+    <div class="matrix-cell compat-self"><span class="compat-val">—</span><span class="compat-note">home</span></div>
+    <div class="matrix-cell compat-78"><span class="compat-val">72%</span><span class="compat-note">sandbox limits</span></div>
+    <div class="matrix-cell compat-61"><span class="compat-val">64%</span><span class="compat-note">flag drift</span></div>
+
+    <div class="matrix-from">⬡ codex</div>
+    <div class="matrix-cell compat-90"><span class="compat-val">95%</span><span class="compat-note">full dispatch</span></div>
+    <div class="matrix-cell compat-78"><span class="compat-val">74%</span><span class="compat-note">output truncation</span></div>
+    <div class="matrix-cell compat-self"><span class="compat-val">—</span><span class="compat-note">home</span></div>
+    <div class="matrix-cell compat-78"><span class="compat-val">79%</span><span class="compat-note">network dep</span></div>
+
+    <div class="matrix-from">✦ grok</div>
+    <div class="matrix-cell compat-90"><span class="compat-val">88%</span><span class="compat-note">partial tool support</span></div>
+    <div class="matrix-cell compat-61"><span class="compat-val">58%</span><span class="compat-note">PTY required</span></div>
+    <div class="matrix-cell compat-78"><span class="compat-val">76%</span><span class="compat-note">approval policy</span></div>
+    <div class="matrix-cell compat-self"><span class="compat-val">—</span><span class="compat-note">home</span></div>
+  </div>
+</div>
+
+<!-- BOTTOM -->
+<div class="bottom-row">
+  <div class="panel">
+    <h4>Sentinels</h4>
+    <div class="sentinel-empty">✓ no active sentinels</div>
+  </div>
+  <div class="panel">
+    <h4>Capacity opportunity</h4>
+    <div class="eco-alert">
+      <span class="eco-icon">⚡</span>
+      <span>agy off-peak window in ~2h — output limit may expand to 32K. 4 queued tasks eligible for eco dispatch.</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

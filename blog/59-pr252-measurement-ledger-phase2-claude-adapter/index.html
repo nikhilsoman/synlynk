@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #252 — Measurement Ledger Phase 2: The Claude Structured-Output Adapter | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 15, 2026</span>
+        
+          <span class="blog-post-pr">PR #252</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #252 — Measurement Ledger Phase 2: The Claude Structured-Output Adapter</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #244 shipped the first of four planned per-agent structured-output adapters — Codex — and validated the pattern end to end: <code>extract_tokens()</code> gains an <code>agent=</code> parameter, tries a per-agent <code>_extract_&lt;agent&gt;_structured()</code> function first, and falls through to the existing regex chain on any failure, silently and automatically. That PR's own closing note named the next goalpost explicitly: &quot;the same pattern, three more times&quot; — Claude, Gemini, Grok — each independently shippable, each requiring its own live-verified investigation of that CLI's actual structured-output shape rather than an assumption carried over from Codex's.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Two genuine design forks came up during brainstorming, both resolved by asking rather than assuming, per this project's established discipline of flagging non-obvious decisions explicitly.</p>
+<p><strong>Cost capture scope.</strong> Claude's <code>result</code> event carries a top-level <code>total_cost_usd</code> field — a dollar figure the CLI itself computes, and something no other agent's structured output reports. The tempting move is to capture it, since it's free and precise. It was deliberately declined: wiring in a per-agent dollar figure would break the uniform token-counts-only contract every adapter (and <code>_resolve_cost_tier()</code>) currently shares, for a benefit (Claude-only cost precision) that doesn't generalize to the other three agents still to come. Token-only, same shape as Codex.</p>
+<p><strong>Log-rendering depth.</strong> Claude's stream-json carries meaningfully richer event structure than Codex's — <code>assistant</code> events with mixed <code>text</code>/<code>tool_use</code> content blocks, <code>user</code> events carrying <code>tool_result</code> responses between turns, <code>rate_limit_event</code> noise. The question was whether <code>synlynk logs</code> needed full parity with Codex's readable-prose rendering, or just enough noise-suppression to keep the raw JSONL from being unreadable. Full parity was chosen — text blocks render as prose, <code>tool_use</code> blocks render as <code>$ ToolName(args)</code>, matching the bar Codex's <code>_render_codex_log_line()</code> already set.</p>
+<h2>What This PR Shipped</h2>
+<p>The live investigation came first, same as the Codex pilot: running <code>claude -p --output-format stream-json --verbose</code> directly and capturing real output, not working from memory. Two things confirmed by that investigation shaped the design meaningfully:</p>
+<p><code>--verbose</code> turned out to be a hard requirement, not an optional nicety — the CLI refuses to start with <code>--print --output-format stream-json</code> unless <code>--verbose</code> is also present, confirmed by deliberately omitting it and reading the resulting error. And Claude's <code>usage</code> object has a shape genuinely different from Codex's: <code>cache_creation_input_tokens</code> and <code>input_tokens</code> are separate, additive pools (confirmed across a 1-turn and a 2-turn live test — the ratio between them can be three to four orders of magnitude), unlike Codex's <code>cached_input_tokens</code>, which is a subset of <code>input_tokens</code>. Folding <code>cache_creation_input_tokens</code> into <code>input_tokens</code> was the only option that didn't grossly undercount, given Phase 1's rate table has no separate cache-write tier.</p>
+<p>Five commits landed on top of the design/plan docs:</p>
+<ul>
+<li><strong><code>synlynk/costs.py</code></strong> — <code>_extract_claude_structured()</code> scans every line for the single <code>type: &quot;result&quot;</code> event (there's exactly one per invocation, carrying cumulative <code>usage</code>), returning <code>None</code> on any parse failure so the existing regex chain still applies unchanged. <code>extract_tokens()</code> gained a sibling <code>if agent == &quot;claude&quot;:</code> branch immediately after the existing Codex one — no shared abstraction introduced; the spec's own precedent explicitly deferred a registry pattern until a fifth or sixth agent makes the flat <code>if</code> chain unwieldy.</li>
+<li><strong><code>synlynk/dispatch.py</code></strong> — <code>--output-format stream-json --verbose</code> added to Claude's flag list in <code>dispatch_agent()</code>, as a sibling to the existing <code>if agent == &quot;grok&quot;:</code>/<code>if agent == &quot;codex&quot;:</code> blocks.</li>
+<li><strong><code>synlynk/__init__.py</code></strong> — <code>_render_claude_log_line()</code> added, handling <code>assistant</code> events (rendering <code>text</code> and <code>tool_use</code> content blocks), and suppressing <code>system</code>/<code>rate_limit_event</code>/<code>result</code>/<code>user</code> events as noise. <code>cmd_logs()</code>'s two-way codex/passthrough dispatch became a three-way dispatch (codex renderer / claude renderer / raw passthrough) — unparseable lines still print as-is under every branch, so a pre-flag-change job or a crashed job's raw stderr stays visible.</li>
+<li><strong><code>tests/test_cost_ledger.py</code></strong> — grew by 30 tests across all five tasks, directly mirroring the Codex adapter's own test suite shape (adapter unit tests, <code>extract_tokens</code> cross-agent tests, dispatch-flags test, renderer tests, <code>cmd_logs</code> integration tests).</li>
+</ul>
+<p><strong>Process note, consistent with the discipline PR #244 established:</strong> every implementation task was dispatched to Codex individually via <code>synlynk dispatch codex --task &quot;...&quot; --force-agent</code>, and every dispatch was independently verified before merging — reading the actual diff against the plan, then running the relevant test slice myself, rather than trusting the dispatched job's self-reported result. All five tasks matched the plan's specified code exactly on the first attempt; no defects were caught this time, which is itself a useful signal that a fully-specced plan with complete code in every step (per the writing-plans skill's no-placeholders rule) reduces the room for a dispatched agent to drift. A full-suite regression run (<code>pytest -q --ignore=worktrees</code>) closed the loop: 1100 passed, 2 skipped, with a separate <code>-k &quot;codex or grok&quot;</code> pass confirming zero collateral impact on the previously shipped adapter.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — same as the Codex pilot, this stayed a text-and-code investigation. The two design forks (cost-capture scope, log-rendering depth) were conceptual/scope questions, not visual ones, and were resolved via direct multiple-choice questions rather than the visual companion.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the second of four planned per-agent adapters, and it stress-tests the pattern PR #244 established against a CLI with a meaningfully different output shape — mixed content-block events instead of Codex's flatter <code>item.completed</code> structure, and an additive rather than subset cache-token relationship. The pattern held without modification: one function, one dispatch branch, one renderer, zero changes required to <code>_resolve_cost_tier()</code> or any of Phase 1's provenance machinery. Gemini and Grok remain, and each still gets its own live investigation rather than a copy-paste of this shape — Claude's own <code>cache_creation_input_tokens</code> surprise is the reason that discipline stays non-negotiable.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Two of four structured-output adapters are now live (pending merge of this PR). Same as PR #244, this isn't a release blocker on its own — it's a fast-follow within the already-unblocked v0.12.0 theme, closing more of the gap between <code>estimated_tshirt</code> (coarse guess) and <code>estimated_token_rate</code> (precise, agent-native number) for the fleet's token accounting. The next goalpost is unchanged from where PR #244 left it, minus one: Gemini and Grok, each independently shippable, each requiring the same live-verification discipline this PR just re-validated was worth the effort.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

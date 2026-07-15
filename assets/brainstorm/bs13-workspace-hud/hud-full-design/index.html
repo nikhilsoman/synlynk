@@ -1,0 +1,197 @@
+<h2>synlynk watch — Full Ambient HUD</h2>
+<p class="subtitle">Left: Work cycle selected (active jobs). Right: Dream cycle selected (idle). Same layout, different panel content.</p>
+
+<div class="split">
+
+  <!-- LEFT: Active cycle selected (Work) -->
+  <div class="mockup">
+    <div class="mockup-header">Work cycle selected — 2 active jobs</div>
+    <div class="mockup-body" style="background:#0d1117;padding:14px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.65">
+
+      <!-- Platform health header (collapsed) -->
+      <div style="background:#161b22;border:1px solid #21262d;border-radius:4px;padding:6px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#8b949e;font-size:10px">▶ PLATFORM &nbsp; <span style="color:#3fb950">✓ claude</span> &nbsp; <span style="color:#3fb950">✓ agy</span> &nbsp; <span style="color:#3fb950">✓ codex</span> &nbsp; <span style="color:#3fb950">✓ grok</span> &nbsp; budget: $8.40 / $20.00</span>
+        <span style="color:#8b949e;font-size:10px">[p]</span>
+      </div>
+
+      <div style="display:flex;gap:0">
+        <!-- Tube sidebar -->
+        <div style="width:120px;flex-shrink:0;border-right:1px solid #21262d;padding-right:12px;margin-right:12px">
+          <div style="color:#58a6ff;font-size:9px;letter-spacing:.1em;margin-bottom:10px">synlynk</div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.7">
+            <div style="width:3px;height:30px;background:#a371f7;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#a371f7">Dream</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.7">
+            <div style="width:3px;height:30px;background:#58a6ff;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#58a6ff">Plan</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;background:#f0883e0d;border:1px solid #f0883e33">
+            <div style="width:3px;height:30px;background:#f0883e;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#f0883e;font-weight:bold">Work</div><div style="font-size:9px;color:#f0883e">◉ 2 running</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.7">
+            <div style="width:3px;height:30px;background:#3fb950;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#3fb950">Ship</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.35">
+            <div style="width:3px;height:30px;background:#d29922;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#d29922">Maintain</div><div style="font-size:9px;color:#6e7681">○ idle</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.35">
+            <div style="width:3px;height:30px;background:#39d3bb;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#39d3bb">Engage</div><div style="font-size:9px;color:#6e7681">○ idle</div></div>
+          </div>
+
+          <div style="border-top:1px solid #21262d;margin-top:8px;padding-top:8px;font-size:9px;color:#6e7681">
+            [↑↓] cycle<br/>[q] quit<br/>[r] refresh
+          </div>
+        </div>
+
+        <!-- Right panel: active jobs + readiness + history -->
+        <div style="flex:1;min-width:0">
+          <div style="color:#f0883e;font-size:9px;letter-spacing:.1em;margin-bottom:8px">◉ WORK — 2 running · $0.53 · 14.2k tok</div>
+
+          <!-- Running jobs -->
+          <div style="background:#161b22;border-radius:4px;padding:8px 10px;margin-bottom:5px;border-left:3px solid #f0883e">
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+              <span style="font-weight:bold">codex</span>
+              <span style="color:#3fb950">$0.42</span>
+            </div>
+            <div style="color:#8b949e;font-size:9px">feat/bs20-deep-scan</div>
+            <div style="display:flex;gap:12px;font-size:9px;color:#6e7681;margin-top:2px"><span>4m 12s</span><span>10.1k tok</span><span style="color:#f0883e">running</span></div>
+          </div>
+
+          <div style="background:#161b22;border-radius:4px;padding:8px 10px;margin-bottom:10px;border-left:3px solid #f0883e">
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+              <span style="font-weight:bold">agy</span>
+              <span style="color:#3fb950">$0.11</span>
+            </div>
+            <div style="color:#8b949e;font-size:9px">docs/blog-post</div>
+            <div style="display:flex;gap:12px;font-size:9px;color:#6e7681;margin-top:2px"><span>1m 30s</span><span>4.1k tok</span><span style="color:#f0883e">running</span></div>
+          </div>
+
+          <!-- Readiness section -->
+          <div style="border-top:1px solid #21262d;padding-top:8px;margin-bottom:8px">
+            <div style="color:#8b949e;font-size:9px;letter-spacing:.08em;margin-bottom:5px">READINESS</div>
+            <div style="display:flex;gap:8px;font-size:10px">
+              <span style="color:#3fb950">codex ✓</span>
+              <span style="color:#3fb950">agy ✓</span>
+              <span style="color:#6e7681">claude —</span>
+              <span style="color:#6e7681">grok —</span>
+            </div>
+            <div style="font-size:9px;color:#6e7681;margin-top:3px">budget: $8.40 used · $11.60 remaining</div>
+          </div>
+
+          <!-- Recent history -->
+          <div style="border-top:1px solid #21262d;padding-top:8px">
+            <div style="color:#8b949e;font-size:9px;letter-spacing:.08em;margin-bottom:5px">RECENT</div>
+            <div style="font-size:10px;color:#6e7681;margin-bottom:2px">✓ codex &nbsp; feat/bs21-vizor &nbsp; 22m &nbsp; $1.10 &nbsp; <span style="color:#3fb950">done</span></div>
+            <div style="font-size:10px;color:#6e7681">✓ agy &nbsp;&nbsp;&nbsp; docs/bs21-blog &nbsp; 8m &nbsp;&nbsp; $0.34 &nbsp; <span style="color:#3fb950">done</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;border-top:1px solid #21262d;padding-top:6px;font-size:9px;color:#6e7681;text-align:right">workspace: synlynk &nbsp; · &nbsp; refreshed 2s ago</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Idle cycle selected (Dream) -->
+  <div class="mockup">
+    <div class="mockup-header">Dream cycle selected — idle</div>
+    <div class="mockup-body" style="background:#0d1117;padding:14px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.65">
+
+      <!-- Platform health header (collapsed) -->
+      <div style="background:#161b22;border:1px solid #21262d;border-radius:4px;padding:6px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#8b949e;font-size:10px">▶ PLATFORM &nbsp; <span style="color:#3fb950">✓ claude</span> &nbsp; <span style="color:#3fb950">✓ agy</span> &nbsp; <span style="color:#3fb950">✓ codex</span> &nbsp; <span style="color:#3fb950">✓ grok</span> &nbsp; budget: $8.40 / $20.00</span>
+        <span style="color:#8b949e;font-size:10px">[p]</span>
+      </div>
+
+      <div style="display:flex;gap:0">
+        <!-- Tube sidebar -->
+        <div style="width:120px;flex-shrink:0;border-right:1px solid #21262d;padding-right:12px;margin-right:12px">
+          <div style="color:#58a6ff;font-size:9px;letter-spacing:.1em;margin-bottom:10px">synlynk</div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;background:#a371f70d;border:1px solid #a371f733">
+            <div style="width:3px;height:30px;background:#a371f7;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#a371f7;font-weight:bold">Dream</div><div style="font-size:9px;color:#a371f7">● ready</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.7">
+            <div style="width:3px;height:30px;background:#58a6ff;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#58a6ff">Plan</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.7">
+            <div style="width:3px;height:30px;background:#f0883e;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#f0883e">Work</div><div style="font-size:9px;color:#f0883e">◉ 2 running</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.7">
+            <div style="width:3px;height:30px;background:#3fb950;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#3fb950">Ship</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.35">
+            <div style="width:3px;height:30px;background:#d29922;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#d29922">Maintain</div><div style="font-size:9px;color:#6e7681">○ idle</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 6px;border-radius:4px;opacity:.35">
+            <div style="width:3px;height:30px;background:#39d3bb;border-radius:2px;flex-shrink:0"></div>
+            <div><div style="color:#39d3bb">Engage</div><div style="font-size:9px;color:#6e7681">○ idle</div></div>
+          </div>
+
+          <div style="border-top:1px solid #21262d;margin-top:8px;padding-top:8px;font-size:9px;color:#6e7681">
+            [↑↓] cycle<br/>[q] quit<br/>[r] refresh
+          </div>
+        </div>
+
+        <!-- Right panel: readiness + history (no active jobs) -->
+        <div style="flex:1;min-width:0">
+          <div style="color:#a371f7;font-size:9px;letter-spacing:.1em;margin-bottom:8px">● DREAM — idle</div>
+
+          <!-- No running jobs indicator -->
+          <div style="color:#8b949e;font-size:10px;font-style:italic;margin-bottom:10px;padding:6px 8px;border:1px dashed #30363d;border-radius:4px">no active jobs in this cycle</div>
+
+          <!-- Readiness -->
+          <div style="margin-bottom:8px">
+            <div style="color:#8b949e;font-size:9px;letter-spacing:.08em;margin-bottom:5px">READINESS</div>
+            <div style="font-size:10px;margin-bottom:3px"><span style="color:#3fb950">claude ✓</span> &nbsp; roles: PM · review</div>
+            <div style="font-size:10px;margin-bottom:3px"><span style="color:#3fb950">agy ✓</span> &nbsp;&nbsp;&nbsp;&nbsp; roles: brainstorm · docs</div>
+            <div style="font-size:10px;margin-bottom:6px"><span style="color:#6e7681">codex —</span> &nbsp; not configured for dream</div>
+            <div style="font-size:9px;color:#6e7681">budget: $11.60 remaining · synlynk launch dream to start</div>
+          </div>
+
+          <!-- Recent history -->
+          <div style="border-top:1px solid #21262d;padding-top:8px">
+            <div style="color:#8b949e;font-size:9px;letter-spacing:.08em;margin-bottom:5px">RECENT</div>
+            <div style="font-size:10px;color:#6e7681;margin-bottom:2px">✓ claude &nbsp; BS-21 Vizor brainstorm &nbsp; 2h ago &nbsp; $2.10</div>
+            <div style="font-size:10px;color:#6e7681">✓ claude &nbsp; BS-16 ecosystem status &nbsp; 1d ago &nbsp; $1.40</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;border-top:1px solid #21262d;padding-top:6px;font-size:9px;color:#6e7681;text-align:right">workspace: synlynk &nbsp; · &nbsp; refreshed 2s ago</div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px;padding:12px 16px;background:#161b22;border-radius:6px;border:1px solid #21262d">
+  <div style="font-size:12px;font-weight:bold;margin-bottom:6px">Colour map</div>
+  <div style="display:flex;gap:20px;font-family:monospace;font-size:11px">
+    <span style="color:#a371f7">■ Dream</span>
+    <span style="color:#58a6ff">■ Plan</span>
+    <span style="color:#f0883e">■ Work</span>
+    <span style="color:#3fb950">■ Ship</span>
+    <span style="color:#d29922">■ Maintain</span>
+    <span style="color:#39d3bb">■ Engage</span>
+  </div>
+</div>

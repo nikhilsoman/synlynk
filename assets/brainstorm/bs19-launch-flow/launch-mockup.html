@@ -1,0 +1,131 @@
+<h2>synlynk launch — full experience mockup</h2>
+<p class="subtitle">Three screens. Click through to give feedback on each.</p>
+
+<div style="display:flex;flex-direction:column;gap:2rem;margin-top:1.5rem">
+
+  <!-- Screen 1: Main launch screen -->
+  <div class="mockup">
+    <div class="mockup-header">Screen 1 — Task selection (what user sees on launch)</div>
+    <div class="mockup-body" style="padding:0">
+      <div style="background:#0d1117;padding:1.4rem;font-family:'SF Mono',monospace;font-size:0.82rem;border-radius:6px">
+
+        <div style="color:#7c3aed;font-weight:700;font-size:0.9rem;margin-bottom:0.25rem">  ◆ synlynk launch</div>
+        <div style="color:#475569;margin-bottom:1.2rem">  synlynk-py · Python CLI · single repo · 623 tests · claude + agy + codex</div>
+
+        <div style="color:#94a3b8;margin-bottom:0.8rem">  Where do you want to start?</div>
+
+        <!-- Task 1 - always shown -->
+        <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #7c3aed;margin-bottom:0.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span><span style="color:#7c3aed;font-weight:700">[1]</span> <span style="color:#e2e8f0;font-weight:600">Workspace architecture review</span></span>
+            <span style="background:#2d1b69;color:#a78bfa;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Dream</span>
+          </div>
+          <div style="color:#64748b;font-size:0.76rem;margin-top:0.25rem">Analyse structure, patterns, tech debt. Claude writes findings to memory.md. ~2h</div>
+        </div>
+
+        <!-- Task 2 - always shown -->
+        <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #7c3aed;margin-bottom:0.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span><span style="color:#7c3aed;font-weight:700">[2]</span> <span style="color:#e2e8f0;font-weight:600">Product + opportunity assessment</span></span>
+            <span style="background:#2d1b69;color:#a78bfa;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Dream</span>
+          </div>
+          <div style="color:#64748b;font-size:0.76rem;margin-top:0.25rem">Scope, features, market fit, growth levers. 1-page brief to memory.md. ~1h</div>
+        </div>
+
+        <!-- Task 3 - scan triggered: no type hints in Python -->
+        <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #2563eb;margin-bottom:0.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span><span style="color:#2563eb;font-weight:700">[3]</span> <span style="color:#e2e8f0;font-weight:600">Add type annotations to public API</span></span>
+            <span style="background:#1e3a5f;color:#60a5fa;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Design</span>
+          </div>
+          <div style="color:#64748b;font-size:0.76rem;margin-top:0.25rem">
+            <span style="color:#f59e0b;font-size:0.7rem">⚡ scan found: no .pyi stubs, limited inline hints in synlynk/__init__.py</span>
+          </div>
+        </div>
+
+        <!-- Task 4 - always shown -->
+        <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #059669;margin-bottom:0.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span><span style="color:#059669;font-weight:700">[4]</span> <span style="color:#e2e8f0;font-weight:600">Set up 6-cycle workflow for this repo</span></span>
+            <span style="background:#1a3a2a;color:#34d399;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Plan</span>
+          </div>
+          <div style="color:#64748b;font-size:0.76rem;margin-top:0.25rem">Initialise lifecycle tracking in state.db. Label open stories by cycle. ~30m</div>
+        </div>
+
+        <div style="border-top:1px solid #21262d;margin-top:0.8rem;padding-top:0.7rem;display:flex;justify-content:space-between;color:#475569;font-size:0.76rem">
+          <span>Dream · Design · Plan · Build · Ship · Sustain</span>
+          <span>[1–4] pick &nbsp; [?] explain cycles &nbsp; [s] skip</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Dispatch preview -->
+  <div class="mockup">
+    <div class="mockup-header">Screen 2 — Dispatch preview (after user presses [1])</div>
+    <div class="mockup-body" style="padding:0">
+      <div style="background:#0d1117;padding:1.4rem;font-family:'SF Mono',monospace;font-size:0.82rem;border-radius:6px">
+
+        <div style="color:#7c3aed;font-weight:700;font-size:0.9rem;margin-bottom:1rem">  ◆ Dispatch preview</div>
+
+        <div style="display:grid;grid-template-columns:80px 1fr;gap:0.35rem;margin-bottom:1rem">
+          <span style="color:#475569">agent</span>    <span style="color:#e2e8f0">claude</span>
+          <span style="color:#475569">cycle</span>    <span style="color:#a78bfa">Dream</span>
+          <span style="color:#475569">mode</span>     <span style="color:#e2e8f0">full context</span>
+          <span style="color:#475569">est.</span>     <span style="color:#e2e8f0">~2h</span>
+        </div>
+
+        <div style="color:#475569;margin-bottom:0.35rem">task prompt:</div>
+        <div style="background:#161b22;border:1px solid #21262d;border-radius:5px;padding:0.75rem;color:#94a3b8;font-size:0.78rem;margin-bottom:1rem;line-height:1.5">
+          Review the architecture of synlynk (Python CLI, 9500-line single-file). Identify: structural patterns in use, top 5 tech debt hotspots (name files + functions), component coupling risks, and 3 concrete improvement opportunities with effort estimates. Write your findings as a new section in .synlynk/project-docs/memory.md under "## Architecture Review 2026-07-01". Be specific — no generic advice.
+        </div>
+
+        <div style="color:#475569;font-size:0.76rem">[enter] dispatch now &nbsp; [e] edit prompt &nbsp; [esc] back to tasks</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: Cycles explainer [?] -->
+  <div class="mockup">
+    <div class="mockup-header">Screen 3 — [?] Cycles explainer (inline, replaces task list temporarily)</div>
+    <div class="mockup-body" style="padding:0">
+      <div style="background:#0d1117;padding:1.4rem;font-family:'SF Mono',monospace;font-size:0.82rem;border-radius:6px">
+
+        <div style="color:#7c3aed;font-weight:700;font-size:0.9rem;margin-bottom:1rem">  ◆ The 6 cycles — your multi-agent SDLC</div>
+
+        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1rem">
+          <div style="display:flex;gap:1rem;align-items:baseline">
+            <span style="color:#a78bfa;font-weight:700;width:52px">Dream</span>
+            <span style="color:#64748b">What's worth building? Ideate, assess, identify opportunities. <span style="color:#475569">→ Claude</span></span>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:baseline">
+            <span style="color:#60a5fa;font-weight:700;width:52px">Design</span>
+            <span style="color:#64748b">Brainstorm → spec → UX. Turn ideas into a concrete brief. <span style="color:#475569">→ Claude</span></span>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:baseline">
+            <span style="color:#34d399;font-weight:700;width:52px">Plan</span>
+            <span style="color:#64748b">Implementation plan, story breakdown, agent wave schedule. <span style="color:#475569">→ Claude</span></span>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:baseline">
+            <span style="color:#fbbf24;font-weight:700;width:52px">Build</span>
+            <span style="color:#64748b">Dispatch agents, run jobs, iterate on diffs. <span style="color:#475569">→ Agy · Codex · Grok</span></span>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:baseline">
+            <span style="color:#f87171;font-weight:700;width:52px">Ship</span>
+            <span style="color:#64748b">Cut release, changelog, publish. <span style="color:#475569">→ Claude</span></span>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:baseline">
+            <span style="color:#94a3b8;font-weight:700;width:52px">Sustain</span>
+            <span style="color:#64748b">Monitor, patch, community, docs, support. <span style="color:#475569">→ all agents</span></span>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #21262d;padding-top:0.7rem;color:#475569;font-size:0.76rem">
+          Tasks in synlynk launch are tagged to the cycle they open. Any cycle can dispatch any agent.
+        </div>
+        <div style="margin-top:0.5rem;color:#475569;font-size:0.76rem">[any key] back to tasks</div>
+      </div>
+    </div>
+  </div>
+
+</div>

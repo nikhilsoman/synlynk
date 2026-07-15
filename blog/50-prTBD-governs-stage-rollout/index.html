@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>GOVERNS: Rolling Out the Seven-Stage Vocabulary</h1>
+<p><strong>Date:</strong> 2026-07-11
+<strong>PR:</strong> TBD
+<strong>Branch:</strong> <code>feat/governs-stage-rollout</code> → <code>main</code></p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>BS-8 (PR #146) gave synlynk a Business Goal layer above Dream/Story — an explicit outcome, success criterion, and deadline, with <code>goal_id</code> FKs on <code>stories</code> and <code>roadmap_arcs</code>, <code>cmd_goal_link</code>/<code>cmd_goal_status</code> rollups, and context injection so every dispatched agent sees the business outcome its task serves. That PR's blog post flagged the next goalpost explicitly: roll out the GOVERNS seven-stage vocabulary (<code>goal/open/visualize/execute/release/notify/sustain</code>) to replace the drifted six-value <code>dream/plan/work/ship/maintain/engage</code> cycle model — inconsistently already spelled <code>design</code>/<code>build</code> in places — across every surface that still spoke the old vocabulary.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>Nothing shifted in scope — the plan (<code>docs/superpowers/plans/2026-07-11-governs-stage-rollout-plan.md</code>) was written and approved in full before dispatch. What changed was <strong>how</strong> it was dispatched, and it's the same lesson BS-8 already taught, applied more deliberately this time.</p>
+<p>The GOVERNS plan document, like the BS-8 plan before it, lives only on <code>chore/sdlc-goal-design</code> — a docs-only branch that's never merged to <code>main</code> (per this project's docs-PR-separation policy). <code>synlynk dispatch</code> always branches a fresh worktree off <code>main</code>'s current HEAD, which means a dispatched agent has <strong>zero path-based access</strong> to that plan file, no matter how explicit the sync instructions are. This was misdiagnosed during BS-8 as &quot;Codex won't follow git-sync instructions&quot; — it's actually structural: the file isn't reachable from any branch the dispatch worktree can see.</p>
+<p>For GOVERNS, this was treated as a known constraint from the start rather than discovered mid-plan: every dispatch prompt (Codex, Agy, Grok) embedded the plan's literal code — exact dicts, exact remap tables, exact test files, exact line-anchored instructions — directly in the <code>--task</code> text. No dispatch referenced the plan file by path.</p>
+<p>One task (Task 1, the <code>hud.py</code> <code>CYCLES</code>/<code>CYCLE_COLOURS</code> rename) turned out to have already shipped separately as PR #144 before this plan's dispatch ran. Codex correctly detected the vocabulary was already in place and skipped re-doing it rather than reverting to the old values or duplicating the commit — confirmed by diff review, not just trusted.</p>
+<hr>
+<h2>What Shipped</h2>
+<h3>Three parallel dispatches, one deliberate ordering rule</h3>
+<p>Given each of the seven remap surfaces was independently testable, the plan was split three ways by specialty (per CLAUDE.md's agent role table) and dispatched in parallel rather than sequentially:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Job</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Codex</td>
+<td><code>job-6cba8ca0</code></td>
+<td>Tasks 2, 3, 4, 6 — <code>LAUNCH_TASK_TEMPLATES</code>, <code>task_to_cycle</code>, <code>cycle_capability</code> migration, roadmap goal-tag parsing (CLI/backend plumbing)</td>
+</tr>
+<tr>
+<td>Agy</td>
+<td><code>job-feab0107</code></td>
+<td>Task 5 — <code>fallback_roadmap</code> template's Business Goals section (templates/content)</td>
+</tr>
+<tr>
+<td>Grok</td>
+<td><code>job-273bbb6f</code></td>
+<td>Task 7 — Vizor <code>generate_viz_data()</code> goals payload (data structures/JS-adjacent)</td>
+</tr>
+</tbody>
+</table>
+<p>All three landed clean commits with zero drift from the plan's exact specs on the first attempt — no redispatch needed this time, validating that embedding literal plan content up front (rather than discovering the need for it after a failed attempt) is the actual fix.</p>
+<h3><code>LAUNCH_TASK_TEMPLATES</code> — 15 templates remapped</h3>
+<p>Every template's <code>&quot;cycle&quot;</code> key moved from the old six-value vocabulary to one of the seven GOVERNS keys, e.g. <code>arch-review</code>: <code>dream</code> → <code>visualize</code>, <code>docs-audit</code>: <code>design</code> (drift) → <code>notify</code>, <code>a11y-audit</code>: <code>design</code> (drift) → <code>release</code>. The <code>lifecycle-setup</code> template's own prompt text and title/description were updated from &quot;6-cycle&quot; to &quot;7-stage GOVERNS&quot; framing so the vocabulary it <em>teaches</em> an agent matches the vocabulary the harness now enforces.</p>
+<h3><code>task_to_cycle</code> handoff routing — orphaned key resolved</h3>
+<pre><code class="language-python">task_to_cycle = {
+    &quot;implement&quot;: &quot;execute&quot;,
+    &quot;review&quot;: &quot;execute&quot;,
+    &quot;plan&quot;: &quot;open&quot;,
+    &quot;debug&quot;: &quot;sustain&quot;,
+    &quot;test&quot;: &quot;execute&quot;,
+    &quot;docs&quot;: &quot;notify&quot;,
+    &quot;default&quot;: &quot;execute&quot;,
+}
+</code></pre>
+<p><code>&quot;review&quot;: &quot;engage&quot;</code> was an orphaned mapping — <code>engage</code> doesn't exist in the GOVERNS vocabulary. It now resolves to <code>execute</code>, since code review is a checkpoint inside the build/dispatch loop, not a separate stage.</p>
+<h3><code>cycle_capability</code> migration cleanup</h3>
+<pre><code class="language-python">cycle_remap = {
+    &quot;dream&quot;: &quot;goal&quot;, &quot;design&quot;: &quot;visualize&quot;, &quot;plan&quot;: &quot;open&quot;,
+    &quot;work&quot;: &quot;execute&quot;, &quot;build&quot;: &quot;execute&quot;, &quot;ship&quot;: &quot;release&quot;,
+    &quot;maintain&quot;: &quot;sustain&quot;, &quot;engage&quot;: &quot;execute&quot;,
+}
+for old, new in cycle_remap.items():
+    conn.execute(&quot;UPDATE cycle_capability SET cycle=? WHERE cycle=?&quot;, (new, old))
+</code></pre>
+<p>This UPDATE-based remap runs after the pre-existing <code>DELETE FROM cycle_capability WHERE cycle IN ('design','build','sustain')</code> line, which was left in place unmodified — it becomes a no-op given the UPDATE now runs after it, but removing historical migration lines was out of scope for this plan.</p>
+<h3>Roadmap goal-tag parsing — wires BS-8 into <code>migrate</code></h3>
+<pre><code class="language-python">goal_m = re.search(r'&lt;!--\s*goal:(\S+)\s*--&gt;', line)
+goal_id = goal_m.group(1) if goal_m else None
+</code></pre>
+<p><code>_parse_roadmap_md</code> now extracts <code>&lt;!-- goal:goal-xxxxxxxx --&gt;</code> tags from arc headers and strips them from the display title; the tag is wired into the <code>INSERT INTO roadmap_arcs</code> statement so imported arcs carry their goal link. This is the one task with a hard dependency on BS-8 (Task 2's <code>goal_id</code> column) — confirmed present on <code>main</code> before this dispatch ran.</p>
+<h3><code>init</code> template — Business Goals section (Agy)</h3>
+<p>The <code>fallback_roadmap</code> scaffold now includes a <code>## Business Goals</code> section between the version table and &quot;Recent work&quot;, pointing new projects at <code>synlynk goal create</code> from their very first <code>roadmap.md</code>.</p>
+<h3>Vizor payload — <code>goals</code> key (Grok)</h3>
+<p><code>generate_viz_data()</code> now queries active goals and sets <code>data[&quot;goals&quot;]</code>, following <code>viz.py</code>'s existing defensive <code>try/except Exception</code> convention used throughout the rest of that function for every DB-derived section — front-end rendering of a Goals panel is explicitly out of scope, flagged as a follow-up dispatch to Agy.</p>
+<h3>Tests</h3>
+<p>6 new test files (<code>test_launch_templates.py</code>, <code>test_handoff_cycle_map.py</code>, <code>test_cycle_migration.py</code>, <code>test_goal_tag_parsing.py</code>, <code>test_init_business_goals.py</code>, <code>test_viz_goals.py</code>), plus an import-wiring regression test added to <code>test_migrate.py</code> by Codex per the plan's Step 6. Codex also fixed a pre-existing stale version-pin failure (<code>test_version_is_0100</code> → <code>test_version_is_0110</code>) it hit while running the full suite mid-task. Full suite: <strong>900/900 passing.</strong></p>
+<hr>
+<h2>Brainstorm Visuals</h2>
+<p>None — the seven-stage vocabulary and remap tables were settled in the GOVERNS design spec (<code>docs/superpowers/specs/2026-07-11-business-goal-sdlc-model-design.md</code>) and this plan document, not visual brainstorming.</p>
+<hr>
+<h2>What This Achieved</h2>
+<p>Every surface that spoke the drifted <code>dream/plan/work/ship/maintain/engage</code>/<code>design</code>/<code>build</code> vocabulary — HUD rendering, task-launch templates, agent-handoff routing, <code>init</code> scaffolding, <code>migrate</code> parsing, Vizor's data payload — now speaks one consistent seven-key language that maps directly to a <code>synlynk</code> command (<code>goal</code>, <code>open</code>, <code>viz</code>, <code>exec</code>/<code>dispatch</code>, <code>release</code>, notify convention, <code>repair</code>/<code>doctor</code>/<code>status</code>). Combined with BS-8, a roadmap arc tagged <code>&lt;!-- goal:goal-xxxxxxxx --&gt;</code> now carries its Business Goal link all the way from markdown import through to <code>roadmap_arcs.goal_id</code>.</p>
+<p>Operationally, this PR is the first time the &quot;embed literal plan content in the dispatch prompt&quot; fix was applied proactively across three parallel agents from the start, rather than discovered reactively after a failed attempt (as it was mid-BS-8). All three dispatches landed clean on the first pass — the fix generalizes.</p>
+<hr>
+<h2>The New Goalpost</h2>
+<p>With GOVERNS merged, both halves of the Business Goal SDLC model design spec are now live on <code>main</code>: the Business Goal layer itself (BS-8) and the seven-stage vocabulary that organizes work under it (GOVERNS). The <code>abstraction-level dev/team/enterprise mapping</code> sub-section of the original design spec's Part 3 was explicitly scoped out of the GOVERNS plan as a separate config/gating concern (<code>.synlynk/config.json</code> mode field) rather than a vocabulary rename — that's the next candidate for a brainstorm-to-plan cycle. Vizor's front-end Goals panel (surfacing the <code>goals</code> payload Task 7 now provides) is a smaller, more immediate follow-up dispatch to Agy.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

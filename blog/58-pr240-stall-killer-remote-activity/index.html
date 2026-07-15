@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #240 — The Stall-Killer Wasn&#39;t Checking Its Own Receipts | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 14, 2026</span>
+        
+          <span class="blog-post-pr">PR #240</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #240 — The Stall-Killer Wasn&#39;t Checking Its Own Receipts</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #238 (previous post) closed a small dispatch-hygiene gap. #202 — filed 2026-07-12 and deliberately parked at the time (&quot;until fixed, don't trust <code>synlynk jobs</code> status display alone; cross-check <code>jobs.json</code>, <code>git log</code>/<code>git status</code>, and <code>gh pr list</code> directly&quot;) — was the next item pulled off the backlog, per explicit user sequencing. The symptom: <code>synlynk jobs</code> would show <code>FAILED (exit -1)</code> for jobs that had, in fact, completed real work — committed, pushed, PR opened — with the discrepancy only visible by manually cross-checking <code>jobs.json</code> against git history.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>The fix landed smaller than first scoped. The initial read (presented to the user before implementation started) proposed three changes: (1) add the missing remote-activity check, (2) route stall-kills through the existing <code>failed_unverified</code> status instead of a hard <code>failed</code>, and (3) fix <code>_write_job_summary()</code>'s label formatting so a <code>None</code> exit code wouldn't print misleadingly as <code>-1</code>. Tracing the downstream reconcile logic in full before writing the dispatch prompt showed (2) and (3) were unnecessary: if the stall-killer simply <em>stops killing prematurely</em> in the one scenario it was wrongly killing, the job stays <code>&quot;running&quot;</code> and gets picked up — correctly, with the correct label — by reconcile logic that already existed from the &quot;Job Lifecycle Ground-Truth Verification&quot; epic (#128/#129/#182/#184/#185/#198). That epic added <code>remote_has_activity</code>-aware promotion to <code>&quot;completed&quot;</code> in <code>_reconcile_jobs()</code>'s <code>waitpid_reaped</code> branch months earlier — it just never got wired into the <em>stall-kill</em> branch, which runs earlier in the same function and short-circuits before the good logic ever executes.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>Root cause.</strong> <code>_check_job_stall()</code> (<code>synlynk/dispatch.py</code>) is the code that SIGKILLs a job whose log file has gone stale past its configured timeout. Before killing, it checks for local git activity in the worktree and extends the grace period if any is found — but the call was <code>_inspect_worktree_git_state(job.get(&quot;worktree_path&quot;))</code>, a single argument. That function accepts two more optional parameters (<code>worktree_branch</code>, <code>started_at</code>) needed to also check whether <code>origin/&lt;branch&gt;</code> already has pushed commits; without them, <code>_inspect_origin_branch_activity()</code> returns <code>None</code> immediately (it requires all three inputs truthy), so <code>remote_has_activity</code> was always <code>False</code> from this call path — even for a job that had already pushed and opened a PR.</p>
+<p><strong>The fix, in full:</strong></p>
+<pre><code class="language-python">git_state = inspect_worktree_git_state(
+    job.get(&quot;worktree_path&quot;), job.get(&quot;worktree_branch&quot;), job.get(&quot;started_at&quot;)
+) if inspect_worktree_git_state else None
+if git_state and git_state.get(&quot;has_activity&quot;):
+    ...
+    return False
+if git_state and git_state.get(&quot;remote_has_activity&quot;):
+    remote_ref = git_state.get(&quot;remote_ref&quot;)
+    remote_commit_count = git_state.get(&quot;remote_commit_count&quot;, 0)
+    print(
+        f&quot;  Stall check extended for job {job.get('id')}: remote activity detected on &quot;
+        f&quot;{remote_ref} ({remote_commit_count} commit(s) since {job.get('started_at')}).&quot;
+    )
+    return False
+</code></pre>
+<p>The hard-kill / <code>failed</code> / <code>exit_code=-1</code> path below is untouched — it still fires, correctly, for jobs with zero local <em>and</em> zero remote activity. Two new tests pin both branches: <code>test_check_job_stall_extends_on_remote_activity</code> (remote activity present → extends, doesn't touch <code>job[&quot;status&quot;]</code>) and <code>test_check_job_stall_still_kills_on_zero_activity</code> (regression guard on the pre-existing kill path).</p>
+<p><strong>Investigation, not implementation, was the expensive part.</strong> Getting to this two-line fix required reading four separate call sites of <code>_write_job_summary()</code> across <code>dispatch.py</code> and <code>jobs.py</code>, confirming three of them (the ones the roadmap had actually flagged as suspects) were already correct, and tracing the one genuinely-broken path back to a single missing pair of function arguments. The dispatch prompt handed to the implementer encoded all of that — exact diff, exact reasoning for why nothing else needed to change — so the actual code change executed in a single pass.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — code-tracing investigation, no visual/UI decisions.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><code>synlynk jobs</code> status is now trustworthy for the one scenario that was silently lying: a job that did real, confirmed work but happened to look locally clean when its log went stale. #202's original parked guidance (&quot;cross-check manually&quot;) can be retired for this case. Cost: 21,502 in / 5,376 out tokens (~$0.15), 309s, first-pass with no rework — cherry-picked, full-suite verified (1010 passed, 2 skipped), and merged same-session as #238.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Both #237 and #202 — the two items pulled forward to strengthen the v0.12.0 &quot;Trust &amp; Cost-Aware Routing&quot; theme — are now merged. What's left before that release can be cut: PR #236 (Measurement Ledger Hardening Phase 1) merging, and PR #241 (the design spec + plan docs for that same epic) merging. Housekeeping also surfaced 22 stray auto-opened per-task dispatch PRs (#214–#235, #239) that duplicate work already integrated into #236/#240 — flagged for cleanup, pending explicit confirmation before a bulk close.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Vizor Gets a Goals Panel</h1>
+<p><strong>Date:</strong> 2026-07-11
+<strong>PR:</strong> TBD
+<strong>Branch:</strong> <code>feat/vizor-goals-panel</code> → <code>main</code></p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>GOVERNS (PR #149) rolled out the seven-stage vocabulary across HUD, launch templates, agent-handoff routing, <code>init</code> scaffolding, and <code>migrate</code> parsing, and — via Grok's Task 7 — wired <code>data[&quot;goals&quot;]</code> into <code>generate_viz_data()</code>. That blog post explicitly named the gap: Vizor had a <code>goals</code> payload with nowhere to render it, and named it as the immediate next dispatch to Agy.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>Nothing — this is the named follow-up, dispatched and scoped exactly as flagged. The one addition: since Vizor has no separate template files (all HTML/CSS/JS for the Gantt dashboard lives as Python string literals inside <code>synlynk/viz.py</code>), the dispatch prompt had to point Agy at specific line ranges and existing idioms to mirror (<code>renderDream</code>, <code>openDrills</code>/<code>openNote</code> toggle patterns, <code>escapeHtml</code>) rather than describing the feature in the abstract.</p>
+<hr>
+<h2>What Shipped</h2>
+<h3>A 5th stat card + collapsible panel</h3>
+<p><code>generate_gantt_html()</code>'s existing <code>srow</code> (4 stat cards: Dreams in flight, Active agents, Total spend, Next ship) gets a 5th card, &quot;Business Goals,&quot; showing the active-goal count and click-to-expand a collapsible panel below the row:</p>
+<pre><code class="language-js">function renderGoals() {
+  const activeCount = goals.filter(g =&gt; String(g.status || '').toLowerCase() === 'active').length;
+  ...
+  if (!goals.length) {
+    goalsBody.innerHTML = `&lt;div class=&quot;empty-state&quot;&gt;... synlynk goal create --outcome &quot;...&quot; --criterion &quot;...&quot; ...&lt;/div&gt;`;
+    return;
+  }
+  goalsBody.innerHTML = goals.map(renderGoal).join('');
+}
+</code></pre>
+<p>Each goal renders outcome (bold), criterion (secondary text), an optional deadline, and a status badge — <code>renderGoal()</code> mirrors <code>renderDream()</code>'s structure and reuses the file's existing <code>escapeHtml()</code> helper. <code>toggleGoalsPanel()</code> follows the same open/collapse CSS-max-height idiom already used elsewhere in the file rather than introducing a new one. <code>renderGoals()</code> is called from inside the existing <code>renderDreams()</code> update cycle (both the empty-dreams early-return path and the normal path), so goals refresh in step with everything else on the dashboard rather than on a separate timer.</p>
+<h3>Tests</h3>
+<p><code>tests/test_vizor_goals_panel.py</code> — two cases: goal data renders the expected DOM ids and content (<code>goal-count</code>, <code>goal-sub</code>, <code>goals-panel</code>, outcome/criterion/deadline text), and an empty <code>goals: []</code> list renders the CLI-pointing empty state. Full suite: <strong>909/909 passing</strong> (up from GOVERNS' 900 — 9 new cases including these 2 plus 7 already added by the GOVERNS work).</p>
+<hr>
+<h2>Brainstorm Visuals</h2>
+<p>None — this was a small, concretely-scoped follow-up dispatch with exact line anchors and existing UI idioms to mirror, not a new design decision.</p>
+<hr>
+<h2>What This Achieved</h2>
+<p>Business Goals (BS-8) are now visible end-to-end: <code>synlynk goal create</code> → <code>goals</code> table → <code>generate_viz_data()</code> → Vizor's Gantt dashboard. A user can see their active outcomes and success criteria without leaving the same screen they're already watching for dream/stage progress.</p>
+<hr>
+<h2>The New Goalpost</h2>
+<p>Vizor's Gantt view now surfaces both execution state (dreams/stages) and intent (business goals) side by side. The next open thread, raised separately by the user during this session: revisit the Architect Map (tube map) view — the hand-crafted SVG approach locked in during BS-21 isn't yet confirmed as the right visualization, and needs a brainstorming pass before any redesign work is dispatched.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

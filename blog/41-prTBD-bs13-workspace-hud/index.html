@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #106 — BS-13 Workspace HUD | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 04, 2026</span>
+        
+          <span class="blog-post-pr">PR 106</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #106 — BS-13 Workspace HUD</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>synlynk had live job tracking, dispatch, and daemon health, but no terminal-native workspace HUD. The only built-in views were split across command-line job tables and the browser Vizor surface. The missing piece was a compact, always-available terminal monitor for the 6-cycle SDLC model.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The HUD work tightened the product boundary around a clear split:</p>
+<ul>
+<li><code>synlynk viz</code> stays the historical browser dashboard.</li>
+<li><code>synlynk watch</code> becomes the live terminal HUD.</li>
+</ul>
+<p>That separation matters because the HUD is not a replacement for Vizor. It is the fastest possible ambient surface for current workspace state, with keyboard navigation and zero dependencies.</p>
+<h2>What This PR Shipped</h2>
+<p>This change introduced the first pass of the workspace HUD stack:</p>
+<ul>
+<li><code>synlynk.dispatch_agent()</code> now records a <code>cycle</code> field in each job record.</li>
+<li><code>synlynk/hud.py</code> adds <code>JobSnapshot</code> for read-only access to <code>.synlynk/jobs.json</code>.</li>
+<li><code>FrameBuffer</code> provides a buffered ANSI diff renderer so only changed rows are re-emitted.</li>
+<li><code>HUDRenderer</code> now owns the error and narrow-terminal states used by the terminal surface.</li>
+<li><code>synlynk.cli.cmd_watch()</code> replaces the old watch-daemon subparser with a HUD loop, keyboard handling, alternate-screen rendering, and clean exit behavior.</li>
+</ul>
+<p>The implementation stayed within the standard library. No <code>curses</code>, no <code>rich</code>, and no extra runtime dependency chain.</p>
+<h2>Test Approach</h2>
+<p>I drove the change with focused tests for:</p>
+<ul>
+<li>dispatch job records carrying <code>cycle</code></li>
+<li><code>JobSnapshot</code> filtering and summaries</li>
+<li>buffered diff rendering behavior</li>
+<li>HUD error and narrow-width states</li>
+<li><code>synlynk watch</code> missing-file handling</li>
+</ul>
+<p>The regression slice for existing dispatch and job behavior stayed green after the changes.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is a coordination primitive, not just a UI feature. The terminal now has a native view of live workspace state that can be refreshed, filtered, and navigated without leaving the shell. That makes the workspace itself feel persistent in a way that a command log never does.</p>
+<p>The <code>cycle</code> field also gives the dispatcher and the HUD a shared vocabulary for lifecycle-aware routing. That is the basis for the later full HUD layout and live stream work.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The next step is to finish the richer layout components and live stream mode, then promote <code>synlynk watch</code> into a polished ambient control surface for the workspace.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BS-1: Agent Failure Surface UX</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; min-height: 100vh; }
+  h2 { color: #fff; font-size: 18px; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 28px; }
+  code { background: #1e1e1e; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #b0c4ff; }
+
+  .phase-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: #555; margin-bottom: 10px; padding-left: 2px;
+  }
+
+  /* Terminal mockup */
+  .terminal {
+    background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 9px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .term-bar {
+    background: #1a1a1a; padding: 8px 14px; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .term-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .term-dot.red { background: #ff5f56; }
+  .term-dot.yellow { background: #ffbd2e; }
+  .term-dot.green { background: #27c93f; }
+  .term-title { font-size: 11px; color: #555; margin-left: 6px; }
+  .term-body { padding: 16px 18px; font-size: 12px; line-height: 2; }
+
+  .cmd { color: #8fd48f; }
+  .cmd::before { content: '$ '; color: #555; }
+  .out { color: #bbb; }
+  .ok { color: #6fcf6f; }
+  .warn { color: #e8c44a; }
+  .err { color: #e05555; }
+  .dim { color: #555; }
+  .info { color: #5b8fff; }
+  .sentinel { color: #ff8c42; }
+  .pulse { color: #a88cff; }
+
+  .phase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .phase-row.single { grid-template-columns: 1fr; }
+  .phase-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+
+  hr { border: none; border-top: 1px solid #1e1e1e; margin: 24px 0; }
+
+  .annotation {
+    font-size: 11px; color: #666; line-height: 1.6; margin-top: -12px; margin-bottom: 20px;
+    padding-left: 4px; border-left: 2px solid #2a2a2a; padding-left: 10px;
+  }
+  .annotation strong { color: #888; }
+
+  .epic-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tag {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .tag-ob { background: #1a1a30; color: #8888ff; border: 1px solid #2a2a50; }
+  .tag-ca { background: #1a2a1a; color: #6fcf6f; border: 1px solid #2a4a2a; }
+  .tag-devx { background: #2a1a10; color: #e8a84a; border: 1px solid #4a2a10; }
+  .tag-ab { background: #1a1020; color: #c882e8; border: 1px solid #3a1a4a; }
+
+  .insight {
+    background: #0d1520; border: 1px solid #1e3050;
+    border-radius: 8px; padding: 14px 18px;
+    font-size: 12px; color: #8aafdf; line-height: 1.7;
+  }
+  .insight strong { color: #b0d0ff; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  }
+  .section-icon { font-size: 16px; }
+  .section-title { font-size: 14px; font-weight: 700; color: #ccc; }
+  .section-sub { font-size: 11px; color: #666; }
+
+  .budget-bar {
+    height: 8px; border-radius: 4px; background: #1a1a1a;
+    overflow: hidden; margin: 4px 0;
+  }
+  .budget-fill { height: 100%; border-radius: 4px; }
+  .budget-fill.ok { background: #2a7a2a; }
+  .budget-fill.warn { background: #7a6a00; }
+  .budget-fill.over { background: #7a2a2a; }
+</style>
+</head>
+<body>
+
+<h2>Agent Failure Surface UX — Cluster A</h2>
+<p class="subtitle">OB-7 · CA-2 · DevX-3 · AB-4 — one unified design for the dispatch lifecycle</p>
+
+<!-- Phase 1: Pre-flight -->
+<div class="section-header">
+  <div class="section-icon">✈️</div>
+  <div>
+    <div class="section-title">Phase 1: Pre-flight checks</div>
+    <div class="section-sub">Before any process is spawned — OB-7 (agent availability) + CA-2 (pre-req audit)</div>
+  </div>
+</div>
+<div class="epic-tags">
+  <span class="tag tag-ob">OB-7</span>
+  <span class="tag tag-ca">CA-2</span>
+</div>
+
+<div class="phase-row triple">
+
+  <div>
+    <div class="phase-label">Happy path</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent agy --task "review PR 42"</div>
+        <div class="dim">  ↳ preflight: daemon alive · agy available · budget ok</div>
+        <div class="ok">✓ dispatched — job 7f3a (agy)</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="phase-label">Agent unavailable</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent agy --task "review PR 42"</div>
+        <div class="warn">⚠ preflight: agy not running on this machine</div>
+        <div class="out">  Last seen: never installed</div>
+        <div class="out">  Install: claude extensions install agy</div>
+        <div class="out">  Or use: --agent claude</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="phase-label">Budget blocked</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent claude --task "refactor auth"</div>
+        <div class="err">✗ preflight: budget limit reached</div>
+        <div class="out">  Used: $4.87 / $5.00 limit</div>
+        <div class="out">  Raise: synlynk config set limit_usd 10</div>
+        <div class="out">  Override: --force-dispatch</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="annotation">
+  <strong>Pre-flight gate:</strong> check daemon alive → agent installed → agent not throttled → budget headroom. Each check is <em>fast and silent on pass</em>. Only prints when something is wrong. The "↳ preflight:" line shows in <code>--verbose</code> mode only.
+</div>
+
+<hr>
+
+<!-- Phase 2: Job lifecycle -->
+<div class="section-header">
+  <div class="section-icon">⚡</div>
+  <div>
+    <div class="section-title">Phase 2: Job lifecycle output</div>
+    <div class="section-sub">DevX-3 — what observability does dispatch carry? What prints, when?</div>
+  </div>
+</div>
+<div class="epic-tags">
+  <span class="tag tag-devx">DevX-3</span>
+  <span class="tag tag-ca">CA-2</span>
+</div>
+
+<div class="phase-row">
+  <div>
+    <div class="phase-label">Interactive mode (foreground job)</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent claude --task "review PR 42" --wait</div>
+        <div class="info">◎ job 7f3a · claude · pr-review · context: task (820 bytes)</div>
+        <div class="dim">  ···················</div>
+        <div class="pulse">  ▸ agent running (42s)</div>
+        <div class="dim">  ···················</div>
+        <div class="ok">✓ done (2m 13s) · tokens: 1,247 in / 420 out · ~$0.009</div>
+        <div class="out">  Output: .synlynk/jobs/7f3a/output.md</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="phase-label">Background mode (default)</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent claude --task "review PR 42"</div>
+        <div class="ok">✓ queued — job 7f3a · monitor: synlynk jobs</div>
+        <div class="dim"> </div>
+        <div class="cmd">synlynk jobs</div>
+        <div class="out">  ID      AGENT    STORY     STATUS     AGE    COST</div>
+        <div class="out">  7f3a    claude   #42        running    1m23s  $0.004</div>
+        <div class="out">  7f3b    agy      #41        done       8m     $0.011</div>
+        <div class="dim">  → synlynk jobs --watch to stream updates</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Budget Pulse</strong> prints after every job (current behavior, kept). The new <code>synlynk jobs</code> command is the "jobs board" — replaces asking "what's running?" to an agent. Context size shown in the header line: <code>context: task (820 bytes)</code> — this closes DevX-1/Q9 (context size budget visibility).
+</div>
+
+<hr>
+
+<!-- Phase 3: Failure modes -->
+<div class="section-header">
+  <div class="section-icon">🚨</div>
+  <div>
+    <div class="section-title">Phase 3: Failure and sentinel alerts</div>
+    <div class="section-sub">AB-4 sentinel extension + CA-2 compliance tags visible in failure output</div>
+  </div>
+</div>
+<div class="epic-tags">
+  <span class="tag tag-ab">AB-4</span>
+  <span class="tag tag-ca">CA-2</span>
+  <span class="tag tag-devx">DevX-3</span>
+</div>
+
+<div class="phase-row triple">
+
+  <div>
+    <div class="phase-label">Job failed — exit non-zero</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk jobs --watch</div>
+        <div class="err">✗ 7f3a · claude · failed (exit 1, 4m22s)</div>
+        <div class="out">  Error: agent exited non-zero</div>
+        <div class="out">  Logs: synlynk logs --job 7f3a</div>
+        <div class="out">  Retry: synlynk dispatch --retry 7f3a</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="phase-label">Sentinel: FLATLINE</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="sentinel">⚑ SENTINEL · FLATLINE</div>
+        <div class="out">  3 consecutive failures: jobs 7f3a 7f3b 7f3c</div>
+        <div class="out">  Agent: claude · Task pattern: "review PR *"</div>
+        <div class="out">  Action: dispatch paused (5m cooldown)</div>
+        <div class="out">  Dismiss: synlynk sentinel ack flatline</div>
+        <div class="dim">  Written: .synlynk/sentinel.md</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="phase-label">Sentinel: VERIFY_SKIP (AB-4)</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="sentinel">⚑ SENTINEL · VERIFY_SKIP</div>
+        <div class="out">  Job 7f3c: instruction compliance: LOW</div>
+        <div class="out">  Missing tags: verify_before_commit</div>
+        <div class="out">  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_test_run</div>
+        <div class="dim">  Details: synlynk jobs --compliance 7f3c</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="annotation">
+  <strong>Key design:</strong> failure output always includes the retry or dismiss command inline — no hunting. FLATLINE auto-pauses dispatch (cooldown); VERIFY_SKIP is informational only (for now). The compliance tags bridge AB-4 (instruction adherence) and CA-2 (audit) — same <code>compliance_tags</code> field on the <code>job_completed</code> relay event.
+</div>
+
+<hr>
+
+<!-- Budget pulse -->
+<div class="section-header">
+  <div class="section-icon">💰</div>
+  <div>
+    <div class="section-title">Context size inline visibility (Q9)</div>
+    <div class="section-sub">No separate command — surfaces in dispatch output and jobs board</div>
+  </div>
+</div>
+
+<div class="phase-row">
+  <div>
+    <div class="phase-label">Context size warn (> 80% of budget)</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent claude --task "refactor auth"</div>
+        <div class="warn">⚠ context: full (94KB) — exceeds soft limit (80KB)</div>
+        <div class="out">  Use --context-mode task to reduce to ~820 bytes</div>
+        <div class="out">  Use --context-mode none to suppress entirely</div>
+        <div class="ok">✓ dispatching anyway — job 8a1c · override: add context_tokens_max to config</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="phase-label">Context size blocked (--strict flag or config hard limit)</div>
+    <div class="terminal">
+      <div class="term-bar"><div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div><div class="term-title">terminal</div></div>
+      <div class="term-body">
+        <div class="cmd">synlynk dispatch --agent agy --task "review all PRs"</div>
+        <div class="err">✗ context: full (119KB) — hard limit is 100KB</div>
+        <div class="out">  Set in config: context_tokens_max: 100000</div>
+        <div class="out">  Options:</div>
+        <div class="out">    --context-mode task     → ~820 bytes</div>
+        <div class="out">    --context-mode none     → 0 bytes</div>
+        <div class="out">    --override-context-limit (unsafe)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Soft vs hard limit:</strong> soft limit warns but continues; hard limit blocks. Default: warn at 80KB, no hard block (too strict for current usage). Config: <code>context_tokens_max</code> for hard block, <code>context_warn_bytes</code> for soft warn. This closes Q9 without adding a separate preflight command.
+</div>
+
+<hr>
+
+<div class="insight">
+  <strong>Cluster A design principle:</strong> the agent lifecycle has four moments that matter — pre-flight, job start, job done, job failed. Each moment gets one line of output by default. Verbose flag adds detail. Sentinel fires an additional alert line asynchronously. All four points write structured data to the relay (<code>job_dispatched</code> / <code>job_completed</code> / <code>alert_raised</code>) — the terminal output and the relay event are generated from the same object. No dual bookkeeping.
+</div>
+
+<script src="http://localhost:56987/_helper.js"></script>
+</body>
+</html>

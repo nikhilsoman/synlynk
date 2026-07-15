@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Closing Epic #210: Flagging Estimated vs. Actual Cost in the Vizor Effort &amp; Cost Tab | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 15, 2026</span>
+        
+          <span class="blog-post-pr">PR #258</span>
+        
+      </div>
+      <h1 class="blog-post-title">Closing Epic #210: Flagging Estimated vs. Actual Cost in the Vizor Effort &amp; Cost Tab</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #257 closed epic #210's four-for-four structured-output adapter scope — Codex, Claude, Agy, and Grok all now extract real vendor-reported token usage into a uniform <code>_TokenCounts(basis=&quot;structured_output&quot;)</code> contract before ever falling back to regex or t-shirt heuristics. That PR's closing note named the one deliverable epic #210 still owed: the display layer. All four adapters, plus Measurement Ledger Phase 1's <code>cost_source</code>/<code>estimate_basis</code> columns, had been populating provenance data that nothing downstream actually showed a human. <code>project-docs/costs.md</code> already prefixed non-actual rows with <code>[est]</code>/<code>[legacy]</code>, but the Vizor web HUD's Effort &amp; Cost tab — the place most people actually look — had zero references to <code>cost_source</code> anywhere in <code>synlynk/viz.py</code>. A structurally-measured row and a heuristically-estimated row rendered identically.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None to the scope — this is the deliverable epic #210 named, built as named. The one design decision worth recording surfaced during brainstorming, not implementation: this codebase already overloads the word &quot;estimate.&quot; <code>story[&quot;cost_actual&quot;]</code>/<code>dream[&quot;cost_est&quot;]</code> mean <em>actual spend vs. budgeted target</em> — a completely different axis from this PR's <em>was this dollar figure structurally measured or heuristically guessed</em>. A naive implementation that reused &quot;actual&quot;/&quot;estimated&quot; bucket names for both axes would have silently narrowed the existing &quot;actual spend&quot; fields to exclude anything estimated-by-provenance, quietly breaking the over-budget math (<code>dream_color</code>, <code>over_budget</code> counting) that already ships. The resolution: every new field speaks only to provenance (<code>cost_prov_estimated</code>, <code>cost_total_estimated</code>, <code>total_usd_estimated</code>), and two different aggregation patterns get applied depending on what a new field sits next to — a strict actual/estimated split for <code>by_agent</code>/<code>by_stage</code> (previously anonymous floats, no pre-existing &quot;actual&quot; semantic to preserve), and a subset-of-an-unchanged-total pattern for <code>story[&quot;cost_actual&quot;]</code> and dream <code>cost_total</code> (existing fields whose &quot;money spent, any provenance&quot; meaning had to survive unchanged).</p>
+<h2>What This PR Shipped</h2>
+<p>The user's visual direction, given after an initial single-choice question was rejected in favor of a hybrid: combine a summary-stat card with a muted/opacity split <em>within</em> each existing bar — not a separate estimated-only chart, not a filter toggle. Two commits landed on <code>synlynk/viz.py</code> and <code>tests/test_viz.py</code>, dispatched across two agents and independently verified before cherry-pick:</p>
+<ul>
+<li><strong>Task 1 (dispatched to Codex, job-3c6aeb57)</strong> — the data layer. <code>generate_viz_data()</code>'s <code>cost_entries</code> query now selects <code>cost_source</code>; <code>by_agent</code>/<code>by_stage</code> change shape from <code>{name: float}</code> to <code>{name: {&quot;actual&quot;: float, &quot;estimated&quot;: float}}</code>; each dream gains <code>cost_total_estimated</code>; <code>data[&quot;costs&quot;]</code> gains <code>total_usd_estimated</code>. <code>_dream_cost_actual()</code> became <code>_dream_cost_breakdown()</code>, returning both the unchanged total and the new provenance-estimated subset via a <code>GROUP BY cost_source</code> query. Any <code>cost_source</code> value other than <code>&quot;actual&quot;</code> — including <code>NULL</code> for pre-migration rows — buckets as estimated, mirroring the exact classification <code>costs.py</code>'s <code>[est]</code>/<code>[legacy]</code> flagging already uses. Three new tests covered the by-agent split, <code>NULL</code>-as-estimated, and the dream-level split; <code>tests/test_viz.py</code>'s shared <code>make_test_db()</code> fixture picked up the <code>cost_source</code> column it had been missing since Phase 1 shipped the real schema.</li>
+<li><strong>Task 2 (dispatched to Agy, job-837c036c)</strong> — the rendering layer. A 5th always-visible summary card, &quot;~Estimated&quot; (<code>$X.XX (Y%)</code>), landing the CSS grid at <code>repeat(5, ...)</code> on desktop and <code>repeat(3, ...)</code> at the 980px breakpoint. <code>render_bar_chart()</code> gained an <code>estimated_key</code> parameter: when a row's estimated portion is greater than zero, it now draws two adjacent <code>&lt;rect&gt;</code> segments — a solid actual-portion rect keeping its rounded corner, and a <code>fill-opacity=&quot;0.4&quot;</code> estimated-portion rect immediately after it with no corner radius, so the two segments read as one continuous bar rather than two pills. Rows with zero estimated spend render exactly as before — no behavior change, no extra DOM. <code>dream_label</code>/<code>agent_label</code>/<code>stage_label</code> append <code>(est: $Y.YY)</code> when applicable, which can co-occur with the pre-existing dream budget suffix (<code>&quot;$42.00 (est: $12.00) / est $50.00&quot;</code> is valid, if verbose — a rare intersection requiring both a set budget and non-actual spend). A one-line addition to the page subtitle serves as the tab's only legend, avoiding a three-times-repeated per-panel note. Two new tests confirmed the <code>(est: $</code> suffix and faded segment appear when expected and are absent for fully-actual data; the two pre-existing tests built on the old flat-float <code>by_agent</code>/<code>by_stage</code> shape stayed green unmodified, backed by a new <code>_bucket_total()</code>/<code>_bucket_estimated()</code> helper pair that handles both shapes via <code>isinstance</code>.</li>
+<li><strong>Task 3 (Claude, verification-only, not dispatched)</strong> — full regression across <code>tests/test_viz.py</code> and <code>tests/test_cost_ledger.py</code> (152 passed), a manual <code>generate_effort_html()</code> smoke test confirming the faded segment and summary card render for populated data, and a grep audit confirming no stray consumer elsewhere in <code>viz.py</code> still treats <code>by_agent</code>/<code>by_stage</code> as flat floats.</li>
+</ul>
+<p><strong>A dispatch-status detection lesson, caught mid-execution.</strong> The first poll for Task 1's completion grepped the job's log for an &quot;error&quot; pattern and exited early — it had matched the word &quot;Error&quot; inside an <em>expected</em> TDD red-step test-failure traceback, not an actual failure. The job was still mid-implementation, four lines into a 33-line log. Corrected by polling for the dispatcher's own <code>.log.exit</code> marker file instead of pattern-matching arbitrary log content — a more reliable signal than either the marker-matching approach or <code>synlynk jobs</code>'s own status column, which is separately known to be unreliable (tracked as #202).</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — the visual-treatment question was resolved through plain-text dialogue (the user directly named &quot;Summary row from 1 + 2&quot; after rejecting a single-choice framing), not mockups. The design spec at <code>docs/superpowers/specs/2026-07-15-vizor-cost-flagging-design.md</code> captures the resulting SVG two-rect approach in exact code form instead.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This closes epic #210 in full. Every number the Vizor Effort &amp; Cost tab displays is now either structurally sourced or visibly labeled as an estimate, satisfying Fable's H0 pre-GA gate requirement stated at the top of the design spec. It's also the fifth PR in a row (three structured-output adapters plus this one) where all production code was dispatched to Codex/Agy across two independently-reviewed tasks, with Claude's own role limited to design, plan-writing, diff verification, test re-execution, and cherry-picking — the PM/reviewer discipline held through a full data-layer-plus-rendering-layer feature, not just isolated single-function adapters.</p>
+<p>A side investigation during this cycle, prompted by a direct question about a &quot;Dream&quot; label appearing where GOVERNS's seven-stage vocabulary was expected, distinguished two entangled-but-separate naming issues: &quot;Dream&quot; as a still-valid display synonym for <code>roadmap_arcs</code> rows (not a bug) versus <code>STAGE_CLASS</code>/<code>STAGE_ICON</code>/<code>_stage_color()</code>'s genuinely stale six-and-five-value stage sets that never migrated to GOVERNS's canonical seven stages. The latter was filed as standalone issue <a href="https://github.com/nikhilsoman/synlynk/issues/263">#263</a>, explicitly scoped out of this PR per direct instruction.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Epic #210 is fully shipped, pending merge. Issue #259 (<code>synlynk status</code> surfacing <code>rates_updated_at</code>) remains the last item under the v0.12.0 Measurement Ledger Hardening theme before that theme's roadmap arc gets marked shipped — deliberately held until both #258 and #259 land, per standing instruction. #260 (Savings Ledger), #261 (dispatch-path unification), #262 (surface consolidation), and now #263 (stage constants) are filed and scoped for a later point release, none blocking.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

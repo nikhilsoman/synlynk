@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — v0.10.0: synlynk migrate — state.db Source of Truth | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 01, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — v0.10.0: synlynk migrate — state.db Source of Truth</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #TBD — v0.10.0: synlynk migrate — state.db Source of Truth</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the close of BS-17 (which introduced <code>synlynk scan</code> and <code>synlynk init --wizard</code>), synlynk successfully simplified the onboarding process and provided a guided, interactive First-Time User Experience (FTUE). However, a fundamental architectural bottleneck persisted: the repository's active state (the <code>project-docs/</code> directory containing <code>todo.md</code>, <code>memory.md</code>, <code>costs.md</code>, etc.) remained tracked directly in Git. When multiple agents and humans worked concurrently, they frequently generated annoying merge conflicts on these markdown files, disrupting the parallel development flow. The broader goal was clear: project state needed to move out of Git and into a structured database (<code>state.db</code>) as the permanent, single source of truth, while keeping a reliable local backup format.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>BS-18 marks a major architectural shift rather than a feature release: transitioning <code>project-docs/</code> out of Git tracking. To achieve this safely without sacrificing visibility or resilience, we implemented three key mechanisms:</p>
+<ol>
+<li><strong>Database as Source of Truth:</strong> Every read and write query targets <code>state.db</code> directly. For instance, context generation now reads from the database.</li>
+<li><strong>Immediate Local Write-Through:</strong> To keep the state human-readable and accessible, any database change is immediately written to <code>.synlynk/project-docs/</code> as a local markdown backup.</li>
+<li><strong>Zero-Dependency Disaster Recovery (DR) Sync:</strong> Instead of building complex cloud authentication protocols, we introduced a path mirror configuration. Users can direct synlynk to mirror backup files to a local folder synced by existing desktop cloud clients (like iCloud, Google Drive, OneDrive). The operating system handles the network traffic, avoiding new dependencies or OAuth flows.</li>
+</ol>
+<h2>What This PR Shipped</h2>
+<h3>The <code>synlynk migrate</code> Subcommand</h3>
+<p>This PR introduces the <code>synlynk migrate</code> CLI command to perform the 8-step atomic migration flow:</p>
+<ol>
+<li><strong>Import:</strong> Reads the flat markdown files in <code>project-docs/</code> and imports them into <code>state.db</code>.</li>
+<li><strong>Copy:</strong> Copies the markdown files to <code>.synlynk/project-docs/</code> as the initial local backup.</li>
+<li><strong>DR Mirror:</strong> Mirrors the files to the user's disaster recovery (DR) folder (if configured).</li>
+<li><strong>Git Untrack:</strong> Executes <code>git rm --cached -r project-docs/</code> to stop tracking active state files in Git.</li>
+<li><strong>Gitignore:</strong> Adds <code>project-docs/</code> to the repository's <code>.gitignore</code>.</li>
+<li><strong>Sentinel:</strong> Writes a <code>.synlynk/.synlynk_migrated</code> sentinel file marking the project as migrated.</li>
+<li><strong>Stage:</strong> Stages <code>.gitignore</code> and <code>.synlynk/.synlynk_migrated</code> for commit.</li>
+<li><strong>Commit:</strong> Commits the migration changes with a standardized message.</li>
+</ol>
+<h4>CLI Flags Shipped:</h4>
+<ul>
+<li><code>--dry-run</code>: Parses the flat files and prints what would be imported without writing to the database or modifying Git.</li>
+<li><code>--recover</code>: Re-imports all project docs from the backup folder <code>.synlynk/project-docs/</code> back into <code>state.db</code>.</li>
+<li><code>--setup-dr</code>: Sets the local path for the zero-dependency disaster recovery mirror in the workspace configuration.</li>
+</ul>
+<h3>Technical Implementation</h3>
+<ul>
+<li><strong>Database Schemas:</strong> Added 5 new database tables to store project state: <code>memory_entries</code>, <code>roadmap_arcs</code>, <code>roadmap_phases</code>, <code>cost_entries</code>, and <code>devlog_entries</code>.</li>
+<li><strong>Flat-File Parsers:</strong> Wrote 5 robust parsers in <code>synlynk/__init__.py</code>:
+<ul>
+<li><code>_parse_memory_md</code>: Section-by-section parser keying on section headers and tracking authors via <code>[@username]</code>.</li>
+<li><code>_parse_roadmap_md</code>: Roadmap structure extraction separating version arcs (shipped, planned) and phase rows.</li>
+<li><code>_parse_costs_md</code>: Reads token records from the markdown table.</li>
+<li><code>_parse_devlog_file</code>: Parses individual developer journals to extract log entries.</li>
+<li><code>_parse_todo_metadata</code>: Matches checkboxes and metadata comments (e.g., gh_issue/story IDs) to sync stories.</li>
+</ul>
+</li>
+<li><strong>Write-Through Hooks:</strong> Configured <code>state.db</code> updates to trigger immediate write-throughs to flat files under <code>.synlynk/project-docs/</code> for:
+<ul>
+<li><code>_generate_todo_md</code> (ToDo updates)</li>
+<li><code>cmd_memory_add</code> (Memory writes)</li>
+<li><code>cmd_devlog_append</code> (Devlog appends)</li>
+<li><code>update_costs</code> (Token cost logs)</li>
+</ul>
+</li>
+<li><strong>Context Generation Routing:</strong> Refactored <code>generate_context()</code> so that it dynamically routes to <code>_generate_context_from_db()</code> once the migration sentinel is detected, eliminating reading from raw Git-tracked markdown files.</li>
+</ul>
+<h3>Testing and E2E Verification</h3>
+<p>To verify the migration lifecycle, we added a comprehensive end-to-end integration test (<code>test_full_migration_end_to_end</code> in [test_migrate.py](file:///Users/nikhilsoman/dev/synlynk/tests/test_migrate.py)) that validates:</p>
+<ol>
+<li><strong>Dry-Run Isolation:</strong> Ensuring <code>--dry-run</code> leaves the database empty.</li>
+<li><strong>Atomic Migration:</strong> Confirming database tables are correctly populated and the sentinel file is written.</li>
+<li><strong>Write-Through Integrity:</strong> Verifying that <code>cmd_memory_add</code> and <code>cmd_devlog_append</code> write to the database <em>and</em> immediately output to the backup directory.</li>
+<li><strong>Context Integrity:</strong> Ensuring <code>generate_context</code> reads directly from the database post-migration.</li>
+<li><strong>Full Recovery:</strong> Dropping memory entries, running <code>--recover</code>, and asserting that the database successfully re-imports all 3 entries (2 original + 1 written-through).</li>
+</ol>
+<p>The full test suite containing 616 tests passes successfully.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>No visual mockups or UI brainstorm files were created for this PR, as the architectural shift was a design-first discussion focused purely on CLI mechanics, data modeling, and file persistence.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<ol>
+<li><strong>Conflict-Free Agent Collaboration:</strong> Multi-agent squads can now execute tasks, update costs, and log devlogs simultaneously. They write to a single transactional SQLite database rather than trying to concurrently edit the same markdown files, eliminating git merge conflicts.</li>
+<li><strong>Durable Local Fallbacks:</strong> If a database corruption ever occurs, the <code>.synlynk/project-docs/</code> backup acts as a persistent human-readable snapshot that can be easily recovered using <code>synlynk migrate --recover</code>.</li>
+<li><strong>Zero-Configuration Backup:</strong> By mirroring to iCloud/Google Drive paths, team members get automated backup/sync without synlynk having to manage cloud credentials, token refreshes, or network request code.</li>
+</ol>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the onboarding experience, repository scanning, and state database migrations fully complete, the last remaining <strong>Phase 0 P0 priority</strong> before the first named <code>v0.10.0</code> release is <strong>packaging</strong>.</p>
+<p>The next milestone is to wrap synlynk into a proper Python package (<code>pyproject.toml</code> definition + <code>pipx install</code> support). This ensures that developers can install and upgrade synlynk as a standalone global CLI utility, making it ready for daily production use.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Measurement Ledger Phase 2: The Agy (Gemini) Structured-Output Adapter | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 15, 2026</span>
+        
+          <span class="blog-post-pr">PR #256</span>
+        
+      </div>
+      <h1 class="blog-post-title">Measurement Ledger Phase 2: The Agy (Gemini) Structured-Output Adapter</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #252 shipped the second of four planned per-agent structured-output adapters — Claude — and re-validated the pattern PR #244 (Codex) established: <code>extract_tokens()</code> tries a per-agent <code>_extract_&lt;agent&gt;_structured()</code> function first, falls through to the existing regex chain on any failure, and requires zero changes to <code>_resolve_cost_tier()</code> or any of Phase 1's provenance machinery. That PR's closing note named the next goalpost explicitly: Gemini and Grok remain, each independently shippable, each requiring its own live-verified investigation of that CLI's actual structured-output shape rather than a copy-paste of Codex's or Claude's.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>One genuine strategic shift, decided before any design work started: this PR's four implementation tasks were the first in the Measurement Ledger series to be distributed across all three real CLI agents — Codex, Agy, and Grok — via <code>synlynk dispatch &lt;agent&gt; --task &quot;...&quot; --force-agent</code>, rather than defaulting every task to Codex as both the Codex and Claude adapters had. The rotation was Task 1 → Codex, Task 2 → Agy, Task 3 → Grok, Task 4 (verification-only) → Claude itself, per this project's PM/reviewer-only role split. Tasks 1 and 2 were deliberately serialized rather than dispatched in parallel, since both touch the shared file <code>tests/test_cost_ledger.py</code> — parallel dispatch risked the second job's context not reflecting the first job's not-yet-cherry-picked test additions.</p>
+<p>Four smaller design forks came up during brainstorming, all resolved by asking rather than assuming:</p>
+<p><strong><code>thinking_tokens</code> handling.</strong> Agy's <code>usage</code> object separates <code>input_tokens</code>, <code>output_tokens</code>, and <code>thinking_tokens</code>, with <code>total_tokens</code> covering only the first two. Folding <code>thinking_tokens</code> into <code>output_tokens</code> was chosen — mirroring how Codex's <code>reasoning_output_tokens</code> is treated as billable output — rather than discarding it or inventing a new provenance field.</p>
+<p><strong>Extraction-failure semantics.</strong> Agy's single JSON response carries a top-level <code>status</code> field. <code>status != &quot;SUCCESS&quot;</code> was defined as an extraction failure (returns <code>None</code>, falls through to the regex chain) rather than inventing a distinct failure schema — consistent with every other adapter's &quot;fail closed, fall through&quot; contract.</p>
+<p><strong>No renderer.</strong> Unlike Codex's <code>item.completed</code> event stream or Claude's mixed-content-block <code>assistant</code> events, Agy's <code>--output-format json</code> emits exactly one JSON object per invocation — there's no multi-event noise for <code>synlynk logs</code> to suppress. A <code>_render_agy_log_line()</code> was deliberately not added; raw passthrough is sufficient.</p>
+<p><strong>Flag block placement.</strong> <code>dispatch.py</code>'s new <code>if agent == &quot;agy&quot;:</code> block was kept as an independent sibling to the coincidentally-identical <code>if agent == &quot;grok&quot;:</code> block (both add <code>[&quot;--output-format&quot;, &quot;json&quot;]</code>), rather than merging them — matching the established flat-chain convention that has already absorbed Codex's and Claude's differently-shaped flag additions without needing an abstraction.</p>
+<h2>What This PR Shipped</h2>
+<p>The live investigation came first, same discipline as the Codex and Claude pilots: running <code>agy -p --output-format json</code> directly and capturing real output. The key finding that shaped the whole design: Agy's structured output is not an event stream like Codex's or Claude's — it's exactly one JSON object per invocation, schema <code>{conversation_id, status, response, duration_seconds, num_turns, usage: {input_tokens, output_tokens, thinking_tokens, total_tokens}}</code>. That single fact eliminated an entire category of design questions the other two adapters had to answer (which event carries the final usage, how to detect the terminal event, how much of the stream to suppress) and is also why no renderer was needed.</p>
+<p>A red herring surfaced during the &quot;what already exists&quot; investigation phase: epic #210's issue body cites <code>synlynk/local_agent.py</code> as a template pattern for structured JSON output. Reading it in full showed this is unrelated — it's <code>.agents/local.json</code> config loading, a health-check GET against an OpenAI-compatible endpoint, and aider CLI flag building for the <code>local</code> agent (aider running against a local model server), with no token-extraction logic anywhere. This was confirmed rather than assumed, and the epic reference was set aside as stale.</p>
+<p>Three commits landed on top of the design/plan docs:</p>
+<ul>
+<li><strong><code>synlynk/costs.py</code></strong> — <code>_extract_agy_structured()</code> parses the single trailing JSON object (scanning from the last non-empty line, matching the &quot;exactly one object&quot; shape confirmed live), returning <code>None</code> on any malformed JSON, non-<code>SUCCESS</code> status, or missing/malformed <code>usage</code> — the same fail-closed contract as Codex's and Claude's extractors. <code>extract_tokens()</code> gained a sibling <code>if agent == &quot;agy&quot;:</code> branch immediately after the existing <code>claude</code> one.</li>
+<li><strong><code>synlynk/dispatch.py</code></strong> — <code>--output-format json</code> added to Agy's flag list in <code>dispatch_agent()</code>, as a sibling to the existing <code>grok</code>/<code>claude</code>/<code>codex</code> blocks. <code>synlynk/_constants.py</code> was deliberately left untouched — TC-2 preflight checks every flag in an agent's <code>valid_flags</code> against that agent's literal <code>--help</code> text, and <code>--output-format</code> is confirmed undocumented for <code>agy</code>, so adding it there would fail preflight. Same pattern as Codex's and Claude's own structured-output flags.</li>
+<li><strong><code>tests/test_cost_ledger.py</code></strong> — grew by 15 tests across the three code tasks (11 for the extractor, 3 for the <code>extract_tokens()</code> wiring, 1 for the dispatch-flags block), directly mirroring the shape of the Codex and Claude adapters' own test suites.</li>
+</ul>
+<p><strong>Process note — the cross-agent dispatch rotation, in detail.</strong> Task 1 went to Codex (<code>_extract_agy_structured()</code> + 11 tests), Task 2 to Agy itself (wiring into <code>extract_tokens()</code> + 3 tests — Agy implementing its own token-counting adapter), Task 3 to Grok (the dispatch flag block + 1 test). Every dispatch was independently verified before cherry-picking onto the design branch: reading the actual diff against the plan's exact code, confirming <code>_constants.py</code> stayed untouched, and running the plan's specified test command myself in the job's worktree — never trusting a job's self-reported pass/fail, and never trusting <code>synlynk jobs</code>' status column alone (still <code>unknown</code> for completed jobs per the known #202 display bug; verified via the job's log tail and <code>git log</code> in its worktree instead). All three dispatched tasks matched the plan's specified code exactly on the first attempt. Task 3's job also left two uncommitted, plan-unrelated working-tree modifications — a <code>GEMINI.md</code> harness-version stamp bump and a <code>project-docs/todo.md</code> overwrite that replaced roughly fifty real story rows with two placeholder stub rows, apparently triggered by a template-context regeneration during the dispatch run. Neither was part of any task; both were confirmed as incidental and discarded before the branch diff was finalized. A full-suite regression (<code>pytest -q --ignore=worktrees</code>) closed the loop: 1115 passed, 2 skipped, with the branch diff against <code>origin/main</code> confirmed to touch exactly the spec, the plan, and the three expected code files — nothing else.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — same as both prior adapters in this series, this stayed a text-and-code investigation. All four design forks were conceptual/scope questions, resolved via direct multiple-choice questions rather than the visual companion.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the third of four planned per-agent adapters, and the first to validate two things simultaneously: that the pattern generalizes to a genuinely simpler output shape (one JSON object, no event stream, no renderer needed), and that the <em>execution</em> of an adapter's plan can itself be distributed across the multi-agent fleet rather than routed through a single implementation agent by default — Agy wired its own token-counting logic into <code>extract_tokens()</code>, and Grok wired its own dispatch flag. Both were independently verified against the plan with the same rigor as every Codex-dispatched task in the prior two adapters, and both matched exactly. The rotation didn't just distribute load — it exercised the dispatch-then-verify discipline against a wider set of agents' actual code-generation behavior, and surfaced one incidental side-effect bug (the <code>todo.md</code> template-regeneration wipe) worth a closer look outside this PR's scope.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Three of four structured-output adapters are now live (pending merge of this PR). Same as PR #244 and PR #252, this isn't a release blocker on its own — it's a fast-follow within the already-unblocked v0.12.0 theme, closing more of the gap between <code>estimated_tshirt</code> and <code>estimated_token_rate</code> for the fleet's token accounting. The next goalpost is unchanged from where PR #252 left it, minus one: Grok's own adapter is the fourth and final deliverable of epic #210's structured-output layer — independently shippable, and per this PR's newly-validated pattern, a candidate for the same cross-agent dispatch rotation rather than a single-agent default.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #244 — Measurement Ledger Phase 2: The Codex Structured-Output Adapter | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 14, 2026</span>
+        
+          <span class="blog-post-pr">PR #244</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #244 — Measurement Ledger Phase 2: The Codex Structured-Output Adapter</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Measurement Ledger Hardening Phase 1 (PR #236/#241/#242) shipped the cost ledger's provenance system: every <code>cost_entries</code> row now carries an explicit <code>cost_source</code> tag (<code>actual</code>, <code>estimated_token_rate</code>, <code>estimated_tshirt</code>, <code>estimated_manual</code>, <code>legacy_unknown</code>) and an <code>estimate_basis</code> sub-tier, enforced through a single write chokepoint (<code>_insert_cost_row()</code>) that SQLite itself rejects if the tag is omitted. The user's stated invariant — <em>never miss capturing cost of any implementation, even as an estimate, and never blend a guess in silently as if it were metered billing</em> — was structurally guaranteed by that point.</p>
+<p>But Phase 1 also named its own biggest remaining weakness. <code>extract_tokens()</code> still produced its numbers by running five regex families against unstructured CLI stdout, falling back to an 80/20 input/output split heuristic when nothing matched. For subscription-billed agents — most of the fleet — <code>estimated_token_rate</code>'s accuracy was entirely downstream of how good that regex guess was. Phase 1's spec explicitly reserved a fourth <code>estimate_basis</code> value, <code>structured_output</code>, for exactly this gap, and scoped closing it out as Phase 2: one PR per agent, each wiring in that agent's own CLI-native structured-output mode. Codex — the most-dispatched agent in synlynk's own dispatch chain — was named as the pilot.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>One real correction happened mid-design, caught before any code was written against it. The original draft of §3.3 (log readability) proposed a live Python background thread that would render Codex's <code>--json</code> output into human-readable prose as it streamed, writing to a <code>.jsonl</code> sibling file alongside the existing log. That mechanism doesn't work: <code>dispatch_agent()</code>'s background job path is fire-and-forget — the shell command is spawned via <code>subprocess.Popen([&quot;sh&quot;, &quot;-c&quot;, shell_cmd], stdout=DEVNULL, ..., start_new_session=True)</code>, and the parent CLI process exits almost immediately after spawning the detached shell. There is no live Python process left to host a rendering thread for the life of the job.</p>
+<p>The design was revised in place (not silently rewritten — the correction is documented inline in the spec) to render lazily, at <em>read</em> time instead of write time. <code>log_file</code> stays raw JSONL for Codex jobs — the only copy, serving both as the parse source for token extraction and the render source for <code>synlynk logs</code>. The readability fix moved entirely into <code>cmd_logs()</code>, a synchronous, foreground, on-demand function with no process-lifetime problem to solve. This eliminated the <code>.jsonl</code> sibling-file convention before it ever existed: one file, one format, two consumers, nothing to keep in sync.</p>
+<h2>What This PR Shipped</h2>
+<p>The adapter pattern: <code>extract_tokens()</code> gained an optional <code>agent: str = None</code> parameter. When <code>agent == &quot;codex&quot;</code>, it tries <code>_extract_codex_structured()</code> first; a <code>None</code> return (any failure — no valid JSON, no <code>turn.completed</code> event, missing <code>usage</code> key, non-numeric values) falls straight through to the existing regex chain, unchanged. No caller has to know which path fired; the fallback is automatic and silent, exactly matching Phase 1's &quot;regex heuristic becomes an explicit last resort&quot; language.</p>
+<p><code>_extract_codex_structured()</code> scans every line of the captured output (not just the last line — trailing blank lines and shell artifacts would break that assumption), looking for <code>{&quot;type&quot;: &quot;turn.completed&quot;, &quot;usage&quot;: {...}}</code> events from <code>codex exec --json</code>. Live-verified schema, not guessed: <code>usage.input_tokens</code>, <code>usage.output_tokens</code> (plus <code>reasoning_output_tokens</code>, billed separately by the provider and folded into <code>out_tokens</code>), and <code>usage.cached_input_tokens</code> (mapped to the existing <code>cache_read_tokens</code> concept). Exactly one <code>turn.completed</code> event fires per invocation regardless of how many tool calls happen inside it — <code>usage</code> is cumulative, not per-turn.</p>
+<p>Five files changed, six commits landed on top of the design/plan docs:</p>
+<ul>
+<li><strong><code>synlynk/costs.py</code></strong> — <code>_extract_codex_structured()</code> added; confirmed <code>_resolve_cost_tier()</code> already handled <code>basis in (&quot;regex_pair&quot;, &quot;structured_output&quot;)</code> identically from Phase 1 — zero changes needed there, the extensibility point Phase 1 promised turned out to be real.</li>
+<li><strong><code>synlynk/dispatch.py</code></strong> — <code>extract_tokens(output_text, agent=cmd_args[0])</code> at the foreground <code>exec_command()</code> call site; <code>--json</code> added to Codex's flag list in the existing <code>if agent == &quot;codex&quot;:</code> block, additive alongside the pre-existing <code>--add-dir</code> injection.</li>
+<li><strong><code>synlynk/jobs.py</code></strong> — all four <code>extract_tokens()</code> call sites across the reconcile/stall paths updated to pass <code>agent=</code>.</li>
+<li><strong><code>synlynk/support_engineer.py</code></strong> — the one investigation-flow call site updated; <code>agent</code> was already in scope from <code>agent_cfg.get(&quot;investigator&quot;, &quot;claude&quot;)</code>.</li>
+<li><strong><code>synlynk/__init__.py</code></strong> — new <code>_render_codex_log_line()</code> helper, wired into <code>cmd_logs()</code>'s Codex branch. Renders <code>agent_message</code> items as prose, <code>command_execution</code> items as <code>$ &lt;command&gt;</code> + output, and intentionally omits <code>thread.started</code>/<code>turn.started</code>/<code>item.started</code>/<code>turn.completed</code> metadata events. Anything that fails to parse as JSON or isn't a recognized shape prints as-is, so a crashed job's raw stderr (e.g. an old Codex version rejecting <code>--json</code>) stays visible instead of disappearing.</li>
+<li><strong><code>tests/test_cost_ledger.py</code></strong> — grew from 52 to 63 tests across the six implementation tasks.</li>
+</ul>
+<p><strong>Process note, since it's part of what this PR actually demonstrates:</strong> every task was dispatched to Codex via <code>synlynk dispatch codex --task &quot;...&quot; --force-agent</code>, and every dispatch was independently verified before being accepted — not by trusting Codex's self-reported pass/fail count, but by reading the actual <code>git diff</code> against the plan's spec and running <code>pytest</code> myself. That discipline caught two real defects. First, in an earlier segment: Codex's initial attempt at <code>_extract_codex_structured()</code> matched on <code>turn_completed</code> (underscore) instead of the live-verified <code>turn.completed</code> (dot notation) — a silent-failure bug that would have made every Codex job fall through to the regex heuristic while looking correct. Second, in this PR's final task: a full-suite regression pass (<code>pytest -q --ignore=worktrees</code>, run directly rather than trusting a task-scoped green result) surfaced a collateral break in <code>tests/test_ecosystem_status.py</code> — a test outside the plan's declared file scope that mocked <code>extract_tokens</code> with a positional-only lambda, broken by the new <code>agent=</code> keyword argument threaded through every call site. A scoped one-line fix (<code>lambda text, agent=None: (0, 0)</code>) resolved it, verified independently: 0 failed, 1079 passed, 2 skipped.</p>
+<p>The dispatch chain itself ended up eight levels of nested job-worktrees deep by the time the fix landed, a byproduct of dispatching each task from inside the prior task's worktree. Despite the nesting, git history stayed strictly linear the whole way through — confirmed via <code>git log --all --graph</code> before merge — which is what made a clean <code>git merge --ff-only</code> (rather than a tangle of merge commits) possible when folding the chain back into the PR branch.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this design moved directly from the Phase 1 spec's reserved extension point through brainstorming dialogue to a written spec, without a visual-companion session. The JSONL schema and the fire-and-forget process-lifetime constraint that drove the §3.3 revision were both established by reading live code and running <code>codex exec --json</code> directly, not by diagramming.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the first of four planned per-agent structured-output adapters, and it validates the pattern end to end: an <code>if agent == &quot;&lt;name&gt;&quot;:</code> branch inside <code>extract_tokens()</code>, a per-agent <code>_extract_&lt;agent&gt;_structured()</code> that returns <code>None</code> on any failure rather than raising, and a fallback to the existing regex chain that requires zero cooperation from the caller. Claude, Gemini, and Grok can each reuse this shape directly — investigate their own CLI's structured-output mode the same way Codex's was here (live-verified, not guessed from memory), write one function, add one branch, done.</p>
+<p>More directly relevant to the PM/reviewer role this project runs under: this PR is itself evidence for the subagent-dispatch discipline it depends on. Every line of implementation code in this PR was written by Codex, not by Claude — and the two real defects that got caught (the <code>turn_completed</code> typo, the collateral <code>test_ecosystem_status.py</code> break) were both invisible to Codex's own self-report and only surfaced because the review step re-derives ground truth (reading diffs, running tests) instead of trusting a status field. That's the same lesson project memory already carries from issue #202 — never trust <code>synlynk jobs</code> status alone — now validated in the token-accuracy domain rather than the job-lifecycle domain.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>v0.12.0 (&quot;Trust &amp; Cost-Aware Routing&quot;) was explicitly held for this PR — everything else in the theme was already on <code>main</code>, and the release was deliberately sequenced to ship with at least one real structured-output adapter live, not just the Phase 1 groundwork. With PR #244 merged, that release is unblocked.</p>
+<p>The next goalpost is the same pattern, three more times: Claude's <code>-p --output-format stream-json</code>, Codex's now-proven approach reused as a template. Each is independently shippable, independently testable, and — per this PR's own out-of-scope list — deliberately not designed here, so each gets its own live-verified investigation rather than an assumption carried over from Codex's shape. Until all four land, a meaningful share of subscription-billed rows will keep resolving to <code>estimated_tshirt</code> (a coarse guess) rather than <code>estimated_token_rate</code> (a precise number, just relabeled) — that gap is the metric Phase 2's remaining PRs are closing.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

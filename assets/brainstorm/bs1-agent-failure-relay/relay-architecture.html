@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BS-1: Relay Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 32px; min-height: 100vh; }
+  h2 { color: #fff; font-size: 18px; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 28px; }
+  code { background: #1e1e1e; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #b0c4ff; }
+
+  /* Two-column: topology + event schema */
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+  .panel { border: 1px solid #222; border-radius: 10px; padding: 20px; }
+  .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: #555; margin-bottom: 16px; }
+
+  /* Topology diagram */
+  .topo { display: flex; flex-direction: column; gap: 8px; }
+  .node {
+    border: 1px solid #2a2a2a; border-radius: 7px; padding: 10px 14px;
+    background: #111;
+  }
+  .node.machine { border-color: #2a3d5a; background: #0c1520; }
+  .node.relay-box { border-color: #3d2a5a; background: #150c20; }
+  .node.cloud { border-color: #1e3a1e; background: #0c180c; }
+  .node-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 4px; }
+  .node-title { font-size: 13px; font-weight: 600; color: #ddd; margin-bottom: 3px; }
+  .node-detail { font-size: 11px; color: #777; line-height: 1.5; }
+
+  .relay-arrow {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: #444; padding: 0 8px;
+  }
+  .relay-arrow .line { flex: 1; height: 1px; background: #333; }
+  .relay-arrow .label { color: #666; white-space: nowrap; }
+
+  /* Event schema */
+  .event-list { display: flex; flex-direction: column; gap: 8px; }
+  .event {
+    border: 1px solid #222; border-radius: 6px; padding: 10px 12px;
+    background: #0f0f0f;
+  }
+  .event.core { border-color: #2a4a2a; background: #0d180d; }
+  .event-name { font-size: 12px; font-weight: 700; color: #8fd48f; margin-bottom: 3px; }
+  .event.secondary .event-name { color: #888; }
+  .event-fields { font-size: 10px; color: #666; line-height: 1.6; font-family: 'SF Mono', monospace; }
+  .event-fields span { color: #b0c4ff; }
+
+  hr { border: none; border-top: 1px solid #1e1e1e; margin: 24px 0; }
+
+  /* Deployment modes */
+  .modes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 0; }
+  .mode {
+    border: 1px solid #222; border-radius: 8px; padding: 14px;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .mode:hover { border-color: #444; }
+  .mode.selected { border-color: #5b8fff; background: #0d1a2e; }
+  .mode-letter {
+    width: 24px; height: 24px; border-radius: 5px;
+    background: #1a1a1a; border: 1px solid #333;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #777;
+    margin-bottom: 10px;
+  }
+  .mode.selected .mode-letter { background: #1a3060; border-color: #5b8fff; color: #5b8fff; }
+  .mode h4 { font-size: 12px; font-weight: 700; color: #ccc; margin-bottom: 4px; }
+  .mode .detail { font-size: 11px; color: #777; line-height: 1.5; margin-bottom: 8px; }
+  .mode .verdict { font-size: 10px; line-height: 1.5; }
+  .pro { color: #6fcf6f; } .pro::before { content: '✓ '; }
+  .con { color: #cc5555; } .con::before { content: '✗ '; }
+  .neu { color: #999; } .neu::before { content: '· '; }
+
+  .rec-badge {
+    position: absolute; top: 10px; right: 10px;
+    background: #1a3060; border: 1px solid #5b8fff;
+    color: #5b8fff; font-size: 9px; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: #555; margin-bottom: 12px; margin-top: 24px; }
+
+  .insight {
+    background: #0d1520; border: 1px solid #1e3050;
+    border-radius: 8px; padding: 14px 18px;
+    font-size: 12px; color: #8aafdf; line-height: 1.7; margin-top: 20px;
+  }
+  .insight strong { color: #b0d0ff; }
+</style>
+</head>
+<body>
+
+<h2>Relay Wire Protocol — v0.9.4</h2>
+<p class="subtitle">SQLite is primary. Each node has <code>state.db</code>. Relay carries row-level events between daemons.</p>
+
+<div class="layout">
+
+  <!-- Left: topology -->
+  <div class="panel">
+    <div class="panel-title">Node topology</div>
+    <div class="topo">
+
+      <div class="node machine">
+        <div class="node-label">Machine A — your laptop</div>
+        <div class="node-title">SynlynkDaemon</div>
+        <div class="node-detail">
+          <code>localhost:27471</code> · <code>state.db</code><br>
+          Publishes events → relay · Applies incoming events → local SQLite
+        </div>
+      </div>
+
+      <div class="relay-arrow">
+        <div class="line"></div>
+        <div class="label">WSS events ↕</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="node relay-box">
+        <div class="node-label">Relay — message broker only</div>
+        <div class="node-title">synlynk relay</div>
+        <div class="node-detail">
+          Fan-out only — no storage. Routes events between connected nodes.<br>
+          Offline nodes miss events; resync via snapshot on reconnect (v0.10.0).<br>
+          <code>relay.synlynk.com</code> · self-hosted · LAN mDNS
+        </div>
+      </div>
+
+      <div class="relay-arrow">
+        <div class="line"></div>
+        <div class="label">WSS events ↕</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="node machine">
+        <div class="node-label">Machine B — agent worker / teammate</div>
+        <div class="node-title">SynlynkDaemon</div>
+        <div class="node-detail">
+          <code>localhost:27471</code> · <code>state.db</code><br>
+          Receives events → merges into local SQLite → regenerates <code>context.md</code>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right: event schema -->
+  <div class="panel">
+    <div class="panel-title">Event schema — typed core + generic tail</div>
+    <div class="event-list">
+
+      <div class="event core">
+        <div class="event-name">story_updated</div>
+        <div class="event-fields">
+          <span>story_id</span>, <span>status</span>, <span>agent</span>,<br>
+          <span>title</span>, <span>engg_domain</span>, <span>ts</span>, <span>origin_node</span>
+        </div>
+      </div>
+
+      <div class="event core">
+        <div class="event-name">job_dispatched</div>
+        <div class="event-fields">
+          <span>job_id</span>, <span>agent</span>, <span>story_id</span>,<br>
+          <span>priority</span>, <span>depends_on[]</span>, <span>ts</span>, <span>origin_node</span>
+        </div>
+      </div>
+
+      <div class="event core">
+        <div class="event-name">job_completed</div>
+        <div class="event-fields">
+          <span>job_id</span>, <span>exit_code</span>, <span>duration_s</span>,<br>
+          <span>tokens_in</span>, <span>tokens_out</span>, <span>ts</span>, <span>origin_node</span>
+        </div>
+      </div>
+
+      <div class="event core">
+        <div class="event-name">alert_raised</div>
+        <div class="event-fields">
+          <span>pattern</span>, <span>severity</span>, <span>job_id?</span>,<br>
+          <span>message</span>, <span>ts</span>, <span>origin_node</span>
+        </div>
+      </div>
+
+      <div class="event core">
+        <div class="event-name">context_checkpoint</div>
+        <div class="event-fields">
+          <span>context_hash</span>, <span>size_bytes</span>,<br>
+          <span>ts</span>, <span>origin_node</span>
+        </div>
+      </div>
+
+      <div class="event secondary">
+        <div class="event-name">table_changed &nbsp;<span style="color:#555;font-size:10px">// generic fallback</span></div>
+        <div class="event-fields">
+          <span>table</span>, <span>op</span> (INSERT|UPDATE|DELETE),<br>
+          <span>pk</span>, <span>changes{}</span>, <span>ts</span>, <span>origin_node</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="insight" style="margin-top:12px;font-size:11px">
+      <strong>Why typed + generic:</strong> 5 typed events cover 95% of relay traffic with semantic meaning receivers can act on. <code>table_changed</code> covers schema additions without relay code changes — adding a new table doesn't require a new event type until it's worth promoting.
+    </div>
+  </div>
+
+</div>
+
+<div class="section-label">Deployment mode for v0.9.4</div>
+
+<div class="modes">
+
+  <div class="mode" onclick="toggleMode(this)" data-choice="lan">
+    <div class="mode-letter">L</div>
+    <h4>LAN — mDNS</h4>
+    <p class="detail">Daemons announce via Bonjour/Avahi. Peer-to-peer, no internet dependency. One daemon is "host."</p>
+    <div class="verdict">
+      <div class="pro">Zero config, zero cost</div>
+      <div class="pro">Works completely offline</div>
+      <div class="con">Same network only</div>
+      <div class="con">Host machine must stay up</div>
+    </div>
+  </div>
+
+  <div class="mode" onclick="toggleMode(this)" data-choice="cf-tunnel">
+    <div class="mode-letter">C</div>
+    <div class="rec-badge">Start here</div>
+    <h4>Cloudflare Tunnel</h4>
+    <p class="detail"><code>cloudflared tunnel</code> wraps the local daemon. Public relay URL generated. Works from anywhere.</p>
+    <div class="verdict">
+      <div class="pro">Zero infra cost</div>
+      <div class="pro">Works across networks / WFH</div>
+      <div class="pro">One command: <code>synlynk relay tunnel start</code></div>
+      <div class="con">Requires cloudflared installed</div>
+      <div class="neu">Cloudflare dependency</div>
+    </div>
+  </div>
+
+  <div class="mode" onclick="toggleMode(this)" data-choice="vps">
+    <div class="mode-letter">V</div>
+    <h4>VPS / self-hosted</h4>
+    <p class="detail">Dedicated relay server. All nodes connect to a fixed address. Required for enterprise / air-gapped.</p>
+    <div class="verdict">
+      <div class="pro">Full control, no third-party</div>
+      <div class="pro">Persistent — relay survives node restarts</div>
+      <div class="con">Cost + maintenance</div>
+      <div class="con">Overkill for solo/small team</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleMode(el) {
+  document.querySelectorAll('.mode').forEach(m => m.classList.remove('selected'));
+  el.classList.add('selected');
+  if (window.recordChoice) recordChoice(el.dataset.choice, el.querySelector('h4').textContent);
+}
+</script>
+<script src="http://localhost:56987/_helper.js"></script>
+</body>
+</html>

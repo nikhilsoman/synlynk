@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Architect Map v2 — From Static Tube Map to Live Workspace Graph</h1>
+<p><strong>Date:</strong> 2026-07-12
+<strong>PR:</strong> #167 (merged)
+<strong>Branch:</strong> <code>chore/vizor-architect-map-v2-design</code> → <code>main</code></p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>BS-21 shipped Vizor as a local browser dashboard with five tabs, one of which — Architect Map —
+rendered a hand-drawn, London Underground–style &quot;tube map&quot; of the workspace. It looked good in a
+screenshot, but it had three structural problems that surfaced almost immediately in dogfooding:</p>
+<ol>
+<li><strong>No live data source.</strong> Every station position, line grouping, and color came from
+<code>.synlynk/vizor-tube.json</code>, a file nothing in the codebase ever generated or updated. Add a
+repo, remove a repo, change a relationship — the map silently went stale with no signal that
+it had.</li>
+<li><strong>Dead-end onboarding.</strong> The empty state told first-time users to run <code>synlynk viz --setup-tube</code>
+to create the file interactively. That command didn't exist anywhere in the codebase. Every
+user who hit the empty state was stuck with no path forward.</li>
+<li><strong>Wrong scope for the metaphor.</strong> The tube-map visual language (stations = modules, lines =
+subsystems) reads as code-level architecture, but synlynk's actual unit of work is the
+<em>workspace</em> — one or more repos tracked together via <code>cfg[&quot;repos&quot;]</code>. The map needed to answer
+&quot;what repos make up this workspace and how do they relate,&quot; not &quot;what does the import graph
+of one repo look like.&quot;</li>
+</ol>
+<p>A revisit-and-redesign brainstorm (issue-tracked as #10) confirmed the fix wasn't a patch to the
+tube map — it was a full swap to a different visualization metaphor built on data synlynk
+already tracks.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>The brainstorm compared three layout styles: an auto-laid-out tube map, a grid/service catalog,
+and a force-directed node graph. Force-directed won — it's the standard shape for this problem
+space (Backstage, Grafana service maps), it scales from a handful of repos to a few dozen without
+redesign, and it avoids the tube map's two-part engineering cost (auto-layout <em>and</em> 45°/90°
+line-routing rules). No visual companion session was used for this round — the three options were
+differentiated well enough in text/diagram form during brainstorming.</p>
+<p>One scope narrowing happened mid-plan, caught during the plan's own self-review rather than left
+as a silent gap: the design spec's side-drawer action #3 (&quot;show active dreams/agents at a glance&quot;)
+originally implied dream count, agent count, <em>and</em> last-commit time, sourced from &quot;the same place
+the Gantt view already reads.&quot; But nothing in the codebase attributes a story to a specific repo —
+<code>stories</code> has no <code>repo_path</code> column, and adding one wasn't part of this plan's approved scope. The
+plan was updated in place (Task 8) to ship the smaller, honest version: real active-dream count
+for single-repo workspaces (today's dogfood case), <code>0</code> for every repo once a workspace has 2+ repos
+(no attribution signal exists yet to split credit). Agent count and last-commit time are deferred,
+not silently dropped — they need the same <code>repo_path</code> plumbing this task deliberately didn't add.</p>
+<hr>
+<h2>What Shipped</h2>
+<p>Eight tasks, executed via Subagent-Driven Development (fresh Codex dispatch per task, two-stage
+review — spec compliance then code quality — before each merge), landing eight commits on
+<code>chore/vizor-architect-map-v2-design</code>:</p>
+<h3>Data model (Task 1–2)</h3>
+<ul>
+<li><code>_load_workspace_repos(config)</code> / <code>_repo_github_url(repo_path)</code> — nodes come straight from the
+existing <code>cfg[&quot;repos&quot;]</code> array; GitHub URLs are derived from each repo's <code>git remote get-url origin</code>, not stored anywhere new.</li>
+<li><code>.synlynk/vizor-workspace-map.json</code> replaces <code>vizor-tube.json</code> — typed, color-coded edges
+(<code>{&quot;from&quot;, &quot;to&quot;, &quot;type&quot;}</code> + an <code>edge_types</code> legend), loaded via <code>_load_workspace_map()</code>.
+Freshness isn't automated (no reliable cross-language signal exists to infer &quot;this PR added an
+API call between repos&quot;) — it's a new conditional line in <code>CLAUDE.md</code>'s protocol list instead:
+update the edges file when a PR's own description says it changed a cross-repo relationship.</li>
+<li><code>_query_repo_file_tree()</code> — a new <code>synlynk/__init__.py</code> DB helper reading the file/symbol data
+<code>synlynk scan --deep</code> already writes to <code>state.db</code>, reused rather than re-walking the filesystem
+at Vizor-generation time.</li>
+</ul>
+<h3>Rendering + routes (Task 3–4)</h3>
+<ul>
+<li>New POST routes: <code>/dispatch</code> (repo-scoped dispatch trigger) and <code>/architect-map/view-pref</code>
+(persists the graph/tree sub-view choice to <code>.synlynk/config.json</code>'s <code>vizor.architect_map_view</code>
+key).</li>
+<li><code>generate_tube_html()</code> renamed to <code>generate_architect_map_html(data, port)</code> and rewritten end to
+end — 611 lines of hand-crafted SVG tube-rendering logic deleted, replaced by a 160-line HTML
+shell: graph/tree switcher tabs, legend, empty SVG canvas, side-drawer markup.</li>
+</ul>
+<h3>Interaction (Task 5)</h3>
+<ul>
+<li>A hand-rolled force-directed layout in ~60 lines of vanilla JS (<code>layoutGraph</code>) — no D3, no CDN
+dependency, matching Vizor's self-contained-HTML constraint. Nodes start on a circle at
+deterministic positions; 200 iterations of pairwise repulsion (inverse-square, strength 4000)
+plus edge-based attraction (distance × 0.01) converge to a stable layout, clamped to a 900×620
+canvas. The simulation runs client-side on page load, so it costs nothing against Vizor's own
+sub-2-second generation budget.</li>
+<li>Clicking a node opens a side drawer (reusing the Gantt view's existing slide-in idiom) with four
+actions: dispatch to that repo, jump to its Gantt view (via <code>postMessage</code> cross-frame nav), open
+on GitHub, and — as of Task 8 — an active-dream count.</li>
+</ul>
+<h3>File tree sub-view (Task 6)</h3>
+<ul>
+<li><code>renderTree()</code>/<code>renderTreeNode()</code> render an IDE-style collapsible directory tree per repo,
+sourced entirely from <code>_query_repo_file_tree()</code> — no filesystem walk at render time. A repo with
+no deep scan yet shows a &quot;run <code>synlynk scan --deep</code>&quot; prompt instead of an empty tree.</li>
+</ul>
+<h3>Cleanup (Task 7)</h3>
+<ul>
+<li>The dead <code>--setup-tube</code> references were removed from the original BS-21 design spec, replaced
+with a pointer to this design doc. The <code>Workspace Map Update Protocol</code> — the conditional,
+PR-triggered edge-file update rule described above — was added to <code>CLAUDE.md</code> immediately after
+the Blog Post Protocol section, following the same &quot;conditional, not mandatory-every-PR&quot; pattern.</li>
+</ul>
+<h3>Drawer dream count (Task 8)</h3>
+<ul>
+<li>Wired the scoped-down active-dream count described above into both <code>_base_data()</code>'s
+<code>workspace.repos</code> list and the drawer's rendered HTML.</li>
+</ul>
+<p>One subagent execution hiccup worth noting for the record: Task 5's implementer job hit a
+transient <code>git commit</code> lock error mid-run (never reproduced afterward — most likely a race with
+another worktree's cleanup happening at the same wall-clock moment) and left its work uncommitted.
+A nested fix job, dispatched from inside the stalled job's own worktree, both resolved the commit
+and fixed a genuine logic bug caught in manual code-quality review: an inverted <code>!window. _treeRendered</code> condition that would have made <code>renderTree()</code> permanently unreachable from the tab
+switcher. Both issues were folded into one final commit rather than left as a base-plus-patch pair.</p>
+<p>All 940 tests pass (up from 934 pre-PR). Zero remaining references to <code>generate_tube_html</code>,
+<code>tube_config</code>, or <code>--setup-tube</code> anywhere in <code>synlynk/</code> or <code>tests/</code>.</p>
+<hr>
+<h2>Progress Toward the Long-Arc Goal</h2>
+<p>The long-arc goal is full autonomous multi-agent dispatch — Claude as PM/reviewer, implementation
+entirely delegated. This PR is a clean instance of that model working end to end at real scope:
+eight tasks, eight fresh Codex dispatches, two-stage review on each, one nested fix-job precedent
+reused a second time without needing new process. Vizor itself — the dashboard this PR improves —
+is the operator's window into that same fleet, so making its workspace-topology view actually
+trustworthy is not a side quest; it's sharpening the tool used to supervise the thing this whole
+project is building toward.</p>
+<hr>
+<h2>New Goalpost</h2>
+<p>Architect Map now tells the truth about the workspace as <code>.synlynk/</code> and <code>state.db</code> already know
+it, with a conditional discipline (Workspace Map Update Protocol) keeping the edge data from going
+stale the way <code>vizor-tube.json</code> silently did. The next open thread on this surface is the deferred
+<code>repo_path</code> attribution work — a <code>stories</code>/<code>repo_path</code> column (or equivalent) that would let the
+drawer's dream count (and eventually agent count, last-commit time) work correctly for multi-repo
+workspaces instead of falling back to zero. That's explicitly out of scope here and not yet
+ticketed; it's the natural next brainstorm once a real multi-repo dogfood workspace exists to
+validate against.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

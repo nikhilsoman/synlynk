@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>BS-8: The Business Goal Layer</h1>
+<p><strong>Date:</strong> 2026-07-11
+<strong>PR:</strong> TBD
+<strong>Branch:</strong> <code>feat/bs8-goal-hierarchy</code> → <code>main</code></p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>v0.11.0 (BS-13 Observatory + BS-12 Agent Autonomy Bridge) completed the operational layer: dispatch, observe, diagnose, repair, and hand off, all from the CLI. What synlynk still lacked was a layer above the Dream/Story hierarchy that answered &quot;why are we building this&quot; in terms a founder or PM would recognize — an explicit Business Goal with an outcome, a success criterion, and a deadline, that stories and roadmap arcs could be traced back to.</p>
+<p>That gap was surfaced during an rxcc roadmap gap analysis and formalized into the BS-8 design spec (<code>docs/superpowers/specs/2026-07-11-business-goal-sdlc-model-design.md</code>), alongside a companion GOVERNS 7-stage rollout plan replacing the drifted <code>dream/plan/work/ship/maintain/engage</code> cycle vocabulary.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>Two things shifted during implementation, not design:</p>
+<p><strong>Execution-handoff conflict.</strong> The <code>writing-plans</code> skill defaults to Claude executing plans directly (Subagent-Driven or Inline). CLAUDE.md locks Claude to PM/reviewer only — all implementation dispatches to Codex/Agy/Grok via <code>synlynk dispatch</code>. Resolved by treating <code>synlynk dispatch</code> itself as the execution mechanism: Claude authors dispatch prompts, reviews diffs for plan fidelity, and does git integration (never new-logic authorship).</p>
+<p><strong>Dispatch strategy, mid-plan.</strong> Task-by-task dispatch (one Codex call per plan task, review between each) was the initial approach. It surfaced a hard constraint: <code>synlynk dispatch</code> creates a fresh worktree/branch off <code>main</code>'s current HEAD every time — there's no flag to continue an existing branch. Codex was also given explicit <code>git fetch &amp;&amp; git reset --hard</code> sync instructions across three escalating levels of directiveness and never once executed them, instead recreating prior tasks' work from scratch atop stale <code>main</code>. After manually reconciling this twice (Tasks 2 and 3), the overhead was flagged and the remaining tasks (4-7) were dispatched as one whole-plan call instead of four.</p>
+<hr>
+<h2>What Shipped</h2>
+<h3>Schema (Tasks 1-2)</h3>
+<pre><code class="language-sql">CREATE TABLE IF NOT EXISTS goals (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id     TEXT NOT NULL UNIQUE,
+    outcome     TEXT NOT NULL,
+    criterion   TEXT NOT NULL,
+    deadline    TEXT,
+    status      TEXT NOT NULL DEFAULT 'active',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS goal_contributions (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id  TEXT NOT NULL REFERENCES goals(goal_id),
+    story_id TEXT NOT NULL REFERENCES stories(story_id),
+    UNIQUE(goal_id, story_id)
+);
+</code></pre>
+<p><code>stories</code> and <code>roadmap_arcs</code> each get a nullable <code>goal_id</code> FK, added via the standard idempotent <code>_migrate_db()</code> ALTER pattern (<code>if col not in existing_cols: try: ALTER ...; except sqlite3.OperationalError: pass</code>). Nullable by design — a story with <code>goal_id IS NULL</code> is simply excluded from goal rollups, no separate <code>lane</code> column needed.</p>
+<h3>CLI + Commands (Tasks 3-6)</h3>
+<pre><code class="language-bash">synlynk goal create --outcome &quot;...&quot; --criterion &quot;...&quot; [--deadline YYYY-MM-DD]
+synlynk goal list
+synlynk goal link &lt;story_id&gt; --goal &lt;goal_id&gt; [--secondary]
+synlynk goal status
+</code></pre>
+<p><code>cmd_goal_link</code> distinguishes primary linkage (sets <code>stories.goal_id</code> directly) from secondary/cross-cutting contribution (<code>goal_contributions</code> row only, story's primary goal unchanged) — this lets a story serve one primary goal while still counting toward others.</p>
+<p><code>cmd_goal_status</code> is a no-arg rollup: for every active goal, prints story completion (<code>{done}/{total} done</code>), deadline, and linked roadmap arc versions.</p>
+<h3>Context Injection (Task 7)</h3>
+<p>The single most-recent active goal is now injected as a <code>## Active Goal</code> section at the top of every generated <code>.synlynk/context.md</code>, so every dispatched agent sees the business outcome its task nominally serves, not just the next story title.</p>
+<h3>Tests</h3>
+<p>10 tests added in <code>tests/test_goals.py</code>. Full suite: 887/888 passing (one pre-existing, unrelated version-pin failure).</p>
+<hr>
+<h2>Brainstorm Visuals</h2>
+<p>None for this PR — the GOVERNS stage model and Business Goal shape were settled via <code>synlynk decide</code> multi-agent consensus and written directly into the design spec, not visual brainstorming.</p>
+<hr>
+<h2>What This Achieved</h2>
+<p>BS-8 gives synlynk a traceable line from a founder-level outcome down to the story a dispatched agent is actually working on. Combined with the operational layer from v0.11.0, the loop is now: <strong>why</strong> (Goal) → <strong>what</strong> (Story/Arc) → <strong>dispatch</strong> → <strong>observe</strong> → <strong>diagnose/repair</strong>.</p>
+<p>It also produced a concrete operational finding for this project's Claude-as-PM/dispatch-execution model: whole-plan dispatch with the plan's exact function signatures spelled out inline in the prompt is markedly more reliable than task-by-task dispatch with a sync instruction Codex won't follow. The first whole-plan attempt still drifted (wrong <code>cmd_goal_link</code>/<code>cmd_goal_status</code> signatures, a missing rollup, a reference to a nonexistent table) and had to be rejected and redispatched — pinning the plan's literal code in the prompt, rather than referencing the plan file by path, is what closed the gap.</p>
+<hr>
+<h2>The New Goalpost</h2>
+<p>With BS-8 merged, the GOVERNS 7-stage rollout plan (<code>docs/superpowers/plans/2026-07-11-governs-stage-rollout-plan.md</code>) is next — it depends on BS-8 Task 2's <code>goal_id</code> column for its own roadmap goal-tag parsing task. Split across three agents: Codex takes the interdependent core-file renames (<code>hud.py</code>, <code>LAUNCH_TASK_TEMPLATES</code>, <code>task_to_cycle</code>, migration cleanup, roadmap tag parsing) as one whole-plan dispatch; Agy takes the <code>fallback_roadmap</code> template's Business Goals section; Grok takes the Vizor <code>generate_viz_data()</code> goals payload.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

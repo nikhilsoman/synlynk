@@ -1,0 +1,164 @@
+<h2>synlynk watch — Layout B variations</h2>
+<p class="subtitle">Left-sidebar cycle nav, different treatments of the right panel and cycle column</p>
+
+<div class="cards">
+
+  <!-- B1: Wide sidebar with mini-stats, all jobs right -->
+  <div class="card" data-choice="b1" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1117;border-radius:6px;padding:16px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.7;display:flex;gap:0">
+      <!-- Sidebar -->
+      <div style="width:140px;flex-shrink:0;border-right:1px solid #21262d;padding-right:14px;margin-right:14px">
+        <div style="color:#58a6ff;font-size:9px;letter-spacing:.1em;margin-bottom:10px">CYCLES</div>
+        <div style="margin-bottom:6px;padding:5px 8px;border-radius:4px;background:#f0883e18;border-left:2px solid #f0883e">
+          <div style="color:#f0883e;font-weight:bold">◉ Work</div>
+          <div style="color:#8b949e;font-size:9px">2 running · $0.53</div>
+        </div>
+        <div style="margin-bottom:6px;padding:5px 8px;border-radius:4px">
+          <div style="color:#3fb950">● Dream</div>
+          <div style="color:#8b949e;font-size:9px">ready</div>
+        </div>
+        <div style="margin-bottom:6px;padding:5px 8px;border-radius:4px">
+          <div style="color:#3fb950">● Plan</div>
+          <div style="color:#8b949e;font-size:9px">ready</div>
+        </div>
+        <div style="margin-bottom:6px;padding:5px 8px;border-radius:4px">
+          <div style="color:#3fb950">● Ship</div>
+          <div style="color:#8b949e;font-size:9px">ready</div>
+        </div>
+        <div style="margin-bottom:6px;padding:5px 8px;border-radius:4px;opacity:.5">
+          <div style="color:#6e7681">○ Maintain</div>
+          <div style="color:#6e7681;font-size:9px">idle</div>
+        </div>
+        <div style="margin-bottom:6px;padding:5px 8px;border-radius:4px;opacity:.5">
+          <div style="color:#6e7681">○ Engage</div>
+          <div style="color:#6e7681;font-size:9px">idle</div>
+        </div>
+        <div style="border-top:1px solid #21262d;margin-top:8px;padding-top:8px;font-size:9px;color:#8b949e">[↑↓] navigate<br/>[p] platform<br/>[q] quit</div>
+      </div>
+      <!-- Main panel — all jobs -->
+      <div style="flex:1;min-width:0">
+        <div style="color:#8b949e;font-size:9px;letter-spacing:.1em;margin-bottom:10px">ALL RUNNING JOBS</div>
+        <div style="background:#161b22;border-radius:4px;padding:8px 10px;margin-bottom:6px;border-left:2px solid #f0883e">
+          <div style="display:flex;justify-content:space-between"><span style="color:#e6edf3">codex</span><span style="color:#3fb950">$0.42</span></div>
+          <div style="color:#8b949e;font-size:9px">feat/bs20-deep-scan · work · 4m 12s · 10.1k tok</div>
+        </div>
+        <div style="background:#161b22;border-radius:4px;padding:8px 10px;margin-bottom:6px;border-left:2px solid #f0883e">
+          <div style="display:flex;justify-content:space-between"><span style="color:#e6edf3">agy</span><span style="color:#3fb950">$0.11</span></div>
+          <div style="color:#8b949e;font-size:9px">docs/blog-post · work · 1m 30s · 4.1k tok</div>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid #21262d;padding-top:8px;font-size:9px;color:#8b949e">2 jobs · $0.53 · 14.2k tok · refreshed 3s ago</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B1 — Sidebar with mini-stats, unified job list</h3>
+      <p>Each cycle row shows a 2-line summary (state + cost). Active cycle is highlighted with an orange left border. Job list on the right shows all running jobs regardless of cycle. Sidebar is navigable but job list doesn't filter — you see everything.</p>
+    </div>
+  </div>
+
+  <!-- B2: Narrow icon sidebar, top = cycle cards, bottom = jobs -->
+  <div class="card" data-choice="b2" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1117;border-radius:6px;padding:16px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.7;display:flex;gap:0">
+      <!-- Narrow sidebar — icons only -->
+      <div style="width:48px;flex-shrink:0;border-right:1px solid #21262d;margin-right:14px;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:2px">
+        <div style="font-size:9px;color:#8b949e;letter-spacing:.05em;writing-mode:vertical-rl;transform:rotate(180deg);margin-bottom:4px">CYCLES</div>
+        <div title="Dream" style="padding:4px 6px;border-radius:4px;color:#3fb950;text-align:center;font-size:10px">●<br/><span style="font-size:8px;color:#8b949e">DR</span></div>
+        <div title="Plan" style="padding:4px 6px;border-radius:4px;color:#3fb950;text-align:center;font-size:10px">●<br/><span style="font-size:8px;color:#8b949e">PL</span></div>
+        <div title="Work" style="padding:4px 6px;border-radius:4px;background:#f0883e18;border:1px solid #f0883e44;color:#f0883e;text-align:center;font-size:10px;font-weight:bold">◉<br/><span style="font-size:8px">WK</span></div>
+        <div title="Ship" style="padding:4px 6px;border-radius:4px;color:#3fb950;text-align:center;font-size:10px">●<br/><span style="font-size:8px;color:#8b949e">SH</span></div>
+        <div title="Maintain" style="padding:4px 6px;border-radius:4px;color:#6e7681;text-align:center;font-size:10px;opacity:.5">○<br/><span style="font-size:8px">MN</span></div>
+        <div title="Engage" style="padding:4px 6px;border-radius:4px;color:#6e7681;text-align:center;font-size:10px;opacity:.5">○<br/><span style="font-size:8px">EN</span></div>
+      </div>
+      <!-- Main: top cards + bottom jobs -->
+      <div style="flex:1;min-width:0">
+        <!-- Cycle summary cards (top) -->
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <div style="flex:1;background:#f0883e18;border:1px solid #f0883e44;border-radius:4px;padding:6px 8px">
+            <div style="color:#f0883e;font-size:9px;font-weight:bold">◉ WORK</div>
+            <div style="color:#e6edf3;font-size:12px">2</div>
+            <div style="color:#8b949e;font-size:9px">$0.53</div>
+          </div>
+          <div style="flex:1;background:#3fb95011;border:1px solid #3fb95033;border-radius:4px;padding:6px 8px">
+            <div style="color:#3fb950;font-size:9px">● DREAM</div>
+            <div style="color:#8b949e;font-size:12px">—</div>
+            <div style="color:#8b949e;font-size:9px">ready</div>
+          </div>
+          <div style="flex:1;background:#3fb95011;border:1px solid #3fb95033;border-radius:4px;padding:6px 8px">
+            <div style="color:#3fb950;font-size:9px">● PLAN</div>
+            <div style="color:#8b949e;font-size:12px">—</div>
+            <div style="color:#8b949e;font-size:9px">ready</div>
+          </div>
+          <div style="flex:1;background:#3fb95011;border:1px solid #3fb95033;border-radius:4px;padding:6px 8px">
+            <div style="color:#3fb950;font-size:9px">● SHIP</div>
+            <div style="color:#8b949e;font-size:12px">—</div>
+            <div style="color:#8b949e;font-size:9px">ready</div>
+          </div>
+        </div>
+        <!-- Job list -->
+        <div style="border-top:1px solid #21262d;padding-top:8px">
+          <div style="color:#8b949e;font-size:9px;margin-bottom:6px;letter-spacing:.1em">RUNNING</div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>codex &nbsp; feat/bs20-deep-scan</span><span style="color:#f0883e">4m 12s</span><span style="color:#3fb950">$0.42</span></div>
+          <div style="display:flex;justify-content:space-between"><span>agy &nbsp;&nbsp;&nbsp; docs/blog-post</span><span style="color:#f0883e">1m 30s</span><span style="color:#3fb950">$0.11</span></div>
+        </div>
+        <div style="margin-top:8px;font-size:9px;color:#8b949e">[p] platform &nbsp; [q] quit</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B2 — Icon sidebar, top cycle cards + bottom job list</h3>
+      <p>Narrowest possible sidebar — just icon + 2-letter abbreviation. Right panel splits: top row shows cycle summary cards (active ones pop with color), bottom shows the job list. Maximises horizontal real estate for job details.</p>
+    </div>
+  </div>
+
+  <!-- B3: Sidebar as colored tube-line segments -->
+  <div class="card" data-choice="b3" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1117;border-radius:6px;padding:16px;font-family:monospace;font-size:11px;color:#e6edf3;line-height:1.7;display:flex;gap:0">
+      <!-- Tube-line sidebar -->
+      <div style="width:130px;flex-shrink:0;border-right:1px solid #21262d;padding-right:14px;margin-right:14px">
+        <div style="color:#58a6ff;font-size:9px;letter-spacing:.1em;margin-bottom:12px">synlynk watch</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:5px 6px;border-radius:4px">
+          <div style="width:3px;height:28px;background:#a371f7;border-radius:2px;flex-shrink:0"></div>
+          <div><div style="color:#a371f7">Dream</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:5px 6px;border-radius:4px">
+          <div style="width:3px;height:28px;background:#58a6ff;border-radius:2px;flex-shrink:0"></div>
+          <div><div style="color:#58a6ff">Plan</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:5px 6px;border-radius:4px;background:#f0883e11">
+          <div style="width:3px;height:28px;background:#f0883e;border-radius:2px;flex-shrink:0"></div>
+          <div><div style="color:#f0883e;font-weight:bold">Work ◀</div><div style="font-size:9px;color:#f0883e">◉ 2 running</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:5px 6px;border-radius:4px">
+          <div style="width:3px;height:28px;background:#3fb950;border-radius:2px;flex-shrink:0"></div>
+          <div><div style="color:#3fb950">Ship</div><div style="font-size:9px;color:#8b949e">● ready</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:5px 6px;border-radius:4px;opacity:.45">
+          <div style="width:3px;height:28px;background:#6e7681;border-radius:2px;flex-shrink:0"></div>
+          <div><div style="color:#6e7681">Maintain</div><div style="font-size:9px;color:#6e7681">○ idle</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:5px 6px;border-radius:4px;opacity:.45">
+          <div style="width:3px;height:28px;background:#6e7681;border-radius:2px;flex-shrink:0"></div>
+          <div><div style="color:#6e7681">Engage</div><div style="font-size:9px;color:#6e7681">○ idle</div></div>
+        </div>
+      </div>
+      <!-- Main panel for selected cycle -->
+      <div style="flex:1;min-width:0">
+        <div style="color:#f0883e;font-size:9px;letter-spacing:.1em;margin-bottom:10px">◉ WORK — 2 active jobs</div>
+        <div style="background:#161b22;border-radius:4px;padding:8px 10px;margin-bottom:6px;border-left:3px solid #f0883e">
+          <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:#e6edf3;font-weight:bold">codex</span><span style="color:#3fb950">$0.42</span></div>
+          <div style="color:#8b949e;font-size:9px">feat/bs20-deep-scan</div>
+          <div style="display:flex;gap:10px;margin-top:3px;font-size:9px;color:#6e7681"><span>4m 12s</span><span>10.1k tok</span><span>running</span></div>
+        </div>
+        <div style="background:#161b22;border-radius:4px;padding:8px 10px;margin-bottom:6px;border-left:3px solid #f0883e">
+          <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:#e6edf3;font-weight:bold">agy</span><span style="color:#3fb950">$0.11</span></div>
+          <div style="color:#8b949e;font-size:9px">docs/blog-post</div>
+          <div style="display:flex;gap:10px;margin-top:3px;font-size:9px;color:#6e7681"><span>1m 30s</span><span>4.1k tok</span><span>running</span></div>
+        </div>
+        <div style="border-top:1px solid #21262d;margin-top:8px;padding-top:8px;font-size:9px;color:#8b949e">$0.53 · 14.2k tok &nbsp;&nbsp; [↑↓] cycle &nbsp; [p] platform &nbsp; [q] quit</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B3 — Tube-line sidebar, cycle-filtered job panel</h3>
+      <p>Each cycle gets its own colour as a vertical line — echoing the Vizor architect tube map. Selected cycle filters the right panel to show only its jobs, with richer per-job cards. Arrow keys move between cycles. Strongest visual identity of the three.</p>
+    </div>
+  </div>
+
+</div>

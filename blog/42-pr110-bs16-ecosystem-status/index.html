@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #110 — BS-16 Ecosystem Status | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #110</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #110 — BS-16 Ecosystem Status</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the close of PR #106 (Workspace HUD), synlynk had a functional terminal observer via <code>synlynk watch</code> and the beginning of a cycle-aware dispatch model (recording a <code>cycle</code> field on each job). However, the harness was still largely blind to the operational boundaries and capacity limits of its agent fleet. We had binary compliance scores, but lacked a formal way to measure whether an agent was capable of executing a specific phase of the 6-cycle SDLC (Dream, Plan, Work, Ship, Maintain, Engage) or if a proposed dispatch would overrun its context window or token limits.</p>
+<p>For the dispatch loop to be truly robust, the scheduler needed a detailed, capacity-aware routing engine that could validate dispatches <em>before</em> they booted up an agent process.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>Design exploration for the ecosystem status HUD — capacity cards, cycle matrix, and compatibility scoring options:</p>
+<p><img src="images/v011/bs16-design-v2.png" alt="BS-16 ecosystem status — capacity design v2"></p>
+<p><img src="images/v011/bs16-hud-v3.png" alt="BS-16 HUD v3 — fixed cards + compatibility options"></p>
+<p>Full brainstorm HTML: <a href="../brainstorm/bs16-ecosystem-status/"><code>docs/brainstorm/bs16-ecosystem-status/</code></a></p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The core shift in BS-16 is moving from an execution engine to an <strong>instrument panel</strong>. In order to achieve autonomous multi-agent dispatch, the harness cannot treat guest agents (Claude, Agy, Codex, Grok) as opaque CLI wrappers. It must be self-aware of its own fleet's capabilities and current operating envelopes.</p>
+<p>By introducing preflight capacity gates and a structured capability matrix, synlynk begins to act as a true operating system kernel—preventing resource exhaustion, validating API limits, and directing agent execution based on empirical capacity data rather than static assumptions.</p>
+<h2>What This PR Shipped</h2>
+<p>This PR introduced a new capacity reporting stack and telemetry-driven gates:</p>
+<ul>
+<li><strong>Ecosystem Status Command (<code>synlynk status</code>)</strong>: A new CLI surface displaying attached fleet counts, active dispatch mode, agent version/drift alerts, capacity metrics (read/write/tool/context), and the cycle capability matrix.</li>
+<li><strong>Stable JSON Contract (<code>synlynk status --json</code>)</strong>: Implemented a stable JSON output format for downstream consumers—specifically the Vizor web interface—to prevent parsing changes from breaking the dashboard.</li>
+<li><strong>Database Schema Upgrades (<code>synlynk/db.py</code>)</strong>: Added two new tables to <code>state.db</code>:
+<ul>
+<li><code>harness_status</code>: Tracks per-agent attach status, version details, token/tool budgets, and compliance test results.</li>
+<li><code>cycle_capability</code>: Aggregates the <code>harness_verb_map</code> to determine support status (<code>full</code>, <code>partial</code>, or <code>none</code>) for each of the 6 SDLC cycles.</li>
+</ul>
+</li>
+<li><strong>The <code>synlynk/status.py</code> Module</strong>: Implemented core logic for:
+<ul>
+<li>Token pressure estimation (<code>estimate_dispatch_tokens</code>): Simulates input size based on context and prompt word counts, and predicts output based on coarse task classification (<code>implement</code>, <code>plan</code>, <code>test</code>, etc.).</li>
+<li>Headless efficiency ratio (<code>_headless_efficiency_ratio</code>): Computes the cost-benefit ratio of running headless dispatches versus interactive developer sessions.</li>
+<li>Capability aggregation (<code>_compute_cycle_capability</code>): Translates verb mappings to cycle capabilities.</li>
+</ul>
+</li>
+<li><strong>Preflight Capacity Gates (<code>synlynk/dispatch.py</code>)</strong>: Implemented three new gates triggered during <code>_preflight_dispatch</code> to halt or warn before execution:
+<ul>
+<li><code>CAPACITY_EXCEEDED_INPUT</code>: Rejects dispatches where estimated context size exceeds the agent's read budget.</li>
+<li><code>CAPACITY_EXCEEDED_OUTPUT</code>: Rejects dispatches where estimated task output exceeds the agent's write budget.</li>
+<li><code>TOOL_PRESSURE</code>: Triggers a sentinel warning if predicted tool usage exceeds 70% of the agent's capacity limit.</li>
+</ul>
+</li>
+</ul>
+<h3>Key Bug Fixes in PR #110</h3>
+<ul>
+<li><strong><code>db_conn=None</code> Preflight Bypass</strong>: During the initial R1 code review, a critical bug was found: <code>dispatch_agent()</code> was passing <code>db_conn=None</code> to <code>_preflight_dispatch()</code>, which silently skipped all DB-backed capacity and telemetry checks. This was resolved by properly opening a connection via <code>_get_db()</code> before executing preflight, and adding a regression test.</li>
+<li><strong>Agy Write Budget Baseline</strong>: Corrected Agy's <code>write_budget_tokens</code> from 8K to 65K. Because Agy operates in a persistent loop, the 8K limit represented a single-response barrier rather than its true multi-turn CLI session capacity.</li>
+</ul>
+<h2>Test Approach</h2>
+<p>We verified the capacity engine and database migrations with 22 new tests in <code>tests/test_ecosystem_status.py</code>:</p>
+<ul>
+<li>Schema integrity tests ensuring the new tables exist and migrations are fully idempotent.</li>
+<li>Unit tests verifying the token pressure estimator under different task classifications and prompt contexts.</li>
+<li>Integration tests ensuring <code>_preflight_dispatch()</code> properly flags input/output overflows and raises <code>TOOL_PRESSURE</code> alerts.</li>
+<li>A regression test (<code>test_preflight_receives_real_db_conn</code>) to guarantee the database connection is never dropped during preflight routing.</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Before PR #110, an agent running out of context window or hitting a token quota would simply crash mid-task after spending minutes of execution time and costing real dollars.</p>
+<p>With this PR, the harness is now <strong>self-aware of its fleet's envelope</strong>:</p>
+<ol>
+<li><strong>Preventative Control</strong>: The harness intercepts invalid dispatches before any API calls are made, preserving token budget and preventing headless lock-ups.</li>
+<li><strong>Dynamic Routing</strong>: By mapping verbs to the 6-cycle SDLC matrix, the scheduler can dynamically route tasks to the best-suited, compliant agent available for that specific phase of development.</li>
+<li><strong>Observability Foundation</strong>: Calculating the headless efficiency ratio and output velocities gives us concrete metrics to optimize the dispatch loops for cost, speed, and accuracy.</li>
+</ol>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Now that the status data layer is locked in and exposed via <code>synlynk status --json</code>, the next goal is to surface this information graphically. We need to enrich the Vizor browser dashboard's <strong>Efficiency</strong> tab with this ecosystem status data, rendering capacity progress bars and the 6-cycle capability matrix visually to complete the PM instrument panel.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

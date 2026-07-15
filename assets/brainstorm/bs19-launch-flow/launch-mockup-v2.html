@@ -1,0 +1,92 @@
+<h2>synlynk launch — task cards with token estimates</h2>
+<p class="subtitle">Duration + R/W/T token budget on every task card</p>
+
+<div class="mockup" style="margin-top:1.5rem">
+  <div class="mockup-header">Screen 1 — updated task cards</div>
+  <div class="mockup-body" style="padding:0">
+    <div style="background:#0d1117;padding:1.4rem;font-family:'SF Mono',monospace;font-size:0.82rem;border-radius:6px">
+
+      <div style="color:#7c3aed;font-weight:700;font-size:0.9rem;margin-bottom:0.25rem">  ◆ synlynk launch</div>
+      <div style="color:#475569;margin-bottom:1.2rem">  synlynk-py · Python CLI · single repo · 623 tests · claude + agy + codex</div>
+      <div style="color:#94a3b8;margin-bottom:0.8rem">  Where do you want to start?</div>
+
+      <!-- Task 1 -->
+      <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #7c3aed;margin-bottom:0.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+          <span><span style="color:#7c3aed;font-weight:700">[1]</span> <span style="color:#e2e8f0;font-weight:600">Workspace architecture review</span></span>
+          <span style="background:#2d1b69;color:#a78bfa;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Dream</span>
+        </div>
+        <div style="color:#64748b;font-size:0.76rem;margin-bottom:0.3rem">Analyse structure, patterns, tech debt. Claude writes findings to memory.md.</div>
+        <div style="display:flex;gap:1.2rem;font-size:0.73rem">
+          <span style="color:#475569">~2h</span>
+          <span style="color:#475569">│</span>
+          <span title="read tokens"><span style="color:#60a5fa">R</span> <span style="color:#94a3b8">80K</span></span>
+          <span style="color:#475569">·</span>
+          <span title="write tokens"><span style="color:#34d399">W</span> <span style="color:#94a3b8">8K</span></span>
+          <span style="color:#475569">·</span>
+          <span title="tool calls"><span style="color:#fbbf24">T</span> <span style="color:#94a3b8">12</span></span>
+        </div>
+      </div>
+
+      <!-- Task 2 -->
+      <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #7c3aed;margin-bottom:0.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+          <span><span style="color:#7c3aed;font-weight:700">[2]</span> <span style="color:#e2e8f0;font-weight:600">Product + opportunity assessment</span></span>
+          <span style="background:#2d1b69;color:#a78bfa;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Dream</span>
+        </div>
+        <div style="color:#64748b;font-size:0.76rem;margin-bottom:0.3rem">Scope, features, market fit, growth levers. 1-page brief to memory.md.</div>
+        <div style="display:flex;gap:1.2rem;font-size:0.73rem">
+          <span style="color:#475569">~1h</span>
+          <span style="color:#475569">│</span>
+          <span><span style="color:#60a5fa">R</span> <span style="color:#94a3b8">40K</span></span>
+          <span style="color:#475569">·</span>
+          <span><span style="color:#34d399">W</span> <span style="color:#94a3b8">6K</span></span>
+          <span style="color:#475569">·</span>
+          <span><span style="color:#fbbf24">T</span> <span style="color:#94a3b8">8</span></span>
+        </div>
+      </div>
+
+      <!-- Task 3 - scan triggered -->
+      <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #2563eb;margin-bottom:0.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+          <span><span style="color:#2563eb;font-weight:700">[3]</span> <span style="color:#e2e8f0;font-weight:600">Add type annotations to public API</span></span>
+          <span style="background:#1e3a5f;color:#60a5fa;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Design</span>
+        </div>
+        <div style="color:#f59e0b;font-size:0.73rem;margin-bottom:0.3rem">⚡ scan found: no .pyi stubs, limited inline hints in synlynk/__init__.py</div>
+        <div style="display:flex;gap:1.2rem;font-size:0.73rem">
+          <span style="color:#475569">~3h</span>
+          <span style="color:#475569">│</span>
+          <span><span style="color:#60a5fa">R</span> <span style="color:#94a3b8">120K</span></span>
+          <span style="color:#475569">·</span>
+          <span><span style="color:#34d399">W</span> <span style="color:#94a3b8">30K</span></span>
+          <span style="color:#475569">·</span>
+          <span><span style="color:#fbbf24">T</span> <span style="color:#94a3b8">45</span></span>
+        </div>
+      </div>
+
+      <!-- Task 4 -->
+      <div style="padding:0.65rem 0.9rem;background:#161b22;border-radius:6px;border-left:3px solid #059669;margin-bottom:0.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+          <span><span style="color:#059669;font-weight:700">[4]</span> <span style="color:#e2e8f0;font-weight:600">Set up 6-cycle workflow for this repo</span></span>
+          <span style="background:#1a3a2a;color:#34d399;padding:1px 7px;border-radius:3px;font-size:0.72rem;font-weight:600">Plan</span>
+        </div>
+        <div style="color:#64748b;font-size:0.76rem;margin-bottom:0.3rem">Initialise lifecycle tracking in state.db. Label open stories by cycle.</div>
+        <div style="display:flex;gap:1.2rem;font-size:0.73rem">
+          <span style="color:#475569">~30m</span>
+          <span style="color:#475569">│</span>
+          <span><span style="color:#60a5fa">R</span> <span style="color:#94a3b8">15K</span></span>
+          <span style="color:#475569">·</span>
+          <span><span style="color:#34d399">W</span> <span style="color:#94a3b8">3K</span></span>
+          <span style="color:#475569">·</span>
+          <span><span style="color:#fbbf24">T</span> <span style="color:#94a3b8">6</span></span>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #21262d;margin-top:0.8rem;padding-top:0.7rem;display:flex;justify-content:space-between;color:#475569;font-size:0.76rem">
+        <span style="color:#334155"><span style="color:#60a5fa">R</span> read · <span style="color:#34d399">W</span> write · <span style="color:#fbbf24">T</span> tool calls · estimates based on task template</span>
+        <span>[1–4] pick &nbsp; [?] cycles &nbsp; [s] skip</span>
+      </div>
+
+    </div>
+  </div>
+</div>

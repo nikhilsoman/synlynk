@@ -1,0 +1,50 @@
+<h2>User picks a task — what happens next?</h2>
+<p class="subtitle">After pressing [1] for "Workspace architecture review"</p>
+
+<div class="options" style="margin-top:1.5rem">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Instant dispatch — job starts immediately</h3>
+      <p>Pressing [1] fires <code>synlynk dispatch claude --task "..." --context-mode full</code> right away. A job ID prints and synlynk exits. User checks progress with <code>synlynk jobs</code>.</p>
+      <div style="margin-top:0.75rem;background:#0f172a;border-radius:6px;padding:0.75rem;font-family:monospace;font-size:0.78rem;color:#94a3b8">
+        <span style="color:#10b981">▶</span> <span style="color:#e2e8f0">[job-a3f2c1] claude dispatched</span>&nbsp;&nbsp;PID 44821<br>
+        <span style="color:#475569">   Log: synlynk logs --job job-a3f2c1</span>
+      </div>
+      <div style="margin-top:0.6rem;font-size:0.8rem;color:#64748b">✓ Zero friction — one keypress to running job<br>✗ No chance to add context or pick a different agent</div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Quick confirm — shows what will be dispatched, then fires</h3>
+      <p>A compact preview screen shows the task prompt, assigned agent, estimated duration, and cycle tag. User presses [enter] to confirm or [e] to edit the prompt before dispatching.</p>
+      <div style="margin-top:0.75rem;background:#0f172a;border-radius:6px;padding:0.75rem;font-family:monospace;font-size:0.78rem;color:#94a3b8">
+        <div style="color:#6366f1;margin-bottom:0.4rem">  ◆ Dispatch preview</div>
+        <div><span style="color:#64748b">agent    </span><span style="color:#e2e8f0">claude</span></div>
+        <div><span style="color:#64748b">cycle    </span><span style="color:#a78bfa">Dream</span></div>
+        <div><span style="color:#64748b">task     </span><span style="color:#e2e8f0">Review architecture of synlynk-py: identify structural</span></div>
+        <div><span style="color:#64748b">         </span><span style="color:#e2e8f0">patterns, tech debt hotspots, and improvement areas...</span></div>
+        <div style="margin-top:0.4rem"><span style="color:#475569">[enter] dispatch  [e] edit prompt  [esc] back</span></div>
+      </div>
+      <div style="margin-top:0.6rem;font-size:0.8rem;color:#64748b">✓ User sees exactly what's going to the agent<br>✓ Escape hatch to edit before committing<br>✗ One extra keypress</div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Mini-wizard — configure agent, scope, output before dispatching</h3>
+      <p>Opens a 3-step sub-flow: pick agent (defaults to Claude for Dream tasks) → set context mode (none/task/full) → confirm. More control, more friction.</p>
+      <div style="margin-top:0.75rem;background:#0f172a;border-radius:6px;padding:0.75rem;font-family:monospace;font-size:0.78rem;color:#94a3b8">
+        <div style="color:#6366f1;margin-bottom:0.3rem">  ◆ Configure task  [1/3]</div>
+        <div style="color:#e2e8f0;margin-bottom:0.3rem">  Agent: [claude] agy  codex  grok</div>
+        <div style="color:#475569">[tab] cycle agents  [enter] accept</div>
+      </div>
+      <div style="margin-top:0.6rem;font-size:0.8rem;color:#64748b">✓ Full control over every dispatch parameter<br>✗ Too much friction for "just get me started" intent<br>✗ Duplicates what <code>synlynk dispatch</code> already does</div>
+    </div>
+  </div>
+
+</div>

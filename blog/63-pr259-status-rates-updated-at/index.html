@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Closing v0.12.0: Surfacing rates_updated_at in synlynk status | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 15, 2026</span>
+        
+          <span class="blog-post-pr">PR #259</span>
+        
+      </div>
+      <h1 class="blog-post-title">Closing v0.12.0: Surfacing rates_updated_at in synlynk status</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #264 closed epic #210 in full — every dollar figure the Vizor Effort &amp; Cost tab renders is now either structurally sourced or visibly flagged as an estimate. That PR's closing note named the one thing still standing between the current state and marking the v0.12.0 Measurement Ledger Hardening theme shipped: issue #259, <code>synlynk status</code> surfacing <code>rates_updated_at</code>. Fable's 2026-07-12 strategic review had asked for the <code>_MODEL_RATE_TABLE</code> move out of code and into an updatable data file &quot;with a <code>rates_updated_at</code> shown in <code>status</code>.&quot; The data-file move itself shipped back in Measurement Ledger Phase 1 (<code>.synlynk/model_rates.json</code>, PR #236) — <code>synlynk/costs.py</code>'s <code>_load_model_rates()</code> has returned a <code>rates_updated_at</code> key ever since. Nothing downstream ever read it. <code>synlynk status</code> — the command most people actually run — had no way to tell a caller whether the rate table behind every cost number on screen was current or a hardcoded fallback from before any rate file existed.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None to scope. Two design decisions were resolved during brainstorming, both taken as the recommended option without pushback: the new <code>RATES</code> line sits immediately next to the existing <code>BUDGET</code> line rather than getting its own section header, since both lines answer &quot;how trustworthy are the numbers on this screen&quot; and belong together; and a missing/<code>None</code> <code>rates_updated_at</code> renders as an explicit <code>⚠</code> warning (<code>&quot;RATES   never updated ⚠ (hardcoded defaults)&quot;</code>) rather than a silent &quot;unknown&quot; — matching epic #210's own precedent that unmeasured or estimated data must be visibly flagged, never blended in unmarked.</p>
+<h2>What This PR Shipped</h2>
+<p>A single-file change to <code>synlynk/status.py</code>, small enough to dispatch as one task rather than the data/rendering split #258 needed:</p>
+<ul>
+<li><strong>New helper</strong> — <code>_format_rates_line(rates_updated_at: Optional[str]) -&gt; str</code> returns <code>&quot;RATES   updated {date}&quot;</code> when a date is present, else the warning string above.</li>
+<li><strong><code>_format_status_terminal()</code> signature</strong> gained one new keyword parameter, <code>rates_updated_at: Optional[str] = None</code> — a default rather than a required positional arg, specifically so the two pre-existing direct-call tests that don't pass it (<code>test_format_status_terminal_structure</code>, <code>test_format_status_json_valid</code>) kept working unmodified.</li>
+<li><strong>Terminal output</strong> inserts the <code>RATES</code> line right after <code>BUDGET</code> in the existing <code>lines</code> list.</li>
+<li><strong>JSON output</strong> gains a <code>rates_updated_at</code> top-level key in the <code>payload</code> dict, serializing as the date string or <code>null</code> — <code>json.dumps</code> handles <code>None</code> natively, no special-casing needed.</li>
+<li><strong><code>cmd_status()</code></strong> now calls <code>synlynk.costs._load_model_rates().get(&quot;rates_updated_at&quot;)</code> and threads the result through to <code>_format_status_terminal()</code>.</li>
+</ul>
+<p><strong>Task 1 (dispatched to Codex, job-48d58abb)</strong> implemented the change exactly as specified in the plan — verified via <code>git diff</code> against the plan's parent commit to confirm zero deviation, not just a self-report. Five new tests landed in <code>tests/test_ecosystem_status.py</code>: two on <code>_format_status_terminal()</code> directly (date-present and warning-path), one on the JSON payload, and two on <code>cmd_status()</code> end-to-end (rate file present with a date, and no rate file at all asserting <code>null</code>). All 5 passed on independent re-run; the full <code>test_ecosystem_status.py</code> + <code>test_status.py</code> + <code>test_cost_ledger.py</code> set (147 tests) stayed green.</p>
+<p><strong>Task 2 (Claude, verification-only, not dispatched)</strong> ran the full project suite rather than just the touched files — 1140 passed, 2 skipped, matching the pre-#259 baseline (1135) plus exactly the 5 new tests. This full-suite discipline is a direct lesson from PR #264's CI failure, where a regression in a completely different test file's own fixture (<code>test_vizor_efficiency.py</code>'s separate <code>make_test_db()</code>) only surfaced because CI ran everything — a narrowly-scoped local check would have missed it. A manual smoke test confirmed both terminal and JSON output render correctly against a real (non-mocked) <code>_load_model_rates()</code> call on a workspace with no rate file, and a grep audit confirmed <code>_format_status_terminal()</code> has exactly one production call site (<code>cmd_status()</code>), so no other caller needed updating.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was a small, text-only design resolved through two direct multiple-choice questions (line placement, null-handling), no mockups warranted.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This closes the v0.12.0 Measurement Ledger Hardening theme's last remaining item. Combined with #258/PR #264, epic #210 is now fully shipped: cost data is structurally sourced end to end, from the token-extraction adapters (Codex/Claude/Agy/Grok structured-output basis) through the ledger schema (<code>cost_source</code>/<code>estimate_basis</code> provenance columns) through both display surfaces that show cost data to a human — the Vizor web HUD and the terminal <code>synlynk status</code> command. Every number a person looks at now either says where it came from or flags that it's an estimate.</p>
+<p>It's also the sixth PR in a row where all production code was dispatched (Codex/Agy/Claude/Grok rotating), with Claude's role held to design, plan-writing, independent diff verification, full-suite test re-execution, and cherry-picking — the PM/reviewer discipline holding even on the smallest scoped task in this run.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With #258 and #259 both shipped, <code>project-docs/roadmap.md</code>'s v0.12.0 Measurement Ledger Hardening arc gets marked shipped next. #260 (Savings Ledger), #261 (dispatch-path unification), #262 (surface consolidation), and #263 (stage constants staleness, filed during #258's side investigation) remain filed and scoped for a later point release, none blocking. #202 (<code>synlynk jobs</code> stale status display) also remains open, tracked separately.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

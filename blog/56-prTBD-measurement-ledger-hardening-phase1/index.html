@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #236 — Measurement Ledger Hardening Phase 1: No Number Lies About Where It Came From | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 14, 2026</span>
+        
+          <span class="blog-post-pr">PR #236</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #236 — Measurement Ledger Hardening Phase 1: No Number Lies About Where It Came From</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Fable's external review (<code>docs/strategy/2026-07-12-fable-deep-review-and-strategic-roadmap.md</code>) drew a hard line for synlynk's pre-GA arc: <strong>&quot;every number synlynk displays is either structurally sourced or visibly labeled as an estimate. No GA, no users, no revenue talk before this.&quot;</strong> The review, done alongside the local-agent MLX driver design, turned up two compounding problems in the cost ledger: extraction fragility (a regex-scraping pipeline that silently degrades to an 80/20 heuristic guess on format drift, with nothing distinguishing a measured number from a guessed one) and coverage gaps (several real execution surfaces — the <code>jobs.py</code> daemon reconcile path, <code>synlynk launch</code>, native PM sessions, the <code>support_engineer.py</code> autonomous agent — writing incomplete cost rows or none at all). A related, narrower fix (#189: per-model rate table bypasses in three specific call sites) had already landed independently. This PR picks up the larger structural problem #189 was a symptom of.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No goalpost move, but a deliberate scope split. The design brainstorm considered doing extraction hardening (replacing regex/heuristic token scraping with per-agent structured-output adapters) in the same pass as the coverage/provenance work. It was split into two phases instead: <strong>Phase 1</strong> (this PR) fixes the ledger's schema, write discipline, and coverage — every row now says explicitly how confident its number is. <strong>Phase 2</strong> (deferred, tracked under the same #210 epic) replaces the extraction mechanism itself. The reasoning: Phase 1 is schema-and-plumbing work with a clean, testable invariant (&quot;no row is ever silently <code>actual</code>&quot;); Phase 2 is per-agent integration work with a much larger surface (every CLI vendor's output format) and no shared abstraction yet. Bundling them would have made both harder to review and land.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>Provenance-tagged schema.</strong> <code>cost_entries</code> gained two columns: <code>cost_source TEXT NOT NULL</code> (<code>actual</code> | <code>estimated_token_rate</code> | <code>estimated_tshirt</code> | <code>estimated_manual</code> | <code>legacy_unknown</code>, no default — every <code>INSERT</code> must pass it explicitly) and <code>estimate_basis TEXT</code> (which fallback tier produced an estimate, or <code>NULL</code> for <code>actual</code>/<code>legacy_unknown</code> rows). The migration rebuilds the table (rename → recreate → backfill-as-<code>legacy_unknown</code> → drop), since SQLite can't add a <code>NOT NULL</code> column without a default to an existing table with rows in it.</p>
+<p><strong>One writer, enforced by a test, not just a comment.</strong> Before this PR, four different call sites (<code>dispatch.py</code>, <code>jobs.py</code> ×2, <code>support_engineer.py</code>) each ran their own <code>INSERT</code>/<code>UPDATE</code> against <code>cost_entries</code>, drifting independently. <code>_insert_cost_row()</code> in <code>synlynk/db.py</code> is now the sole sanctioned path — validates <code>cost_source</code> against an allow-list, upserts by <code>job_id</code> when present (so a reconciled job's estimate gets replaced by its actual rather than duplicated). A new test walks the entire <code>synlynk/</code> source tree looking for <code>INSERT INTO cost_entries</code> / <code>UPDATE cost_entries</code> outside <code>db.py</code> and fails the suite if it finds one — the invariant is enforced mechanically, not just documented.</p>
+<p><strong>Extraction confidence tagging.</strong> <code>extract_tokens()</code> now returns a <code>.basis</code> attribute alongside token counts: <code>regex_pair</code> (real per-field extraction), <code>total_split</code> (the 80/20 heuristic guess on a bare total), or <code>none</code>. This is the signal <code>_resolve_cost_tier()</code> uses to decide whether a row can be <code>estimated_token_rate</code> (real count, priced) or must fall back to <code>estimated_tshirt</code> (guessed).</p>
+<p><strong>Three-tier t-shirt fallback.</strong> For surfaces with no real token count at all, <code>_estimate_tshirt_tokens()</code> tries: (1) the story's own <code>estimated_tokens</code> column, split evenly in/out; (2) a historical average from <code>cost_entries</code>, same discipline+phase, requiring ≥3 samples; (3) a fixed conservative default (5000 in / 2000 out). Deliberately sourced from <code>cost_entries</code> rather than <code>stories.actual_tokens</code> — the fallback gets smarter as real usage data accumulates, rather than depending on a separately-maintained estimate column.</p>
+<p><strong>Coverage closure.</strong> Every surface the design spec's audit flagged now writes through the chokepoint unconditionally: <code>dispatch_agent()</code>'s exec wrapper no longer gates the cost write on <code>in_tokens &gt; 0</code> (a failed/zero-token job now gets a <code>[failed job]</code>-labeled placeholder row instead of writing nothing); <code>jobs.py</code>'s reconcile and daemon-reconcile paths call <code>update_costs()</code> with the job's real <code>job_id</code> for idempotent upsert; <code>cmd_launch()</code> routes through the fallback chain instead of writing untagged 0/0 rows; <code>support_engineer.py</code>'s <code>_run_investigation()</code> — previously zero <code>update_costs()</code> calls anywhere in the file — now logs every investigation run. <code>synlynk cost log</code> was added as a new command so native/unwrapped PM and brainstorming sessions (previously invisible to the ledger entirely) can be logged manually as <code>estimated_manual</code>. <code>synlynk release</code>, <code>synlynk probe</code>, and <code>synlynk doctor</code> were separately audited and confirmed to be correctly out of scope — non-billable operations, not gaps.</p>
+<p><strong>Reporting stayed honest.</strong> <code>costs.md</code> entries for anything other than <code>actual</code>/<code>legacy_unknown</code> now carry an <code>[est] </code> prefix; the parser (both <code>costs.md</code> ingestion and <code>check_budgets()</code>'s live query) tolerates that prefix (and <code>[legacy] </code>, <code>~</code>) without breaking numeric parsing. <code>check_budgets()</code> gained a dedicated sub-line for failed-job placeholder estimates so they're visible but don't silently blend into the headline spend total.</p>
+<p><strong>A bug the plan didn't anticipate, caught by review, not by a test.</strong> During the final whole-branch review — reading the assembled diff end-to-end rather than task-by-task — the <code>[failed job]</code> marker <code>dispatch.py</code> appends for zero-token failures turned out to be silently truncated away by <code>update_costs()</code>'s pre-existing 20-character <code>short_cmd</code> slice, which runs <em>after</em> the marker is appended. Real commands are almost always longer than 20 characters before the marker is even added, so the truncation cut the string off before the tail-appended marker survived. <code>check_budgets()</code>'s failed-job sub-line (which greps <code>notes</code> for the literal text <code>&quot;failed job&quot;</code>) was therefore dead code in production — while its own unit test passed cleanly, because that test inserted a DB row with the marker already present, never exercising the interaction with truncation. Fixed by prepending the marker instead of appending it, with a new regression test that calls the real <code>update_costs()</code> path with a &gt;20-character command to prove the marker now survives. This is exactly the class of bug two-stage per-task review (spec compliance, then code quality) doesn't catch on its own — it only shows up when you trace a value through two functions written in different tasks.</p>
+<p><strong>Process note.</strong> All 20 units of work (the 19 plan tasks plus this review-caught fix) were implemented by dispatched CLI agents (<code>synlynk dispatch &lt;agent&gt; --task &quot;...&quot; --force-agent</code>), per this project's locked PM/reviewer-only governance — Claude wrote zero implementation code, only dispatch prompts, spec/quality review, and the final whole-branch pass. One dispatch (the CLAUDE.md docs section) was rejected on first attempt for mangling markdown formatting and redone from a clean prompt before it ever touched the integration branch.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was a text-driven design brainstorm (schema, provenance taxonomy, coverage audit), not a visual/UI decision. No <code>docs/brainstorm/</code> artifacts informed this PR.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Every dispatched job's cost is now traceable end-to-end with an explicit confidence label, which is the prerequisite for two things further out on the roadmap: (1) budget/quota gating that can actually trust its own numbers instead of silently under- or over-counting, and (2) eventually surfacing per-agent cost-efficiency in the capability/scoring system without contaminating it with unlabeled guesses. The sole-writer chokepoint also means future coverage gaps (a new agent surface, a new dispatch path) fail loudly at review time via the audit test, rather than silently drifting the way the original four independent write sites did.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The ledger's schema and coverage are hardened; every number it stores says explicitly how it was derived. Phase 2 — replacing regex/heuristic extraction with per-agent structured-output adapters, closing the rest of #210 — remains open as a separate follow-up plan, deliberately not bundled here. The design spec and implementation plan for this Phase 1 work live on a separate <code>chore/measurement-ledger-hardening-design</code> branch and will land as their own docs-only PR, per this project's standing policy of never bundling doc changes with code changes.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

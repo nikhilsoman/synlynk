@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk viz — shell concept</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'JetBrains Mono', monospace; background: #0d0f14; color: #c9d1d9; min-height: 100vh; font-size: 13px; }
+
+  /* App shell */
+  .app { display: flex; height: 100vh; }
+
+  /* LEFT NAV */
+  .sidenav {
+    width: 220px; min-width: 220px;
+    background: #0a0c10;
+    border-right: 1px solid #1e2430;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidenav-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #1e2430;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sidenav-header .logo {
+    font-size: 14px; font-weight: 700; color: #3de0c0;
+    letter-spacing: -0.5px;
+  }
+  .sidenav-header .logo span { color: #7b8896; font-weight: 400; }
+  .sidenav-search {
+    margin: 10px 12px 6px;
+    background: #13171f; border: 1px solid #1e2430;
+    border-radius: 5px; padding: 5px 10px;
+    color: #4a5568; font-size: 12px; font-family: inherit;
+  }
+  .ws-section { padding: 6px 0; flex: 1; overflow-y: auto; }
+  .ws-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: #4a5568; padding: 6px 16px 4px;
+  }
+  .ws-item {
+    padding: 5px 12px 5px 16px;
+    display: flex; align-items: center; gap: 7px;
+    cursor: pointer; border-radius: 4px; margin: 1px 6px;
+    color: #8b949e; font-size: 12px;
+  }
+  .ws-item:hover { background: #161b22; color: #c9d1d9; }
+  .ws-item.active { background: #0d2137; color: #3de0c0; }
+  .ws-item .icon { font-size: 11px; width: 14px; text-align: center; }
+  .ws-item .badge {
+    margin-left: auto; font-size: 10px;
+    background: #1e2430; color: #4a5568;
+    padding: 1px 5px; border-radius: 8px;
+  }
+  .ws-item.active .badge { background: #0a3050; color: #3de0c0; }
+  .repo-item {
+    padding: 4px 12px 4px 32px;
+    display: flex; align-items: center; gap: 7px;
+    cursor: pointer; margin: 0 6px;
+    color: #6a737d; font-size: 11px; border-radius: 4px;
+  }
+  .repo-item:hover { background: #161b22; color: #8b949e; }
+  .repo-item.active { color: #58a6ff; }
+  .repo-dot { width: 6px; height: 6px; border-radius: 50%; background: #3de0c0; flex-shrink: 0; }
+  .repo-dot.warm { background: #f0883e; }
+  .repo-dot.cold { background: #4a5568; }
+  .sidenav-footer {
+    border-top: 1px solid #1e2430;
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sidenav-footer .avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: linear-gradient(135deg, #3de0c0, #1a8f7a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #000; flex-shrink: 0;
+  }
+  .sidenav-footer .name { font-size: 11px; color: #8b949e; flex: 1; }
+  .sidenav-footer .gear { color: #4a5568; cursor: pointer; font-size: 14px; }
+  .sidenav-footer .gear:hover { color: #8b949e; }
+
+  /* MAIN AREA */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* VIEW TABS */
+  .view-tabs {
+    background: #0a0c10;
+    border-bottom: 1px solid #1e2430;
+    display: flex; align-items: stretch;
+    padding: 0 20px; gap: 0;
+    flex-shrink: 0;
+  }
+  .view-tab {
+    padding: 11px 18px 9px;
+    font-size: 12px; color: #4a5568;
+    cursor: pointer; border-bottom: 2px solid transparent;
+    display: flex; align-items: center; gap: 7px;
+    transition: color 0.15s;
+    white-space: nowrap;
+  }
+  .view-tab:hover { color: #8b949e; }
+  .view-tab.active { color: #3de0c0; border-bottom-color: #3de0c0; }
+  .view-tab .tab-icon { font-size: 13px; }
+  .tab-spacer { flex: 1; }
+  .tab-meta {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 4px;
+    font-size: 11px; color: #4a5568;
+  }
+  .tab-meta .pulse { width: 6px; height: 6px; border-radius: 50%; background: #238636; box-shadow: 0 0 6px #238636; }
+  .tab-meta .last-run { }
+
+  /* CONTENT AREA */
+  .content { flex: 1; overflow-y: auto; padding: 20px 24px; }
+
+  /* WORKSPACE HEADER */
+  .ws-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+  }
+  .ws-title { font-size: 18px; font-weight: 700; color: #e6edf3; }
+  .ws-subtitle { font-size: 12px; color: #4a5568; margin-top: 2px; }
+  .ws-chip {
+    background: #0d2137; color: #3de0c0; border: 1px solid #1a4a6e;
+    border-radius: 12px; font-size: 11px; padding: 3px 10px;
+  }
+
+  /* USER JOURNEY VIEW (placeholder) */
+  .view-ux { display: flex; gap: 16px; }
+  .ux-sidebar {
+    width: 200px; flex-shrink: 0;
+    background: #0a0c10; border: 1px solid #1e2430;
+    border-radius: 8px; overflow: hidden;
+  }
+  .ux-sidebar-header {
+    padding: 10px 12px; background: #111520;
+    border-bottom: 1px solid #1e2430;
+    font-size: 11px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .journey-item {
+    padding: 9px 12px; border-bottom: 1px solid #1e2430;
+    cursor: pointer;
+  }
+  .journey-item:hover { background: #111520; }
+  .journey-item.active { background: #0d2137; border-left: 2px solid #3de0c0; }
+  .journey-label { font-size: 10px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .journey-name { font-size: 12px; color: #c9d1d9; }
+  .journey-item.active .journey-name { color: #3de0c0; }
+  .journey-desc { font-size: 11px; color: #4a5568; margin-top: 2px; line-height: 1.4; }
+
+  .ux-main { flex: 1; }
+  .screen-flow {
+    background: #0a0c10; border: 1px solid #1e2430;
+    border-radius: 8px; padding: 16px; margin-bottom: 12px;
+  }
+  .screen-flow-title { font-size: 12px; color: #8b949e; margin-bottom: 12px; }
+  .screen-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .screen-box {
+    background: #13171f; border: 1px solid #1e2430;
+    border-radius: 6px; padding: 10px 14px; min-width: 110px;
+    font-size: 11px; color: #8b949e; text-align: center;
+    position: relative;
+  }
+  .screen-box.entry { border-color: #3de0c0; color: #3de0c0; }
+  .screen-box.key { border-color: #58a6ff; color: #58a6ff; }
+  .screen-box .step { font-size: 10px; color: #4a5568; margin-bottom: 3px; }
+  .screen-arrow { color: #4a5568; font-size: 14px; }
+  .screen-note {
+    background: #13171f; border: 1px solid #f0883e44;
+    border-radius: 5px; padding: 6px 10px; margin-top: 8px;
+    font-size: 11px; color: #f0883e; display: flex; align-items: center; gap: 6px;
+  }
+  .metric-row { display: flex; gap: 10px; margin-top: 12px; }
+  .metric-card {
+    flex: 1; background: #0a0c10; border: 1px solid #1e2430;
+    border-radius: 6px; padding: 10px 14px;
+  }
+  .metric-label { font-size: 10px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; }
+  .metric-value { font-size: 20px; font-weight: 700; color: #e6edf3; margin: 4px 0 2px; }
+  .metric-sub { font-size: 11px; color: #4a5568; }
+  .metric-card.green .metric-value { color: #3de0c0; }
+  .metric-card.blue .metric-value { color: #58a6ff; }
+  .metric-card.orange .metric-value { color: #f0883e; }
+
+  /* STICKY NOTE */
+  .sticky {
+    background: #2d2500; border: 1px solid #5a4a00;
+    border-radius: 5px; padding: 7px 10px;
+    font-size: 11px; color: #d4b800;
+    display: flex; align-items: flex-start; gap: 6px;
+    margin-top: 10px;
+  }
+  .sticky .pin { font-size: 13px; }
+
+  /* STATUS BAR */
+  .status-bar {
+    background: #0a0c10; border-top: 1px solid #1e2430;
+    padding: 5px 20px; display: flex; align-items: center; gap: 16px;
+    font-size: 11px; color: #4a5568; flex-shrink: 0;
+  }
+  .status-bar .ok { color: #238636; }
+  .status-bar .warn { color: #f0883e; }
+  .status-bar .right { margin-left: auto; display: flex; gap: 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT NAV -->
+  <div class="sidenav">
+    <div class="sidenav-header">
+      <div class="logo">S<span>ynlynk</span> <span style="color:#3de0c0">viz</span></div>
+    </div>
+    <input class="sidenav-search" placeholder="⌘ K  search..." readonly>
+    <div class="ws-section">
+      <div class="ws-label">Workspaces</div>
+
+      <!-- Workspace 1 — active -->
+      <div class="ws-item active">
+        <span class="icon">▸</span>
+        synlynk-core
+        <span class="badge">3</span>
+      </div>
+      <div class="repo-item active">
+        <div class="repo-dot"></div>
+        synlynk (main)
+      </div>
+      <div class="repo-item">
+        <div class="repo-dot warm"></div>
+        synlynk-website
+      </div>
+      <div class="repo-item">
+        <div class="repo-dot cold"></div>
+        tokq-bridge
+      </div>
+
+      <!-- Workspace 2 -->
+      <div class="ws-item" style="margin-top:8px">
+        <span class="icon">▸</span>
+        rxcc
+        <span class="badge">1</span>
+      </div>
+      <div class="ws-item">
+        <span class="icon">▸</span>
+        playblazer-ng
+        <span class="badge">2</span>
+      </div>
+
+      <div class="ws-label" style="margin-top:10px">+ Add workspace</div>
+    </div>
+    <div class="sidenav-footer">
+      <div class="avatar">N</div>
+      <div class="name">nikhilsoman</div>
+      <div class="gear">⚙</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- VIEW TABS -->
+    <div class="view-tabs">
+      <div class="view-tab active"><span class="tab-icon">🗺</span> User Journeys</div>
+      <div class="view-tab"><span class="tab-icon">🚇</span> Architect Map</div>
+      <div class="view-tab"><span class="tab-icon">📅</span> Gantt</div>
+      <div class="view-tab"><span class="tab-icon">💰</span> Effort & Cost</div>
+      <div class="view-tab"><span class="tab-icon">📊</span> Efficiency</div>
+      <div class="tab-spacer"></div>
+      <div class="tab-meta">
+        <div class="pulse"></div>
+        <div class="last-run">updated 4m ago</div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+      <div class="ws-header">
+        <div>
+          <div class="ws-title">synlynk-core</div>
+          <div class="ws-subtitle">3 repos · 14 active Epics · last scan 4 min ago</div>
+        </div>
+        <div class="ws-chip">Developer Preview · v0.10.0</div>
+      </div>
+
+      <!-- UX / USER JOURNEY VIEW -->
+      <div class="view-ux">
+
+        <!-- Journey sidebar (like the rxcc screenshot) -->
+        <div class="ux-sidebar">
+          <div class="ux-sidebar-header">User Journeys (4)</div>
+
+          <div class="journey-item active">
+            <div class="journey-label">Journey A</div>
+            <div class="journey-name">First Install (FTUE)</div>
+            <div class="journey-desc">pip install → wizard → first dispatch</div>
+          </div>
+          <div class="journey-item">
+            <div class="journey-label">Journey B</div>
+            <div class="journey-name">Daily Driver Loop</div>
+            <div class="journey-desc">launch → dispatch → jobs summary</div>
+          </div>
+          <div class="journey-item">
+            <div class="journey-label">Journey C</div>
+            <div class="journey-name">Ship a Release</div>
+            <div class="journey-desc">stories → release → blog stub</div>
+          </div>
+          <div class="journey-item">
+            <div class="journey-label">Journey D</div>
+            <div class="journey-name">Team Onboarding</div>
+            <div class="journey-desc">join → sync → parallel dispatch</div>
+          </div>
+        </div>
+
+        <!-- Journey A screen flow -->
+        <div class="ux-main">
+          <div class="screen-flow">
+            <div class="screen-flow-title">Journey A — First Install (FTUE) · 6 screens</div>
+            <div class="screen-row">
+              <div class="screen-box entry">
+                <div class="step">Step 0</div>
+                pip install
+              </div>
+              <div class="screen-arrow">→</div>
+              <div class="screen-box">
+                <div class="step">Screen 1</div>
+                Home Harness
+              </div>
+              <div class="screen-arrow">→</div>
+              <div class="screen-box">
+                <div class="step">Screen 2</div>
+                Workspace
+              </div>
+              <div class="screen-arrow">→</div>
+              <div class="screen-box">
+                <div class="step">Screen 3</div>
+                Skills Scan
+              </div>
+              <div class="screen-arrow">→</div>
+              <div class="screen-box key">
+                <div class="step">Screen 4</div>
+                Agent Fleet
+              </div>
+              <div class="screen-arrow">→</div>
+              <div class="screen-box">
+                <div class="step">Screen 5</div>
+                Roles
+              </div>
+              <div class="screen-arrow">→</div>
+              <div class="screen-box entry">
+                <div class="step">Screen 6</div>
+                Launch ✓
+              </div>
+            </div>
+            <div class="screen-note">⚠ Drop-off risk: Screen 3 Skills Scan takes 8–12s — no progress indicator (open gap)</div>
+          </div>
+
+          <div class="metric-row">
+            <div class="metric-card green">
+              <div class="metric-label">Avg completion</div>
+              <div class="metric-value">87%</div>
+              <div class="metric-sub">of users who start finish wizard</div>
+            </div>
+            <div class="metric-card blue">
+              <div class="metric-label">Time to first dispatch</div>
+              <div class="metric-value">4.2 min</div>
+              <div class="metric-sub">from pip install → first job running</div>
+            </div>
+            <div class="metric-card orange">
+              <div class="metric-label">D1 return rate</div>
+              <div class="metric-value">—</div>
+              <div class="metric-sub">not yet tracked · gap</div>
+            </div>
+          </div>
+
+          <div class="sticky">
+            <span class="pin">📌</span>
+            Screen 3 needs a progress bar. Nikhil noted: "feels like it hung the first time I ran it" — check if scan writes partial results to stdout. 2026-07-03
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+      <span class="ok">● local</span>
+      <span>3 workspaces</span>
+      <span>726 tests passing</span>
+      <div class="right">
+        <span class="warn">⚠ BS-13 HUD: spec refresh needed</span>
+        <span>next update: ~8 min</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

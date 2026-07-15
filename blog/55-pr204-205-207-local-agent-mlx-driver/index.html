@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #204/#205/#207 — Local Agent: oMLX Driver, Capability Seeding, and Real-Hardware Tests | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 13, 2026</span>
+        
+          <span class="blog-post-pr">PR #204/#205/#207</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #204/#205/#207 — Local Agent: oMLX Driver, Capability Seeding, and Real-Hardware Tests</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>BS-8 had already shipped the Business Goal hierarchy, and GOVERNS was in the middle of
+rolling out the seven-stage vocabulary that sits above it. The next open thread was not
+another abstraction layer; it was practical dogfooding: prove that synlynk could route
+real implementation work to a zero-cost local agent without breaking the existing
+capability-to-quota-to-cost pipeline.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The main pivot happened before code was written. Ornith was initially assumed to be
+GGUF-only, which would have pointed the local-agent dispatch story toward <code>llama.cpp</code>.
+During the brainstorm and spec pass, that assumption turned out to be wrong: the model
+has MLX conversions, so the recommendation changed mid-brainstorm from <code>llama.cpp</code> to
+oMLX. That mattered because it kept the feature inside the existing OpenAI-compatible
+agent-subprocess model instead of inventing a new driver path.</p>
+<h2>What This PR Shipped</h2>
+<h3>Task Group 1: driver wiring</h3>
+<p>PR #204 wired <code>local</code> as an Aider subprocess over oMLX. The implementation keeps the
+existing dispatch architecture intact: <code>_preflight_local()</code> checks the oMLX endpoint,
+<code>AGENT_CAPABILITY_BASELINES[&quot;local&quot;]</code> uses the same shape as the other agents, and the
+job still runs as a normal CLI subprocess inside the worktree.</p>
+<h3>Task Group 2: capability seeding and concurrency guard</h3>
+<p>PR #205 added the narrow starter envelope. <code>synlynk local doctor</code> seeds moderate
+capability scores for the granular coordinates the spec called out first, so the local
+agent shows up for docs/testing execute-stage work before it has earned broader trust.
+The same PR also introduced the <code>local_concurrency</code> guard so in-flight local jobs are
+bounded by hardware, not by a spend cap.</p>
+<h3>Task Group 3: two-tier tests</h3>
+<p>PR #207 added the test split the spec called for. The standard CI path stays mocked and
+portable, while the opt-in <code>@pytest.mark.local_hardware</code> tier exercises a real
+<code>omlx serve</code> instance with a live roster. That keeps the PR gate deterministic while
+still leaving room for real inference validation on Apple Silicon or a later hosted
+runner.</p>
+<p>The design and implementation were tracked against
+<code>docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md</code>. No separate
+brainstorm visuals were used for this feature; the decision trail lived in the spec and
+plan text.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the first route in synlynk that can route low-risk implementation work to a
+zero-marginal-cost local model while still preserving the same dispatch, capability, and
+verification contract used for paid agents. The important part is not just that <code>local</code>
+exists, but that it was added without a parallel taxon or a bespoke driver stack.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The next thing to watch is real local-agent job completions. Once those arrive, we can
+decide whether the starter whitelist should widen, and whether a second Linux/Windows
+driver path should be added for non-Apple-Silicon environments. Until then, <code>local</code>
+should stay narrow, cheap, and observable.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #117 — Live Job Observatory | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 05, 2026</span>
+        
+          <span class="blog-post-pr">PR #117</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #117 — Live Job Observatory</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>While the workspace HUD (PR #106) provided a terminal-native dashboard for monitoring the 6-cycle SDLC model, it only tracked local repo executions. The long-arc goal of synlynk is <strong>autonomous multi-agent dispatch</strong> across multiple repositories and agents. To make this legibility possible, we needed a unified operator panel: a read-only, near real-time live board displaying running jobs across all repos in a single workspace.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The introduction of the Live Job Observatory shifts synlynk from a single-repository task runner into a multi-repository operator panel. For the first time, operators can see all active, queued, and completed jobs across different repositories grouped by repo and execution stage.</p>
+<p>Instead of jumping between directories or tracking separate terminal windows, the Observatory aggregates telemetry and statuses into a singular model. This is the strategic foundation that makes multi-repo, multi-agent collaboration legible, giving the human controller (or supervising orchestrator agents) a high-level view of the entire fleet.</p>
+<h2>What This PR Shipped</h2>
+<p>This PR delivers the complete data, CLI, and web UI layers for the Live Job Observatory:</p>
+<ul>
+<li><strong><code>synlynk/observatory.py</code></strong>:
+<ul>
+<li><code>build_job_observatory_snapshot()</code>: Pulls job logs and telemetry entries to build a comprehensive, structured snapshot of workspace activity.</li>
+<li><code>_merge_telemetry()</code>: Merges and aggregates input/output token counts, request rates, and costs across all active and historical jobs.</li>
+<li><code>_job_repo_fallback()</code>: Resolves repository names from Git origin URLs when not explicitly declared in job configurations.</li>
+</ul>
+</li>
+<li><strong><code>synlynk/hud.py</code></strong>:
+<ul>
+<li><code>render_observatory_panel()</code>: Groups active jobs by repository and execution stage (e.g., <code>running</code>, <code>queued</code>, <code>done</code>, <code>failed</code>), displaying runtime ages, accrued costs, and token consumption statistics.</li>
+</ul>
+</li>
+<li><strong>CLI &amp; TUI (<code>synlynk watch --live</code>)</strong>:
+<ul>
+<li>Refined the terminal HUD to render the Live Observatory panel directly beneath the HUD header.</li>
+</ul>
+</li>
+<li><strong>Web Interface (<code>synlynk viz</code>)</strong>:
+<ul>
+<li>Added the <strong>Observatory</strong> tab to the local browser dashboard.</li>
+<li>Generates <code>observatory.html</code> in the Viz cache.</li>
+<li>Configured 10-second auto-refresh polling of <code>observatory-snapshot.json</code> to keep the UI live.</li>
+</ul>
+</li>
+<li><strong>Review Cycle Adjustments</strong>:
+<ul>
+<li>During the R1/R2 review cycles, we resolved a critical telemetry crash risk when loading malformed JSON.</li>
+<li>Cleaned up a redundant column in the unified job board layout to optimize screen space.</li>
+</ul>
+</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>HUD design exploration that informed the observatory layout — the full-screen job board design and the live + platform panel split:</p>
+<p><img src="images/v011/bs13-hud-full-design.png" alt="BS-13 HUD — full observatory design"></p>
+<p><img src="images/v011/bs13-hud-live-platform.png" alt="BS-13 HUD — live jobs + platform health panel"></p>
+<p>Full brainstorm HTML: <a href="../brainstorm/bs13-workspace-hud/"><code>docs/brainstorm/bs13-workspace-hud/</code></a></p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>In a fully autonomous multi-agent ecosystem, agents will spawn subagents, delegate tasks across different repositories, and coordinate parallel pipelines. Without a unified ledger and observability panel, this behavior would quickly become an unmanageable black box.</p>
+<p>The Live Job Observatory solves the legibility problem. It provides:</p>
+<ol>
+<li><strong>Fleet Legibility</strong>: Clear visualization of which agent is running which task, in what repo, at what cost.</li>
+<li><strong>Cost Attribution</strong>: Unified telemetry rollup summing total cost, total requests, and total input/output/context tokens across the workspace.</li>
+<li><strong>Execution Age Tracking</strong>: Highlighting runtimes to quickly surface stuck processes or execution stalls before they drain token quotas.</li>
+</ol>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the Live Job Observatory shipped, synlynk has the instrumentation required to monitor complex, multi-agent operations. The next focus is <strong>agent autonomy, permissions, and handoffs (BS-12)</strong>. We need to define the protocol for how agents ask for permission to run commands, how they manage their capability ratings, and how they hand off context-crossing stories to other specialists in the workgroup.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

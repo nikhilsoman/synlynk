@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-16: HUD v3 — fixed cards + compat options</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #080a10; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; padding: 1.5rem; font-size: 12px; }
+
+/* HEADER */
+.hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.6rem; border-bottom:1px solid #1a1f2e; }
+.hud-title { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.15em; color:#475569; }
+.hud-title span { color:#7c3aed; font-weight:bold; }
+.hud-meta { font-size:10px; color:#334155; }
+.dispatch-mode { display:flex; align-items:center; gap:0.4rem; background:#0f1520; border:1px solid #1e3a5f; border-radius:20px; padding:0.25rem 0.65rem; font-size:10px; color:#60a5fa; }
+.mode-dot { width:6px; height:6px; border-radius:50%; background:#3b82f6; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* EFFICIENCY BANNER */
+.eff-banner { background:linear-gradient(135deg,#0f1a0f,#0a1520); border:1px solid #166534; border-radius:10px; padding:0.85rem 1.25rem; margin-bottom:1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
+.eff-val { font-size:1.8rem; font-weight:bold; color:#10b981; line-height:1; }
+.eff-unit { font-size:0.7rem; color:#4ade80; text-transform:uppercase; letter-spacing:0.08em; }
+.eff-sub { font-size:10px; color:#475569; margin-top:2px; }
+.eff-stats { display:flex; gap:1.75rem; }
+.eff-stat .v { font-size:1rem; font-weight:bold; color:#e2e8f0; }
+.eff-stat .l { font-size:10px; color:#475569; }
+.eff-note { font-size:10.5px; color:#86efac; max-width:260px; line-height:1.5; border-left:2px solid #166534; padding-left:0.75rem; }
+.eff-note strong { color:#4ade80; }
+
+/* AGENT CARDS — strict equal width */
+.section-label { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#334155; margin-bottom:0.5rem; }
+.agent-row { display:flex; gap:0.75rem; overflow-x:auto; padding-bottom:0.5rem; margin-bottom:1.5rem; }
+.agent-row::-webkit-scrollbar { height:3px; }
+.agent-row::-webkit-scrollbar-thumb { background:#1e293b; border-radius:2px; }
+
+.agent-card {
+  width: 180px; min-width: 180px; max-width: 180px; /* STRICT EQUAL */
+  background:#0c0e16; border:1px solid #1a1f2e; border-radius:10px; padding:0.7rem;
+}
+.agent-card.ref      { border-color:#1d3a5f; }
+.agent-card.degraded { border-color:#451a03; }
+
+.card-top { display:flex; align-items:center; gap:0.45rem; margin-bottom:0.45rem; }
+.agent-icon { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+.icon-claude { background:#1a1030; color:#a78bfa; }
+.icon-agy    { background:#0a1a10; color:#34d399; }
+.icon-codex  { background:#0a0f1a; color:#60a5fa; }
+.icon-grok   { background:#1a1000; color:#fbbf24; }
+.card-nameblock { flex:1; min-width:0; }
+.agent-name { font-size:0.75rem; font-weight:bold; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.agent-ver  { font-size:8.5px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ref-badge  { font-size:7.5px; color:#3b82f6; background:#0f1f3f; border-radius:3px; padding:1px 3px; }
+.status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.status-dot.up  { background:#10b981; box-shadow:0 0 5px #10b981; }
+.status-dot.deg { background:#f59e0b; box-shadow:0 0 5px #f59e0b; }
+
+.ctx-label { font-size:9px; color:#334155; margin-bottom:0.45rem; }
+.ctx-label span { color:#64748b; }
+
+.attach-row { display:flex; align-items:center; gap:0.35rem; margin-bottom:0.45rem; }
+.attach-label { font-size:8.5px; color:#475569; width:32px; flex-shrink:0; }
+.attach-pct   { font-size:9.5px; font-weight:bold; width:28px; text-align:right; flex-shrink:0; }
+.attach-spark { flex:1; height:14px; }
+
+.budgets { display:flex; flex-direction:column; gap:3px; margin-bottom:0.45rem; }
+.budget-row { display:flex; align-items:center; gap:0.3rem; }
+.budget-icon { font-size:8.5px; color:#475569; width:9px; flex-shrink:0; text-align:center; }
+.budget-bar-wrap { flex:1; background:#1a1f2e; border-radius:2px; height:4px; }
+.budget-bar { height:100%; border-radius:2px; }
+.budget-val { font-size:8px; width:28px; text-align:right; flex-shrink:0; }
+.b-read  .budget-bar { background:#7c3aed; } .b-read  .budget-val { color:#a78bfa; }
+.b-write .budget-bar { background:#06b6d4; } .b-write .budget-val { color:#06b6d4; }
+.b-tool  .budget-bar { background:#d97706; } .b-tool  .budget-val { color:#d97706; }
+
+.scores-row { display:flex; gap:0.3rem; }
+.score-chip { flex:1; background:#0f1117; border:1px solid #1a1f2e; border-radius:4px; padding:2px 4px; text-align:center; }
+.score-chip .sv { font-size:9.5px; font-weight:bold; display:block; }
+.score-chip .sl { font-size:7.5px; color:#475569; display:block; }
+
+.add-agent { width:180px; min-width:180px; max-width:180px; background:#0c0e16; border:1px dashed #1a2e1a; border-radius:10px; padding:0.7rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.35rem; color:#1e4620; cursor:pointer; min-height:168px; }
+.add-agent:hover { border-color:#166534; color:#4ade80; }
+.add-agent .plus { font-size:1.3rem; }
+.add-agent .lbl  { font-size:9px; text-align:center; line-height:1.5; }
+
+/* ══════════════════════════════════════
+   COMPAT SECTION — TWO ALTERNATIVES
+══════════════════════════════════════ */
+.compat-alts { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem; }
+.alt-panel { background:#0c0e16; border:1px solid #1a1f2e; border-radius:10px; padding:0.9rem; }
+.alt-panel h4 { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#334155; margin-bottom:0.75rem; }
+.alt-tag { display:inline-block; font-size:8px; text-transform:uppercase; letter-spacing:0.08em; border-radius:3px; padding:1px 5px; margin-left:0.4rem; }
+.alt-tag.rec { background:#14532d; color:#4ade80; }
+.alt-tag.alt { background:#1e293b; color:#64748b; }
+
+/* OPTION A: Cycle × Agent capability matrix */
+.cycle-matrix { width:100%; border-collapse:collapse; font-size:10px; }
+.cycle-matrix th { font-size:8.5px; color:#475569; text-transform:uppercase; letter-spacing:0.05em; padding:0.3rem 0.4rem; text-align:center; border-bottom:1px solid #1a1f2e; }
+.cycle-matrix th:first-child { text-align:left; width:80px; }
+.cycle-matrix td { padding:0.3rem 0.4rem; text-align:center; border-bottom:1px solid #0f1117; vertical-align:middle; }
+.cycle-matrix td:first-child { text-align:left; }
+
+.cycle-name { font-size:9.5px; color:#94a3b8; display:flex; align-items:center; gap:0.3rem; }
+.cycle-icon { font-size:11px; }
+
+.cap-cell { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.cap-dot-row { display:flex; gap:2px; }
+.cap-dot { width:7px; height:7px; border-radius:50%; }
+.cap-full { background:#10b981; }
+.cap-part { background:#f59e0b; }
+.cap-none { background:#1e293b; }
+.cap-lbl { font-size:7.5px; color:#475569; }
+
+/* OPTION B: Radar / hexagon per agent */
+.radar-row { display:flex; gap:0.6rem; justify-content:space-around; flex-wrap:wrap; }
+.radar-agent { text-align:center; }
+.radar-name { font-size:9px; color:#94a3b8; margin-bottom:0.3rem; }
+.radar-legend { display:flex; flex-wrap:wrap; gap:0.25rem; justify-content:center; margin-top:0.4rem; max-width:120px; margin-left:auto; margin-right:auto; }
+.radar-badge { font-size:7.5px; padding:1px 4px; border-radius:3px; }
+.rb-full { background:#0a1f12; color:#10b981; border:1px solid #166534; }
+.rb-part { background:#1a1200; color:#f59e0b; border:1px solid #78350f; }
+.rb-none { background:#1a1f2e; color:#475569; border:1px solid #1e293b; }
+
+/* BOTTOM */
+.bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; }
+.panel { background:#0c0e16; border:1px solid #1a1f2e; border-radius:8px; padding:0.75rem; }
+.panel h4 { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#334155; margin-bottom:0.5rem; }
+.sentinel-ok { color:#1e4620; font-size:11px; }
+.eco-alert { background:#0a1a10; border:1px solid #166534; border-radius:5px; padding:0.5rem 0.65rem; font-size:10.5px; color:#4ade80; display:flex; align-items:flex-start; gap:0.4rem; }
+</style>
+</head>
+<body>
+
+<div class="hud-header">
+  <div>
+    <div class="hud-title"><span>synlynk</span> ecosystem status</div>
+    <div class="hud-meta">2026-07-01 · 14:23 · workspace: synlynk · 3/4 attached</div>
+  </div>
+  <div class="dispatch-mode"><div class="mode-dot"></div>daily-grind</div>
+</div>
+
+<!-- EFFICIENCY BANNER -->
+<div class="eff-banner">
+  <div>
+    <div style="display:flex;align-items:baseline;gap:0.5rem">
+      <span class="eff-val">4.2×</span>
+      <div><div class="eff-unit">headless efficiency</div><div class="eff-sub">tokens doing work vs. interactive</div></div>
+    </div>
+  </div>
+  <div class="eff-stats">
+    <div class="eff-stat"><div class="v" style="color:#10b981">847K</div><div class="l">tokens saved<br>this session</div></div>
+    <div class="eff-stat"><div class="v" style="color:#a78bfa">23</div><div class="l">headless<br>dispatches</div></div>
+    <div class="eff-stat"><div class="v" style="color:#06b6d4">$0.34</div><div class="l">saved vs.<br>interactive</div></div>
+  </div>
+  <div class="eff-note"><strong>Every headless dispatch starts clean.</strong> No history accumulation — every token goes to the task.</div>
+</div>
+
+<!-- AGENT CARDS -->
+<div class="section-label">fleet — scroll →</div>
+<div class="agent-row">
+
+  <div class="agent-card ref">
+    <div class="card-top">
+      <div class="agent-icon icon-claude">◈</div>
+      <div class="card-nameblock"><div class="agent-name">claude <span class="ref-badge">ref</span></div><div class="agent-ver">sonnet-4-6 · max · v1.2.3</div></div>
+      <div class="status-dot up"></div>
+    </div>
+    <div class="ctx-label">ctx: <span>200K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#10b981">100%</span>
+      <svg class="attach-spark" viewBox="0 0 50 14"><polyline points="0,11 7,8 14,10 21,6 28,4 35,5 42,2 50,1" fill="none" stroke="#10b981" stroke-width="1.5"/><circle cx="50" cy="1" r="2" fill="#10b981"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"><span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:75%"></div></div><span class="budget-val">750K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div><span class="budget-val">32K</span></div>
+      <div class="budget-row b-tool"><span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:80%"></div></div><span class="budget-val">~200</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#10b981">99%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#334155">ref</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <div class="agent-card degraded">
+    <div class="card-top">
+      <div class="agent-icon icon-agy">◇</div>
+      <div class="card-nameblock"><div class="agent-name">agy</div><div class="agent-ver">gemini-2.0-flash · pro · v3.2.0</div></div>
+      <div class="status-dot deg"></div>
+    </div>
+    <div class="ctx-label">ctx: <span>1,000K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#ef4444">61%</span>
+      <svg class="attach-spark" viewBox="0 0 50 14"><polyline points="0,3 7,6 14,2 21,9 28,4 35,11 42,6 50,10" fill="none" stroke="#ef4444" stroke-width="1.5"/><circle cx="50" cy="10" r="2" fill="#ef4444"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"><span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:90%"></div></div><span class="budget-val">900K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:25%"></div></div><span class="budget-val">8K</span></div>
+      <div class="budget-row b-tool"><span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:100%"></div></div><span class="budget-val">~500</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#ef4444">67%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#ef4444">43%</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <div class="agent-card">
+    <div class="card-top">
+      <div class="agent-icon icon-codex">⬡</div>
+      <div class="card-nameblock"><div class="agent-name">codex</div><div class="agent-ver">gpt-4o · plus · v1.1.0</div></div>
+      <div class="status-dot up"></div>
+    </div>
+    <div class="ctx-label">ctx: <span>128K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#10b981">94%</span>
+      <svg class="attach-spark" viewBox="0 0 50 14"><polyline points="0,9 7,6 14,7 21,4 28,5 35,2 42,3 50,1" fill="none" stroke="#10b981" stroke-width="1.5"/><circle cx="50" cy="1" r="2" fill="#10b981"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"><span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:55%"></div></div><span class="budget-val">110K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div><span class="budget-val">16K</span></div>
+      <div class="budget-row b-tool"><span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div><span class="budget-val">~128</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#10b981">92%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#10b981">87%</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <div class="agent-card">
+    <div class="card-top">
+      <div class="agent-icon icon-grok">✦</div>
+      <div class="card-nameblock"><div class="agent-name">grok</div><div class="agent-ver">grok-3 · ? · v2.0.1</div></div>
+      <div class="status-dot deg"></div>
+    </div>
+    <div class="ctx-label">ctx: <span>131K</span></div>
+    <div class="attach-row">
+      <span class="attach-label">attach</span>
+      <span class="attach-pct" style="color:#f59e0b">78%</span>
+      <svg class="attach-spark" viewBox="0 0 50 14"><polyline points="0,4 7,3 14,2 21,5 28,3 35,7 42,5 50,8" fill="none" stroke="#f59e0b" stroke-width="1.5"/><circle cx="50" cy="8" r="2" fill="#f59e0b"/></svg>
+    </div>
+    <div class="budgets">
+      <div class="budget-row b-read"><span class="budget-icon">R</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:55%"></div></div><span class="budget-val">115K</span></div>
+      <div class="budget-row b-write"><span class="budget-icon">W</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div><span class="budget-val">16K</span></div>
+      <div class="budget-row b-tool"><span class="budget-icon">T</span><div class="budget-bar-wrap"><div class="budget-bar" style="width:40%"></div></div><span class="budget-val">~100</span></div>
+    </div>
+    <div class="scores-row">
+      <div class="score-chip"><span class="sv" style="color:#f59e0b">81%</span><span class="sl">complete</span></div>
+      <div class="score-chip"><span class="sv" style="color:#f59e0b">71%</span><span class="sl">adherence</span></div>
+    </div>
+  </div>
+
+  <div class="add-agent">
+    <span class="plus">+</span>
+    <span class="lbl">local agent<br>(ollama / lm-studio)</span>
+  </div>
+
+</div>
+
+<!-- COMPAT: TWO ALTERNATIVES -->
+<div class="section-label" style="margin-bottom:0.6rem">capability coverage — two representations (pick one)</div>
+<div class="compat-alts">
+
+  <!-- OPTION A: Cycle × Agent matrix -->
+  <div class="alt-panel">
+    <h4>A — Cycle capability matrix <span class="alt-tag rec">recommended</span></h4>
+    <table class="cycle-matrix">
+      <thead>
+        <tr>
+          <th>Cycle</th>
+          <th>◈ claude</th>
+          <th>◇ agy</th>
+          <th>⬡ codex</th>
+          <th>✦ grok</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="cycle-name"><span class="cycle-icon">💡</span>Dream</div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div></div><span class="cap-lbl">full</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">loop risk</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+        </tr>
+        <tr>
+          <td><div class="cycle-name"><span class="cycle-icon">📋</span>Plan</div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div></div><span class="cap-lbl">full</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+        </tr>
+        <tr>
+          <td><div class="cycle-name"><span class="cycle-icon">⚙️</span>Work</div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div></div><span class="cap-lbl">full</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">headless ~</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-part"></div></div><span class="cap-lbl">resume ✗</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">network dep</span></div></td>
+        </tr>
+        <tr>
+          <td><div class="cycle-name"><span class="cycle-icon">🚀</span>Ship</div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div></div><span class="cap-lbl">full</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+        </tr>
+        <tr>
+          <td><div class="cycle-name"><span class="cycle-icon">🔧</span>Maintain</div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div></div><span class="cap-lbl">full</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">probe ✓ doctor ~</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-part"></div></div><span class="cap-lbl">probe ✓</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">probe ✓</span></div></td>
+        </tr>
+        <tr>
+          <td><div class="cycle-name"><span class="cycle-icon">🤝</span>Engage</div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div><div class="cap-dot cap-full"></div></div><span class="cap-lbl">full</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">none</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">upgrade only</span></div></td>
+          <td><div class="cap-cell"><div class="cap-dot-row"><div class="cap-dot cap-part"></div><div class="cap-dot cap-none"></div><div class="cap-dot cap-none"></div></div><span class="cap-lbl">upgrade only</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="display:flex;gap:0.75rem;margin-top:0.6rem;font-size:9px;color:#475569">
+      <span><span style="color:#10b981">●</span> full support</span>
+      <span><span style="color:#f59e0b">●</span> partial</span>
+      <span><span style="color:#1e293b;background:#1e293b;border-radius:50%;display:inline-block;width:8px;height:8px;vertical-align:middle"></span> none</span>
+      <span style="margin-left:auto;color:#64748b">3 dots = 3 key commands per cycle</span>
+    </div>
+  </div>
+
+  <!-- OPTION B: Radar hexagons per agent -->
+  <div class="alt-panel">
+    <h4>B — Cycle radar per agent <span class="alt-tag alt">visual alternative</span></h4>
+    <div class="radar-row">
+
+      <!-- claude -->
+      <div class="radar-agent">
+        <div class="radar-name">◈ claude <span style="font-size:8px;color:#3b82f6">ref</span></div>
+        <svg width="100" height="92" viewBox="-50 -46 100 92">
+          <g opacity="0.2">
+            <polygon points="0,-38 33,-19 33,19 0,38 -33,19 -33,-19" fill="none" stroke="#475569" stroke-width="0.5"/>
+            <polygon points="0,-25 22,-13 22,13 0,25 -22,13 -22,-13" fill="none" stroke="#475569" stroke-width="0.5"/>
+            <polygon points="0,-12 10,-6 10,6 0,12 -10,6 -10,-6" fill="none" stroke="#475569" stroke-width="0.5"/>
+          </g>
+          <line x1="0" y1="0" x2="0" y2="-38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="0" y2="38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <!-- full hexagon = claude -->
+          <polygon points="0,-38 33,-19 33,19 0,38 -33,19 -33,-19" fill="#10b981" fill-opacity="0.15" stroke="#10b981" stroke-width="1.5"/>
+          <text x="0" y="-42" text-anchor="middle" fill="#94a3b8" font-size="7">Dream</text>
+          <text x="37" y="-21" fill="#94a3b8" font-size="7">Plan</text>
+          <text x="37" y="23" fill="#94a3b8" font-size="7">Work</text>
+          <text x="0" y="47" text-anchor="middle" fill="#94a3b8" font-size="7">Ship</text>
+          <text x="-52" y="23" fill="#94a3b8" font-size="7">Maint</text>
+          <text x="-52" y="-21" fill="#94a3b8" font-size="7">Engage</text>
+        </svg>
+        <div class="radar-legend">
+          <span class="radar-badge rb-full">all cycles</span>
+        </div>
+      </div>
+
+      <!-- agy -->
+      <div class="radar-agent">
+        <div class="radar-name">◇ agy</div>
+        <svg width="100" height="92" viewBox="-50 -46 100 92">
+          <g opacity="0.2">
+            <polygon points="0,-38 33,-19 33,19 0,38 -33,19 -33,-19" fill="none" stroke="#475569" stroke-width="0.5"/>
+            <polygon points="0,-25 22,-13 22,13 0,25 -22,13 -22,-13" fill="none" stroke="#475569" stroke-width="0.5"/>
+          </g>
+          <line x1="0" y1="0" x2="0" y2="-38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="0" y2="38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <!-- agy: dream partial, plan none, work partial, ship none, maintain partial, engage none -->
+          <polygon points="0,-16 0,0 14,7 0,0 -14,7 0,0" fill="#f59e0b" fill-opacity="0.2" stroke="#f59e0b" stroke-width="1.5"/>
+          <!-- maintain spike -->
+          <polygon points="0,-16 0,-1 13,-7 0,-1 -26,13 0,-1" fill="#f59e0b" fill-opacity="0.15" stroke="none"/>
+          <polyline points="0,-16 0,-1 13,-7 0,-1 -26,13 0,-1 0,-16" fill="#f59e0b" fill-opacity="0.1" stroke="#f59e0b" stroke-width="1"/>
+          <!-- clean shape: dream=partial, work=partial, maintain=partial -->
+          <polygon points="0,-19 0,0 14,7 0,12 -26,13 0,0" fill="#f59e0b" fill-opacity="0.12" stroke="#f59e0b" stroke-width="1.5"/>
+          <text x="0" y="-42" text-anchor="middle" fill="#94a3b8" font-size="7">Dream</text>
+          <text x="37" y="-21" fill="#94a3b8" font-size="7">Plan</text>
+          <text x="37" y="23" fill="#94a3b8" font-size="7">Work</text>
+          <text x="0" y="47" text-anchor="middle" fill="#94a3b8" font-size="7">Ship</text>
+          <text x="-52" y="23" fill="#94a3b8" font-size="7">Maint</text>
+          <text x="-52" y="-21" fill="#94a3b8" font-size="7">Engage</text>
+        </svg>
+        <div class="radar-legend">
+          <span class="radar-badge rb-part">dream~</span>
+          <span class="radar-badge rb-part">work~</span>
+          <span class="radar-badge rb-part">maint~</span>
+          <span class="radar-badge rb-none">plan ✗</span>
+          <span class="radar-badge rb-none">ship ✗</span>
+        </div>
+      </div>
+
+      <!-- codex -->
+      <div class="radar-agent">
+        <div class="radar-name">⬡ codex</div>
+        <svg width="100" height="92" viewBox="-50 -46 100 92">
+          <g opacity="0.2">
+            <polygon points="0,-38 33,-19 33,19 0,38 -33,19 -33,-19" fill="none" stroke="#475569" stroke-width="0.5"/>
+            <polygon points="0,-25 22,-13 22,13 0,25 -22,13 -22,-13" fill="none" stroke="#475569" stroke-width="0.5"/>
+          </g>
+          <line x1="0" y1="0" x2="0" y2="-38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="0" y2="38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <!-- codex: work=full, maintain=partial, engage=tiny -->
+          <polygon points="0,-1 28,-14 33,19 0,1 -22,12 0,0" fill="#60a5fa" fill-opacity="0.15" stroke="#60a5fa" stroke-width="1.5"/>
+          <text x="0" y="-42" text-anchor="middle" fill="#94a3b8" font-size="7">Dream</text>
+          <text x="37" y="-21" fill="#94a3b8" font-size="7">Plan</text>
+          <text x="37" y="23" fill="#94a3b8" font-size="7">Work</text>
+          <text x="0" y="47" text-anchor="middle" fill="#94a3b8" font-size="7">Ship</text>
+          <text x="-52" y="23" fill="#94a3b8" font-size="7">Maint</text>
+          <text x="-52" y="-21" fill="#94a3b8" font-size="7">Engage</text>
+        </svg>
+        <div class="radar-legend">
+          <span class="radar-badge rb-full">work ✓</span>
+          <span class="radar-badge rb-part">maint~</span>
+          <span class="radar-badge rb-none">dream ✗</span>
+          <span class="radar-badge rb-none">plan ✗</span>
+        </div>
+      </div>
+
+      <!-- grok -->
+      <div class="radar-agent">
+        <div class="radar-name">✦ grok</div>
+        <svg width="100" height="92" viewBox="-50 -46 100 92">
+          <g opacity="0.2">
+            <polygon points="0,-38 33,-19 33,19 0,38 -33,19 -33,-19" fill="none" stroke="#475569" stroke-width="0.5"/>
+            <polygon points="0,-25 22,-13 22,13 0,25 -22,13 -22,-13" fill="none" stroke="#475569" stroke-width="0.5"/>
+          </g>
+          <line x1="0" y1="0" x2="0" y2="-38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="0" y2="38" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="19" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="0" y1="0" x2="-33" y2="-19" stroke="#1e293b" stroke-width="0.5"/>
+          <!-- grok: work=partial, maintain=partial -->
+          <polygon points="0,-1 14,-7 22,12 0,0 -22,12 0,-1" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-width="1.5"/>
+          <text x="0" y="-42" text-anchor="middle" fill="#94a3b8" font-size="7">Dream</text>
+          <text x="37" y="-21" fill="#94a3b8" font-size="7">Plan</text>
+          <text x="37" y="23" fill="#94a3b8" font-size="7">Work</text>
+          <text x="0" y="47" text-anchor="middle" fill="#94a3b8" font-size="7">Ship</text>
+          <text x="-52" y="23" fill="#94a3b8" font-size="7">Maint</text>
+          <text x="-52" y="-21" fill="#94a3b8" font-size="7">Engage</text>
+        </svg>
+        <div class="radar-legend">
+          <span class="radar-badge rb-part">work~</span>
+          <span class="radar-badge rb-part">maint~</span>
+          <span class="radar-badge rb-none">plan ✗</span>
+          <span class="radar-badge rb-none">ship ✗</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM -->
+<div class="bottom-row">
+  <div class="panel">
+    <h4>Sentinels</h4>
+    <div class="sentinel-ok">✓ none active</div>
+  </div>
+  <div class="panel">
+    <h4>Capacity window</h4>
+    <div class="eco-alert">
+      <span style="font-size:13px">⚡</span>
+      <span>agy off-peak in ~2h — output may expand to 32K. 4 queued tasks eligible for eco dispatch.</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

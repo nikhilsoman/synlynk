@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — v0.10.1 Release Command Integration | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 03, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — v0.10.1 Release Command Integration</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Before this work, the focus was on establishing clean project packaging (pipx support), the state database migration pipeline (<code>synlynk migrate</code>), and the guided FTUE setup wizard (<code>synlynk init --wizard</code>). However, cutting named releases still required tedious manual ceremonies: manually bumping the VERSION variables, manually collating git commits to draft the CHANGELOG.md, and copy-pasting the blog post structure to draft build stubs.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>There were no shifts in overall product strategy, but there was a shift in automation priorities. To allow synlynk and its autonomous agents to cut new releases reliably, we introduced a standardized <code>synlynk release</code> command that handles the mechanical steps of version control, changelog generation, and blog stubbing, leaving only the manual verification steps as checkbox checklist items.</p>
+<h2>What This PR Shipped</h2>
+<p>This PR implements the <code>synlynk release</code> command directly in the CLI engine <code>synlynk/__init__.py</code> and adds comprehensive verification coverage:</p>
+<ol>
+<li><strong>CLI and argparse integration</strong>:
+<ul>
+<li><code>synlynk release [--dry-run] [--version &lt;version&gt;] [--minor]</code></li>
+<li>Handles auto-incrementing patch version (<code>0.10.0 -&gt; 0.10.1</code>) or minor version (<code>0.10.0 -&gt; 0.11.0</code>) when <code>--minor</code> is passed.</li>
+</ul>
+</li>
+<li><strong>Automated Commit Collation</strong>:
+<ul>
+<li>Executes git log analysis from the latest tagged version to <code>HEAD</code>, falling back to the last 20 commits if no tags exist.</li>
+<li>Categorizes commit entries into Added (<code>feat:</code>), Fixed (<code>fix:</code>), and Changed (<code>chore:</code>, <code>refactor:</code>, etc.) buckets.</li>
+</ul>
+</li>
+<li><strong>Prepend to CHANGELOG.md</strong>:
+<ul>
+<li>Formats and inserts the Keep a Changelog compliant entry directly before the first versioned release heading in <code>CHANGELOG.md</code>.</li>
+</ul>
+</li>
+<li><strong>Blog Post Stub Generation</strong>:
+<ul>
+<li>Parses the template in <code>docs/blog/README.md</code> and generates a customized blog stub at <code>docs/blog/NN-prTBD-v&lt;version&gt;.md</code> prefilled with series metadata, current date, and sequence number.</li>
+</ul>
+</li>
+<li><strong>Interactive Release Checklist</strong>:
+<ul>
+<li>Prints a formatted terminal checklist detailing steps executed and outstanding manual actions (git tag, gh release, roadmap update).</li>
+</ul>
+</li>
+<li><strong>Robust Testing</strong>:
+<ul>
+<li>Added <code>tests/test_release.py</code> covering dry-runs, version bumps, changelog generation, blog stub generation, and checklist printing.</li>
+<li>Added capability verification test <code>test_add_synlynk_release_command_to_synlynk__</code> inside <code>tests/test_capability_scoring.py</code>.</li>
+</ul>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<p>No new brainstorm visuals were created for this P0 release step, as it implements the standard release policy outlined in <code>CLAUDE.md</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>By automating the release pipeline, agents can now programmatically transition a project from active development (<code>build</code> phase) to a clean release state (<code>ship</code> phase). Autonomous orchestrators can now trigger <code>synlynk release</code> to automatically update files and produce deployment artifacts without human intervention.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the release command fully integrated and tested, the next goal is completing the job completion summary (<code>v0.10.0-jobsummary</code>) and infrastructure health dashboard (<code>v0.10.0-status</code>) to round out the daily-driver user experience.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

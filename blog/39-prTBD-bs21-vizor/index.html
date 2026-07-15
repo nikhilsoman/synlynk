@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — BS-21 Vizor: Local Browser Workspace Dashboard | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 03, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — BS-21 Vizor: Local Browser Workspace Dashboard</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #TBD — BS-21 Vizor: Local Browser Workspace Dashboard</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>By the end of v0.10.0, synlynk had crossed the daily-driver threshold. The install, migrate, release, and status commands were in place, the state database was the source of truth, and the CLI could now support a real workflow instead of a pile of one-off utilities. That got us through the &quot;can I run this every day?&quot; milestone.</p>
+<p>The next question was sharper: after day 1, how do users come back to synlynk on day 2, day 3, and day 7? The gap was not another command. It was the absence of a visual surface, no ambient workspace awareness, and no fast way to understand the state of the multi-agent system at a glance.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>Vizor started life as BS-6 <code>git-connectome</code>, a codebase dependency graph tool. That framing was useful, but during the brainstorm it became obvious that the real D1-D2 retention hook was not a graph viewer for its own sake. It was a local workspace dashboard that made synlynk feel present every time a user opened the browser.</p>
+<p>That was the strategic shift: from an interesting utility to the primary ambient surface. The design work reflected that change. We iterated through five Gantt versions, then two tube map variants, before the layouts locked in. The result was not a single-purpose report, but a browser tab that could hold the workspace story together.</p>
+<h2>What This PR Shipped</h2>
+<p>Vizor v1 shipped as a local-first browser dashboard implemented in <code>synlynk/viz.py</code>, with the whole surface generated from the workspace state and served locally.</p>
+<p>What landed:</p>
+<ol>
+<li>A new <code>synlynk/viz.py</code> module at roughly 3,500 lines, centered on <code>generate_viz_data()</code>, which reads <code>state.db</code> plus Vizor support files into one serializable data structure.</li>
+<li>Database-backed data sources for <code>roadmap_arcs</code>, <code>roadmap_phases</code>, <code>stories</code>, <code>cost_entries</code>, telemetry JSON, and sentinel notes, so the dashboard reflects actual workspace state instead of a separate projection.</li>
+<li>Six HTML generators, each returning a self-contained page with <code>window.VIZOR_DATA</code> embedded. The browser does not need an API server for view rendering.</li>
+<li><code>VizorHandler</code>, an <code>http.server</code> subclass that serves the generated <code>viz-cache/</code> directory and accepts <code>POST /note</code> for note persistence.</li>
+<li><code>_live_js()</code> polling every 60 seconds plus browser notifications, so the tab can update itself when workspace state changes.</li>
+<li>A three-prompt FTUE flow that writes setup state to <code>synlynk/config.json</code> on first run.</li>
+<li>The <code>synlynk viz</code> command with <code>--serve</code>, <code>--generate</code>, <code>--open</code>, and <code>--stop</code> flags.</li>
+<li>Five primary views:
+<ul>
+<li>Gantt, with accordion drill-down, stage bars, pencil notes, and zoom-to-stage behavior.</li>
+<li>User Journeys, with split-pane docs linked from <code>docs/journeys/*.md</code>.</li>
+<li>Architect Map, rendered as a <code>vizor-tube.json</code> SVG tube map.</li>
+<li>Effort &amp; Cost, with SVG bar charts.</li>
+<li>Efficiency, with agent cards, a sentinel timeline, and recent runs.</li>
+</ul>
+</li>
+<li>A note system where <code>POST /note</code> writes <code>viz-notes.json</code>, then injects those notes into the next <code>generate_context()</code> call. That makes Vizor annotations bidirectional: visual note to AI context, and AI context back into the workspace memory loop.</li>
+<li>Twenty-one tests across <code>tests/test_viz.py</code> and <code>tests/test_viz_serve.py</code>, covering data extraction, rendering, empty states, note loading, and server behavior.</li>
+<li>Brainstorm visual artifacts committed under <code>docs/brainstorm/bs21-vizor/</code>, including <a href="../brainstorm/bs21-vizor/viz-gantt-v5.html">viz-gantt-v5.html</a> and <a href="../brainstorm/bs21-vizor/viz-tube.html">viz-tube.html</a>.</li>
+<li>The local-first implementation path stayed intentionally simple: <code>state.db</code> reader -&gt; HTML f-strings -&gt; stdlib <code>http.server</code>, with no external dependencies and no remote rendering step.</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<p>The locked-in designs came from the BS-21 brainstorm set, especially:</p>
+<ul>
+<li><a href="../brainstorm/bs21-vizor/viz-gantt-v5.html">viz-gantt-v5.html</a></li>
+<li><a href="../brainstorm/bs21-vizor/viz-tube.html">viz-tube.html</a></li>
+</ul>
+<p>Those were the key references after the five Gantt iterations and two tube map variants converged on the final layout language. The v5 Gantt direction established the right-aligned task labels, the drill-down interaction model, and the pencil-note affordance. The tube map reference established the station-weighting logic and the visual grammar for the architect view.
+In the tube map, station sizing follows the connection count directly: <code>r = 4 + segs*2</code>, so denser hubs read as visually heavier nodes instead of flat labels.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Vizor v1 shipped as the primary D1-D2 retention surface.</p>
+<p>That matters because a user who runs <code>synlynk viz</code> after installing it can now see the workspace state immediately: dreams, costs, agent health, live runs, and annotations. They do not need to read logs or query the database to answer the basic question, &quot;What is happening in my workspace right now?&quot;</p>
+<p>This also makes the system easier for agents to inhabit. The dashboard is not a static report. It is a local ambient surface that can show state, accept notes, and feed those notes back into the next generation cycle. That closes the loop between observation and action.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The new goalpost is D3-D7 retention.</p>
+<p>Next up:</p>
+<ol>
+<li>Daily brief mode: <code>synlynk viz --brief</code></li>
+<li>Scan delta surfacing: what changed since the last Vizor run</li>
+<li>v1.0 workspace FTUE: a guided loop that walks a new user through dispatch, observation, note-taking, and re-dispatch</li>
+</ol>
+<p>Vizor now owns the day-2 return path. The next step is to make it the habit-forming surface for the rest of the week.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

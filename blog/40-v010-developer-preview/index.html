@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.10.0 — Developer Preview: The First Daily-Driver Release | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 03, 2026</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.10.0 — Developer Preview: The First Daily-Driver Release</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.10.0 — Developer Preview: The First Daily-Driver Release</h1>
+<h2>The Broader Goal at the End of the Previous Milestone</h2>
+<p>At the close of v0.9.9 (Harness Compatibility, PR #82), synlynk had a solid four-agent dispatch loop with a proper contract layer: headless execution contracts, per-agent flag maps, STALL and PREFLIGHT sentinels, and a compliance test suite. The BS-14 work proved that multi-agent dispatch could be consistent across harnesses. The next stated target was BS-13: the Live Job Observatory — a real-time SSE job streaming dashboard that would make agent orchestration observable.</p>
+<p>That was the right ambition. It was the wrong next step.</p>
+<h2>Strategic Shifts in This Release</h2>
+<h3>The BS-13 Detour</h3>
+<p>BS-13 assumed a steady-state: a running daemon, agents actively dispatching jobs, a stream of events worth watching. But the user base for synlynk at the time of v0.9.9 was still at the &quot;first install&quot; stage. There was no steady-state to observe. The Live Job Observatory was a retention surface for users who were already daily-driving synlynk. Nobody was daily-driving synlynk.</p>
+<p>That realization refocused the v0.10.0 scope entirely. The question shifted from &quot;what do users see while synlynk is running?&quot; to &quot;how does a developer go from zero to daily-driving synlynk in one session?&quot; Developer Preview became the release theme, not because the name sounded good, but because it described a concrete requirement: after v0.10.0, synlynk should be installable via a single command, set up in under two minutes, and useful enough that someone comes back the next day.</p>
+<h3>BS-21 Vizor over BS-13</h3>
+<p>BS-13 required a live SSE event stream — meaningful only when jobs are actively running. BS-21 Vizor took a different angle: generate a complete workspace dashboard from <code>state.db</code> and serve it locally. No streaming required. No daemon required. Open it once, and the whole workspace story is there: what was dispatched, how long it took, which agents ran which tasks, where cost went.</p>
+<p>The difference mattered. Vizor could ship as a zero-dep <code>stdlib</code>-only module. BS-13 required SSE infrastructure, browser notification wiring, and a continuously-running daemon. Vizor could be the D1–D2 retention surface without any of that. BS-13 remains the right design for D7+ retention when users have job history to stream — but Vizor is the right first surface.</p>
+<h3>The DB-First Shift</h3>
+<p>The other structural shift in v0.10.0 was <code>synlynk migrate</code> and the write-through architecture. Before this release, project state lived in <code>project-docs/</code> markdown files — committed to git, readable by humans, writable by any agent that could run <code>echo</code>. That worked early on. It broke down when three agents tried to write to the same file in the same session and produced merge conflicts in todo.md.</p>
+<p><code>synlynk migrate</code> is a one-shot import: markdown → <code>state.db</code>. After migration, every write goes to SQLite first, then writes through to a flat-file backup at <code>.synlynk/project-docs/</code>. The git-tracked markdown files are removed from tracking. Agents that read markdown still can — they read from the write-through copy. But the canonical source is the database, which handles concurrent writes without conflicts. Every command after v0.10.0 reads from and writes to state.db.</p>
+<h2>What v0.10.0 Shipped</h2>
+<p>v0.10.0 is ten PRs across three weeks. The groupings below reflect the actual implementation sequence.</p>
+<h3>P0: Installable + First-Run (PRs #89–#92)</h3>
+<p><strong><code>synlynk init --wizard</code></strong> — The 6-screen typeform-style TUI replaced the blunt <code>init</code> overwrite. Built entirely in <code>stdlib</code> (<code>termios</code>/<code>tty</code>). Screens: harness detection, workspace topology, skills scan, agent fleet discovery, role assignment, launch cheat sheet. Commit-on-complete: Ctrl-C before the final screen leaves zero state — no partial config, no orphaned <code>.synlynk/</code> directory. The wizard's role-assignment screen writes <code>## Your Role</code> blocks directly into CLAUDE.md, GEMINI.md, and AGENTS.md, so agents receive their directive in every session without any additional setup.</p>
+<p><img src="images/v010/bs17-wizard-landing.png" alt="BS-17 wizard landing screen brainstorm">
+<em>Wizard landing screen design: S-glyph wordmark, brand introduction, teal accent. The landing locks in tone — not a config wizard, a workspace onboarding.</em></p>
+<p><img src="images/v010/bs17-wizard-steps.png" alt="BS-17 wizard step sequence">
+<em>Step sequence mockup showing the dot-trail progress indicator across all 6 screens. The multi-repo sub-flow branches at screen 2 and rejoins at screen 3.</em></p>
+<p><strong><code>synlynk scan</code></strong> — Re-runnable workspace analysis: detects topology (single/mono/multi), fingerprints stack via 14 file-presence heuristics, parses CLAUDE.md/GEMINI.md/AGENTS.md, maps everything to <code>state.db</code>. The key design decision: <code>scan</code> runs silently in the background as Phase 0 of the wizard, but is also a standalone command with <code>--refresh</code>, <code>--add &lt;path&gt;</code>, <code>--remove &lt;path&gt;</code>, and <code>--dry-run</code> flags. Every subsequent feature that needs workspace context reads from the scan output, not from <code>ls</code>.</p>
+<p><img src="images/v010/bs17-multirepo-flow.png" alt="BS-17 multi-repo workspace flow">
+<em>Multi-repo sub-flow: screens 2a/2b combined (name input + repo picker), then 2c confirmation. The teal accent distinguishes multi-repo paths from single-repo flows throughout.</em></p>
+<p><strong><code>synlynk migrate</code></strong> — One-shot atomic import (8 steps: parse → import → copy to <code>.synlynk/project-docs/</code> → <code>git rm</code> → <code>.gitignore</code> → sentinel → <code>generate_context()</code> switch → commit). Flags: <code>--dry-run</code> (preview without writing), <code>--recover</code> (re-import from <code>.synlynk/project-docs/</code> backup after DB loss), <code>--setup-dr</code> (configure a cloud-synced DR folder — iCloud/GDrive/OneDrive, no OAuth). After migration, <code>generate_context()</code> reads from <code>state.db</code> instead of flat files.</p>
+<p><strong><code>pyproject.toml</code> packaging</strong> — <code>VERSION</code> is the single source of truth in <code>synlynk/__init__.py</code>. <code>pyproject.toml</code> reads it via <code>version = { attr = &quot;synlynk.VERSION&quot; }</code>. Install via <code>pipx install git+https://github.com/nikhilsoman/synlynk</code>. <code>synlynk upgrade</code> detects pipx vs manual install and routes accordingly.</p>
+<h3>P1: Daily-Driver Commands (PRs #94–#99)</h3>
+<p><strong><code>synlynk launch</code></strong> (BS-19) — FTUE task picker for returning users. First screen: 12 launch templates organized by the 6-cycle SDLC (Dream · Plan · Work · Ship · Maintain · Engage), each showing the scan-derived R/W/T budget for that agent+task combination. Second screen: dispatch preview. Third screen: cycles explainer for first-time users. The templates are scan-aware: if the scan detected no test files, the &quot;Add tests&quot; template surfaces at the top. The key naming change here: <code>synlynk launch &lt;agent&gt;</code> was renamed to <code>synlynk open &lt;agent&gt;</code> so <code>launch</code> could own the task-picker flow without collision.</p>
+<p><strong><code>synlynk roles</code></strong> (BS-12a) — Prints the current agent role table from <code>.synlynk/config.json</code>. More importantly, <code>synlynk init</code> and <code>synlynk doctor</code> now generate per-agent role blocks automatically: <code>## Your Role</code> sections written to CLAUDE.md, GEMINI.md, and AGENTS.md. This was the BS-12a formal closure: roles are not just documented, they are injected into every agent's instruction file at init time and verified on every <code>doctor</code> run.</p>
+<p><strong><code>synlynk scan</code> deep mode</strong> (BS-20) — Six-stage pipeline beyond the surface scan: repo fingerprint → dependency graph → test coverage ratio → doc coverage → CI health → churn density. Stage Cards TUI shows progress. Scan fences are written to <code>state.db</code> so subsequent <code>synlynk launch</code> and <code>synlynk jobs</code> calls can use scan signals to surface the right templates. Six new fields per repo: <code>test_ratio</code>, <code>readme_word_count</code>, <code>has_ci</code>, <code>has_docs</code>, <code>has_type_hints</code>, <code>has_orm</code>. The deep scan is opt-in (<code>synlynk scan --deep</code>) and typically takes 5–10s on a medium repo.</p>
+<p><strong><code>synlynk jobs --summary &lt;id&gt;</code></strong> — After every job closes (dispatch path or <code>register/complete</code>), a structured summary is written to <code>.synlynk/logs/&lt;job_id&gt;.summary</code>: files touched, exit status, cost, tokens, duration. <code>synlynk jobs --summary &lt;id&gt;</code> reads it back. This closed the most visible UX gap in the daily-driver story: you dispatch a job, it runs, it finishes — and previously you had no fast way to see what happened without reading the full log.</p>
+<p><strong><code>synlynk release</code></strong> — Ship cycle stub. Bumps VERSION, generates a CHANGELOG entry from merged stories since the last tag (reads <code>stories</code> table filtered by <code>merged_at &gt; last_tag_date</code>), writes a blog post stub to <code>docs/blog/NN-prN-&lt;theme&gt;.md</code>. <code>--dry-run</code> previews the CHANGELOG entry without writing. This command is the reason the v0.10.0 release prep (PR #102) took under an hour: <code>synlynk release --dry-run</code> produced the draft, <code>synlynk release</code> wrote it.</p>
+<p><strong><code>synlynk status --platform</code></strong> — Infrastructure health view distinct from the workspace/HUD surface: harness compliance (last <code>synlynk probe</code> run, any open <code>HARNESS_VERSION_DRIFT</code> sentinels), agent availability table (installed/version/TC compliance status), budget pulse (daily/weekly burn rate from <code>cost_entries</code>). Three quick checks to answer &quot;is my agent fleet healthy before I dispatch anything?&quot;</p>
+<p><img src="images/v010/bs16-hud-v3.png" alt="BS-16 ecosystem status HUD v3">
+<em>BS-16 HUD v3 design: agent cards with R/W/T budget bars (left), 6-cycle × agent capability matrix (right). The <code>synlynk status --platform</code> terminal output follows the same information hierarchy — harness compliance → agent availability → budget — distilled to a single-screen CLI view.</em></p>
+<h3>Deep Scan (PR #96)</h3>
+<p><strong><code>synlynk scan --deep</code></strong> (BS-20) — Six-stage pipeline: repo fingerprint → dependency graph → test coverage ratio → doc coverage → CI health → churn density.</p>
+<p><img src="images/v010/bs20-scan-stages.png" alt="BS-20 scan stages pipeline">
+<em>Stage Cards TUI: each stage lights up as it completes, with duration and a one-line finding. The design decision was to show progress rather than just a spinner — each stage result is visible immediately, so a slow stage is obvious before the full scan finishes.</em></p>
+<h3>P2: Browser Dashboard (PR #101)</h3>
+<p><strong><code>synlynk viz</code></strong> (BS-21 Vizor) — <code>synlynk/viz.py</code> at 3,642 lines. Five views served at <code>http://localhost:8721</code> from <code>state.db</code>:</p>
+<ol>
+<li><strong>Gantt</strong> — accordion drill-down by story arc → story → job. Stage bars show dispatch time, model load time, and execution time per job. Pencil-icon sticky notes on any row, POSTed to <code>/note</code> and written to <code>viz-notes.json</code>.</li>
+<li><strong>User Journeys</strong> — split-pane: left lists <code>docs/journeys/*.md</code> files; right renders the selected journey with inline annotations. For multi-user projects, journeys can be per-persona.</li>
+<li><strong>Architect Map</strong> — tube map SVG generated from <code>vizor-tube.json</code>. Components are stations; dependencies are lines. London tube map aesthetic: colour-coded lines by layer, interchange circles for shared components.</li>
+<li><strong>Effort &amp; Cost</strong> — SVG bar charts: estimate-at-dispatch vs. actual cost per story arc, ±ROI in red/green.</li>
+<li><strong>Efficiency</strong> — Agent report cards: per-epic and per-task breakdowns of agent used, tokens, wall time, reviews-before-PR, hours from dispatch to merge.</li>
+</ol>
+<p><img src="images/v010/bs21-gantt-v5.png" alt="BS-21 Vizor Gantt v5">
+<em>Gantt v5 — the final design iteration: accordion story rows, stage-segmented bars (dispatch / model load / execution), pencil note affordance per row. Five iterations preceded this; v1–v3 explored flat lists and swimlane layouts before the accordion model won.</em></p>
+<p><img src="images/v010/bs21-tube-v2.png" alt="BS-21 Vizor tube map v2">
+<em>Architect Map tube map v2: colour-coded lines by architectural layer (data / compute / interface / infra), interchange circles at shared components, station labels for each module. Generated from <code>vizor-tube.json</code> — the config file is the design artifact, the SVG is the output.</em></p>
+<p>The sticky note system is the feature with the longest tail. Notes written in the Gantt view are persisted to <code>viz-notes.json</code> and injected into <code>generate_context()</code> on the next exec run. A note like &quot;Agy took 4 rounds on this story — may need better scoping&quot; becomes part of the context the next agent reads. Visual annotation feeds back into AI context bidirectionally.</p>
+<h3>Refactor</h3>
+<p>The single-file <code>bin/synlynk.py</code> was split into <code>synlynk/cli.py</code> (the command dispatcher) and <code>synlynk/db.py</code> (all state.db reads and writes). <code>bin/synlynk.py</code> is now a thin shim that calls <code>cli.main()</code>. The refactor had no functional changes — it was a prerequisite for the growing surface area of v0.10.0 and the BS-21 <code>viz.py</code> module, which needed to import db functions cleanly without circular dependencies.</p>
+<h3>Tests</h3>
+<p>747 passing at v0.10.0 (up from 503 at v0.9.9): 28 migrate tests with full E2E round-trips, 28 launch/FTUE tests, 21 Vizor route and data-generation tests, 7 packaging tests, 40 deep-scan pipeline tests, 37 scan+wizard tests (carried from PR #89).</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>Four brainstorm sessions shaped the design decisions in v0.10.0:</p>
+<ul>
+<li><strong><code>docs/brainstorm/bs17-ftue-onboarding/</code></strong> — 6 HTML files: wizard landing, screen flow, multi-repo sub-flow, 2ab picker layout, agent card rendering, role definition tables. These locked in the commit-on-complete pattern and the multi-repo sub-flow sequence. Screenshots: <a href="images/v010/bs17-wizard-landing.png">landing</a>, <a href="images/v010/bs17-wizard-steps.png">steps</a>, <a href="images/v010/bs17-multirepo-flow.png">multi-repo flow</a>.</li>
+<li><strong><code>docs/brainstorm/bs16-ecosystem-status/</code></strong> — 8 HTML files: approaches, capacity design, HUD v1–v3. Agent card layout, R/W/T budget bars, cycle × agent capability matrix (Option A), per-agent radar hexagon (Option B). Screenshot: <a href="images/v010/bs16-hud-v3.png">hud-v3</a>.</li>
+<li><strong><code>docs/brainstorm/bs20-deep-scan/</code></strong> — 4 HTML files: scan stages pipeline, TUI mockup, interaction model, end-action screen. The Stage Cards TUI design came from this session. Screenshot: <a href="images/v010/bs20-scan-stages.png">scan-stages</a>.</li>
+<li><strong><code>docs/brainstorm/bs21-vizor/</code></strong> — 8 HTML files across five Gantt iterations and two tube map variants. The note-to-context feedback loop was the key insight that emerged in the visual session: sticky notes shouldn't be decorative, they should close the loop between what the user sees and what the agent reads. Screenshots: <a href="images/v010/bs21-gantt-v5.png">gantt-v5</a>, <a href="images/v010/bs21-tube-v2.png">tube-v2</a>.</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>v0.9.9 proved synlynk could dispatch correctly to any harness. v0.10.0 proves synlynk is worth dispatching to in the first place.</p>
+<p>The specific advances:</p>
+<p><strong>The workspace is now machine-readable.</strong> <code>synlynk scan</code> produces a structured fingerprint — topology, stack, agent fleet, skills, role assignments — that any downstream command can read. Before this release, <code>generate_context()</code> was reading raw markdown files and hoping the agent could figure out what they meant. Now it reads structured data from <code>state.db</code> and produces a context that reflects the actual workspace state.</p>
+<p><strong>Dispatch has a feedback loop.</strong> Job summaries plus Vizor's Gantt means every dispatch cycle now has a record: what was dispatched, how long it took, what it cost, what it touched. The sticky note system closes the loop into the next dispatch. This is the beginning of the observability chain that BS-13 would complete.</p>
+<p><strong>The release cycle is self-documenting.</strong> <code>synlynk release</code> reading from <code>state.db</code> to generate CHANGELOG entries means the gap between &quot;work done&quot; and &quot;release documented&quot; is now one command. The blog post stub means there's no &quot;oh, I need to write the post&quot; moment after a release — it's part of the same flow.</p>
+<p><strong>synlynk is now installable by anyone.</strong> <code>pipx install git+https://github.com/nikhilsoman/synlynk</code> is a real command that works. That's a different category of tool from a script you clone and run manually.</p>
+<h2>Strategic Note: The Goal at the End of This Release</h2>
+<p>v0.10.0 is the Developer Preview. The goal at the end of it is to have real users using it daily — not the one-person team that built it.</p>
+<p>That means the next milestone, v1.0.0 GA, is about community infrastructure: a workgroup protocol for multi-user projects, signed capability ledgers, pipx/Homebrew distribution, synlynk.com (BS-5 design is complete, implementation is next), and multi-repo workspace support (<code>synlynk workspace add</code>).</p>
+<p>Between v0.10.0 and v1.0.0, the planned v0.11.0 work addresses the D1+ retention gap: the <code>synlynk launch</code> daily brief (when state.db has prior history, replace the template picker with a &quot;welcome back&quot; card showing last job status and scan delta), and surfacing scan delta signals (coverage %, type coverage trend, churn density) in <code>synlynk jobs --summary</code> and <code>synlynk launch</code>.</p>
+<p>BS-13 (the full 6-cycle Workspace HUD) is still on the roadmap for v0.11.x — it's the right D3+ retention surface for users who have job history to observe. The spec needs a refresh to incorporate the 6-cycle framing and absorb the <code>synlynk status --platform</code> health panel. That redesign is the next design session.</p>
+<p>The long arc: synlynk is building toward a state where the agent team runs autonomously — dispatching jobs, monitoring results, repairing failures, surfacing signals — while the human sets direction and reviews outcomes. v0.10.0 is the release where a human can realistically pick up synlynk and use it for a week. v1.0.0 is the release where a team can.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

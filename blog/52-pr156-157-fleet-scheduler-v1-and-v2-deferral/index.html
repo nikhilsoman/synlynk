@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #156/#157 — Fleet Dispatch Scheduler v1 Ships, v2 Deferred to a Tracked Goal</h1>
+<p><strong>Date:</strong> 2026-07-11
+<strong>PRs:</strong> #156 (scheduler), #157 (roadmap + deferred goal)
+<strong>Branches:</strong> <code>dispatch/grok/job-*</code> → <code>main</code>, <code>chore/fleet-scheduler-v2-deferred-goal</code> → <code>main</code>
+<strong>Tracks:</strong> #141 optimizer follow-up (closes out epic #137 capability-matrix hardening)</p>
+<hr>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>PR #148/#151/#152/#154 (blog post 51) shipped the <strong>base matrix</strong>: <code>agent_quotas</code>,
+the 3-stage <code>_best_agent_for_story</code> routing (capability → quota headroom → cost),
+and degraded-mode non-hard-blocking when quota signal is missing. That closed the
+gating half of the 2026-06 token-budget design. The optimizer half — sequencing a
+<em>batch</em> of stories against fleet-wide capacity, not just picking one agent per story
+— was explicitly left as a follow-up architect design doc, not code.</p>
+<hr>
+<h2>What Moved the Goalpost in This PR</h2>
+<p>Two design docs were written this session
+(<code>docs/superpowers/specs/2026-07-11-fleet-dispatch-scheduler-design.md</code> and its
+implementation plan) to scope that optimizer follow-up. The scope decision that
+mattered most: <strong>v1 ships a batch scheduler with fleet-level in-batch headroom
+accounting and a binary readiness gate; the harder problems — reset-timing-aware
+bin-packing, persistent quota-blocking history, and a GOVERNS-aware readiness gate
+that checks a plan's coverage across all 7 SDLC stages — are out of scope until we
+have real production data on how v1 behaves.</strong></p>
+<p>Rather than let that scope decision live only as a &quot;later&quot; comment in the design
+doc, it was formalized as a dated goal (<code>synlynk goal create</code>, <code>goal-d38e3c83</code>,
+deadline 2026-08-10) — a 30-day observation window on v1's <code>synlynk schedule</code>
+behavior before v2 is even converted into stories.</p>
+<hr>
+<h2>What Shipped</h2>
+<h3>Schema &amp; readiness gate</h3>
+<ul>
+<li><code>stories.priority</code> / <code>stories.readiness</code> columns (additive migration)</li>
+<li><code>synlynk story ready</code> / <code>synlynk story draft</code> — binary gate, no story is
+schedulable until explicitly marked ready</li>
+</ul>
+<h3>Scheduler (<code>synlynk/scheduler.py</code>)</h3>
+<ul>
+<li><code>_compute_schedule_plan</code> — batch routes ready stories through
+<code>_best_agent_for_story</code>, accumulating in-batch headroom consumption per
+<code>(agent, model, quota_type)</code> so story 2 in a batch sees story 1's projected spend,
+not just the pre-batch quota snapshot</li>
+<li><code>_enqueue_plan</code> — commits the plan to dispatch queue</li>
+<li>Retry/reassignment: <code>MAX_STORY_RETRIES=2</code>, reassigns to next-best agent on
+failure rather than re-queuing to the same exhausted candidate</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li><code>synlynk schedule [--execute] [--max-stories N]</code> — dry-run plan preview by
+default, <code>--execute</code> commits it</li>
+</ul>
+<h3>Tests</h3>
+<ul>
+<li><code>tests/test_fleet_scheduler.py</code> — e2e coverage of the batch plan, in-batch
+headroom accounting, retry policy, and CLI wiring</li>
+</ul>
+<p>Grok implemented all 8 tasks from the plan; diff and tests reviewed and verified
+independently before merge (PR #156). CI showed only the known baseline failure
+set (5 environment-specific tests, confirmed unchanged across #151/#152/#154/#156)
+— no regression.</p>
+<h3>Roadmap + deferred goal (PR #157, docs-only per branch discipline)</h3>
+<ul>
+<li>Cross-Cutting Epics table: epic #137–141 marked <strong>Shipped</strong>, new <strong>Fleet
+Scheduler v2 (deferred)</strong> row pointing at <code>goal-d38e3c83</code> and the design doc's
+Future Work section</li>
+</ul>
+<hr>
+<h2>On Track to Full Autonomous Multi-Agent Dispatch</h2>
+<p>Epic #137 is now closed end-to-end: capability score → quota gate → cost
+tie-break → batch scheduling, all real code paths instead of design-doc
+intentions. The three v2 problems (bin-packing around reset windows, persistent
+blocking-pattern history, stage-aware readiness) are real but premature —
+scoping them before v1 has run in production would be guessing at requirements
+instead of reading them off actual <code>blocked</code>/<code>retry</code>/<code>degraded-mode</code> counts.</p>
+<hr>
+<h2>New Goalpost</h2>
+<ul>
+<li>Run <code>synlynk schedule</code> in production for 30 days (2026-07-11 → 2026-08-10)</li>
+<li>Revisit <code>goal-d38e3c83</code> at deadline: review blocked-story reasons, retry
+frequency, degraded-mode incidence</li>
+<li>Only then convert v2's three Future Work bullets into scoped stories</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

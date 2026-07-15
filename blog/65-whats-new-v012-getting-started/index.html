@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What&#39;s New in v0.12.0 — And How to Get Started | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 15, 2026</span>
+        
+          <span class="blog-post-pr">PR —</span>
+        
+      </div>
+      <h1 class="blog-post-title">What&#39;s New in v0.12.0 — And How to Get Started</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <p><em>This post is different from the others in this series. Most entries here are engineering diary — the &quot;why&quot; and &quot;how&quot; behind a specific PR, written for people already using synlynk. This one is for you if you're deciding whether to try it, or if you installed it a few months ago and haven't kept up.</em></p>
+<h2>The one-sentence version</h2>
+<p>synlynk is a CLI that keeps your AI coding tools — Claude, Codex, Gemini (Agy), and Grok — in sync with a shared project state, so you can dispatch work to whichever agent fits, track what it cost, and trust that the numbers you're seeing are real.</p>
+<h2>If you're new here</h2>
+<p>Three commands get you running:</p>
+<pre><code class="language-bash">pipx install git+https://github.com/nikhilsoman/synlynk
+synlynk init --wizard
+synlynk exec claude
+</code></pre>
+<p><code>init --wizard</code> walks you through an 8-screen setup: which AI CLIs you have installed, solo vs. team mode, and whether you want GitHub issue/project linking. <code>exec</code> wraps any AI CLI call with the current project context — active tasks, recent decisions, budget status — so the agent starts every session already caught up.</p>
+<p>From there, the two commands you'll use daily are <code>synlynk dispatch &lt;agent&gt; --task &quot;...&quot;</code> to hand off a background job, and <code>synlynk jobs --watch</code> to see it land. Full details are in the <a href="/synlynk-quickstart-guide.pdf">Quick Start Guide</a> and <a href="/synlynk-command-reference.pdf">Command Reference</a>.</p>
+<h2>If you've been away for a bit — what changed</h2>
+<p>v0.12.0 shipped 71 PRs since v0.11.0 (2026-07-05 → 2026-07-15), and the theme across all of them was <strong>trust</strong>: making sure dispatched work actually lands, routing is based on real signal instead of a coin flip, and every dollar synlynk reports is either measured or clearly labeled as a guess.</p>
+<p>Five things worth knowing about if you haven't upgraded recently:</p>
+<ul>
+<li><strong>Dispatched jobs finish themselves.</strong> synlynk used to leave commit/push/PR steps to the agent, and agents didn't reliably do them. Now synlynk does it — the moment a job's work is verifiably complete, it stages, commits, pushes, and opens the PR for you.</li>
+<li><strong>Routing got smarter.</strong> Dispatch used to be close to first-match. Now it scores agents on capability, checks quota headroom across five time windows, and tie-breaks on cost — and if you have a backlog, <code>synlynk schedule --execute</code> will clear it unattended.</li>
+<li><strong>Costs are provably real.</strong> Every number in <code>synlynk status</code> and the Vizor dashboard (<code>synlynk viz</code>) is now tagged as either a structurally-sourced measurement or a visibly-flagged estimate — no more silent guesses dressed up as facts. If you're logging cost for work synlynk didn't wrap directly (a native session, a manual fix), <code>synlynk cost log</code> records it properly.</li>
+<li><strong><code>synlynk status</code> has a new <code>RATES</code> line</strong> showing when the pricing table was last refreshed, with a warning if it's gone stale.</li>
+</ul>
+<h2>Getting current</h2>
+<pre><code class="language-bash">synlynk upgrade
+synlynk doctor
+</code></pre>
+<p><code>doctor</code> runs a health check after the upgrade — worth running even if <code>upgrade</code> reports success, since it also validates your <code>.synlynk/config.json</code> and agent CLI reachability.</p>
+<h2>Where to go next</h2>
+<ul>
+<li><a href="/synlynk-quickstart-guide.pdf">Quick Start Guide</a> — install, init, first dispatch, joining an existing workspace</li>
+<li><a href="/synlynk-command-reference.pdf">Command Reference</a> — every command, every flag</li>
+<li><a href="/synlynk-official-reference.pdf">The Manual</a> — architecture, <code>state.db</code> schema, agent profiles, relay, full changelog</li>
+<li><a href="https://synlynk.com/docs">synlynk.com/docs</a> — the same references, browsable</li>
+</ul>
+<p>If you want the engineering detail behind any of this — the actual diffs, the design decisions, the dead ends — the rest of this series has it, starting with <a href="./64-v012-measurement-and-reliability.md">post 64</a> for the full v0.12.0 release notes.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

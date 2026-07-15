@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BS-16: Capacity Model</title>
+<script src="../../../../../../../.claude/plugins/cache/superpowers-marketplace/superpowers/5.1.0/skills/brainstorming/scripts/helper.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 2rem; font-size: 12px; }
+  h2 { color: #7c3aed; font-size: 1.1rem; margin-bottom: 0.25rem; }
+  .subtitle { color: #64748b; font-size: 0.8rem; margin-bottom: 1.5rem; }
+  h3 { color: #94a3b8; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem; }
+
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.75rem; }
+  .grid2 { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 1.5rem; margin-bottom: 1.75rem; }
+
+  .card { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; }
+  .card h4 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.5rem; }
+  .card p { font-size: 11px; color: #64748b; line-height: 1.55; margin-bottom: 0.5rem; }
+  .card ul { list-style: none; font-size: 11px; }
+  .card ul li { color: #94a3b8; padding: 0.12rem 0; }
+  .card ul li::before { content: "→ "; color: #475569; }
+
+  .dim-input  { border-top: 2px solid #7c3aed; } .dim-input h4  { color: #a78bfa; }
+  .dim-output { border-top: 2px solid #06b6d4; } .dim-output h4 { color: #06b6d4; }
+  .dim-tools  { border-top: 2px solid #f59e0b; } .dim-tools h4  { color: #f59e0b; }
+
+  /* variation axes */
+  .axes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.75rem; }
+  .axis { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem; }
+  .axis h5 { font-size: 0.68rem; text-transform: uppercase; color: #475569; letter-spacing: 0.07em; margin-bottom: 0.4rem; }
+  .axis ul { list-style: none; font-size: 10.5px; }
+  .axis ul li { color: #94a3b8; padding: 0.1rem 0; }
+
+  /* capacity table */
+  .cap-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .cap-table th { color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.35rem 0.6rem; text-align: right; border-bottom: 1px solid #1e293b; }
+  .cap-table th:first-child { text-align: left; }
+  .cap-table td { padding: 0.35rem 0.6rem; text-align: right; border-bottom: 1px solid #0f1117; }
+  .cap-table td:first-child { text-align: left; color: #e2e8f0; }
+  .cap-table .input-col { color: #a78bfa; }
+  .cap-table .output-col { color: #06b6d4; }
+  .cap-table .tools-col { color: #f59e0b; }
+  .cap-table .plan { color: #475569; font-size: 10px; }
+  .cap-table .dyn { color: #10b981; font-size: 9px; }
+  .cap-table .static { color: #475569; font-size: 9px; }
+  .cap-table tr:hover td { background: #0f1520; }
+
+  /* terminal */
+  .terminal { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1.1rem; font-size: 11px; line-height: 1.85; }
+  .ok { color: #10b981; } .warn { color: #f59e0b; } .crit { color: #ef4444; }
+  .dim { color: #475569; } .ref { color: #3b82f6; } .cyan { color: #06b6d4; }
+  .purple { color: #a78bfa; } .gold { color: #f59e0b; } .head { color: #7c3aed; font-weight: bold; }
+  .sep { color: #1e293b; }
+  .agent { display: inline-block; width: 8rem; }
+
+  /* preflight */
+  .preflight { background: #0a0b0f; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; font-size: 11px; line-height: 1.75; }
+
+  .note-superpower { background: #0a1520; border: 1px solid #1d4ed8; border-radius: 6px; padding: 0.75rem 1rem; font-size: 11px; color: #93c5fd; margin-top: 1rem; }
+  .note-superpower strong { color: #60a5fa; }
+</style>
+</head>
+<body>
+
+<h2>BS-16: Token Budget — Three Dimensions</h2>
+<p class="subtitle">Context window is one number. Dispatch needs three budgets, each with independent limits and variation axes.</p>
+
+<!-- THREE DIMENSIONS -->
+<h3>Three independent token budgets</h3>
+<div class="grid3">
+  <div class="card dim-input">
+    <h4>Read / Input</h4>
+    <p>Tokens sent to the model: system prompt, context.md injection, user prompt, tool definitions, prior conversation. Hits a wall silently — model truncates or refuses.</p>
+    <ul>
+      <li>Context.md size is the main variable</li>
+      <li>Tool defs add ~2–6K per dispatch</li>
+      <li>Conversation history grows per session</li>
+      <li>Agy 1M → Claude 200K → Codex 128K</li>
+    </ul>
+  </div>
+  <div class="card dim-output">
+    <h4>Write / Output</h4>
+    <p>Tokens the model can generate per response. Often much smaller than input. If a task needs a long output (full file rewrite, long plan), it hits this first.</p>
+    <ul>
+      <li>Claude Max: 32K output</li>
+      <li>Gemini Pro: 8K output (free), 32K (pro)</li>
+      <li>Codex: 16K output</li>
+      <li>Partial output = silently truncated work</li>
+    </ul>
+  </div>
+  <div class="card dim-tools">
+    <h4>Tool Calls</h4>
+    <p>Each tool definition + result consumes input budget. Heavy tool-use tasks (many Read/Glob/Edit calls) can exhaust input before the prompt itself is large.</p>
+    <ul>
+      <li>Each tool def: ~200–500 tokens</li>
+      <li>Each result: variable (file reads = large)</li>
+      <li>Agy tool-call loops are the worst offender</li>
+      <li>Tracked separately: avg_tool_calls/job</li>
+    </ul>
+  </div>
+</div>
+
+<!-- VARIATION AXES -->
+<h3>Variation axes — what changes these limits</h3>
+<div class="axes">
+  <div class="axis">
+    <h5>Plan level</h5>
+    <ul>
+      <li>free / pro / max / enterprise</li>
+      <li>Output tokens scale most</li>
+      <li>Rate limits differ sharply</li>
+    </ul>
+  </div>
+  <div class="axis">
+    <h5>Plan type</h5>
+    <ul>
+      <li>D2C — consumer subscription</li>
+      <li>Bulk / partner acq</li>
+      <li>API key vs. CLI auth</li>
+      <li>Often undocumented delta</li>
+    </ul>
+  </div>
+  <div class="axis">
+    <h5>Traffic / time</h5>
+    <ul>
+      <li>Peak: limits enforced strictly</li>
+      <li>Off-peak: burst headroom</li>
+      <li>Surge windows: 2–5× limits</li>
+      <li>Visible in rate-limit headers</li>
+    </ul>
+  </div>
+  <div class="axis">
+    <h5>Region / geo</h5>
+    <ul>
+      <li>API endpoint routing</li>
+      <li>Regional capacity pools</li>
+      <li>Latency proxy for load</li>
+      <li>Tier 3: detect + route</li>
+    </ul>
+  </div>
+</div>
+
+<div class="grid2">
+  <!-- CAPACITY TABLE + STATUS -->
+  <div>
+    <h3>Capacity table in state.db + status output</h3>
+    <div class="card" style="margin-bottom:1rem;padding:0">
+      <table class="cap-table">
+        <tr>
+          <th>Agent</th>
+          <th class="input-col">Input</th>
+          <th class="output-col">Output</th>
+          <th class="tools-col">Tools</th>
+          <th>Plan</th>
+          <th>Source</th>
+        </tr>
+        <tr>
+          <td>agy</td>
+          <td class="input-col">1,000K</td>
+          <td class="output-col">32K</td>
+          <td class="tools-col">~500</td>
+          <td class="plan">pro</td>
+          <td class="static">curated</td>
+        </tr>
+        <tr>
+          <td>claude</td>
+          <td class="input-col">200K</td>
+          <td class="output-col">32K</td>
+          <td class="tools-col">~200</td>
+          <td class="plan">max</td>
+          <td class="static">curated</td>
+        </tr>
+        <tr>
+          <td>codex</td>
+          <td class="input-col">128K</td>
+          <td class="output-col">16K</td>
+          <td class="tools-col">~128</td>
+          <td class="plan">plus</td>
+          <td class="static">curated</td>
+        </tr>
+        <tr>
+          <td>grok</td>
+          <td class="input-col">131K</td>
+          <td class="output-col">16K</td>
+          <td class="tools-col">~100</td>
+          <td class="plan">?</td>
+          <td class="dyn">header</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>synlynk status — capacity section</h3>
+    <div class="terminal">
+<span class="dim">CAPACITY</span>       <span class="dim"> INPUT    OUTPUT   TOOLS   PLAN</span>
+  <span class="agent">agy      </span>  <span class="cyan">1,000K</span>   <span class="cyan">  32K</span>   <span class="gold"> ~500</span>   <span class="dim">pro  </span>
+  <span class="agent">claude   </span>  <span class="purple"> 200K</span>   <span class="purple">  32K</span>   <span class="gold"> ~200</span>   <span class="dim">max  </span>
+  <span class="agent">codex    </span>  <span class="ok"> 128K</span>   <span class="ok">  16K</span>   <span class="gold"> ~128</span>   <span class="dim">plus </span>
+  <span class="agent">grok     </span>  <span class="warn"> 131K</span>   <span class="warn">  16K</span>   <span class="gold"> ~100</span>   <span class="dim">?    </span>
+
+  <span class="dim">Fleet input:  </span><span class="cyan">1,459K</span>  <span class="dim">Fleet output: </span><span class="purple">96K</span>
+  <span class="dim">Tasks &gt;200K input → agy only</span>
+  <span class="dim">Tasks &gt;16K output → agy or claude</span>
+  <span class="gold">⚡ agy off-peak in ~2h — output limit may expand</span>
+    </div>
+
+    <div class="note-superpower">
+      <strong>Aggregator edge:</strong> Agy has a 1M input window but only 8K output on free tier. synlynk knows this — it won't route a "write 2000 lines of code" task to free-tier Agy even though the input fits. No other dispatch layer models input and output budgets independently.
+    </div>
+  </div>
+
+  <!-- PREFLIGHT -->
+  <div>
+    <h3>Updated _preflight_dispatch() — three budget gates</h3>
+    <div class="preflight">
+<span class="dim"># Estimate task token requirements</span>
+est = estimate_dispatch_tokens(prompt, context_md, agent)
+  <span class="dim"># est.input  = context + prompt + tool_defs</span>
+  <span class="dim"># est.output = task_type output heuristic</span>
+  <span class="dim"># est.tools  = expected tool calls × avg size</span>
+
+cap = get_capacity(agent, plan_tier)
+
+<span class="dim"># Gate 1 — input budget</span>
+if est.input > cap.input_tokens:
+  <span class="crit">→ CAPACITY_EXCEEDED_INPUT</span>
+  suggest: split context, summarise, use agy
+
+<span class="dim"># Gate 2 — output budget</span>
+if est.output > cap.output_tokens:
+  <span class="crit">→ CAPACITY_EXCEEDED_OUTPUT</span>
+  suggest: split task into subtasks
+  suggest: route to agy or claude (32K out)
+
+<span class="dim"># Gate 3 — tool call pressure</span>
+if est.tools > cap.tool_budget * 0.7:
+  <span class="warn">→ WARNING: TOOL_PRESSURE</span>
+  suggest: reduce tool scope
+  dispatch continues
+
+<span class="dim"># Gate 4 — existing checks</span>
+flag_validation(agent, dispatch_flags)
+network_reachability(agent.required_endpoints)
+    </div>
+
+    <div style="margin-top:1rem">
+      <h3>estimate_dispatch_tokens() heuristics</h3>
+      <div class="preflight">
+<span class="dim"># Input estimate</span>
+input_est = (
+  len(context_md_tokens)     <span class="dim"># measured</span>
+  + len(prompt_tokens)        <span class="dim"># measured</span>
+  + tool_def_tokens(agent)    <span class="dim"># per-agent baseline</span>
+  + SYSTEM_OVERHEAD           <span class="dim"># ~2K constant</span>
+)
+
+<span class="dim"># Output estimate — by task type</span>
+output_est = {
+  "implement":  <span class="cyan">8000</span>,   <span class="dim"># full file rewrites</span>
+  "review":     <span class="cyan">2000</span>,   <span class="dim"># comment + summary</span>
+  "plan":       <span class="cyan">3000</span>,   <span class="dim"># structured output</span>
+  "debug":      <span class="cyan">1500</span>,   <span class="dim"># explanation + fix</span>
+  "default":    <span class="cyan">4000</span>,
+}.get(task_type, 4000)
+
+<span class="dim"># Tool estimate — from telemetry baseline</span>
+tool_est = avg_tool_calls[agent] * avg_tokens_per_call
+      </div>
+    </div>
+
+    <div style="margin-top:1rem">
+      <h3>Tier 3 — dynamic header watching</h3>
+      <div class="preflight">
+<span class="dim"># After every dispatch, parse response headers</span>
+_update_capacity_from_headers(agent, headers):
+  remaining = headers.get(<span class="cyan">"x-ratelimit-remaining-tokens"</span>)
+  reset_at   = headers.get(<span class="cyan">"x-ratelimit-reset-tokens"</span>)
+  limit      = headers.get(<span class="cyan">"x-ratelimit-limit-tokens"</span>)
+
+  if limit > known_baseline[agent].input_tokens:
+    <span class="gold">→ SURGE_WINDOW detected — notify user</span>
+    <span class="dim">   eco mode: drain queue into this window</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="color:#475569;font-size:11px;text-align:center;margin-top:0.5rem">Does this cover the full capacity model? Confirm in terminal and we'll write the spec.</p>
+</body>
+</html>

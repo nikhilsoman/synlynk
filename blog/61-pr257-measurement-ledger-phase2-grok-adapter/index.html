@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210) | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 15, 2026</span>
+        
+          <span class="blog-post-pr">PR #257</span>
+        
+      </div>
+      <h1 class="blog-post-title">Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210)</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #256 shipped the third of four planned per-agent structured-output adapters — Agy (Gemini) — and validated something beyond the extraction logic itself: that the plan-execution stage, not just the design stage, could be distributed across the real agent fleet via <code>synlynk dispatch</code>, with Agy and Grok each wiring parts of their own adapter under Claude's PM/reviewer verification. That PR's closing note named the remaining goalpost precisely: Grok is the fourth and final adapter in epic #210's structured-output layer, and — unlike the other three — <code>dispatch.py</code> already had a <code>--output-format json</code> flag wired for it (an incidental byproduct of Agy's Task 3), meaning the live-investigation phase would start from a flag nobody had actually parsed the output of yet.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No scope changes from the spec approved at the start of this adapter's cycle. One structural shift did show up in execution, though: this was the first adapter where the <em>implementation plan itself</em> was smaller than its predecessors by design, not by accident. Because <code>dispatch.py:754</code> and <code>_constants.py</code>'s <code>valid_flags</code> entry for Grok already shipped correctly (confirmed unchanged, no diff needed), the plan had exactly one task's worth of production code — <code>_extract_grok_structured()</code> plus its <code>extract_tokens()</code> wiring — split into two dispatched tasks purely to keep each dispatch atomic and independently revertable, plus a third, verification-only task performed directly by Claude.</p>
+<p>The one genuine design fork, resolved by live arithmetic rather than assumption: whether Grok's <code>cache_read_input_tokens</code> is a subset of <code>input_tokens</code> (Codex's shape) or an additive pool (Claude's shape). Three separate live invocations of <code>grok -p --output-format json</code> — a plain success case, a multi-turn tool-use case, and a deliberately-broken <code>--model</code> case to observe the failure shape — confirmed <code>total_tokens == input_tokens + cache_read_input_tokens + output_tokens</code> held in every run. That settled it: additive, matching Claude's precedent, not Codex's.</p>
+<h2>What This PR Shipped</h2>
+<p>The live investigation surfaced a shape distinct from all three prior adapters: Grok emits exactly one <strong>pretty-printed, multi-line</strong> JSON object per invocation — not Codex's or Claude's newline-delimited event stream, not Agy's single-line JSON. That meant <code>_extract_grok_structured()</code> parses the entire captured stdout as one document (<code>json.loads(output_text.strip())</code>) rather than scanning line by line or taking the last line. It also meant there's no explicit success/failure status field the way Agy has <code>status: &quot;SUCCESS&quot;</code> — the live-verified failure shape (<code>{&quot;type&quot;:&quot;error&quot;,&quot;message&quot;:&quot;...&quot;}</code>) simply lacks a <code>usage</code> key entirely, so a missing or malformed <code>usage</code> dict <em>is</em> the failure signal.</p>
+<p>Two commits landed on <code>synlynk/costs.py</code> and <code>tests/test_cost_ledger.py</code>, dispatched across two agents and independently verified before cherry-pick, exactly per the discipline established for the prior three adapters:</p>
+<ul>
+<li><strong>Task 1 (dispatched to Codex, job-52aea3ed)</strong> — <code>_extract_grok_structured()</code> plus 12 unit tests covering the basic success case, a tool-use/multi-turn sample, the additive-not-subset cache-read behavior, empty-string and malformed/truncated JSON, the live-verified error shape, and defaulting behavior for missing <code>reasoning_tokens</code>/<code>cache_read_input_tokens</code>. <code>reasoning_tokens</code> is folded into <code>output_tokens</code> (mirroring Codex's own <code>reasoning_output_tokens</code> treatment and Agy's <code>thinking_tokens</code>); <code>cache_read_input_tokens</code> stays a separate additive tier on <code>_TokenCounts</code>, matching Claude's precedent.</li>
+<li><strong>Task 2 (dispatched to Agy, job-ca4f171c)</strong> — the four-line <code>if agent == &quot;grok&quot;:</code> sibling branch in <code>extract_tokens()</code>, inserted after the existing <code>agy</code> branch (codex → claude → agy → grok insertion order, matching every prior adapter), plus 3 cross-agent wiring tests.</li>
+<li><strong>Task 3 (Claude, verification-only, not dispatched)</strong> — full regression (1130 passed, 2 skipped), a cross-agent extraction slice, confirmation that no <code>_render_grok_log_line()</code> renderer was added (none needed — a single JSON object has no multi-event stream for <code>synlynk logs</code> to suppress, same reasoning as Agy), and confirmation that <code>dispatch.py</code>/<code>_constants.py</code> are untouched, since both already shipped the <code>--output-format json</code> flag correctly during Agy's own Task 3.</li>
+</ul>
+<p><strong>Process note — a stale job worktree, and a self-caught boundary violation during its resolution.</strong> Job-52aea3ed's worktree bootstrapped from a base commit (<code>2349cbc</code>) that predated this entire Phase 1/Phase 2 body of work, so its local copy of <code>synlynk/costs.py</code> lacked the <code>basis</code> attribute and the <code>agent</code> parameter already merged to <code>origin/main</code>. The job's own commit was scoped correctly — <code>git show --stat</code> confirmed it touched only the two expected files with reasonable line counts — but cherry-picking it produced real conflicts. Resolving them by hand surfaced a discipline question worth recording: while splicing the job's new function into the existing structure, an extra <code>if agent == &quot;grok&quot;:</code> branch got added to <code>extract_tokens()</code> as part of &quot;picking the right side&quot; of the conflict — before being caught and removed, since that branch was Task 2's undispatched deliverable, not something the job itself had produced. Mechanical conflict resolution (selecting between existing versions, splicing in a job's verbatim output) stays inside the PM/reviewer role; authoring new logic inline, even incidentally through a merge conflict, does not. The corrected resolution was committed with the conflict's cause and fix documented for future readers. Job-ca4f171c, by contrast, bootstrapped cleanly from the just-cherry-picked tip and cherry-picked with zero conflicts — this looks like a one-off worktree-bootstrap timing artifact rather than a systemic dispatch issue, worth a watch item but not further investigation here.</p>
+<p>Task 3's regression also re-encountered the same incidental dispatch side effect first seen during the Agy adapter's own Task 4: <code>GEMINI.md</code>'s harness-version stamp and <code>project-docs/todo.md</code>'s story rows, both modified outside any plan task. Per the precedent set then, this wasn't auto-discarded — fresh authorization was requested via AskUserQuestion, presenting the exact diffs and three options, and &quot;Discard both (Recommended)&quot; was selected. The same pattern recurred a second time later in the same worktree (apparently regenerated by a subsequent <code>synlynk</code> invocation rather than by a job), and was discarded under that same standing authorization rather than re-asking, since it was the identical file pair and identical diff shape within the same session. A full-suite rerun after each discard confirmed zero regression both times.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — consistent with all three prior adapters in this series. Every design fork (the additive-vs-subset cache-read question, the no-status-field failure signal) was a conceptual/data-shape question, resolved by live CLI investigation and direct questions rather than visual mockups.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This closes epic #210's structured-output adapter scope entirely — all four planned agents (Codex, Claude, Agy, Grok) now extract real vendor-reported token usage before ever falling back to regex heuristics, with a uniform <code>_TokenCounts(basis=&quot;structured_output&quot;)</code> contract and zero changes required to <code>_resolve_cost_tier()</code> or any of Phase 1's provenance machinery across all four. It also closes the loop on distributing plan <em>execution</em> across the fleet: this adapter's two production-code tasks went to Codex and Agy respectively, each independently verified against the plan before cherry-pick, with a self-caught correction mid-resolution reinforcing the boundary between mechanical conflict resolution and authoring new logic — a distinction worth keeping sharp as more of this project's own maintenance work gets dispatched rather than hand-written.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Epic #210's adapter-PR scope is now fully shipped (pending merge of this PR) — four for four. The one deliverable epic #210 named that this PR does not touch, by design, is the estimated-flagging UI in <code>costs.md</code>/Vizor, distinguishing structured-output-verified cost rows from regex/heuristic-estimated ones at the display layer. That's the next and final goalpost for epic #210 as a whole, and it has no dependency on anything shipped across these four adapter PRs — it's purely a rendering concern layered on top of the <code>basis</code> field all four adapters already populate.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
