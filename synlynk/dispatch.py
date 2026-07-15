@@ -755,6 +755,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--output-format", "json"]
     if agent == "claude":
         flags = flags + ["--output-format", "stream-json", "--verbose"]
+    if agent == "agy":
+        flags = flags + ["--output-format", "json"]
     if agent == "codex":
         flags = flags + ["--json"]
         try:

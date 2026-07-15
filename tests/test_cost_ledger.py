@@ -307,6 +307,38 @@ def test_dispatch_agent_claude_flags_include_stream_json_verbose(project_dir, mo
     assert "--verbose" in captured_flags["shell_cmd"]
 
 
+def test_dispatch_agent_agy_flags_include_output_format_json(project_dir, monkeypatch):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+
+    captured_flags = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured_flags["shell_cmd"] = cmd[2]
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(synlynk, "_create_job_worktree", lambda job_id, agent: str(project_dir / "worktree"), raising=False)
+    monkeypatch.setattr(synlynk, "_job_worktree_details", lambda job_id, agent: ("", "branch"), raising=False)
+    monkeypatch.setattr(synlynk, "_load_jobs", lambda: [], raising=False)
+    monkeypatch.setattr(synlynk, "_save_jobs", lambda jobs: None, raising=False)
+    monkeypatch.setattr(synlynk, "_get_db", lambda: None, raising=False)
+    monkeypatch.setattr(synlynk, "_load_agent_profile", lambda agent: {}, raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda **kwargs: "", raising=False)
+    monkeypatch.setattr(synlynk, "_format_prompt_for_agent", lambda *a, **k: "prompt", raising=False)
+    monkeypatch.setattr(synlynk, "_warn_context_size", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(synlynk, "_probe_model_version", lambda agent, cli: "unknown", raising=False)
+
+    dispatch_mod.dispatch_agent("agy", "do a thing", skip_preflight=True, job_id="job-test789")
+
+    assert "--output-format" in captured_flags["shell_cmd"]
+    assert "json" in captured_flags["shell_cmd"]
+
+
 def test_extract_tokens_basis_regex_pair():
     from synlynk.costs import extract_tokens
 
@@ -542,6 +574,111 @@ def test_extract_claude_structured_last_result_wins():
     assert result.output_tokens == 888
 
 
+def test_extract_agy_structured_basic():
+    from synlynk.costs import _extract_agy_structured
+
+    output = (
+        '{"conversation_id":"c1","status":"SUCCESS","response":"hello",'
+        '"duration_seconds":12.34,"num_turns":1,'
+        '"usage":{"input_tokens":80648,"output_tokens":2390,'
+        '"thinking_tokens":1922,"total_tokens":83038}}\n'
+    )
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.input_tokens == 80648
+    assert result.output_tokens == 2390 + 1922
+    assert result.cache_read_tokens == 0
+    assert result.basis == "structured_output"
+
+
+def test_extract_agy_structured_tool_use_sample():
+    from synlynk.costs import _extract_agy_structured
+
+    output = (
+        '{"conversation_id":"c2","status":"SUCCESS","response":"there are 5 files",'
+        '"duration_seconds":18.02,"num_turns":1,'
+        '"usage":{"input_tokens":84375,"output_tokens":3294,'
+        '"thinking_tokens":2632,"total_tokens":87669}}\n'
+    )
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.input_tokens == 84375
+    assert result.output_tokens == 3294 + 2632
+    assert result.cache_read_tokens == 0
+    assert result.basis == "structured_output"
+
+
+def test_extract_agy_structured_empty_string_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    assert _extract_agy_structured("") is None
+
+
+def test_extract_agy_structured_trailing_blank_lines_still_parses():
+    from synlynk.costs import _extract_agy_structured
+
+    output = (
+        '{"status":"SUCCESS","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '\n'
+        '   \n'
+    )
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_agy_structured_status_not_success_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"FAILED","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_missing_status_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"usage":{"input_tokens":10,"output_tokens":5}}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_missing_usage_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","response":"hi"}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_missing_thinking_tokens_defaults_zero():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":10,"output_tokens":5}}\n'
+    result = _extract_agy_structured(output)
+    assert result is not None
+    assert result.output_tokens == 5
+
+
+def test_extract_agy_structured_malformed_usage_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":"not-a-number","output_tokens":5}}\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_malformed_json_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = 'not json at all\n'
+    assert _extract_agy_structured(output) is None
+
+
+def test_extract_agy_structured_truncated_json_returns_none():
+    from synlynk.costs import _extract_agy_structured
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":10,"outp'
+    assert _extract_agy_structured(output) is None
+
+
 def test_extract_tokens_agent_codex_uses_structured_output():
     from synlynk.costs import extract_tokens
 
@@ -597,6 +734,34 @@ def test_extract_tokens_non_claude_agent_never_uses_claude_structured_path():
 
     output = '{"type":"result","usage":{"input_tokens":100,"output_tokens":50}}\n'
     result = extract_tokens(output, agent="codex")
+    assert result.basis != "structured_output"
+
+
+def test_extract_tokens_agent_agy_uses_structured_output():
+    from synlynk.costs import extract_tokens
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="agy")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 100
+    assert result.output_tokens == 50
+
+
+def test_extract_tokens_agent_agy_falls_back_to_regex_on_plain_text():
+    from synlynk.costs import extract_tokens
+
+    output = "Input tokens: 10\nOutput tokens: 5\n"
+    result = extract_tokens(output, agent="agy")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
+def test_extract_tokens_non_agy_agent_never_uses_agy_structured_path():
+    from synlynk.costs import extract_tokens
+
+    output = '{"status":"SUCCESS","usage":{"input_tokens":100,"output_tokens":50}}\n'
+    result = extract_tokens(output, agent="claude")
     assert result.basis != "structured_output"
 
 
