@@ -10,7 +10,7 @@ import time
 from typing import Optional
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
-from synlynk.sentinel import _write_sentinel_alert
+from synlynk.sentinel import _clear_sentinel_alerts, _write_sentinel_alert
 
 SOP_SECTION_HEADERS = [
     "## PR Review Discipline",
@@ -346,6 +346,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
         installed_version = result.stdout.strip().split()[-1] if result.stdout.strip() else "unknown"
     except (FileNotFoundError, subprocess.TimeoutExpired):
         installed_version = "unavailable"
+    version_detected = installed_version not in {"unknown", "unavailable"}
 
     contract = baseline.get("headless_contract", {})
     flags = baseline.get("dispatch_flags", {})
@@ -357,7 +358,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
             (agent_name,),
         ).fetchone()
         if row and row[0] == installed_version and row[1] == new_hash:
-            return {"skipped": True, "version": installed_version, "status": "ok"}
+            return {"skipped": True, "version": installed_version, "version_detected": version_detected, "status": "ok"}
 
     network_ok = True
     for endpoint in baseline.get("network_deps", {}).get("required_endpoints", []):
@@ -503,7 +504,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True) -> dict:
     _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
 
     db_conn.commit()
-    return {"skipped": False, "version": installed_version, "status": compliance}
+    return {"skipped": False, "version": installed_version, "version_detected": version_detected, "status": compliance}
 
 
 def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
@@ -628,6 +629,11 @@ def cmd_probe(agent: str = None) -> None:
     try:
         for agent_name in agents:
             result = _probe_agent(agent_name, db_conn)
+            if result.get("version_detected"):
+                _clear_sentinel_alerts(
+                    code="HARNESS_VERSION_DRIFT",
+                    agent=agent_name,
+                )
             status = "skipped (up to date)" if result["skipped"] else result["status"]
             print(f"  probe [{agent_name}] {result['version']} → {status}")
     finally:
