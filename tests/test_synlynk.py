@@ -1823,11 +1823,13 @@ def test_extract_tokens_no_match(project_dir):
 
 
 def test_update_costs_appends_row(project_dir):
+    before_lines = (project_dir / "project-docs" / "costs.md").read_text().splitlines()
     synlynk.update_costs("claude --print hello", 1000, 200, 30.0)
-    content = (project_dir / "project-docs" / "costs.md").read_text()
-    assert "1000/200" in content
+    content_lines = (project_dir / "project-docs" / "costs.md").read_text().splitlines()
+    assert len(content_lines) == len(before_lines) + 1
+    assert sum(1 for line in content_lines if "1000/200" in line) == 1
     # cost: (1000/1000*0.003) + (200/1000*0.015) = 0.003 + 0.003 = $0.0060
-    assert "$0.0060" in content
+    assert any("$0.0060" in line for line in content_lines)
 
 
 def test_update_costs_missing_file(tmp_path, monkeypatch):
