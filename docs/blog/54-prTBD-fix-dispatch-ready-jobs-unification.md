@@ -5,7 +5,7 @@ series: "Building the OS for Multi-Agent Development"
 post: 54
 pr: "#TBD"
 issue: "#190"
-merged: status: open
+merged: —
 ---
 
 ## The Broader Goal at the End of the Previous PR

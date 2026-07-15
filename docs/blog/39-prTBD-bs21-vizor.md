@@ -4,7 +4,7 @@ date: 2026-07-03
 series: "Building the OS for Multi-Agent Development"
 post: 39
 pr: "#TBD"
-merged: status: open
+merged: —
 ---
 
 # PR #TBD — BS-21 Vizor: Local Browser Workspace Dashboard
