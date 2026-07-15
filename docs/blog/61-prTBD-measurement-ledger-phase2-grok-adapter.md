@@ -1,0 +1,44 @@
+---
+title: "Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210)"
+date: 2026-07-15
+series: "Building the OS for Multi-Agent Development"
+post: 61
+pr: "TBD"
+merged: pending
+---
+
+## The Broader Goal at the End of the Previous PR
+
+PR #256 shipped the third of four planned per-agent structured-output adapters — Agy (Gemini) — and validated something beyond the extraction logic itself: that the plan-execution stage, not just the design stage, could be distributed across the real agent fleet via `synlynk dispatch`, with Agy and Grok each wiring parts of their own adapter under Claude's PM/reviewer verification. That PR's closing note named the remaining goalpost precisely: Grok is the fourth and final adapter in epic #210's structured-output layer, and — unlike the other three — `dispatch.py` already had a `--output-format json` flag wired for it (an incidental byproduct of Agy's Task 3), meaning the live-investigation phase would start from a flag nobody had actually parsed the output of yet.
+
+## Strategic Shifts in This PR
+
+No scope changes from the spec approved at the start of this adapter's cycle. One structural shift did show up in execution, though: this was the first adapter where the *implementation plan itself* was smaller than its predecessors by design, not by accident. Because `dispatch.py:754` and `_constants.py`'s `valid_flags` entry for Grok already shipped correctly (confirmed unchanged, no diff needed), the plan had exactly one task's worth of production code — `_extract_grok_structured()` plus its `extract_tokens()` wiring — split into two dispatched tasks purely to keep each dispatch atomic and independently revertable, plus a third, verification-only task performed directly by Claude.
+
+The one genuine design fork, resolved by live arithmetic rather than assumption: whether Grok's `cache_read_input_tokens` is a subset of `input_tokens` (Codex's shape) or an additive pool (Claude's shape). Three separate live invocations of `grok -p --output-format json` — a plain success case, a multi-turn tool-use case, and a deliberately-broken `--model` case to observe the failure shape — confirmed `total_tokens == input_tokens + cache_read_input_tokens + output_tokens` held in every run. That settled it: additive, matching Claude's precedent, not Codex's.
+
+## What This PR Shipped
+
+The live investigation surfaced a shape distinct from all three prior adapters: Grok emits exactly one **pretty-printed, multi-line** JSON object per invocation — not Codex's or Claude's newline-delimited event stream, not Agy's single-line JSON. That meant `_extract_grok_structured()` parses the entire captured stdout as one document (`json.loads(output_text.strip())`) rather than scanning line by line or taking the last line. It also meant there's no explicit success/failure status field the way Agy has `status: "SUCCESS"` — the live-verified failure shape (`{"type":"error","message":"..."}`) simply lacks a `usage` key entirely, so a missing or malformed `usage` dict *is* the failure signal.
+
+Two commits landed on `synlynk/costs.py` and `tests/test_cost_ledger.py`, dispatched across two agents and independently verified before cherry-pick, exactly per the discipline established for the prior three adapters:
+
+- **Task 1 (dispatched to Codex, job-52aea3ed)** — `_extract_grok_structured()` plus 12 unit tests covering the basic success case, a tool-use/multi-turn sample, the additive-not-subset cache-read behavior, empty-string and malformed/truncated JSON, the live-verified error shape, and defaulting behavior for missing `reasoning_tokens`/`cache_read_input_tokens`. `reasoning_tokens` is folded into `output_tokens` (mirroring Codex's own `reasoning_output_tokens` treatment and Agy's `thinking_tokens`); `cache_read_input_tokens` stays a separate additive tier on `_TokenCounts`, matching Claude's precedent.
+- **Task 2 (dispatched to Agy, job-ca4f171c)** — the four-line `if agent == "grok":` sibling branch in `extract_tokens()`, inserted after the existing `agy` branch (codex → claude → agy → grok insertion order, matching every prior adapter), plus 3 cross-agent wiring tests.
+- **Task 3 (Claude, verification-only, not dispatched)** — full regression (1130 passed, 2 skipped), a cross-agent extraction slice, confirmation that no `_render_grok_log_line()` renderer was added (none needed — a single JSON object has no multi-event stream for `synlynk logs` to suppress, same reasoning as Agy), and confirmation that `dispatch.py`/`_constants.py` are untouched, since both already shipped the `--output-format json` flag correctly during Agy's own Task 3.
+
+**Process note — a stale job worktree, and a self-caught boundary violation during its resolution.** Job-52aea3ed's worktree bootstrapped from a base commit (`2349cbc`) that predated this entire Phase 1/Phase 2 body of work, so its local copy of `synlynk/costs.py` lacked the `basis` attribute and the `agent` parameter already merged to `origin/main`. The job's own commit was scoped correctly — `git show --stat` confirmed it touched only the two expected files with reasonable line counts — but cherry-picking it produced real conflicts. Resolving them by hand surfaced a discipline question worth recording: while splicing the job's new function into the existing structure, an extra `if agent == "grok":` branch got added to `extract_tokens()` as part of "picking the right side" of the conflict — before being caught and removed, since that branch was Task 2's undispatched deliverable, not something the job itself had produced. Mechanical conflict resolution (selecting between existing versions, splicing in a job's verbatim output) stays inside the PM/reviewer role; authoring new logic inline, even incidentally through a merge conflict, does not. The corrected resolution was committed with the conflict's cause and fix documented for future readers. Job-ca4f171c, by contrast, bootstrapped cleanly from the just-cherry-picked tip and cherry-picked with zero conflicts — this looks like a one-off worktree-bootstrap timing artifact rather than a systemic dispatch issue, worth a watch item but not further investigation here.
+
+Task 3's regression also re-encountered the same incidental dispatch side effect first seen during the Agy adapter's own Task 4: `GEMINI.md`'s harness-version stamp and `project-docs/todo.md`'s story rows, both modified outside any plan task. Per the precedent set then, this wasn't auto-discarded — fresh authorization was requested via AskUserQuestion, presenting the exact diffs and three options, and "Discard both (Recommended)" was selected. The same pattern recurred a second time later in the same worktree (apparently regenerated by a subsequent `synlynk` invocation rather than by a job), and was discarded under that same standing authorization rather than re-asking, since it was the identical file pair and identical diff shape within the same session. A full-suite rerun after each discard confirmed zero regression both times.
+
+## Brainstorm Visuals Used
+
+None — consistent with all three prior adapters in this series. Every design fork (the additive-vs-subset cache-read question, the no-status-field failure signal) was a conceptual/data-shape question, resolved by live CLI investigation and direct questions rather than visual mockups.
+
+## What This Achieved on the Path to Autonomy
+
+This closes epic #210's structured-output adapter scope entirely — all four planned agents (Codex, Claude, Agy, Grok) now extract real vendor-reported token usage before ever falling back to regex heuristics, with a uniform `_TokenCounts(basis="structured_output")` contract and zero changes required to `_resolve_cost_tier()` or any of Phase 1's provenance machinery across all four. It also closes the loop on distributing plan *execution* across the fleet: this adapter's two production-code tasks went to Codex and Agy respectively, each independently verified against the plan before cherry-pick, with a self-caught correction mid-resolution reinforcing the boundary between mechanical conflict resolution and authoring new logic — a distinction worth keeping sharp as more of this project's own maintenance work gets dispatched rather than hand-written.
+
+## Strategic Note: The Goal at the End of This PR
+
+Epic #210's adapter-PR scope is now fully shipped (pending merge of this PR) — four for four. The one deliverable epic #210 named that this PR does not touch, by design, is the estimated-flagging UI in `costs.md`/Vizor, distinguishing structured-output-verified cost rows from regex/heuristic-estimated ones at the display layer. That's the next and final goalpost for epic #210 as a whole, and it has no dependency on anything shipped across these four adapter PRs — it's purely a rendering concern layered on top of the `basis` field all four adapters already populate.
