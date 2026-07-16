@@ -351,6 +351,12 @@ _FIXED_DEFAULT_TOKENS_IN = 5000
 _FIXED_DEFAULT_TOKENS_OUT = 2000
 _HISTORICAL_AVG_MIN_SAMPLES = 3
 _HISTORICAL_AVG_LOOKBACK = 20
+_SUSPICIOUS_TOKEN_COUNT_CEILING = 2_000_000
+
+
+def _is_suspicious_token_count(in_tokens: int, out_tokens: int) -> bool:
+    """Returns True when a parsed token count looks implausibly large for one exec."""
+    return max(in_tokens or 0, out_tokens or 0) > _SUSPICIOUS_TOKEN_COUNT_CEILING
 
 
 def _estimate_tshirt_tokens(story_id: str = None, discipline: str = None, phase: str = None) -> tuple:
@@ -437,6 +443,17 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             )
             cost_source = "estimated_tshirt"
 
+    suspicious_token_count = _is_suspicious_token_count(in_tokens, out_tokens)
+    if suspicious_token_count:
+        print(
+            "WARNING: extracted token count "
+            f"{in_tokens:,}/{out_tokens:,} exceeds the "
+            f"{_SUSPICIOUS_TOKEN_COUNT_CEILING:,} ceiling; logging as [est?]"
+        )
+        if cost_source == "actual":
+            cost_source = "estimated_token_rate"
+            estimate_basis = basis if basis != "none" else "suspicious_token_ceiling"
+
     rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
     est_cost = (
@@ -446,7 +463,10 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
     )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
-    flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
+    if suspicious_token_count:
+        flag = "[est?] "
+    else:
+        flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
     entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
              f"| {flag}${est_cost:.4f} | exec: {short_cmd} |\n")
 
@@ -569,7 +589,7 @@ def parse_costs_md() -> tuple:
             if len(parts) < 8:
                 continue
             cost_str = parts[5]
-            for prefix in ("[est] ", "[legacy] ", "~"):
+            for prefix in ("[est] ", "[est?] ", "[legacy] ", "~"):
                 if cost_str.startswith(prefix):
                     cost_str = cost_str[len(prefix):]
                     break

@@ -1068,15 +1068,16 @@ def test_costs_py_parse_costs_md_handles_est_prefix(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, "_docs_dir", lambda: docs_dir)
     with open(os.path.join(docs_dir, "costs.md"), "w") as f:
         f.write("| 2026-07-13 10:00 | claude | 1 | 1000/500 | [est] $0.0270 | exec: claude -p |\n")
+        f.write("| 2026-07-13 10:02 | claude | 1 | 1000/500 | [est?] $0.0270 | exec: claude -p |\n")
         f.write("| 2026-07-13 10:05 | claude | 1 | 800/400 | [legacy] $0.0100 | exec: claude -p |\n")
         f.write("| 2026-07-13 10:10 | claude | 1 | 200/100 | $0.0050 | exec: claude -p |\n")
     total_usd, total_requests = costs_parse_costs_md()
-    assert total_requests == 3
-    assert round(total_usd, 4) == round(0.0270 + 0.0100 + 0.0050, 4)
+    assert total_requests == 4
+    assert round(total_usd, 4) == round(0.0270 + 0.0270 + 0.0100 + 0.0050, 4)
 
 
 def test_db_parse_costs_md_handles_prefixed_cost_column():
-    content = "| 2026-07-13 | claude | claude-sonnet-4-6 | 1000 | 500 | 0 | [est] $0.0270 | note |\n"
+    content = "| 2026-07-13 | claude | claude-sonnet-4-6 | 1000 | 500 | 0 | [est?] $0.0270 | note |\n"
     rows = db_parse_costs_md(content)
     assert len(rows) == 1
     assert rows[0]["total_cost_usd"] == 0.0270
@@ -1354,6 +1355,31 @@ def test_update_costs_costs_md_includes_provenance_prefix(project_dir, monkeypat
     assert "| $" in actual_line
     assert "[est] $" not in actual_line
     assert "[legacy] $" not in actual_line
+
+
+def test_update_costs_flags_implausible_token_outlier(project_dir, monkeypatch, capsys):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+
+    costs_path = project_dir / ".synlynk" / "project-docs" / "costs.md"
+
+    update_costs(
+        "codex -p 'x'",
+        2_500_000,
+        120,
+        5.0,
+        model_version="gpt-5-codex",
+        agent="codex",
+        basis="regex_pair",
+    )
+
+    captured = capsys.readouterr().out
+    assert "WARNING: extracted token count 2,500,000/120 exceeds the 2,000,000 ceiling" in captured
+
+    last_line = costs_path.read_text().strip().splitlines()[-1]
+    assert "[est?] $" in last_line
 
 
 def test_load_model_rates_missing_file_uses_hardcoded_default(project_dir):

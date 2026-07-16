@@ -177,7 +177,7 @@ def _parse_costs_md(content: str) -> list:
             try: return int(v.replace(',', ''))
             except: return None
         def _float(v):
-            for prefix in ("[est] ", "[legacy] "):
+            for prefix in ("[est] ", "[est?] ", "[legacy] "):
                 if v.startswith(prefix):
                     v = v[len(prefix):]
                     break
