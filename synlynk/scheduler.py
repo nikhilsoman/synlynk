@@ -48,10 +48,17 @@ def _compute_schedule_plan(max_stories=None) -> dict:
         _estimate_story_cost_usd,
         _get_db,
         _quota_status_for_agent,
+        _refresh_agent_quotas_from_telemetry,
     )
 
     conn = _get_db()
     try:
+        # #291: populate agent_quotas from telemetry before fleet stage-2 gate
+        try:
+            _refresh_agent_quotas_from_telemetry(conn=conn)
+        except Exception:
+            pass
+
         query = (
             "SELECT s.story_id, s.title, s.engg_domain, s.org_domain, s.industry, "
             "s.phase, s.priority, s.estimated_tokens FROM stories s "

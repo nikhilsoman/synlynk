@@ -177,6 +177,7 @@ def main() -> None:
         cmd_run_trio,
         cmd_scan,
         cmd_cost_log,
+        cmd_quota,
         cmd_score_add,
         cmd_score_attest,
         cmd_score_list,
@@ -555,6 +556,22 @@ def main() -> None:
     cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
     cost_log_parser.add_argument("--note", default=None)
 
+    quota_parser = subparsers.add_parser(
+        "quota",
+        help="Show per-agent quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
+    )
+    quota_parser.add_argument(
+        "--agent",
+        default=None,
+        help="Filter to a single agent (claude, agy, codex, grok, local)",
+    )
+    quota_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON",
+    )
+
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
     )
@@ -762,6 +779,11 @@ def main() -> None:
                 story_id=args.story_id,
                 note=args.note,
             )
+    elif args.command == "quota":
+        cmd_quota(
+            agent=getattr(args, "agent", None),
+            json_output=getattr(args, "json_output", False),
+        )
     elif args.command == "schedule":
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":

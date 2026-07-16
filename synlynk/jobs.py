@@ -813,6 +813,17 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
         if not candidates:
             return None
 
+        # #291: keep agent_quotas rows current from telemetry before stage-2 gate
+        # so routing sees non-zero used_tokens when exec history exists.
+        refresh_quotas = _pkg("_refresh_agent_quotas_from_telemetry") or _pkg(
+            "refresh_agent_quotas_from_telemetry"
+        )
+        if refresh_quotas:
+            try:
+                refresh_quotas(conn=conn)
+            except Exception:
+                pass  # degraded: empty/stale rows handled by stage-2 below
+
         # Stage 2 — quota headroom gate
         gated = []  # (agent, score, model, quota_status)
         for agent, score, model in candidates:
