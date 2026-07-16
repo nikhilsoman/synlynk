@@ -85,7 +85,7 @@ def test_capacity_table_renders_all_agents():
     # Check that capacity table headers or classes exist
     assert "capacity table" in html_str.lower()
 
-# (3) cycle matrix renders all 6 cycles (dream, plan, work, ship, maintain, engage)
+# (3) cycle matrix renders all 7 cycles (goal, open, visualize, execute, release, notify, sustain)
 def test_cycle_matrix_renders_all_cycles():
     data = {
         "workspace": {"name": "test-ws"},
@@ -95,7 +95,7 @@ def test_cycle_matrix_renders_all_cycles():
             "fleet": {"attached": 1, "total": 4, "dispatch_mode": "daily-grind"},
             "agents": {},
             "cycle_capability": {
-                "claude": {"dream": "full", "plan": "partial", "work": "full", "ship": "none", "maintain": "none", "engage": "none"}
+                "claude": {"goal": "full", "open": "partial", "visualize": "full", "execute": "none", "release": "none", "notify": "none", "sustain": "none"}
             },
             "capacity": {},
             "sentinels_active": 0
@@ -103,7 +103,7 @@ def test_cycle_matrix_renders_all_cycles():
     }
     html_str = generate_efficiency_html(data, port=8721)
     assert "cycle capability matrix" in html_str.lower()
-    for cycle in ["dream", "plan", "work", "ship", "maintain", "engage"]:
+    for cycle in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]:
         assert cycle in html_str.lower()
 
 # (4) fleet header shows dispatch_mode value

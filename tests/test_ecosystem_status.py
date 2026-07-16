@@ -117,9 +117,9 @@ def test_compute_cycle_capability_upserts(db):
     )
     db.commit()
     result = _compute_cycle_capability("testbot", db)
-    assert result["work"]["support"] == "full"
+    assert result["execute"]["support"] == "full"
     row = db.execute(
-        "SELECT support, verb_count, full_count FROM cycle_capability WHERE agent_name='testbot' AND cycle='work'"
+        "SELECT support, verb_count, full_count FROM cycle_capability WHERE agent_name='testbot' AND cycle='execute'"
     ).fetchone()
     assert row[0] == "full"
     assert row[1] >= 1
@@ -151,7 +151,7 @@ def test_format_status_terminal_structure(db):
     from synlynk.status import _format_status_terminal
 
     rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
-    cycle_map = {"claude": {c: "full" for c in ["dream", "plan", "work", "ship", "maintain", "engage"]}}
+    cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
     assert "HEADLESS EFFICIENCY" in output
     assert "4.2×" in output
@@ -165,7 +165,7 @@ def test_format_status_terminal_shows_rates_updated_date():
     from synlynk.status import _format_status_terminal
 
     rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
-    cycle_map = {"claude": {c: "full" for c in ["dream", "plan", "work", "ship", "maintain", "engage"]}}
+    cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0, rates_updated_at="2026-07-13")
     assert "RATES   updated 2026-07-13" in output
 
@@ -174,7 +174,7 @@ def test_format_status_terminal_shows_rates_never_updated_warning():
     from synlynk.status import _format_status_terminal
 
     rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
-    cycle_map = {"claude": {c: "full" for c in ["dream", "plan", "work", "ship", "maintain", "engage"]}}
+    cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
     assert "RATES   never updated ⚠ (hardcoded defaults)" in output
 
@@ -350,7 +350,7 @@ def test_probe_writes_status_and_cycle_capability(db, tmp_path, monkeypatch):
     cycle_row = db.execute(
         "SELECT COUNT(*) FROM cycle_capability WHERE agent_name='claude'"
     ).fetchone()
-    assert cycle_row[0] == 6
+    assert cycle_row[0] == 7
 
 
 def test_dispatch_agent_records_dispatch_mode(monkeypatch, tmp_path):

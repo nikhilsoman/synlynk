@@ -266,8 +266,6 @@ from synlynk.wizard import (
     wizard_init,
 )
 
-CYCLE_NAMES = ["dream", "design", "plan", "build", "ship", "sustain"]
-
 CYCLE_COLORS = {
     "dream":   "#a78bfa",
     "design":  "#60a5fa",

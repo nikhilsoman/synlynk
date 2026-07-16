@@ -188,11 +188,14 @@ def generate_viz_data() -> dict:
     def _normalize_stage(name: str) -> str:
         key = (name or "").strip().lower()
         aliases = {
-            "design": "design",
-            "plan": "plan",
-            "build": "build",
-            "ship": "ship",
-            "sustain": "sustain",
+            "dream": "goal",
+            "design": "visualize",
+            "plan": "open",
+            "work": "execute",
+            "build": "execute",
+            "ship": "release",
+            "maintain": "sustain",
+            "engage": "execute",
         }
         return aliases.get(key, key)
 
@@ -407,7 +410,7 @@ def generate_viz_data() -> dict:
 
     data = _read_support_files()
     by_agent = {name: {"actual": 0.0, "estimated": 0.0} for name in ("claude", "agy", "codex", "grok")}
-    by_stage = {name: {"actual": 0.0, "estimated": 0.0} for name in ("design", "plan", "build", "ship", "sustain")}
+    by_stage = {name: {"actual": 0.0, "estimated": 0.0} for name in ("goal", "open", "visualize", "execute", "release", "notify", "sustain")}
     agents = {}
     agent_runs = {}
 
@@ -1042,15 +1045,32 @@ def generate_gantt_html(data: dict, port: int) -> str:
     script_content = """
 const PORT = __PORT__;
 const NOTE_STATE_CLASS = { none:'note-none', info:'note-info', action:'note-action', urgent:'note-urgent', done:'note-done' };
-const STAGE_CLASS = { dream:'dream', plan:'plan', work:'work', ship:'ship', maintain:'maint', engage:'engage' };
-const STAGE_ICON = { dream:'✦ Dream', plan:'⊡ Plan', work:'⚙ Work', ship:'▲ Ship', maintain:'↺ Maintain', engage:'♡ Engage' };
+const STAGE_CLASS = {
+  goal:'goal',
+  open:'open',
+  visualize:'visualize',
+  execute:'execute',
+  release:'release',
+  notify:'notify',
+  sustain:'sustain',
+};
+const STAGE_ICON = {
+  goal:'◆ Goal',
+  open:'○ Open',
+  visualize:'◌ Visualize',
+  execute:'⚙ Execute',
+  release:'▲ Release',
+  notify:'✉ Notify',
+  sustain:'↺ Sustain',
+};
 const STAGE_STYLE = {
-  dream:'background:var(--s-dream-bg);border-color:var(--s-dream-bd);color:var(--s-dream-tx)',
-  plan:'background:var(--s-plan-bg);border-color:var(--s-plan-bd);color:var(--s-plan-tx)',
-  work:'background:var(--s-work-bg);border-color:var(--s-work-bd);color:var(--s-work-tx)',
-  ship:'background:var(--s-ship-bg);border-color:var(--s-ship-bd);color:var(--s-ship-tx)',
-  maintain:'background:var(--s-maint-bg);border-color:var(--s-maint-bd);color:var(--s-maint-tx)',
-  engage:'background:var(--s-engage-bg);border-color:var(--s-engage-bd);color:var(--s-engage-tx)',
+  goal:'background:#dbeafe;border-color:#93c5fd;color:#1d4ed8',
+  open:'background:#ede9fe;border-color:#c4b5fd;color:#6d28d9',
+  visualize:'background:#e6f7f4;border-color:#c0ede6;color:#0d9e87',
+  execute:'background:#dcfce7;border-color:#86efac;color:#15803d',
+  release:'background:#fef3c7;border-color:#fde68a;color:#d97706',
+  notify:'background:#ffe4e6;border-color:#fda4af;color:#be123c',
+  sustain:'background:#f3f4f6;border-color:#d1d5db;color:#6b7280',
 };
 const dreams = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.dreams) ? window.VIZOR_DATA.dreams : [];
 const goals = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.goals) ? window.VIZOR_DATA.goals : [];
@@ -1087,12 +1107,12 @@ function setTheme(t) {
 
 function classForStage(stageKey) {
   const key = String(stageKey || '').trim().toLowerCase();
-  return STAGE_CLASS[key] || 'plan';
+  return STAGE_CLASS[key] || 'open';
 }
 
 function iconForStage(stageKey) {
   const key = String(stageKey || '').trim().toLowerCase();
-  return STAGE_ICON[key] || (stageKey ? escapeHtml(stageKey) : '✦ Dream');
+  return STAGE_ICON[key] || (stageKey ? escapeHtml(stageKey) : '○ Open');
 }
 
 function noteStateClass(state) {
@@ -2512,10 +2532,12 @@ def _svg_text(value) -> str:
 def _stage_color(key: str) -> str:
     stage = (key or "").strip().lower()
     return {
-        "design": "#f39c6b",
-        "plan": "#7b8cff",
-        "build": "#1a9e5c",
-        "ship": "#0d9e87",
+        "goal": "#7b8cff",
+        "open": "#60a5fa",
+        "visualize": "#f39c6b",
+        "execute": "#1a9e5c",
+        "release": "#0d9e87",
+        "notify": "#fbbf24",
         "sustain": "#888888",
     }.get(stage, "#0d9e87")
 
@@ -3026,12 +3048,13 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         dispatch_mode = "—"
         agents_data = {}
         cycle_cap = {
-            "dream": {"claude": "full", "agy": "partial", "codex": "none", "grok": "none"},
-            "plan": {"claude": "full", "agy": "none", "codex": "none", "grok": "none"},
-            "work": {"claude": "full", "agy": "partial", "codex": "full", "grok": "partial"},
-            "ship": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "none"},
-            "maintain": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "partial"},
-            "engage": {"claude": "full", "agy": "partial", "codex": "none", "grok": "partial"},
+            "goal": {"claude": "full", "agy": "partial", "codex": "none", "grok": "none"},
+            "open": {"claude": "full", "agy": "none", "codex": "none", "grok": "none"},
+            "visualize": {"claude": "full", "agy": "partial", "codex": "full", "grok": "partial"},
+            "execute": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "none"},
+            "release": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "partial"},
+            "notify": {"claude": "full", "agy": "partial", "codex": "none", "grok": "partial"},
+            "sustain": {"claude": "full", "agy": "partial", "codex": "partial", "grok": "partial"},
         }
         capacity = TIER1_CAPACITY
         sentinels_active = 0
@@ -3602,7 +3625,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     .cap-none { color: var(--text3); }
     """
 
-    cycles_list = ["dream", "plan", "work", "ship", "maintain", "engage"]
+    cycles_list = ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]
     cards_html = []
     for name, stats in agents.items():
         rate = _rate(stats.get("success_rate"))
@@ -3661,8 +3684,8 @@ def generate_efficiency_html(data: dict, port: int) -> str:
             </div>
         """.strip()
 
-        # Radar hexagon SVG
-        angles = [270, 330, 30, 90, 150, 210]
+        # Radar heptagon SVG
+        angles = [270, 321.4, 12.9, 64.3, 115.7, 167.1, 218.6]
         cycles_order = cycles_list
 
         outer_points = []
@@ -3691,7 +3714,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
         score_points_str = " ".join(f"{x:.1f},{y:.1f}" for x, y in score_points)
 
         axis_lines_html = []
-        for i in range(6):
+        for i in range(len(cycles_list)):
             rad = math.radians(angles[i])
             x_outer = 40 + 32 * math.cos(rad)
             y_outer = 40 + 32 * math.sin(rad)
@@ -4010,19 +4033,20 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     <section class="section">
       <div class="section-head">
         <div class="section-title label-font">Cycle Capability Matrix</div>
-        <div class="section-note label-font">Support mapping across SDLC cycles.</div>
+        <div class="section-note label-font">Support mapping across GOVERNS cycles.</div>
       </div>
       <div style="padding: 16px; overflow-x: auto;">
         <table class="matrix-table">
           <thead>
             <tr>
               <th class="label-font">Agent</th>
-              <th class="label-font">Dream</th>
-              <th class="label-font">Plan</th>
-              <th class="label-font">Work</th>
-              <th class="label-font">Ship</th>
-              <th class="label-font">Maintain</th>
-              <th class="label-font">Engage</th>
+              <th class="label-font">Goal</th>
+              <th class="label-font">Open</th>
+              <th class="label-font">Visualize</th>
+              <th class="label-font">Execute</th>
+              <th class="label-font">Release</th>
+              <th class="label-font">Notify</th>
+              <th class="label-font">Sustain</th>
             </tr>
           </thead>
           <tbody>
@@ -4043,12 +4067,13 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     # 5. Cycle capability matrix section
     matrix_rows_new = []
     cycle_emojis = {
-        "dream": "💡 Dream",
-        "plan": "📋 Plan",
-        "work": "⚙️ Work",
-        "ship": "🚀 Ship",
-        "maintain": "🔧 Maintain",
-        "engage": "🤝 Engage"
+        "goal": "🎯 Goal",
+        "open": "📂 Open",
+        "visualize": "🧭 Visualize",
+        "execute": "⚙️ Execute",
+        "release": "🚀 Release",
+        "notify": "✉️ Notify",
+        "sustain": "🔧 Sustain",
     }
     matrix_agents = ["claude", "agy", "codex", "grok"]
     for cycle in cycles_list:
@@ -4062,7 +4087,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     <section class="section">
       <div class="section-head">
         <div class="section-title">Cycle Capability Matrix</div>
-        <div class="section-note">full / partial / none per agent per 6-cycle stage.</div>
+        <div class="section-note">full / partial / none per agent per 7-stage GOVERNS cycle.</div>
       </div>
       <table class="cycle-table">
         <thead><tr><th>Cycle</th><th>Claude</th><th>Agy</th><th>Codex</th><th>Grok</th></tr></thead>

@@ -283,7 +283,7 @@ def test_generate_effort_html_renders_svg_charts(tmp_path, monkeypatch):
         "costs": {
             "total_usd": 180.0,
             "by_agent": {"claude": 50.0, "agy": 80.0, "codex": 40.0, "grok": 10.0},
-            "by_stage": {"design": 20.0, "plan": 30.0, "build": 40.0, "ship": 50.0, "sustain": 40.0},
+            "by_stage": {"goal": 20.0, "open": 30.0, "visualize": 40.0, "execute": 50.0, "release": 40.0, "notify": 10.0, "sustain": 20.0},
         },
         "agents": {},
         "telemetry": {"recent": [], "sentinel_alerts": []},

@@ -5,11 +5,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
 
-def test_cycle_names_constant_exists():
-    assert hasattr(synlynk, 'CYCLE_NAMES')
-    assert synlynk.CYCLE_NAMES == ["dream", "design", "plan", "build", "ship", "sustain"]
-
-
 def test_cycle_colors_constant_exists():
     assert hasattr(synlynk, 'CYCLE_COLORS')
     assert synlynk.CYCLE_COLORS["dream"] == "#a78bfa"

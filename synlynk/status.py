@@ -9,6 +9,7 @@ import time
 from typing import Any, Optional
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk.hud import CYCLES
 
 TIER1_CAPACITY = {
     "claude": {"ctx_window_tokens": 200_000, "read_budget_tokens": 750_000, "write_budget_tokens": 32_000, "tool_budget_count": 200},
@@ -20,13 +21,22 @@ TIER1_CAPACITY = {
 TOOL_DEF_OVERHEAD = {"claude": 2200, "agy": 1800, "codex": 1600, "grok": 1400}
 TASK_TYPE_OUTPUT = {"implement": 8000, "review": 2000, "plan": 3000, "debug": 1500, "test": 2500, "docs": 2000, "default": 4000}
 SYSTEM_OVERHEAD = 2000
-CYCLES = ["dream", "plan", "work", "ship", "maintain", "engage"]
+LEGACY_CYCLE_ALIASES = {
+    "dream": "goal",
+    "design": "visualize",
+    "plan": "open",
+    "work": "execute",
+    "build": "execute",
+    "ship": "release",
+    "maintain": "sustain",
+    "engage": "execute",
+}
 _CATEGORY_TO_CYCLE = {
-    "dispatch": "work",
-    "observability": "maintain",
-    "harness": "maintain",
-    "pm": "plan",
-    "workspace": "maintain",
+    "dispatch": "execute",
+    "observability": "sustain",
+    "harness": "sustain",
+    "pm": "open",
+    "workspace": "sustain",
 }
 
 
@@ -90,6 +100,8 @@ def _cycle_from_row(row: sqlite3.Row, cols: set[str]) -> Optional[str]:
     cycle_hint = row["cycle_hint"] if "cycle_hint" in cols else None
     if cycle_hint in CYCLES:
         return cycle_hint
+    if cycle_hint in LEGACY_CYCLE_ALIASES:
+        return LEGACY_CYCLE_ALIASES[cycle_hint]
 
     verb_category = row["verb_category"] if "verb_category" in cols else None
     if verb_category in _CATEGORY_TO_CYCLE:
@@ -98,13 +110,13 @@ def _cycle_from_row(row: sqlite3.Row, cols: set[str]) -> Optional[str]:
     verb = row["verb"] if "verb" in cols else (row["synlynk_verb"] if "synlynk_verb" in cols else None)
     if isinstance(verb, str):
         if "probe" in verb or "doctor" in verb:
-            return "maintain"
+            return "sustain"
         if "dispatch" in verb:
-            return "work"
+            return "execute"
         if "decide" in verb:
-            return "dream"
+            return "goal"
         if "story" in verb or "epic" in verb:
-            return "plan"
+            return "open"
     return None
 
 
