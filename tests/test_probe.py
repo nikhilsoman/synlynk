@@ -190,3 +190,141 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
     cmd_probe(agent="claude")
 
     assert _read_installed_version(db_path, "claude") == "2.1.208"
+
+
+# --- #287: Tier-2 model probe reads agent config files, not CLI version text ---
+
+
+def _install_fake_home(tmp_path, monkeypatch):
+    """Point ~ at tmp_path for isolated agent config probes."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    # expanduser respects HOME on POSIX; also pin for safety on all platforms.
+    real_expanduser = os.path.expanduser
+
+    def _expand(path):
+        if path.startswith("~/") or path == "~":
+            return str(home / path[2:]) if path.startswith("~/") else str(home)
+        return real_expanduser(path)
+
+    monkeypatch.setattr(os.path, "expanduser", _expand)
+    return home
+
+
+def test_probe_model_version_codex_reads_config_toml(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    home = _install_fake_home(tmp_path, monkeypatch)
+    codex_dir = home / ".codex"
+    codex_dir.mkdir()
+    (codex_dir / "config.toml").write_text(
+        'model = "gpt-5.4-mini"\nmodel_reasoning_effort = "medium"\n'
+    )
+
+    assert _probe_model_version("codex", "codex") == "gpt-5.4-mini"
+
+
+def test_probe_model_version_grok_reads_models_default(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    home = _install_fake_home(tmp_path, monkeypatch)
+    grok_dir = home / ".grok"
+    grok_dir.mkdir()
+    (grok_dir / "config.toml").write_text(
+        '[cli]\ninstaller = "internal"\n\n[models]\ndefault = "grok-build"\n'
+    )
+
+    assert _probe_model_version("grok", "grok") == "grok-build"
+
+
+def test_probe_model_version_agy_session_scoped(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    _install_fake_home(tmp_path, monkeypatch)
+    # No config file required — agy has no persistent default model.
+    result = _probe_model_version("agy", "agy")
+    assert result == "session-scoped, no fixed default"
+
+
+def test_probe_model_version_claude_reads_settings_model(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    home = _install_fake_home(tmp_path, monkeypatch)
+    claude_dir = home / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "settings.json").write_text(
+        '{\n  "model": "claude-sonnet-4-6",\n  "permissions": {}\n}\n'
+    )
+
+    assert _probe_model_version("claude", "claude") == "claude-sonnet-4-6"
+
+
+def test_probe_model_version_claude_built_in_default_when_no_model_key(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    home = _install_fake_home(tmp_path, monkeypatch)
+    claude_dir = home / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "settings.json").write_text('{"permissions": {}}\n')
+
+    result = _probe_model_version("claude", "claude")
+    assert result == "uses Claude Code's built-in default, no override"
+
+
+def test_probe_model_version_claude_built_in_default_when_settings_missing(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    _install_fake_home(tmp_path, monkeypatch)
+    result = _probe_model_version("claude", "claude")
+    assert result == "uses Claude Code's built-in default, no override"
+
+
+def test_probe_model_version_codex_unknown_when_config_missing(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    _install_fake_home(tmp_path, monkeypatch)
+    assert _probe_model_version("codex", "codex") == "unknown"
+
+
+def test_probe_model_version_grok_unknown_when_models_section_missing(tmp_path, monkeypatch):
+    from synlynk.probe import _probe_model_version
+
+    home = _install_fake_home(tmp_path, monkeypatch)
+    grok_dir = home / ".grok"
+    grok_dir.mkdir()
+    (grok_dir / "config.toml").write_text('[cli]\ninstaller = "internal"\n')
+
+    assert _probe_model_version("grok", "grok") == "unknown"
+
+
+def test_probe_model_version_does_not_shell_out(tmp_path, monkeypatch):
+    """Regression: old probe shelled out to CLI --version /status and scraped text."""
+    import subprocess
+    from synlynk.probe import _probe_model_version
+
+    home = _install_fake_home(tmp_path, monkeypatch)
+    codex_dir = home / ".codex"
+    codex_dir.mkdir()
+    (codex_dir / "config.toml").write_text('model = "gpt-5.4-mini"\n')
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for model probe")
+
+    monkeypatch.setattr(subprocess, "run", _boom)
+    monkeypatch.setattr(subprocess, "Popen", _boom)
+    assert _probe_model_version("codex", "codex") == "gpt-5.4-mini"
+    assert _probe_model_version("agy", "agy") == "session-scoped, no fixed default"
+
+
+def test_read_toml_string_value_top_level_and_section(tmp_path):
+    from synlynk.probe import _read_toml_string_value
+
+    path = tmp_path / "cfg.toml"
+    path.write_text(
+        'model = "gpt-test"\n\n[models]\ndefault = "grok-test"\nother = "x"\n'
+    )
+    assert _read_toml_string_value(str(path), "model") == "gpt-test"
+    assert _read_toml_string_value(str(path), "default", section="models") == "grok-test"
+    assert _read_toml_string_value(str(path), "missing") is None
+    assert _read_toml_string_value(str(path / "nope"), "model") is None

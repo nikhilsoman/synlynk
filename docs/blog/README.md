@@ -67,6 +67,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [63](./63-pr259-status-rates-updated-at.md) | Closing v0.12.0: Surfacing rates_updated_at in synlynk status | [#259](https://github.com/nikhilsoman/synlynk/pull/259) | 2026-07-15 |
 | **[64](./64-v012-measurement-and-reliability.md)** | **v0.12.0 — Measurement & Reliability (Named Release)** | [v0.12.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.12.0) | **2026-07-15** |
 | [65](./65-whats-new-v012-getting-started.md) | What's New in v0.12.0 — And How to Get Started | — | 2026-07-15 |
+| [66](./66-pr293-agent-quota-tracking-291.md) | PR #293 — agent_quotas finally gets real usage (#291) | [#293](https://github.com/nikhilsoman/synlynk/pull/293) | 2026-07-16 |
+| [67](./67-pr292-fix-probe-model-version.md) | PR #292 — Fix Tier-2 Model Probe (#287) | [#292](https://github.com/nikhilsoman/synlynk/pull/292) | 2026-07-16 |
 
 
 ## Per-PR Post Template

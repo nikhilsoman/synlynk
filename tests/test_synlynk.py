@@ -6216,15 +6216,22 @@ def test_agent_discovery_defaults_includes_grok():
     assert synlynk.AGENT_DISCOVERY_DEFAULTS["grok"] == os.path.expanduser("~/.grok")
 
 
-def test_probe_grok_version(monkeypatch):
+def test_probe_grok_version(tmp_path, monkeypatch):
+    """#287: grok model from ~/.grok/config.toml [models] default, not CLI -v text."""
+    import os
     import synlynk
+
+    home = tmp_path / "home"
+    grok = home / ".grok"
+    grok.mkdir(parents=True)
+    (grok / "config.toml").write_text('[models]\ndefault = "grok-composer-2.5-fast"\n')
+    monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(
-        synlynk,
-        "_spawn_with_pty_fallback",
-        lambda *a, **kw: (None, b"grok 0.2.67 (grok-composer-2.5-fast)"),
+        os.path, "expanduser",
+        lambda p: str(home / p[2:]) if p.startswith("~/") else (str(home) if p == "~" else p),
     )
     result = synlynk._probe_model_version("grok", "grok")
-    assert "grok" in result.lower()
+    assert result == "grok-composer-2.5-fast"
 
 
 def test_grok_md_in_instruction_targets():
