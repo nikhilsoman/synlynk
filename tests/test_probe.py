@@ -7,12 +7,13 @@ class _DummySocket:
         pass
 
 
-def _make_stub_agent(tmp_path, name, version):
+def _make_stub_agent(tmp_path, name, version, version_output=None):
     script = tmp_path / name
+    version_line = version_output or f"{name} {version}"
     script.write_text(
         f"""#!/bin/sh
 case "$1" in
-  --version) echo "{name} {version}"; exit 0 ;;
+  --version) echo "{version_line}"; exit 0 ;;
   --help)    echo "  --flag  Example flag"; exit 0 ;;
   *)         echo "stub output"; exit 0 ;;
 esac
@@ -169,3 +170,23 @@ def test_probe_clears_all_drift_alerts_for_same_agent(tmp_path, monkeypatch):
     assert "Agent 'codex' version changed" in content
     assert "Agent 'agy' version changed" not in content
     assert _read_installed_version(db_path, "agy") == "2.0.0"
+
+
+def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeypatch):
+    import socket
+    import synlynk
+    from synlynk.probe import cmd_probe
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    db_path = tmp_path / ".synlynk" / "state.db"
+    _seed_probe_db(db_path, agent_name="claude", installed_version="2.0.0")
+    _make_stub_agent(tmp_path, "claude", "2.1.208", version_output="2.1.208 (Claude Code)")
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
+    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
+
+    cmd_probe(agent="claude")
+
+    assert _read_installed_version(db_path, "claude") == "2.1.208"
