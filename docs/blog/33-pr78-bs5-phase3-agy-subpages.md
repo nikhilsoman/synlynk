@@ -37,7 +37,7 @@ For the `/changelog` subpage, rather than manual copy-pasting, we automated the 
 
 ## Brainstorm Visuals Used
 - `docs/brainstorm/bs5-website-redesign/hero-v4.html` (layout and color alternation guidelines)
-- `docs/synlynk-quickstart-apple.html` (prose and document styles reference)
+- `docs/synlynk-quickstart-guide.html` (prose and document styles reference)
 
 ## What This Achieved on the Path to Autonomy
 This PR completes the presentation layers of the synlynk ecosystem. By dynamically extracting information from active development documents (`CHANGELOG.md` and `docs/blog/*.md`), it demonstrates that presentation pages can be kept in sync with the codebase autonomously. Multi-agent coordination (where Grok owns animations and Agy owns styling/templates) operates within strict boundaries, allowing parallel contributions to coexist seamlessly.
