@@ -6436,6 +6436,85 @@ def test_hc_version_current_offline(monkeypatch):
     assert "offline" in result.message.lower() or "timeout" in result.message.lower()
 
 
+def test_hc_model_rates_no_file(tmp_path, monkeypatch):
+    import synlynk
+    monkeypatch.chdir(tmp_path)
+    result = synlynk._hc_model_rates()
+    assert result.status == "warn"
+    assert "never been updated" in result.message
+    assert "synlynk init" in result.fix
+
+
+def test_hc_model_rates_fresh(tmp_path, monkeypatch):
+    import synlynk, os, json, time
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    today_str = time.strftime("%Y-%m-%d")
+    rates_data = {"unit": "usd_per_1k_tokens", "rates_updated_at": today_str}
+    (tmp_path / ".synlynk" / "model_rates.json").write_text(json.dumps(rates_data))
+    result = synlynk._hc_model_rates()
+    assert result.status == "ok"
+    assert "fresh" in result.message
+
+
+def test_hc_model_rates_stale(tmp_path, monkeypatch):
+    import synlynk, os, json
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    rates_data = {"unit": "usd_per_1k_tokens", "rates_updated_at": "2025-01-01"}
+    (tmp_path / ".synlynk" / "model_rates.json").write_text(json.dumps(rates_data))
+    result = synlynk._hc_model_rates()
+    assert result.status == "warn"
+    assert "stale" in result.message
+    assert "refresh" in result.fix or "timestamp" in result.fix
+
+
+def test_hc_model_rates_invalid_date(tmp_path, monkeypatch):
+    import synlynk, os, json
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    rates_data = {"unit": "usd_per_1k_tokens", "rates_updated_at": "invalid-date"}
+    (tmp_path / ".synlynk" / "model_rates.json").write_text(json.dumps(rates_data))
+    result = synlynk._hc_model_rates()
+    assert result.status == "warn"
+    assert "invalid" in result.message
+    assert "Update" in result.fix
+
+
+def test_sentinel_model_rates_no_file(tmp_path, monkeypatch):
+    import synlynk
+    monkeypatch.chdir(tmp_path)
+    # Should not write alert because model_rates.json does not exist
+    synlynk.check_model_rates_freshness()
+    assert not (tmp_path / ".synlynk" / "sentinel.md").exists()
+
+
+def test_sentinel_model_rates_stale(tmp_path, monkeypatch):
+    import synlynk, os, json
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    rates_data = {"unit": "usd_per_1k_tokens", "rates_updated_at": "2025-01-01"}
+    (tmp_path / ".synlynk" / "model_rates.json").write_text(json.dumps(rates_data))
+    synlynk.check_model_rates_freshness()
+    sentinel_path = tmp_path / ".synlynk" / "sentinel.md"
+    assert sentinel_path.exists()
+    assert "STALE_MODEL_RATES" in sentinel_path.read_text()
+
+
+def test_sentinel_model_rates_fresh(tmp_path, monkeypatch):
+    import synlynk, os, json, time
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(tmp_path / ".synlynk")
+    today_str = time.strftime("%Y-%m-%d")
+    rates_data = {"unit": "usd_per_1k_tokens", "rates_updated_at": today_str}
+    (tmp_path / ".synlynk" / "model_rates.json").write_text(json.dumps(rates_data))
+    synlynk.check_model_rates_freshness()
+    sentinel_path = tmp_path / ".synlynk" / "sentinel.md"
+    # Either sentinel.md does not exist, or it has no STALE_MODEL_RATES alert
+    if sentinel_path.exists():
+        assert "STALE_MODEL_RATES" not in sentinel_path.read_text()
+
+
 def test_cmd_doctor_all_ok(tmp_path, monkeypatch, capsys):
     import synlynk
     ok_check = lambda: synlynk.HealthCheck("fake", "ok", "all good")

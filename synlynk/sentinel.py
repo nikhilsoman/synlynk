@@ -392,9 +392,41 @@ def _extract_compliance_tags(output_text: str) -> dict:
     }
 
 
+def check_model_rates_freshness() -> None:
+    """Sentinel check for model rate table staleness.
+    Writes a STALE_MODEL_RATES alert if rates are None or older than 90 days.
+    """
+    from synlynk.costs import _RATES_PATH, _load_model_rates
+    if not os.path.exists(_RATES_PATH):
+        return
+    rates = _load_model_rates()
+    rates_updated_at = rates.get("rates_updated_at")
+    if not rates_updated_at:
+        _write_sentinel_alert(
+            "WARN", "STALE_MODEL_RATES",
+            "Model rates have never been updated (using hardcoded defaults)."
+        )
+        return
+    try:
+        t_parsed = time.mktime(time.strptime(rates_updated_at, "%Y-%m-%d"))
+        age_days = (time.time() - t_parsed) / 86400
+    except (ValueError, TypeError):
+        _write_sentinel_alert(
+            "WARN", "STALE_MODEL_RATES",
+            f"Model rates have invalid timestamp: {rates_updated_at}."
+        )
+        return
+    if age_days > 90:
+        _write_sentinel_alert(
+            "WARN", "STALE_MODEL_RATES",
+            f"Model rates are stale (updated {rates_updated_at}, {int(age_days)} days ago)."
+        )
+
+
 def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                              cmd: str = "") -> None:
     """Detects flatline, success loop, and quota-exhausted; writes sentinel alerts."""
+    check_model_rates_freshness()
     telemetry_file = ".synlynk/telemetry.json"
     data = []
     if os.path.exists(telemetry_file):
