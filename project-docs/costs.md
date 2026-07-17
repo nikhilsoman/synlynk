@@ -9,10 +9,10 @@
 | Tier | Sessions | Est. Cost Each | Subtotal |
 | :--- | :--- | :--- | :--- |
 | Light (~50K tokens) | 10 | ~$0.25–0.50 | ~$3.50 |
-| Medium (~150K tokens) | 12 | ~$0.65–1.50 | ~$12.00 |
+| Medium (~150K tokens) | 13 | ~$0.65–1.75 | ~$13.73 |
 | Heavy (~400K tokens) | 9 | ~$1.75–3.00 | ~$20.25 |
 | Very Heavy / Subagent (~800K tokens) | 8 | ~$3.50–6.00 | ~$31.50 |
-| **Total** | **40** | | **~$67.75** |
+| **Total** | **41** | | **~$68.98** |
 
 ---
 
@@ -66,3 +66,18 @@
 | 2026-07-15 19:32 | agy | 1 | 242381/18525 | [est] $1.0050 | exec: agy job job-0b627f6f |
 | 2026-07-15 19:50 | codex | 1 | 6223528/119074 | [est] $20.4567 | exec: codex job job-f9804c... |
 | 2026-07-15 20:01 | grok | 1 | 81218/27634 | [est] $0.6582 | exec: grok job job-2327f65... |
+| 2026-07-17 09:17 | codex | 1 | 3916492/33996 | [est?] $12.2594 | exec: codex job job-d63c4c... |
+| 2026-07-17 11:40 | codex | 1 | 1709555/41215 | [est] $5.7469 | exec: codex job job-5164f9... |
+| 2026-07-17 11:40 | codex | 1 | 451445/4976 | [est] $1.4290 | exec: codex job job-05915c... |
+| 2026-07-17 11:40 | codex | 1 | 3293151/46046 | [est?] $10.5701 | exec: codex job job-b2a31b... |
+| 2026-07-17 13:56 | codex | 1 | 5000/2000 | [est] $0.0450 | exec: codex job job-096098... |
+| 2026-07-17 13:56 | codex | 1 | 791808/32623 | [est] $2.8648 | exec: codex job job-94c25e... |
+| 2026-07-17 14:04 | codex | 1 | 477401/7643 | [est] $1.5468 | exec: codex job job-b693c4... |
+| 2026-07-17 14:11 | codex | 1 | 881861/17042 | [est] $2.9012 | exec: codex job job-dc844b... |
+| 2026-07-17 14:30 | codex | 1 | 3615064/41038 | [est?] $11.4608 | exec: codex job job-616098... |
+| 2026-07-17 14:42 | codex | 1 | 2338749/31865 | [est?] $7.4942 | exec: codex job job-ede207... |
+| 2026-07-17 14:56 | codex | 1 | 3377411/26123 | [est?] $10.5241 | exec: codex job job-453760... |
+| 2026-07-17 15:14 | codex | 1 | 1401974/46797 | [est] $4.9079 | exec: codex job job-6edba9... |
+| 2026-07-17 15:28 | codex | 1 | 557675/11916 | [est] $1.8518 | exec: codex job job-d0919d... |
+| 2026-07-17 15:47 | codex | 1 | 1686766/23007 | [est] $5.4054 | exec: codex job job-69b29d... |
+| 2026-07-17 | nikhil | ~130 | ~160K / ~80K | ~$1.73 | PM session: reviewed+merged PR #305, executed Tasks 2-6 of dispatch-job-comms-fence plan end-to-end — per-task dispatch/verify/merge loop (PRs #309-#313), caught+fixed Task 3's inverted context_mode bug and Task 4's unauthorized fencing.py rewrite via redispatch, caught+fixed Task 5's duplicate-cost-display defect via direct inline patch to the open PR branch, full-suite verification before every merge, roadmap+devlog housekeeping (PR #314), memory sync |
