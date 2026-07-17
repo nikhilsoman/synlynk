@@ -635,6 +635,8 @@ def build_parser() -> argparse.ArgumentParser:
     release_parser.add_argument('--version', help='Explicit version string e.g. 0.11.0')
     release_parser.add_argument('--minor', action='store_true', help='Bump minor instead of patch')
 
+    subparsers.add_parser("selftest", help="Run live command smoke tests")
+
     viz_parser = subparsers.add_parser("viz", help="Open local browser workspace dashboard")
     viz_parser.add_argument("--serve", action="store_true",
                             help="Start background server (stable port)")
@@ -973,6 +975,10 @@ def main() -> None:
             version=getattr(args, "version", None),
             minor=getattr(args, "minor", False),
         )
+    elif args.command == "selftest":
+        from synlynk.selftest import cmd_selftest as _cmd_selftest
+
+        sys.exit(_cmd_selftest())
     elif args.command == "viz":
         cmd_viz(args)
     elif args.command == "exit":
