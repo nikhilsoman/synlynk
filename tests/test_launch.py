@@ -3,6 +3,7 @@ import os
 import sqlite3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
+from synlynk.taxonomy import entries_for_tier
 
 
 def test_cycle_colors_constant_exists():
@@ -59,6 +60,17 @@ def test_launch_task_templates_core_ids():
         assert core_id in ids
 
 
+def test_launch_tasks_are_limited_to_core_and_tier1_primary_commands(monkeypatch):
+    allowed = synlynk.CORE_TEMPLATE_IDS | {
+        entry["command"]
+        for entry in entries_for_tier(1)
+        if entry["prominence"] == "primary"
+    }
+    monkeypatch.setattr(synlynk, "_template_matches", lambda template, scan: True)
+    tasks = synlynk._select_launch_tasks(_minimal_scan())
+    assert {task["id"] for task in tasks} <= allowed
+
+
 def test_auto_launch_config_default_true(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     config = synlynk.load_config()
@@ -75,12 +87,16 @@ def test_cmd_launch_dry_run_prints_tasks_no_dispatch(monkeypatch, capsys, tmp_pa
     assert not called
 
 
-def test_cmd_launch_list_prints_all_12_templates(monkeypatch, capsys, tmp_path):
+def test_cmd_launch_list_prints_only_visible_templates(monkeypatch, capsys, tmp_path):
     monkeypatch.chdir(tmp_path)
     synlynk.cmd_launch_ftue(dry_run=False, list_mode=True)
     out = capsys.readouterr().out
+    visible_ids = {tmpl["id"] for tmpl in synlynk._launch_visible_templates()}
     for tmpl in synlynk.LAUNCH_TASK_TEMPLATES:
-        assert tmpl["id"] in out
+        if tmpl["id"] in visible_ids:
+            assert tmpl["id"] in out
+        else:
+            assert tmpl["id"] not in out
 
 
 def test_wizard_calls_cmd_launch_when_auto_launch_true(monkeypatch, tmp_path):
