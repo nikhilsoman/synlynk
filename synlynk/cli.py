@@ -586,7 +586,15 @@ def build_parser() -> argparse.ArgumentParser:
         "instructions", help="Manage synlynk instruction files across AI tools"
     )
     instructions_sub = instructions_parser.add_subparsers(dest="instructions_action")
-    instructions_sub.add_parser("status", help="Show status of all tracked instruction files")
+    instr_status_parser = instructions_sub.add_parser(
+        "status", help="Show status of all tracked instruction files"
+    )
+    instr_status_parser.add_argument(
+        "--pre-commit",
+        action="store_true",
+        dest="pre_commit",
+        help="Fail with exit 1 if drift is detected (for git hooks)",
+    )
     instr_diff_parser = instructions_sub.add_parser(
         "diff", help="Show user/tool content outside synlynk sections"
     )
@@ -881,7 +889,7 @@ def main() -> None:
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
-            cmd_instructions_status()
+            cmd_instructions_status(pre_commit=getattr(args, "pre_commit", False))
         elif action == "diff":
             cmd_instructions_diff(getattr(args, "file", None))
         elif action == "update":

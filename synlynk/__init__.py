@@ -10,6 +10,7 @@ import re
 import threading
 import tempfile
 import urllib.request
+from pathlib import Path
 from typing import Optional, Tuple
 import sqlite3 as _sqlite3
 
@@ -206,6 +207,7 @@ from synlynk.instructions import (
     _write_informed_skeleton,
     _write_instruction_file,
     _write_instruction_manifest,
+    install_pre_commit_hook,
     cmd_instructions_ack,
     cmd_instructions_diff,
     cmd_instructions_status,
@@ -3596,6 +3598,8 @@ def init(force: bool = False, agents: list = None,
             manifest_entries[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
     if manifest_entries:
         _write_instruction_manifest(manifest_entries)
+
+    install_pre_commit_hook(repo_root=Path.cwd())
 
     # Write config.json if needed.
     config_json_content = templates.get("config.json", "")
