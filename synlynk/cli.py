@@ -24,7 +24,7 @@ def cmd_watch(args) -> None:
     refresh_seconds = 3 if live_mode else 10
     snapshot = JobSnapshot(jobs_file)
     harness_snapshot = HarnessSnapshot(_resolve_db_path())
-    selected_cycle_idx = CYCLES.index("work")
+    selected_cycle_idx = CYCLES.index("execute")
     platform_expanded = False
     show_all = False
     last_refresh = 0.0
