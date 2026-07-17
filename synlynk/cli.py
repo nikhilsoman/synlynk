@@ -134,74 +134,9 @@ def cmd_watch(args) -> None:
         sys.stdout.write("\033[?1049l")
         sys.stdout.flush()
 
-def main() -> None:
-    from synlynk import (
-        VERSION,
-        AGENT_CAPABILITY_BASELINES,
-        SynlynkDaemon,
-        SynlynkRelay,
-        _CYAN,
-        _GREEN,
-        _RESET,
-        _daemon_install_service,
-        _daemon_uninstall_service,
-        _reconcile_jobs,
-        _update_config,
-        checkpoint,
-        cmd_agent_add,
-        cmd_agent_configure,
-        cmd_agent_list,
-        cmd_agent_run,
-        cmd_decide,
-        cmd_doctor,
-        cmd_exit,
-        cmd_identity_init,
-        cmd_instructions_ack,
-        cmd_instructions_diff,
-        cmd_instructions_status,
-        cmd_instructions_update,
-        cmd_jobs,
-        cmd_jobs_handoff,
-        cmd_join,
-        cmd_launch,
-        cmd_launch_ftue,
-        cmd_logs,
-        cmd_migrate,
-        cmd_pr_check,
-        cmd_probe,
-        cmd_relay_broadcast,
-        cmd_relay_start,
-        cmd_release,
-        cmd_repair,
-        cmd_roles,
-        cmd_run_trio,
-        cmd_scan,
-        cmd_cost_log,
-        cmd_score_add,
-        cmd_score_attest,
-        cmd_score_list,
-        cmd_shell,
-        cmd_status as cmd_project_status,
-        cmd_story_create,
-        cmd_story_draft,
-        cmd_story_list,
-        cmd_story_ready,
-        cmd_sync,
-        cmd_configure_agent,
-        cmd_team_status,
-        cmd_watch,
-        dispatch_agent,
-        exec_command,
-        init,
-        sentinel_clear,
-        sentinel_list,
-        upgrade,
-        wizard_init,
-    )
-    from synlynk.status import cmd_status as cmd_ecosystem_status
-    from synlynk.viz import cmd_viz
-    from synlynk.scheduler import cmd_schedule
-    _reconcile_jobs()
+def build_parser() -> argparse.ArgumentParser:
+    from synlynk import AGENT_CAPABILITY_BASELINES, SynlynkRelay, VERSION
+
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
     )
@@ -610,7 +545,93 @@ def main() -> None:
     viz_parser.add_argument("--port", type=int, default=None,
                             help="Override port (default: 8721)")
 
+    parser._synlynk_help_parsers = {
+        "agent": agent_parser,
+        "configure": configure_parser,
+        "config": config_parser,
+        "daemon": daemon_parser,
+        "goal": goal_parser,
+        "identity": identity_parser,
+        "instructions": instructions_parser,
+        "local": local_parser,
+        "relay": relay_parser,
+        "run": run_parser,
+        "team": team_parser,
+    }
+
+    return parser
+
+
+def main() -> None:
+    from synlynk import (
+        AGENT_CAPABILITY_BASELINES,
+        SynlynkDaemon,
+        SynlynkRelay,
+        _CYAN,
+        _GREEN,
+        _RESET,
+        _daemon_install_service,
+        _daemon_uninstall_service,
+        _reconcile_jobs,
+        _update_config,
+        checkpoint,
+        cmd_agent_add,
+        cmd_agent_configure,
+        cmd_agent_list,
+        cmd_agent_run,
+        cmd_decide,
+        cmd_doctor,
+        cmd_exit,
+        cmd_identity_init,
+        cmd_instructions_ack,
+        cmd_instructions_diff,
+        cmd_instructions_status,
+        cmd_instructions_update,
+        cmd_jobs,
+        cmd_jobs_handoff,
+        cmd_join,
+        cmd_launch,
+        cmd_launch_ftue,
+        cmd_logs,
+        cmd_migrate,
+        cmd_pr_check,
+        cmd_probe,
+        cmd_relay_broadcast,
+        cmd_relay_start,
+        cmd_release,
+        cmd_repair,
+        cmd_roles,
+        cmd_run_trio,
+        cmd_scan,
+        cmd_cost_log,
+        cmd_score_add,
+        cmd_score_attest,
+        cmd_score_list,
+        cmd_shell,
+        cmd_status as cmd_project_status,
+        cmd_story_create,
+        cmd_story_draft,
+        cmd_story_list,
+        cmd_story_ready,
+        cmd_sync,
+        cmd_configure_agent,
+        cmd_team_status,
+        cmd_watch,
+        dispatch_agent,
+        exec_command,
+        init,
+        sentinel_clear,
+        sentinel_list,
+        upgrade,
+        wizard_init,
+    )
+    from synlynk.status import cmd_status as cmd_ecosystem_status
+    from synlynk.viz import cmd_viz
+    from synlynk.scheduler import cmd_schedule
+    _reconcile_jobs()
+    parser = build_parser()
     args = parser.parse_args()
+    help_parsers = getattr(parser, "_synlynk_help_parsers", {})
 
     if args.command == "init":
         if getattr(args, "wizard", False):
@@ -778,7 +799,7 @@ def main() -> None:
         elif action == "ack":
             cmd_instructions_ack(args.file)
         else:
-            instructions_parser.print_help()
+            help_parsers.get("instructions", parser).print_help()
     elif args.command == "agent":
         action = getattr(args, "agent_action", None)
         if action == "add":
@@ -794,7 +815,7 @@ def main() -> None:
         elif action == "list":
             cmd_agent_list()
         else:
-            agent_parser.print_help()
+            help_parsers.get("agent", parser).print_help()
     elif args.command == "join":
         cmd_join()
     elif args.command == "team":
@@ -802,7 +823,7 @@ def main() -> None:
         if action == "status" or action is None:
             cmd_team_status()
         else:
-            team_parser.print_help()
+            help_parsers.get("team", parser).print_help()
     elif args.command == "decide":
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
         cmd_decide(args.topic, panel=panel_members, record=args.record)
@@ -818,13 +839,13 @@ def main() -> None:
         elif action == "status" or action is None:
             cmd_goal_status()
         else:
-            goal_parser.print_help()
+            help_parsers.get("goal", parser).print_help()
     elif args.command == "local":
         from synlynk.local_agent import cmd_local_doctor
         if args.local_action == "doctor":
             sys.exit(cmd_local_doctor())
         else:
-            local_parser.print_help()
+            help_parsers.get("local", parser).print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
@@ -871,13 +892,13 @@ def main() -> None:
             envs = dict(item.split("=", 1) for item in args.env) if args.env else {}
             cmd_configure_agent(args.name, flags=flags, envs=envs, network_deps=args.network_dep)
         else:
-            configure_parser.print_help()
+            help_parsers.get("configure", parser).print_help()
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:
             cmd_identity_init()
         else:
-            identity_parser.print_help()
+            help_parsers.get("identity", parser).print_help()
     else:
         parser.print_help()
 
