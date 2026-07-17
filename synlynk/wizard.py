@@ -9,6 +9,8 @@ import time
 import tty
 from typing import Tuple
 
+from synlynk.taxonomy import entries_for_tier
+
 def _pkg(name: str, default=None):
     package = sys.modules.get("synlynk")
     if package is None:
@@ -39,7 +41,7 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
     - list_mode: print full template pool with trigger conditions
     """
     if list_mode:
-        templates = _pkg("LAUNCH_TASK_TEMPLATES")
+        templates = _pkg("_launch_visible_templates")()
         core_ids = _pkg("CORE_TEMPLATE_IDS")
         print(f"\n  {_BOLD}synlynk launch - task template pool ({len(templates)} templates){_RESET}\n")
         for t in templates:
@@ -734,16 +736,20 @@ def _wiz_screen_launch(workspace: dict, scan: dict, auto_launch: bool = False) -
     print(f"  {_BOLD}{_GREEN}You're set up.{_RESET}  "
           f"{_DIM}workspace: {ws_name}{_RESET}\n")
     print(f"  {_DIM}{'─' * 52}{_RESET}\n")
-    cmds = [
-        (f"synlynk dispatch {home_h}", f'"ask {home_h} something"', "dispatch a task"),
-        ("synlynk scan --refresh", "", "re-scan all repos"),
-        ("synlynk status", "", "platform health + agent availability"),
-        ("synlynk jobs", "", "list running/recent jobs"),
-        ("synlynk help", "", "full command reference"),
-    ]
-    for cmd, arg, desc in cmds:
-        suffix = f" {arg}" if arg else ""
-        print(f"  {_CYAN}{cmd}{suffix}{_RESET}  {_DIM}{desc}{_RESET}")
+    cheat_sheet = []
+    seen = set()
+    for entry in entries_for_tier(0):
+        if entry["prominence"] == "primary" and not entry["orientation_gateway"]:
+            cheat_sheet.append(entry)
+            seen.add(entry["command"])
+    for entry in entries_for_tier(0):
+        if entry["orientation_gateway"] and entry["command"] not in seen:
+            cheat_sheet.append(entry)
+            seen.add(entry["command"])
+
+    for entry in cheat_sheet:
+        trigger = entry["trigger_phrases"][0] if entry["trigger_phrases"] else "launch from synlynk"
+        print(f"  {_CYAN}synlynk {entry['command']}{_RESET}  {_DIM}{trigger}{_RESET}")
     print(f"\n  {_DIM}{'─' * 52}{_RESET}")
     _wiz_prompt("done · run `synlynk launch` to pick your first task")
     _pkg("_wiz_read_key")()

@@ -100,6 +100,7 @@ from synlynk.costs import (
     parse_costs_md,
     update_costs,
 )
+from synlynk.taxonomy import entries_for_tier
 from synlynk.doctor import (
     HEALTH_CHECKS,
     HealthCheck,
@@ -305,6 +306,20 @@ CORE_TEMPLATE_IDS = {"arch-review", "product-assessment", "lifecycle-setup"}
 
 # Capability scores within this gap are considered ties → break on cost (#140).
 _CAPABILITY_COST_TIE_GAP = 0.15
+
+def _launch_visible_template_ids() -> set:
+    tier1_primary_ids = {
+        entry["command"]
+        for entry in entries_for_tier(1)
+        if entry["prominence"] == "primary"
+    }
+    return CORE_TEMPLATE_IDS | tier1_primary_ids
+
+
+def _launch_visible_templates() -> list:
+    visible_ids = _launch_visible_template_ids()
+    return [template for template in LAUNCH_TASK_TEMPLATES if template["id"] in visible_ids]
+
 
 LAUNCH_TASK_TEMPLATES = [
     # ── Core templates (always shown) ───────────────────────────────────────
@@ -670,7 +685,7 @@ def _template_matches(template: dict, scan: dict) -> bool:
 
 def _select_launch_tasks(scan: dict) -> list:
     """Returns ordered list of 3-5 matching templates (core first, bonus sorted by specificity)."""
-    eligible = [t for t in LAUNCH_TASK_TEMPLATES if _template_matches(t, scan)]
+    eligible = [t for t in _launch_visible_templates() if _template_matches(t, scan)]
     core = [t for t in eligible if t["id"] in CORE_TEMPLATE_IDS]
     bonus = [t for t in eligible if t["id"] not in CORE_TEMPLATE_IDS]
     return (core + bonus)[:5]
