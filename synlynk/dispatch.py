@@ -425,7 +425,6 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             f"{note_line}"
             f"duration: {duration_label}\n"
             f"{render_task_fence(fence)}"
-            f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
             f"{worktree_line}"
             f"{files_line}"
             f"---------------------------------\n"

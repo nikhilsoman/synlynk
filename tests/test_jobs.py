@@ -100,7 +100,7 @@ def test_write_job_summary_content(tmp_path, monkeypatch):
     assert "agent:    agy   story: story-42" in text
     assert "status:   OK (exit 0)" in text
     assert "duration: 3.0s" in text
-    assert "tokens:   in 1,000  out 250  (~$0.03)" in text
+    assert "cost:   $0.03  (1,000 in / 250 out, structured_output)" in text
 
 
 def test_write_job_summary_failed_job(tmp_path, monkeypatch):
