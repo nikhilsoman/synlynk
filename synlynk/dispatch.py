@@ -13,6 +13,7 @@ import time
 from typing import Optional, Tuple
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
 
 
@@ -404,6 +405,31 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         if more_count > 0:
             rendered_files += f"          +{more_count} more\n"
         files_line += rendered_files
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    if is_fenced_command("jobs", config):
+        fence = FenceData(
+            command="jobs",
+            kind="actual",
+            in_tokens=in_tokens,
+            out_tokens=out_tokens,
+            cost_usd=cost_usd,
+            basis="structured_output",
+            hints=["Run \"synlynk watch\" for a live overview"],
+            label=job_id,
+        )
+        return (
+            f"-- job {job_id} complete ---------\n"
+            f"agent:    {agent}   story: {story_label}\n"
+            f"status:   {status_label}\n"
+            f"{note_line}"
+            f"duration: {duration_label}\n"
+            f"{render_task_fence(fence)}"
+            f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
+            f"{worktree_line}"
+            f"{files_line}"
+            f"---------------------------------\n"
+        )
     return (
         f"-- job {job_id} complete ---------\n"
         f"agent:    {agent}   story: {story_label}\n"
