@@ -100,67 +100,20 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/cont
 
 Commands are grouped by where you'll reach for them in a typical project lifecycle.
 
-### Getting Started
+<!-- commands:start -->
 
-| Command | Description |
-| --- | --- |
-| `synlynk init [--force] [--wizard]` | Initialize synlynk in a repository |
-| `synlynk doctor` | Run health checks on your synlynk installation |
-| `synlynk probe` | Probe agent harness capability and record compatibility |
-| `synlynk exec <cmd>` | Execute an AI CLI with synlynk context |
-| `synlynk status [--json] [--platform]` | Show project state dashboard |
-| `synlynk upgrade` | Check for and apply updates |
+**Start here:**
 
-### Daily Use
+- `synlynk init`
+- `synlynk scan`
+- `synlynk join`
+- `synlynk status`
+- `synlynk watch`
+- `synlynk viz`
 
-| Command | Description |
-| --- | --- |
-| `synlynk dispatch <agent> --task <text> [--story <id>] [--context-mode none\|task\|full]` | Dispatch an agent to run a task in the background |
-| `synlynk jobs [--all] [--watch] [--stalled]` | List dispatched background jobs |
-| `synlynk jobs handoff <job-id> <agent>` | Transfer a stalled job to another agent |
-| `synlynk watch [--live]` | Live workspace HUD (synlynk watch) |
-| `synlynk launch [--dry-run] [--list]` | Pick your first task and dispatch it (FTUE task picker) |
-| `synlynk run --trio <task>` | Dispatch all functional agents in parallel (not the sequential Trio pipeline) |
-| `synlynk checkpoint` | Archive done tasks, refresh context, emit telemetry |
-| `synlynk logs --job <id> [--tail N]` | Tail the output log of a job |
-| `synlynk shell [--story <id>]` | Spawn a subshell with synlynk context injected |
-| `synlynk open <agent> [--story <id>]` | Open an agent CLI interactively with pre-loaded context |
-| `synlynk config set <key> <value>` | Set a config key |
-| `synlynk sentinel list\|clear [--severity] [--code]` | View and manage sentinel alerts |
-| `synlynk cost log` | Log a manual cost entry for native/unwrapped sessions |
+Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
-### Team / PM
-
-| Command | Description |
-| --- | --- |
-| `synlynk join` | Onboard as a new member to an existing project |
-| `synlynk team status` | Show team digest: members, stories, budget |
-| `synlynk decide <topic> --panel <agents> [--record]` | Convene a multi-agent panel and optionally record a Decision |
-| `synlynk goal create\|list\|link\|status` | Manage Business Goals |
-| `synlynk story create\|list\|ready\|draft` | Manage stories |
-| `synlynk score add\|list\|attest` | Manage capability scores |
-| `synlynk schedule [--execute] [--max-stories N]` | Batch-assign ready stories to agents (dry-run by default) |
-| `synlynk relay start [--port N]` | Start relay broker (foreground) |
-| `synlynk relay broadcast <body> [--kind motd\|wellness\|message\|joke\|custom]` | Send a broadcast event to the relay |
-| `synlynk instructions status\|diff\|update\|ack` | Manage synlynk instruction files across AI tools |
-| `synlynk pr check` | Block PR if model versions are unattested |
-| `synlynk roles [--fix]` | Show agent role table and directive file fence status |
-
-### Advanced / Operate
-
-| Command | Description |
-| --- | --- |
-| `synlynk agent configure\|run\|list` | Manage and run autopilot agents |
-| `synlynk identity init` | Create local Ed25519 identity key |
-| `synlynk scan [--refresh] [--add PATH] [--remove PATH] [--dry-run] [--workspace WORKSPACE] [--no-tui] [--deep] [--status]` | Scan workspace environment (repos, harnesses, agents, skills) |
-| `synlynk migrate [--dry-run] [--recover] [--setup-dr]` | Migrate project-docs markdown into state.db and .synlynk/project-docs |
-| `synlynk repair [--confirm]` | Remove and re-initialize synlynk using current configuration |
-| `synlynk sync [--confirm] [--repair-sops]` | Propagate updated synlynk artifacts without full re-init |
-| `synlynk exit [--confirm] [--remove-docs]` | Remove synlynk from this repository (reversible via repair) |
-| `synlynk release [--dry-run] [--version VERSION] [--minor]` | Cut a named release |
-| `synlynk viz [--serve\|--generate\|--open\|--stop\|--port PORT]` | Open local browser workspace dashboard |
-| `synlynk daemon [start\|stop\|status\|restart] [--install-service] [--uninstall-service]` | Manage the always-on context daemon |
-| `synlynk --version` | Print current version |
+<!-- commands:end -->
 
 > **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux. `synlynk dispatch` works on all platforms.
 
