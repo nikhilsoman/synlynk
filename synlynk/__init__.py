@@ -1334,6 +1334,7 @@ def load_config() -> dict:
         "watch_interval_seconds": 30,
         "auto_launch_after_wizard": True,
         "dispatch_mode": "daily-grind",
+        "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
         "org": None,
         "owner": None,
         "repo": None,
