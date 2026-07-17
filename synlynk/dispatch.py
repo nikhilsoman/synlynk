@@ -3,6 +3,7 @@
 import json
 import os
 import re
+from dataclasses import asdict
 import select
 import signal
 import subprocess
@@ -851,6 +852,74 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
+    fence_data = None
+    load_config_fn = _pkg("load_config")
+    fence_config = load_config_fn() if load_config_fn else {}
+    from synlynk.fencing import FenceData, is_fenced_command
+    from synlynk.status import estimate_dispatch_tokens
+    if is_fenced_command("dispatch", fence_config):
+        rate_fn = _pkg("_model_rate_for_version")
+        if context_mode == "none":
+            est = estimate_dispatch_tokens(prompt, context_text, agent)
+            in_tok, out_tok = est["input"], est["output"]
+            basis = "prompt_estimate"
+        else:
+            db_conn = _pkg("_get_db")
+            conn = db_conn() if db_conn else None
+            if conn is not None:
+                if story_id:
+                    row = conn.execute(
+                        "SELECT estimated_tokens FROM stories WHERE story_id=?",
+                        (story_id,),
+                    ).fetchone()
+                    if row and row[0]:
+                        total_tokens = int(row[0])
+                        half = total_tokens // 2
+                        in_tok, out_tok, basis = half, total_tokens - half, "story_estimate"
+                    else:
+                        discipline = None
+                        phase = None
+                        row = conn.execute(
+                            "SELECT discipline, phase FROM stories WHERE story_id=?",
+                            (story_id,),
+                        ).fetchone()
+                        if row:
+                            discipline, phase = row[0], row[1]
+                        if discipline and phase:
+                            rows = conn.execute(
+                                """SELECT cost_entries.input_tokens, cost_entries.output_tokens
+                                   FROM cost_entries
+                                   JOIN stories ON cost_entries.story_id = stories.story_id
+                                   WHERE stories.discipline = ?
+                                     AND stories.phase = ?
+                                     AND cost_entries.cost_source IN ('actual', 'estimated_token_rate')
+                                   ORDER BY cost_entries.id DESC
+                                   LIMIT ?""",
+                                (discipline, phase, 20),
+                            ).fetchall()
+                            if len(rows) >= 3:
+                                avg_in = sum((row[0] or 0) for row in rows) // len(rows)
+                                avg_out = sum((row[1] or 0) for row in rows) // len(rows)
+                                in_tok, out_tok, basis = avg_in, avg_out, "historical_avg"
+                            else:
+                                in_tok, out_tok, basis = 5000, 2000, "fixed_default"
+                        else:
+                            in_tok, out_tok, basis = 5000, 2000, "fixed_default"
+                else:
+                    in_tok, out_tok, basis = 5000, 2000, "fixed_default"
+            else:
+                in_tok, out_tok, basis = 5000, 2000, "fixed_default"
+        rates = rate_fn(model_at_dispatch, agent=agent) if rate_fn else {"input": 0.003, "output": 0.015}
+        cost_usd = (in_tok / 1000 * rates["input"]) + (out_tok / 1000 * rates["output"])
+        fence_data = FenceData(
+            command="dispatch",
+            kind="estimate",
+            in_tokens=in_tok,
+            out_tokens=out_tok,
+            cost_usd=cost_usd,
+            basis=basis,
+        )
+
     import shlex as _shlex
     prompt_file_flag = baselines.get("prompt_file_flag")
     prompt_via_arg = baselines.get("prompt_via_arg", False)
@@ -912,6 +981,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "micro_rework": 0,
         "retry_count": 0,
         "model_at_dispatch": model_at_dispatch,
+        "fence": fence_data,
     }
 
     load_jobs = _pkg("_load_jobs")
@@ -919,7 +989,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     jobs = load_jobs() if load_jobs else []
     jobs.append(job)
     if save_jobs:
-        save_jobs(jobs)
+        jobs_to_save = []
+        for saved_job in jobs:
+            if hasattr(saved_job.get("fence"), "__dataclass_fields__"):
+                saved_job = dict(saved_job)
+                saved_job["fence"] = asdict(saved_job["fence"])
+            jobs_to_save.append(saved_job)
+        save_jobs(jobs_to_save)
 
     dconn = None
     get_db = _pkg("_get_db")
