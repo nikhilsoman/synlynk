@@ -1182,7 +1182,20 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     (out_tokens / 1000 * rates["output"]) +
                     (cache_read_tokens / 1000 * rates["cache_read"])
                 )
-                print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
+                load_config_fn = _pkg("load_config")
+                fence_config = load_config_fn() if load_config_fn else {}
+                if is_fenced_command("exec", fence_config):
+                    fence = FenceData(
+                        command="exec",
+                        kind="actual",
+                        in_tokens=in_tokens,
+                        out_tokens=out_tokens,
+                        cost_usd=est_cost,
+                        basis=basis,
+                    )
+                    print(render_task_fence(fence))
+                else:
+                    print(f"  ⚡ Tokens: {in_tokens:,} in / {out_tokens:,} out  |  est. ${est_cost:.4f}")
             else:
                 print(f"  ⚡ Token count unavailable — logged as estimated_tshirt fallback")
         else:

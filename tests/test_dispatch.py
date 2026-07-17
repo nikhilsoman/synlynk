@@ -38,3 +38,53 @@ def test_format_job_summary_falls_back_when_jobs_not_allowlisted(monkeypatch):
     )
     assert "job job-x complete" in summary
     assert "synlynk watch" not in summary
+
+
+def test_exec_command_prints_fence_when_exec_allowlisted(tmp_path, monkeypatch, capsys):
+    import synlynk as sl
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(sl, "set_state", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(sl, "log_telemetry_event", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_sentinel_patterns", lambda **kw: None)
+    monkeypatch.setattr(sl, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(sl, "WatchDaemon", None)
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": ["exec"]})
+
+    exec_command(["echo", "--print", "Input tokens: 10 Output tokens: 5"])
+
+    captured = capsys.readouterr()
+    assert "-- exec complete" in captured.out
+    assert "cost:" in captured.out
+
+
+def test_exec_command_falls_back_when_exec_not_allowlisted(tmp_path, monkeypatch, capsys):
+    import synlynk as sl
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(sl, "set_state", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(sl, "log_telemetry_event", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_sentinel_patterns", lambda **kw: None)
+    monkeypatch.setattr(sl, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(sl, "WatchDaemon", None)
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": []})
+
+    exec_command(["echo", "--print", "Input tokens: 10 Output tokens: 5"])
+
+    captured = capsys.readouterr()
+    assert "⚡ Tokens: 10 in / 5 out" in captured.out
+    assert "-- exec complete" not in captured.out
