@@ -1,7 +1,63 @@
 import os
 import sys
+import sqlite3
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch, capsys):
+    from synlynk.fencing import FenceData
+    from synlynk.jobs import _dispatch_ready_jobs
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, "
+        "story_id TEXT, depends_on TEXT, log_path TEXT, priority INTEGER, "
+        "enqueued_at TEXT, status TEXT, pid INTEGER, started_at TEXT, completed_at TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, depends_on, log_path, "
+        "priority, enqueued_at, status) VALUES "
+        "('job-abc123', 'codex', 'do the thing', 'story-x', '[]', '/tmp/x-log', 1, "
+        "'2026-07-17T00:00:00', 'queued')"
+    )
+    conn.commit()
+
+    fake_job = {
+        "id": "job-abc123",
+        "pid": 999,
+        "started_at": "2026-07-17T00:00:00",
+        "log_file": "/tmp/x-log",
+        "fence": FenceData(
+            command="schedule",
+            kind="estimate",
+            in_tokens=100,
+            out_tokens=50,
+            cost_usd=0.01,
+            basis="prompt_estimate",
+        ),
+    }
+
+    import synlynk.jobs as jobs_mod
+    from synlynk.fencing import render_task_fence
+
+    def pkg_side_effect(name, default=None):
+        if name == "_get_db":
+            return lambda: conn
+        if name == "dispatch_agent":
+            return lambda *a, **k: fake_job
+        if name == "render_task_fence":
+            return render_task_fence
+        return default
+
+    monkeypatch.setattr(jobs_mod, "_pkg", pkg_side_effect)
+
+    launched = _dispatch_ready_jobs(max_parallel=4)
+
+    assert launched == 1
+    out = capsys.readouterr().out
+    assert "schedule" in out
+    assert "$0.01" in out
 
 
 def test_write_job_summary_creates_file(tmp_path, monkeypatch):

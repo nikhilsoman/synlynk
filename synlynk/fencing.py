@@ -1,10 +1,10 @@
-"""Shared task-boundary cost fence helpers."""
+"""Estimate fence helpers for task dispatch output."""
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Iterable, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class FenceData:
     command: str
     kind: str
@@ -12,26 +12,30 @@ class FenceData:
     out_tokens: int
     cost_usd: float
     basis: str
-    hints: List[str] = field(default_factory=list)
+    hints: Optional[Iterable[str]] = None
     label: Optional[str] = None
 
 
-def render_task_fence(data: FenceData) -> str:
-    """Render a bordered fence block for a FenceData instance."""
-    label = data.label or data.command
-    suffix = "estimate" if data.kind == "estimate" else "complete"
-    header = f"-- {label} {suffix} " + "-" * max(1, 32 - len(label) - len(suffix))
-    prefix = "~$" if data.kind == "estimate" else "$"
+def render_task_fence(fence: FenceData) -> str:
+    """Render a compact human-readable estimate fence."""
+    title = fence.label or fence.command
+    status = "estimate" if fence.kind == "estimate" else "complete"
+    cost_prefix = "~" if fence.kind == "estimate" else ""
+    token_text = f"{fence.in_tokens:,} in / {fence.out_tokens:,} out"
     lines = [
-        header,
-        f"cost:   {prefix}{data.cost_usd:.2f}  ({data.in_tokens:,} in / {data.out_tokens:,} out, {data.basis})",
+        f"-- {title} {status} ",
+        f"cost: {cost_prefix}${fence.cost_usd:.2f}",
+        token_text,
+        f"basis: {fence.basis}",
     ]
-    for hint in data.hints:
+    for hint in fence.hints or []:
         lines.append(f"tip:    {hint}")
-    lines.append("-" * 36)
-    return "\n".join(lines) + "\n"
+    return (
+        "\n".join(lines)
+    )
 
 
 def is_fenced_command(command: str, config: dict) -> bool:
-    """True if `command` is in config['fenced_commands']."""
-    return command in (config.get("fenced_commands") or [])
+    """Return True when command is explicitly listed for fence rendering."""
+    fenced_commands = config.get("fenced_commands") or []
+    return command in fenced_commands
