@@ -8,7 +8,7 @@
 
 ## Why this exists
 
-Issue #262 asked for something narrow: pick 5 daily commands, demote the rest from README/FTUE to reference docs. Working through it surfaced that the real command surface is much larger than the docs suggest — **~45 commands and subcommands** are registered in `synlynk/cli.py`, versus ~19 visible in `README.md`. A flat "top 5" list can't represent that gap honestly, because:
+Issue #262 asked for something narrow: pick 5 daily commands, demote the rest from README/FTUE to reference docs. Working through it surfaced that the real command surface is much larger than the docs suggest — **58 commands and subcommands** are registered in `synlynk/cli.py` (counting each nested subcommand as its own entry — see Section 1), versus ~19 visible in `README.md`. A flat "top 5" list can't represent that gap honestly, because:
 
 1. Not every command is meant for a human to type. Some exist purely for synlynk's own autopilots/hooks to invoke (`relay`, `checkpoint`, `daemon`, `instructions ack`, etc.) — these should never compete for a human's attention regardless of how experienced the user is.
 2. What's "essential" changes as a user/repo matures. A brand-new repo needs `init`/`scan`; a repo with months of history needs `dispatch`/`jobs`. A single flat list can't represent that.
@@ -88,24 +88,27 @@ This shape deliberately mirrors the existing `LAUNCH_TASK_TEMPLATES` structure i
 
 - Are available from **Tier 0 onward** — never gated behind maturity, since the orientation layer should never need to be "unlocked"
 - Are **never demoted** to secondary as the user's tier advances (every other `primary` command cycles to `secondary` once the user moves past the tier where it's freshest)
-- Are the intended long-term home for taxonomy browsing (see "Out of scope" — Phase 5)
+- Are the intended long-term home for taxonomy browsing (see "Out of scope," item 2)
 
 ### Full command classification
 
-The complete classification of all ~45 currently-registered commands (derived from `synlynk/cli.py`'s `add_parser()` calls) is maintained as the initial contents of `COMMAND_TAXONOMY` at implementation time, not duplicated here as a second source of truth. Summary by tier:
+`command` is defined as one leaf entry per `add_parser()` call in `synlynk/cli.py`, including nested subcommands (e.g. `story create`, `story list`, `story ready`, and `story draft` are four separate entries, not one `story` entry) — this is the exact granularity Section 4's coverage test checks against. Counted at that granularity, `synlynk/cli.py` registers **58 commands** as of 2026-07-17 (not ~45 — the earlier estimate undercounted nested subcommands). The complete classification of all 58 is maintained as the initial contents of `COMMAND_TAXONOMY` at implementation time, not duplicated here as a second source of truth. Summary by tier:
 
 | Tier | Count | Primary examples | Secondary examples |
 |---|---|---|---|
-| 0 — FTUE | 8 | `init`, `scan`, `join` | `migrate`, `agent add/configure/list`, `config set` |
-| 1 — Goal | 8 | `decide`, `goal *`, `story *`, `open`, `launch` | — |
-| 2 — Execute | 16 | `dispatch`, `jobs`, `schedule`, `release`, `pr` | `doctor`, `probe`, `exec`, `logs`, `shell`, `sentinel *`, `cost log`, `run --trio`, `local doctor`, `upgrade` |
-| 3 — Team/Enterprise | 4 | `team status`, `sync` | `score *`, `roles` |
+| 0 — FTUE | 9 | `init`, `scan`, `join` | `migrate`, `configure agent`, `agent add/configure/list`, `config set` |
+| 1 — Goal | 12 | `decide`, `goal *`, `story create/list`, `open`, `launch` | `story ready/draft`, `roles` |
+| 2 — Execute | 17 | `dispatch`, `jobs`, `schedule`, `release`, `pr check` | `doctor`, `probe`, `exec`, `logs`, `shell`, `sentinel list/clear`, `cost log`, `run --trio`, `local doctor`, `upgrade`, `jobs handoff` |
+| 3 — Team/Enterprise | 5 | `team status`, `sync` | `score add/list/attest` |
 | Gateway (tier-independent) | 3 | `status`, `watch`, `viz` | — |
-| Latent (autopilot/hook) | 9 | — | `relay *`, `checkpoint`, `daemon`, `identity init`, `repair`, `exit`, `instructions *` |
+| Latent (autopilot/hook) | 12 | — | `relay start/broadcast`, `checkpoint`, `daemon`, `identity init`, `repair`, `exit`, `agent run`, `instructions status/diff/update/ack` |
 
-Notes on two deliberate calls:
+9 + 12 + 17 + 5 + 3 + 12 = 58, matching the full inventory above.
+
+Notes on deliberate calls:
 - `doctor` is classified **secondary**, not primary, despite appearing in Fable's original "5 daily commands" proposal — it's a periodic health check, not a daily-driver verb. Flagged for revisit if this doesn't match real usage once telemetry exists.
-- Tier 2 has 8 primary commands, larger than the founder's own stated daily habit (`dispatch` + `jobs`). Deliberately left at 8 rather than narrowed further — the intent is that **context (Phase 4, out of scope here) does the narrowing at display time**, not a smaller static list.
+- Tier 2 has 5 primary commands (`dispatch`, `jobs`, `schedule`, `release`, `pr check`), close to the founder's own stated daily habit (`dispatch` + `jobs`). The remaining 12 Tier 2 commands stay secondary rather than being cut — the intent is that **context (Phase 4, out of scope here) does the narrowing at display time**, not a smaller static list.
+- `cli.py` registers two distinct, confusingly-named commands: `configure agent` (line ~329, sets dispatch flag/env/network-dep overrides for an agent's harness) and `agent configure` (line ~353, interactively writes the agent's `.agents/<name>.json` context profile). Both are real and both get separate `COMMAND_TAXONOMY` entries; this pre-existing overlap is not resolved by this spec but is worth a product-naming pass at implementation time.
 
 ---
 
@@ -153,5 +156,5 @@ Two independent delivery mechanisms, sharing the same `trigger_phrases` / `hook_
 - `docs/superpowers/specs/2026-07-16-gtm-checklist-agenda.md` (GTM item 4 — trigger hardening; GTM item 5 — onboarding hardening)
 - `docs/superpowers/specs/2026-06-27-bs7-skill-pack-interoperability-design.md` (`synlynk:start/end` fencing mechanism, reused here)
 - `synlynk/__init__.py` `LAUNCH_TASK_TEMPLATES` / `CORE_TEMPLATE_IDS` (existing precedent for this data shape)
-- `synlynk/cli.py` (full command inventory, ~45 commands/subcommands as of 2026-07-17)
+- `synlynk/cli.py` (full command inventory, 58 commands/subcommands as of 2026-07-17)
 - `docs/superpowers/specs/2026-07-17-adoption-priority-stack-rank.md` (item 4 — surface consolidation — and item 6 — GTM item 4 triggers — both folded into this spec)
