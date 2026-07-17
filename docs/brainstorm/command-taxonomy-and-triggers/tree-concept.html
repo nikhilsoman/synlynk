@@ -1,0 +1,88 @@
+<h2>GOVERNS Command Tree — Zoom Concept</h2>
+<p class="subtitle">Left: zoomed out (7 GOVERNS stages as branches). Right: zoomed in on one branch (Execute), showing tiered commands. This is a first-pass draft of the categorization — react to both the mechanic and where I put things.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Zoomed Out — 7 Stage Branches</div>
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;gap:10px;font-family:monospace;font-size:13px">
+        <div style="padding:10px;border-radius:8px;background:#dbeafe;border:1px solid #93c5fd">
+          <b>◆ GOAL</b> <span class="label">4 commands</span><br>
+          <span style="color:#555">decide · goal create/list/link/status · story create/list</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#ede9fe;border:1px solid #c4b5fd">
+          <b>○ OPEN</b> <span class="label">6 commands</span><br>
+          <span style="color:#555">scan · init · join · launch · agent add/configure · roles</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#e6f7f4;border:1px solid #c0ede6">
+          <b>◌ VISUALIZE</b> <span class="label">3 commands</span><br>
+          <span style="color:#555">status · watch · viz</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#dcfce7;border:1px solid #86efac">
+          <b>⚙ EXECUTE</b> <span class="label">9 commands — click to zoom →</span><br>
+          <span style="color:#555">dispatch · schedule · jobs · sentinel · logs · exec · run --trio · relay · checkpoint</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#fef3c7;border:1px solid #fde68a">
+          <b>▲ RELEASE</b> <span class="label">2 commands</span><br>
+          <span style="color:#555">release · pr</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#ffe4e6;border:1px solid #fda4af">
+          <b>✉ NOTIFY</b> <span class="label">1 command</span><br>
+          <span style="color:#555">team status</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#f3f4f6;border:1px solid #d1d5db">
+          <b>↺ SUSTAIN</b> <span class="label">12 commands</span><br>
+          <span style="color:#555">doctor · probe · migrate · repair · sync · daemon · upgrade · exit · score · cost log · instructions · identity/config</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Zoomed In — Execute Branch Detail</div>
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;gap:8px;font-family:monospace;font-size:13px">
+        <div style="padding:10px;border-radius:8px;background:#15803d;color:white">
+          <b>dispatch</b> <span style="opacity:0.8">— TIER 1 · daily driver</span><br>
+          <span style="font-size:12px;opacity:0.9">Trigger phrases: "let's build X", "can you implement...", "hand this to codex"</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#15803d;color:white">
+          <b>schedule</b> <span style="opacity:0.8">— TIER 1 · daily driver</span><br>
+          <span style="font-size:12px;opacity:0.9">Trigger phrases: "batch these up", "run this fleet-wide"</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#15803d;color:white">
+          <b>jobs</b> <span style="opacity:0.8">— TIER 1 · daily driver</span><br>
+          <span style="font-size:12px;opacity:0.9">Trigger phrases: "what's still running", "check on that job"</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#86efac;color:#14532d">
+          <b>sentinel</b> <span style="opacity:0.8">— TIER 2 · surfaced on alert only</span><br>
+          <span style="font-size:12px">Auto-surfaces in watch/viz when a FLATLINE/STALL fires — not a command a human types daily</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#86efac;color:#14532d">
+          <b>logs</b> <span style="opacity:0.8">— TIER 2 · secondary/debug</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#86efac;color:#14532d">
+          <b>exec</b> <span style="opacity:0.8">— TIER 2 · power-user direct invoke</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#e5e7eb;color:#4b5563">
+          <b>run --trio</b> <span style="opacity:0.8">— TIER 3 · agent/pilot-only</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#e5e7eb;color:#4b5563">
+          <b>relay start/broadcast</b> <span style="opacity:0.8">— TIER 3 · agent/pilot-only (event broker internals)</span>
+        </div>
+        <div style="padding:10px;border-radius:8px;background:#e5e7eb;color:#4b5563">
+          <b>checkpoint</b> <span style="opacity:0.8">— TIER 3 · agent/pilot-only (internal state snapshot)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>Questions this raises for you</h3>
+  <ul>
+    <li>Does grouping by GOVERNS stage feel right, or should some commands live under a stage-independent "Admin/Config" root instead (e.g. identity, config set, roles)?</li>
+    <li>Is 3-tier (daily driver / secondary / pilot-only) the right granularity, or do you want a 4th tier (e.g. "team/enterprise-only")?</li>
+    <li>SUSTAIN has 12 commands — the biggest branch by far. Does that feel like a dumping-ground smell, or is that expected (SDLC's maintenance stage naturally accumulates the most tooling)?</li>
+  </ul>
+</div>
