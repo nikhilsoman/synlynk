@@ -25,6 +25,8 @@ def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
 
     for action in subparsers_actions:
         for name, subparser in action.choices.items():
+            if getattr(subparser, "_synlynk_skip_taxonomy", False):
+                continue
             yield from iter_leaf_commands(subparser, prefix + (name,))
 
 
