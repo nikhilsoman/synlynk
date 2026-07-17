@@ -859,7 +859,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     from synlynk.status import estimate_dispatch_tokens
     if is_fenced_command("dispatch", fence_config):
         rate_fn = _pkg("_model_rate_for_version")
-        if context_mode == "none":
+        if context_mode != "none":
             est = estimate_dispatch_tokens(prompt, context_text, agent)
             in_tok, out_tok = est["input"], est["output"]
             basis = "prompt_estimate"
