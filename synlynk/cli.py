@@ -393,6 +393,16 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--platform", action="store_true", dest="platform",
                                help="Show legacy project dashboard instead of ecosystem status")
 
+    selftest_parser = subparsers.add_parser(
+        "selftest",
+        help="Exercise every synlynk command (dry by default; --live runs against a real scratch repo)",
+    )
+    selftest_parser.add_argument(
+        "--live", action="store_true",
+        help="Run against a real throwaway git repo, including real paid-agent-CLI invocations, capped at $2 total spend",
+    )
+    selftest_parser._synlynk_skip_taxonomy = True
+
     config_parser = subparsers.add_parser("config", help="Manage synlynk config")
     config_sub = config_parser.add_subparsers(dest="config_action")
     config_set_parser = config_sub.add_parser("set", help="Set a config key")
@@ -767,6 +777,10 @@ def main() -> None:
         else:
             from synlynk import _get_db
             cmd_ecosystem_status(db_conn=_get_db(), json_output=args.json_output)
+    elif args.command == "selftest":
+        from synlynk.selftest import cmd_selftest
+
+        sys.exit(cmd_selftest(live=getattr(args, "live", False)))
     elif args.command == "config":
         if getattr(args, "config_action", None) == "set":
             from synlynk import cmd_config_set
