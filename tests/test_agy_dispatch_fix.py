@@ -76,6 +76,17 @@ def _fake_completed_process(stdout="", stderr="", returncode=0):
     return result
 
 
+def test_extract_build_parser_from_clipy_main_for_cli_introspection():
+    import synlynk.cli as cli_mod
+
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(["dispatch", "codex", "--task", "build"])
+
+    assert args.command == "dispatch"
+    assert args.agent == "codex"
+    assert args.task == "build"
+
+
 def test_dispatch_real_files_touched_via_git_diff_lists_committed_and_dirty_files(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
