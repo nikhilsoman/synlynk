@@ -1363,6 +1363,11 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 conn.commit()
                 continue
 
+            if job.get("fence"):
+                render_fence = _pkg("render_task_fence")
+                if render_fence:
+                    print(render_fence(job["fence"]))
+
             # dispatch_agent updates daemon_jobs when the row already exists; re-apply
             # on this connection so the per-job commit contract remains visible here.
             conn.execute(

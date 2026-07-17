@@ -59,6 +59,7 @@ from synlynk.probe import (
     _fence_exists,
     _probe_model_version,
 )
+from synlynk.fencing import FenceData, render_task_fence
 from synlynk.dispatch import (
     _spawn_with_pty_fallback,
     _is_interactive,
