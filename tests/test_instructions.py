@@ -49,6 +49,24 @@ def test_install_pre_commit_hook_rejects_non_shebang_hook(tmp_path, monkeypatch)
         install_pre_commit_hook(repo_root=tmp_path)
 
 
+def test_tier0_fixture_only_gets_tier0_and_gateway_phrases():
+    from synlynk.instructions import render_trigger_phrase_section
+
+    section = render_trigger_phrase_section(current_tier=0)
+    assert "let's build X" not in section
+    assert "set up synlynk here" in section
+    assert "where are we" in section
+
+
+def test_tier2_fixture_gets_tier0_through_tier2_phrases():
+    from synlynk.instructions import render_trigger_phrase_section
+
+    section = render_trigger_phrase_section(current_tier=2)
+    assert "let's build X" in section
+    assert "set up synlynk here" in section
+    assert "rate this agent's output" not in section
+
+
 def test_instructions_status_pre_commit_exits_on_drift(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()

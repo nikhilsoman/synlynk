@@ -15,6 +15,7 @@ from typing import Optional
 from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
 from synlynk.probe import SOP_BLOCKS
 from synlynk.sentinel import _write_sentinel_alert
+from synlynk.taxonomy import entries_up_to_tier
 
 
 def _pkg(name: str, default=None):
@@ -22,6 +23,28 @@ def _pkg(name: str, default=None):
     if package is None:
         return default
     return getattr(package, name, default)
+
+
+def _current_trigger_registry_tier() -> int:
+    """Return the tier used to scope trigger phrases in generated instructions.
+
+    No live maturity-tier signal exists in committed code outside taxonomy, so
+    this defaults to Tier 2 until that signal is available.
+    """
+    return 2
+
+
+def render_trigger_phrase_section(current_tier: int) -> str:
+    """Render the trigger-registry subsection injected into instruction files."""
+    entries = [
+        entry for entry in entries_up_to_tier(current_tier)
+        if entry["audience"] == "human" and entry["trigger_phrases"]
+    ]
+    lines = ["## Trigger registry", ""]
+    for entry in entries:
+        phrases = ", ".join(f'"{phrase}"' for phrase in entry["trigger_phrases"])
+        lines.append(f"- {phrases} -> `synlynk {entry['command']}`")
+    return "\n".join(lines)
 
 def _generate_ai_context_files(arch_context: str, git_summary: str) -> None:
     """Appends a context snapshot section to CLAUDE.md, GEMINI.md, AGENTS.md.
@@ -383,6 +406,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
     """Returns TEMPLATES dict with parameterized values filled in."""
     _pid = project_id or "TODO: PROJECT_ID"
     _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
+    _trigger_registry_section = render_trigger_phrase_section(_current_trigger_registry_tier())
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
@@ -501,7 +525,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _ghp_block + "\n"
         + _sop_section
         + _synlynk_start + "\n"
-        + _session_protocol
+        + _session_protocol + "\n\n"
+        + _trigger_registry_section
     )
 
     _gemini_md = (
@@ -525,7 +550,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _ghp_block + "\n"
         + _sop_section
         + _synlynk_start + "\n"
-        + _session_protocol
+        + _session_protocol + "\n\n"
+        + _trigger_registry_section
     )
 
     _agents_md = (
@@ -549,7 +575,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _ghp_block + "\n"
         + _sop_section
         + _synlynk_start + "\n"
-        + _session_protocol
+        + _session_protocol + "\n\n"
+        + _trigger_registry_section
     )
 
     _grok_md = (
@@ -573,7 +600,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _ghp_block + "\n"
         + _sop_section
         + _synlynk_start + "\n"
-        + _session_protocol
+        + _session_protocol + "\n\n"
+        + _trigger_registry_section
     )
 
     _ai_instructions_md = (
@@ -585,7 +613,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _four_doc + "\n"
         + _ghp_block + "\n"
         + _synlynk_start + "\n"
-        + _session_protocol
+        + _session_protocol + "\n\n"
+        + _trigger_registry_section
     )
 
     return {
