@@ -784,6 +784,10 @@ def main() -> None:
                                  revokes=getattr(args, "revoke", []))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
+            if job.get("fence"):
+                from synlynk.fencing import render_task_fence
+
+                print(render_task_fence(job["fence"]))
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
