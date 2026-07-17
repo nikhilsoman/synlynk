@@ -3,10 +3,13 @@
 import hashlib
 import json
 import os
+import shlex
 import re
 import subprocess
 import sys
 import time
+import stat
+from pathlib import Path
 from typing import Optional
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
@@ -740,6 +743,58 @@ def _write_instruction_manifest(entries: dict) -> None:
     with open(_INSTRUCTIONS_MANIFEST, "w") as f:
         json.dump(manifest, f, indent=2)
 
+_PRE_COMMIT_HOOK_MARKER = "-m synlynk instructions status --pre-commit"
+
+def _build_pre_commit_hook_script(repo_root: Path) -> str:
+    """Build the pre-commit hook script for a specific repo root."""
+    repo_root_str = shlex.quote(str(Path(repo_root).resolve()))
+    code_root_str = shlex.quote(str(Path(__file__).resolve().parents[1]))
+    python_exe = shlex.quote(sys.executable)
+    return f"""#!/bin/sh
+# Installed by synlynk init to gate instruction drift before commit.
+REPO_ROOT={repo_root_str}
+CODE_ROOT={code_root_str}
+cd "$REPO_ROOT" || exit 1
+PYTHONPATH="$CODE_ROOT${{PYTHONPATH:+:$PYTHONPATH}}" exec {python_exe} -m synlynk instructions status --pre-commit
+"""
+
+def _resolve_git_dir(repo_root: Path) -> Path:
+    """Resolve the actual git dir for a repo root, including worktree .git files."""
+    git_path = Path(repo_root) / ".git"
+    if git_path.is_dir():
+        return git_path
+    if git_path.is_file():
+        raw = git_path.read_text().strip()
+        if raw.startswith("gitdir:"):
+            gitdir = raw.split("gitdir:", 1)[1].strip()
+            gitdir_path = Path(gitdir)
+            if not gitdir_path.is_absolute():
+                gitdir_path = (Path(repo_root) / gitdir_path).resolve()
+            return gitdir_path
+    return git_path
+
+def install_pre_commit_hook(repo_root: Path) -> None:
+    """Install a git pre-commit hook that blocks unreviewed instruction drift."""
+    git_dir = _resolve_git_dir(Path(repo_root))
+    hook_path = git_dir / "hooks" / "pre-commit"
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing = hook_path.read_text() if hook_path.exists() else ""
+    if _PRE_COMMIT_HOOK_MARKER in existing:
+        return
+    if existing and not existing.startswith("#!"):
+        raise RuntimeError(
+            f"unexpected pre-commit hook content at {hook_path}, not overwriting"
+        )
+
+    content = existing
+    if content and not content.endswith("\n"):
+        content += "\n"
+    content += _build_pre_commit_hook_script(Path(repo_root))
+
+    hook_path.write_text(content)
+    hook_path.chmod(hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
 def _check_instruction_drift() -> list:
     """Check tracked instruction files for external modifications to the synlynk section.
 
@@ -786,8 +841,21 @@ def _check_instruction_drift() -> list:
     _write_instruction_manifest(updated_entries)
     return drifted
 
-def cmd_instructions_status() -> None:
+def cmd_instructions_status(pre_commit: bool = False) -> None:
     """Print status table for all tracked instruction files."""
+    if pre_commit:
+        drifted = _check_instruction_drift()
+        if drifted:
+            print("  Instruction drift detected. Commit blocked.")
+            for fpath in drifted:
+                print(
+                    f"  {fpath}: run `synlynk instructions diff {fpath}`, "
+                    f"`synlynk instructions update {fpath}`, or "
+                    f"`synlynk instructions ack {fpath}`"
+                )
+            sys.exit(1)
+        return
+
     manifest_data = _load_instruction_manifest()
     if not manifest_data:
         print("  No instruction manifest found. Run `synlynk init` first.")
