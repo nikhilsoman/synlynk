@@ -1368,6 +1368,7 @@ def load_config() -> dict:
         "exec_timeout_minutes": 30,
         "stall_timeout_minutes": 30,
         "agents": {},
+        "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": _default_roles_map(),
     }
     config_file = ".synlynk/config.json"
