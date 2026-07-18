@@ -1,4 +1,5 @@
 import argparse
+from unittest.mock import patch
 
 from synlynk.taxonomy import COMMAND_TAXONOMY
 
@@ -111,3 +112,58 @@ def test_selftest_subcommand_is_registered():
 
     args_live = parser.parse_args(["selftest", "--live"])
     assert args_live.live is True
+
+
+def test_dispatch_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=1.0, spent_usd=1.0)
+    with patch("synlynk.selftest.dispatch_agent") as mock_dispatch:
+        result = SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
+    mock_dispatch.assert_not_called()
+    assert result.status == "skipped"
+    assert "budget" in result.detail.lower()
+
+
+def test_dispatch_scenario_uses_fence_estimate_as_cost(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.fencing import FenceData
+    from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS
+
+    fake_job = {
+        "id": "job-selftest",
+        "pid": 12345,
+        "fence": FenceData(
+            command="dispatch",
+            kind="estimate",
+            in_tokens=100,
+            out_tokens=50,
+            cost_usd=0.03,
+            basis="prompt_estimate",
+        ),
+    }
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=2.0)
+    with patch("synlynk.selftest.dispatch_agent", return_value=fake_job) as mock_dispatch:
+        result = SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
+    mock_dispatch.assert_called_once()
+    assert result.status == "pass"
+    assert result.cost_usd == 0.03
+
+
+def test_exec_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=1.0, spent_usd=1.0)
+    with patch("synlynk.selftest.exec_command") as mock_exec:
+        result = SELFTEST_SCENARIOS["exec"]({"command": "exec"}, ctx)
+    mock_exec.assert_not_called()
+    assert result.status == "skipped"
+
+
+def test_all_paid_commands_have_registered_scenarios():
+    from synlynk.selftest import SELFTEST_SCENARIOS
+
+    for cmd in ["dispatch", "exec", "schedule", "release"]:
+        assert cmd in SELFTEST_SCENARIOS, f"missing scenario for {cmd!r}"
