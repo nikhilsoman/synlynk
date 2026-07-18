@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Dict, List
 from unittest.mock import patch
 
+from synlynk.dispatch import dispatch_agent, exec_command
 from synlynk.cli import build_parser
 from synlynk.taxonomy import COMMAND_TAXONOMY
 
@@ -636,6 +637,78 @@ def _scenario_instructions_status(entry: dict, ctx: ScenarioContext) -> Scenario
     )
 
 
+_TRIVIAL_PROMPT = "Reply with the single word OK and do nothing else."
+
+
+def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    if ctx.remaining_budget() <= 0:
+        return ScenarioResult(command="dispatch", status="skipped", detail="budget cap reached")
+    import os
+
+    old_cwd = os.getcwd()
+    os.chdir(ctx.repo_path)
+    try:
+        job = dispatch_agent("codex", _TRIVIAL_PROMPT, force_agent=True)
+    except Exception as exc:
+        return ScenarioResult(command="dispatch", status="fail", detail=str(exc))
+    finally:
+        os.chdir(old_cwd)
+    fence = job.get("fence")
+    cost = fence.cost_usd if fence else 0.0
+    return ScenarioResult(
+        command="dispatch",
+        status="pass",
+        detail=f"launched {job.get('id')} pid={job.get('pid')}",
+        cost_usd=cost,
+    )
+
+
+def _exec_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    if ctx.remaining_budget() <= 0:
+        return ScenarioResult(command="exec", status="skipped", detail="budget cap reached")
+    import os
+
+    old_cwd = os.getcwd()
+    os.chdir(ctx.repo_path)
+    try:
+        exit_code = exec_command(["claude", "-p", _TRIVIAL_PROMPT])
+    except Exception as exc:
+        return ScenarioResult(command="exec", status="fail", detail=str(exc))
+    finally:
+        os.chdir(old_cwd)
+    if exit_code != 0:
+        return ScenarioResult(command="exec", status="fail", detail=f"exit code {exit_code}")
+    return ScenarioResult(command="exec", status="pass", detail="exec completed")
+
+
+def _schedule_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    if ctx.remaining_budget() <= 0:
+        return ScenarioResult(command="schedule", status="skipped", detail="budget cap reached")
+    from synlynk.scheduler import cmd_schedule
+    import os
+
+    old_cwd = os.getcwd()
+    os.chdir(ctx.repo_path)
+    try:
+        cmd_schedule(execute=True, max_stories=1)
+    except Exception as exc:
+        return ScenarioResult(command="schedule", status="fail", detail=str(exc))
+    finally:
+        os.chdir(old_cwd)
+    return ScenarioResult(command="schedule", status="pass", detail="schedule --execute ran")
+
+
+def _release_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    return ScenarioResult(
+        command="release",
+        status="skipped",
+        detail=(
+            "release is a real-world publish action (git tag/push, GitHub release) - "
+            "not safe to run against a scratch repo; verified structurally via --help only"
+        ),
+    )
+
+
 def _selftest_sort_key(entry: dict) -> tuple[int, int]:
     tier = entry["maturity_tier"]
     tier_rank = 99 if tier == "latent" else int(tier)
@@ -683,6 +756,10 @@ SELFTEST_SCENARIOS: Dict[str, Callable[[dict, ScenarioContext], ScenarioResult]]
     "jobs": _scenario_jobs,
     "status": _scenario_status,
     "instructions status": _scenario_instructions_status,
+    "dispatch": _dispatch_scenario,
+    "exec": _exec_scenario,
+    "schedule": _schedule_scenario,
+    "release": _release_scenario,
 }
 
 _TAXONOMY_INDEX = {entry["command"]: idx for idx, entry in enumerate(COMMAND_TAXONOMY)}
