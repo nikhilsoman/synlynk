@@ -484,6 +484,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
         except sqlite3.OperationalError:
             pass
+    if "pr_number" not in rating_cols:
+        try:
+            conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
+        except sqlite3.OperationalError:
+            pass
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     for col, typedef in [
         ("story_id", "TEXT REFERENCES stories(story_id)"),

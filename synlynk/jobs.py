@@ -193,7 +193,7 @@ def _push_worktree_branch_if_needed(
     return True
 
 
-def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> None:
+def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
     """Opens a PR for a finalized worktree if one does not already exist."""
     if not worktree_path or not worktree_branch:
         return
@@ -241,7 +241,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         return
 
     if existing_prs:
-        return
+        return existing_prs[0].get("number")
 
     task_line = (job.get("task") or "").splitlines()[0].strip() or "Auto-finalized worktree changes"
     title = _commit_subject_for_job(job)
@@ -277,6 +277,14 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
             f"  ⚠ gh pr create failed for {worktree_branch}: "
             f"{stderr[:200] if stderr else 'unknown error'}"
         )
+        return None
+
+    stdout = (create_result.stdout or "").strip()
+    try:
+        pr_number = int(stdout.rstrip("/").rsplit("/", 1)[-1])
+    except (ValueError, IndexError):
+        pr_number = None
+    return pr_number
 
 
 def _resolve_finalize_worktree_branch(job: dict, worktree_path: str) -> Optional[str]:
@@ -411,7 +419,15 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
             git_state,
             force_push=created_commit or git_state.get("commits_ahead", 0) > 0,
         )
-        _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
+        pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
+        if pr_number is not None:
+            conn = _pkg("_get_db")()
+            conn.execute(
+                "UPDATE capability_ratings SET pr_number=? WHERE story_id=?",
+                (pr_number, job.get("story_id", "")),
+            )
+            conn.commit()
+            conn.close()
 
 
 def _job_cost_usd(agent: str, in_tokens: int, out_tokens: int, model_version: Optional[str] = None) -> float:

@@ -846,6 +846,7 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     verified_by_ci        INTEGER,
     correct               INTEGER DEFAULT 1,
     note                  TEXT,
+    pr_number             INTEGER,
     ed25519_sig           TEXT,
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
