@@ -74,3 +74,47 @@ def test_seed_from_baseline_only_when_ledger_empty(tmp_path, monkeypatch):
     after_second = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
     assert after_second == after
     conn.close()
+
+
+def test_run_sweep_writes_baseline_seed_rows_with_independent_verifier(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.capability_sweep import _run_sweep
+
+    calls = []
+
+    def fake_dispatch(agent, task, **kwargs):
+        calls.append((agent, task))
+        return {"exit_code": 0, "output": "task complete", "agent": agent}
+
+    def fake_verify(verifier_agent, executor_agent, model, skill, executor_output):
+        assert verifier_agent != executor_agent
+        return {"quality": 8.0, "correct": True}
+
+    monkeypatch.setattr("synlynk.capability_sweep._dispatch_calibration_task", fake_dispatch)
+    monkeypatch.setattr("synlynk.capability_sweep._verify_calibration_result", fake_verify)
+
+    discovered = {"codex": ["gpt-5-codex"], "agy": ["gemini-2.5-pro"]}
+    _run_sweep(discovered, ["PROG"])
+
+    conn = sl._get_db()
+    rows = conn.execute(
+        "SELECT agent, signal_source, quality FROM capability_ratings WHERE signal_source='baseline_seed'"
+    ).fetchall()
+    conn.close()
+
+    assert len(rows) >= 2
+    for agent, signal_source, quality in rows:
+        assert signal_source == "baseline_seed"
+        assert quality == 8.0
+
+
+def test_pick_verifier_agent_is_not_executor(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk.capability_sweep import _pick_verifier_agent
+
+    verifier = _pick_verifier_agent(executor_agent="codex", available_agents=["codex", "agy", "grok"])
+    assert verifier != "codex"
+    assert verifier in ("agy", "grok")
