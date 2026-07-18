@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from synlynk.hud import CYCLES
+from synlynk.taxonomy_standards import _taxonomy_label
 
 _ORG_DOMAINS = (
     "personalization",
@@ -1439,7 +1440,10 @@ def cmd_story_create(title: str, engg_domain: str = None,
     conn.commit()
     conn.close()
     _generate_todo_md()
-    print(f"  {_GREEN}✓{_RESET} Story created: {story_id}  [{engg_domain} · {org_domain} · {industry}]")
+    print(
+        f"  {_GREEN}✓{_RESET} Story created: {story_id}  "
+        f"[{_taxonomy_label('sfia', engg_domain)} · {_taxonomy_label('apqc', org_domain)} · {_taxonomy_label('naics', industry)}]"
+    )
     return story_id
 
 def cmd_story_list() -> None:
@@ -1647,8 +1651,11 @@ def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> N
     print("  " + "-" * 96)
     for r in rows:
         score_str = f"{r[6]:.2f}" if r[6] is not None else "  n/a"
-        print(f"  {r[0]:<10} {r[1]:<22} {r[2]:<12} {r[3]:<14} "
-              f"{r[4]:<12} {r[5]:<10} {score_str:>6} {r[7]:>4}")
+        print(
+            f"  {r[0]:<10} {r[1]:<22} {_taxonomy_label('sfia', r[2]):<12} "
+            f"{_taxonomy_label('apqc', r[3]):<14} {_taxonomy_label('naics', r[4]):<12} "
+            f"{r[5]:<10} {score_str:>6} {r[7]:>4}"
+        )
 
 def cmd_cost_log(
     agent: str,
