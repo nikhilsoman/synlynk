@@ -163,6 +163,29 @@ def test_exec_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
     assert result.status == "skipped"
 
 
+def test_dispatch_scenario_patches_db_path_to_scratch_workspace(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import synlynk as synlynk_pkg
+    from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS
+
+    scratch_workspace = tmp_path / "scratch"
+    scratch_workspace.mkdir()
+
+    host_db_path = synlynk_pkg.DB_PATH
+    seen_db_path = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        seen_db_path["value"] = synlynk_pkg.DB_PATH
+        return {"id": "job-fake", "pid": 1, "fence": None}
+
+    ctx = ScenarioContext(repo_path=str(scratch_workspace), live=True, budget_cap_usd=2.0)
+    with patch("synlynk.selftest.dispatch_agent", side_effect=fake_dispatch_agent):
+        SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
+
+    assert seen_db_path.get("value") == str(scratch_workspace / ".synlynk" / "state.db")
+    assert synlynk_pkg.DB_PATH == host_db_path
+
+
 def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_path):
     from synlynk import selftest as selftest_mod
     import synlynk.scheduler as scheduler_mod

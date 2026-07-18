@@ -651,11 +651,15 @@ def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     if ctx.remaining_budget() <= 0:
         return ScenarioResult(command="dispatch", status="skipped", detail="budget cap reached")
     import os
+    import synlynk as synlynk_pkg
 
+    workspace = Path(ctx.repo_path)
+    db_path = workspace / ".synlynk" / "state.db"
     old_cwd = os.getcwd()
     os.chdir(ctx.repo_path)
     try:
-        job = dispatch_agent("codex", _TRIVIAL_PROMPT, force_agent=True)
+        with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+            job = dispatch_agent("codex", _TRIVIAL_PROMPT, force_agent=True)
     except Exception as exc:
         return ScenarioResult(command="dispatch", status="fail", detail=str(exc))
     finally:
@@ -674,11 +678,15 @@ def _exec_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     if ctx.remaining_budget() <= 0:
         return ScenarioResult(command="exec", status="skipped", detail="budget cap reached")
     import os
+    import synlynk as synlynk_pkg
 
+    workspace = Path(ctx.repo_path)
+    db_path = workspace / ".synlynk" / "state.db"
     old_cwd = os.getcwd()
     os.chdir(ctx.repo_path)
     try:
-        exit_code = exec_command(["claude", "-p", _TRIVIAL_PROMPT])
+        with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+            exit_code = exec_command(["claude", "-p", _TRIVIAL_PROMPT])
     except Exception as exc:
         return ScenarioResult(command="exec", status="fail", detail=str(exc))
     finally:
@@ -693,11 +701,15 @@ def _schedule_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         return ScenarioResult(command="schedule", status="skipped", detail="budget cap reached")
     from synlynk.scheduler import cmd_schedule
     import os
+    import synlynk as synlynk_pkg
 
+    workspace = Path(ctx.repo_path)
+    db_path = workspace / ".synlynk" / "state.db"
     old_cwd = os.getcwd()
     os.chdir(ctx.repo_path)
     try:
-        cmd_schedule(execute=True, max_stories=1)
+        with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+            cmd_schedule(execute=True, max_stories=1)
     except Exception as exc:
         return ScenarioResult(command="schedule", status="fail", detail=str(exc))
     finally:
