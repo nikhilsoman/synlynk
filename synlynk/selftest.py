@@ -9,6 +9,7 @@ import io
 import json
 import os
 import sqlite3
+import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -71,10 +72,34 @@ def _ensure_workspace_scaffold(ctx: ScenarioContext) -> Path:
                 {
                     "project_docs_dir": "project-docs",
                     "dispatch_mode": "daily-grind",
+                    "budget": {"limit_usd": 2.0},
                     "roles": {},
                 },
                 indent=2,
             )
+        )
+    if ctx.live and not (workspace / ".git").exists():
+        subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+        subprocess.run(
+            ["git", "config", "user.name", "synlynk-selftest"],
+            cwd=workspace,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "selftest@synlynk.local"],
+            cwd=workspace,
+            check=True,
+        )
+        (docs_dir / ".gitkeep").touch(exist_ok=True)
+        subprocess.run(
+            ["git", "add", ".synlynk/config.json", "project-docs/.gitkeep"],
+            cwd=workspace,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "chore: bootstrap selftest workspace", "--quiet"],
+            cwd=workspace,
+            check=True,
         )
     return workspace
 
@@ -546,44 +571,26 @@ def _scenario_status(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
 
     workspace = _ensure_workspace_scaffold(ctx)
     db_path = workspace / ".synlynk" / "state.db"
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS harness_status (
-            agent_name TEXT PRIMARY KEY,
-            attach_rate_24h REAL,
-            attach_point_in_time INTEGER,
-            completion_rate_24h REAL,
-            installed_version TEXT,
-            latest_version TEXT
+    with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        conn = synlynk_pkg._get_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO harness_status (agent_name, attach_rate_24h, attach_point_in_time, completion_rate_24h, installed_version, latest_version) VALUES (?, ?, ?, ?, ?, ?)",
+            ("claude", 1.0, 1, 0.8, "1.0.0", "1.0.0"),
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS cycle_capability (
-            agent_name TEXT,
-            cycle TEXT,
-            support TEXT
+        conn.execute(
+            "INSERT INTO cycle_capability (agent_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            ("claude", "execute", "full", 1, 1, 0),
         )
-        """
-    )
-    conn.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, attach_rate_24h, attach_point_in_time, completion_rate_24h, installed_version, latest_version) VALUES (?, ?, ?, ?, ?, ?)",
-        ("claude", 1.0, 1, 0.8, "1.0.0", "1.0.0"),
-    )
-    conn.execute(
-        "INSERT INTO cycle_capability (agent_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
-        ("claude", "execute", "full", 1, 1, 0),
-    )
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
     with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)), patch.object(
         costs_mod,
         "_load_model_rates",
         return_value={"rates_updated_at": "2026-07-17"},
     ):
-        result, output, _ = _capture_call(entry["command"], lambda: status_mod.cmd_status(json_output=False))
+        result, output, _ = _capture_call(
+            entry["command"], lambda: status_mod.cmd_status(json_output=False)
+        )
     if result.status != "pass":
         return result
     if "SYNLYNK ECOSYSTEM STATUS" not in output or "claude" not in output:
@@ -769,6 +776,9 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     """Run the selftest scenarios for every taxonomy command."""
     parser = build_parser()
     ctx = ScenarioContext(repo_path=".", live=live)
+    if live:
+        scratch_workspace = _ensure_workspace_scaffold(ctx)
+        ctx.repo_path = str(scratch_workspace)
     results: List[ScenarioResult] = []
     for entry in sorted(COMMAND_TAXONOMY, key=_selftest_sort_key):
         scenario = SELFTEST_SCENARIOS.get(entry["command"]) if live else None
