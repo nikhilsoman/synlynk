@@ -56,6 +56,17 @@ def test_taxonomy_label_rejects_unknown_axis():
         _taxonomy_label("not_an_axis", "PROG")
 
 
+def test_taxonomy_label_used_by_capability_view_helper(tmp_path, monkeypatch):
+    """Whatever function renders a capability_ratings row for display must
+    call _taxonomy_label rather than printing the raw code.
+    """
+    monkeypatch.chdir(tmp_path)
+    import os
+    os.makedirs("synlynk", exist_ok=True)
+    from synlynk.taxonomy_standards import _taxonomy_label
+    assert _taxonomy_label("sfia", "PROG") == "Programming/Software Development"
+
+
 def test_taxonomy_axis_registry_contains_expected_tables():
     from synlynk.taxonomy_standards import _AXIS_TABLES
 
