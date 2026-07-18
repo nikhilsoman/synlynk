@@ -229,7 +229,15 @@ def _parse_todo_metadata(content: str) -> list:
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     from synlynk import AGENT_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
+    preexisting_tables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('stories', 'capability_ratings')"
+        ).fetchall()
+    }
     conn.executescript(_DB_SCHEMA)
+    schema_version_row = conn.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+    legacy_taxonomy_migrated = bool(schema_version_row and schema_version_row[0] >= 2)
     story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
     if "discipline" not in story_cols:
         try:
@@ -674,6 +682,48 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
         except Exception:
             pass  # column already exists
+    # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
+    from synlynk.taxonomy_standards import (
+        LEGACY_DISCIPLINE_CROSSWALK,
+        LEGACY_ORG_DOMAIN_CROSSWALK,
+        LEGACY_INDUSTRY_CROSSWALK,
+    )
+    if not legacy_taxonomy_migrated and preexisting_tables:
+        for table in ("stories", "capability_ratings"):
+            if table not in preexisting_tables:
+                continue
+            cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "legacy_unmapped" not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN legacy_unmapped INTEGER NOT NULL DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+
+        for table, col, crosswalk in (
+            ("stories", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+            ("stories", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+            ("stories", "industry", LEGACY_INDUSTRY_CROSSWALK),
+            ("capability_ratings", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+            ("capability_ratings", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+            ("capability_ratings", "industry", LEGACY_INDUSTRY_CROSSWALK),
+        ):
+            if table not in preexisting_tables:
+                continue
+            for legacy_value, code in crosswalk.items():
+                conn.execute(
+                    f"UPDATE {table} SET {col}=?, legacy_unmapped=0 WHERE {col}=?",
+                    (code, legacy_value),
+                )
+            known_codes = set(crosswalk.values())
+            rows = conn.execute(f"SELECT DISTINCT {col} FROM {table}").fetchall()
+            for (value,) in rows:
+                if value is not None and value not in known_codes and value not in crosswalk:
+                    conn.execute(
+                        f"UPDATE {table} SET legacy_unmapped=1 WHERE {col}=? AND legacy_unmapped=0",
+                        (value,),
+                    )
+    conn.execute("DELETE FROM schema_version")
+    conn.execute("INSERT INTO schema_version(version) VALUES (2)")
     conn.commit()
     _seed_verb_map(conn)
 

@@ -808,6 +808,7 @@ CREATE TABLE IF NOT EXISTS stories (
     stack_tags    TEXT DEFAULT '[]',
     industry      TEXT DEFAULT 'unknown',
     phase         TEXT DEFAULT 'build',
+    legacy_unmapped INTEGER NOT NULL DEFAULT 0,
     priority      INTEGER NOT NULL DEFAULT 5,
     readiness     TEXT NOT NULL DEFAULT 'draft',
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -830,6 +831,7 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     stack_tags            TEXT DEFAULT '[]',
     industry              TEXT NOT NULL DEFAULT 'unknown',
     phase                 TEXT NOT NULL DEFAULT 'build',
+    legacy_unmapped       INTEGER NOT NULL DEFAULT 0,
     signal_source         TEXT NOT NULL DEFAULT 'auto',
     quality               REAL NOT NULL DEFAULT 0.0,
     quality_auto          REAL,
