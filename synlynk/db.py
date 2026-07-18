@@ -1723,7 +1723,20 @@ def cmd_pr_check() -> None:
     Exit code 1 if blocked. Exit code 0 if clean.
     """
     from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.pr_multiplier import (
+        _apply_review_cycle_multiplier,
+        _current_pr_number,
+        _is_github_remote,
+    )
+    from synlynk.sentinel import _extract_pr_review_cycles
+
     conn = _get_db()
+    if _is_github_remote():
+        pr_number = _current_pr_number()
+        if pr_number is not None:
+            changes_requested_count = _extract_pr_review_cycles() or 0
+            _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
+
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"
     ).fetchall()
