@@ -11,6 +11,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `synlynk capability sweep` — a taxonomy-driven calibration sweep that scores agent capability against NAICS/APQC/SFIA-coded skill axes, seeded from `capability_baseline.json` and reinforced organically as real PRs land, with a configurable `$10` cost guardrail (`capability_sweep.cost_cap_usd`) and independent cross-agent verification scoring.
+- Legacy free-text `discipline` / `org_domain` / `industry` values are crosswalked to NAICS/APQC/SFIA codes on migration, tagging any value with no crosswalk match as `legacy_unmapped` rather than dropping it.
+- `synlynk pr check` now applies a geometric review-cycle multiplier (`1.10 × 0.825^(N-1)`, floored at `0.25x`) to a PR's `capability_ratings` rows at merge time — a clean first-pass approval (`N=1`) earns a 10% bonus, and each round of requested changes decays the quality credit. GitHub-only in this version; falls back to a neutral `1.0x` off GitHub.
 - `synlynk agent add <name>` to retroactively onboard a newly available CLI agent on `$PATH`, generating its directive file, writing its role fence, wiring `workgroup_agents` / `agent_slots` / `roles`, and seeding a capability baseline. Fixes #277.
 - Lazy daily housekeeping on the first `synlynk exec` of a new calendar day, detecting new PATH agents, re-probing onboarded agents for drift, repairing directive fences, and recording `last_housekeeping_date`. Fixes #277.
 
