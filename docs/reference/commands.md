@@ -42,6 +42,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `jobs handoff` (secondary) — execute
 - `schedule` (primary) — execute
 - `release` (primary) — release
+- `selftest` (secondary) — sustain
 - `pr check` (primary) — release
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain
