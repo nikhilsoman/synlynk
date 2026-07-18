@@ -69,6 +69,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [65](./65-whats-new-v012-getting-started.md) | What's New in v0.12.0 — And How to Get Started | — | 2026-07-15 |
 | [66](./66-pr293-agent-quota-tracking-291.md) | PR #293 — agent_quotas finally gets real usage (#291) | [#293](https://github.com/nikhilsoman/synlynk/pull/293) | 2026-07-16 |
 | [67](./67-pr292-fix-probe-model-version.md) | PR #292 — Fix Tier-2 Model Probe (#287) | [#292](https://github.com/nikhilsoman/synlynk/pull/292) | 2026-07-16 |
+| [68](./68-pr328-live-command-selftest.md) | PR #328 — Live Command Selftest: Does synlynk Actually Work in a Real Repo? | [#328](https://github.com/nikhilsoman/synlynk/pull/328) | 2026-07-18 |
 
 
 ## Per-PR Post Template
