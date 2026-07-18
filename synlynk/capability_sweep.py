@@ -1,5 +1,7 @@
 """synlynk capability sweep -- periodic calibration of agent/model capability baselines."""
 
+import json
+import os
 import subprocess
 import sys
 
@@ -107,3 +109,49 @@ def _run_sweep(discovered: dict, skills: list) -> None:
         for model in models:
             for skill in skills:
                 print(f"  [sweep] {agent} / {model} / {skill}: queued (see later task)")
+
+
+def _seed_capability_ledger_from_baseline(conn) -> None:
+    """Seed capability_ratings from the bundled capability_baseline.json when empty."""
+    existing = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
+    if existing > 0:
+        return
+
+    baseline_path = os.path.join(os.path.dirname(__file__), "..", "capability_baseline.json")
+    if not os.path.exists(baseline_path):
+        return
+
+    with open(baseline_path) as f:
+        rows = json.load(f)
+
+    if not rows:
+        return
+
+    conn.execute(
+        "INSERT OR IGNORE INTO stories (story_id, title) VALUES (?, ?)",
+        ("__baseline_seed__", "Capability baseline seed (synthetic, not a real story)"),
+    )
+
+    for row in rows:
+        for _ in range(row["sample_count"]):
+            conn.execute(
+                """INSERT INTO capability_ratings
+                   (story_id, agent, model_version, discipline, org_domain, industry, phase,
+                    signal_source, quality, quality_auto, correct)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    row["story_id"],
+                    row["agent"],
+                    row["model_version"],
+                    row["discipline"],
+                    row["org_domain"],
+                    row["industry"],
+                    row["phase"],
+                    row["signal_source"],
+                    row["quality"],
+                    row["quality"],
+                    1,
+                ),
+            )
+
+    conn.commit()
