@@ -896,6 +896,53 @@ def test_migrate_db_adds_stack_tags_columns(tmp_path, monkeypatch):
     assert "stack_tags" in rating_cols
 
 
+def test_migrate_db_crosswalks_legacy_taxonomy_values(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import sqlite3
+    import synlynk as sl
+
+    conn = sqlite3.connect(sl.DB_PATH)
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, engg_domain TEXT NOT NULL DEFAULT 'backend', "
+        "discipline TEXT NOT NULL DEFAULT 'backend', org_domain TEXT NOT NULL DEFAULT 'platform', "
+        "role TEXT NOT NULL DEFAULT 'dev', stage TEXT NOT NULL DEFAULT 'open', org_domain_tags TEXT DEFAULT '[]', "
+        "industry TEXT DEFAULT 'unknown', phase TEXT DEFAULT 'build', stack_tags TEXT DEFAULT '[]')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, industry) "
+        "VALUES ('s1', 'test story', 'backend', 'backend', 'platform', 'unknown')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, industry) "
+        "VALUES ('s2', 'weird story', 'some_made_up_value', 'some_made_up_value', 'some_made_up_org', 'made_up_industry')"
+    )
+    conn.commit()
+
+    sl._migrate_db(conn)
+
+    story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    assert "legacy_unmapped" in story_cols
+    assert "legacy_unmapped" in rating_cols
+
+    s1 = conn.execute(
+        "SELECT discipline, org_domain, industry, legacy_unmapped FROM stories WHERE story_id='s1'"
+    ).fetchone()
+    assert s1[0] == "PROG"       # "backend" -> SFIA PROG
+    assert s1[1] == "8.5"        # "platform" -> APQC 8.5 (Develop and Maintain IT Solutions)
+    assert s1[2] == "none"       # "unknown" -> NAICS none
+    assert s1[3] == 0            # crosswalked cleanly, not flagged
+
+    s2 = conn.execute(
+        "SELECT discipline, org_domain, industry, legacy_unmapped FROM stories WHERE story_id='s2'"
+    ).fetchone()
+    assert s2[0] == "some_made_up_value"   # left as-is, no crosswalk entry
+    assert s2[3] == 1                      # flagged legacy_unmapped
+    conn.close()
+
+
 _BS5_DIAGRAM = Path("docs/brainstorm/bs5-diagram-impl/bs5-diagram-impl.html")
 
 

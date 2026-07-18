@@ -674,6 +674,57 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
         except Exception:
             pass  # column already exists
+    # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
+    from synlynk.taxonomy_standards import (
+        LEGACY_DISCIPLINE_CROSSWALK,
+        LEGACY_ORG_DOMAIN_CROSSWALK,
+        LEGACY_INDUSTRY_CROSSWALK,
+    )
+    # capability-sweep-taxonomy: one-time gate so the crosswalk only ever
+    # rewrites pre-migration legacy data, not fresh rows written afterward
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS _taxonomy_crosswalk_state ("
+        "id INTEGER PRIMARY KEY CHECK (id = 1), completed INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO _taxonomy_crosswalk_state (id, completed) VALUES (1, 0)"
+    )
+    already_done = conn.execute(
+        "SELECT completed FROM _taxonomy_crosswalk_state WHERE id = 1"
+    ).fetchone()[0]
+    for table in ("stories", "capability_ratings"):
+        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "legacy_unmapped" not in cols:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN legacy_unmapped INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+
+    if not already_done:
+        for table, col, crosswalk in (
+            ("stories", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+            ("stories", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+            ("stories", "industry", LEGACY_INDUSTRY_CROSSWALK),
+            ("capability_ratings", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+            ("capability_ratings", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+            ("capability_ratings", "industry", LEGACY_INDUSTRY_CROSSWALK),
+        ):
+            for legacy_value, code in crosswalk.items():
+                conn.execute(
+                    f"UPDATE {table} SET {col}=?, legacy_unmapped=0 WHERE {col}=?",
+                    (code, legacy_value),
+                )
+            known_codes = set(crosswalk.values())
+            rows = conn.execute(f"SELECT DISTINCT {col} FROM {table}").fetchall()
+            for (value,) in rows:
+                if value is not None and value not in known_codes and value not in crosswalk:
+                    conn.execute(
+                        f"UPDATE {table} SET legacy_unmapped=1 WHERE {col}=? AND legacy_unmapped=0",
+                        (value,),
+                    )
+        conn.execute(
+            "UPDATE _taxonomy_crosswalk_state SET completed = 1 WHERE id = 1"
+        )
     conn.commit()
     _seed_verb_map(conn)
 

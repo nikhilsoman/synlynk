@@ -87,6 +87,36 @@ _AXIS_TABLES = {
     "sfia": SFIA_CODES,
 }
 
+# Legacy free-text -> taxonomy-code crosswalk, used once by _migrate_db().
+# Keys are the pre-migration values synlynk wrote before these taxonomy codes existed.
+LEGACY_DISCIPLINE_CROSSWALK = {
+    "backend": "PROG",
+    "frontend": "PROG",
+    "fullstack": "PROG",
+    "qa": "TEST",
+    "devops": "DEPL",
+    "security": "SCTY",
+    "design": "DESN",
+    "data": "DTAN",
+}
+
+LEGACY_ORG_DOMAIN_CROSSWALK = {
+    "platform": "8.5",
+    "product": "2.3",
+    "growth": "3.0",
+    "infra": "8.0",
+    "support": "6.0",
+}
+
+LEGACY_INDUSTRY_CROSSWALK = {
+    "unknown": "none",
+    "saas": "5112",
+    "fintech": "52",
+    "healthtech": "62",
+    "ecommerce": "44-45",
+    "edtech": "61",
+}
+
 
 def _taxonomy_label(axis: str, code: str) -> str:
     """Return the human-readable label for a taxonomy code.
