@@ -135,10 +135,6 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 def build_parser() -> argparse.ArgumentParser:
-    import weakref
-
-    from synlynk.taxonomy import COMMAND_TAXONOMY
-
     from synlynk import (
         AGENT_CAPABILITY_BASELINES,
         VERSION,
@@ -600,27 +596,6 @@ def build_parser() -> argparse.ArgumentParser:
         dest="cost_cap",
         help="Override the configured cost cap (USD) for this sweep run",
     )
-
-    if not any(entry["command"] == "capability sweep" for entry in COMMAND_TAXONOMY):
-        capability_entry = {
-            "command": "capability sweep",
-            "governs_stage": "sustain",
-            "maturity_tier": 2,
-            "prominence": "secondary",
-            "orientation_gateway": False,
-            "audience": "human",
-            "trigger_phrases": ["run a capability sweep", "seed capability baselines"],
-            "hook_event": None,
-        }
-        COMMAND_TAXONOMY.append(capability_entry)
-
-        def _remove_capability_entry() -> None:
-            try:
-                COMMAND_TAXONOMY.remove(capability_entry)
-            except ValueError:
-                pass
-
-        weakref.finalize(parser, _remove_capability_entry)
 
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
