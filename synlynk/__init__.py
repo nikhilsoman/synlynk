@@ -3673,6 +3673,9 @@ def init(force: bool = False, agents: list = None,
     })
 
     set_state("stopped")
+    from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
+
+    _seed_capability_ledger_from_baseline(_get_db())
 
     print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
     if functional:

@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ""))
 
@@ -46,3 +47,30 @@ def test_sweep_aborts_when_estimate_exceeds_cap(monkeypatch, tmp_path, capsys):
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "exceeds cap" in captured.out.lower() or "exceeds cap" in captured.err.lower()
+
+
+def test_seed_from_baseline_only_when_ledger_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
+
+    baseline_path = os.path.join(os.path.dirname(sl.__file__), "..", "capability_baseline.json")
+    with open(baseline_path) as f:
+        baseline = json.load(f)
+    assert isinstance(baseline, list)
+    assert len(baseline) > 0
+    for row in baseline:
+        assert row["signal_source"] == "baseline_seed"
+        assert row["sample_count"] in (3, 4, 5)
+
+    conn = sl._get_db()
+    before = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
+    _seed_capability_ledger_from_baseline(conn)
+    after = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
+    assert after > before
+
+    _seed_capability_ledger_from_baseline(conn)
+    after_second = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
+    assert after_second == after
+    conn.close()
