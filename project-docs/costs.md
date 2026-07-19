@@ -3,6 +3,7 @@
 > All entries marked `~` are estimates. Verify actuals at claude.ai/settings/usage.  
 > Pricing: Sonnet 4.6 — cache $0.30/MTok · input $3.00/MTok · output $15.00/MTok  
 > Token split assumption: cache_read 40% · input 40% · output 20%
+> Payment-mode-aware accounting (`payment_mode` / `actual_usd`) begins 2026-07-19. Earlier entries predate this and are not directly comparable.
 
 ## Running Estimate
 
