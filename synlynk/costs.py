@@ -6,6 +6,7 @@ import re
 import sys
 import time
 
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -345,6 +346,166 @@ def _model_rate_for_version(model_version, agent=None):
         return {"input": 0.0, "output": 0.0, "cache_read": 0.0}
     rates = _load_model_rates()
     return rates["models"].get(model_version, rates["default"])
+
+
+@dataclass
+class PaymentValue:
+    api_equivalent_usd: float
+    actual_usd: float
+    mode: str
+    quota_pct_used: Optional[float] = None
+    credit_remaining_usd: Optional[float] = None
+
+
+def _payment_model_config_for_agent(agent: str) -> dict:
+    """Return the configured payment model block for an agent."""
+    config = _pkg("load_config")() or {}
+    payment_models = config.get("payment_models", {})
+    if not isinstance(payment_models, dict):
+        return {"mode": "pay_as_you_go"}
+    agent_cfg = payment_models.get(agent, {})
+    return agent_cfg if isinstance(agent_cfg, dict) else {"mode": "pay_as_you_go"}
+
+
+def _subscription_actual_usd(
+    agent: str,
+    tokens_in: int,
+    tokens_out: int,
+    pm_config: dict,
+) -> tuple:
+    """Return (actual_usd, quota_pct_used) for subscription mode."""
+    from synlynk.quota import _upsert_agent_quota
+
+    get_db = _pkg("_get_db")
+    conn = get_db()
+    try:
+        row_in = conn.execute(
+            "SELECT used_tokens FROM agent_quotas WHERE agent=? "
+            "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+            (agent,),
+        ).fetchone()
+        row_out = conn.execute(
+            "SELECT used_tokens FROM agent_quotas WHERE agent=? "
+            "AND quota_type='monthly' AND unit='tokens' AND model='out'",
+            (agent,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    prior_used_in = int(row_in[0]) if row_in else 0
+    prior_used_out = int(row_out[0]) if row_out else 0
+
+    tier_quota_in = int(pm_config.get("tier_quota_tokens_in") or 0)
+    tier_quota_out = int(pm_config.get("tier_quota_tokens_out") or 0)
+    overage_rate_in = float(pm_config.get("overage_rate_per_1k_in") or 0.0)
+    overage_rate_out = float(pm_config.get("overage_rate_per_1k_out") or 0.0)
+
+    cumulative_in = prior_used_in + int(tokens_in or 0)
+    cumulative_out = prior_used_out + int(tokens_out or 0)
+
+    over_in = max(0, cumulative_in - tier_quota_in)
+    over_out = max(0, cumulative_out - tier_quota_out)
+    actual_usd = (over_in / 1000 * overage_rate_in) + (over_out / 1000 * overage_rate_out)
+
+    pct_in = (cumulative_in / tier_quota_in) if tier_quota_in else 0.0
+    pct_out = (cumulative_out / tier_quota_out) if tier_quota_out else 0.0
+    quota_pct_used = min(max(pct_in, pct_out), 1.0)
+
+    conn = get_db()
+    try:
+        _upsert_agent_quota(
+            agent,
+            "monthly",
+            limit_tokens=tier_quota_in,
+            used_tokens=cumulative_in,
+            model="unknown",
+            unit="tokens",
+            conn=conn,
+        )
+        _upsert_agent_quota(
+            agent,
+            "monthly",
+            limit_tokens=tier_quota_out,
+            used_tokens=cumulative_out,
+            model="out",
+            unit="tokens",
+            conn=conn,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return actual_usd, quota_pct_used
+
+
+def _credit_grant_actual_usd(agent: str, api_equivalent_usd: float) -> tuple:
+    """Return (actual_usd, remaining_credit_usd) for credit-grant mode."""
+    conn = _pkg("_get_db")()
+    try:
+        row = conn.execute(
+            "SELECT id, remaining_usd FROM credit_grants "
+            "WHERE agent=? AND remaining_usd > 0 "
+            "AND (expires_at IS NULL OR expires_at > datetime('now')) "
+            "ORDER BY granted_at ASC, id ASC LIMIT 1",
+            (agent,),
+        ).fetchone()
+        if row is None:
+            return api_equivalent_usd, 0.0
+
+        row_id, remaining = row
+        remaining = float(remaining)
+        if api_equivalent_usd <= remaining:
+            new_remaining = remaining - api_equivalent_usd
+            conn.execute(
+                "UPDATE credit_grants SET remaining_usd=? WHERE id=?",
+                (new_remaining, row_id),
+            )
+            conn.commit()
+            return 0.0, new_remaining
+
+        overshoot = api_equivalent_usd - remaining
+        conn.execute(
+            "UPDATE credit_grants SET remaining_usd=0 WHERE id=?",
+            (row_id,),
+        )
+        conn.commit()
+        return overshoot, 0.0
+    finally:
+        conn.close()
+
+
+def resolve_payment_value(agent: str, tokens_in: int, tokens_out: int) -> PaymentValue:
+    """Resolve API-equivalent and actual payment values for an agent call."""
+    pm_config = _payment_model_config_for_agent(agent)
+    mode = pm_config.get("mode", "pay_as_you_go")
+
+    model_version = extract_model_version("", agent=agent)
+    rates = _model_rate_for_version(model_version, agent=agent)
+    api_equivalent_usd = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
+
+    if mode == "subscription":
+        actual_usd, quota_pct_used = _subscription_actual_usd(agent, tokens_in, tokens_out, pm_config)
+        return PaymentValue(
+            api_equivalent_usd=api_equivalent_usd,
+            actual_usd=actual_usd,
+            mode=mode,
+            quota_pct_used=quota_pct_used,
+        )
+
+    if mode == "credit_grant":
+        actual_usd, credit_remaining_usd = _credit_grant_actual_usd(agent, api_equivalent_usd)
+        return PaymentValue(
+            api_equivalent_usd=api_equivalent_usd,
+            actual_usd=actual_usd,
+            mode=mode,
+            credit_remaining_usd=credit_remaining_usd,
+        )
+
+    return PaymentValue(
+        api_equivalent_usd=api_equivalent_usd,
+        actual_usd=api_equivalent_usd,
+        mode="pay_as_you_go",
+    )
 
 
 _FIXED_DEFAULT_TOKENS_IN = 5000
