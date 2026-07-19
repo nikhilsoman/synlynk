@@ -138,7 +138,7 @@ class JobSnapshot:
     def recent_jobs(self, n: int = 5, cycle: Optional[str] = None) -> list:
         jobs = []
         for job in self._load():
-            if job.get("status") not in ("done", "failed", "error"):
+            if job.get("status") not in ("done", "failed", "error", "permission_denied"):
                 continue
             if cycle and job.get("cycle", "execute") != cycle:
                 continue

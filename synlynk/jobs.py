@@ -80,6 +80,11 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
 
 
+def _log_has_permission_denied_signature(log_text: str) -> bool:
+    detector = _pkg("_log_has_permission_denied_signature")
+    return bool(detector(log_text)) if detector else False
+
+
 def _normalize_worktree_relative_path(path: str) -> str:
     normalized = (path or "").replace("\\", "/").strip()
     if normalized.startswith("./"):
@@ -976,6 +981,7 @@ def _reconcile_jobs() -> None:
                     job.get("worktree_branch"),
                     job.get("started_at"),
                 )
+            permission_denied = False
             if waitpid_exit_code == 0:
                 job["status"] = "completed"
                 job["exit_code"] = 0
@@ -988,6 +994,10 @@ def _reconcile_jobs() -> None:
             if job.get("status") != "completed" and git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
                 job["status"] = "completed"
                 job["exit_code"] = 0
+            if log_text:
+                permission_denied = _log_has_permission_denied_signature(log_text)
+                if permission_denied:
+                    job["status"] = "permission_denied"
             if job.get("status") != "completed" and log_text:
                 log_text_lower = log_text.lower()
                 for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1024,6 +1034,13 @@ def _reconcile_jobs() -> None:
             except Exception:
                 duration_s = None
             summary_status = None
+            summary_note = None
+            if permission_denied:
+                summary_status = "PERMISSION_DENIED (headless auto-denied)"
+                summary_note = (
+                    "headless permission auto-denial detected from log contents "
+                    "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
             if job.get("status") == "unknown":
                 summary_status = "UNKNOWN (exit unknown)"
             summary = _pkg("_write_job_summary")(
@@ -1039,6 +1056,7 @@ def _reconcile_jobs() -> None:
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
                 status_label=summary_status,
+                note=summary_note,
             )
             print(summary, end="")
             if job.get("status") == "completed":
@@ -1111,12 +1129,16 @@ def _reconcile_jobs() -> None:
                     job.get("worktree_branch"),
                     job.get("started_at"),
                 )
+            permission_denied = False
             job["ended_at"] = now
             changed = True
 
             if log_file and os.path.exists(log_file):
                 with open(log_file) as f:
                     log_text = f.read()
+                permission_denied = _log_has_permission_denied_signature(log_text)
+                if permission_denied:
+                    job["status"] = "permission_denied"
                 if job.get("status") != "completed":
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1156,6 +1178,12 @@ def _reconcile_jobs() -> None:
             summary_note = None
             summary_status = None
             summary_files_touched = _pkg("_worktree_files_touched")(job.get("worktree_path"))
+            if permission_denied:
+                summary_status = "PERMISSION_DENIED (headless auto-denied)"
+                summary_note = (
+                    "headless permission auto-denial detected from log contents "
+                    "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
             if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
                 summary_files_touched = git_state.get("remote_files_touched", [])
                 remote_ref = git_state.get("remote_ref")
@@ -1265,6 +1293,7 @@ def _reconcile_daemon_jobs() -> None:
                     status = "unknown"
                 else:
                     status = "failed"
+                log_text = ""
                 conn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
                     "WHERE job_id=?",
@@ -1285,6 +1314,13 @@ def _reconcile_daemon_jobs() -> None:
                             log_text = f.read()
                     except Exception:
                         log_text = ""
+                if log_text and _log_has_permission_denied_signature(log_text):
+                    status = "permission_denied"
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status=? WHERE job_id=?",
+                        (status, job_id),
+                    )
+                    conn.commit()
                 token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
                 basis = getattr(token_counts, "basis", "none")
@@ -1301,10 +1337,19 @@ def _reconcile_daemon_jobs() -> None:
                     job_id=job_id,
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
-                summary_status = "UNKNOWN (exit unknown)" if status == "unknown" else None
+                summary_status = None
+                summary_note = None
+                if status == "permission_denied":
+                    summary_status = "PERMISSION_DENIED (headless auto-denied)"
+                    summary_note = (
+                        "headless permission auto-denial detected from log contents "
+                        "(response empty, num_turns <= 1, or explicit no-output marker)"
+                    )
+                elif status == "unknown":
+                    summary_status = "UNKNOWN (exit unknown)"
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
-                    out_tokens, cost_usd, [], status_label=summary_status
+                    out_tokens, cost_usd, [], status_label=summary_status, note=summary_note
                 )
         conn.commit()
     finally:
@@ -1476,7 +1521,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             return
         visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
         if not visible:
-            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified")])
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified", "permission_denied")])
             unknown = len([j for j in jobs if j["status"] == "unknown"])
             suffix = f"{completed} completed/failed"
             if unknown:
@@ -1511,7 +1556,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
         else:
             visible = [r for r in rows if r[3] in ("queued", "running")]
             if not visible:
-                done = sum(1 for r in rows if r[3] in ("done", "failed"))
+                done = sum(1 for r in rows if r[3] in ("done", "failed", "permission_denied"))
                 unknown = sum(1 for r in rows if r[3] == "unknown")
                 suffix = f"{done} completed"
                 if unknown:

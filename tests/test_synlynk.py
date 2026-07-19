@@ -5801,7 +5801,7 @@ def test_http_status_endpoint(project_dir):
     assert "uptime_s" in data
     assert "pid" in data
     assert "jobs" in data
-    assert set(data["jobs"].keys()) == {"queued", "running", "done", "failed"}
+    assert set(data["jobs"].keys()) == {"queued", "running", "done", "failed", "permission_denied"}
 
 
 def test_http_context_endpoint_json(project_dir):
