@@ -564,6 +564,14 @@ def build_parser() -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
     cost_log_parser.add_argument("--note", default=None)
 
+    credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
+    credit_sub = credit_parser.add_subparsers(dest="credit_action")
+    grant_parser = credit_sub.add_parser("grant", help="Record a credit grant for an agent")
+    grant_parser.add_argument("--agent", required=True, help="Agent name (e.g. agy, codex)")
+    grant_parser.add_argument("--amount", type=float, required=True, help="Face-value USD amount granted")
+    grant_parser.add_argument("--expires", default=None, help="ISO8601 expiry date, optional")
+    grant_parser.add_argument("--note", default=None, help="Free-text note")
+
     quota_parser = subparsers.add_parser(
         "quota",
         help="Show per-agent quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
@@ -727,6 +735,7 @@ def main() -> None:
     from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
     from synlynk.scheduler import cmd_schedule
+    from synlynk.db import cmd_credit_grant
     _reconcile_jobs()
     parser = build_parser()
     args = parser.parse_args()
@@ -888,6 +897,14 @@ def main() -> None:
                 args.tokens_in,
                 args.tokens_out,
                 story_id=args.story_id,
+                note=args.note,
+            )
+    elif args.command == "credit":
+        if args.credit_action == "grant":
+            cmd_credit_grant(
+                agent=args.agent,
+                amount=args.amount,
+                expires=args.expires,
                 note=args.note,
             )
     elif args.command == "quota":

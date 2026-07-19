@@ -51,6 +51,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `sentinel list` (secondary) — execute
 - `sentinel clear` (secondary) — execute
 - `cost log` (secondary) — sustain
+- `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain

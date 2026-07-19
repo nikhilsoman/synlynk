@@ -1665,6 +1665,30 @@ def cmd_cost_log(
         f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
     )
 
+def cmd_credit_grant(
+    agent: str,
+    amount: float,
+    expires: str = None,
+    note: str = None,
+) -> None:
+    """Record a new credit grant for an agent."""
+    from synlynk import _GREEN, _RESET, _get_db
+
+    if amount < 0:
+        raise ValueError("amount must be non-negative")
+
+    granted_at = time.strftime("%Y-%m-%d %H:%M")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at, expires_at, note) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (agent, amount, amount, granted_at, expires, note),
+    )
+    conn.commit()
+    conn.close()
+    suffix = f" (expires {expires})" if expires else ""
+    print(f"  {_GREEN}✓{_RESET} Credit grant recorded for {agent}: ${amount:.2f}{suffix}")
+
 def cmd_pr_check() -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'.
 

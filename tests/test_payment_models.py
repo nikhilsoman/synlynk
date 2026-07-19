@@ -255,3 +255,36 @@ def test_resolve_payment_value_unconfigured_agent_defaults_pay_as_you_go(
 
     result = resolve_payment_value("claude", tokens_in=100, tokens_out=100)
     assert result.mode == "pay_as_you_go"
+
+
+def test_cmd_credit_grant_inserts_row(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import os
+
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.db import cmd_credit_grant
+
+    cmd_credit_grant(agent="agy", amount=25.0, expires=None, note="Q3 promo credit")
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT agent, face_value_usd, remaining_usd, note FROM credit_grants WHERE agent='agy'"
+    ).fetchone()
+    conn.close()
+    assert row == ("agy", 25.0, 25.0, "Q3 promo credit")
+
+    captured = capsys.readouterr()
+    assert "25.00" in captured.out
+
+
+def test_cmd_credit_grant_rejects_negative_amount(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import os
+
+    os.makedirs(".synlynk", exist_ok=True)
+    from synlynk.db import cmd_credit_grant
+    import pytest
+
+    with pytest.raises(ValueError):
+        cmd_credit_grant(agent="agy", amount=-50.0, expires=None, note=None)
