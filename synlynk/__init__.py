@@ -179,6 +179,7 @@ from synlynk.story_provisioning import (
     _classify_heuristic,
     _detect_issue_number,
     classify_story,
+    cmd_backfill_capability_ratings,
     resolve_or_create_story_id,
 )
 from synlynk.daemon import (

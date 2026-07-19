@@ -91,3 +91,83 @@ def test_resolve_or_create_story_id_reachable_from_top_level_package():
     import synlynk as sl
 
     assert callable(sl.resolve_or_create_story_id)
+
+
+def test_backfill_capability_ratings_skips_jobs_with_existing_story_id(project_dir, monkeypatch):
+    from synlynk import story_provisioning as sp
+    import synlynk as sl
+
+    sl._save_jobs([{
+        "id": "job-1",
+        "agent": "claude",
+        "story_id": "story-existing",
+        "task": "already has a story",
+        "log_file": None,
+    }])
+
+    backfilled, skipped = sp.cmd_backfill_capability_ratings()
+
+    assert backfilled == 0
+    assert skipped == 0
+
+
+def test_backfill_capability_ratings_skips_jobs_with_missing_log_file(project_dir, monkeypatch, tmp_path):
+    from synlynk import story_provisioning as sp
+    import synlynk as sl
+
+    missing_log = str(tmp_path / "does-not-exist.log")
+    sl._save_jobs([{
+        "id": "job-2",
+        "agent": "claude",
+        "story_id": "",
+        "task": "no log on disk",
+        "log_file": missing_log,
+    }])
+
+    backfilled, skipped = sp.cmd_backfill_capability_ratings()
+
+    assert backfilled == 0
+    assert skipped == 1
+
+
+def test_backfill_capability_ratings_resolves_story_and_writes_rating(project_dir, monkeypatch, tmp_path):
+    from synlynk import story_provisioning as sp
+    import synlynk as sl
+
+    monkeypatch.setattr(
+        sp.subprocess,
+        "run",
+        lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("gh not found")),
+    )
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda payload: "")
+
+    log_file = tmp_path / "job-3.log"
+    log_file.write_text("47 passed in 3.2s\n")
+    sl._save_jobs([{
+        "id": "job-3",
+        "agent": "claude",
+        "story_id": "",
+        "task": "fix the thing #501",
+        "log_file": str(log_file),
+        "model_at_dispatch": "claude-sonnet-5",
+    }])
+
+    backfilled, skipped = sp.cmd_backfill_capability_ratings()
+
+    assert backfilled == 1
+    assert skipped == 0
+    jobs = sl._load_jobs()
+    assert jobs[0]["story_id"] == "story-issue-501"
+    conn = sl._get_db()
+    rating = conn.execute(
+        "SELECT story_id FROM capability_ratings WHERE story_id=?",
+        ("story-issue-501",)
+    ).fetchone()
+    conn.close()
+    assert rating is not None
+
+
+def test_cmd_backfill_capability_ratings_reachable_from_top_level_package():
+    import synlynk as sl
+
+    assert callable(sl.cmd_backfill_capability_ratings)

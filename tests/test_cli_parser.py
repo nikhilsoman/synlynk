@@ -31,3 +31,12 @@ def test_dispatch_parser_issue_defaults_to_none():
     args = parser.parse_args(["dispatch", "claude", "--task", "fix it"])
 
     assert args.issue is None
+
+
+def test_backfill_capability_ratings_parser_registered():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["backfill-capability-ratings"])
+
+    assert args.command == "backfill-capability-ratings"

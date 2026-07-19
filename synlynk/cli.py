@@ -161,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_instructions_update,
         cmd_jobs,
         cmd_jobs_handoff,
+        cmd_backfill_capability_ratings,
         cmd_join,
         cmd_launch,
         cmd_launch_ftue,
@@ -486,6 +487,11 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("--tail", type=int, default=50,
         help="Number of lines to show (default: 50)")
 
+    subparsers.add_parser(
+        "backfill-capability-ratings",
+        help="Resolve/create story_ids for completed jobs missing one and write their capability ratings",
+    )
+
     shell_parser = subparsers.add_parser(
         "shell", help="Spawn a subshell with synlynk context injected")
     shell_parser.add_argument("--story", default=None, dest="story_id",
@@ -715,6 +721,7 @@ def main() -> None:
         cmd_instructions_update,
         cmd_jobs,
         cmd_jobs_handoff,
+        cmd_backfill_capability_ratings,
         cmd_join,
         cmd_launch,
         cmd_launch_ftue,
@@ -842,6 +849,8 @@ def main() -> None:
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
+    elif args.command == "backfill-capability-ratings":
+        cmd_backfill_capability_ratings()
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))

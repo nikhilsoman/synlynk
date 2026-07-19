@@ -1,6 +1,7 @@
 """Story provisioning helpers for dispatch story_id resolution."""
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -141,3 +142,53 @@ def resolve_or_create_story_id(task_text: str, issue=None) -> str:
         story_id=story_id,
     )
     return story_id
+
+
+def cmd_backfill_capability_ratings() -> tuple:
+    """Backfill capability ratings for jobs missing story_id."""
+    load_jobs = _pkg("_load_jobs")
+    save_jobs = _pkg("_save_jobs")
+    write_rating = _pkg("_write_capability_rating")
+
+    jobs = load_jobs() if load_jobs else []
+    backfilled = 0
+    skipped = 0
+
+    for job in jobs:
+        if job.get("story_id"):
+            continue
+
+        log_file = job.get("log_file")
+        if not log_file or not os.path.exists(log_file):
+            skipped += 1
+            continue
+
+        try:
+            with open(log_file) as f:
+                log_text = f.read()
+        except OSError:
+            skipped += 1
+            continue
+
+        try:
+            story_id = resolve_or_create_story_id(job.get("task", ""))
+        except Exception:
+            skipped += 1
+            continue
+
+        original_story_id = job.get("story_id", "")
+        job["story_id"] = story_id
+        try:
+            if write_rating is None:
+                raise RuntimeError("synlynk._write_capability_rating is unavailable")
+            write_rating(job, log_text)
+        except ValueError:
+            job["story_id"] = original_story_id
+            skipped += 1
+            continue
+        backfilled += 1
+
+    if save_jobs:
+        save_jobs(jobs)
+    print(f"  ✓ backfilled {backfilled}, skipped {skipped}")
+    return backfilled, skipped
