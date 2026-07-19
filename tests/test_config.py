@@ -18,3 +18,26 @@ def test_load_config_preserves_existing_fenced_commands(tmp_path, monkeypatch):
         json.dump({"fenced_commands": ["dispatch"]}, f)
     config = load_config()
     assert config["fenced_commands"] == ["dispatch"]
+
+
+def test_load_config_defaults_story_classification_method(project_dir):
+    import synlynk as sl
+
+    config = sl.load_config()
+
+    assert config["story_classification"] == {"method": "heuristic"}
+
+
+def test_load_config_preserves_explicit_story_classification_method(project_dir):
+    import synlynk as sl
+
+    config_path = ".synlynk/config.json"
+    with open(config_path) as f:
+        existing = json.load(f)
+    existing["story_classification"] = {"method": "pm_manual"}
+    with open(config_path, "w") as f:
+        json.dump(existing, f)
+
+    config = sl.load_config()
+
+    assert config["story_classification"] == {"method": "pm_manual"}

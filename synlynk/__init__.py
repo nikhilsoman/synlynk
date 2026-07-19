@@ -1388,6 +1388,7 @@ def load_config() -> dict:
         "payment_models": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": _default_roles_map(),
+        "story_classification": {"method": "heuristic"},
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
