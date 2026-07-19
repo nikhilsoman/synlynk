@@ -184,3 +184,44 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
     assert "status:   OK (exit 0)" in out
     summary_path = tmp_path / ".synlynk" / "logs" / "job-run.summary"
     assert summary_path.exists()
+
+
+def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-denied.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        "jetski: no output produced - a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied\n"
+        '{"conversation_id":"job-a59f065a","status":"SUCCESS","response":"","duration_seconds":149,"num_turns":1,"usage":{"input_tokens":10,"output_tokens":0}}\n'
+    )
+    (log_path.parent / "job-denied.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-denied",
+            "agent": "agy",
+            "story_id": "story-denied",
+            "task": "review the PR",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-07-19T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    synlynk.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-denied")
+
+    assert reconciled["status"] == "permission_denied"
+    assert "PERMISSION_DENIED" in out
+    assert "OK (exit 0)" not in out

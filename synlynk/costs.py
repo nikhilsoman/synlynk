@@ -127,6 +127,40 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
 
 
+def _log_has_permission_denied_signature(output_text: str) -> bool:
+    """Detect the headless permission auto-denial signature in agent output."""
+    lowered = (output_text or "").lower()
+    if not lowered:
+        return False
+
+    signature_phrases = (
+        "no output produced",
+        "permission that headless mode cannot prompt for",
+        "auto-denied",
+    )
+    if any(phrase in lowered for phrase in signature_phrases):
+        return True
+
+    lines = [line.strip() for line in output_text.splitlines() if line.strip()]
+    if not lines:
+        return False
+
+    try:
+        event = json.loads(lines[-1])
+    except (ValueError, TypeError):
+        return False
+
+    if not isinstance(event, dict) or event.get("status") != "SUCCESS":
+        return False
+    if event.get("response", None) != "":
+        return False
+    try:
+        num_turns = int(event.get("num_turns", 0))
+    except (TypeError, ValueError):
+        return False
+    return num_turns <= 1
+
+
 def _extract_grok_structured(output_text: str) -> Optional[_TokenCounts]:
     """Parses grok -p --output-format json's single, pretty-printed JSON object.
 

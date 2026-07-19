@@ -98,6 +98,7 @@ from synlynk.costs import (
     extract_model_version,
     extract_tokens,
     extract_verifier_meta,
+    _log_has_permission_denied_signature,
     parse_costs_md,
     update_costs,
 )

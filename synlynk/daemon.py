@@ -237,7 +237,7 @@ def _make_daemon_handler(daemon_instance):
             conn = _pkg("_get_db")()
             try:
                 counts = {}
-                for status in ("queued", "running", "done", "failed"):
+                for status in ("queued", "running", "done", "failed", "permission_denied"):
                     counts[status] = conn.execute(
                         "SELECT COUNT(*) FROM daemon_jobs WHERE status=?", (status,)
                     ).fetchone()[0]
@@ -731,12 +731,12 @@ class SynlynkDaemon(WatchDaemon):
         try:
             counts = {s: conn.execute(
                 "SELECT COUNT(*) FROM daemon_jobs WHERE status=?", (s,)
-            ).fetchone()[0] for s in ("queued", "running", "done", "failed")}
+            ).fetchone()[0] for s in ("queued", "running", "done", "failed", "permission_denied")}
         finally:
             conn.close()
         print(f"  ✦ synlynk daemon running  (pid {pid}, up {uptime_str})")
         print(f"    jobs: {counts['queued']} queued · {counts['running']} running "
-              f"· {counts['done']} done · {counts['failed']} failed")
+              f"· {counts['done']} done · {counts['failed']} failed · {counts['permission_denied']} permission_denied")
         print(f"    http: http://localhost:{self.HTTP_PORT}")
 
     def _run_loop(self) -> None:

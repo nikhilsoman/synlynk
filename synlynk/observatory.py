@@ -120,6 +120,7 @@ def _normalize_stage(status: Any, stage: Any = None) -> Optional[str]:
         "running": "running",
         "queued": "queued",
         "failed": "failed",
+        "permission_denied": "failed",
         "error": "failed",
         "done": "done",
         "completed": "done",
