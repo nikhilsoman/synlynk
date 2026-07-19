@@ -674,6 +674,17 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
         except Exception:
             pass  # column already exists
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS credit_grants (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent           TEXT NOT NULL,
+            face_value_usd  REAL NOT NULL,
+            remaining_usd   REAL NOT NULL,
+            granted_at      TEXT NOT NULL,
+            expires_at      TEXT,
+            note            TEXT
+        )
+    """)
     conn.commit()
     _seed_verb_map(conn)
 

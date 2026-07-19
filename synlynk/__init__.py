@@ -929,6 +929,16 @@ CREATE TABLE IF NOT EXISTS agent_quotas (
     UNIQUE(agent, model, quota_type, unit)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
+
+CREATE TABLE IF NOT EXISTS credit_grants (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent           TEXT NOT NULL,
+    face_value_usd  REAL NOT NULL,
+    remaining_usd   REAL NOT NULL,
+    granted_at      TEXT NOT NULL,
+    expires_at      TEXT,
+    note            TEXT
+);
 """
 
 _DB_SCORES_VIEW = """
