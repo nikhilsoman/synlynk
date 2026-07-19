@@ -617,10 +617,12 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
 
     rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
-    est_cost = (
-        (in_tokens / 1000 * rates["input"]) +
-        (out_tokens / 1000 * rates["output"]) +
-        (cache_read_tokens / 1000 * rates["cache_read"])
+    payment_value = resolve_payment_value(agent_name, in_tokens, out_tokens)
+    est_cost = payment_value.api_equivalent_usd + (cache_read_tokens / 1000 * rates["cache_read"])
+    actual_usd = payment_value.actual_usd + (
+        cache_read_tokens / 1000 * rates["cache_read"]
+        if payment_value.mode == "pay_as_you_go"
+        else 0.0
     )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
@@ -628,8 +630,15 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
         flag = "[est?] "
     else:
         flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
+    if payment_value.mode == "subscription":
+        mode_tag = "[in-quota]" if actual_usd == 0.0 else "[overage]"
+    elif payment_value.mode == "credit_grant":
+        mode_tag = "[credit]"
+    else:
+        mode_tag = ""
+    actual_display = f"${actual_usd:.4f} {mode_tag}".strip()
     entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
-             f"| {flag}${est_cost:.4f} | exec: {short_cmd} |\n")
+             f"| {flag}${est_cost:.4f} | {actual_display} | exec: {short_cmd} |\n")
 
     from synlynk.db import _insert_cost_row
 
@@ -640,6 +649,9 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
             notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
             job_id=job_id,
+            api_equivalent_usd=payment_value.api_equivalent_usd,
+            actual_usd=actual_usd,
+            payment_mode=payment_value.mode,
         )
         costs_file = os.path.join(_pkg("_synlynk_project_docs_dir")(), "costs.md")
         os.makedirs(os.path.dirname(costs_file), exist_ok=True)
@@ -736,7 +748,7 @@ def check_budgets() -> None:
 
 
 def parse_costs_md() -> tuple:
-    """Returns (total_usd, total_requests) by parsing costs.md column 6."""
+    """Returns (total_usd, total_requests) by parsing costs.md's real-dollar column."""
     costs_file = os.path.join(_pkg("_docs_dir")(), "costs.md")
     total_usd = 0.0
     total_requests = 0
@@ -749,7 +761,10 @@ def parse_costs_md() -> tuple:
             parts = [p.strip() for p in line.split("|")]
             if len(parts) < 8:
                 continue
-            cost_str = parts[5]
+            if len(parts) >= 9:
+                cost_str = parts[6].split(" ", 1)[0]
+            else:
+                cost_str = parts[5]
             for prefix in ("[est] ", "[est?] ", "[legacy] ", "~"):
                 if cost_str.startswith(prefix):
                     cost_str = cost_str[len(prefix):]

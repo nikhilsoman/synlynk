@@ -20,6 +20,9 @@ def test_cost_entries_has_provenance_columns(project_dir, monkeypatch):
     assert "cost_source" in cols
     assert "estimate_basis" in cols
     assert "job_id" in cols
+    assert "api_equivalent_usd" in cols
+    assert "actual_usd" in cols
+    assert "payment_mode" in cols
 
 
 def test_cost_source_not_null_no_default(project_dir, monkeypatch):

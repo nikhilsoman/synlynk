@@ -257,6 +257,107 @@ def test_resolve_payment_value_unconfigured_agent_defaults_pay_as_you_go(
     assert result.mode == "pay_as_you_go"
 
 
+def test_update_costs_writes_actual_and_api_equivalent_columns(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import os
+
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(tmp_path, ".synlynk", "state.db"))
+    _write_config(
+        tmp_path,
+        {
+            "codex": {
+                "mode": "subscription",
+                "tier_quota_tokens_in": 1000000,
+                "tier_quota_tokens_out": 1000000,
+                "overage_rate_per_1k_in": 0.003,
+                "overage_rate_per_1k_out": 0.015,
+            }
+        },
+    )
+
+    import inspect
+
+    from synlynk.costs import resolve_payment_value
+    from synlynk.db import _insert_cost_row
+
+    payment_value = resolve_payment_value("codex", tokens_in=1000, tokens_out=1000)
+    signature = inspect.signature(_insert_cost_row)
+    assert "api_equivalent_usd" in signature.parameters
+    assert "actual_usd" in signature.parameters
+    assert "payment_mode" in signature.parameters
+
+    source = inspect.getsource(_insert_cost_row)
+    assert "api_equivalent_usd" in source
+    assert "actual_usd" in source
+    assert "payment_mode" in source
+    assert payment_value.mode == "subscription"
+    assert payment_value.api_equivalent_usd > 0
+    assert payment_value.actual_usd == 0.0
+
+
+def test_costs_md_shows_two_dollar_columns_for_subscription_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import os
+
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(tmp_path, ".synlynk", "state.db"))
+    monkeypatch.setattr(sl, "_is_migrated", lambda: True)
+    _write_config(
+        tmp_path,
+        {
+            "codex": {
+                "mode": "subscription",
+                "tier_quota_tokens_in": 1000000,
+                "tier_quota_tokens_out": 1000000,
+                "overage_rate_per_1k_in": 0.003,
+                "overage_rate_per_1k_out": 0.015,
+            }
+        },
+    )
+
+    sl.update_costs("codex exec", in_tokens=1000, out_tokens=1000, duration=10, agent="codex")
+
+    costs_file = os.path.join(sl._synlynk_project_docs_dir(), "costs.md")
+    with open(costs_file) as f:
+        content = f.read()
+
+    assert "[in-quota]" in content
+
+
+def test_parse_costs_md_sums_actual_not_api_equivalent_for_new_format_rows(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    import os
+
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.costs import parse_costs_md
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(tmp_path, ".synlynk", "state.db"))
+    monkeypatch.setattr(sl, "_docs_dir", sl._synlynk_project_docs_dir)
+
+    docs_dir = sl._synlynk_project_docs_dir()
+    os.makedirs(docs_dir, exist_ok=True)
+    costs_file = os.path.join(docs_dir, "costs.md")
+    with open(costs_file, "w") as f:
+        f.write(
+            "| 2026-07-18 10:00 | codex | 1 | 1000/1000 | [est] $5.0000 | $0.0000 [in-quota] | exec: codex |\n"
+        )
+        f.write(
+            "| 2026-07-18 10:05 | codex | 1 | 1000/1000 | [est] $5.0000 | $1.2300 [overage] | exec: codex |\n"
+        )
+
+    total_usd, total_requests = parse_costs_md()
+    assert total_requests == 2
+    assert round(total_usd, 4) == 1.23
+
+
 def test_cmd_credit_grant_inserts_row(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     import os
