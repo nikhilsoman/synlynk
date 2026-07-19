@@ -84,3 +84,5 @@
 | 2026-07-17 | nikhil | ~130 | ~160K / ~80K | ~$1.73 | PM session: reviewed+merged PR #305, executed Tasks 2-6 of dispatch-job-comms-fence plan end-to-end — per-task dispatch/verify/merge loop (PRs #309-#313), caught+fixed Task 3's inverted context_mode bug and Task 4's unauthorized fencing.py rewrite via redispatch, caught+fixed Task 5's duplicate-cost-display defect via direct inline patch to the open PR branch, full-suite verification before every merge, roadmap+devlog housekeeping (PR #314), memory sync |
 | 2026-07-17 17:14 | codex | 1 | 1488238/16240 | [est] $4.7083 | exec: codex job job-ddb9d1... |
 | 2026-07-19 11:16 | grok | 1 | 72117/23525 | [est] $0.5692 | $0.5692 | exec: grok job job-1005b68... |
+| 2026-07-19 21:52 | grok | 1 | 80193/25883 | [est] $0.6288 | exec: grok job job-9c2473b... |
+| 2026-07-19 22:21 | codex | 1 | 12708919/90366 | [est] $39.4822 | exec: codex job job-cd3f72... |
