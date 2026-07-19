@@ -6,6 +6,7 @@ import pytest
 
 from synlynk.costs import _estimate_tshirt_tokens
 from synlynk.costs import check_budgets
+from synlynk.costs import _log_has_permission_denied_signature
 from synlynk.costs import parse_costs_md as costs_parse_costs_md
 from synlynk.db import _parse_costs_md as db_parse_costs_md
 
@@ -371,6 +372,31 @@ def test_extract_tokens_still_unpacks_as_pair():
 
     in_tokens, out_tokens = extract_tokens("Input tokens: 10\nOutput tokens: 5\n")
     assert (in_tokens, out_tokens) == (10, 5)
+
+
+def test_log_has_permission_denied_signature_ignores_echoed_source_tail():
+    fixture = (
+        "     signature_phrases = (\n"
+        '         "no output produced",\n'
+        '         "permission that headless mode cannot prompt for",\n'
+        '         "auto-denied",\n'
+        "     )\n"
+        "     if any(phrase in lowered for phrase in signature_phrases):\n"
+        "         return True\n"
+        '{"conversation_id":"job-953ae072","status":"SUCCESS","response":"finished cleanly",'
+        '"duration_seconds":149,"num_turns":3,"usage":{"input_tokens":10,"output_tokens":0}}\n'
+    )
+
+    assert _log_has_permission_denied_signature(fixture) is False
+
+
+def test_log_has_permission_denied_signature_detects_genuine_denial():
+    fixture = (
+        "jetski: no output produced - a tool required the \"command\" permission "
+        "that headless mode cannot prompt for, so it was auto-denied\n"
+    )
+
+    assert _log_has_permission_denied_signature(fixture) is True
 
 
 def test_extract_codex_structured_single_turn():
