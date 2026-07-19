@@ -94,6 +94,8 @@ Commit the blog post in the same branch as the PR. Do not wait until after merge
 
 Always `git pull` before modifying project-docs files to avoid conflicts in team mode.
 
+**Merge strategy for high-churn project-docs (issue #379):** root `.gitattributes` sets `merge=union` on `project-docs/todo.md`, `project-docs/costs.md`, and `project-docs/devlogs/*.md`. Git's built-in union merge takes lines from both sides instead of leaving conflict markers — **no** one-time `git config merge.union.driver` setup is required (union is a built-in attribute value, not a custom driver name). Pull still recommended; union may reorder concurrent append lines.
+
 ## Workspace Map Update Protocol
 
 **For any PR that changes how one tracked repo relates to another** (new API call between repos,

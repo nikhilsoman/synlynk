@@ -1,0 +1,10 @@
+# Append-only project-docs files: take lines from both sides on merge
+# instead of conflict markers. Git's built-in "union" merge attribute —
+# no custom merge.union.driver config is required.
+#
+# Verified (git 2.x): concurrent appends to these paths merge cleanly
+# without markers. Line order may be nondeterministic; still prefer
+# `git pull` before editing. See CLAUDE.md Session Protocol note.
+project-docs/todo.md merge=union
+project-docs/costs.md merge=union
+project-docs/devlogs/*.md merge=union
