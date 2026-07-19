@@ -85,3 +85,9 @@ def test_classify_story_raises_not_implemented_for_pm_manual_method():
 
     with pytest.raises(NotImplementedError):
         sp.classify_story(issue_number=None, task_text="anything", method="pm_manual")
+
+
+def test_resolve_or_create_story_id_reachable_from_top_level_package():
+    import synlynk as sl
+
+    assert callable(sl.resolve_or_create_story_id)

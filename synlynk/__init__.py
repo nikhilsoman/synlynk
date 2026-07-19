@@ -175,6 +175,12 @@ from synlynk.jobs import (
     cmd_jobs,
     cmd_jobs_handoff,
 )
+from synlynk.story_provisioning import (
+    _classify_heuristic,
+    _detect_issue_number,
+    classify_story,
+    resolve_or_create_story_id,
+)
 from synlynk.daemon import (
     SynlynkDaemon,
     SynlynkRelay,
