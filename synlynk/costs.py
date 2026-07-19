@@ -129,8 +129,8 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
 
 def _log_has_permission_denied_signature(output_text: str) -> bool:
     """Detect the headless permission auto-denial signature in agent output."""
-    lowered = (output_text or "").lower()
-    if not lowered:
+    lines = [line for line in (output_text or "").splitlines() if line.strip()]
+    if not lines:
         return False
 
     signature_phrases = (
@@ -138,15 +138,23 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
         "permission that headless mode cannot prompt for",
         "auto-denied",
     )
-    if any(phrase in lowered for phrase in signature_phrases):
+    signature_window = lines[-40:]
+    try:
+        last_event = json.loads(signature_window[-1].strip())
+    except (ValueError, TypeError, IndexError):
+        last_event = None
+    else:
+        if isinstance(last_event, dict):
+            signature_window = signature_window[:-1]
+
+    lowered_window = "\n".join(
+        line.lower() for line in signature_window if line == line.lstrip()
+    )
+    if lowered_window and any(phrase in lowered_window for phrase in signature_phrases):
         return True
 
-    lines = [line.strip() for line in output_text.splitlines() if line.strip()]
-    if not lines:
-        return False
-
     try:
-        event = json.loads(lines[-1])
+        event = json.loads(lines[-1].strip())
     except (ValueError, TypeError):
         return False
 
