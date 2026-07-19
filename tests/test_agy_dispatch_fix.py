@@ -197,6 +197,57 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_
     assert job["log_file"].startswith(os.path.abspath(expected_worktree))
 
 
+def test_dispatch_perjob_git_worktree_isolation_prefers_fresh_origin_main_over_stale_local_main(
+    git_worktree_repo,
+):
+    import synlynk as sl
+
+    def git(cmd, cwd=git_worktree_repo):
+        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+
+    git(["git", "branch", "-M", "main"])
+
+    temp_root = os.path.dirname(git_worktree_repo)
+    remote_dir = os.path.join(temp_root, "origin.git")
+    subprocess.run(["git", "init", "--bare", remote_dir], capture_output=True, check=True)
+    git(["git", "remote", "add", "origin", remote_dir])
+    git(["git", "push", "-u", "origin", "main"])
+
+    upstream_dir = os.path.join(temp_root, "upstream")
+    subprocess.run(["git", "clone", remote_dir, upstream_dir], capture_output=True, check=True)
+    git(["git", "config", "user.email", "codex@example.com"], cwd=upstream_dir)
+    git(["git", "config", "user.name", "Codex"], cwd=upstream_dir)
+    with open(os.path.join(upstream_dir, "origin-mainline.txt"), "w") as f:
+        f.write("origin mainline\n")
+    git(["git", "add", "origin-mainline.txt"], cwd=upstream_dir)
+    git(["git", "commit", "-m", "advance origin main"], cwd=upstream_dir)
+    git(["git", "push", "origin", "main"], cwd=upstream_dir)
+
+    git(["git", "fetch", "origin", "main"])
+    origin_tip = git(["git", "rev-parse", "origin/main"])
+
+    git(["git", "checkout", "-b", "feature/job-395", "origin/main"])
+    with open(os.path.join(git_worktree_repo, "feature-only.txt"), "w") as f:
+        f.write("feature work\n")
+    git(["git", "add", "feature-only.txt"])
+    git(["git", "commit", "-m", "feature work"])
+
+    git(["git", "checkout", "-b", "stale-main", origin_tip])
+    with open(os.path.join(git_worktree_repo, "stale-main.txt"), "w") as f:
+        f.write("stale mainline\n")
+    git(["git", "add", "stale-main.txt"])
+    git(["git", "commit", "-m", "stale local main"])
+    stale_main_commit = git(["git", "rev-parse", "HEAD"])
+    git(["git", "branch", "-f", "main", stale_main_commit])
+    git(["git", "checkout", "feature/job-395"])
+
+    base_info = sl._resolve_worktree_base_commit(git_worktree_repo)
+    touched = sl._worktree_files_touched(git_worktree_repo)
+
+    assert base_info == {"base_commit": origin_tip, "base_ref": "origin/main"}
+    assert touched == ["feature-only.txt"]
+
+
 def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_worktree_repo, monkeypatch):
     import synlynk as sl
 

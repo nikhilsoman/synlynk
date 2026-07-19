@@ -299,7 +299,7 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
     if not worktree_path or not os.path.isdir(worktree_path):
         return None
 
-    for ref in ("main", "master", "origin/main", "origin/master"):
+    for ref in ("origin/main", "origin/master", "main", "master"):
         try:
             base_result = subprocess.run(
                 ["git", "-C", worktree_path, "merge-base", "HEAD", ref],
