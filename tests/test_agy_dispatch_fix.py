@@ -146,24 +146,22 @@ def test_dispatch_real_files_touched_via_git_diff_summary_lists_and_truncates_fi
 def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
-    captured_run = {}
+    captured_run = []
+    captured_popen = {}
 
     class FakeProc:
         pid = 4242
 
     def fake_run(cmd, **kwargs):
-        captured_run["cmd"] = cmd
-        captured_run["kwargs"] = kwargs
-
-        class Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return Result()
+        captured_run.append((cmd, kwargs))
+        if cmd == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]:
+            return _fake_completed_process(stdout=os.path.abspath(os.path.join(os.getcwd(), ".git")))
+        if isinstance(cmd, list) and ("merge-base" in cmd or (len(cmd) > 3 and cmd[0] == "git" and cmd[1] == "-C" and cmd[3] == "rev-parse")):
+            return _fake_completed_process(stdout="abc123")
+        return _fake_completed_process()
 
     def fake_popen(cmd, **kwargs):
-        captured_run["popen"] = kwargs
+        captured_popen["kwargs"] = kwargs
         return FakeProc()
 
     monkeypatch.setattr(sl.subprocess, "run", fake_run)
@@ -181,12 +179,21 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_
     expected_branch = f"dispatch/codex/{expected_job_id}"
     expected_worktree = os.path.join("worktrees", expected_job_id)
 
-    assert captured_run["cmd"] == ["git", "worktree", "add", expected_worktree, "-b", expected_branch]
-    assert captured_run["kwargs"]["cwd"] == os.getcwd()
-    assert captured_run["kwargs"]["stderr"] is not None
+    assert ["git", "fetch", "origin", "main"] in [cmd for cmd, _ in captured_run]
+    assert [
+        "git",
+        "worktree",
+        "add",
+        expected_worktree,
+        "-b",
+        expected_branch,
+        "origin/main",
+    ] in [cmd for cmd, _ in captured_run]
+    worktree_run_kwargs = next(kwargs for cmd, kwargs in captured_run if cmd[:3] == ["git", "worktree", "add"])
+    assert worktree_run_kwargs["cwd"] == os.getcwd()
     assert job["worktree_path"] == expected_worktree
     assert job["worktree_branch"] == expected_branch
-    assert captured_run["popen"]["cwd"] == expected_worktree
+    assert captured_popen["kwargs"]["cwd"] == expected_worktree
     assert job["log_file"].startswith(os.path.abspath(expected_worktree))
 
 
@@ -202,13 +209,11 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
 
     def fake_run(cmd, **kwargs):
         created.append((cmd, kwargs))
-
-        class Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return Result()
+        if cmd == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]:
+            return _fake_completed_process(stdout=os.path.abspath(os.path.join(os.getcwd(), ".git")))
+        if isinstance(cmd, list) and ("merge-base" in cmd or (len(cmd) > 3 and cmd[0] == "git" and cmd[1] == "-C" and cmd[3] == "rev-parse")):
+            return _fake_completed_process(stdout="abc123")
+        return _fake_completed_process()
 
     def fake_popen(cmd, **kwargs):
         spawned.append(kwargs["cwd"])
@@ -231,7 +236,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
     assert job_a["worktree_path"] != job_b["worktree_path"]
     assert spawned == [job_a["worktree_path"], job_b["worktree_path"]]
     assert len({job_a["worktree_branch"], job_b["worktree_branch"]}) == 2
-    assert len(created) == 4
+    assert len(created) == 10
 
 
 def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(git_worktree_repo, monkeypatch):
@@ -272,6 +277,125 @@ def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(g
     assert spawned == []
 
 
+def test_dispatch_perjob_git_worktree_isolation_branches_from_fresh_origin_tip(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+
+    current_branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=git_worktree_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    initial_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=git_worktree_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    remote_dir = os.path.join(git_worktree_repo, "origin.git")
+    subprocess.run(["git", "init", "--bare", remote_dir], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", remote_dir],
+        cwd=git_worktree_repo,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", current_branch],
+        cwd=git_worktree_repo,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "--detach", initial_commit],
+        cwd=git_worktree_repo,
+        capture_output=True,
+        check=True,
+    )
+
+    upstream_dir = os.path.join(git_worktree_repo, "upstream")
+    subprocess.run(
+        ["git", "clone", remote_dir, upstream_dir],
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "codex@example.com"],
+        cwd=upstream_dir,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Codex"],
+        cwd=upstream_dir,
+        capture_output=True,
+        check=True,
+    )
+    with open(os.path.join(upstream_dir, "remote-only.txt"), "w") as f:
+        f.write("remote tip\n")
+    subprocess.run(
+        ["git", "add", "remote-only.txt"],
+        cwd=upstream_dir,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "advance remote tip"],
+        cwd=upstream_dir,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", current_branch],
+        cwd=upstream_dir,
+        capture_output=True,
+        check=True,
+    )
+
+    captured = {}
+    real_popen = sl.subprocess.Popen
+
+    class FakeProc:
+        pid = 4242
+
+    def fake_popen(cmd, **kwargs):
+        if isinstance(cmd, list) and cmd[:2] == ["sh", "-c"]:
+            captured["popen_cmd"] = cmd
+            captured["popen_kwargs"] = kwargs
+            return FakeProc()
+        return real_popen(cmd, **kwargs)
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "_relevant_files_for_story", lambda _story_id: [])
+    monkeypatch.setattr(sl, "_verify_contract_for_story", lambda _story_id, _task: "")
+    monkeypatch.setattr(sl, "_count_dispatch_rework", lambda _story_id: 0)
+    monkeypatch.setattr(sl.time, "time", lambda: 1_725_000_000.123)
+
+    job = sl.dispatch_agent("codex", "fix bug", skip_preflight=True)
+
+    worktree_commit = subprocess.run(
+        ["git", "-C", job["worktree_path"], "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    origin_commit = subprocess.run(
+        ["git", "-C", upstream_dir, "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    assert worktree_commit == origin_commit
+    assert captured["popen_kwargs"]["cwd"] == job["worktree_path"]
+
+
 def test_dispatch_codex_adds_git_common_dir_as_writable(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
@@ -285,13 +409,9 @@ def test_dispatch_codex_adds_git_common_dir_as_writable(git_worktree_repo, monke
         captured.setdefault("runs", []).append((cmd, kwargs))
         if cmd == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]:
             return _fake_completed_process(stdout=git_common_dir, returncode=0)
-
-        class Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return Result()
+        if isinstance(cmd, list) and ("merge-base" in cmd or (len(cmd) > 3 and cmd[0] == "git" and cmd[1] == "-C" and cmd[3] == "rev-parse")):
+            return _fake_completed_process(stdout="abc123")
+        return _fake_completed_process()
 
     def fake_popen(cmd, **kwargs):
         captured["popen_cmd"] = cmd
@@ -327,13 +447,9 @@ def test_dispatch_codex_skips_git_common_dir_when_git_rev_parse_fails(git_worktr
         captured.setdefault("runs", []).append((cmd, kwargs))
         if cmd == ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]:
             return _fake_completed_process(stdout="", returncode=1)
-
-        class Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return Result()
+        if isinstance(cmd, list) and ("merge-base" in cmd or (len(cmd) > 3 and cmd[0] == "git" and cmd[1] == "-C" and cmd[3] == "rev-parse")):
+            return _fake_completed_process(stdout="abc123")
+        return _fake_completed_process()
 
     def fake_popen(cmd, **kwargs):
         captured["popen_cmd"] = cmd
