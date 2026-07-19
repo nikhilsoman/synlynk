@@ -297,3 +297,39 @@ def test_empty_telemetry_writes_nothing(project_dir):
     finally:
         conn.close()
     assert n == 0
+
+
+def test_fix_github_issue_378_nikhilsomansynk_terminal_summary_survives_unknown_overwrite(project_dir, monkeypatch):
+    import synlynk as sl
+
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": []})
+
+    terminal = sl._write_job_summary(
+        "job-race",
+        "codex",
+        "story-378",
+        0,
+        4.0,
+        120,
+        30,
+        0.02,
+        ["src/terminal.py"],
+        status_label="OK (exit 0)",
+    )
+
+    overwritten = sl._write_job_summary(
+        "job-race",
+        "codex",
+        "story-378",
+        None,
+        5.0,
+        0,
+        0,
+        0.00,
+        [],
+        status_label="UNKNOWN (exit unknown)",
+    )
+
+    summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
+    assert summary_path.read_text() == terminal
+    assert overwritten == terminal
