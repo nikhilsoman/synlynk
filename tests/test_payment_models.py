@@ -2,6 +2,8 @@ import json
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -192,6 +194,59 @@ def test_resolve_payment_value_subscription_overage_bills_only_the_excess(
     assert result.quota_pct_used == 1.0
 
 
+def test_resolve_payment_value_subscription_bills_marginal_overage_not_cumulative(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    _write_config(
+        tmp_path,
+        {
+            "codex": {
+                "mode": "subscription",
+                "tier_quota_tokens_in": 1000,
+                "tier_quota_tokens_out": 1000000,
+                "overage_rate_per_1k_in": 1.0,
+                "overage_rate_per_1k_out": 0.0,
+            }
+        },
+    )
+    import synlynk as sl
+    from synlynk.quota import _upsert_agent_quota
+
+    _upsert_agent_quota(
+        "codex",
+        "monthly",
+        limit_tokens=1000,
+        used_tokens=1000,
+        model="unknown",
+        unit="tokens",
+    )
+    _upsert_agent_quota(
+        "codex",
+        "monthly",
+        limit_tokens=1000000,
+        used_tokens=0,
+        model="out",
+        unit="tokens",
+    )
+
+    from synlynk.costs import resolve_payment_value
+
+    pv1 = resolve_payment_value("codex", tokens_in=500, tokens_out=0)
+    assert pv1.actual_usd == pytest.approx(0.5, abs=1e-6)
+
+    pv2 = resolve_payment_value("codex", tokens_in=100, tokens_out=0)
+    assert pv2.actual_usd == pytest.approx(0.1, abs=1e-6)
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT used_tokens FROM agent_quotas "
+        "WHERE agent='codex' AND quota_type='monthly' AND unit='tokens' AND model='unknown'"
+    ).fetchone()
+    conn.close()
+    assert row[0] == 1600
+
+
 def test_resolve_payment_value_credit_grant_consumes_balance(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path, {"agy": {"mode": "credit_grant"}})
@@ -242,6 +297,47 @@ def test_resolve_payment_value_credit_grant_falls_back_when_exhausted(
     assert result.mode == "credit_grant"
     assert result.actual_usd > 0
     assert result.credit_remaining_usd == 0.0
+
+
+def test_resolve_payment_value_credit_grant_chains_across_multiple_grants(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, {"agy": {"mode": "credit_grant"}})
+    import synlynk as sl
+    import synlynk.costs as costs
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 5.0, 5.0, '2026-07-01')"
+    )
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 10.0, 10.0, '2026-07-10')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(costs, "extract_model_version", lambda output_text, agent=None: "stub")
+    monkeypatch.setattr(
+        costs,
+        "_model_rate_for_version",
+        lambda model_version, agent=None: {"input": 0.078, "output": 0.0, "cache_read": 0.0},
+    )
+
+    from synlynk.costs import resolve_payment_value
+
+    pv = resolve_payment_value("agy", 100000, 0)
+    assert pv.actual_usd == pytest.approx(0.0, abs=1e-6)
+
+    conn = sl._get_db()
+    remaining = conn.execute(
+        "SELECT remaining_usd FROM credit_grants WHERE agent='agy' ORDER BY granted_at ASC"
+    ).fetchall()
+    conn.close()
+    assert remaining[0][0] == pytest.approx(0.0, abs=1e-6)
+    assert remaining[1][0] == pytest.approx(7.2, abs=1e-6)
 
 
 def test_resolve_payment_value_unconfigured_agent_defaults_pay_as_you_go(

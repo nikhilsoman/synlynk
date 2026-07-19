@@ -403,9 +403,15 @@ def _subscription_actual_usd(
     cumulative_in = prior_used_in + int(tokens_in or 0)
     cumulative_out = prior_used_out + int(tokens_out or 0)
 
-    over_in = max(0, cumulative_in - tier_quota_in)
-    over_out = max(0, cumulative_out - tier_quota_out)
-    actual_usd = (over_in / 1000 * overage_rate_in) + (over_out / 1000 * overage_rate_out)
+    prior_over_in = max(0, prior_used_in - tier_quota_in)
+    prior_over_out = max(0, prior_used_out - tier_quota_out)
+    new_over_in = max(0, cumulative_in - tier_quota_in)
+    new_over_out = max(0, cumulative_out - tier_quota_out)
+    marginal_over_in = new_over_in - prior_over_in
+    marginal_over_out = new_over_out - prior_over_out
+    actual_usd = (marginal_over_in / 1000 * overage_rate_in) + (
+        marginal_over_out / 1000 * overage_rate_out
+    )
 
     pct_in = (cumulative_in / tier_quota_in) if tier_quota_in else 0.0
     pct_out = (cumulative_out / tier_quota_out) if tier_quota_out else 0.0
@@ -442,34 +448,37 @@ def _credit_grant_actual_usd(agent: str, api_equivalent_usd: float) -> tuple:
     """Return (actual_usd, remaining_credit_usd) for credit-grant mode."""
     conn = _pkg("_get_db")()
     try:
-        row = conn.execute(
+        rows = conn.execute(
             "SELECT id, remaining_usd FROM credit_grants "
             "WHERE agent=? AND remaining_usd > 0 "
             "AND (expires_at IS NULL OR expires_at > datetime('now')) "
-            "ORDER BY granted_at ASC, id ASC LIMIT 1",
+            "ORDER BY granted_at ASC, id ASC",
             (agent,),
-        ).fetchone()
-        if row is None:
+        ).fetchall()
+        if not rows:
             return api_equivalent_usd, 0.0
 
-        row_id, remaining = row
-        remaining = float(remaining)
-        if api_equivalent_usd <= remaining:
-            new_remaining = remaining - api_equivalent_usd
+        remaining_cost = float(api_equivalent_usd)
+        for row_id, remaining in rows:
+            if remaining_cost <= 0:
+                break
+            remaining = float(remaining)
+            consume = min(remaining_cost, remaining)
+            new_remaining = remaining - consume
             conn.execute(
                 "UPDATE credit_grants SET remaining_usd=? WHERE id=?",
                 (new_remaining, row_id),
             )
-            conn.commit()
-            return 0.0, new_remaining
+            remaining_cost -= consume
 
-        overshoot = api_equivalent_usd - remaining
-        conn.execute(
-            "UPDATE credit_grants SET remaining_usd=0 WHERE id=?",
-            (row_id,),
-        )
         conn.commit()
-        return overshoot, 0.0
+        total_remaining = conn.execute(
+            "SELECT COALESCE(SUM(remaining_usd), 0) FROM credit_grants "
+            "WHERE agent=? AND remaining_usd > 0 "
+            "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+            (agent,),
+        ).fetchone()[0]
+        return remaining_cost, float(total_remaining)
     finally:
         conn.close()
 
