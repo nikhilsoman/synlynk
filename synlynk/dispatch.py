@@ -812,7 +812,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    skip_preflight: bool = False,
                    grants: list = None,
                    revokes: list = None,
-                   job_id: str = None) -> dict:
+                   job_id: str = None,
+                   issue: int = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     if story_id and not force_agent:
         best_agent = _pkg("_best_agent_for_story")
@@ -823,6 +824,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
+
+    if not story_id:
+        resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
+        if resolve_or_create_story_id:
+            story_id = resolve_or_create_story_id(task, issue=issue)
 
     if agent == "local":
         get_db = _pkg("_get_db")
