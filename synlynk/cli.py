@@ -431,6 +431,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story/task ID for context labelling")
+    dispatch_parser.add_argument("--issue", type=int, default=None,
+        help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
     dispatch_parser.add_argument(
@@ -829,7 +831,8 @@ def main() -> None:
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  grants=getattr(args, "grant", []),
-                                 revokes=getattr(args, "revoke", []))
+                                 revokes=getattr(args, "revoke", []),
+                                 issue=getattr(args, "issue", None))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
