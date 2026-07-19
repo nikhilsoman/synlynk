@@ -1107,6 +1107,53 @@ def test_cmd_cost_log_writes_estimated_manual_row(project_dir, monkeypatch):
     assert row[5] == "brainstorm session"
 
 
+def test_cmd_cost_log_populates_payment_columns(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.costs import resolve_payment_value
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+
+    agent = "claude"
+    tokens_in = 1234
+    tokens_out = 567
+    story_id = "story-payment-columns"
+    payment_value = resolve_payment_value(agent, tokens_in, tokens_out)
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, discipline, phase) VALUES (?, 'T', 'backend', 'build')",
+        (story_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_cost_log(
+        agent=agent,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        story_id=story_id,
+        note="payment columns regression",
+    )
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        """
+        SELECT total_cost_usd, api_equivalent_usd, actual_usd, payment_mode
+        FROM cost_entries
+        WHERE story_id=?
+        """,
+        (story_id,),
+    ).fetchone()
+    conn.close()
+
+    assert row is not None
+    assert row[1] == pytest.approx(payment_value.api_equivalent_usd)
+    assert row[2] == pytest.approx(payment_value.actual_usd)
+    assert row[3] == payment_value.mode
+    assert row[0] == pytest.approx(payment_value.api_equivalent_usd)
+
+
 def test_cmd_cost_log_with_story_id(project_dir, monkeypatch):
     import synlynk
 

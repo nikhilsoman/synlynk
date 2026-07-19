@@ -1728,7 +1728,7 @@ def cmd_cost_log(
         _insert_cost_row,
         extract_model_version,
     )
-    from synlynk.costs import _model_rate_for_version
+    from synlynk.costs import resolve_payment_value
 
     if tokens_in < 0 or tokens_out < 0:
         raise ValueError("tokens-in and tokens-out must be non-negative")
@@ -1745,8 +1745,8 @@ def cmd_cost_log(
     conn.close()
 
     model_version = extract_model_version("", agent=agent)
-    rates = _model_rate_for_version(model_version, agent=agent)
-    est_cost = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
+    payment_value = resolve_payment_value(agent, tokens_in, tokens_out)
+    est_cost = payment_value.api_equivalent_usd
     ts = time.strftime("%Y-%m-%d %H:%M")
 
     _insert_cost_row(
@@ -1761,6 +1761,9 @@ def cmd_cost_log(
         total_cost_usd=est_cost,
         notes=note,
         story_id=story_id,
+        api_equivalent_usd=payment_value.api_equivalent_usd,
+        actual_usd=payment_value.actual_usd,
+        payment_mode=payment_value.mode,
     )
     label = f"story {story_id}" if story_id else f"phase={phase or 'dream/plan'} (no story)"
     print(
