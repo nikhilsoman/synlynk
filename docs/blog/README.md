@@ -71,7 +71,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [67](./67-pr292-fix-probe-model-version.md) | PR #292 — Fix Tier-2 Model Probe (#287) | [#292](https://github.com/nikhilsoman/synlynk/pull/292) | 2026-07-16 |
 | [68](./68-pr328-live-command-selftest.md) | PR #328 — Live Command Selftest: Does synlynk Actually Work in a Real Repo? | [#328](https://github.com/nikhilsoman/synlynk/pull/328) | 2026-07-18 |
 | [69](./69-pr-capability-sweep-taxonomy.md) | Capability Sweep + Industry Taxonomy — Calibrating Agents Against Real Skill Axes | TBD | 2026-07-19 |
-| [70](./70-prTBD-gitattributes-project-docs-union.md) | PR TBD — .gitattributes union merge for project-docs churn | TBD | 2026-07-19 |
+| [70](./70-prTBD-gitattributes-project-docs-union.md) | PR #383 — .gitattributes union merge for project-docs churn | [#383](https://github.com/nikhilsoman/synlynk/pull/383) | 2026-07-19 |
 
 
 ## Per-PR Post Template

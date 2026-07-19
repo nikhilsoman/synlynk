@@ -1,9 +1,9 @@
 ---
-title: "PR TBD — .gitattributes union merge for project-docs churn"
+title: "PR #383 — .gitattributes union merge for project-docs churn"
 date: 2026-07-19
 series: "Building the OS for Multi-Agent Development"
 post: 70
-pr: "TBD"
+pr: "#383"
 merged: —
 ---
 
