@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from synlynk.hud import CYCLES
+from synlynk.taxonomy_standards import _taxonomy_label
 
 _ORG_DOMAINS = (
     "personalization",
@@ -486,6 +487,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
         except sqlite3.OperationalError:
             pass
+    if "pr_number" not in rating_cols:
+        try:
+            conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
+        except sqlite3.OperationalError:
+            pass
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     for col, typedef in [
         ("story_id", "TEXT REFERENCES stories(story_id)"),
@@ -669,6 +675,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             UNIQUE(agent, model, quota_type, unit)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
+            pr_number  INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+    """)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
     )
@@ -707,6 +719,57 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             note            TEXT
         )
     """)
+    # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
+    from synlynk.taxonomy_standards import (
+        LEGACY_DISCIPLINE_CROSSWALK,
+        LEGACY_ORG_DOMAIN_CROSSWALK,
+        LEGACY_INDUSTRY_CROSSWALK,
+    )
+    # capability-sweep-taxonomy: one-time gate so the crosswalk only ever
+    # rewrites pre-migration legacy data, not fresh rows written afterward
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS _taxonomy_crosswalk_state ("
+        "id INTEGER PRIMARY KEY CHECK (id = 1), completed INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO _taxonomy_crosswalk_state (id, completed) VALUES (1, 0)"
+    )
+    already_done = conn.execute(
+        "SELECT completed FROM _taxonomy_crosswalk_state WHERE id = 1"
+    ).fetchone()[0]
+    for table in ("stories", "capability_ratings"):
+        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "legacy_unmapped" not in cols:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN legacy_unmapped INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+
+    if not already_done:
+        for table, col, crosswalk in (
+            ("stories", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+            ("stories", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+            ("stories", "industry", LEGACY_INDUSTRY_CROSSWALK),
+            ("capability_ratings", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+            ("capability_ratings", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+            ("capability_ratings", "industry", LEGACY_INDUSTRY_CROSSWALK),
+        ):
+            for legacy_value, code in crosswalk.items():
+                conn.execute(
+                    f"UPDATE {table} SET {col}=?, legacy_unmapped=0 WHERE {col}=?",
+                    (code, legacy_value),
+                )
+            known_codes = set(crosswalk.values())
+            rows = conn.execute(f"SELECT DISTINCT {col} FROM {table}").fetchall()
+            for (value,) in rows:
+                if value is not None and value not in known_codes and value not in crosswalk:
+                    conn.execute(
+                        f"UPDATE {table} SET legacy_unmapped=1 WHERE {col}=? AND legacy_unmapped=0",
+                        (value,),
+                    )
+        conn.execute(
+            "UPDATE _taxonomy_crosswalk_state SET completed = 1 WHERE id = 1"
+        )
     conn.commit()
     _seed_verb_map(conn)
 
@@ -1433,7 +1496,10 @@ def cmd_story_create(title: str, engg_domain: str = None,
     conn.commit()
     conn.close()
     _generate_todo_md()
-    print(f"  {_GREEN}✓{_RESET} Story created: {story_id}  [{engg_domain} · {org_domain} · {industry}]")
+    print(
+        f"  {_GREEN}✓{_RESET} Story created: {story_id}  "
+        f"[{_taxonomy_label('sfia', engg_domain)} · {_taxonomy_label('apqc', org_domain)} · {_taxonomy_label('naics', industry)}]"
+    )
     return story_id
 
 def cmd_story_list() -> None:
@@ -1641,8 +1707,11 @@ def cmd_score_list(engg: str = None, org: str = None, industry: str = None) -> N
     print("  " + "-" * 96)
     for r in rows:
         score_str = f"{r[6]:.2f}" if r[6] is not None else "  n/a"
-        print(f"  {r[0]:<10} {r[1]:<22} {r[2]:<12} {r[3]:<14} "
-              f"{r[4]:<12} {r[5]:<10} {score_str:>6} {r[7]:>4}")
+        print(
+            f"  {r[0]:<10} {r[1]:<22} {_taxonomy_label('sfia', r[2]):<12} "
+            f"{_taxonomy_label('apqc', r[3]):<14} {_taxonomy_label('naics', r[4]):<12} "
+            f"{r[5]:<10} {score_str:>6} {r[7]:>4}"
+        )
 
 def cmd_cost_log(
     agent: str,
@@ -1729,7 +1798,20 @@ def cmd_pr_check() -> None:
     Exit code 1 if blocked. Exit code 0 if clean.
     """
     from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.pr_multiplier import (
+        _apply_review_cycle_multiplier,
+        _current_pr_number,
+        _is_github_remote,
+    )
+    from synlynk.sentinel import _extract_pr_review_cycles
+
     conn = _get_db()
+    if _is_github_remote():
+        pr_number = _current_pr_number()
+        if pr_number is not None:
+            changes_requested_count = _extract_pr_review_cycles() or 0
+            _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
+
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"
     ).fetchall()

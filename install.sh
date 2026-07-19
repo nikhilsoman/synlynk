@@ -46,6 +46,8 @@ else
         curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f" \
              -o "$PACKAGE_DIR/$f"
     done
+    curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/capability_baseline.json" \
+         -o "$PACKAGE_DIR/capability_baseline.json"
     # Write shim directly (bin/synlynk.py references package via sys.path)
     cat > "$BINARY_PATH" <<'SHIM'
 #!/usr/bin/env python3

@@ -808,6 +808,7 @@ CREATE TABLE IF NOT EXISTS stories (
     stack_tags    TEXT DEFAULT '[]',
     industry      TEXT DEFAULT 'unknown',
     phase         TEXT DEFAULT 'build',
+    legacy_unmapped INTEGER NOT NULL DEFAULT 0,
     priority      INTEGER NOT NULL DEFAULT 5,
     readiness     TEXT NOT NULL DEFAULT 'draft',
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -830,6 +831,7 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     stack_tags            TEXT DEFAULT '[]',
     industry              TEXT NOT NULL DEFAULT 'unknown',
     phase                 TEXT NOT NULL DEFAULT 'build',
+    legacy_unmapped       INTEGER NOT NULL DEFAULT 0,
     signal_source         TEXT NOT NULL DEFAULT 'auto',
     quality               REAL NOT NULL DEFAULT 0.0,
     quality_auto          REAL,
@@ -844,8 +846,14 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     verified_by_ci        INTEGER,
     correct               INTEGER DEFAULT 1,
     note                  TEXT,
+    pr_number             INTEGER,
     ed25519_sig           TEXT,
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
+    pr_number  INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS source_symbols (
@@ -1377,6 +1385,7 @@ def load_config() -> dict:
         "stall_timeout_minutes": 30,
         "agents": {},
         "payment_models": {},
+        "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": _default_roles_map(),
     }
     config_file = ".synlynk/config.json"
@@ -3681,6 +3690,9 @@ def init(force: bool = False, agents: list = None,
     })
 
     set_state("stopped")
+    from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
+
+    _seed_capability_ledger_from_baseline(_get_db())
 
     print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
     if functional:

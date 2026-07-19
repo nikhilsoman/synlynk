@@ -201,6 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
     from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
     from synlynk.scheduler import cmd_schedule
+
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
     )
@@ -600,6 +601,20 @@ def build_parser() -> argparse.ArgumentParser:
     pr_sub = pr_parser.add_subparsers(dest="pr_action")
     pr_sub.add_parser("check", help="Block PR if model versions are unattested")
 
+    capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
+    capability_sub = capability_parser.add_subparsers(dest="capability_action")
+    sweep_parser = capability_sub.add_parser(
+        "sweep",
+        help="Run a calibration sweep across agents/models to seed the capability baseline",
+    )
+    sweep_parser.add_argument(
+        "--cost-cap",
+        type=float,
+        default=None,
+        dest="cost_cap",
+        help="Override the configured cost cap (USD) for this sweep run",
+    )
+
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
     )
@@ -669,6 +684,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    from synlynk.capability_sweep import cmd_capability_sweep
+
     from synlynk import (
         AGENT_CAPABILITY_BASELINES,
         VERSION,
@@ -917,6 +934,9 @@ def main() -> None:
     elif args.command == "pr":
         if args.pr_action == "check":
             cmd_pr_check()
+    elif args.command == "capability":
+        if args.capability_action == "sweep":
+            cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:

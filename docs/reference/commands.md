@@ -53,6 +53,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `cost log` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
+- `capability sweep` (secondary) — sustain
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain
 - `upgrade` (secondary) — sustain
