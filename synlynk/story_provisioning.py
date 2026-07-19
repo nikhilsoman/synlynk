@@ -103,25 +103,27 @@ def classify_story(issue_number, task_text: str, method: str = "heuristic") -> d
     raise ValueError(f"Unknown story_classification method: {method!r}")
 
 
-def resolve_or_create_story_id(task_text: str, issue=None) -> str:
+def resolve_or_create_story_id(task_text: str, issue=None, timestamp: float = None) -> str:
     """Return an existing or newly-created story_id for a dispatch."""
     issue_number = _detect_issue_number(task_text, issue=issue)
     if issue_number is not None:
         story_id = f"story-issue-{issue_number}"
     else:
-        story_id = f"story-adhoc-{int(time.time())}"
+        story_id = f"story-adhoc-{int(timestamp if timestamp is not None else time.time())}"
 
     get_db = _pkg("_get_db")
     if get_db is None:
-        raise RuntimeError("synlynk._get_db is unavailable")
+        return story_id
     conn = get_db()
+    if conn is None:
+        return story_id
     try:
         exists = conn.execute(
             "SELECT 1 FROM stories WHERE story_id=?",
             (story_id,),
         ).fetchone()
-    finally:
-        conn.close()
+    except Exception:
+        return story_id
     if exists:
         return story_id
 
@@ -129,18 +131,48 @@ def resolve_or_create_story_id(task_text: str, issue=None) -> str:
     config = load_config() if load_config else {}
     method = (config.get("story_classification") or {}).get("method", "heuristic")
     classification = classify_story(issue_number, task_text, method=method)
-
-    cmd_story_create = _pkg("cmd_story_create")
-    if cmd_story_create is None:
-        raise RuntimeError("synlynk.cmd_story_create is unavailable")
-    cmd_story_create(
-        classification["title"],
-        discipline=classification["discipline"],
-        org_domain=classification["org_domain"],
-        role=classification["role"],
-        stage=classification["stage"],
-        story_id=story_id,
-    )
+    normalize_tags = _pkg("_normalize_capability_tags")
+    engg_domain = classification["discipline"] or "backend"
+    org_domain = classification["org_domain"] or "platform"
+    role = classification["role"] or "dev"
+    stage = classification["stage"] or "open"
+    if normalize_tags:
+        engg_domain, org_domain, role, stage = normalize_tags(
+            engg_domain,
+            org_domain,
+            discipline=classification["discipline"],
+            role=classification["role"],
+            stage=classification["stage"],
+        )[0:4]
+        if classification["discipline"] is None:
+            engg_domain = engg_domain or "backend"
+    tags_json = json.dumps([])
+    stack_tags_json = json.dumps([])
+    industry = config.get("industry", "unknown")
+    conn = get_db()
+    if conn is None:
+        return story_id
+    try:
+        conn.execute(
+            "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, role, stage, "
+            "org_domain_tags, stack_tags, industry, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                story_id,
+                classification["title"],
+                engg_domain,
+                classification["discipline"] or engg_domain,
+                org_domain,
+                role,
+                stage,
+                tags_json,
+                stack_tags_json,
+                industry,
+                "build",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        return story_id
     return story_id
 
 

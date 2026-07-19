@@ -815,6 +815,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    job_id: str = None,
                    issue: int = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
+    dispatch_time = None
+    if not story_id:
+        dispatch_time = time.time()
     if story_id and not force_agent:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
@@ -828,7 +831,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if not story_id:
         resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
         if resolve_or_create_story_id:
-            story_id = resolve_or_create_story_id(task, issue=issue)
+            story_id = resolve_or_create_story_id(task, issue=issue, timestamp=dispatch_time)
 
     if agent == "local":
         get_db = _pkg("_get_db")
@@ -918,7 +921,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     import hashlib as _hashlib
     if not job_id:
-        job_id = "job-" + _hashlib.md5(f"{agent}{task}{time.time()}".encode()).hexdigest()[:8]
+        job_seed = dispatch_time if dispatch_time is not None else time.time()
+        job_id = "job-" + _hashlib.md5(f"{agent}{task}{job_seed}".encode()).hexdigest()[:8]
 
     worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
     worktree_path = _create_job_worktree(job_id, agent)
