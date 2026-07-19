@@ -389,3 +389,61 @@ def test_cmd_credit_grant_rejects_negative_amount(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError):
         cmd_credit_grant(agent="agy", amount=-50.0, expires=None, note=None)
+
+
+def test_check_budgets_prints_payment_model_rollup(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import os
+
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+
+    _write_config(
+        tmp_path,
+        {
+            "codex": {
+                "mode": "subscription",
+                "tier_quota_tokens_in": 1000000,
+                "tier_quota_tokens_out": 1000000,
+                "overage_rate_per_1k_in": 0.003,
+                "overage_rate_per_1k_out": 0.015,
+            },
+            "agy": {"mode": "credit_grant"},
+        },
+    )
+    conn = sl._get_db()
+    sl._migrate_db(conn)
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at) "
+        "VALUES ('agy', 25.0, 14.20, '2026-07-18')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(sl, "_is_migrated", lambda: True)
+    sl.update_costs("codex exec", in_tokens=1000, out_tokens=1000, duration=10, agent="codex")
+    from synlynk.db import _insert_cost_row
+
+    _insert_cost_row(
+        session_date="2026-07-19 10:30",
+        agent="agy",
+        model="unknown",
+        input_tokens=0,
+        output_tokens=0,
+        cache_read_tokens=0,
+        cost_source="actual",
+        estimate_basis=None,
+        total_cost_usd=0.0,
+        api_equivalent_usd=0.0,
+        actual_usd=0.0,
+        payment_mode="credit_grant",
+        notes="manual payment-model test",
+    )
+
+    sl.check_budgets()
+    captured = capsys.readouterr()
+    assert "Payment Models" in captured.out
+    assert "codex" in captured.out
+    assert "subscription" in captured.out
+    assert "agy" in captured.out
+    assert "14.20" in captured.out

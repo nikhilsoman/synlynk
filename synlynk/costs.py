@@ -746,6 +746,50 @@ def check_budgets() -> None:
             "(not blended into the spend total above)"
         )
 
+    conn = _pkg("_get_db")()
+    try:
+        payment_rows = conn.execute(
+            "SELECT agent, payment_mode, actual_usd FROM cost_entries "
+            "WHERE payment_mode IS NOT NULL ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if payment_rows:
+        seen_agents = {}
+        for agent, mode, actual in payment_rows:
+            seen_agents[agent] = (mode, actual)
+
+        print("\n  Payment Models")
+        for agent, (mode, actual) in seen_agents.items():
+            if mode == "subscription":
+                conn = _pkg("_get_db")()
+                try:
+                    row = conn.execute(
+                        "SELECT limit_tokens, used_tokens FROM agent_quotas "
+                        "WHERE agent=? AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+                        (agent,),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                pct = int(100 * row[1] / row[0]) if row and row[0] else 0
+                print(f"    {agent:<8}[subscription]  quota: {pct}% used this cycle (${actual:.2f} marginal)")
+            elif mode == "credit_grant":
+                conn = _pkg("_get_db")()
+                try:
+                    grant_row = conn.execute(
+                        "SELECT remaining_usd, face_value_usd FROM credit_grants "
+                        "WHERE agent=? ORDER BY granted_at DESC LIMIT 1",
+                        (agent,),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if grant_row:
+                    remaining, face_value = grant_row
+                    print(f"    {agent:<8}[credit_grant]  balance: ${remaining:.2f} remaining of ${face_value:.2f} granted")
+            else:
+                print(f"    {agent:<8}[pay_as_you_go] ${actual:.2f} this run")
+
 
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md's real-dollar column."""
