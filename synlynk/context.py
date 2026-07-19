@@ -368,11 +368,23 @@ def _relevant_files_for_story(story_id: str) -> list:
     """Returns up to 10 source file paths relevant to the story's engg_domain."""
     if not story_id:
         return []
-    conn = _pkg("_get_db")()
-    row = conn.execute(
-        "SELECT engg_domain FROM stories WHERE story_id=?", (story_id,)
-    ).fetchone()
-    conn.close()
+    get_db = _pkg("_get_db")
+    if get_db is None:
+        return []
+    conn = get_db()
+    if conn is None:
+        return []
+    try:
+        row = conn.execute(
+            "SELECT engg_domain FROM stories WHERE story_id=?", (story_id,)
+        ).fetchone()
+    except Exception:
+        return []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
     if not row or row[0] == "unknown":
         return []
     engg = row[0]
@@ -400,11 +412,23 @@ def _verify_contract_for_story(story_id: str, task: str) -> str:
     if not os.path.exists("tests"):
         return ""
 
-    conn = _pkg("_get_db")()
-    row = conn.execute(
-        "SELECT title FROM stories WHERE story_id=?", (story_id,)
-    ).fetchone() if story_id else None
-    conn.close()
+    get_db = _pkg("_get_db")
+    if get_db is None:
+        return ""
+    conn = get_db()
+    if conn is None:
+        return ""
+    try:
+        row = conn.execute(
+            "SELECT title FROM stories WHERE story_id=?", (story_id,)
+        ).fetchone() if story_id else None
+    except Exception:
+        return ""
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
     title = (row[0] if row else "") or task
 
     # Derive test pattern: lowercase, alphanumeric + underscores, max 40 chars

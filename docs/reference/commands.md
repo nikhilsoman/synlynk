@@ -38,6 +38,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 ## Tier 2 — Execute
 
 - `dispatch` (primary) — execute
+- `backfill-capability-ratings` (secondary) — execute
 - `jobs` (primary) — execute
 - `jobs handoff` (secondary) — execute
 - `schedule` (primary) — execute

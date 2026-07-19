@@ -161,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_instructions_update,
         cmd_jobs,
         cmd_jobs_handoff,
+        cmd_backfill_capability_ratings,
         cmd_join,
         cmd_launch,
         cmd_launch_ftue,
@@ -431,6 +432,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story/task ID for context labelling")
+    dispatch_parser.add_argument("--issue", type=int, default=None,
+        help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
     dispatch_parser.add_argument(
@@ -483,6 +486,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Job ID (from `synlynk jobs`)")
     logs_parser.add_argument("--tail", type=int, default=50,
         help="Number of lines to show (default: 50)")
+
+    subparsers.add_parser(
+        "backfill-capability-ratings",
+        help="Resolve/create story_ids for completed jobs missing one and write their capability ratings",
+    )
 
     shell_parser = subparsers.add_parser(
         "shell", help="Spawn a subshell with synlynk context injected")
@@ -713,6 +721,7 @@ def main() -> None:
         cmd_instructions_update,
         cmd_jobs,
         cmd_jobs_handoff,
+        cmd_backfill_capability_ratings,
         cmd_join,
         cmd_launch,
         cmd_launch_ftue,
@@ -829,7 +838,8 @@ def main() -> None:
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  grants=getattr(args, "grant", []),
-                                 revokes=getattr(args, "revoke", []))
+                                 revokes=getattr(args, "revoke", []),
+                                 issue=getattr(args, "issue", None))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
@@ -839,6 +849,8 @@ def main() -> None:
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
+    elif args.command == "backfill-capability-ratings":
+        cmd_backfill_capability_ratings()
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))

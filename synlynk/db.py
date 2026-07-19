@@ -1465,14 +1465,16 @@ def cmd_story_create(title: str, engg_domain: str = None,
                      stack_tags: list = None,
                      discipline: str = None,
                      role: str = None,
-                     stage: str = None) -> str:
+                     stage: str = None,
+                     story_id: str = None) -> str:
     """Creates a story record in state.db. Returns the generated story_id."""
     from synlynk import _GREEN, _RESET, _generate_todo_md, _get_db, load_config
     import hashlib as _hashlib
     import json as _json
-    story_id = "story-" + _hashlib.md5(
-        f"{title}{time.time()}".encode()
-    ).hexdigest()[:8]
+    if story_id is None:
+        story_id = "story-" + _hashlib.md5(
+            f"{title}{time.time()}".encode()
+        ).hexdigest()[:8]
     config = load_config()
     industry = config.get("industry", "unknown")
     tags_json = _json.dumps(org_domain_tags or [])

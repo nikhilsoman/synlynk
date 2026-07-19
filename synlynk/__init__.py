@@ -175,6 +175,13 @@ from synlynk.jobs import (
     cmd_jobs,
     cmd_jobs_handoff,
 )
+from synlynk.story_provisioning import (
+    _classify_heuristic,
+    _detect_issue_number,
+    classify_story,
+    cmd_backfill_capability_ratings,
+    resolve_or_create_story_id,
+)
 from synlynk.daemon import (
     SynlynkDaemon,
     SynlynkRelay,
@@ -1388,6 +1395,7 @@ def load_config() -> dict:
         "payment_models": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": _default_roles_map(),
+        "story_classification": {"method": "heuristic"},
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):

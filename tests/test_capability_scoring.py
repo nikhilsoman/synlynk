@@ -93,6 +93,30 @@ def test_story_create_generates_unique_id(tmp_path, monkeypatch):
     ids = [r[0] for r in rows]
     assert len(set(ids)) == 2
 
+
+def test_cmd_story_create_accepts_story_id_override(project_dir, monkeypatch):
+    import synlynk as sl
+
+    returned_id = sl.cmd_story_create("Fix flaky worktree test", story_id="story-issue-395")
+
+    assert returned_id == "story-issue-395"
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT story_id, title FROM stories WHERE story_id=?",
+        ("story-issue-395",)
+    ).fetchone()
+    conn.close()
+    assert row == ("story-issue-395", "Fix flaky worktree test")
+
+
+def test_cmd_story_create_still_generates_id_when_not_given(project_dir, monkeypatch):
+    import synlynk as sl
+
+    generated_id = sl.cmd_story_create("Some other story")
+
+    assert generated_id.startswith("story-")
+    assert generated_id != "story-issue-395"
+
 def test_story_list_returns_rows(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk/state", exist_ok=True)

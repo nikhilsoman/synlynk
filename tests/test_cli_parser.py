@@ -13,3 +13,30 @@ def test_build_parser_exposes_dispatch_tree_without_running_main():
 
     with pytest.raises(SystemExit):
         parser.parse_args(["dispatch", "not-a-real-agent", "--task", "build"])
+
+
+def test_dispatch_parser_accepts_issue_flag():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["dispatch", "claude", "--task", "fix it", "--issue", "395"])
+
+    assert args.issue == 395
+
+
+def test_dispatch_parser_issue_defaults_to_none():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["dispatch", "claude", "--task", "fix it"])
+
+    assert args.issue is None
+
+
+def test_backfill_capability_ratings_parser_registered():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["backfill-capability-ratings"])
+
+    assert args.command == "backfill-capability-ratings"
