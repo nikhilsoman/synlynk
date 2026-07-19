@@ -43,7 +43,7 @@ New command: `synlynk capability sweep` (manual trigger, no cron — matches how
 
 ## 3. Distribution
 
-A `capability_baseline.json` file ships inside the synlynk package itself, regenerated periodically by the maintainer's own sweep runs and bundled into each release/upgrade (`install.sh`/PyPI package, alongside the existing `VERSION` bump discipline). On `init` or `upgrade`, if a project's `capability_ratings` table is empty, it seeds from this bundled baseline. Any user can instead (or additionally) run their own `synlynk capability sweep` to generate a project-local baseline from their own paid dispatches.
+A `synlynk/capability_baseline.json` file ships inside the synlynk package itself, regenerated periodically by the maintainer's own sweep runs and bundled into each release/upgrade (`install.sh`/PyPI package, alongside the existing `VERSION` bump discipline). On `init` or `upgrade`, if a project's `capability_ratings` table is empty, it seeds from this bundled baseline. Any user can instead (or additionally) run their own `synlynk capability sweep` to generate a project-local baseline from their own paid dispatches.
 
 ## 4. Organic Reinforcement
 
@@ -76,7 +76,7 @@ Baseline rows are inserted into `capability_ratings` with a small phantom `sampl
 - `capability_ratings.signal_source`: new allowed value `'baseline_seed'` alongside existing `'auto'`/`'verifier'`.
 - New `jobs`-side (or equivalent lookup) column: `pr_number` (nullable TEXT/INTEGER), populated by `_maybe_open_worktree_pr`.
 - New file: `synlynk/taxonomy_standards.py` (static lookup tables).
-- New file: `capability_baseline.json` (bundled with package releases).
+- New file: `synlynk/capability_baseline.json` (bundled with package releases).
 - Migration additions to `_migrate_db()`: free-text → taxonomy-code crosswalk for existing rows.
 
 ## Out of Scope

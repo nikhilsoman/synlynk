@@ -55,7 +55,7 @@ def test_seed_from_baseline_only_when_ledger_empty(tmp_path, monkeypatch):
     import synlynk as sl
     from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
 
-    baseline_path = os.path.join(os.path.dirname(sl.__file__), "..", "capability_baseline.json")
+    baseline_path = os.path.join(os.path.dirname(sl.__file__), "capability_baseline.json")
     with open(baseline_path) as f:
         baseline = json.load(f)
     assert isinstance(baseline, list)
@@ -74,6 +74,37 @@ def test_seed_from_baseline_only_when_ledger_empty(tmp_path, monkeypatch):
     after_second = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
     assert after_second == after
     conn.close()
+
+
+def test_baseline_seed_routes_default_tagged_story(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
+    from synlynk.jobs import _capability_candidates_for_story
+
+    conn = sl._get_db()
+    _seed_capability_ledger_from_baseline(conn)
+
+    candidates = _capability_candidates_for_story(conn, "backend", "platform", "unknown", "build")
+    conn.close()
+
+    assert candidates, "seeded baseline rows must be visible to real cold-start routing"
+    agents_seen = {row[0] for row in candidates}
+    assert "codex" in agents_seen or "grok" in agents_seen
+
+
+def test_capability_baseline_json_ships_inside_package():
+    import synlynk.capability_sweep as cs_module
+
+    baseline_path = os.path.join(os.path.dirname(cs_module.__file__), "capability_baseline.json")
+    assert os.path.exists(baseline_path), (
+        "capability_baseline.json must live inside the synlynk/ package directory "
+        "so it is included in package-data and ships with pip/pipx installs"
+    )
+    with open(baseline_path) as f:
+        rows = json.load(f)
+    assert isinstance(rows, list) and len(rows) > 0
 
 
 def test_run_sweep_writes_baseline_seed_rows_with_independent_verifier(tmp_path, monkeypatch):

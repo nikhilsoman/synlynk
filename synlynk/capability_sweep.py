@@ -13,6 +13,7 @@ _ESTIMATED_TOKENS_PER_CALL = {"input": 500, "output": 500}
 _CALLS_PER_COMBINATION = 2
 _DEFAULT_SWEEP_COST_CAP_USD = 10.0
 _CALIBRATION_SKILLS = [skill for skill in ("PROG", "TEST", "REQM") if skill in SFIA_CODES]
+_SKILL_TO_DISCIPLINE = {"PROG": "backend", "TEST": "testing", "REQM": "architecture"}
 
 
 def _discover_models() -> dict:
@@ -193,6 +194,7 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                     "INSERT OR IGNORE INTO stories (story_id, title) VALUES (?, ?)",
                     ("__baseline_seed__", "Capability baseline seed (synthetic, not a real story)"),
                 )
+                discipline_value = _SKILL_TO_DISCIPLINE.get(skill, "backend")
                 phantom_sample_count = 4
                 for _ in range(phantom_sample_count):
                     conn.execute(
@@ -204,9 +206,9 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                             "__baseline_seed__",
                             agent,
                             model,
-                            skill,
-                            "85",
-                            "none",
+                            discipline_value,
+                            "platform",
+                            "unknown",
                             "build",
                             "baseline_seed",
                             verdict["quality"],
@@ -229,7 +231,7 @@ def _seed_capability_ledger_from_baseline(conn) -> None:
     if existing > 0:
         return
 
-    baseline_path = os.path.join(os.path.dirname(__file__), "..", "capability_baseline.json")
+    baseline_path = os.path.join(os.path.dirname(__file__), "capability_baseline.json")
     if not os.path.exists(baseline_path):
         return
 

@@ -683,7 +683,7 @@ git commit -m "feat(capability): add synlynk capability sweep command with cost 
 ## Task 5: Distribution — bundle `capability_baseline.json` into releases
 
 **Files:**
-- Create: `capability_baseline.json` (repo root, alongside `install.sh`/`VERSION`)
+- Create: `synlynk/capability_baseline.json` (package directory, alongside `install.sh`/`VERSION`)
 - Modify: `synlynk/__init__.py` (wherever `init()`/`upgrade()` seed initial state — search `grep -n "def init\|def cmd_upgrade" synlynk/__init__.py` first)
 - Test: `tests/test_capability_sweep.py` (extend)
 
@@ -700,7 +700,7 @@ def test_seed_from_baseline_only_when_ledger_empty(tmp_path, monkeypatch):
     from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
 
     # Write a minimal fake baseline file for the test (real one ships in the repo).
-    baseline_path = os.path.join(os.path.dirname(sl.__file__), "..", "capability_baseline.json")
+    baseline_path = os.path.join(os.path.dirname(sl.__file__), "capability_baseline.json")
     with open(baseline_path) as f:
         baseline = json.load(f)
     assert isinstance(baseline, list)
@@ -729,7 +729,7 @@ Expected: FAIL with `FileNotFoundError` (no `capability_baseline.json` yet) or `
 
 - [ ] **Step 3: Write the implementation**
 
-Create `capability_baseline.json` at repo root (a minimal real seed — the maintainer's own sweep runs regenerate/extend this file over time; this is the initial hand-seeded version):
+Create `synlynk/capability_baseline.json` in the package directory (a minimal real seed — the maintainer's own sweep runs regenerate/extend this file over time; this is the initial hand-seeded version):
 
 ```json
 [
@@ -786,7 +786,7 @@ def _seed_capability_ledger_from_baseline(conn) -> None:
     if existing > 0:
         return
 
-    baseline_path = os.path.join(os.path.dirname(__file__), "..", "capability_baseline.json")
+    baseline_path = os.path.join(os.path.dirname(__file__), "capability_baseline.json")
     if not os.path.exists(baseline_path):
         return
     with open(baseline_path) as f:
@@ -836,7 +836,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add capability_baseline.json synlynk/capability_sweep.py synlynk/__init__.py tests/test_capability_sweep.py
+git add synlynk/capability_baseline.json synlynk/capability_sweep.py synlynk/__init__.py tests/test_capability_sweep.py
 git commit -m "feat(capability): bundle capability_baseline.json and seed empty ledgers on init"
 ```
 
