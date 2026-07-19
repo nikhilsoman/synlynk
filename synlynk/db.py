@@ -449,6 +449,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             epic_id           INTEGER REFERENCES roadmap_arcs(id),
             phase_id          INTEGER REFERENCES roadmap_phases(id),
             total_cost_usd    REAL,
+            api_equivalent_usd REAL,
+            actual_usd        REAL,
+            payment_mode      TEXT,
             notes             TEXT,
             cost_source       TEXT NOT NULL,
             estimate_basis    TEXT,
@@ -500,6 +503,14 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
             except sqlite3.OperationalError:
                 pass
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    for col in ("api_equivalent_usd", "actual_usd", "payment_mode"):
+        if col not in cost_cols:
+            typedef = "TEXT" if col == "payment_mode" else "REAL"
+            try:
+                conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
+            except sqlite3.OperationalError:
+                pass
     if "cost_source" not in cost_cols:
         conn.execute("ALTER TABLE cost_entries RENAME TO cost_entries_pre_provenance")
         conn.execute("""
@@ -515,6 +526,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 epic_id           INTEGER REFERENCES roadmap_arcs(id),
                 phase_id          INTEGER REFERENCES roadmap_phases(id),
                 total_cost_usd    REAL,
+                api_equivalent_usd REAL,
+                actual_usd        REAL,
+                payment_mode      TEXT,
                 notes             TEXT,
                 cost_source       TEXT NOT NULL,
                 estimate_basis    TEXT,
@@ -526,17 +540,25 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         select_cols = ", ".join(
             c if c in old_cols else "NULL"
             for c in (
-                "session_date", "agent", "model", "input_tokens", "output_tokens",
-                "cache_read_tokens", "story_id", "epic_id", "phase_id",
-                "total_cost_usd", "notes"
+                "session_date",
+                "agent",
+                "model",
+                "input_tokens",
+                "output_tokens",
+                "cache_read_tokens",
+                "story_id",
+                "epic_id",
+                "phase_id",
+                "total_cost_usd",
+                "notes",
             )
         )
         conn.execute(f"""
             INSERT INTO cost_entries
                 (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                 story_id, epic_id, phase_id, total_cost_usd, notes, cost_source,
-                 estimate_basis, job_id, recorded_at)
-            SELECT {select_cols}, 'legacy_unknown', NULL, NULL, recorded_at
+                 story_id, epic_id, phase_id, total_cost_usd, api_equivalent_usd, actual_usd,
+                 payment_mode, notes, cost_source, estimate_basis, job_id, recorded_at)
+            SELECT {select_cols}, NULL, NULL, NULL, 'legacy_unknown', NULL, NULL, recorded_at
             FROM cost_entries_pre_provenance
         """)
         conn.execute("DROP TABLE cost_entries_pre_provenance")
@@ -686,6 +708,17 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
         except Exception:
             pass  # column already exists
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS credit_grants (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent           TEXT NOT NULL,
+            face_value_usd  REAL NOT NULL,
+            remaining_usd   REAL NOT NULL,
+            granted_at      TEXT NOT NULL,
+            expires_at      TEXT,
+            note            TEXT
+        )
+    """)
     # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
     from synlynk.taxonomy_standards import (
         LEGACY_DISCIPLINE_CROSSWALK,
@@ -765,6 +798,9 @@ def _insert_cost_row(
     phase_id: int = None,
     estimate_basis: str = None,
     job_id: str = None,
+    api_equivalent_usd: float = None,
+    actual_usd: float = None,
+    payment_mode: str = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -793,6 +829,9 @@ def _insert_cost_row(
                         cost_source=?,
                         estimate_basis=?,
                         total_cost_usd=?,
+                        api_equivalent_usd=?,
+                        actual_usd=?,
+                        payment_mode=?,
                         notes=?,
                         story_id=?,
                         epic_id=?,
@@ -808,6 +847,9 @@ def _insert_cost_row(
                         cost_source,
                         estimate_basis,
                         total_cost_usd,
+                        api_equivalent_usd,
+                        actual_usd,
+                        payment_mode,
                         notes,
                         story_id,
                         epic_id,
@@ -820,8 +862,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, notes, story_id, epic_id, phase_id, job_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent,
@@ -832,6 +874,9 @@ def _insert_cost_row(
                 cost_source,
                 estimate_basis,
                 total_cost_usd,
+                api_equivalent_usd,
+                actual_usd,
+                payment_mode,
                 notes,
                 story_id,
                 epic_id,
@@ -1722,6 +1767,30 @@ def cmd_cost_log(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
         f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
     )
+
+def cmd_credit_grant(
+    agent: str,
+    amount: float,
+    expires: str = None,
+    note: str = None,
+) -> None:
+    """Record a new credit grant for an agent."""
+    from synlynk import _GREEN, _RESET, _get_db
+
+    if amount < 0:
+        raise ValueError("amount must be non-negative")
+
+    granted_at = time.strftime("%Y-%m-%d %H:%M")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO credit_grants (agent, face_value_usd, remaining_usd, granted_at, expires_at, note) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (agent, amount, amount, granted_at, expires, note),
+    )
+    conn.commit()
+    conn.close()
+    suffix = f" (expires {expires})" if expires else ""
+    print(f"  {_GREEN}✓{_RESET} Credit grant recorded for {agent}: ${amount:.2f}{suffix}")
 
 def cmd_pr_check() -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'.

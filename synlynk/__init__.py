@@ -937,6 +937,16 @@ CREATE TABLE IF NOT EXISTS agent_quotas (
     UNIQUE(agent, model, quota_type, unit)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
+
+CREATE TABLE IF NOT EXISTS credit_grants (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent           TEXT NOT NULL,
+    face_value_usd  REAL NOT NULL,
+    remaining_usd   REAL NOT NULL,
+    granted_at      TEXT NOT NULL,
+    expires_at      TEXT,
+    note            TEXT
+);
 """
 
 _DB_SCORES_VIEW = """
@@ -1374,6 +1384,7 @@ def load_config() -> dict:
         "exec_timeout_minutes": 30,
         "stall_timeout_minutes": 30,
         "agents": {},
+        "payment_models": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": _default_roles_map(),
     }

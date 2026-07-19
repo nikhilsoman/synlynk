@@ -6,6 +6,7 @@ import re
 import sys
 import time
 
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -347,6 +348,175 @@ def _model_rate_for_version(model_version, agent=None):
     return rates["models"].get(model_version, rates["default"])
 
 
+@dataclass
+class PaymentValue:
+    api_equivalent_usd: float
+    actual_usd: float
+    mode: str
+    quota_pct_used: Optional[float] = None
+    credit_remaining_usd: Optional[float] = None
+
+
+def _payment_model_config_for_agent(agent: str) -> dict:
+    """Return the configured payment model block for an agent."""
+    config = _pkg("load_config")() or {}
+    payment_models = config.get("payment_models", {})
+    if not isinstance(payment_models, dict):
+        return {"mode": "pay_as_you_go"}
+    agent_cfg = payment_models.get(agent, {})
+    return agent_cfg if isinstance(agent_cfg, dict) else {"mode": "pay_as_you_go"}
+
+
+def _subscription_actual_usd(
+    agent: str,
+    tokens_in: int,
+    tokens_out: int,
+    pm_config: dict,
+) -> tuple:
+    """Return (actual_usd, quota_pct_used) for subscription mode."""
+    from synlynk.quota import _upsert_agent_quota
+
+    get_db = _pkg("_get_db")
+    conn = get_db()
+    try:
+        row_in = conn.execute(
+            "SELECT used_tokens FROM agent_quotas WHERE agent=? "
+            "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+            (agent,),
+        ).fetchone()
+        row_out = conn.execute(
+            "SELECT used_tokens FROM agent_quotas WHERE agent=? "
+            "AND quota_type='monthly' AND unit='tokens' AND model='out'",
+            (agent,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    prior_used_in = int(row_in[0]) if row_in else 0
+    prior_used_out = int(row_out[0]) if row_out else 0
+
+    tier_quota_in = int(pm_config.get("tier_quota_tokens_in") or 0)
+    tier_quota_out = int(pm_config.get("tier_quota_tokens_out") or 0)
+    overage_rate_in = float(pm_config.get("overage_rate_per_1k_in") or 0.0)
+    overage_rate_out = float(pm_config.get("overage_rate_per_1k_out") or 0.0)
+
+    cumulative_in = prior_used_in + int(tokens_in or 0)
+    cumulative_out = prior_used_out + int(tokens_out or 0)
+
+    prior_over_in = max(0, prior_used_in - tier_quota_in)
+    prior_over_out = max(0, prior_used_out - tier_quota_out)
+    new_over_in = max(0, cumulative_in - tier_quota_in)
+    new_over_out = max(0, cumulative_out - tier_quota_out)
+    marginal_over_in = new_over_in - prior_over_in
+    marginal_over_out = new_over_out - prior_over_out
+    actual_usd = (marginal_over_in / 1000 * overage_rate_in) + (
+        marginal_over_out / 1000 * overage_rate_out
+    )
+
+    pct_in = (cumulative_in / tier_quota_in) if tier_quota_in else 0.0
+    pct_out = (cumulative_out / tier_quota_out) if tier_quota_out else 0.0
+    quota_pct_used = min(max(pct_in, pct_out), 1.0)
+
+    conn = get_db()
+    try:
+        _upsert_agent_quota(
+            agent,
+            "monthly",
+            limit_tokens=tier_quota_in,
+            used_tokens=cumulative_in,
+            model="unknown",
+            unit="tokens",
+            conn=conn,
+        )
+        _upsert_agent_quota(
+            agent,
+            "monthly",
+            limit_tokens=tier_quota_out,
+            used_tokens=cumulative_out,
+            model="out",
+            unit="tokens",
+            conn=conn,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return actual_usd, quota_pct_used
+
+
+def _credit_grant_actual_usd(agent: str, api_equivalent_usd: float) -> tuple:
+    """Return (actual_usd, remaining_credit_usd) for credit-grant mode."""
+    conn = _pkg("_get_db")()
+    try:
+        rows = conn.execute(
+            "SELECT id, remaining_usd FROM credit_grants "
+            "WHERE agent=? AND remaining_usd > 0 "
+            "AND (expires_at IS NULL OR expires_at > datetime('now')) "
+            "ORDER BY granted_at ASC, id ASC",
+            (agent,),
+        ).fetchall()
+        if not rows:
+            return api_equivalent_usd, 0.0
+
+        remaining_cost = float(api_equivalent_usd)
+        for row_id, remaining in rows:
+            if remaining_cost <= 0:
+                break
+            remaining = float(remaining)
+            consume = min(remaining_cost, remaining)
+            new_remaining = remaining - consume
+            conn.execute(
+                "UPDATE credit_grants SET remaining_usd=? WHERE id=?",
+                (new_remaining, row_id),
+            )
+            remaining_cost -= consume
+
+        conn.commit()
+        total_remaining = conn.execute(
+            "SELECT COALESCE(SUM(remaining_usd), 0) FROM credit_grants "
+            "WHERE agent=? AND remaining_usd > 0 "
+            "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+            (agent,),
+        ).fetchone()[0]
+        return remaining_cost, float(total_remaining)
+    finally:
+        conn.close()
+
+
+def resolve_payment_value(agent: str, tokens_in: int, tokens_out: int) -> PaymentValue:
+    """Resolve API-equivalent and actual payment values for an agent call."""
+    pm_config = _payment_model_config_for_agent(agent)
+    mode = pm_config.get("mode", "pay_as_you_go")
+
+    model_version = extract_model_version("", agent=agent)
+    rates = _model_rate_for_version(model_version, agent=agent)
+    api_equivalent_usd = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
+
+    if mode == "subscription":
+        actual_usd, quota_pct_used = _subscription_actual_usd(agent, tokens_in, tokens_out, pm_config)
+        return PaymentValue(
+            api_equivalent_usd=api_equivalent_usd,
+            actual_usd=actual_usd,
+            mode=mode,
+            quota_pct_used=quota_pct_used,
+        )
+
+    if mode == "credit_grant":
+        actual_usd, credit_remaining_usd = _credit_grant_actual_usd(agent, api_equivalent_usd)
+        return PaymentValue(
+            api_equivalent_usd=api_equivalent_usd,
+            actual_usd=actual_usd,
+            mode=mode,
+            credit_remaining_usd=credit_remaining_usd,
+        )
+
+    return PaymentValue(
+        api_equivalent_usd=api_equivalent_usd,
+        actual_usd=api_equivalent_usd,
+        mode="pay_as_you_go",
+    )
+
+
 _FIXED_DEFAULT_TOKENS_IN = 5000
 _FIXED_DEFAULT_TOKENS_OUT = 2000
 _HISTORICAL_AVG_MIN_SAMPLES = 3
@@ -456,10 +626,12 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
 
     rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
-    est_cost = (
-        (in_tokens / 1000 * rates["input"]) +
-        (out_tokens / 1000 * rates["output"]) +
-        (cache_read_tokens / 1000 * rates["cache_read"])
+    payment_value = resolve_payment_value(agent_name, in_tokens, out_tokens)
+    est_cost = payment_value.api_equivalent_usd + (cache_read_tokens / 1000 * rates["cache_read"])
+    actual_usd = payment_value.actual_usd + (
+        cache_read_tokens / 1000 * rates["cache_read"]
+        if payment_value.mode == "pay_as_you_go"
+        else 0.0
     )
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
@@ -467,8 +639,15 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
         flag = "[est?] "
     else:
         flag = "" if cost_source == "actual" else ("[legacy] " if cost_source == "legacy_unknown" else "[est] ")
+    if payment_value.mode == "subscription":
+        mode_tag = "[in-quota]" if actual_usd == 0.0 else "[overage]"
+    elif payment_value.mode == "credit_grant":
+        mode_tag = "[credit]"
+    else:
+        mode_tag = ""
+    actual_display = f"${actual_usd:.4f} {mode_tag}".strip()
     entry = (f"| {ts} | {agent_name} | 1 | {in_tokens}/{out_tokens} "
-             f"| {flag}${est_cost:.4f} | exec: {short_cmd} |\n")
+             f"| {flag}${est_cost:.4f} | {actual_display} | exec: {short_cmd} |\n")
 
     from synlynk.db import _insert_cost_row
 
@@ -479,6 +658,9 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
             notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
             job_id=job_id,
+            api_equivalent_usd=payment_value.api_equivalent_usd,
+            actual_usd=actual_usd,
+            payment_mode=payment_value.mode,
         )
         costs_file = os.path.join(_pkg("_synlynk_project_docs_dir")(), "costs.md")
         os.makedirs(os.path.dirname(costs_file), exist_ok=True)
@@ -573,9 +755,53 @@ def check_budgets() -> None:
             "(not blended into the spend total above)"
         )
 
+    conn = _pkg("_get_db")()
+    try:
+        payment_rows = conn.execute(
+            "SELECT agent, payment_mode, actual_usd FROM cost_entries "
+            "WHERE payment_mode IS NOT NULL ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if payment_rows:
+        seen_agents = {}
+        for agent, mode, actual in payment_rows:
+            seen_agents[agent] = (mode, actual)
+
+        print("\n  Payment Models")
+        for agent, (mode, actual) in seen_agents.items():
+            if mode == "subscription":
+                conn = _pkg("_get_db")()
+                try:
+                    row = conn.execute(
+                        "SELECT limit_tokens, used_tokens FROM agent_quotas "
+                        "WHERE agent=? AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+                        (agent,),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                pct = int(100 * row[1] / row[0]) if row and row[0] else 0
+                print(f"    {agent:<8}[subscription]  quota: {pct}% used this cycle (${actual:.2f} marginal)")
+            elif mode == "credit_grant":
+                conn = _pkg("_get_db")()
+                try:
+                    grant_row = conn.execute(
+                        "SELECT remaining_usd, face_value_usd FROM credit_grants "
+                        "WHERE agent=? ORDER BY granted_at DESC LIMIT 1",
+                        (agent,),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if grant_row:
+                    remaining, face_value = grant_row
+                    print(f"    {agent:<8}[credit_grant]  balance: ${remaining:.2f} remaining of ${face_value:.2f} granted")
+            else:
+                print(f"    {agent:<8}[pay_as_you_go] ${actual:.2f} this run")
+
 
 def parse_costs_md() -> tuple:
-    """Returns (total_usd, total_requests) by parsing costs.md column 6."""
+    """Returns (total_usd, total_requests) by parsing costs.md's real-dollar column."""
     costs_file = os.path.join(_pkg("_docs_dir")(), "costs.md")
     total_usd = 0.0
     total_requests = 0
@@ -588,7 +814,10 @@ def parse_costs_md() -> tuple:
             parts = [p.strip() for p in line.split("|")]
             if len(parts) < 8:
                 continue
-            cost_str = parts[5]
+            if len(parts) >= 9:
+                cost_str = parts[6].split(" ", 1)[0]
+            else:
+                cost_str = parts[5]
             for prefix in ("[est] ", "[est?] ", "[legacy] ", "~"):
                 if cost_str.startswith(prefix):
                     cost_str = cost_str[len(prefix):]
