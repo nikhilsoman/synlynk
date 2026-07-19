@@ -378,6 +378,13 @@ def _job_summary_path(job_id: str) -> str:
     return os.path.join(".synlynk/logs", f"{job_id}.summary")
 
 
+def _summary_status_label(summary_text: str) -> Optional[str]:
+    match = re.search(r"^status:\s+(.*)$", summary_text, re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
 def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         exit_code: Optional[int], duration_s: Optional[float],
                         in_tokens: int, out_tokens: int, cost_usd: float,
@@ -457,7 +464,19 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
         cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch,
         status_label=status_label, note=note
     )
-    with open(_job_summary_path(job_id), "w") as f:
+    summary_path = _job_summary_path(job_id)
+    existing_summary = None
+    if os.path.exists(summary_path):
+        try:
+            with open(summary_path) as f:
+                existing_summary = f.read()
+        except OSError:
+            existing_summary = None
+    existing_status = _summary_status_label(existing_summary) if existing_summary else None
+    new_status = _summary_status_label(summary)
+    if existing_status == "OK (exit 0)" and new_status == "UNKNOWN (exit unknown)":
+        return existing_summary
+    with open(summary_path, "w") as f:
         f.write(summary)
     return summary
 
