@@ -3,6 +3,8 @@
 import json
 import os
 import time
+from pathlib import Path
+import importlib.util
 
 import pytest
 
@@ -333,3 +335,114 @@ def test_fix_github_issue_378_nikhilsomansynk_terminal_summary_survives_unknown_
     summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
     assert summary_path.read_text() == terminal
     assert overwritten == terminal
+
+
+def _load_backfill_script():
+    script_path = Path(__file__).resolve().parents[1] / "bin" / "backfill_api_equivalent_usd.py"
+    spec = importlib.util.spec_from_file_location("backfill_api_equivalent_usd", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _seed_cost_entries_db(db_path):
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE cost_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_date TEXT NOT NULL,
+            agent TEXT,
+            model TEXT,
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            cache_read_tokens INTEGER,
+            api_equivalent_usd REAL,
+            payment_mode TEXT,
+            actual_usd REAL,
+            cost_source TEXT NOT NULL,
+            recorded_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute(
+        """INSERT INTO cost_entries
+           (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+            api_equivalent_usd, payment_mode, actual_usd, cost_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("2026-07-01", "claude", "claude-sonnet-4-6", 1000, 500, 250, None, "subscription", None, "estimated_manual"),
+    )
+    conn.execute(
+        """INSERT INTO cost_entries
+           (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+            api_equivalent_usd, payment_mode, actual_usd, cost_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("2026-07-02", "codex", "gpt-5-codex", 2000, 1000, 0, None, "subscription", None, "estimated_manual"),
+    )
+    conn.execute(
+        """INSERT INTO cost_entries
+           (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+            api_equivalent_usd, payment_mode, actual_usd, cost_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("2026-07-03", "claude", "claude-sonnet-4-6", 3000, 1500, 0, None, "subscription", None, "legacy_unknown"),
+    )
+    conn.execute(
+        """INSERT INTO cost_entries
+           (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+            api_equivalent_usd, payment_mode, actual_usd, cost_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("2026-07-04", "claude", "claude-sonnet-4-6", 4000, 2000, 0, 0.99, "subscription", 1.23, "estimated_manual"),
+    )
+    conn.execute(
+        """INSERT INTO cost_entries
+           (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+            api_equivalent_usd, payment_mode, actual_usd, cost_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("2026-07-05", "claude", "claude-sonnet-4-6", 5000, None, 0, None, "subscription", None, "estimated_manual"),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_fix_github_issue_382_nikhilsomansynlynk_backfill_updates_only_eligible_rows(project_dir, monkeypatch, capsys):
+    import sqlite3
+    import synlynk as sl
+
+    db_path = project_dir / "state.db"
+    _seed_cost_entries_db(db_path)
+    monkeypatch.setattr(sl, "_resolve_db_path", lambda: str(db_path))
+
+    backfill_mod = _load_backfill_script()
+    assert backfill_mod.main([]) == 0
+
+    out = capsys.readouterr().out
+    assert "Updated 2 rows" in out
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT session_date, agent, model, api_equivalent_usd, payment_mode, actual_usd, cost_source "
+            "FROM cost_entries ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert rows[0][3] == pytest.approx(
+        sl._model_rate_for_version("claude-sonnet-4-6", agent="claude")["input"] +
+        (0.5 * sl._model_rate_for_version("claude-sonnet-4-6", agent="claude")["output"]) +
+        (0.25 * sl._model_rate_for_version("claude-sonnet-4-6", agent="claude")["cache_read"])
+    )
+    assert rows[1][3] == pytest.approx(
+        (2.0 * sl._model_rate_for_version("gpt-5-codex", agent="codex")["input"]) +
+        (1.0 * sl._model_rate_for_version("gpt-5-codex", agent="codex")["output"])
+    )
+    assert rows[2][3] is None
+    assert rows[3][3] == pytest.approx(0.99)
+    assert rows[4][3] is None
+    assert rows[0][4] == "subscription"
+    assert rows[0][5] is None
+    assert rows[1][4] == "subscription"
+    assert rows[1][5] is None
+    assert rows[2][4] == "subscription"
+    assert rows[2][5] is None
