@@ -1,6 +1,7 @@
 import hashlib
 import os
 import subprocess
+import tempfile
 
 import pytest
 
@@ -195,6 +196,77 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_
     assert job["worktree_branch"] == expected_branch
     assert captured_popen["kwargs"]["cwd"] == expected_worktree
     assert job["log_file"].startswith(os.path.abspath(expected_worktree))
+
+
+def test_dispatch_perjob_git_worktree_isolation_prefers_fresh_origin_main_over_stale_local_main(
+    git_worktree_repo,
+):
+    """Local main can lag origin/main when many worktrees share one repo.
+
+    Prefer origin/main so files_touched excludes unrelated mainline commits
+    that landed on origin after the local main ref stopped moving.
+    """
+    import synlynk as sl
+
+    def git(cmd, cwd=git_worktree_repo):
+        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+
+    # Stabilize on main; capture the pre-advance tip used as a stale local main.
+    git(["git", "branch", "-M", "main"])
+    stale_main_tip = git(["git", "rev-parse", "HEAD"])
+
+    # Keep bare remote + upstream *outside* the fixture worktree so they do not
+    # appear in files_touched as untracked paths. Use a unique temp dir (not the
+    # shared pytest basetemp parent, which collides across tests).
+    temp_root = tempfile.mkdtemp(prefix="synlynk-issue-395-")
+    remote_dir = os.path.join(temp_root, "origin.git")
+    subprocess.run(["git", "init", "--bare", remote_dir], capture_output=True, check=True)
+    # Bare repos default HEAD to master on some hosts; force main so clone checks out main.
+    subprocess.run(
+        ["git", "-C", remote_dir, "symbolic-ref", "HEAD", "refs/heads/main"],
+        capture_output=True,
+        check=True,
+    )
+    git(["git", "remote", "add", "origin", remote_dir])
+    git(["git", "push", "-u", "origin", "main"])
+
+    upstream_dir = os.path.join(temp_root, "upstream")
+    subprocess.run(["git", "clone", remote_dir, upstream_dir], capture_output=True, check=True)
+
+    git(["git", "config", "user.email", "codex@example.com"], cwd=upstream_dir)
+    git(["git", "config", "user.name", "Codex"], cwd=upstream_dir)
+    with open(os.path.join(upstream_dir, "origin-mainline.txt"), "w") as f:
+        f.write("origin mainline\n")
+    git(["git", "add", "origin-mainline.txt"], cwd=upstream_dir)
+    git(["git", "commit", "-m", "advance origin main"], cwd=upstream_dir)
+    # HEAD:main is robust if the clone's local branch name differs across git versions.
+    git(["git", "push", "origin", "HEAD:main"], cwd=upstream_dir)
+
+    git(["git", "fetch", "origin", "main"])
+    origin_tip = git(["git", "rev-parse", "origin/main"])
+    assert origin_tip != stale_main_tip
+
+    # Move off main before force-updating it (git refuses -f on the checked-out branch).
+    git(["git", "checkout", "-B", "feature/job-395", "origin/main"])
+    git(["git", "branch", "-f", "main", stale_main_tip])
+
+    with open(os.path.join(git_worktree_repo, "feature-only.txt"), "w") as f:
+        f.write("feature work\n")
+    git(["git", "add", "feature-only.txt"])
+    git(["git", "commit", "-m", "feature work"])
+
+    base_info = sl._resolve_worktree_base_commit(git_worktree_repo)
+    touched = sl._worktree_files_touched(git_worktree_repo)
+
+    assert base_info == {"base_commit": origin_tip, "base_ref": "origin/main"}
+    assert touched == ["feature-only.txt"]
+
+    # Guard: preferring the stale local main would include origin-mainline.txt as well.
+    merge_base_local = git(["git", "merge-base", "HEAD", "main"])
+    assert merge_base_local == stale_main_tip
+    stale_diff = git(["git", "diff", "--name-only", merge_base_local, "HEAD"]).splitlines()
+    assert "origin-mainline.txt" in stale_diff
+    assert "feature-only.txt" in stale_diff
 
 
 def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_worktree_repo, monkeypatch):
