@@ -1,0 +1,38 @@
+[
+  {
+    "story_id": "__baseline_seed__",
+    "agent": "codex",
+    "model_version": "gpt-5-codex",
+    "discipline": "backend",
+    "org_domain": "platform",
+    "industry": "unknown",
+    "phase": "build",
+    "signal_source": "baseline_seed",
+    "quality": 7.5,
+    "sample_count": 4
+  },
+  {
+    "story_id": "__baseline_seed__",
+    "agent": "agy",
+    "model_version": "gemini-2.5-pro",
+    "discipline": "testing",
+    "org_domain": "platform",
+    "industry": "unknown",
+    "phase": "build",
+    "signal_source": "baseline_seed",
+    "quality": 7.0,
+    "sample_count": 4
+  },
+  {
+    "story_id": "__baseline_seed__",
+    "agent": "grok",
+    "model_version": "grok-build",
+    "discipline": "backend",
+    "org_domain": "platform",
+    "industry": "unknown",
+    "phase": "build",
+    "signal_source": "baseline_seed",
+    "quality": 7.2,
+    "sample_count": 4
+  }
+]
