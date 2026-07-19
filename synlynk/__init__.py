@@ -851,6 +851,11 @@ CREATE TABLE IF NOT EXISTS capability_ratings (
     ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
+    pr_number  INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS source_symbols (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     head_sha    TEXT NOT NULL,

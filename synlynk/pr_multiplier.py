@@ -22,7 +22,14 @@ def _review_cycle_multiplier(n: int) -> float:
 
 
 def _apply_review_cycle_multiplier(conn, pr_number: int, changes_requested_count: int) -> None:
-    """Applies the multiplier to all capability_ratings rows for pr_number."""
+    """Applies the multiplier to all capability_ratings rows for pr_number, exactly once."""
+    already_applied = conn.execute(
+        "SELECT 1 FROM pr_multiplier_applied WHERE pr_number=?",
+        (pr_number,),
+    ).fetchone()
+    if already_applied:
+        return
+
     n = 1 + changes_requested_count
     multiplier = _review_cycle_multiplier(n)
     rows = conn.execute(
@@ -35,6 +42,10 @@ def _apply_review_cycle_multiplier(conn, pr_number: int, changes_requested_count
             "UPDATE capability_ratings SET quality=? WHERE id=?",
             (new_quality, row_id),
         )
+    conn.execute(
+        "INSERT INTO pr_multiplier_applied (pr_number, applied_at) VALUES (?, datetime('now'))",
+        (pr_number,),
+    )
     conn.commit()
 
 

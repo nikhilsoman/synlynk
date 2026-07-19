@@ -653,6 +653,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             UNIQUE(agent, model, quota_type, unit)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
+            pr_number  INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+    """)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
     )

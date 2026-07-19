@@ -85,6 +85,72 @@ def test_apply_review_cycle_multiplier_updates_quality_and_clamps(tmp_path, monk
     assert row[0] == 10.0
 
 
+def test_apply_review_cycle_multiplier_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import os
+    import sqlite3
+
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import synlynk as sl
+    from synlynk.pr_multiplier import _apply_review_cycle_multiplier
+
+    conn = sqlite3.connect(sl.DB_PATH)
+    sl._migrate_db(conn)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('__baseline_seed__', 'seed')")
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, quality, pr_number) "
+        "VALUES ('__baseline_seed__', 'codex', 8.0, 42)"
+    )
+    conn.commit()
+
+    _apply_review_cycle_multiplier(conn, pr_number=42, changes_requested_count=0)
+    first_quality = conn.execute(
+        "SELECT quality FROM capability_ratings WHERE pr_number=42"
+    ).fetchone()[0]
+    assert abs(first_quality - 8.8) < 0.01
+
+    _apply_review_cycle_multiplier(conn, pr_number=42, changes_requested_count=0)
+    second_quality = conn.execute(
+        "SELECT quality FROM capability_ratings WHERE pr_number=42"
+    ).fetchone()[0]
+    assert second_quality == first_quality, (
+        "second call must be a no-op - the multiplier must apply at most once per pr_number"
+    )
+    conn.close()
+
+
+def test_apply_review_cycle_multiplier_different_prs_independent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import os
+    import sqlite3
+
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import synlynk as sl
+    from synlynk.pr_multiplier import _apply_review_cycle_multiplier
+
+    conn = sqlite3.connect(sl.DB_PATH)
+    sl._migrate_db(conn)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('__baseline_seed__', 'seed')")
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, quality, pr_number) "
+        "VALUES ('__baseline_seed__', 'codex', 8.0, 1)"
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, quality, pr_number) "
+        "VALUES ('__baseline_seed__', 'codex', 8.0, 2)"
+    )
+    conn.commit()
+
+    _apply_review_cycle_multiplier(conn, pr_number=1, changes_requested_count=0)
+    pr2_quality = conn.execute(
+        "SELECT quality FROM capability_ratings WHERE pr_number=2"
+    ).fetchone()[0]
+    assert pr2_quality == 8.0, "applying the multiplier to PR 1 must not affect PR 2's rows"
+    conn.close()
+
+
 def test_current_pr_number_uses_gh_pr_view(monkeypatch):
     import subprocess
 

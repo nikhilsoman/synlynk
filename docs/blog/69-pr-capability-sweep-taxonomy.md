@@ -2,7 +2,7 @@
 title: "Capability Sweep + Industry Taxonomy — Calibrating Agents Against Real Skill Axes"
 date: 2026-07-19
 series: "Building the OS for Multi-Agent Development"
-post: 68
+post: 69
 pr: "TBD"
 merged: status: open
 ---
