@@ -534,12 +534,94 @@ def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     return worktree_path, worktree_branch
 
 
+def _resolve_dispatch_worktree_base_ref(repo_path: Optional[str]) -> str:
+    """Resolve the freshest mainline ref available for a new dispatch worktree."""
+    if not repo_path or not os.path.isdir(repo_path):
+        return "HEAD"
+
+    for candidate in ("main", "master"):
+        try:
+            fetch_result = subprocess.run(
+                ["git", "fetch", "origin", candidate],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=repo_path,
+            )
+        except Exception:
+            fetch_result = None
+        if fetch_result and fetch_result.returncode == 0:
+            return f"origin/{candidate}"
+
+    for candidate in ("origin/main", "origin/master", "main", "master"):
+        try:
+            verify_result = subprocess.run(
+                ["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=repo_path,
+            )
+        except Exception:
+            continue
+        if verify_result.returncode == 0 and (verify_result.stdout or "").strip():
+            return candidate
+
+    return "HEAD"
+
+
+def _assert_dispatch_worktree_base_is_fresh(worktree_path: str, base_ref: str) -> None:
+    """Fail loudly if a new worktree is not anchored to the intended mainline tip."""
+    if not worktree_path or not base_ref or base_ref == "HEAD":
+        return
+
+    try:
+        ref_result = subprocess.run(
+            ["git", "-C", worktree_path, "rev-parse", base_ref],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        merge_base_result = subprocess.run(
+            ["git", "-C", worktree_path, "merge-base", "HEAD", base_ref],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to verify worktree base for {worktree_path} against {base_ref}: {exc}"
+        ) from exc
+
+    ref_commit = (ref_result.stdout or "").strip()
+    merge_base = (merge_base_result.stdout or "").strip()
+    if (
+        ref_result.returncode != 0
+        or merge_base_result.returncode != 0
+        or not ref_commit
+        or not merge_base
+        or ref_commit != merge_base
+    ):
+        raise RuntimeError(
+            f"Worktree {worktree_path} is not anchored to fresh {base_ref} "
+            f"(expected {ref_commit or 'unknown'}, merge-base {merge_base or 'unknown'})."
+        )
+
+    print(f"  worktree base verified against {base_ref} @ {ref_commit}")
+
+
 def _create_job_worktree(job_id: str, agent: str) -> str:
     """Create the isolated git worktree for a dispatched job."""
     worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
     os.makedirs(os.path.dirname(worktree_path), exist_ok=True)
+    base_ref = _resolve_dispatch_worktree_base_ref(os.getcwd())
+    worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
+    if base_ref and base_ref != "HEAD":
+        worktree_cmd.append(base_ref)
     result = subprocess.run(
-        ["git", "worktree", "add", worktree_path, "-b", worktree_branch],
+        worktree_cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -554,6 +636,7 @@ def _create_job_worktree(job_id: str, agent: str) -> str:
             f"on branch {worktree_branch}."
             + (f"\n{details}" if details else "")
         )
+    _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
     return worktree_path
 
 
