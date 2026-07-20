@@ -105,7 +105,9 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
     if agent == "agy":
-        return []
+        if not permissions or set(permissions) <= {"read:*"}:
+            return []
+        return ["--dangerously-skip-permissions"]
     if agent == "claude":
         tools = []
         for perm in permissions or []:
