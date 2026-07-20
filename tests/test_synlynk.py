@@ -399,11 +399,49 @@ def test_permissions_to_flags_codex_approval_policy():
     assert "untrusted" in result
 
 
-def test_permissions_to_flags_agy_returns_context_section():
+def test_permissions_to_flags_agy_returns_empty_for_read_only():
     from synlynk.dispatch import _permissions_to_flags
 
-    result = _permissions_to_flags("agy", ["read:*", "write:docs/"])
+    result = _permissions_to_flags("agy", ["read:*"])
     assert result == []
+
+
+def test_permissions_to_flags_agy_returns_empty_for_no_permissions():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("agy", [])
+    assert result == []
+
+
+def test_permissions_to_flags_agy_returns_skip_permissions_for_shell():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("agy", ["read:*", "run:shell"])
+    assert result == ["--dangerously-skip-permissions"]
+
+
+def test_permissions_to_flags_agy_returns_skip_permissions_for_write():
+    from synlynk.dispatch import _permissions_to_flags
+
+    result = _permissions_to_flags("agy", ["read:*", "write:src/"])
+    assert result == ["--dangerously-skip-permissions"]
+
+
+def test_preflight_allows_agy_dangerously_skip_permissions_flag(monkeypatch):
+    import socket
+
+    from synlynk import probe as probe_mod
+    from synlynk import _preflight_dispatch
+
+    monkeypatch.setattr(probe_mod, "_run_tc2", lambda agent, flags_spec, **kw: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
+
+    result = _preflight_dispatch(
+        agent_name="agy",
+        dispatch_flags=["--dangerously-skip-permissions"],
+        db_conn=None,
+    )
+    assert result["passed"] is True
 
 
 def test_dispatch_agent_injects_agy_permissions_header(tmp_path, isolated_db, monkeypatch):
