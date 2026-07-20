@@ -53,6 +53,7 @@ _CAPABILITY_ALLOCATION_SOP = """\
 | HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
 | canvas/JS/infra | Grok | canvas, JS, infra |
 | PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
+GitHub write actions (`gh pr review`/`gh pr merge`) must route to Grok only until #426 is resolved.
 Do not start a task outside your role column without explicit Claude approval.
 """
 
