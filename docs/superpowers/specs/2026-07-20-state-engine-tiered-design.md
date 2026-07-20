@@ -32,7 +32,9 @@ Three sequenced PRs, none of which may expand past its boundary before the prior
 - Regeneration functions mirroring `_generate_todo_md()`: `_generate_roadmap_md()`, `_generate_memory_md()`, `_generate_costs_md()` — called at the end of every mutating command, not just on `exec`/`dispatch` (this is the write-through-on-every-update requirement, not on-demand).
 - `check_budgets()` switches its read path from `parse_costs_md()` (regex over markdown) to querying `cost_entries` directly — closes the existing split-brain where the DB row is already written but budget-gating still trusts the markdown.
 - **Rotation policy:** the live `roadmap.md`/`memory.md`/`costs.md` show in-flight items + the last N shipped/logged (N configurable, default covers ~1 release cycle). Older entries move to `project-docs/archive/<file>-<period>.md` (e.g. `roadmap-2026-H1.md`), generated the same write-through way. An `INDEX.md` in `project-docs/archive/` lists what's archived and links to each file, so "fresh context" stays small while nothing is lost.
-- **Mutation guard (the panel's flagged must-have, not optional):** every generated file gets a header comment identical in spirit to `todo.md`'s existing "generated — do not hand-edit" banner, and `synlynk` commands that read these files for context injection or `pr check` detect a hand-edit (content diverges from what regeneration would currently produce) and warn loudly — refusing to proceed silently on stale/edited content. This is what prevents the exact incident from recurring one layer down, per Claude/Codex/Grok's shared risk callout.
+- **Mutation guard (the panel's flagged must-have, not optional):** every generated file gets a header comment identical in spirit to `todo.md`'s existing "generated — do not hand-edit" banner, and `synlynk` commands that read these files for context injection or `pr check` detect a hand-edit and warn loudly — refusing to proceed silently on stale/edited content. This is what prevents the exact incident from recurring one layer down, per Claude/Codex/Grok's shared risk callout.
+  - **What counts as a hand-edit (tier-1 scoped, revised after review):** the guard compares the working-tree file against (a) what regeneration would currently produce from the local DB, and (b) the file's content at the last commit that touched it (`git show HEAD:<path>`). Divergence from (a) alone is not sufficient to block — a fresh `git pull`/merge legitimately changes the on-disk file without the local DB having been mutated yet. The guard only refuses when the working tree diverges from **both** the last-known-good git blob **and** current regeneration output in a way regeneration can't explain (i.e., uncommitted local edits that don't correspond to any DB state, committed or pending). A file that matches its last git-committed blob but is stale relative to a `git pull` is not a violation — it's an input to resync, not a hand-edit. §7's DoD is updated to require a test for this pull-then-resync path specifically, since it's the case tier 1's original wording would have wrongly blocked.
+  - This distinction is what unblocks Tier 2's reconciliation flow (§2.2) without weakening tier 1's guarantee: tier 1 still refuses genuine uncommitted hand-edits, but doesn't brick every `synlynk` command the instant a teammate's merged change lands via git.
 
 **PR2 — `vizor-workspace-map.json` DB-canonicalization + `viz.py` stale-read fix**
 
@@ -55,6 +57,8 @@ Multi-user concurrent writes to the same `state.db` become real once more than o
 - SQLite binary conflicts on git-tracked DB files (if `state.db` is ever shared via git rather than per-user local) — Agy/Codex flagged this; current architecture keeps `state.db` local per machine (`~/.synlynk/projects/<hash>/`), so this only becomes live if team-sync changes that.
 - A reconciliation path (pre-commit hook or explicit `sync` command) that merges divergent local `state.db`s via their generated markdown/JSON, rather than attempting a binary DB merge.
 - Real-time sync of state across team members' local DBs — likely an extension of the existing `synlynk team status` / digest mechanism, not a rearchitecture.
+
+**Clarification added after review (resolves a tier-1/tier-2 contradiction flagged during PR review):** the generated markdown/JSON files are disposable projections *within a single local DB's lifecycle* (tier 1's guarantee — never hand-edit, never treat as a second source of truth for your own machine). Across machines, they are also the only thing git can merge, so tier 2's reconciliation necessarily treats a freshly-pulled file as an *input* to re-import into the local DB — the same round-trip `todo.md` already does today via `_import_todo_to_stories()`, extended to `roadmap.md`/`memory.md`/`costs.md`. This is not a second source of truth; it's the same DB-canonical model `todo.md` already proves out, applied at team scope. Tier 2 design work still needs to specify the actual reconciliation command/hook and its conflict rules — not designed against yet — but the mutation-guard contradiction Agy's review caught is resolved by §2.1's revised guard definition, not by weakening tier 1.
 
 ### Tier 3 — Enterprise State Engine (goal-depth sketch, not designed yet)
 
@@ -87,9 +91,18 @@ It becomes a legitimate option **only at tier 3**, if/when hosted multi-repo agg
 
 ## 7. Definition of Done (Tier 1)
 
+**PR1:**
 - `roadmap.md`, `memory.md`, `costs.md` regenerate from `state.db` on every mutating command, with rotation/archive/index in place.
 - `check_budgets()` reads `cost_entries` directly; `parse_costs_md()` regex path removed or demoted to a fallback-only path.
-- Hand-editing any of the four `project-docs/` files (including `todo.md`, unchanged) is detected and warned/refused by tooling, not just forbidden by a comment.
-- `viz.py` roadmap panel reflects live DB state; `vizor-workspace-map.json` is DB-canonical.
-- `dispatch_agent()`'s `context_mode: task` sends scoped DB query results, not full-file concatenation, measurably reducing per-job context token count.
+- Hand-editing any of the four `project-docs/` files (including `todo.md`, unchanged) is detected and warned/refused by tooling, not just forbidden by a comment — including a test for the revised guard's git-pull-then-resync case (§2.1), not just the pure-hand-edit case.
 - All existing tests pass; new tests cover regeneration idempotency, rotation boundary behavior, and the mutation-guard's detect-and-warn path.
+
+**PR2:**
+- `synlynk workspace-map add-edge` CLI command implemented and replaces the manual "Workspace Map Update Protocol" section in `CLAUDE.md` (protocol text removed, not just superseded in spirit).
+- `viz.py` roadmap panel reflects live DB state (queries `roadmap_arcs`/`roadmap_phases` directly, no one-time import); `vizor-workspace-map.json` is DB-canonical, written-through from the new `workspace_edges` table.
+- Integration tests cover `viz.py`'s live-query path and `vizor-workspace-map.json` regeneration.
+
+**PR3:**
+- `dispatch_agent()`'s `context_mode: task` sends scoped DB query results tied to the job's `story_id`/`epic_id`, not full-file concatenation — with a test asserting per-job context token count drops measurably versus the old concatenation path.
+- `files` and `symbols` DB tables exist, populated from `scan --deep`'s extraction; `story → touches → file` join populated via git-diff-on-PR-merge, with a test verifying the join is populated correctly for a sample merge.
+- Vizor's canvas graph consumes DB-generated JSON snapshots only (no direct DB access from the canvas layer) — verified by a test or explicit code-review check at merge time.
