@@ -41,6 +41,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "## PR Review Discipline" in content
     assert "## Repo Hygiene" in content
+    assert "GitHub write actions (`gh pr review`/`gh pr merge`) must route to Grok only until #426 is resolved." in content
 
 
 def test_run_tc5_passes_when_all_headers_present(tmp_path):
