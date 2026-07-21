@@ -812,6 +812,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    context_mode: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
+                   requires_gh_write: bool = False,
                    grants: list = None,
                    revokes: list = None,
                    job_id: str = None,
@@ -826,6 +827,31 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             best = best_agent(story_id)
             if best and best in baselines_map:
                 agent = best
+
+    if requires_gh_write:
+        current_baseline = baselines_map.get(agent, {})
+        if not current_baseline.get("can_gh_write", False):
+            capable_agents = [
+                name for name, baseline in baselines_map.items()
+                if baseline.get("can_gh_write", False)
+            ]
+            if not capable_agents:
+                raise ValueError(
+                    "No agent in AGENT_CAPABILITY_BASELINES has can_gh_write: True"
+                )
+            if force_agent:
+                print(
+                    f"  ⚠ '{agent}' cannot reliably complete GitHub-write actions "
+                    f"headless (see #426) — proceeding because --force-agent was set",
+                    file=sys.stderr,
+                )
+            else:
+                rerouted_to = capable_agents[0]
+                print(
+                    f"  ↪ rerouted '{agent}' -> '{rerouted_to}' "
+                    f"(--requires-gh-write; '{agent}' cannot do this headless, see #426)"
+                )
+                agent = rerouted_to
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
