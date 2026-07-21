@@ -58,7 +58,7 @@ _CAPABILITY_ALLOCATION_SOP = """\
 | GitHub write actions | **Grok only** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` |
 Do not start a task outside your role column without explicit Claude approval.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok only**. Agy headless auto-denies the `command` permission class for external-mutating GitHub writes even with `--dangerously-skip-permissions`. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Only Grok has been shown to complete `gh` write actions headless.
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok only**. Agy headless auto-denies the `command` permission class for external-mutating GitHub writes even with `--dangerously-skip-permissions`. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Only Grok has been shown to complete `gh` write actions headless. Pass --requires-gh-write on synlynk dispatch to have this enforced automatically instead of relying on manual routing (see #426).
 """
 
 _COST_VISIBILITY_SOP = """\
