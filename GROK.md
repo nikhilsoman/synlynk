@@ -110,6 +110,8 @@ implement, test, canvas, js, infra
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
+**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different reviewer and `gh pr review --approve` fails with "Can not approve your own pull request" on every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.
+
 ## Brainstorm-First Policy
 1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
 2. Run the brainstorm using Claude via `synlynk dispatch`.
@@ -129,7 +131,10 @@ implement, test, canvas, js, infra
 | HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
 | canvas/JS/infra | Grok | canvas, JS, infra |
 | PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
+| GitHub write actions | **Grok only** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` |
 Do not start a task outside your role column without explicit Claude approval.
+
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok only**. Agy headless auto-denies the `command` permission class for external-mutating GitHub writes even with `--dangerously-skip-permissions`. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Only Grok has been shown to complete `gh` write actions headless.
 
 ## Cost Visibility
 1. Log estimated_cost in the job context header before dispatch.
