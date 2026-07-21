@@ -44,6 +44,7 @@ _PERMISSION_TO_TOOL_MAP = {
 AGENT_CAPABILITY_BASELINES = {
     "claude": {
         "cli": "claude",
+        "can_gh_write": True,
         "non_interactive_flags": ["--print"],
         "dispatch_flags": ["--dangerously-skip-permissions"],
         "roles": ["architect", "builder"],
@@ -51,6 +52,7 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "codex": {
         "cli": "codex",
+        "can_gh_write": False,
         # 'exec' subcommand + '-' reads prompt from stdin without requiring a TTY.
         # 'codex exec' sets approval:never by default — no bypass flag needed.
         # '-s workspace-write' confines writes to workdir + /tmp while allowing
@@ -65,6 +67,7 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "agy": {
         "cli": "agy",
+        "can_gh_write": False,
         "non_interactive_flags": [],
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
@@ -88,6 +91,7 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "grok": {
         "cli": "grok",
+        "can_gh_write": True,
         "non_interactive_flags": [],
         "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
         "prompt_via_arg": True,
@@ -105,6 +109,7 @@ AGENT_CAPABILITY_BASELINES = {
     },
     "local": {
         "cli": "aider",
+        "can_gh_write": False,
         "non_interactive_flags": [],
         "dispatch_flags": ["--no-auto-commits", "--yes-always"],
         "prompt_file_flag": "--message-file",
