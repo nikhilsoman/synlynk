@@ -436,6 +436,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
+    dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
+        help="Task needs gh pr review/merge - reroute to a capable agent unless --force-agent is set (see #426)")
     dispatch_parser.add_argument(
         "--context-mode", choices=["none", "task", "full"], default="task",
         dest="context_mode", help="Context injection mode"
@@ -835,6 +837,7 @@ def main() -> None:
         try:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
+                                 requires_gh_write=getattr(args, "requires_gh_write", False),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  grants=getattr(args, "grant", []),
