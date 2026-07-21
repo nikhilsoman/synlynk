@@ -165,6 +165,28 @@ def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch
     assert job["agent"] == "agy"
 
 
+def test_cli_dispatch_passes_requires_gh_write_flag(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["requires_gh_write"] = kwargs.get("requires_gh_write")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "grok", "--task", "review and merge PR #500",
+         "--requires-gh-write", "--force-agent"],
+    )
+
+    cli_mod.main()
+
+    assert captured["requires_gh_write"] is True
+
+
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
