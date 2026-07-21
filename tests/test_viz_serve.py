@@ -1,7 +1,11 @@
 import io
 import json
 import os
+import threading
+import time as real_time
+from types import SimpleNamespace
 
+import synlynk.viz
 from synlynk.viz import VizorHandler
 
 
@@ -79,3 +83,87 @@ def test_post_invalid_json_returns_400(tmp_path, monkeypatch):
     VizorHandler.do_POST(handler)
 
     assert handler.errors == [(400, "Invalid JSON")]
+
+
+def test_cmd_viz_serve_keeps_server_alive_and_shuts_down_cleanly(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    stop_signal = threading.Event()
+    captured = {}
+    errors = []
+
+    class _FakeHTTPServer:
+        def __init__(self, address, handler_class):
+            self.server_address = address
+            self.handler_class = handler_class
+            self.shutdown_called = False
+            self.server_close_called = False
+            self.started = threading.Event()
+            self.release = threading.Event()
+            captured["server"] = self
+
+        def serve_forever(self):
+            self.started.set()
+            self.release.wait()
+
+        def shutdown(self):
+            self.shutdown_called = True
+            self.release.set()
+
+        def server_close(self):
+            self.server_close_called = True
+
+    def fake_generate_viz_data():
+        return {
+            "workspace": {"name": "test", "updated_at": "2026-07-21T00:00:00Z", "repos": []},
+            "goals": [],
+            "dreams": [],
+            "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
+            "agents": {},
+            "workspace_map": {"edges": [], "edge_types": {}},
+            "file_tree": {"name": ".", "dirs": {}, "files": []},
+            "notes": {},
+            "ecosystem": {},
+            "observatory": {},
+            "telemetry": {"recent": [], "sentinel_alerts": []},
+            "journeys": [],
+        }
+
+    def fake_ftue_prompts(config):
+        return config
+
+    def fake_sleep(_seconds):
+        if stop_signal.wait(0.05):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(synlynk.viz, "generate_viz_data", fake_generate_viz_data)
+    monkeypatch.setattr(synlynk.viz, "_ftue_prompts", fake_ftue_prompts)
+    monkeypatch.setattr(synlynk.viz.http.server, "HTTPServer", _FakeHTTPServer)
+    monkeypatch.setattr(synlynk.viz.time, "sleep", fake_sleep)
+
+    args = SimpleNamespace(stop=False, open=False, generate=False, serve=True, port=8721)
+
+    def run_cmd():
+        try:
+            synlynk.viz.cmd_viz(args)
+        except BaseException as exc:  # pragma: no cover - captured for failure reporting
+            errors.append(exc)
+
+    thread = threading.Thread(target=run_cmd)
+    thread.start()
+
+    try:
+        for _ in range(100):
+            if "server" in captured and captured["server"].started.is_set():
+                break
+            real_time.sleep(0.05)
+        assert "server" in captured
+        assert captured["server"].started.is_set()
+        assert thread.is_alive()
+    finally:
+        stop_signal.set()
+        thread.join(timeout=5)
+
+    assert not thread.is_alive()
+    assert captured["server"].shutdown_called
+    assert captured["server"].server_close_called
+    assert not errors

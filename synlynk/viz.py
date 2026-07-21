@@ -4617,7 +4617,7 @@ def _server_is_running() -> bool:
     return meta.get("serving", False)
 
 
-def _start_server(port: int) -> None:
+def _start_server(port: int) -> http.server.HTTPServer:
     server = http.server.HTTPServer(("127.0.0.1", port), VizorHandler)
     meta = {"port": port, "serving": True}
     with open(VIZ_META_PATH, "w") as f:
@@ -4625,6 +4625,17 @@ def _start_server(port: int) -> None:
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     return server
+
+
+def _serve_until_stopped(server: http.server.HTTPServer) -> None:
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def _stop_server() -> None:
@@ -4709,6 +4720,10 @@ def cmd_viz(args) -> None:
     if not _server_is_running() or args.serve:
         server = _start_server(port)
         print(f"  ✓ Serving at http://localhost:{port}/")
+
+    if args.serve:
+        _serve_until_stopped(server)
+        return
 
     if not args.serve:
         webbrowser.open(f"http://localhost:{port}/index.html")
