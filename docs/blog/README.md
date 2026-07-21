@@ -72,6 +72,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [68](./68-pr328-live-command-selftest.md) | PR #328 — Live Command Selftest: Does synlynk Actually Work in a Real Repo? | [#328](https://github.com/nikhilsoman/synlynk/pull/328) | 2026-07-18 |
 | [69](./69-pr-capability-sweep-taxonomy.md) | Capability Sweep + Industry Taxonomy — Calibrating Agents Against Real Skill Axes | TBD | 2026-07-19 |
 | [70](./70-prTBD-gitattributes-project-docs-union.md) | PR #383 — .gitattributes union merge for project-docs churn | [#383](https://github.com/nikhilsoman/synlynk/pull/383) | 2026-07-19 |
+| [71](./71-prTBD-gh-write-routing-and-review-discipline.md) | Docs — GitHub write routing (Grok only) + PR Review Discipline identity caveat | [#432](https://github.com/nikhilsoman/synlynk/pull/432) | 2026-07-21 |
 
 
 ## Per-PR Post Template
