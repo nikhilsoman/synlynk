@@ -1,3 +1,5 @@
+import pytest
+
 from synlynk.dispatch import _format_job_summary
 
 
@@ -146,3 +148,97 @@ def test_dispatch_agent_explicit_story_id_bypasses_auto_provisioning(project_dir
     job = sl.dispatch_agent("claude", "task text with #999", story_id="story-manual-1", context_mode="none")
 
     assert job["story_id"] == "story-manual-1"
+
+
+def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    job = sl.dispatch_agent("agy", "write docs", story_id="story-manual-1", context_mode="none")
+
+    assert job["agent"] == "agy"
+
+
+def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    job = sl.dispatch_agent(
+        "grok", "review and merge PR #500", story_id="story-manual-1",
+        context_mode="none", requires_gh_write=True, force_agent=True,
+    )
+
+    assert job["agent"] == "grok"
+
+
+def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    job = sl.dispatch_agent(
+        "agy", "review and merge PR #500", story_id="story-manual-1",
+        context_mode="none", requires_gh_write=True,
+    )
+
+    assert job["agent"] == "agy"
+    assert sl.AGENT_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
+    captured = capsys.readouterr()
+    assert "rerouted" in captured.out
+    assert "#426" in captured.out
+
+
+def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    job = sl.dispatch_agent(
+        "codex", "review and merge PR #500", story_id="story-manual-1",
+        context_mode="none", requires_gh_write=True, force_agent=True,
+    )
+
+    assert job["agent"] == "codex"
+    captured = capsys.readouterr()
+    assert "codex" in captured.err
+    assert "#426" in captured.err
+
+
+def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    no_capable = {
+        name: {**baseline, "can_gh_write": False}
+        for name, baseline in sl.AGENT_CAPABILITY_BASELINES.items()
+    }
+    monkeypatch.setattr(dispatch_mod, "AGENT_CAPABILITY_BASELINES", no_capable)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    with pytest.raises(ValueError, match="can_gh_write"):
+        sl.dispatch_agent(
+            "agy", "review and merge PR #500", story_id="story-manual-1",
+            context_mode="none", requires_gh_write=True,
+        )
