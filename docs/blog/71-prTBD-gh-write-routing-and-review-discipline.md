@@ -3,7 +3,7 @@ title: "Docs — GitHub write routing (Grok only) + PR Review Discipline identit
 date: 2026-07-21
 series: "Building the OS for Multi-Agent Development"
 post: 68
-pr: "TBD"
+pr: "#432"
 merged: status: open
 ---
 
