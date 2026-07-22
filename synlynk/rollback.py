@@ -17,7 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-ROLLBACK_DIR = os.path.join("synlynk", "rollback")
+ROLLBACK_DIR = os.path.join(".synlynk", "rollback")
 MANIFEST_PATH = os.path.join(ROLLBACK_DIR, "last.json")
 ARCHIVE_DIR = os.path.join(ROLLBACK_DIR, "archive")
 
