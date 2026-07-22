@@ -982,16 +982,26 @@ GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage,
 def _get_db() -> _sqlite3.Connection:
     """Returns a WAL-mode SQLite connection to state.db, running migrations."""
     db_path = DB_PATH
-    try:
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    except PermissionError:
-        db_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    _migrate_db(conn)
-    return conn
+    fallback_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
+    tried_fallback = False
+    while True:
+        try:
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            conn = _sqlite3.connect(db_path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            _migrate_db(conn)
+            return conn
+        except PermissionError:
+            if tried_fallback:
+                raise
+            db_path = fallback_path
+            tried_fallback = True
+        except _sqlite3.OperationalError:
+            if tried_fallback:
+                raise
+            db_path = fallback_path
+            tried_fallback = True
 
 
 def _is_migrated() -> bool:

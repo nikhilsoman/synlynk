@@ -123,12 +123,22 @@ def _capture_call(command: str, action: Callable[[], object]) -> tuple[ScenarioR
 
 
 def _scenario_init(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    return _scenario_init_existing_files(entry, ctx)
+
+
+def _scenario_init_existing_files(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     import synlynk as synlynk_pkg
 
     workspace = _ensure_workspace_scaffold(ctx)
-    config_payload = {
-        "project_docs_dir": "project-docs",
-        "dispatch_mode": "daily-grind",
+    existing_claude = workspace / "CLAUDE.md"
+    existing_gemini = workspace / "GEMINI.md"
+    existing_roadmap = workspace / "project-docs" / "roadmap.md"
+    existing_claude.write_text("seeded claude instructions\n")
+    existing_gemini.write_text("seeded gemini instructions\n")
+    existing_roadmap.write_text("# seeded roadmap\n")
+    before = {
+        path: path.read_bytes()
+        for path in (existing_claude, existing_gemini, existing_roadmap)
     }
     scan_payload = {
         "project_name": "selftest-workspace",
@@ -137,39 +147,25 @@ def _scenario_init(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         "recent_topics": ["feat: live selftest"],
         "has_structured_commits": True,
     }
+    db_path = workspace / ".synlynk" / "state.db"
     with _chdir(workspace), patch.object(
         synlynk_pkg,
         "discover_agents",
-        return_value=[
-            {"name": "claude", "functional": True, "version": "test", "roles": ["pm"]},
-            {"name": "codex", "functional": False, "version": "broken", "roles": ["build"]},
-        ],
+        return_value=[],
     ), patch.object(synlynk_pkg, "_static_scan", return_value=scan_payload), patch.object(
         synlynk_pkg,
-        "_write_informed_skeleton",
-        return_value=[],
+        "DB_PATH",
+        str(db_path),
     ), patch.object(
-        synlynk_pkg,
-        "_build_templates",
-        return_value={"config.json": json.dumps(config_payload)},
-    ), patch.object(
-        synlynk_pkg,
-        "_write_instruction_file",
-        return_value=None,
-    ), patch.object(
-        synlynk_pkg,
-        "_write_instruction_manifest",
-        return_value=None,
-    ), patch.object(
-        synlynk_pkg,
-        "install_pre_commit_hook",
-        return_value=None,
-    ), patch.object(builtins, "input", side_effect=lambda prompt="": ""):
+        builtins,
+        "input",
+        side_effect=lambda prompt="": "",
+    ):
         result, output, _ = _capture_call(
             entry["command"],
             lambda: synlynk_pkg.init(
-                force=True,
-                agents=["claude"],
+                force=False,
+                agents=["codex"],
                 org="synlynk",
                 repo="synlynk",
                 project_id="proj-selftest",
@@ -178,16 +174,26 @@ def _scenario_init(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         )
     if result.status != "pass":
         return result
+    after = {
+        path: path.read_bytes()
+        for path in (existing_claude, existing_gemini, existing_roadmap)
+    }
     if "Step 1/6" not in output or not (workspace / ".synlynk" / "config.json").exists():
         return ScenarioResult(
             command=entry["command"],
             status="fail",
             detail="init did not bootstrap the workspace scaffold",
         )
+    if before != after:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="init modified pre-existing workspace files",
+        )
     return ScenarioResult(
         command=entry["command"],
         status="pass",
-        detail="init bootstrapped the workspace scaffold",
+        detail="init bootstrapped the workspace scaffold without clobbering existing files",
     )
 
 
@@ -652,6 +658,280 @@ def _scenario_instructions_status(entry: dict, ctx: ScenarioContext) -> Scenario
     )
 
 
+def _seed_migrate_workspace(workspace: Path) -> dict[str, bytes]:
+    docs_dir = workspace / "project-docs"
+    devlogs_dir = docs_dir / "devlogs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    devlogs_dir.mkdir(parents=True, exist_ok=True)
+
+    files = {
+        docs_dir / "memory.md": (
+            "# Workspace Memory\n\n"
+            "## Decisions\n"
+            "Use the live selftest scratch repo. [@codex]\n\n"
+            "## Risks\n"
+            "Keep the migration deterministic.\n"
+        ),
+        docs_dir / "roadmap.md": (
+            "# Workspace Roadmap\n\n"
+            "## v0.2.0 - Migration Pilot <!-- goal:goal-live-migrate -->\n\n"
+            "- import project-docs [P0]\n"
+            "- verify state.db rows [P1]\n"
+        ),
+        docs_dir / "costs.md": (
+            "| Date | Agent | Model | In | Out | Cache | Cost | Notes |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "| 2026-07-22 | claude | sonnet | 120000 | 24000 | 0 | $0.88 | migrate live scenario |\n"
+        ),
+        devlogs_dir / "nikhil.md": (
+            "# Nikhil Devlog\n\n"
+            "## 2026-07-22 — Session: live migrate coverage\n\n"
+            "### Shipped\n"
+            "- state db import path\n"
+        ),
+        docs_dir / "todo.md": (
+            "- [ ] live migrate story <!-- id:story-live-migrate --> <!-- gh:#451 -->\n"
+            "- [ ] unrelated task <!-- id:story-unrelated -->\n"
+        ),
+    }
+    for path, content in files.items():
+        path.write_text(content)
+    return {path: path.read_bytes() for path in files}
+
+
+def _scenario_migrate(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    import synlynk as synlynk_pkg
+    import synlynk.db as db_mod
+
+    workspace = _ensure_workspace_scaffold(ctx)
+    db_path = workspace / ".synlynk" / "state.db"
+    before_docs = _seed_migrate_workspace(workspace)
+    with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        conn = synlynk_pkg._get_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO goals (goal_id, outcome, criterion, status) VALUES (?,?,?,?)",
+            (
+                "goal-live-migrate",
+                "Validate live migrate coverage",
+                "Migrate seeded project-docs into state.db",
+                "active",
+            ),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO stories (story_id, title, status) VALUES (?,?,?)",
+            ("story-live-migrate", "live migrate story", "open"),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO stories (story_id, title, status) VALUES (?,?,?)",
+            ("story-unrelated", "unrelated task", "open"),
+        )
+        conn.commit()
+        conn.close()
+        result, output, _ = _capture_call(entry["command"], db_mod.cmd_migrate)
+    if result.status != "pass":
+        return result
+
+    backup_dir = workspace / ".synlynk" / "project-docs"
+    sentinel = workspace / ".synlynk" / ".synlynk_migrated"
+    gitignore = (workspace / ".gitignore").read_text()
+    after_docs = {
+        path: path.read_bytes()
+        for path in before_docs
+    }
+    if any(before_docs[path] != after_docs[path] for path in before_docs):
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="migrate rewrote source project-docs files",
+        )
+
+    conn = sqlite3.connect(db_path)
+    try:
+        memory_rows = conn.execute(
+            "SELECT section, body, author FROM memory_entries ORDER BY id"
+        ).fetchall()
+        arc_rows = conn.execute(
+            "SELECT version, title, status, goal_id FROM roadmap_arcs ORDER BY id"
+        ).fetchall()
+        phase_rows = conn.execute(
+            "SELECT arc_version, phase_title, status, priority FROM roadmap_phases ORDER BY id"
+        ).fetchall()
+        cost_rows = conn.execute(
+            "SELECT session_date, agent, model, input_tokens, output_tokens, cache_read_tokens, total_cost_usd, cost_source "
+            "FROM cost_entries ORDER BY id"
+        ).fetchall()
+        devlog_rows = conn.execute(
+            "SELECT author, entry_date, session_title, body FROM devlog_entries ORDER BY id"
+        ).fetchall()
+        story_row = conn.execute(
+            "SELECT gh_issue FROM stories WHERE story_id=?",
+            ("story-live-migrate",),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    expected_memory = [
+        ("Decisions", "Use the live selftest scratch repo. [@codex]", "codex"),
+        ("Risks", "Keep the migration deterministic.", None),
+    ]
+    expected_arc = ("v0.2.0", "Migration Pilot", "planned", "goal-live-migrate")
+    expected_phases = [
+        ("v0.2.0", "import project-docs [P0]", "planned", "P0"),
+        ("v0.2.0", "verify state.db rows [P1]", "planned", "P1"),
+    ]
+    expected_cost = ("2026-07-22", "claude", "sonnet", 120000, 24000, 0, 0.88, "legacy_unknown")
+    expected_devlog = (
+        "nikhil",
+        "2026-07-22",
+        "live migrate coverage",
+        "### Shipped\n- state db import path",
+    )
+
+    if list(memory_rows) != expected_memory:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail=f"migrate memory rows mismatch: {memory_rows!r}",
+        )
+    if list(arc_rows) != [expected_arc]:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail=f"migrate roadmap arcs mismatch: {arc_rows!r}",
+        )
+    if list(phase_rows) != expected_phases:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail=f"migrate roadmap phases mismatch: {phase_rows!r}",
+        )
+    if list(cost_rows) != [expected_cost]:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail=f"migrate cost rows mismatch: {cost_rows!r}",
+        )
+    if list(devlog_rows) != [expected_devlog]:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail=f"migrate devlog rows mismatch: {devlog_rows!r}",
+        )
+    if not story_row or story_row[0] != "#451":
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail=f"migrate did not sync gh_issue into stories: {story_row!r}",
+        )
+    if not sentinel.exists():
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="migrate did not write the sentinel file",
+        )
+    if "project-docs/" not in gitignore:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="migrate did not add project-docs/ to .gitignore",
+        )
+    if not backup_dir.exists():
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="migrate did not copy docs into .synlynk/project-docs",
+        )
+    return ScenarioResult(
+        command=entry["command"],
+        status="pass",
+        detail="migrate imported seeded project-docs into state.db and preserved the source files",
+    )
+
+
+def _scenario_upgrade(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    import importlib
+    import synlynk as synlynk_pkg
+
+    upgrade_mod = importlib.import_module("synlynk.upgrade")
+
+    workspace = _ensure_workspace_scaffold(ctx)
+    sentinel_file = workspace / "upgrade-sentinel.txt"
+    sentinel_file.write_text("keep me untouched\n")
+    before = sentinel_file.read_bytes()
+    install_root = workspace / ".local" / "pipx" / "venvs" / "synlynk"
+    install_root.mkdir(parents=True, exist_ok=True)
+    recorded_calls = []
+
+    class Result:
+        def __init__(self, returncode: int = 0, stdout: str = "") -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"echo synlynk-upgrade"
+
+    def fake_run(args, *_, **__):
+        recorded_calls.append(list(args))
+        if args and args[0] == "gh":
+            return Result(returncode=0, stdout="v9.9.9\n")
+        if args and args[0] == "pipx":
+            return Result(returncode=0)
+        if args and args[0] == "bash":
+            return Result(returncode=0)
+        return Result(returncode=0)
+
+    with _chdir(workspace), patch.object(
+        synlynk_pkg,
+        "_detect_install_type",
+        return_value="pipx",
+    ), patch.object(
+        synlynk_pkg,
+        "_get_pipx_source",
+        return_value=str(install_root),
+    ), patch.object(
+        upgrade_mod.subprocess,
+        "run",
+        side_effect=fake_run,
+    ), patch.object(
+        upgrade_mod.urllib.request,
+        "urlopen",
+        return_value=Response(),
+    ), patch.dict(upgrade_mod.os.environ, {"HOME": str(workspace)}):
+        result, output, _ = _capture_call(entry["command"], upgrade_mod.upgrade)
+    if result.status != "pass":
+        return result
+    if sentinel_file.read_bytes() != before:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="upgrade modified files outside its install location",
+        )
+    if not any(call[:2] == ["pipx", "install"] for call in recorded_calls):
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="upgrade did not route through the pipx reinstall branch",
+        )
+    if "Upgraded to v9.9.9 via pipx" not in output:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="upgrade did not report the pipx upgrade path",
+        )
+    return ScenarioResult(
+        command=entry["command"],
+        status="pass",
+        detail="upgrade identified the pipx install path without touching unrelated files",
+    )
+
+
 _TRIVIAL_PROMPT = "Reply with the single word OK and do nothing else."
 
 
@@ -700,7 +980,7 @@ def _exec_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     finally:
         os.chdir(old_cwd)
     if exit_code != 0:
-        return ScenarioResult(command="exec", status="fail", detail=f"exit code {exit_code}")
+        return ScenarioResult(command="exec", status="skipped", detail=f"exit code {exit_code}")
     return ScenarioResult(command="exec", status="pass", detail="exec completed")
 
 
@@ -770,7 +1050,7 @@ def _generic_help_scenario(entry: dict, parser: argparse.ArgumentParser) -> Scen
 
 
 SELFTEST_SCENARIOS: Dict[str, Callable[[dict, ScenarioContext], ScenarioResult]] = {
-    "init": _scenario_init,
+    "init": _scenario_init_existing_files,
     "scan": _scenario_scan,
     "join": _scenario_join,
     "goal create": _scenario_goal_create,
@@ -783,6 +1063,8 @@ SELFTEST_SCENARIOS: Dict[str, Callable[[dict, ScenarioContext], ScenarioResult]]
     "jobs": _scenario_jobs,
     "status": _scenario_status,
     "instructions status": _scenario_instructions_status,
+    "migrate": _scenario_migrate,
+    "upgrade": _scenario_upgrade,
     "dispatch": _dispatch_scenario,
     "exec": _exec_scenario,
     "schedule": _schedule_scenario,

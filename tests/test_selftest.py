@@ -7,6 +7,7 @@ from synlynk.taxonomy import COMMAND_TAXONOMY
 
 EXPECTED_LIVE_SCENARIOS = [
     "init",
+    "migrate",
     "scan",
     "join",
     "goal create",
@@ -19,6 +20,7 @@ EXPECTED_LIVE_SCENARIOS = [
     "jobs",
     "status",
     "instructions status",
+    "upgrade",
 ]
 
 
@@ -99,6 +101,42 @@ def test_live_selftest_bespoke_lifecycle_scenarios_pass(tmp_path):
         entry = next(item for item in COMMAND_TAXONOMY if item["command"] == command)
         result = selftest_mod.SELFTEST_SCENARIOS[command](entry, ctx)
         assert result.status == "pass", f"{command}: {result.detail}"
+
+
+def test_live_selftest_init_preserves_existing_files(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = next(item for item in COMMAND_TAXONOMY if item["command"] == "init")
+
+    result = selftest_mod.SELFTEST_SCENARIOS["init"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "without clobbering existing files" in result.detail
+
+
+def test_live_selftest_migrate_imports_real_rows(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = next(item for item in COMMAND_TAXONOMY if item["command"] == "migrate")
+
+    result = selftest_mod.SELFTEST_SCENARIOS["migrate"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "state.db" in result.detail
+
+
+def test_live_selftest_upgrade_respects_install_location(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = next(item for item in COMMAND_TAXONOMY if item["command"] == "upgrade")
+
+    result = selftest_mod.SELFTEST_SCENARIOS["upgrade"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "pipx install path" in result.detail
 
 
 def test_selftest_subcommand_is_registered():
