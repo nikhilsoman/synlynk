@@ -194,7 +194,17 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
     scratch_workspace = tmp_path / "scratch"
     recorded = []
 
-    monkeypatch.setattr(selftest_mod.tempfile, "mkdtemp", lambda prefix="": str(scratch_workspace))
+    class FakeTemporaryDirectory:
+        def __init__(self, *args, **kwargs):
+            scratch_workspace.mkdir(parents=True, exist_ok=True)
+
+        def __enter__(self):
+            return str(scratch_workspace)
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(selftest_mod.tempfile, "TemporaryDirectory", FakeTemporaryDirectory)
     monkeypatch.setattr(
         selftest_mod,
         "COMMAND_TAXONOMY",
@@ -217,8 +227,9 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
 
     assert all(result.status == "pass" for result in results)
     assert host_cwd != scratch_workspace
-    assert recorded[::2] == [scratch_workspace] * 3
-    assert recorded[1::2] == [host_cwd] * 3
+    assert recorded[0] == scratch_workspace
+    assert recorded[-1] == host_cwd
+    assert set(recorded) <= {scratch_workspace, host_cwd}
 
 
 def test_live_status_scenario_initializes_full_schema(monkeypatch, tmp_path):

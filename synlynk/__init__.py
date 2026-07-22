@@ -1647,6 +1647,14 @@ def cmd_repair(dry_run: bool = True) -> int:
             project_id=project_id,
             docs_dir=docs_dir_arg,
         )
+        try:
+            from synlynk.doctor import cleanup_selftest_workspaces
+
+            removed = cleanup_selftest_workspaces()
+            if removed:
+                print(f"  ✓ Cleaned up {removed} orphaned synlynk-selftest workspace(s)")
+        except Exception:
+            pass
         print(f"\n  {_GREEN}Repair complete.{_RESET}")
     print()
     return 0

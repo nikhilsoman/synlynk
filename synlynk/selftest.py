@@ -353,6 +353,10 @@ def _scenario_goal_link(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     workspace = _ensure_workspace_scaffold(ctx)
     db_path = workspace / ".synlynk" / "state.db"
     with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)), patch.object(
+        synlynk_pkg,
+        "_generate_todo_md",
+        return_value=None,
+    ), patch.object(
         db_mod,
         "_generate_todo_md",
         return_value=None,
@@ -427,6 +431,10 @@ def _scenario_story_create(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     workspace = _ensure_workspace_scaffold(ctx)
     db_path = workspace / ".synlynk" / "state.db"
     with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)), patch.object(
+        synlynk_pkg,
+        "_generate_todo_md",
+        return_value=None,
+    ), patch.object(
         db_mod,
         "_generate_todo_md",
         return_value=None,
@@ -788,16 +796,26 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     """Run the selftest scenarios for every taxonomy command."""
     parser = build_parser()
     ctx = ScenarioContext(repo_path=".", live=live)
-    if live:
-        scratch_workspace = _ensure_workspace_scaffold(ctx)
-        ctx.repo_path = str(scratch_workspace)
     results: List[ScenarioResult] = []
+    if live:
+        with tempfile.TemporaryDirectory(prefix="synlynk-selftest-") as scratch_dir:
+            scratch_workspace = Path(scratch_dir)
+            ctx.state["workspace_dir"] = scratch_workspace
+            scratch_workspace = _ensure_workspace_scaffold(ctx)
+            ctx.repo_path = str(scratch_workspace)
+            with _chdir(scratch_workspace):
+                for entry in sorted(COMMAND_TAXONOMY, key=_selftest_sort_key):
+                    scenario = SELFTEST_SCENARIOS.get(entry["command"])
+                    if scenario is None:
+                        result = _generic_help_scenario(entry, parser)
+                    else:
+                        result = scenario(entry, ctx)
+                    ctx.spent_usd += result.cost_usd
+                    results.append(result)
+        return results
+
     for entry in sorted(COMMAND_TAXONOMY, key=_selftest_sort_key):
-        scenario = SELFTEST_SCENARIOS.get(entry["command"]) if live else None
-        if scenario is None:
-            result = _generic_help_scenario(entry, parser)
-        else:
-            result = scenario(entry, ctx)
+        result = _generic_help_scenario(entry, parser)
         ctx.spent_usd += result.cost_usd
         results.append(result)
     return results

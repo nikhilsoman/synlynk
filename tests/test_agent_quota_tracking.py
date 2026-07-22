@@ -5,6 +5,7 @@ import os
 import time
 from pathlib import Path
 import importlib.util
+import subprocess
 
 import pytest
 
@@ -446,3 +447,61 @@ def test_fix_github_issue_382_nikhilsomansynlynk_backfill_updates_only_eligible_
     assert rows[1][5] is None
     assert rows[2][4] == "subscription"
     assert rows[2][5] is None
+
+
+def test_synlynk_selftest_live_clobbers_real_repo(monkeypatch, tmp_path):
+    from synlynk import selftest as selftest_mod
+    import synlynk.scheduler as scheduler_mod
+
+    real_repo = tmp_path / "real-repo"
+    (real_repo / "project-docs").mkdir(parents=True)
+    (real_repo / ".synlynk").mkdir(parents=True)
+    (real_repo / "project-docs" / "todo.md").write_text(
+        "# Project Todo List\n"
+        "- [ ] keep me <!-- id: story-keep -->\n"
+    )
+    (real_repo / "GEMINI.md").write_text(
+        "<!-- synlynk:start version=\"1\" tool=\"agy\" -->\n"
+        "## keep me\n"
+        "<!-- synlynk:end -->\n"
+    )
+    (real_repo / ".synlynk" / "config.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "budget": {"limit_usd": 10.0, "limit_requests": 100},
+                "project_docs_dir": "project-docs",
+                "dispatch_mode": "daily-grind",
+            }
+        )
+    )
+    subprocess.run(["git", "init", "-q"], cwd=real_repo, check=True)
+    subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=real_repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Codex"], cwd=real_repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=real_repo, check=True)
+    subprocess.run(["git", "commit", "-m", "baseline", "-q"], cwd=real_repo, check=True)
+
+    todo_before = (real_repo / "project-docs" / "todo.md").read_text()
+    gemini_before = (real_repo / "GEMINI.md").read_text()
+
+    monkeypatch.chdir(real_repo)
+    monkeypatch.setattr(
+        selftest_mod,
+        "dispatch_agent",
+        lambda *args, **kwargs: {"id": "job-selftest", "pid": 1, "fence": None},
+    )
+    monkeypatch.setattr(selftest_mod, "exec_command", lambda argv: 0)
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda execute=True, max_stories=1: None)
+
+    results = selftest_mod.run_selftest(live=True)
+
+    assert all(result.status != "fail" for result in results)
+    assert subprocess.run(
+        ["git", "status", "--short"],
+        cwd=real_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip() == ""
+    assert (real_repo / "project-docs" / "todo.md").read_text() == todo_before
+    assert (real_repo / "GEMINI.md").read_text() == gemini_before
