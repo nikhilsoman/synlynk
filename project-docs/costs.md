@@ -94,3 +94,13 @@
 | 2026-07-20 23:07 | grok | 1 | 26507/3260 | [est] $0.1284 | $0.1284 | exec: grok job job-1b952a5... |
 | 2026-07-20 23:07 | codex | 1 | 692276/6073 | [est] $2.1679 | $2.1679 | exec: codex job job-8383ca... |
 | 2026-07-18 | nikhil | ~8 | ~67K/~3.2K | ~$0.25 | PM session: `synlynk decide` panel consult (codex+agy+grok) on pre-dogfooding-week blocking/non-blocking triage — re-logged after this row was lost to an unstashed `git reset --hard` on main; estimate covers both the intended run and an accidental double-run (background timeout mishap caused the panel to fire twice, 8 real agent CLI calls total, only one decision record survived on disk since both runs shared an identical filename slug) — see #346 (decide has no budget guard/dedup) |
+| 2026-07-19 10:07 | codex | 1 | 7832814/86435 | [est] $24.7950 | exec: codex job job-72eb95... |
+| 2026-07-19 10:37 | codex | 1 | 1070384/19458 | [est] $3.5030 | exec: codex job job-871b84... |
+| 2026-07-20 01:22 | grok | 1 | 5000/2000 | [est] $0.0450 | exec: grok job job-c1dfaef... |
+| 2026-07-20 01:24 | agy | 1 | 428404/37150 | [est] $1.8425 | exec: agy job job-a338459e |
+| 2026-07-20 07:49 | agy | 1 | 200437/10404 | [est] $0.7574 | exec: agy job job-ce511d78 |
+| 2026-07-20 21:35 | codex | 1 | 1257739/16128 | [est] $4.0151 | exec: codex job job-0a193c... |
+| 2026-07-20 21:35 | agy | 1 | 81505/1349 | [est] $0.2647 | exec: agy job job-4cb54c47 |
+| 2026-07-20 21:40 | grok | 1 | 36218/5785 | [est] $0.1954 | exec: grok job job-3b38792... |
+| 2026-07-22 09:11 | grok | 1 | 39030/4746 | [est] $0.1883 | exec: grok job job-d1fe5a3... |
+| 2026-07-22 09:12 | grok | 1 | 70431/7752 | [est] $0.3276 | exec: grok job job-f312219... |
