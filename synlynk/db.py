@@ -1239,61 +1239,68 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         _migrate_import(docs_dir, dry_run=True)
         return
 
-    print("  ▶ Importing flat files → state.db ...")
-    try:
-        _migrate_import(docs_dir)
-    except MigrationImportError as exc:
-        print(f"  ✗ {exc}")
-        raise SystemExit(1)
-
     backup_dir = _synlynk_project_docs_dir()
-    print(f"  ▶ Copying {docs_dir}/ → {backup_dir}/ ...")
-    if os.path.exists(backup_dir):
-        _shutil.rmtree(backup_dir)
-    _shutil.copytree(docs_dir, backup_dir)
-
-    _migrate_dr_mirror(backup_dir)
+    from synlynk.rollback import rollback_checkpoint
 
     try:
-        subprocess.run(
-            ["git", "rm", "--cached", "-r", "--quiet", docs_dir],
-            check=True,
-            stderr=subprocess.DEVNULL,
-        )
-        print(f"  ✓ git rm --cached {docs_dir}/")
-    except subprocess.CalledProcessError:
-        print("  ⚠ git rm --cached failed (may not be tracked) — continuing")
-
-    gitignore = ".gitignore"
-    entry = f"{docs_dir}/\n"
-    already = False
-    if os.path.exists(gitignore):
-        with open(gitignore) as f:
-            already = any(docs_dir in line for line in f)
-    if not already:
-        with open(gitignore, "a") as f:
-            f.write(entry)
-        print(f"  ✓ Added {docs_dir}/ to .gitignore")
-
-    with open(sentinel, "w") as f:
-        f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    print("  ✓ Sentinel written")
-
-    try:
-        subprocess.run(["git", "add", ".gitignore", sentinel], check=True)
-        subprocess.run(
-            [
-                "git",
-                "commit",
-                "-m",
-                "chore: synlynk migrate — project-docs moved to .synlynk, "
-                "state.db is now source of truth",
+        with rollback_checkpoint(
+            "migrate",
+            untracked_paths=[
+                os.path.join(".synlynk", "state.db"),
+                backup_dir,
+                sentinel,
             ],
-            check=True,
-        )
-        print("  ✓ Committed")
-    except subprocess.CalledProcessError as e:
-        print(f"  ⚠ Git commit failed (continuing): {e}")
+        ):
+            print("  ▶ Importing flat files → state.db ...")
+            try:
+                _migrate_import(docs_dir)
+            except MigrationImportError as exc:
+                print(f"  ✗ {exc}")
+                raise
+
+            print(f"  ▶ Copying {docs_dir}/ → {backup_dir}/ ...")
+            if os.path.exists(backup_dir):
+                _shutil.rmtree(backup_dir)
+            _shutil.copytree(docs_dir, backup_dir)
+
+            _migrate_dr_mirror(backup_dir)
+
+            subprocess.run(
+                ["git", "rm", "--cached", "-r", "--quiet", docs_dir],
+                check=True,
+                stderr=subprocess.DEVNULL,
+            )
+            print(f"  ✓ git rm --cached {docs_dir}/")
+
+            gitignore = ".gitignore"
+            entry = f"{docs_dir}/\n"
+            already = False
+            if os.path.exists(gitignore):
+                with open(gitignore) as f:
+                    already = any(docs_dir in line for line in f)
+            if not already:
+                with open(gitignore, "a") as f:
+                    f.write(entry)
+                print(f"  ✓ Added {docs_dir}/ to .gitignore")
+
+            with open(sentinel, "w") as f:
+                f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            print("  ✓ Sentinel written")
+
+            subprocess.run(["git", "add", ".gitignore", sentinel], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    "chore: synlynk migrate — project-docs moved to .synlynk, "
+                    "state.db is now source of truth",
+                ],
+                check=True,
+            )
+            print("  ✓ Committed")
+    except MigrationImportError:
+        raise SystemExit(1)
 
 def _generate_todo_md() -> None:
     """Writes todo.md as a generated view of stories.
