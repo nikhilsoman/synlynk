@@ -9,30 +9,65 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-22
+
+**Release pitch:** synlynk learns to explain itself — every command now has a discoverable taxonomy entry with a maturity-tiered reveal, a live selftest exercises all 59 commands end-to-end, cost accounting gets payment-model awareness and a task-boundary fence around actual spend, and dispatch routing gets capability-aware enough to stop sending GitHub-write work to agents that structurally can't do it.
+
 ### Added
 
-- `synlynk capability sweep` — a taxonomy-driven calibration sweep that scores agent capability against NAICS/APQC/SFIA-coded skill axes, seeded from `synlynk/capability_baseline.json` and reinforced organically as real PRs land, with a configurable `$10` cost guardrail (`capability_sweep.cost_cap_usd`) and independent cross-agent verification scoring.
-- Legacy free-text `discipline` / `org_domain` / `industry` values are crosswalked to NAICS/APQC/SFIA codes on migration, tagging any value with no crosswalk match as `legacy_unmapped` rather than dropping it.
-- `synlynk pr check` now applies a geometric review-cycle multiplier (`1.10 × 0.825^(N-1)`, floored at `0.25x`) to a PR's `capability_ratings` rows at merge time — a clean first-pass approval (`N=1`) earns a 10% bonus, and each round of requested changes decays the quality credit. GitHub-only in this version; falls back to a neutral `1.0x` off GitHub.
-- `synlynk agent add <name>` to retroactively onboard a newly available CLI agent on `$PATH`, generating its directive file, writing its role fence, wiring `workgroup_agents` / `agent_slots` / `roles`, and seeding a capability baseline. Fixes #277.
-- Lazy daily housekeeping on the first `synlynk exec` of a new calendar day, detecting new PATH agents, re-probing onboarded agents for drift, repairing directive fences, and recording `last_housekeeping_date`. Fixes #277.
+**Command Taxonomy, Maturity-Tiered Reveal, and Trigger Registry (design #303, PRs #304/#305/#309/#310/#311/#312/#316/#319/#320/#321)**
+- `COMMAND_TAXONOMY` becomes the single source of truth for all 59 commands — `cli.py`'s `build_parser()` extracted standalone (#304), taxonomy command surface restored and hardened (#305), default `fenced_commands` allowlist (#309).
+- Command reference docs now generate directly from `COMMAND_TAXONOMY` (#316) instead of hand-maintained markdown, closing a recurring drift source.
+- FTUE wizard and the `synlynk` launch picker are now driven by the same taxonomy (#319), so first-run onboarding and the reference docs can never disagree about what a command does or which tier it belongs to.
+- Tier-scoped trigger phrases wired into `synlynk:start`/`synlynk:end` session fencing (#320).
+- Pre-commit hook installed on `synlynk init` to gate instructions drift between the taxonomy and generated CLAUDE.md/GEMINI.md/AGENTS.md content (#321).
+
+**Task-Boundary Cost Fence (story-615bc8f4, PRs #313/#314/#315/#317)**
+- `synlynk exec`'s actual-cost print now routes through a dedicated cost fence at the task boundary (#313) rather than being computed ad hoc per call site, closing a class of under/over-reporting bugs where a task's real spend diverged from what `costs.md` recorded.
+- Shipped and marked complete in the roadmap (#314); PM session cost for the execution itself logged per the Cost Capture Protocol (#315, #317).
+
+**Live Command Selftest (PR #328, follow-ups #335/#337)**
+- `synlynk selftest` — a taxonomy-driven smoke test that exercises all 59 commands, catching command-surface regressions the unit suite doesn't (drift between `COMMAND_TAXONOMY` and actual CLI behavior, broken flag wiring, silent crashes on real invocation).
+- Blog post documenting the design and implementation (#335).
+- Follow-up fix: live paid selftest scenarios now rebind `DB_PATH` to a scratch workspace instead of touching the real project DB (#337, scenario N6).
+
+**Capability Sweep + Industry Taxonomy (PR #367)**
+- `synlynk capability sweep` — a taxonomy-driven calibration sweep scoring agent capability against NAICS/APQC/SFIA-coded skill axes, seeded from `synlynk/capability_baseline.json` and reinforced organically as real PRs land, with a configurable `$10` cost guardrail (`capability_sweep.cost_cap_usd`) and independent cross-agent verification scoring.
+- Legacy free-text `discipline` / `org_domain` / `industry` values are crosswalked to NAICS/APQC/SFIA codes on migration, tagging unmatched values `legacy_unmapped` rather than dropping them.
+
+**Payment-Model-Aware Cost/Value Accounting — PMA-1 through PMA-6 (PR #374)**
+- Cost and value accounting now distinguishes payment model (subscription-seat vs. metered/API) so `costs.md` and budget reporting reflect what was actually spent under each agent's real billing arrangement, instead of a single blended token-rate assumption.
+- Manual cost entries gained payment-column population (#402); historical entries backfilled with `api_equivalent_usd` for cross-model comparison (#388).
+- Roadmap and devlog synced for both Capability Sweep (#367) and PMA (#374) landing together (#375).
+
+**Story-ID Auto-Provisioning for Dispatch (PR #407)**
+- `dispatch_agent()` now auto-provisions a `story_id` when a dispatched task has none, closing a gap where ad hoc dispatches (not tied to an existing story) fell outside cost/capability tracking.
+
+**`can_gh_write` Capability Routing (issues #423/#426, PRs #427/#432/#438)**
+- `AGENT_CAPABILITY_BASELINES` gained a `can_gh_write` field so dispatch routing can structurally avoid sending GitHub-write work (`gh pr review`/merge) to agents that can't complete it headless (Agy, Codex, local) — previously enforced only by SOP convention (#427, #432 codified the convention first; #438 made it structural).
+- New `--requires-gh-write` dispatch flag and enforcement logic in `dispatch_agent()`.
 
 ### Fixed
 
-- **`synlynk migrate` false-positive `MigrationImportError` on idempotent re-runs (#276):**
-  the loud-fail check treated `INSERT OR IGNORE` with `rowcount == 0` as a hard failure
-  whenever a non-empty source landed zero *new* rows. On a project that had already been
-  migrated, natural-key collisions (especially `roadmap_arcs.version` UNIQUE) correctly
-  no-op the insert, so re-import / `--recover` raised
-  `MigrationImportError: 0 rows inserted … roadmap_arcs (N parsed/attempted, 0 inserted)`
-  even when every expected row was already present. `_migrate_import()` now checks natural
-  keys before insert (`memory_entries.section`, `roadmap_arcs.version`,
-  `roadmap_phases(arc_version, phase_title)`, cost fingerprint, `devlog` author+date+title,
-  `todo` `gh_issue` already set) and only fails loud when zero rows were inserted *and*
-  not all attempted rows were already present. Genuine 0-of-N write failures still raise
-  with the same error message prefix.
-- **Dispatch auto-PR branch detection (#280):** `_finalize_completed_worktree_job()` re-derives the worktree's actual current branch via `git branch --show-current` instead of trusting the pre-recorded `dispatch/<agent>/<job_id>` name. When an agent commits on a custom branch (the encouraged human-readable pattern), push and `gh pr create --head` now target that branch; the job record is updated so `synlynk jobs` reports the real name. Detached HEAD falls back to the recorded branch without erroring.
-- `synlynk probe` now clears `HARNESS_VERSION_DRIFT` alerts for the specific agent it just re-probed, so the warning disappears once the recorded `installed_version` matches the live binary again. Fixes #281.
+- **`synlynk watch` crash on `CYCLES.index("work")` (issue #421, fixed by #301, released here):** the `v0.12.0` tag shipped `cmd_watch()` still looking up a `"work"` cycle name that had already been renamed out of `hud.py`'s `CYCLES` list under the GOVERNS seven-stage vocabulary rollout, raising `ValueError: 'work' is not in list` on every invocation. The fix (`CYCLES.index("execute")`) merged to `main` via #301 two days after the `v0.12.0` tag, but was never shipped in a release until now.
+- **`synlynk viz --serve` exits immediately, nothing binds the port (issue #421, PR #440, merged as #421):** `_start_server()` spawned the HTTP server on a `daemon=True` thread and returned immediately with no blocking call, so the process exited (killing the daemon thread with it) right after printing "Serving at...". Not a sandbox/forking artifact — reproduced identically in a real terminal. Fix adds `_serve_until_stopped()`, which blocks the main thread until `KeyboardInterrupt` and then cleanly shuts the server down.
+- `synlynk migrate` false-positive `MigrationImportError` on idempotent re-runs (#276, #278): natural-key collisions on re-import no longer trip the loud-fail check.
+- Dispatch auto-PR branch detection re-derives the worktree's actual current branch instead of trusting the pre-recorded name (#280, #283).
+- `synlynk probe` clears `HARNESS_VERSION_DRIFT` for the specific agent just re-probed (#281, #284).
+- `synlynk agent add <name>` retrofits onboarding for a newly available CLI agent already on `$PATH` (#277, #285), plus lazy daily housekeeping on the first `synlynk exec` of a new calendar day.
+- Token-outlier cost entries now flagged safely instead of silently corrupting averages (#295).
+- Stale Cost Visibility / Repo Hygiene SOP text corrected (#290, #296).
+- Per-provider model rates with freshness checks across `costs`, `doctor`, and `sentinel` (#289, #297).
+- Probe version-token parsing fixed (#294); model version now resolved from agent config files (#287, #292).
+- `agent_quotas` now populated from telemetry, plus a new `synlynk quota` CLI (#291, #293).
+- Job summary overwrites guarded against clobbering (#387).
+- Dispatch worktrees branch from a fresh `origin/main` tip instead of a potentially stale local ref (#398, #395).
+- Headless permission denials correctly classified, avoiding false positives from echoed source text (#399, #404).
+- Agy permission dispatch enabled (#417).
+- GitHub issue #379 follow-up: `.g` file handling fix (#384).
+- `__init__.py` modularisation epic marked shipped, closing stale #380 (#401).
+
+Design specs: `docs/superpowers/specs/2026-07-21-command-taxonomy-maturity-reveal-design.md`, capability sweep and PMA specs referenced in PRs #367/#374. Roadmap rows synced for Task-Boundary Cost Fence, Command Taxonomy, and Live Command Selftest (#416). State Engine tiered design (single-user/team/enterprise) drafted for a future release (#412) — not shipped in this version.
 
 ## [0.12.0] - 2026-07-15
 
