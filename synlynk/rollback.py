@@ -133,7 +133,6 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
 
     Records the pre-op HEAD SHA (auto-stashing a dirty tree first) and backs up
     untracked_paths before yielding.
-
     On any exception raised inside the `with` block, restores the repo and
     untracked paths to their pre-op state, then re-raises.
     """
@@ -159,4 +158,58 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
         yield manifest
     except BaseException:
         restore_leg1(manifest)
+        raise
+
+
+_SCRIPT_INSTALL_PATHS = ("~/.synlynk/bin", "~/.synlynk/lib")
+
+
+def restore_leg2(manifest: dict) -> None:
+    install_type = manifest.get("install_type")
+    old_version = manifest.get("previous_version")
+    if install_type == "pipx" and old_version:
+        subprocess.run(
+            [
+                "pipx",
+                "install",
+                f"git+https://github.com/nikhilsoman/synlynk@v{old_version}",
+                "--force",
+            ]
+        )
+    elif install_type == "script" and manifest.get("backup_dir"):
+        _restore_paths(
+            manifest["backup_dir"],
+            [os.path.expanduser(p) for p in _SCRIPT_INSTALL_PATHS],
+        )
+    _archive_manifest(manifest)
+
+
+@contextlib.contextmanager
+def rollback_checkpoint_upgrade(current_version: str, install_type: str):
+    """Leg 2: install-location snapshot wrapping _run_upgrade().
+
+    upgrade() never touches the git repo, so this does not use Leg 1 at all.
+    pipx installs roll back by reinstalling the recorded old version tag;
+    script installs additionally snapshot ~/.synlynk/{bin,lib} since there is
+    no version-pinned reinstall path for that install type.
+    """
+    op_id = _new_op_id()
+    backup_dir = None
+    if install_type == "script":
+        backup_dir = _backup_paths(
+            op_id, [os.path.expanduser(p) for p in _SCRIPT_INSTALL_PATHS]
+        )
+    manifest = {
+        "op_id": op_id,
+        "op_type": "upgrade",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "previous_version": current_version,
+        "install_type": install_type,
+        "backup_dir": backup_dir,
+    }
+    _write_manifest(manifest)
+    try:
+        yield manifest
+    except BaseException:
+        restore_leg2(manifest)
         raise

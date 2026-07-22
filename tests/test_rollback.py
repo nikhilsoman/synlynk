@@ -124,3 +124,41 @@ def test_rollback_checkpoint_leaves_manifest_on_success(tmp_path, monkeypatch):
     assert os.path.exists(rollback.MANIFEST_PATH)
     loaded = rollback._read_manifest()
     assert loaded["op_type"] == "migrate"
+
+
+def test_rollback_checkpoint_upgrade_pipx_restore_reinstalls_old_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    recorded = []
+    monkeypatch.setattr(
+        rollback.subprocess,
+        "run",
+        lambda args, **kw: recorded.append(list(args)) or subprocess.CompletedProcess(args, 0),
+    )
+
+    with pytest.raises(RuntimeError):
+        with rollback.rollback_checkpoint_upgrade("0.12.0", "pipx"):
+            raise RuntimeError("simulated pipx failure")
+
+    assert any(
+        call[:2] == ["pipx", "install"] and "v0.12.0" in call[2]
+        for call in recorded
+    )
+    assert not os.path.exists(rollback.MANIFEST_PATH)
+
+
+def test_rollback_checkpoint_upgrade_script_restores_bin_and_lib(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    home = tmp_path / "home"
+    bin_dir = home / ".synlynk" / "bin"
+    lib_dir = home / ".synlynk" / "lib"
+    bin_dir.mkdir(parents=True)
+    lib_dir.mkdir(parents=True)
+    (bin_dir / "synlynk").write_text("#!/bin/sh\necho old\n")
+    monkeypatch.setattr(rollback.os.path, "expanduser", lambda p: p.replace("~", str(home)))
+
+    with pytest.raises(RuntimeError):
+        with rollback.rollback_checkpoint_upgrade("0.12.0", "script"):
+            (bin_dir / "synlynk").write_text("#!/bin/sh\necho new\n")
+            raise RuntimeError("simulated script install failure")
+
+    assert (bin_dir / "synlynk").read_text() == "#!/bin/sh\necho old\n"
