@@ -505,3 +505,15 @@ def test_synlynk_selftest_live_clobbers_real_repo(monkeypatch, tmp_path):
     ).stdout.strip() == ""
     assert (real_repo / "project-docs" / "todo.md").read_text() == todo_before
     assert (real_repo / "GEMINI.md").read_text() == gemini_before
+
+
+def test_live_selftest_scenario_coverage_gap_init(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = {"command": "init"}
+
+    result = selftest_mod.SELFTEST_SCENARIOS["init"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "without clobbering existing files" in result.detail
