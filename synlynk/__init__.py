@@ -1385,6 +1385,7 @@ def load_config() -> dict:
     defaults = {
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
         "watch_interval_seconds": 30,
         "auto_launch_after_wizard": True,
         "dispatch_mode": "daily-grind",
@@ -1419,6 +1420,9 @@ def load_config() -> dict:
         for key, val in defaults["budget"].items():
             if key not in config.get("budget", {}):
                 config.setdefault("budget", {})[key] = val
+        for key, val in defaults["dispatch"].items():
+            if key not in config.get("dispatch", {}):
+                config.setdefault("dispatch", {})[key] = val
         return config
     except (json.JSONDecodeError, IOError):
         return defaults
