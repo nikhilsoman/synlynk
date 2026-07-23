@@ -264,3 +264,78 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
             "agy", "review and merge PR #500", story_id="story-manual-1",
             context_mode="none", requires_gh_write=True,
         )
+
+
+def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="auto"
+    )
+
+    assert base_ref == "feat/example"
+
+
+def test_resolve_dispatch_base_ref_falls_back_to_mainline_on_main_branch(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kw):
+        if cmd[:2] == ["git", "fetch"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="no remote")
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", fake_run)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="auto"
+    )
+
+    assert base_ref == "main"
+
+
+def test_resolve_dispatch_base_ref_stacking_never_always_uses_mainline(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="never"
+    )
+
+    assert base_ref == "main"
+
+
+def test_resolve_dispatch_base_ref_stacking_always_errors_on_mainline(git_worktree_repo):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+    import pytest
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    with pytest.raises(RuntimeError, match="stacking is 'always'"):
+        dispatch_mod._resolve_dispatch_worktree_base_ref(
+            str(git_worktree_repo), stacking_mode="always"
+        )
+
+
+def test_resolve_dispatch_base_ref_explicit_base_wins(git_worktree_repo):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="auto", explicit_base="main"
+    )
+
+    assert base_ref == "main"
