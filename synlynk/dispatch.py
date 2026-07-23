@@ -460,7 +460,10 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         worktree_path: Optional[str] = None,
                         worktree_branch: Optional[str] = None,
                         status_label: Optional[str] = None,
-                        note: Optional[str] = None) -> str:
+                        note: Optional[str] = None,
+                        base_branch: Optional[str] = None,
+                        base_sha: Optional[str] = None,
+                        suite_result: Optional[dict] = None) -> str:
     """Formats the structured completion summary for a finished job."""
     files_touched = sorted(set(files_touched or []))
     story_label = story_id or "-"
@@ -469,6 +472,17 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
     worktree_line = ""
     note_line = f"note:     {note}\n" if note else ""
+    base_line = ""
+    if base_branch:
+        sha_label = f" @ {base_sha[:8]}" if base_sha else ""
+        base_line = f"base:     {base_branch}{sha_label}\n"
+    suite_line = ""
+    if suite_result:
+        suite_line = (
+            f"suite:    {suite_result.get('passed', 0)} passed, "
+            f"{suite_result.get('failed', 0)} failed, "
+            f"{suite_result.get('skipped', 0)} skipped\n"
+        )
     if worktree_path:
         branch_note = f" (branch: {worktree_branch})" if worktree_branch else ""
         worktree_line = f"worktree: {worktree_path}{branch_note}\n"
@@ -498,6 +512,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             f"agent:    {agent}   story: {story_label}\n"
             f"status:   {status_label}\n"
             f"{note_line}"
+            f"{base_line}"
+            f"{suite_line}"
             f"duration: {duration_label}\n"
             f"{render_task_fence(fence)}"
             f"{worktree_line}"
@@ -509,6 +525,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"agent:    {agent}   story: {story_label}\n"
         f"status:   {status_label}\n"
         f"{note_line}"
+        f"{base_line}"
+        f"{suite_line}"
         f"duration: {duration_label}\n"
         f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
         f"{worktree_line}"
@@ -524,13 +542,17 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
                        worktree_path: Optional[str] = None,
                        worktree_branch: Optional[str] = None,
                        status_label: Optional[str] = None,
-                       note: Optional[str] = None) -> str:
+                       note: Optional[str] = None,
+                       base_branch: Optional[str] = None,
+                       base_sha: Optional[str] = None,
+                       suite_result: Optional[dict] = None) -> str:
     """Writes a structured completion summary for a job and returns the text."""
     os.makedirs(".synlynk/logs", exist_ok=True)
     summary = _format_job_summary(
         job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
         cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch,
-        status_label=status_label, note=note
+        status_label=status_label, note=note, base_branch=base_branch, base_sha=base_sha,
+        suite_result=suite_result
     )
     summary_path = _job_summary_path(job_id)
     existing_summary = None

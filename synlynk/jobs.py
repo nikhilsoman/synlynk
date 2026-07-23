@@ -982,6 +982,9 @@ def _reconcile_jobs() -> None:
                 _pkg("_worktree_files_touched")(job.get("worktree_path")),
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
+                base_branch=job.get("base_branch"),
+                base_sha=job.get("base_sha"),
+                suite_result=job.get("suite_result"),
             )
             print(summary, end="")
             changed = True
@@ -1079,6 +1082,9 @@ def _reconcile_jobs() -> None:
                 )
             if job.get("status") == "unknown":
                 summary_status = "UNKNOWN (exit unknown)"
+            if job.get("status") == "completed":
+                _finalize_completed_worktree_job(job, git_state)
+                _apply_dispatch_gate(job)
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1093,11 +1099,11 @@ def _reconcile_jobs() -> None:
                 job.get("worktree_branch"),
                 status_label=summary_status,
                 note=summary_note,
+                base_branch=job.get("base_branch"),
+                base_sha=job.get("base_sha"),
+                suite_result=job.get("suite_result"),
             )
             print(summary, end="")
-            if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
-                _apply_dispatch_gate(job)
             changed = True
             continue
         try:
@@ -1259,6 +1265,9 @@ def _reconcile_jobs() -> None:
                 summary_status = "FAILED_UNVERIFIED (exit unknown)"
             elif job.get("status") == "unknown":
                 summary_status = "UNKNOWN (exit unknown)"
+            if job.get("status") == "completed":
+                _finalize_completed_worktree_job(job, git_state)
+                _apply_dispatch_gate(job)
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1273,12 +1282,11 @@ def _reconcile_jobs() -> None:
                 job.get("worktree_branch"),
                 status_label=summary_status,
                 note=summary_note,
+                base_branch=job.get("base_branch"),
+                base_sha=job.get("base_sha"),
+                suite_result=job.get("suite_result"),
             )
             print(summary, end="")
-
-            if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
-                _apply_dispatch_gate(job)
 
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.

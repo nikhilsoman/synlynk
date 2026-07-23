@@ -19,6 +19,28 @@ def test_format_job_summary_includes_watch_reminder():
     assert "$12.26" in summary
 
 
+def test_format_job_summary_includes_base_and_suite_result_when_present():
+    from synlynk.dispatch import _format_job_summary
+
+    summary = _format_job_summary(
+        "job-abc",
+        "codex",
+        "story-1",
+        0,
+        12.5,
+        100,
+        200,
+        0.01,
+        files_touched=["a.py"],
+        base_branch="feat/example",
+        base_sha="deadbeefcafe",
+        suite_result={"passed": 5, "failed": 0, "skipped": 1, "ran_at": "2026-07-23T00:00:00"},
+    )
+
+    assert "base:     feat/example @ deadbeef" in summary
+    assert "suite:    5 passed, 0 failed, 1 skipped" in summary
+
+
 def test_format_job_summary_falls_back_when_jobs_not_allowlisted(monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
