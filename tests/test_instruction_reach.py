@@ -20,6 +20,18 @@ def test_gemini_md_template_has_no_transition_note(tmp_path, monkeypatch):
     assert "gemini-2.x" not in templates["GEMINI.md"]
 
 
+def test_build_templates_includes_lifecycle_checkpoint_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk import _build_templates
+    templates = _build_templates()
+    for key in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"):
+        content = templates[key]
+        assert "## Lifecycle checkpoint directives" in content
+        assert "synlynk goal create" in content
+        # Checkpoint section must come after the trigger registry, in the same block
+        assert content.index("## Trigger registry") < content.index("## Lifecycle checkpoint directives")
+
+
 def test_extract_synlynk_section_html_markers():
     from synlynk import _extract_synlynk_section
     content = 'Before\n<!-- synlynk:start version="0.4.1" tool="claude" -->\nmy block\n<!-- synlynk:end -->\nAfter'

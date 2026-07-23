@@ -67,6 +67,27 @@ def test_tier2_fixture_gets_tier0_through_tier2_phrases():
     assert "rate this agent's output" not in section
 
 
+def test_render_lifecycle_checkpoint_section_returns_fixed_block():
+    from synlynk.instructions import render_lifecycle_checkpoint_section
+
+    section = render_lifecycle_checkpoint_section()
+    assert section == (
+        "## Lifecycle checkpoint directives\n"
+        "\n"
+        "- When a brainstorming session (per the brainstorming skill) concludes with\n"
+        "  an approved, written spec, and no active GOVERNS goal is linked to the\n"
+        "  work: suggest `synlynk goal create --outcome <spec's one-line thesis>\n"
+        "  --criterion <spec's stated success condition>` before transitioning to\n"
+        "  implementation planning. This is a suggestion, not a gate — proceed if\n"
+        "  the user declines or the work is explicitly one-shot/maintenance.\n"
+        "- When an implementation plan (per the writing-plans skill) is approved\n"
+        "  and about to enter execution, and the plan's spec has no linked goal:\n"
+        "  same suggestion, offered once.\n"
+        "- Do not suggest goal creation at any other point in a session (not on\n"
+        "  ordinary command usage, not on phrase matches, not mid-brainstorm)."
+    )
+
+
 def test_instructions_status_pre_commit_exits_on_drift(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()

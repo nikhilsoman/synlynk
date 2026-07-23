@@ -46,6 +46,33 @@ def render_trigger_phrase_section(current_tier: int) -> str:
         lines.append(f"- {phrases} -> `synlynk {entry['command']}`")
     return "\n".join(lines)
 
+
+def render_lifecycle_checkpoint_section() -> str:
+    """Render the fixed GOVERNS-lifecycle checkpoint subsection injected into
+    instruction files, directly beneath the trigger registry.
+
+    Unlike render_trigger_phrase_section, this is not derived from
+    COMMAND_TAXONOMY — it's a small, hand-written set of skill-completion
+    checkpoints (brainstorming-skill and writing-plans-skill conclusion),
+    not a per-command phrase-matching registry.
+    """
+    return (
+        "## Lifecycle checkpoint directives\n"
+        "\n"
+        "- When a brainstorming session (per the brainstorming skill) concludes with\n"
+        "  an approved, written spec, and no active GOVERNS goal is linked to the\n"
+        "  work: suggest `synlynk goal create --outcome <spec's one-line thesis>\n"
+        "  --criterion <spec's stated success condition>` before transitioning to\n"
+        "  implementation planning. This is a suggestion, not a gate — proceed if\n"
+        "  the user declines or the work is explicitly one-shot/maintenance.\n"
+        "- When an implementation plan (per the writing-plans skill) is approved\n"
+        "  and about to enter execution, and the plan's spec has no linked goal:\n"
+        "  same suggestion, offered once.\n"
+        "- Do not suggest goal creation at any other point in a session (not on\n"
+        "  ordinary command usage, not on phrase matches, not mid-brainstorm)."
+    )
+
+
 def _generate_ai_context_files(arch_context: str, git_summary: str) -> None:
     """Appends a context snapshot section to CLAUDE.md, GEMINI.md, AGENTS.md.
     Creates files if absent. Never overwrites existing content."""
@@ -407,6 +434,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
     _pid = project_id or "TODO: PROJECT_ID"
     _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
     _trigger_registry_section = render_trigger_phrase_section(_current_trigger_registry_tier())
+    _lifecycle_checkpoint_section = render_lifecycle_checkpoint_section()
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
@@ -526,7 +554,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _gemini_md = (
@@ -551,7 +580,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _agents_md = (
@@ -576,7 +606,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _grok_md = (
@@ -601,7 +632,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _ai_instructions_md = (
@@ -614,7 +646,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _ghp_block + "\n"
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     return {
