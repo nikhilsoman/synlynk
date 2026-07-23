@@ -225,3 +225,65 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     assert reconciled["status"] == "permission_denied"
     assert "PERMISSION_DENIED" in out
     assert "OK (exit 0)" not in out
+
+
+def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    config_path = ".synlynk/config.json"
+    import json
+    with open(config_path, "w") as f:
+        json.dump({"dispatch": {"gate_suite_cmd": "pytest tests/ -q"}}, f)
+
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: {
+            "load_config": sl.load_config,
+            "_run_dispatch_gate": lambda job, cmd: {"passed": 3, "failed": 2, "skipped": 0},
+        }.get(name, default),
+    )
+
+    job = {"id": "job-gate1", "status": "completed", "worktree_path": "worktrees/job-gate1"}
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "needs_fix"
+    assert job["suite_result"]["failed"] == 2
+
+
+def test_apply_dispatch_gate_leaves_status_completed_when_no_gate_configured(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {"load_config": sl.load_config}.get(name, default))
+
+    job = {"id": "job-gate2", "status": "completed", "worktree_path": "worktrees/job-gate2"}
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "completed"
+    assert job.get("suite_result") is None
+
+
+def test_apply_dispatch_gate_flags_stale_base(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: {
+            "load_config": sl.load_config,
+            "_check_dispatch_base_still_fresh": lambda job: False,
+        }.get(name, default),
+    )
+
+    job = {
+        "id": "job-stale1", "status": "completed",
+        "worktree_path": "worktrees/job-stale1",
+        "base_branch": "feat/example", "base_sha": "abc123",
+    }
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "stale_base"

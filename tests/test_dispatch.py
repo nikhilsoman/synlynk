@@ -407,3 +407,72 @@ def test_resolve_dispatch_base_ref_explicit_base_wins(git_worktree_repo):
     )
 
     assert base_ref == "main"
+
+
+def test_run_dispatch_gate_parses_pytest_summary_and_flags_failures(tmp_path, monkeypatch):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeResult:
+        returncode = 1
+        stdout = "2 passed, 1 failed, 1 skipped in 0.05s"
+        stderr = ""
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", lambda *a, **kw: FakeResult())
+
+    job = {"worktree_path": str(tmp_path)}
+    result = dispatch_mod._run_dispatch_gate(job, "pytest tests/ -q")
+
+    assert result == {"passed": 2, "failed": 1, "skipped": 1}
+
+
+def test_run_dispatch_gate_returns_none_when_no_gate_cmd_configured(tmp_path):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    job = {"worktree_path": str(tmp_path)}
+    result = dispatch_mod._run_dispatch_gate(job, "")
+
+    assert result is None
+
+
+def test_check_dispatch_base_still_fresh_true_when_sha_matches_current_tip(git_worktree_repo):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+    tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    job = {"base_branch": "main", "base_sha": tip}
+    assert dispatch_mod._check_dispatch_base_still_fresh(job, repo_path=str(git_worktree_repo)) is True
+
+
+def test_check_dispatch_base_still_fresh_false_when_branch_advanced(git_worktree_repo):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+    old_tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    (git_worktree_repo / "new_file.txt").write_text("more work\n")
+    subprocess.run(["git", "add", "."], cwd=git_worktree_repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "advance branch"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    job = {"base_branch": "main", "base_sha": old_tip}
+    assert dispatch_mod._check_dispatch_base_still_fresh(job, repo_path=str(git_worktree_repo)) is False
+
+
+def test_check_dispatch_base_still_fresh_true_when_no_base_recorded():
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    job = {"base_branch": None, "base_sha": None}
+    assert dispatch_mod._check_dispatch_base_still_fresh(job) is True

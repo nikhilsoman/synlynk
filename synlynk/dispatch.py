@@ -376,6 +376,72 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
     return sorted(touched)
 
 
+def _run_dispatch_gate(job: dict, gate_suite_cmd: str) -> Optional[dict]:
+    """Runs the configured test-suite command inside a job's worktree.
+
+    Returns {"passed": int, "failed": int, "skipped": int} parsed from the
+    command's combined output, or None if no gate command is configured or
+    the worktree is unavailable.
+    """
+    if not gate_suite_cmd:
+        return None
+    worktree_path = job.get("worktree_path")
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return None
+
+    try:
+        result = subprocess.run(
+            gate_suite_cmd,
+            shell=True,
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    combined = (result.stdout or "") + "\n" + (result.stderr or "")
+
+    def _count(pattern: str) -> int:
+        match = re.search(pattern, combined)
+        return int(match.group(1)) if match else 0
+
+    return {
+        "passed": _count(r"(\d+)\s+passed"),
+        "failed": _count(r"(\d+)\s+failed"),
+        "skipped": _count(r"(\d+)\s+skipped"),
+    }
+
+
+def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None) -> bool:
+    """Returns False if job base_branch has moved past job base_sha since dispatch.
+
+    True (fresh) when no base was recorded (legacy jobs, or stacking: never).
+    """
+    base_branch = job.get("base_branch")
+    base_sha = job.get("base_sha")
+    if not base_branch or not base_sha:
+        return True
+
+    repo_path = repo_path or os.getcwd()
+    try:
+        tip_result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", base_branch],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except Exception:
+        return True
+
+    current_tip = (tip_result.stdout or "").strip()
+    if tip_result.returncode != 0 or not current_tip:
+        return True
+
+    return current_tip == base_sha
+
+
 def _job_summary_path(job_id: str) -> str:
     return os.path.join(".synlynk/logs", f"{job_id}.summary")
 
