@@ -434,6 +434,7 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
     _pid = project_id or "TODO: PROJECT_ID"
     _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
     _trigger_registry_section = render_trigger_phrase_section(_current_trigger_registry_tier())
+    _lifecycle_checkpoint_section = render_lifecycle_checkpoint_section()
     _session_protocol = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
@@ -553,7 +554,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _gemini_md = (
@@ -578,7 +580,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _agents_md = (
@@ -603,7 +606,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _grok_md = (
@@ -628,7 +632,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     _ai_instructions_md = (
@@ -641,7 +646,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         + _ghp_block + "\n"
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
-        + _trigger_registry_section
+        + _trigger_registry_section + "\n\n"
+        + _lifecycle_checkpoint_section
     )
 
     return {
