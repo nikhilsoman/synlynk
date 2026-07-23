@@ -536,10 +536,45 @@ def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     return worktree_path, worktree_branch
 
 
-def _resolve_dispatch_worktree_base_ref(repo_path: Optional[str]) -> str:
-    """Resolve the freshest mainline ref available for a new dispatch worktree."""
+def _resolve_dispatch_worktree_base_ref(
+    repo_path: Optional[str],
+    stacking_mode: str = "auto",
+    explicit_base: Optional[str] = None,
+) -> str:
+    """Resolve the base ref a new dispatch worktree should be anchored to.
+
+    stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
+    "always" (stack on current branch, error on mainline/detached HEAD),
+    "never" (always mainline — legacy behavior)
+    """
+    if explicit_base:
+        return explicit_base
+
     if not repo_path or not os.path.isdir(repo_path):
         return "HEAD"
+
+    if stacking_mode != "never":
+        try:
+            branch_result = subprocess.run(
+                ["git", "-C", repo_path, "branch", "--show-current"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception:
+            branch_result = None
+        current_branch = (
+            (branch_result.stdout or "").strip()
+            if branch_result and branch_result.returncode == 0
+            else ""
+        )
+        if current_branch and current_branch not in ("main", "master"):
+            return current_branch
+        if stacking_mode == "always":
+            raise RuntimeError(
+                f"dispatch stacking is 'always' but current branch is "
+                f"'{current_branch or '(detached HEAD)'}' — refusing to stack on mainline"
+            )
 
     for candidate in ("main", "master"):
         try:
@@ -618,7 +653,9 @@ def _create_job_worktree(job_id: str, agent: str) -> str:
     """Create the isolated git worktree for a dispatched job."""
     worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
     os.makedirs(os.path.dirname(worktree_path), exist_ok=True)
-    base_ref = _resolve_dispatch_worktree_base_ref(os.getcwd())
+    base_ref = _resolve_dispatch_worktree_base_ref(
+        os.getcwd(), stacking_mode="auto"
+    )
     worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
     if base_ref and base_ref != "HEAD":
         worktree_cmd.append(base_ref)

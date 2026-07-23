@@ -308,7 +308,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
     assert job_a["worktree_path"] != job_b["worktree_path"]
     assert spawned == [job_a["worktree_path"], job_b["worktree_path"]]
     assert len({job_a["worktree_branch"], job_b["worktree_branch"]}) == 2
-    assert len(created) == 10
+    assert len(created) == 12
 
 
 def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(git_worktree_repo, monkeypatch):
