@@ -447,6 +447,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Bypass harness preflight checks"
     )
     dispatch_parser.add_argument(
+        "--base", default=None,
+        help="Explicit base branch/ref to anchor the job worktree to (overrides auto-stacking)"
+    )
+    dispatch_parser.add_argument(
         "--grant", action="append", default=[],
         help="Add a permission for this dispatch (repeatable)"
     )
@@ -840,6 +844,7 @@ def main() -> None:
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
+                                 base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
                                  issue=getattr(args, "issue", None))

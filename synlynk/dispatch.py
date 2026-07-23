@@ -649,15 +649,37 @@ def _assert_dispatch_worktree_base_is_fresh(worktree_path: str, base_ref: str) -
     print(f"  worktree base verified against {base_ref} @ {ref_commit}")
 
 
-def _create_job_worktree(job_id: str, agent: str) -> str:
-    """Create the isolated git worktree for a dispatched job."""
+def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) -> dict:
+    """Create the isolated git worktree for a dispatched job.
+
+    Returns {"path": str, "branch": str, "base_branch": str, "base_sha": str}
+    """
     worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
     os.makedirs(os.path.dirname(worktree_path), exist_ok=True)
+
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    stacking_mode = (config.get("dispatch") or {}).get("stacking", "auto")
+
     base_ref = _resolve_dispatch_worktree_base_ref(
-        os.getcwd(), stacking_mode="auto"
+        os.getcwd(), stacking_mode=stacking_mode, explicit_base=base
     )
-    worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
+
+    base_sha = None
     if base_ref and base_ref != "HEAD":
+        sha_result = subprocess.run(
+            ["git", "-C", os.getcwd(), "rev-parse", base_ref],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if sha_result.returncode == 0:
+            base_sha = (sha_result.stdout or "").strip()
+
+    worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
+    if base_sha:
+        worktree_cmd.append(base_sha)
+    elif base_ref and base_ref != "HEAD":
         worktree_cmd.append(base_ref)
     result = subprocess.run(
         worktree_cmd,
@@ -676,7 +698,12 @@ def _create_job_worktree(job_id: str, agent: str) -> str:
             + (f"\n{details}" if details else "")
         )
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
-    return worktree_path
+    return {
+        "path": worktree_path,
+        "branch": worktree_branch,
+        "base_branch": base_ref,
+        "base_sha": base_sha,
+    }
 
 
 def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
@@ -853,7 +880,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    grants: list = None,
                    revokes: list = None,
                    job_id: str = None,
-                   issue: int = None) -> dict:
+                   issue: int = None,
+                   base: str = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     dispatch_time = None
     if not story_id:
@@ -989,8 +1017,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         job_seed = dispatch_time if dispatch_time is not None else time.time()
         job_id = "job-" + _hashlib.md5(f"{agent}{task}{job_seed}".encode()).hexdigest()[:8]
 
-    worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
-    worktree_path = _create_job_worktree(job_id, agent)
+    _unused_path, worktree_branch = _job_worktree_details(job_id, agent)
+    worktree_info = _create_job_worktree(job_id, agent, base=base)
+    worktree_path = worktree_info["path"]
+    base_branch = worktree_info["base_branch"]
+    base_sha = worktree_info["base_sha"]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
@@ -1174,6 +1205,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "context_file": context_file if context_mode != "none" else "",
         "worktree_path": worktree_path,
         "worktree_branch": worktree_branch,
+        "base_branch": base_branch,
+        "base_sha": base_sha,
+        "suite_result": None,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "ended_at": None,
         "status": "running",

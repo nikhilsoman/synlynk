@@ -179,6 +179,7 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_
     expected_job_id = _job_id("codex", "fix bug", 1_725_000_000.123)
     expected_branch = f"dispatch/codex/{expected_job_id}"
     expected_worktree = os.path.join("worktrees", expected_job_id)
+    expected_base_sha = "abc123"
 
     assert ["git", "fetch", "origin", "main"] in [cmd for cmd, _ in captured_run]
     assert [
@@ -188,7 +189,7 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_
         expected_worktree,
         "-b",
         expected_branch,
-        "origin/main",
+        expected_base_sha,
     ] in [cmd for cmd, _ in captured_run]
     worktree_run_kwargs = next(kwargs for cmd, kwargs in captured_run if cmd[:3] == ["git", "worktree", "add"])
     assert worktree_run_kwargs["cwd"] == os.getcwd()
@@ -308,7 +309,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
     assert job_a["worktree_path"] != job_b["worktree_path"]
     assert spawned == [job_a["worktree_path"], job_b["worktree_path"]]
     assert len({job_a["worktree_branch"], job_b["worktree_branch"]}) == 2
-    assert len(created) == 12
+    assert len(created) == 14
 
 
 def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(git_worktree_repo, monkeypatch):

@@ -187,6 +187,74 @@ def test_cli_dispatch_passes_requires_gh_write_flag(project_dir, monkeypatch):
     assert captured["requires_gh_write"] is True
 
 
+def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+    import os as _os
+
+    monkeypatch.chdir(git_worktree_repo)
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+    tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    result = dispatch_mod._create_job_worktree("job-test1", "codex")
+
+    assert result["path"] == _os.path.join("worktrees", "job-test1")
+    assert result["base_branch"] == "feat/example"
+    assert result["base_sha"] == tip
+    assert _os.path.isdir(result["path"])
+
+
+def test_dispatch_agent_records_base_branch_and_sha_on_job(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 4242
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "reasons": []})
+    monkeypatch.setattr(
+        dispatch_mod, "_create_job_worktree",
+        lambda job_id, agent, base=None: {
+            "path": "worktrees/job-fake",
+            "branch": f"dispatch/{agent}/job-fake",
+            "base_branch": base or "feat/example",
+            "base_sha": "deadbeef",
+        },
+    )
+
+    job = dispatch_mod.dispatch_agent("codex", "do the thing", force_agent=True, base="feat/example")
+
+    assert job["base_branch"] == "feat/example"
+    assert job["base_sha"] == "deadbeef"
+    assert job["suite_result"] is None
+
+
+def test_cli_dispatch_passes_base_flag(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch(agent, task, **kwargs):
+        captured.update(kwargs)
+        return {"id": "job-x", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "do it", "--base", "feat/example", "--force-agent"],
+    )
+
+    cli_mod.main()
+
+    assert captured["base"] == "feat/example"
+
+
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
