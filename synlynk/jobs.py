@@ -435,6 +435,42 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
             conn.close()
 
 
+def _apply_dispatch_gate(job: dict) -> None:
+    """Runs the configured gate suite in job's worktree; downgrades status on failure.
+
+    Also flags STALE_BASE when the job's stacked base branch has advanced since dispatch.
+    """
+    if job.get("status") != "completed":
+        return
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    gate_suite_cmd = (config.get("dispatch") or {}).get("gate_suite_cmd", "")
+    if gate_suite_cmd:
+        run_gate = _pkg("_run_dispatch_gate")
+        if run_gate:
+            suite_result = run_gate(job, gate_suite_cmd)
+            if suite_result is not None:
+                suite_result["ran_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                job["suite_result"] = suite_result
+                if suite_result.get("failed", 0) > 0:
+                    job["status"] = "needs_fix"
+                    print(
+                        f"  ⚠ gate suite failed for job {job.get('id', '')}: "
+                        f"{suite_result['failed']} failed, {suite_result['passed']} passed "
+                        f"— status downgraded to needs_fix"
+                    )
+
+    if job.get("status") == "completed":
+        check_fresh = _pkg("_check_dispatch_base_still_fresh")
+        if check_fresh and not check_fresh(job):
+            job["status"] = "stale_base"
+            print(
+                f"  ⚠ job {job.get('id', '')}'s base branch '{job.get('base_branch')}' "
+                f"has advanced since dispatch — status set to stale_base "
+                f"(re-dispatch fresh rather than force-merging)"
+            )
+
+
 def _job_cost_usd(agent: str, in_tokens: int, out_tokens: int, model_version: Optional[str] = None) -> float:
     rates = _pkg("_model_rate_for_version")(model_version or "unknown", agent=agent)
     return (
@@ -946,6 +982,9 @@ def _reconcile_jobs() -> None:
                 _pkg("_worktree_files_touched")(job.get("worktree_path")),
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
+                base_branch=job.get("base_branch"),
+                base_sha=job.get("base_sha"),
+                suite_result=job.get("suite_result"),
             )
             print(summary, end="")
             changed = True
@@ -1043,6 +1082,9 @@ def _reconcile_jobs() -> None:
                 )
             if job.get("status") == "unknown":
                 summary_status = "UNKNOWN (exit unknown)"
+            if job.get("status") == "completed":
+                _finalize_completed_worktree_job(job, git_state)
+                _apply_dispatch_gate(job)
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1057,10 +1099,11 @@ def _reconcile_jobs() -> None:
                 job.get("worktree_branch"),
                 status_label=summary_status,
                 note=summary_note,
+                base_branch=job.get("base_branch"),
+                base_sha=job.get("base_sha"),
+                suite_result=job.get("suite_result"),
             )
             print(summary, end="")
-            if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
             changed = True
             continue
         try:
@@ -1222,6 +1265,9 @@ def _reconcile_jobs() -> None:
                 summary_status = "FAILED_UNVERIFIED (exit unknown)"
             elif job.get("status") == "unknown":
                 summary_status = "UNKNOWN (exit unknown)"
+            if job.get("status") == "completed":
+                _finalize_completed_worktree_job(job, git_state)
+                _apply_dispatch_gate(job)
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1236,11 +1282,11 @@ def _reconcile_jobs() -> None:
                 job.get("worktree_branch"),
                 status_label=summary_status,
                 note=summary_note,
+                base_branch=job.get("base_branch"),
+                base_sha=job.get("base_sha"),
+                suite_result=job.get("suite_result"),
             )
             print(summary, end="")
-
-            if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
 
         except PermissionError:
             # Process exists but is owned by another user — keep status as running.
