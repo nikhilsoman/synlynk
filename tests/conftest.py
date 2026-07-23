@@ -35,7 +35,12 @@ def stub_dispatch_worktree(monkeypatch, request):
     monkeypatch.setattr(
         dispatch_mod,
         "_create_job_worktree",
-        lambda job_id, agent: os.path.join("worktrees", job_id),
+        lambda job_id, agent, base=None: {
+            "path": os.path.join("worktrees", job_id),
+            "branch": f"dispatch/{agent}/{job_id}",
+            "base_branch": None,
+            "base_sha": None,
+        },
     )
     monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path: [])
