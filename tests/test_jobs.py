@@ -287,3 +287,40 @@ def test_apply_dispatch_gate_flags_stale_base(project_dir, monkeypatch):
     jobs_mod._apply_dispatch_gate(job)
 
     assert job["status"] == "stale_base"
+
+
+def test_apply_dispatch_gate_end_to_end_with_real_failing_suite(git_worktree_repo, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk.dispatch as dispatch_mod
+    import synlynk as sl
+    import json
+    import os
+    import subprocess
+
+    tests_dir = os.path.join(str(git_worktree_repo), "tests")
+    os.makedirs(tests_dir, exist_ok=True)
+    with open(os.path.join(tests_dir, "test_deliberate_failure.py"), "w") as f:
+        f.write("def test_deliberately_fails():\n    assert 1 == 2\n")
+    subprocess.run(["git", "add", "."], cwd=git_worktree_repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed failing test"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    config_path = os.path.join(str(git_worktree_repo), ".synlynk", "config.json")
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    with open(config_path, "w") as f:
+        json.dump({"dispatch": {"gate_suite_cmd": "python3 -m pytest tests/ -q"}}, f)
+
+    monkeypatch.chdir(git_worktree_repo)
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: {
+            "load_config": sl.load_config,
+            "_run_dispatch_gate": dispatch_mod._run_dispatch_gate,
+        }.get(name, default),
+    )
+
+    job = {"id": "job-realgate", "status": "completed", "worktree_path": str(git_worktree_repo)}
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "needs_fix"
+    assert job["suite_result"]["failed"] >= 1
