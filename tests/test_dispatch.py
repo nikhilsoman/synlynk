@@ -492,6 +492,63 @@ def test_check_dispatch_base_still_fresh_false_when_branch_advanced(git_worktree
     assert dispatch_mod._check_dispatch_base_still_fresh(job, repo_path=str(git_worktree_repo)) is False
 
 
+def test_sequential_dispatch_jobs_stack_with_zero_conflicts(git_worktree_repo, monkeypatch, tmp_path):
+    """Simulates Task N and Task N+1 of a plan: job2 should be anchored to
+    the tip left behind after job1's commit is merged, so merging job2
+    produces no conflicts even though both jobs touch the same file
+    """
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    monkeypatch.chdir(git_worktree_repo)
+
+    # --- Job 1 ---
+    worktree1 = dispatch_mod._create_job_worktree("job-seq1", "codex")
+    shared_file = os_path_join(worktree1["path"], "shared.py")
+    with open(shared_file, "w") as f:
+        f.write("value = 1\n")
+    subprocess.run(["git", "add", "."], cwd=worktree1["path"], capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "job1: set value=1"], cwd=worktree1["path"], capture_output=True, check=True)
+
+    # Simulate the reviewer merging job1's commit back onto the feature branch
+    subprocess.run(["git", "checkout", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+    merge1 = subprocess.run(
+        ["git", "merge", "--no-ff", "-m", "merge job1", worktree1["branch"]],
+        cwd=git_worktree_repo, capture_output=True, text=True,
+    )
+    assert merge1.returncode == 0, merge1.stderr
+
+    # --- Job 2, dispatched after job1 merged ---
+    worktree2 = dispatch_mod._create_job_worktree("job-seq2", "codex")
+
+    assert worktree2["base_branch"] == "feat/example"
+    new_tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "feat/example"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert worktree2["base_sha"] == new_tip
+
+    with open(os_path_join(worktree2["path"], "shared.py"), "w") as f:
+        f.write("value = 1\nextra = 2\n")
+    subprocess.run(["git", "add", "."], cwd=worktree2["path"], capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "job2: add extra=2"], cwd=worktree2["path"], capture_output=True, check=True)
+
+    merge2 = subprocess.run(
+        ["git", "merge", "--no-ff", "-m", "merge job2", worktree2["branch"]],
+        cwd=git_worktree_repo, capture_output=True, text=True,
+    )
+    assert merge2.returncode == 0, merge2.stderr
+    assert "CONFLICT" not in (merge2.stdout + merge2.stderr)
+
+
+def os_path_join(*parts):
+    import os
+    return os.path.join(*parts)
+
+
 def test_check_dispatch_base_still_fresh_true_when_no_base_recorded():
     import synlynk
     import synlynk.dispatch as dispatch_mod
