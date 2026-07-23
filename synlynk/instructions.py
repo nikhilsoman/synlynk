@@ -46,6 +46,33 @@ def render_trigger_phrase_section(current_tier: int) -> str:
         lines.append(f"- {phrases} -> `synlynk {entry['command']}`")
     return "\n".join(lines)
 
+
+def render_lifecycle_checkpoint_section() -> str:
+    """Render the fixed GOVERNS-lifecycle checkpoint subsection injected into
+    instruction files, directly beneath the trigger registry.
+
+    Unlike render_trigger_phrase_section, this is not derived from
+    COMMAND_TAXONOMY — it's a small, hand-written set of skill-completion
+    checkpoints (brainstorming-skill and writing-plans-skill conclusion),
+    not a per-command phrase-matching registry.
+    """
+    return (
+        "## Lifecycle checkpoint directives\n"
+        "\n"
+        "- When a brainstorming session (per the brainstorming skill) concludes with\n"
+        "  an approved, written spec, and no active GOVERNS goal is linked to the\n"
+        "  work: suggest `synlynk goal create --outcome <spec's one-line thesis>\n"
+        "  --criterion <spec's stated success condition>` before transitioning to\n"
+        "  implementation planning. This is a suggestion, not a gate — proceed if\n"
+        "  the user declines or the work is explicitly one-shot/maintenance.\n"
+        "- When an implementation plan (per the writing-plans skill) is approved\n"
+        "  and about to enter execution, and the plan's spec has no linked goal:\n"
+        "  same suggestion, offered once.\n"
+        "- Do not suggest goal creation at any other point in a session (not on\n"
+        "  ordinary command usage, not on phrase matches, not mid-brainstorm)."
+    )
+
+
 def _generate_ai_context_files(arch_context: str, git_summary: str) -> None:
     """Appends a context snapshot section to CLAUDE.md, GEMINI.md, AGENTS.md.
     Creates files if absent. Never overwrites existing content."""
