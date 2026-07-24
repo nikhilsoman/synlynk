@@ -29,3 +29,10 @@
   - Supports zoom-in and zoom-out operations on the SVG canvas.
 - Added comprehensive unit tests in `tests/test_viz.py` for both setup-prompt and configured states.
 - Verified successful cache generation with `python3 bin/synlynk.py viz --generate`.
+
+## 2026-07-24 — Adhoc Task: REPRO_TEST.txt Creation
+
+### Shipped
+- Created `REPRO_TEST.txt` at repo root containing `agy-repro-ok`.
+- Verified test suite status.
+
