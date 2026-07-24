@@ -196,3 +196,50 @@ def test_rollback_checkpoint_pops_stash_on_success(tmp_path, monkeypatch):
     assert untracked.read_text() == "original memory\n"
     listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
     assert listing.stdout.strip() == ""
+
+
+def test_cmd_rollback_last_restores_and_archives(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+
+    with rollback.rollback_checkpoint("init", untracked_paths=[]):
+        tracked.write_text("v2\n")
+        subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-m", "unwanted change", "-q"], cwd=tmp_path, check=True)
+
+    assert tracked.read_text() == "v2\n"
+
+    rollback.cmd_rollback(last=True)
+
+    assert tracked.read_text() == "v1\n"
+    assert not os.path.exists(rollback.MANIFEST_PATH)
+
+
+def test_cmd_rollback_clear_discards_without_restoring(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+
+    with rollback.rollback_checkpoint("init", untracked_paths=[]):
+        pass
+
+    assert os.path.exists(rollback.MANIFEST_PATH)
+    rollback.cmd_rollback(clear=True)
+    assert not os.path.exists(rollback.MANIFEST_PATH)
+    archived = os.listdir(rollback.ARCHIVE_DIR)
+    assert len(archived) == 1
+
+
+def test_cmd_rollback_no_manifest_prints_message(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rollback.cmd_rollback(last=True)
+    captured = capsys.readouterr()
+    assert "no rollback checkpoint" in captured.out.lower()

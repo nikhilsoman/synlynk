@@ -236,3 +236,19 @@ def rollback_checkpoint_upgrade(current_version: str, install_type: str):
     except BaseException:
         restore_leg2(manifest)
         raise
+
+
+def cmd_rollback(last: bool = False, op_id: Optional[str] = None, clear: bool = False) -> None:
+    manifest = _read_manifest(op_id=op_id) if op_id else _read_manifest()
+    if manifest is None:
+        print("  No rollback checkpoint found for this session.")
+        return
+    if clear:
+        _archive_manifest(manifest)
+        print(f"  ✓ Cleared checkpoint {manifest['op_id']} ({manifest['op_type']}) without restoring")
+        return
+    if manifest["op_type"] in ("init", "migrate"):
+        restore_leg1(manifest)
+    else:
+        restore_leg2(manifest)
+    print(f"  ✓ Rolled back {manifest['op_type']} checkpoint {manifest['op_id']}")
