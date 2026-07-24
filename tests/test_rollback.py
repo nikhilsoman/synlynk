@@ -162,3 +162,37 @@ def test_rollback_checkpoint_upgrade_script_restores_bin_and_lib(tmp_path, monke
             raise RuntimeError("simulated script install failure")
 
     assert (bin_dir / "synlynk").read_text() == "#!/bin/sh\necho old\n"
+
+
+def test_git_head_sha_returns_none_when_subprocess_run_returns_none(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+    assert rollback._git_head_sha() is None
+
+
+def test_git_dirty_returns_false_when_subprocess_run_returns_none(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: None)
+    assert rollback._git_dirty() is False
+
+
+def test_rollback_checkpoint_pops_stash_on_success(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], check=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], check=True)
+    (tmp_path / "committed.txt").write_text("v1\n")
+    subprocess.run(["git", "add", "committed.txt"], check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], check=True)
+
+    # Simulate a dirty tree with an untracked file present before the op starts,
+    # mirroring the live-selftest migrate workspace scenario.
+    untracked = tmp_path / "project-docs" / "memory.md"
+    untracked.parent.mkdir(parents=True)
+    untracked.write_text("original memory\n")
+
+    with rollback.rollback_checkpoint("migrate", untracked_paths=[]):
+        pass
+
+    assert untracked.exists()
+    assert untracked.read_text() == "original memory\n"
+    listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
+    assert listing.stdout.strip() == ""

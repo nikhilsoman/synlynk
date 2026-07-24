@@ -1247,8 +1247,12 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
             "migrate",
             untracked_paths=[
                 os.path.join(".synlynk", "state.db"),
+                os.path.join(".synlynk", "state.db-wal"),
+                os.path.join(".synlynk", "state.db-shm"),
+                os.path.join(".synlynk", "state.db-journal"),
                 backup_dir,
                 sentinel,
+                docs_dir,
             ],
         ):
             print("  ▶ Importing flat files → state.db ...")

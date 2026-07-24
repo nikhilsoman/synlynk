@@ -95,14 +95,32 @@ def _archive_manifest(manifest: dict) -> None:
 
 def _git_head_sha() -> Optional[str]:
     result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
-    if result.returncode != 0:
+    if result is None or result.returncode != 0:
         return None
     return result.stdout.strip()
 
 
 def _git_dirty() -> bool:
     result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+    if result is None:
+        return False
     return bool(result.stdout.strip())
+
+
+def _pop_stash(stash_ref: str) -> None:
+    listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
+    if listing is None:
+        return
+    for line in listing.stdout.splitlines():
+        if stash_ref in line:
+            stash_id = line.split(":", 1)[0]
+            popped = subprocess.run(["git", "stash", "pop", stash_id])
+            if popped is not None and popped.returncode != 0:
+                print(
+                    f"  ⚠ git stash pop failed for {stash_id} — resolve conflicts "
+                    f"manually, then run: git stash drop {stash_id}"
+                )
+            break
 
 
 def restore_leg1(manifest: dict) -> None:
@@ -111,17 +129,7 @@ def restore_leg1(manifest: dict) -> None:
         subprocess.run(["git", "reset", "--hard", sha], check=True)
     stash_ref = manifest.get("stash_ref")
     if stash_ref:
-        listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
-        for line in listing.stdout.splitlines():
-            if stash_ref in line:
-                stash_id = line.split(":", 1)[0]
-                popped = subprocess.run(["git", "stash", "pop", stash_id])
-                if popped.returncode != 0:
-                    print(
-                        f"  ⚠ git stash pop failed for {stash_id} — resolve conflicts "
-                        f"manually, then run: git stash drop {stash_id}"
-                    )
-                break
+        _pop_stash(stash_ref)
     if manifest.get("backup_dir"):
         _restore_paths(manifest["backup_dir"], manifest.get("untracked_paths", []))
     _archive_manifest(manifest)
@@ -135,6 +143,10 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
     untracked_paths before yielding.
     On any exception raised inside the `with` block, restores the repo and
     untracked paths to their pre-op state, then re-raises.
+    On success, pops the auto-stash back (if one was created) so a dirty
+    pre-op working tree is left exactly as it was. The manifest is left at
+    MANIFEST_PATH (not archived) so `synlynk rollback --last` can still act
+    on it.
     """
     untracked_paths = untracked_paths or []
     op_id = _new_op_id()
@@ -142,7 +154,15 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
     stash_ref = None
     if _git_dirty():
         stash_ref = f"synlynk-rollback-{op_id}"
-        subprocess.run(["git", "stash", "push", "-u", "-m", stash_ref], check=True)
+        # untracked_paths are the op's own outputs (already covered by the
+        # _backup_paths/_restore_paths mechanism above) — exclude them from
+        # the auto-stash so popping the stash back on success doesn't clobber
+        # what the op just wrote.
+        exclude_pathspecs = [f":!{p}" for p in untracked_paths]
+        subprocess.run(
+            ["git", "stash", "push", "-u", "-m", stash_ref, "--", ".", *exclude_pathspecs],
+            check=True,
+        )
     checkpoint_sha = _git_head_sha()
     manifest = {
         "op_id": op_id,
@@ -159,6 +179,9 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
     except BaseException:
         restore_leg1(manifest)
         raise
+    else:
+        if stash_ref:
+            _pop_stash(stash_ref)
 
 
 _SCRIPT_INSTALL_PATHS = ("~/.synlynk/bin", "~/.synlynk/lib")
