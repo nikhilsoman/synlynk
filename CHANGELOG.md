@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+**Init/Migrate/Upgrade Rollback Mechanism (design 2026-07-22, plan 2026-07-22)**
+- `rollback_checkpoint` (Leg 1) wraps `init()` and `cmd_migrate()` in a git-checkpoint + untracked-state backup, auto-restoring on any mid-operation failure.
+- `rollback_checkpoint_upgrade` (Leg 2) wraps `_run_upgrade()` in a global install snapshot (pipx reinstall-by-tag / script bin+lib backup), auto-restoring on upgrade failure.
+- `synlynk rollback [--last|<op-id>|--clear]` — manual rollback CLI, restoring or discarding the most recent (or a specific) checkpoint manifest.
+- `--dry-run` on `synlynk init` and `synlynk upgrade` — preview what would be written/changed without touching disk or making network/subprocess calls.
+- Failure-injection live selftest coverage for both rollback legs, plus dedicated `rollback --last`/`--clear` scenario tests.
+
 ## [0.13.0] - 2026-07-22
 
 **Release pitch:** synlynk learns to explain itself — every command now has a discoverable taxonomy entry with a maturity-tiered reveal, a live selftest exercises all 59 commands end-to-end, cost accounting gets payment-model awareness and a task-boundary fence around actual spend, and dispatch routing gets capability-aware enough to stop sending GitHub-write work to agents that structurally can't do it.

@@ -2,6 +2,8 @@ import json
 import os
 import subprocess
 
+import pytest
+
 import synlynk
 
 
@@ -395,6 +397,39 @@ def test_migrate_import_genuine_zero_insert_still_raises(tmp_path, monkeypatch):
     assert "memory_entries" in msg
     assert "roadmap_arcs" in msg
     assert "roadmap_phases" in msg
+
+
+def test_migrate_rolls_back_on_mid_operation_failure(tmp_path, monkeypatch):
+    import subprocess as sp
+    from synlynk import db as db_mod
+
+    monkeypatch.chdir(tmp_path)
+    sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    docs_dir = tmp_path / "project-docs"
+    docs_dir.mkdir()
+    (docs_dir / "roadmap.md").write_text("# roadmap\n")
+    sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    sp.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+    before_head = sp.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True
+    ).stdout.strip()
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated failure writing sentinel")
+
+    monkeypatch.setattr(db_mod, "_migrate_dr_mirror", boom)
+
+    with pytest.raises(RuntimeError):
+        db_mod.cmd_migrate()
+
+    after_head = sp.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True
+    ).stdout.strip()
+    assert after_head == before_head
+    assert not (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+    assert not (tmp_path / ".synlynk" / "project-docs").exists()
 
 
 def test_migrate_recover_reimports(tmp_path, monkeypatch):

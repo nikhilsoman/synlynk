@@ -227,8 +227,12 @@ def build_parser() -> argparse.ArgumentParser:
                                   "Use '.' for repos that keep docs at the repo root.")
     init_parser.add_argument("--wizard", action="store_true",
                              help="Run the FTUE guided setup wizard")
+    init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                             help="Preview what init would write without writing anything")
 
-    subparsers.add_parser("upgrade", help="Check for and apply updates")
+    upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
+    upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                                help="Preview what would be upgraded without installing")
 
     subparsers.add_parser("join", help="Onboard as a new member to an existing project")
 
@@ -294,6 +298,17 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Re-import from .synlynk/project-docs")
     migrate_parser.add_argument("--setup-dr", action="store_true", dest="setup_dr",
                                 help="Configure a DR sync path for mirroring")
+
+    rollback_parser = subparsers.add_parser(
+        "rollback", help="Undo the last init/migrate/upgrade if something went wrong"
+    )
+    rollback_group = rollback_parser.add_mutually_exclusive_group()
+    rollback_group.add_argument("--last", action="store_true",
+                                help="Roll back the most recent checkpoint (default)")
+    rollback_group.add_argument("--op-id", default=None, dest="op_id",
+                                help="Roll back a specific archived checkpoint by op-id")
+    rollback_group.add_argument("--clear", action="store_true",
+                                help="Discard the current checkpoint without restoring")
 
     probe_parser = subparsers.add_parser(
         "probe", help="Probe agent harness capability and record compatibility"
@@ -783,12 +798,13 @@ def main() -> None:
                 os.makedirs(".synlynk", exist_ok=True)
                 _update_config({"project_docs_dir": args.docs_dir})
             init(force=args.force, agents=agents, mode=args.mode,
-                 org=args.org, repo=args.repo, project_id=args.project_id)
+                 org=args.org, repo=args.repo, project_id=args.project_id,
+                 dry_run=getattr(args, "dry_run", False))
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
     elif args.command == "upgrade":
-        upgrade()
+        upgrade(dry_run=getattr(args, "dry_run", False))
     elif args.command == "watch":
         cmd_watch(args)
     elif args.command == "daemon":
@@ -1031,6 +1047,13 @@ def main() -> None:
             dry_run=getattr(args, "dry_run", False),
             recover=getattr(args, "recover", False),
             setup_dr=getattr(args, "setup_dr", False),
+        )
+    elif args.command == "rollback":
+        from synlynk.rollback import cmd_rollback
+        cmd_rollback(
+            last=getattr(args, "last", False) or not (getattr(args, "op_id", None) or getattr(args, "clear", False)),
+            op_id=getattr(args, "op_id", None),
+            clear=getattr(args, "clear", False),
         )
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))
