@@ -356,6 +356,22 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
         )
 
 
+def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags("agy", []) == []
+    out = capsys.readouterr().out
+    assert "no write/run permissions granted" in out
+
+
+def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warning(capsys):
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags("agy", ["write:src/"]) == ["--dangerously-skip-permissions"]
+    out = capsys.readouterr().out
+    assert out == ""
+
+
 def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
     import synlynk.dispatch as dispatch_mod
     import subprocess
