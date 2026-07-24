@@ -73,6 +73,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [69](./69-pr-capability-sweep-taxonomy.md) | Capability Sweep + Industry Taxonomy — Calibrating Agents Against Real Skill Axes | TBD | 2026-07-19 |
 | [70](./70-prTBD-gitattributes-project-docs-union.md) | PR #383 — .gitattributes union merge for project-docs churn | [#383](https://github.com/nikhilsoman/synlynk/pull/383) | 2026-07-19 |
 | [71](./71-prTBD-gh-write-routing-and-review-discipline.md) | Docs — GitHub write routing (Grok only) + PR Review Discipline identity caveat | [#432](https://github.com/nikhilsoman/synlynk/pull/432) | 2026-07-21 |
+| [72](./72-v013-discoverability-and-accounting.md) | v0.13.0 — Discoverability & Accounting | [#274–#440](https://github.com/nikhilsoman/synlynk/releases/tag/v0.13.0) | 2026-07-22 |
+| [73](./73-pr463-dispatch-stacking-ground-truth-gate.md) | PR #463 — Dispatch Stacking + Ground-Truth Merge Gate | [#463](https://github.com/nikhilsoman/synlynk/pull/463) | 2026-07-23 |
 
 
 ## Per-PR Post Template
