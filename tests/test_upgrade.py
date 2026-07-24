@@ -142,6 +142,30 @@ def test_run_upgrade_script_prints_migrate_hint(monkeypatch, capsys):
     assert "Run 'synlynk migrate' if prompted" in out
 
 
+def test_run_upgrade_pipx_records_leg2_manifest(tmp_path, monkeypatch):
+    import importlib
+    import synlynk
+    from synlynk import rollback
+
+    upgrade_mod = importlib.import_module("synlynk.upgrade")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(upgrade_mod, "VERSION", "0.12.0")
+    monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "pipx")
+    monkeypatch.setattr(synlynk, "_get_pipx_source", lambda: "")
+    monkeypatch.setattr(
+        upgrade_mod.subprocess,
+        "run",
+        lambda args, **kw: __import__("subprocess").CompletedProcess(args, 0),
+    )
+
+    upgrade_mod._run_upgrade("0.13.0")
+
+    manifest = rollback._read_manifest()
+    assert manifest["op_type"] == "upgrade"
+    assert manifest["previous_version"] == "0.12.0"
+    assert manifest["install_type"] == "pipx"
+
+
 def test_get_pipx_source_local_path(monkeypatch, tmp_path):
     metadata = {
         "main_package": {"package_or_url": "/home/user/dev/synlynk"}
