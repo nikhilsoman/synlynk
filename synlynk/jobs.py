@@ -198,6 +198,42 @@ def _push_worktree_branch_if_needed(
     return True
 
 
+def _resolve_default_base_branch(worktree_path: Optional[str]) -> Optional[str]:
+    """Resolve the repo's default base branch for gh pr create."""
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return None
+
+    try:
+        head_result = subprocess.run(
+            ["git", "-C", worktree_path, "symbolic-ref", "refs/remotes/origin/HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        head_result = None
+
+    if head_result and head_result.returncode == 0:
+        head_ref = (head_result.stdout or "").strip()
+        if head_ref:
+            return head_ref.rsplit("/", 1)[-1]
+
+    for candidate in ("origin/main", "origin/master", "main", "master"):
+        try:
+            verify_result = subprocess.run(
+                ["git", "-C", worktree_path, "rev-parse", "--verify", candidate],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            continue
+        if verify_result.returncode == 0 and (verify_result.stdout or "").strip():
+            return candidate.rsplit("/", 1)[-1]
+
+    return None
+
+
 def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
     """Opens a PR for a finalized worktree if one does not already exist."""
     if not worktree_path or not worktree_branch:
@@ -255,12 +291,13 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         f"Task: {task_line}\n\n"
         f"This PR was created automatically by synlynk, not hand-written.\n"
     )
+    base_branch = _resolve_default_base_branch(worktree_path) or "main"
     try:
         create_result = subprocess.run(
             [
                 "gh", "pr", "create",
                 "--repo", repo_slug,
-                "--base", "main",
+                "--base", base_branch,
                 "--head", worktree_branch,
                 "--title", title,
                 "--body", body,

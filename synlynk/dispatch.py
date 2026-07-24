@@ -106,6 +106,10 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
 
     if agent == "agy":
         if not permissions or set(permissions) <= {"read:*"}:
+            print(
+                "  ⚠ agy dispatched with no write/run permissions granted -- "
+                "headless mode will auto-deny command/write tool calls and may silently no-op"
+            )
             return []
         return ["--dangerously-skip-permissions"]
     if agent == "claude":

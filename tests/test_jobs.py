@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -324,3 +325,76 @@ def test_apply_dispatch_gate_end_to_end_with_real_failing_suite(git_worktree_rep
 
     assert job["status"] == "needs_fix"
     assert job["suite_result"]["failed"] >= 1
+
+
+@pytest.mark.parametrize(
+    "available_refs, expected_base",
+    [
+        ({"origin/main"}, "main"),
+        ({"origin/master"}, "master"),
+    ],
+)
+def test_resolve_default_base_branch_prefers_origin_head_then_fallbacks(
+    tmp_path, monkeypatch, available_refs, expected_base
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            candidate = cmd[5]
+            if candidate in available_refs:
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+
+    assert jobs_mod._resolve_default_base_branch(str(worktree_path)) == expected_base
+
+
+def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    captured = []
+
+    def fake_run(cmd, **kwargs):
+        captured.append(cmd)
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            candidate = cmd[5]
+            if candidate == "origin/master":
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/octo/repo/pull/42\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {"id": "job-1", "task": "do the thing"},
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in captured if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "master"
