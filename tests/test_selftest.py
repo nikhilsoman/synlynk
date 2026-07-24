@@ -290,3 +290,51 @@ def test_all_paid_commands_have_registered_scenarios():
 
     for cmd in ["dispatch", "exec", "schedule", "release"]:
         assert cmd in SELFTEST_SCENARIOS, f"missing scenario for {cmd!r}"
+
+
+def test_scenario_migrate_failure_injection_triggers_rollback():
+    from synlynk.selftest import (
+        ScenarioContext, _scenario_migrate_failure_injection,
+    )
+
+    ctx = ScenarioContext(repo_path="", live=True)
+    result = _scenario_migrate_failure_injection({"command": "migrate"}, ctx)
+    assert result.status == "pass", result.detail
+
+
+def test_scenario_upgrade_failure_injection_triggers_rollback():
+    from synlynk.selftest import (
+        ScenarioContext, _scenario_upgrade_failure_injection,
+    )
+
+    ctx = ScenarioContext(repo_path="", live=True)
+    result = _scenario_upgrade_failure_injection({"command": "upgrade"}, ctx)
+    assert result.status == "pass", result.detail
+
+
+def test_synlynk_rollback_last_via_cli(tmp_path, monkeypatch):
+    import subprocess as sp
+    from synlynk import rollback
+
+    monkeypatch.chdir(tmp_path)
+    sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    sp.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    sp.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    with rollback.rollback_checkpoint("init", untracked_paths=[]):
+        tracked.write_text("v2\n")
+        sp.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+        sp.run(["git", "commit", "-m", "unwanted", "-q"], cwd=tmp_path, check=True)
+
+    from synlynk.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args(["rollback", "--last"])
+    assert args.command == "rollback"
+    assert args.last is True
+
+    rollback.cmd_rollback(last=True)
+    assert tracked.read_text() == "v1\n"

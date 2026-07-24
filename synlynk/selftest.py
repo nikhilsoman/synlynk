@@ -848,6 +848,79 @@ def _scenario_migrate(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     )
 
 
+def _scenario_migrate_failure_injection(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    """Injects a failure mid-migrate and asserts the workspace is fully rolled back."""
+    import synlynk as synlynk_pkg
+    import synlynk.db as db_mod
+    from synlynk import rollback
+
+    workspace = _ensure_workspace_scaffold(ctx)
+    db_path = workspace / ".synlynk" / "state.db"
+    before_docs = _seed_migrate_workspace(workspace)
+    before_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=workspace, capture_output=True, text=True
+    ).stdout.strip()
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("injected failure: simulated git rm --cached failure")
+
+    with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)), patch.object(
+        db_mod, "_migrate_dr_mirror", boom
+    ):
+        conn = synlynk_pkg._get_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO goals (goal_id, outcome, criterion, status) VALUES (?,?,?,?)",
+            (
+                "goal-live-migrate",
+                "Validate live migrate coverage",
+                "Migrate seeded project-docs into state.db",
+                "active",
+            ),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO stories (story_id, title, status) VALUES (?,?,?)",
+            ("story-live-migrate", "live migrate story", "open"),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO stories (story_id, title, status) VALUES (?,?,?)",
+            ("story-unrelated", "unrelated task", "open"),
+        )
+        conn.commit()
+        conn.close()
+        result, output, _ = _capture_call(entry["command"], db_mod.cmd_migrate)
+
+    if result.status != "fail":
+        return ScenarioResult(
+            command=entry["command"], status="fail",
+            detail=f"expected injected failure to propagate, got: {result.status}",
+        )
+
+    after_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=workspace, capture_output=True, text=True
+    ).stdout.strip()
+    if after_head != before_head:
+        return ScenarioResult(
+            command=entry["command"], status="fail",
+            detail="migrate rollback did not reset HEAD to the pre-op checkpoint",
+        )
+    sentinel = workspace / ".synlynk" / ".synlynk_migrated"
+    if sentinel.exists():
+        return ScenarioResult(
+            command=entry["command"], status="fail",
+            detail="migrate rollback left the sentinel file behind",
+        )
+    manifest_live = workspace / ".synlynk" / "rollback" / "last.json"
+    if manifest_live.exists():
+        return ScenarioResult(
+            command=entry["command"], status="fail",
+            detail="rollback manifest was not archived after auto-rollback",
+        )
+    return ScenarioResult(
+        command=entry["command"], status="pass",
+        detail="migrate auto-rolled back to the pre-op checkpoint after an injected failure",
+    )
+
+
 def _scenario_upgrade(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     import importlib
     import synlynk as synlynk_pkg
@@ -929,6 +1002,53 @@ def _scenario_upgrade(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         command=entry["command"],
         status="pass",
         detail="upgrade identified the pipx install path without touching unrelated files",
+    )
+
+
+def _scenario_upgrade_failure_injection(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
+    """Injects a failure mid-upgrade for a script install and asserts bin/lib are restored.
+
+    Drives rollback_checkpoint_upgrade directly (as test_rollback.py's
+    test_rollback_checkpoint_upgrade_script_restores_bin_and_lib does) rather than through
+    upgrade._run_upgrade's script-install path — that path wraps its subprocess.run call in a
+    broad try/except that prints a manual-fix message instead of re-raising, so a subprocess
+    failure there never propagates out to the rollback_checkpoint_upgrade context manager.
+    That swallow-and-warn behavior is pre-existing and out of scope for this scenario; this
+    exercises the Leg 2 restore mechanism itself under a live selftest workspace.
+    """
+    from synlynk import rollback
+
+    workspace = _ensure_workspace_scaffold(ctx)
+    home = workspace / "fake-home"
+    bin_dir = home / ".synlynk" / "bin"
+    lib_dir = home / ".synlynk" / "lib"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    lib_dir.mkdir(parents=True, exist_ok=True)
+    (bin_dir / "synlynk").write_text("#!/bin/sh\necho old-version\n")
+    before = (bin_dir / "synlynk").read_bytes()
+
+    def action():
+        with patch.object(rollback.os.path, "expanduser", side_effect=lambda p: p.replace("~", str(home))):
+            with rollback.rollback_checkpoint_upgrade("0.12.0", "script"):
+                (bin_dir / "synlynk").write_text("#!/bin/sh\necho new-version\n")
+                raise RuntimeError("injected failure: simulated install script failure")
+
+    with _chdir(workspace):
+        result, output, _ = _capture_call(entry["command"], action)
+
+    if result.status != "fail":
+        return ScenarioResult(
+            command=entry["command"], status="fail",
+            detail=f"expected injected failure to propagate, got: {result.status}",
+        )
+    if (bin_dir / "synlynk").read_bytes() != before:
+        return ScenarioResult(
+            command=entry["command"], status="fail",
+            detail="upgrade rollback did not restore ~/.synlynk/bin after an injected failure",
+        )
+    return ScenarioResult(
+        command=entry["command"], status="pass",
+        detail="upgrade auto-rolled back the script install after an injected failure",
     )
 
 
