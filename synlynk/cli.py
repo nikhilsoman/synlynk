@@ -227,8 +227,12 @@ def build_parser() -> argparse.ArgumentParser:
                                   "Use '.' for repos that keep docs at the repo root.")
     init_parser.add_argument("--wizard", action="store_true",
                              help="Run the FTUE guided setup wizard")
+    init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                             help="Preview what init would write without writing anything")
 
-    subparsers.add_parser("upgrade", help="Check for and apply updates")
+    upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
+    upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                                help="Preview what would be upgraded without installing")
 
     subparsers.add_parser("join", help="Onboard as a new member to an existing project")
 
@@ -783,12 +787,13 @@ def main() -> None:
                 os.makedirs(".synlynk", exist_ok=True)
                 _update_config({"project_docs_dir": args.docs_dir})
             init(force=args.force, agents=agents, mode=args.mode,
-                 org=args.org, repo=args.repo, project_id=args.project_id)
+                 org=args.org, repo=args.repo, project_id=args.project_id,
+                 dry_run=getattr(args, "dry_run", False))
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
     elif args.command == "upgrade":
-        upgrade()
+        upgrade(dry_run=getattr(args, "dry_run", False))
     elif args.command == "watch":
         cmd_watch(args)
     elif args.command == "daemon":

@@ -39,47 +39,50 @@ def _ver_tuple(v: str) -> tuple:
 
 
 def _run_upgrade(latest: str) -> None:
+    from synlynk.rollback import rollback_checkpoint_upgrade
+
     print(f"  ✦ New version available: v{latest} — upgrading from v{VERSION}")
     package = sys.modules.get("synlynk")
     detect_install_type = getattr(package, "_detect_install_type", _detect_install_type)
     get_pipx_source = getattr(package, "_get_pipx_source", _get_pipx_source)
     install_type = detect_install_type()
-    if install_type == "pipx":
-        pipx_source = get_pipx_source()
-        if pipx_source and not pipx_source.startswith(("http://", "https://", "git+")):
-            install_spec = f"git+https://github.com/nikhilsoman/synlynk@v{latest}"
-            result = subprocess.run(["pipx", "install", install_spec, "--force"], text=True)
+    with rollback_checkpoint_upgrade(VERSION, install_type):
+        if install_type == "pipx":
+            pipx_source = get_pipx_source()
+            if pipx_source and not pipx_source.startswith(("http://", "https://", "git+")):
+                install_spec = f"git+https://github.com/nikhilsoman/synlynk@v{latest}"
+                result = subprocess.run(["pipx", "install", install_spec, "--force"], text=True)
+                if result.returncode == 0:
+                    print(f"  ✓ Upgraded to v{latest} via pipx (switched to release channel)")
+                    print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
+                else:
+                    print("  ⚠ pipx reinstall failed — run manually:")
+                    print(f"    pipx install git+https://github.com/nikhilsoman/synlynk@v{latest} --force")
+            else:
+                result = subprocess.run(["pipx", "upgrade", "synlynk"], text=True)
+                if result.returncode == 0:
+                    print(f"  ✓ Upgraded to v{latest} via pipx")
+                    print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
+                else:
+                    print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
+            return
+        try:
+            req = urllib.request.Request(
+                _INSTALL_SCRIPT_URL, headers={"User-Agent": f"synlynk/{VERSION}"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                script = resp.read().decode()
+            result = subprocess.run(["bash", "-c", script], text=True)
             if result.returncode == 0:
-                print(f"  ✓ Upgraded to v{latest} via pipx (switched to release channel)")
+                print(f"  ✓ Upgraded to v{latest}")
+                print("  Restart your shell or run: source ~/.zshrc")
                 print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
             else:
-                print("  ⚠ pipx reinstall failed — run manually:")
-                print(f"    pipx install git+https://github.com/nikhilsoman/synlynk@v{latest} --force")
-        else:
-            result = subprocess.run(["pipx", "upgrade", "synlynk"], text=True)
-            if result.returncode == 0:
-                print(f"  ✓ Upgraded to v{latest} via pipx")
-                print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
-            else:
-                print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
-        return
-    try:
-        req = urllib.request.Request(
-            _INSTALL_SCRIPT_URL, headers={"User-Agent": f"synlynk/{VERSION}"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            script = resp.read().decode()
-        result = subprocess.run(["bash", "-c", script], text=True)
-        if result.returncode == 0:
-            print(f"  ✓ Upgraded to v{latest}")
-            print("  Restart your shell or run: source ~/.zshrc")
-            print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
-        else:
-            print(f"  ⚠ Install script exited {result.returncode} — run manually:")
+                print(f"  ⚠ Install script exited {result.returncode} — run manually:")
+                print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
+        except Exception as e:
+            print(f"  ⚠ Auto-install failed ({e}) — run manually:")
             print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
-    except Exception as e:
-        print(f"  ⚠ Auto-install failed ({e}) — run manually:")
-        print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
 
 
 def _get_pipx_source() -> str:
@@ -112,9 +115,22 @@ def _warn_stale_script_install() -> None:
     print("    Your pipx install at ~/.local/bin/synlynk is the active version")
 
 
-def upgrade() -> None:
+def upgrade(dry_run: bool = False) -> None:
     """Checks GitHub releases for a newer version and auto-installs if one is found."""
     print(f"Checking for updates... (current: v{VERSION})")
+    if dry_run:
+        install_type = _detect_install_type()
+        print("  DRY RUN — no network calls, no install/reinstall will run")
+        print(f"  Detected install type: {install_type}")
+        if install_type == "pipx":
+            print("  Rollback (if needed later) would reinstall the previous version via: "
+                  "pipx install git+https://github.com/nikhilsoman/synlynk@v<old> --force")
+        elif install_type == "script":
+            print("  Rollback (if needed later) would restore ~/.synlynk/bin and ~/.synlynk/lib "
+                  "from a pre-upgrade snapshot")
+        else:
+            print("  No mutating reinstall path for this install type — nothing to roll back")
+        return
     package = sys.modules.get("synlynk")
     run_upgrade = getattr(package, "_run_upgrade", _run_upgrade)
     warn_stale_script_install = getattr(
