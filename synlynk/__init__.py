@@ -3542,7 +3542,7 @@ _ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
 
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
-         mode: str = "solo") -> None:
+         mode: str = "solo", dry_run: bool = False) -> None:
     """Progressive wizard: semantic scan → agent discovery → doc bootstrap → nudge."""
 
     def _print_step(n: int, label: str) -> None:
@@ -3556,6 +3556,21 @@ def init(force: bool = False, agents: list = None,
     if synlynk_exists and not force:
         print(f"  {_YELLOW}⚠ .synlynk/ already exists.{_RESET} "
               "Use --force to reinitialise.\n  Updating agent files only.")
+
+    if dry_run:
+        print("  DRY RUN — no files will be written\n")
+        dd_preview = _docs_dir()
+        for d in [dd_preview, os.path.join(dd_preview, "devlogs"), ".synlynk", LOGS_DIR, PROMPTS_DIR]:
+            if not os.path.exists(d):
+                print(f"  would create: {d}/")
+        print("  would always overwrite (marker_style='none', regardless of --force):")
+        for fpath in (".cursor/rules/synlynk.mdc", ".github/copilot-instructions.md",
+                      ".windsurfrules", "AI_INSTRUCTIONS.md"):
+            if os.path.exists(fpath):
+                print(f"    ⚠ {fpath}  (already exists — would be overwritten unconditionally)")
+            else:
+                print(f"    {fpath}  (would be created)")
+        return
 
     scan = _static_scan(".")
     print(f"  Project : {_BOLD}{scan['project_name']}{_RESET}")

@@ -63,3 +63,25 @@ def test_init_rolls_back_on_mid_operation_failure(tmp_path, monkeypatch):
         synlynk.init(force=False, agents=["claude"], mode="solo")
 
     assert existing_claude.read_text() == "pre-existing content\n"
+
+
+def test_init_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+    monkeypatch.setattr(synlynk, "discover_agents", lambda: [])
+    monkeypatch.setattr(
+        synlynk, "_static_scan",
+        lambda path: {
+            "project_name": "test", "commit_count": 1, "languages": ["Python"],
+            "recent_topics": [], "has_structured_commits": True,
+        },
+    )
+
+    synlynk.init(force=False, agents=["claude"], mode="solo", dry_run=True)
+
+    assert not (tmp_path / ".synlynk").exists()
+    assert not (tmp_path / "CLAUDE.md").exists()
+    captured = capsys.readouterr()
+    assert "DRY RUN" in captured.out
+    assert ".github/copilot-instructions.md" in captured.out or "always overwrite" in captured.out.lower()

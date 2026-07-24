@@ -244,3 +244,24 @@ def test_install_script_downloads_all_package_modules():
     content = install_script.read_text()
     assert 'for f in __init__.py __main__.py cli.py db.py hud.py viz.py; do' in content
     assert 'curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f"' in content
+
+
+def test_upgrade_dry_run_makes_no_subprocess_calls(tmp_path, monkeypatch, capsys):
+    import importlib
+
+    upgrade_mod = importlib.import_module("synlynk.upgrade")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(upgrade_mod, "VERSION", "0.12.0")
+    calls = []
+    monkeypatch.setattr(
+        upgrade_mod.subprocess, "run",
+        lambda *a, **kw: calls.append(a) or (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+    monkeypatch.setattr(upgrade_mod, "_detect_install_type", lambda: "pipx")
+
+    upgrade_mod.upgrade(dry_run=True)
+
+    assert calls == []
+    captured = capsys.readouterr()
+    assert "DRY RUN" in captured.out
+    assert "pipx" in captured.out

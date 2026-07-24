@@ -115,9 +115,22 @@ def _warn_stale_script_install() -> None:
     print("    Your pipx install at ~/.local/bin/synlynk is the active version")
 
 
-def upgrade() -> None:
+def upgrade(dry_run: bool = False) -> None:
     """Checks GitHub releases for a newer version and auto-installs if one is found."""
     print(f"Checking for updates... (current: v{VERSION})")
+    if dry_run:
+        install_type = _detect_install_type()
+        print("  DRY RUN — no network calls, no install/reinstall will run")
+        print(f"  Detected install type: {install_type}")
+        if install_type == "pipx":
+            print("  Rollback (if needed later) would reinstall the previous version via: "
+                  "pipx install git+https://github.com/nikhilsoman/synlynk@v<old> --force")
+        elif install_type == "script":
+            print("  Rollback (if needed later) would restore ~/.synlynk/bin and ~/.synlynk/lib "
+                  "from a pre-upgrade snapshot")
+        else:
+            print("  No mutating reinstall path for this install type — nothing to roll back")
+        return
     package = sys.modules.get("synlynk")
     run_upgrade = getattr(package, "_run_upgrade", _run_upgrade)
     warn_stale_script_install = getattr(
