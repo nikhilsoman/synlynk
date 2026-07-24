@@ -295,6 +295,17 @@ def build_parser() -> argparse.ArgumentParser:
     migrate_parser.add_argument("--setup-dr", action="store_true", dest="setup_dr",
                                 help="Configure a DR sync path for mirroring")
 
+    rollback_parser = subparsers.add_parser(
+        "rollback", help="Undo the last init/migrate/upgrade if something went wrong"
+    )
+    rollback_group = rollback_parser.add_mutually_exclusive_group()
+    rollback_group.add_argument("--last", action="store_true",
+                                help="Roll back the most recent checkpoint (default)")
+    rollback_group.add_argument("--op-id", default=None, dest="op_id",
+                                help="Roll back a specific archived checkpoint by op-id")
+    rollback_group.add_argument("--clear", action="store_true",
+                                help="Discard the current checkpoint without restoring")
+
     probe_parser = subparsers.add_parser(
         "probe", help="Probe agent harness capability and record compatibility"
     )
@@ -1031,6 +1042,13 @@ def main() -> None:
             dry_run=getattr(args, "dry_run", False),
             recover=getattr(args, "recover", False),
             setup_dr=getattr(args, "setup_dr", False),
+        )
+    elif args.command == "rollback":
+        from synlynk.rollback import cmd_rollback
+        cmd_rollback(
+            last=getattr(args, "last", False) or not (getattr(args, "op_id", None) or getattr(args, "clear", False)),
+            op_id=getattr(args, "op_id", None),
+            clear=getattr(args, "clear", False),
         )
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))
