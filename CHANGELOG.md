@@ -18,6 +18,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `--dry-run` on `synlynk init` and `synlynk upgrade` — preview what would be written/changed without touching disk or making network/subprocess calls.
 - Failure-injection live selftest coverage for both rollback legs, plus dedicated `rollback --last`/`--clear` scenario tests.
 
+### Fixed
+
+- Bumped `linkify-it` to 5.0.2 in `website/package-lock.json`, resolving a high-severity quadratic-complexity DoS (CVE-2026-59887, GHSA-v245-v573-v5vm) in its `mailto:` schema validator. Dev-only, transitive via `markdown-it`; fixes GitHub Dependabot alert #6.
+
 ## [0.13.0] - 2026-07-22
 
 **Release pitch:** synlynk learns to explain itself — every command now has a discoverable taxonomy entry with a maturity-tiered reveal, a live selftest exercises all 59 commands end-to-end, cost accounting gets payment-model awareness and a task-boundary fence around actual spend, and dispatch routing gets capability-aware enough to stop sending GitHub-write work to agents that structurally can't do it.
