@@ -3587,83 +3587,103 @@ def init(force: bool = False, agents: list = None,
         for ag in non_functional:
             print(f"    {_DIM}✗ {ag['name']} — check API key / install{_RESET}")
 
-    # ── Step 3: Create directories + write skeleton ─────────────────────────
-    dd = _docs_dir()
-    _print_step(3, f"Bootstrapping {dd}/")
-    for d in [dd, os.path.join(dd, "devlogs"), ".synlynk",
-              LOGS_DIR, PROMPTS_DIR]:
-        if not os.path.exists(d):
-            os.makedirs(d)
+    from synlynk.rollback import rollback_checkpoint
 
-    written = _write_informed_skeleton(scan, skip_existing=not force)
-    if written:
-        for p, label in written:
-            print(f"  {_GREEN}✓{_RESET} {p}  {_DIM}({label}){_RESET}")
-    else:
-        print(f"  {_DIM}All docs already exist — skipped (use --force to overwrite){_RESET}")
-
-    # Write agent instruction files using _write_instruction_file().
-    agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex", "grok"}
-    templates = _build_templates(org=org, repo=repo, project_id=project_id)
-
-    # Core trio: only write if agent was discovered as functional.
-    trio_content = {
-        "CLAUDE.md":   (templates.get("CLAUDE.md", ""), "html"),
-        "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
-        "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
-        "GROK.md":     (templates.get("GROK.md", ""), "html"),
-    }
-    _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex", "GROK.md": "grok"}
-    for fname, (content, mstyle) in trio_content.items():
-        required = _agent_guards[fname]
-        if required not in agent_set:
-            continue
-        _write_instruction_file(fname, required, content, mstyle)
-
-    # Extended targets: written based on environment detection.
-    # Guards are sourced from _INSTRUCTION_TARGETS[i][3] (detection_fn).
-    _target_detection = {fpath: fn for fpath, _, _, fn in _INSTRUCTION_TARGETS}
-    extended = [
-        (".cursor/rules/synlynk.mdc",       "cursor",    "none", _build_cursor_mdc()),
-        (".github/copilot-instructions.md",  "copilot",   "html", _build_copilot_instructions()),
-        (".windsurfrules",                   "windsurf",  "hash", _build_windsurf_rules()),
-        ("AI_INSTRUCTIONS.md",              "universal",  "html", templates.get("AI_INSTRUCTIONS.md", "")),
-    ]
-    for fpath, tool, mstyle, content in extended:
-        if _target_detection[fpath]():
-            # marker_style='none' means synlynk owns the whole file — always overwrites
-            _write_instruction_file(fpath, tool, content, mstyle)
-
-    # Write manifest of all tracked files with their SHAs.
-    manifest_entries = {}
-    for fpath, tool, mstyle, _ in _INSTRUCTION_TARGETS:
-        if not os.path.exists(fpath):
-            continue
-        file_content = open(fpath).read()
-        section = _extract_synlynk_section(file_content, mstyle)
-        if section is not None:
-            manifest_entries[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
-    if manifest_entries:
-        _write_instruction_manifest(manifest_entries)
-
-    install_pre_commit_hook(repo_root=Path.cwd())
-
-    # Write config.json if needed.
-    config_json_content = templates.get("config.json", "")
-    if config_json_content:
-        config_path = os.path.join(".synlynk", "config.json")
-        if not os.path.exists(config_path) or force:
-            with open(config_path, "w") as f:
-                f.write(config_json_content)
-
+    config_path = os.path.join(".synlynk", "config.json")
     rates_path = os.path.join(".synlynk", "model_rates.json")
-    if not os.path.exists(rates_path):
-        from synlynk.costs import _HARDCODED_FALLBACK_RATES
-        rates_seed = dict(_HARDCODED_FALLBACK_RATES)
-        rates_seed["rates_updated_at"] = time.strftime("%Y-%m-%d")
-        with open(rates_path, "w") as f:
-            json.dump(rates_seed, f, indent=2)
-        print(f"  ✓ Created {rates_path}")
+    with rollback_checkpoint("init", untracked_paths=[
+        os.path.join(".git", "hooks", "pre-commit"),
+        config_path,
+        os.path.join(".synlynk", "instructions.json"),
+        rates_path,
+        "project-docs",
+        "roadmap.md",
+        "memory.md",
+        "todo.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        "AGENTS.md",
+        "GROK.md",
+        ".cursor/rules/synlynk.mdc",
+        ".github/copilot-instructions.md",
+        ".windsurfrules",
+        "AI_INSTRUCTIONS.md",
+    ]):
+        # ── Step 3: Create directories + write skeleton ─────────────────────
+        dd = _docs_dir()
+        _print_step(3, f"Bootstrapping {dd}/")
+        for d in [dd, os.path.join(dd, "devlogs"), ".synlynk",
+                  LOGS_DIR, PROMPTS_DIR]:
+            if not os.path.exists(d):
+                os.makedirs(d)
+
+        written = _write_informed_skeleton(scan, skip_existing=not force)
+        if written:
+            for p, label in written:
+                print(f"  {_GREEN}✓{_RESET} {p}  {_DIM}({label}){_RESET}")
+        else:
+            print(f"  {_DIM}All docs already exist — skipped (use --force to overwrite){_RESET}")
+
+        # Write agent instruction files using _write_instruction_file().
+        agent_set = set(agents) if agents is not None else {a["name"] for a in functional} or {"claude", "agy", "codex", "grok"}
+        templates = _build_templates(org=org, repo=repo, project_id=project_id)
+
+        # Core trio: only write if agent was discovered as functional.
+        trio_content = {
+            "CLAUDE.md":   (templates.get("CLAUDE.md", ""), "html"),
+            "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
+            "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
+            "GROK.md":     (templates.get("GROK.md", ""), "html"),
+        }
+        _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex", "GROK.md": "grok"}
+        for fname, (content, mstyle) in trio_content.items():
+            required = _agent_guards[fname]
+            if required not in agent_set:
+                continue
+            _write_instruction_file(fname, required, content, mstyle)
+
+        # Extended targets: written based on environment detection.
+        # Guards are sourced from _INSTRUCTION_TARGETS[i][3] (detection_fn).
+        _target_detection = {fpath: fn for fpath, _, _, fn in _INSTRUCTION_TARGETS}
+        extended = [
+            (".cursor/rules/synlynk.mdc",       "cursor",    "none", _build_cursor_mdc()),
+            (".github/copilot-instructions.md",  "copilot",   "html", _build_copilot_instructions()),
+            (".windsurfrules",                   "windsurf",  "hash", _build_windsurf_rules()),
+            ("AI_INSTRUCTIONS.md",              "universal",  "html", templates.get("AI_INSTRUCTIONS.md", "")),
+        ]
+        for fpath, tool, mstyle, content in extended:
+            if _target_detection[fpath]():
+                # marker_style='none' means synlynk owns the whole file — always overwrites
+                _write_instruction_file(fpath, tool, content, mstyle)
+
+        # Write manifest of all tracked files with their SHAs.
+        manifest_entries = {}
+        for fpath, tool, mstyle, _ in _INSTRUCTION_TARGETS:
+            if not os.path.exists(fpath):
+                continue
+            file_content = open(fpath).read()
+            section = _extract_synlynk_section(file_content, mstyle)
+            if section is not None:
+                manifest_entries[fpath] = {"tool": tool, "sha": _compute_section_sha(section)}
+        if manifest_entries:
+            _write_instruction_manifest(manifest_entries)
+
+        install_pre_commit_hook(repo_root=Path.cwd())
+
+        # Write config.json if needed.
+        config_json_content = templates.get("config.json", "")
+        if config_json_content:
+            if not os.path.exists(config_path) or force:
+                with open(config_path, "w") as f:
+                    f.write(config_json_content)
+
+        if not os.path.exists(rates_path):
+            from synlynk.costs import _HARDCODED_FALLBACK_RATES
+            rates_seed = dict(_HARDCODED_FALLBACK_RATES)
+            rates_seed["rates_updated_at"] = time.strftime("%Y-%m-%d")
+            with open(rates_path, "w") as f:
+                json.dump(rates_seed, f, indent=2)
+            print(f"  ✓ Created {rates_path}")
 
     # ── Step 4: LLM enrichment offer ────────────────────────────────────────
     _print_step(4, "LLM enrichment (optional)")
