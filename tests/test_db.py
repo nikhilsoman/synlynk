@@ -149,3 +149,48 @@ def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
     assert os.path.exists(md_path)
     dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
     assert os.path.exists(dr_path)
+
+
+def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    _setup_migrated(tmp_path, monkeypatch)
+    monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
+
+    for i in range(4):
+        _insert_cost_row(
+            session_date=f"2026-01-0{i+1} 10:00",
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=f"row{i}",
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+
+    _generate_costs_md()
+
+    live = open(os.path.join(".synlynk", "project-docs", "costs.md")).read()
+    assert "row3" in live
+    assert "row0" not in live
+
+    archive_dir = os.path.join(".synlynk", "project-docs", "archive")
+    archive_files = os.listdir(archive_dir)
+    assert any(f.startswith("costs-") for f in archive_files)
+    archived_content = open(
+        os.path.join(archive_dir, [f for f in archive_files if f.startswith("costs-")][0])
+    ).read()
+    assert "row0" in archived_content
+
+    index_path = os.path.join(archive_dir, "INDEX.md")
+    assert os.path.exists(index_path)
+    assert "costs-" in open(index_path).read()

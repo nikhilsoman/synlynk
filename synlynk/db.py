@@ -41,6 +41,8 @@ _ORG_DOMAIN_DRIFT_MAP = {
     "marketing": "growth",
 }
 
+_PROJECT_DOC_KEEP_N = 50
+
 
 def _validate_enum_value(field_name: str, value: str, allowed: tuple[str, ...]) -> str:
     normalized = str(value).strip()
@@ -1346,6 +1348,44 @@ def _generate_todo_md() -> None:
     if _is_migrated():
         _dr_sync("todo.md")
 
+
+def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
+    """Rotate older generated project-doc rows into archive files."""
+    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+
+    n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
+    if len(all_rows) <= n:
+        return all_rows
+
+    archived_rows = all_rows[:-n]
+    live_rows = all_rows[-n:]
+
+    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _docs_dir()
+    archive_dir = os.path.join(base_dir, "archive")
+    os.makedirs(archive_dir, exist_ok=True)
+
+    period = time.strftime("%Y-H%m")
+    archive_filename = f"{file_stem}-{period}.md"
+    archive_path = os.path.join(archive_dir, archive_filename)
+    with open(archive_path, "a") as f:
+        for row in archived_rows:
+            f.write(str(row) + "\n")
+
+    index_path = os.path.join(archive_dir, "INDEX.md")
+    existing_index = ""
+    if os.path.exists(index_path):
+        with open(index_path) as f:
+            existing_index = f.read()
+    if archive_filename not in existing_index:
+        with open(index_path, "a") as f:
+            if not existing_index:
+                f.write("# Archive Index\n\n")
+            f.write(
+                f"- [{archive_filename}]({archive_filename}) — {file_stem} entries older than the live window\n"
+            )
+
+    return live_rows
+
 def _generate_roadmap_md() -> None:
     """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
     Post-migration: writes to .synlynk/project-docs/roadmap.md.
@@ -1371,6 +1411,7 @@ def _generate_roadmap_md() -> None:
     ).fetchall():
         phases_by_arc.setdefault(arc_version, []).append((phase_title, status, priority, story_id, notes))
     conn.close()
+    arcs = _rotate_project_doc("roadmap", arcs)
 
     lines = [
         "# Roadmap (generated - source of truth is state.db)\n",
@@ -1417,6 +1458,7 @@ def _generate_costs_md() -> None:
     )
     rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     conn.close()
+    rows = _rotate_project_doc("costs", rows)
 
     lines = [
         "# Costs (generated - source of truth is state.db)\n",
@@ -1455,6 +1497,7 @@ def _write_memory_md() -> None:
     conn = _get_db()
     rows = conn.execute("SELECT section, body FROM memory_entries ORDER BY id").fetchall()
     conn.close()
+    rows = _rotate_project_doc("memory", rows)
     lines = [
         "# synlynk Memory (generated - source of truth is state.db)\n",
         "# Edit via: synlynk memory add | Do NOT hand-edit this file\n\n",
