@@ -1,6 +1,6 @@
 # State Engine: Tiered Reliability Design (Single-User → Team → Enterprise)
 
-**Status:** Draft — awaiting Nikhil review
+**Status:** Approved — Tier 1 PR1 scoped for implementation (see §8 for landing decisions, 2026-07-25)
 **Panel decision:** `project-docs/decisions/2026-07-20-design-a-reliable-state-engine-for-synly.md` (Claude, Agy, Codex, Grok — unanimous, no dissent recorded)
 **GOVERNS stage:** `visualize` → `execute` (this doc closes `visualize`; a Business Goal record tracks the arc)
 
@@ -106,3 +106,13 @@ It becomes a legitimate option **only at tier 3**, if/when hosted multi-repo agg
 - `dispatch_agent()`'s `context_mode: task` sends scoped DB query results tied to the job's `story_id`/`epic_id`, not full-file concatenation — with a test asserting per-job context token count drops measurably versus the old concatenation path.
 - `files` and `symbols` DB tables exist, populated from `scan --deep`'s extraction; `story → touches → file` join populated via git-diff-on-PR-merge, with a test verifying the join is populated correctly for a sample merge.
 - Vizor's canvas graph consumes DB-generated JSON snapshots only (no direct DB access from the canvas layer) — verified by a test or explicit code-review check at merge time.
+
+## 8. PR1 Addendum — Landing Decisions (added 2026-07-25, Nikhil review)
+
+Three scoping decisions confirmed during Nikhil's review, ahead of PR1 moving from spec to plan:
+
+**8.1 This repo runs `synlynk migrate` as part of PR1, not a follow-up.** `synlynk`'s own repo has never run `migrate` — `project-docs/` still lives at the repo root, git-tracked, hand-edited, and the just-shipped `memory.md` write-through code (`cmd_memory_add()`, gated behind `_is_migrated()`) is consequently inert here today. This is the direct, confirmed root cause of the repeated `costs.md` drift firefighting this release (backfills in #482, #485; tracked as #481). PR1's Definition of Done (§7) is extended: after the roadmap/memory/costs write-through and mutation guard land and pass tests, PR1 also runs `cmd_migrate()` against this repo, commits the resulting `.synlynk_migrated` sentinel and relocated `project-docs/`, and confirms a live `cost log`/`roadmap add`/`memory add` round-trips correctly against the real repo — not just a test fixture. Skipping this would leave PR1's fix theoretical for the one repo where it's needed most.
+
+**8.2 Mutation guard ships warn-and-continue, not block-and-refuse** — this matches §2.1's already-revised wording (the guard detects genuine uncommitted hand-edits not explained by a `git pull`/merge, and warns loudly on the next `synlynk` invocation rather than halting it), consistent with the project's existing "fail loud, don't fail closed" pattern (e.g. `cmd_migrate()`'s 0-row import check). No change to §2.1's text was needed; recorded here as an explicit confirmation since it was re-litigated during PR1 scoping review.
+
+**8.3 `dr_sync_path`/gdrive DR stays documentation-only in PR1.** The existing `_dr_sync()` mechanism (a generic local-directory file mirror, currently only wired into `cmd_memory_add()`) gets extended to fire from the new `_generate_roadmap_md()`/`_generate_costs_md()` write-through paths alongside `_generate_memory_md()`'s existing call, matching the pattern uniformly across all three files. PR1 does **not** configure `dr_sync_path` for this repo's own `.synlynk/config.json` — no Google Drive folder path is chosen or wired up in this PR. Instead, PR1's DoD gains one line: document in this spec (here) that pointing `dr_sync_path` at a Google Drive Desktop-synced local folder achieves off-machine DR today with zero new code, and that actually setting the config value for this repo is a deliberate follow-up once a folder is chosen — not a PR1 blocker.
