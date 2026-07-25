@@ -1346,6 +1346,56 @@ def _generate_todo_md() -> None:
     if _is_migrated():
         _dr_sync("todo.md")
 
+def _generate_roadmap_md() -> None:
+    """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
+    Post-migration: writes to .synlynk/project-docs/roadmap.md.
+    Pre-migration: writes to project-docs/roadmap.md."""
+    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
+    if _is_migrated():
+        roadmap_path = os.path.join(_synlynk_project_docs_dir(), "roadmap.md")
+        os.makedirs(os.path.dirname(roadmap_path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        roadmap_path = os.path.join(docs_dir, "roadmap.md")
+
+    conn = _get_db()
+    arcs = conn.execute(
+        "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id ASC"
+    ).fetchall()
+    phases_by_arc = {}
+    for arc_version, phase_title, status, priority, story_id, notes in conn.execute(
+        "SELECT arc_version, phase_title, status, priority, story_id, notes "
+        "FROM roadmap_phases ORDER BY id ASC"
+    ).fetchall():
+        phases_by_arc.setdefault(arc_version, []).append((phase_title, status, priority, story_id, notes))
+    conn.close()
+
+    lines = [
+        "# Roadmap (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk roadmap add | Do NOT hand-edit this file\n\n",
+    ]
+    for version, title, status, target_date, notes in arcs:
+        date_str = f" (target: {target_date})" if target_date else ""
+        lines.append(f"## {version} — {title or version} [{status}]{date_str}\n\n")
+        if notes:
+            lines.append(f"{notes}\n\n")
+        for phase_title, p_status, priority, story_id, p_notes in phases_by_arc.get(version, []):
+            check = "x" if p_status == "done" else ("-" if p_status == "deferred" else " ")
+            prio = f" ({priority})" if priority else ""
+            story = f" <!-- story:{story_id} -->" if story_id else ""
+            lines.append(f"- [{check}] {phase_title}{prio}{story}\n")
+            if p_notes:
+                lines.append(f"  {p_notes}\n")
+        lines.append("\n")
+
+    with open(roadmap_path, "w") as f:
+        f.writelines(lines)
+
+    if _is_migrated():
+        _dr_sync("roadmap.md")
+
 def _write_memory_md() -> None:
     """Regenerate .synlynk/project-docs/memory.md from memory_entries table."""
     from synlynk import _get_db, _synlynk_project_docs_dir
@@ -1514,6 +1564,57 @@ def cmd_story_create(title: str, engg_domain: str = None,
         f"[{_taxonomy_label('sfia', engg_domain)} · {_taxonomy_label('apqc', org_domain)} · {_taxonomy_label('naics', industry)}]"
     )
     return story_id
+
+def cmd_roadmap_add(
+    version: str,
+    title: str = None,
+    status: str = "planned",
+    target_date: str = None,
+    notes: str = None,
+    phase_title: str = None,
+    priority: str = None,
+    story_id: str = None,
+) -> None:
+    """Add or update a roadmap arc, or a phase within an existing arc.
+
+    If phase_title is None: create/update the arc row identified by `version`.
+    If phase_title is set: add a phase to the arc `version` (which must already exist).
+    """
+    from synlynk import _GREEN, _RESET, _get_db
+
+    conn = _get_db()
+    try:
+        arc_row = conn.execute(
+            "SELECT version FROM roadmap_arcs WHERE version=?", (version,)
+        ).fetchone()
+
+        if phase_title is None:
+            if arc_row:
+                conn.execute(
+                    "UPDATE roadmap_arcs SET title=?, status=?, target_date=?, notes=? WHERE version=?",
+                    (title, status, target_date, notes, version),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO roadmap_arcs (version, title, status, target_date, notes) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (version, title, status, target_date, notes),
+                )
+        else:
+            if not arc_row:
+                raise ValueError(f"no roadmap arc with version={version!r}; create it first")
+            conn.execute(
+                "INSERT INTO roadmap_phases (arc_version, phase_title, status, priority, story_id, notes) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (version, phase_title, status, priority, story_id, notes),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _generate_roadmap_md()
+    label = phase_title if phase_title else (title or version)
+    print(f"  {_GREEN}✓{_RESET} Roadmap updated — {version}: {label}")
 
 def cmd_story_list() -> None:
     """Prints all stories in state.db."""
