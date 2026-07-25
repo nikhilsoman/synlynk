@@ -809,6 +809,38 @@ def test_parse_costs_md_missing(tmp_path, monkeypatch):
     assert total_requests == 0
 
 
+def test_check_budgets_reads_cost_entries_not_markdown(project_dir, capsys, monkeypatch):
+    from synlynk import _insert_cost_row
+    from synlynk.costs import check_budgets
+
+    costs_path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    with open(costs_path, "w") as f:
+        f.write("# Costs\n\n| Date | Agent | Cost |\n|---|---|---|\n")
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="claude",
+        model="claude-sonnet-5",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=9.50,
+        notes=None,
+        story_id=None,
+        api_equivalent_usd=9.50,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    check_budgets()
+
+    captured = capsys.readouterr()
+    assert "Budget Warning" in captured.out
+    assert "9.50" in captured.out
+
+
 def test_set_state_writes_file(project_dir):
     synlynk.set_state("watching")
     assert (project_dir / ".synlynk" / "state").read_text() == "watching"
@@ -1085,14 +1117,32 @@ def test_init_config_schema_version(tmp_path, monkeypatch):
 
 
 def test_check_budgets_no_alert_under_threshold(project_dir, capsys):
-    # costs.md has $1.24 out of $10.00
+    # cost_entries has $1.24 out of $10.00
     synlynk.check_budgets()
     captured = capsys.readouterr()
     assert "Budget Alert" not in captured.out
 
 
 def test_check_budgets_warning_at_80_percent(project_dir, capsys):
+    from synlynk import _insert_cost_row
     import json
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="claude",
+        model="claude-sonnet-5",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=1.24,
+        notes=None,
+        story_id=None,
+        api_equivalent_usd=1.24,
+        actual_usd=None,
+        payment_mode=None,
+    )
     config = json.loads((project_dir / ".synlynk" / "config.json").read_text())
     config["budget"]["limit_usd"] = 1.50  # $1.24 is 82% of $1.50
     (project_dir / ".synlynk" / "config.json").write_text(json.dumps(config))

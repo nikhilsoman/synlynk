@@ -755,7 +755,13 @@ def check_budgets() -> None:
     config = _pkg("load_config")()
     limit_usd = config["budget"]["limit_usd"]
     limit_reqs = config["budget"]["limit_requests"]
-    total_usd, _ = _pkg("parse_costs_md")()
+    conn = _pkg("_get_db")()
+    try:
+        total_usd = conn.execute(
+            "SELECT COALESCE(SUM(total_cost_usd), 0) FROM cost_entries"
+        ).fetchone()[0]
+    finally:
+        conn.close()
 
     # Request count from telemetry exec events
     total_reqs = 0
