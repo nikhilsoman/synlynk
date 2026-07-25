@@ -120,12 +120,18 @@ from synlynk.doctor import (
 )
 from synlynk.team import (
     _build_team_digest,
+    _build_app_manifest_url,
     _ensure_identity_key,
+    _exchange_manifest_code,
+    _confirm_installation,
     _run_agent_sync,
     _sign_capability_rating,
+    _write_role_app_config,
     _write_decision_record,
     cmd_decide,
     cmd_identity_init,
+    cmd_identity_init_role,
+    cmd_identity_list,
     cmd_join,
     cmd_team_status,
     get_mode,
@@ -2301,6 +2307,21 @@ def _render_claude_log_line(line: str):
     return line
 
 
+def _redact_active_tokens(text: str) -> str:
+    """Strip any currently-cached GitHub App installation token values from
+    display text. Best-effort: only catches tokens minted this process
+    lifetime (github_app_auth._token_cache), not tokens from prior runs —
+    those have already expired by the time a later `synlynk logs` call
+    could display them, since installation tokens live ~1hr."""
+    from synlynk.github_app_auth import _token_cache
+
+    for entry in _token_cache.values():
+        token = entry.get("token")
+        if token:
+            text = text.replace(token, "***REDACTED***")
+    return text
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
@@ -2326,10 +2347,10 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
         for line in display_lines:
             rendered = renderer(line)
             if rendered is not None:
-                print(rendered, end="")
+                print(_redact_active_tokens(rendered), end="")
     else:
         for line in display_lines:
-            print(line, end="")
+            print(_redact_active_tokens(line), end="")
     if len(lines) > tail:
         print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
     summary_path = _job_summary_path(job_id)
