@@ -1093,6 +1093,9 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         print(f"  ⚠ devlog entry skipped ({fname}): {ex}")
     counts["devlog_entries"] = devlog_count
 
+    if not dry_run:
+        _import_todo_to_stories(docs_dir, conn=conn)
+
     todo_path = os.path.join(docs_dir, "todo.md")
     todo_sync_count = 0
     inserted_counts["todo_metadata"] = 0
@@ -1641,18 +1644,34 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
         _write_devlog_file(author)
         _dr_sync(f"devlogs/{author}.md")
 
-def _import_todo_to_stories() -> int:
+def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""
     from synlynk import _docs_dir, _get_db
     import hashlib as _hashlib
 
-    docs_dir = _docs_dir()
+    if docs_dir is None:
+        docs_dir = _docs_dir()
     todo_path = os.path.join(docs_dir, "todo.md")
     if not os.path.exists(todo_path):
         return 0
 
-    conn = _get_db()
-    existing_ids = {row[0] for row in conn.execute("SELECT story_id FROM stories")}
+    owns_conn = conn is None
+    if conn is None:
+        conn = _get_db()
+
+    def _fetchall(cursor):
+        fetchall = getattr(cursor, "fetchall", None)
+        if callable(fetchall):
+            return fetchall()
+        return []
+
+    def _fetchone(cursor):
+        fetchone = getattr(cursor, "fetchone", None)
+        if callable(fetchone):
+            return fetchone()
+        return None
+
+    existing_ids = {row[0] for row in _fetchall(conn.execute("SELECT story_id FROM stories"))}
     checkbox_status = {
         " ": "open",
         "x": "done",
@@ -1689,9 +1708,9 @@ def _import_todo_to_stories() -> int:
             )
             if story_id in existing_ids:
                 continue
-            if conn.execute("SELECT 1 FROM stories WHERE title=?", (title,)).fetchone():
-                continue
             try:
+                if _fetchone(conn.execute("SELECT 1 FROM stories WHERE title=?", (title,))):
+                    continue
                 conn.execute(
                     "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
                     (story_id, title, status),
@@ -1700,9 +1719,12 @@ def _import_todo_to_stories() -> int:
                 existing_ids.add(story_id)
             except sqlite3.IntegrityError:
                 pass
+            except Exception as e:
+                print(f"  ⚠ todo.md story import skipped ({story_id}): {e}")
 
-    conn.commit()
-    conn.close()
+    if owns_conn:
+        conn.commit()
+        conn.close()
     return imported
 
 def cmd_story_create(title: str, engg_domain: str = None,

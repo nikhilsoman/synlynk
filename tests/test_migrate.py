@@ -368,7 +368,16 @@ def test_migrate_import_genuine_zero_insert_still_raises(tmp_path, monkeypatch):
                     def fetchone(self):
                         return None
 
+                    def fetchall(self):
+                        return []
+
                 return EmptyCursor()
+            if sql_u.startswith("INSERT INTO STORIES"):
+
+                class InsertCursor:
+                    rowcount = 1
+
+                return InsertCursor()
             if sql_u.startswith(("INSERT", "UPDATE")):
                 raise RuntimeError("forced write failure")
 
@@ -397,6 +406,29 @@ def test_migrate_import_genuine_zero_insert_still_raises(tmp_path, monkeypatch):
     assert "memory_entries" in msg
     assert "roadmap_arcs" in msg
     assert "roadmap_phases" in msg
+
+
+def test_migrate_import_backfills_checked_todo_story_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [x] Some completed story [platform] <!-- id:story-abc12345 --> <!-- gh:#999 -->\n"
+    )
+
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-abc12345",),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "Some completed story"
+    assert row[1] == "done"
+    assert row[2] == "#999"
 
 
 def test_migrate_rolls_back_on_mid_operation_failure(tmp_path, monkeypatch):
