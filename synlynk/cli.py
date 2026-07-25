@@ -190,6 +190,8 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_sync,
         cmd_configure_agent,
         cmd_team_status,
+        cmd_identity_init_role,
+        cmd_identity_list,
         cmd_watch,
         dispatch_agent,
         exec_command,
@@ -360,7 +362,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     identity_parser = subparsers.add_parser("identity", help="Manage synlynk agent identity")
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
-    identity_sub.add_parser("init", help="Create local Ed25519 identity key")
+    identity_init_parser = identity_sub.add_parser("init", help="Create local Ed25519 identity key")
+    identity_init_parser.add_argument(
+        "--role",
+        default=None,
+        help="Provision a GitHub App for a specific role",
+    )
+    identity_sub.add_parser("list", help="List provisioned role identities")
 
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
@@ -1088,7 +1096,13 @@ def main() -> None:
     elif args.command == "identity":
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:
-            cmd_identity_init()
+            role = getattr(args, "role", None)
+            if role:
+                cmd_identity_init_role(role)
+            else:
+                cmd_identity_init()
+        elif action == "list":
+            cmd_identity_list()
         else:
             help_parsers.get("identity", parser).print_help()
     else:
