@@ -509,3 +509,23 @@ def cmd_identity_init() -> None:
         print(f"  Public key: {pub}")
     else:
         print("  (public key file not found)")
+
+
+def cmd_identity_list() -> None:
+    """List every declared role's GitHub App identity provisioning status."""
+    from synlynk.identity_roles import load_declared_roles
+
+    roles = load_declared_roles()
+    print(f"\n  {'role':<14}  {'app_slug':<24}  status")
+    print(f"  {'─' * 14}  {'─' * 24}  {'─' * 20}")
+    for role in roles:
+        json_path = os.path.join(".synlynk", "github_apps", f"{role}.json")
+        if not os.path.exists(json_path):
+            print(f"  {role:<14}  {'—':<24}  not provisioned")
+            continue
+        with open(json_path) as fh:
+            config = json.load(fh)
+        slug = config.get("app_slug", "—")
+        status = "provisioned" if config.get("installation_id") else "pending installation"
+        print(f"  {role:<14}  {slug:<24}  {status}")
+    print()
