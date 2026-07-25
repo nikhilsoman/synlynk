@@ -1,10 +1,13 @@
 import json
 import os
 import subprocess
+import sqlite3
 
 import pytest
 
+import synlynk
 from synlynk import rollback
+from synlynk.db import MigrationImportError
 
 
 def test_dest_for_relative_path(tmp_path):
@@ -94,6 +97,52 @@ def test_rollback_checkpoint_restores_on_exception(tmp_path, monkeypatch):
     ).stdout
     assert "mutation" not in log
     assert not os.path.exists(rollback.MANIFEST_PATH)
+
+
+def test_cmd_migrate_rolls_back_real_db_path_on_import_failure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+
+    external_db = tmp_path.parent / f"{tmp_path.name}-external" / "projects" / "deadbeef" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(external_db))
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES (?,?,?)",
+        ("story-sentinel", "sentinel", "open"),
+    )
+    conn.commit()
+    conn.close()
+
+    def fake_migrate_import(docs_dir: str, dry_run: bool = False) -> None:
+        db = sqlite3.connect(synlynk.DB_PATH)
+        try:
+            db.execute(
+                "INSERT INTO stories (story_id, title, status) VALUES (?,?,?)",
+                ("story-bad", "bad", "open"),
+            )
+            db.commit()
+        finally:
+            db.close()
+        raise MigrationImportError("simulated partial import failure")
+
+    monkeypatch.setattr(synlynk, "_migrate_import", fake_migrate_import, raising=False)
+    monkeypatch.setattr(rollback.subprocess, "run", lambda *args, **kwargs: None)
+
+    with pytest.raises(SystemExit) as excinfo:
+        synlynk.cmd_migrate()
+
+    assert excinfo.value.code == 1
+
+    conn = sqlite3.connect(str(external_db))
+    rows = conn.execute(
+        "SELECT story_id, title FROM stories ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+
+    assert ("story-sentinel", "sentinel") in rows
+    assert ("story-bad", "bad") not in rows
 
 
 def test_rollback_checkpoint_restores_dirty_tree_stash(tmp_path, monkeypatch):

@@ -1253,19 +1253,25 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
 
     backup_dir = _synlynk_project_docs_dir()
     from synlynk.rollback import rollback_checkpoint
+    abs_db_path = os.path.abspath(DB_PATH)
+    cwd = os.path.abspath(os.getcwd())
+    db_path_for_rollback = DB_PATH
+    if os.path.commonpath([abs_db_path, cwd]) == cwd:
+        db_path_for_rollback = os.path.relpath(abs_db_path, cwd)
+    untracked_paths = [
+        db_path_for_rollback,
+        f"{db_path_for_rollback}-wal",
+        f"{db_path_for_rollback}-shm",
+        f"{db_path_for_rollback}-journal",
+        backup_dir,
+        sentinel,
+        docs_dir,
+    ]
 
     try:
         with rollback_checkpoint(
             "migrate",
-            untracked_paths=[
-                os.path.join(".synlynk", "state.db"),
-                os.path.join(".synlynk", "state.db-wal"),
-                os.path.join(".synlynk", "state.db-shm"),
-                os.path.join(".synlynk", "state.db-journal"),
-                backup_dir,
-                sentinel,
-                docs_dir,
-            ],
+            untracked_paths=untracked_paths,
         ):
             print("  ▶ Importing flat files → state.db ...")
             try:
