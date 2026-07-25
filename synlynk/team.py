@@ -1,5 +1,7 @@
 """synlynk team: onboarding (join), team digest, consensus (decide), identity keys."""
 
+from __future__ import annotations
+
 import hashlib
 import html
 import json
