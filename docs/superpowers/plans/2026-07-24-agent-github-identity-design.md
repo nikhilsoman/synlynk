@@ -12,6 +12,19 @@
 
 ---
 
+## Panel Decision (2026-07-25) — Read This Second
+
+Before execution, a `synlynk decide --panel claude,agy,codex,grok --record` review ran against this plan given the auth-adjacent surface (recorded at `project-docs/decisions/2026-07-25-should-synlynk-implement-per-role-github.md`). Verdict: **proceed, but narrower**, with specific revisions this plan now incorporates:
+
+1. **Narrower first slice.** Do not provision all six taxonomy roles up front. Task 8's manual validation now provisions and validates **`dev` only** — the role most GitHub-write dispatches are tagged with — end-to-end, before any second role is provisioned. Do not generalize beyond `dev` until that slice is confirmed working in real dispatch use.
+2. **`GH_TOKEN` injection scoped to declared GitHub-write need, not every dispatch.** Task 5 originally injected a token into every job's `proc_env` whenever *any* role identity existed. Revised: only inject when the job was dispatched with `requires_gh_write=True` (the parameter `dispatch_agent()` already accepts at `synlynk/dispatch.py:815` for the #426 routing gate) — this is the existing, already-tested hook for "this job needs to do GitHub writes," reused rather than duplicated.
+3. **Harden the `openssl` invocation** (Task 2): resolve an absolute, verified path via `shutil.which` once at import/call time instead of trusting a bare `"openssl"` PATH lookup, and fail with a clear error if not found. (The plan already passed the signing input via `stdin` and the private key via a *file path* argument, never as secret content on argv — the panel confirmed this part was already sound.)
+4. **Enforce `0o600` on identity files at rest, checked, not just set-and-forget.** New Task 6b adds a doctor check that both the `.json` and `.pem` files under `.synlynk/github_apps/` still have `0o600` permissions, and a test that `.gitignore` actually excludes that directory (not just relying on the top-level `.synlynk/` ignore continuing to hold).
+5. **Scrub token-shaped values from logs/telemetry.** New Task 9 adds a redaction pass so a minted `GH_TOKEN` value can never end up captured verbatim in `.synlynk/telemetry.json`, job logs, or sentinel alerts.
+6. **Extra review gate.** Codex still implements this (Python/CLI/tests — matches the Capability-Based Task Allocation table), but per the panel, the resulting PR requires an **explicit security-focused review pass by Claude** — covering the threat model and token-handling details specifically — in addition to (not instead of) the standard non-authoring-reviewer + `synlynk pr check` rule. Do not merge on the standard path alone.
+
+---
+
 ## Naming Collision — Read This First
 
 There are **two unrelated things called "role" in this codebase**, and this feature adds a **third**. Do not conflate them:
@@ -226,6 +239,7 @@ section) — so signing shells out to `openssl dgst -sha256 -sign`.
 import base64
 import json
 import os
+import shutil
 import subprocess
 import time
 import urllib.error
@@ -234,6 +248,26 @@ import urllib.request
 GITHUB_API = "https://api.github.com"
 
 _token_cache = {}  # role -> {"token": str, "expires_at": float}
+_openssl_path_cache = None  # resolved once, not re-looked-up per signing call
+
+
+def _resolve_openssl_path() -> str:
+    """Resolve an absolute, verified openssl path via shutil.which — never trust
+    a bare "openssl" argv[0] to PATH resolution inside subprocess.run, so a
+    malicious PATH entry ahead of the real binary can't be silently invoked
+    for RSA signing. Cached after first successful resolution."""
+    global _openssl_path_cache
+    if _openssl_path_cache:
+        return _openssl_path_cache
+    resolved = shutil.which("openssl")
+    if not resolved:
+        raise RuntimeError(
+            "openssl not found on PATH — required for GitHub App JWT signing (RS256). "
+            "Install it (already present on virtually all dev machines/CI images) or "
+            "GitHub identity provisioning/token minting cannot proceed."
+        )
+    _openssl_path_cache = resolved
+    return resolved
 
 
 def _b64url(data: bytes) -> bytes:
@@ -258,10 +292,16 @@ def _build_jwt_signing_input(app_id: str, now: float = None) -> tuple:
 
 
 def _sign_jwt(app_id: str, private_key_path: str) -> str:
-    """Sign a GitHub App JWT by shelling out to openssl for RS256."""
+    """Sign a GitHub App JWT by shelling out to openssl for RS256.
+
+    The signing input goes over stdin and the key is passed as a file path —
+    never as secret key material on argv, where it would be visible via `ps`
+    to any other process on the host.
+    """
     signing_input, _, _ = _build_jwt_signing_input(app_id)
+    openssl = _resolve_openssl_path()
     result = subprocess.run(
-        ["openssl", "dgst", "-sha256", "-sign", private_key_path],
+        [openssl, "dgst", "-sha256", "-sign", private_key_path],
         input=signing_input,
         capture_output=True,
         check=False,
@@ -279,6 +319,37 @@ def _sign_jwt(app_id: str, private_key_path: str) -> str:
 
 Run: `pytest tests/test_github_app_auth.py -v`
 Expected: PASS (1 passed)
+
+- [ ] **Step 4b: Write the failing test for hardened openssl path resolution (panel-mandated hygiene item)**
+
+```python
+def test_resolve_openssl_path_raises_clear_error_when_missing(monkeypatch):
+    from synlynk import github_app_auth as gh_auth
+
+    gh_auth._openssl_path_cache = None
+    monkeypatch.setattr(gh_auth.shutil, "which", lambda name: None)
+    with pytest.raises(RuntimeError, match="openssl not found"):
+        gh_auth._resolve_openssl_path()
+
+
+def test_resolve_openssl_path_caches_after_first_resolution(monkeypatch):
+    from synlynk import github_app_auth as gh_auth
+
+    gh_auth._openssl_path_cache = None
+    calls = []
+    monkeypatch.setattr(gh_auth.shutil, "which", lambda name: calls.append(name) or "/usr/bin/openssl")
+    first = gh_auth._resolve_openssl_path()
+    second = gh_auth._resolve_openssl_path()
+    assert first == second == "/usr/bin/openssl"
+    assert len(calls) == 1  # second call hit the cache, not shutil.which again
+```
+
+Add `import pytest` to the top of `tests/test_github_app_auth.py` if not already present from Step 1.
+
+- [ ] **Step 4c: Run tests to verify they pass**
+
+Run: `pytest tests/test_github_app_auth.py -v`
+Expected: PASS (3 passed)
 
 - [ ] **Step 5: Write the failing test for installation token minting + caching**
 
@@ -381,7 +452,7 @@ def get_installation_token(role: str, app_config: dict) -> str:
 - [ ] **Step 8: Run tests to verify they pass**
 
 Run: `pytest tests/test_github_app_auth.py -v`
-Expected: PASS (4 passed)
+Expected: PASS (6 passed)
 
 - [ ] **Step 9: Commit**
 
@@ -731,6 +802,8 @@ Co-Authored-By: Codex <noreply@openai.com>"
 
 This is the call-routing rule from the spec: resolve the job's role from `stories.role` (via `story_id`), look up `.synlynk/github_apps/<role>.json`, mint/inject a token; if the role has no identity file, fall back to `.synlynk/github_apps/synlynk-bot.json`; if neither exists, inject nothing (falls through to whatever `GH_TOKEN`/`gh auth` is already on the host — never silently uses a human's personal token as an intentional substitution, but also never blocks dispatch if GitHub identity isn't provisioned yet).
 
+**Panel-mandated scope narrowing (see "Panel Decision" section above):** injection only happens when the job was dispatched with `requires_gh_write=True` — the existing `dispatch_agent()` parameter at `synlynk/dispatch.py:815` used for the #426 GitHub-write routing gate. Every other dispatched job's `proc_env` is untouched by this task, regardless of whether a role identity is provisioned. This shrinks the blast radius of a minted token being present in a subprocess environment to only the jobs that actually declared a need to touch GitHub.
+
 - [ ] **Step 1: Write the failing test**
 
 ```python
@@ -837,7 +910,7 @@ Expected: PASS (3 passed)
 - [ ] **Step 5: Write the failing integration test — GH_TOKEN actually reaches `proc_env`**
 
 ```python
-def test_dispatch_agent_injects_gh_token_from_role(tmp_path, monkeypatch):
+def _dispatch_with_fake_popen(monkeypatch, tmp_path, **dispatch_kwargs):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
     os.makedirs(".agents", exist_ok=True)
@@ -862,14 +935,27 @@ def test_dispatch_agent_injects_gh_token_from_role(tmp_path, monkeypatch):
 
     dispatch_mod.dispatch_agent(
         "codex", "do a thing", story_id="story-1", skip_preflight=True, job_id="job-test",
+        **dispatch_kwargs,
     )
+    return captured_env
+
+
+def test_dispatch_agent_injects_gh_token_when_requires_gh_write(tmp_path, monkeypatch):
+    captured_env = _dispatch_with_fake_popen(monkeypatch, tmp_path, requires_gh_write=True)
     assert captured_env.get("GH_TOKEN") == "minted-token-abc"
+
+
+def test_dispatch_agent_does_not_inject_gh_token_by_default(tmp_path, monkeypatch):
+    # requires_gh_write defaults to False — most dispatched jobs never touch GitHub,
+    # and per the 2026-07-25 panel decision, injection must not happen for them.
+    captured_env = _dispatch_with_fake_popen(monkeypatch, tmp_path)
+    assert "GH_TOKEN" not in captured_env
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [ ] **Step 6: Run tests to verify they fail**
 
-Run: `pytest tests/test_dispatch_github_identity.py::test_dispatch_agent_injects_gh_token_from_role -v`
-Expected: FAIL — `GH_TOKEN` not in `captured_env` (nothing injects it yet), or an `AttributeError` on `_role_for_story` not existing.
+Run: `pytest tests/test_dispatch_github_identity.py -k "injects_gh_token or does_not_inject" -v`
+Expected: FAIL — `GH_TOKEN` not in `captured_env` for the positive case (nothing injects it yet), or an `AttributeError` on `_role_for_story` not existing.
 
 - [ ] **Step 7: Add `_role_for_story` and wire the injection into `proc_env`**
 
@@ -903,16 +989,19 @@ to:
 ```python
     proc_env = os.environ.copy()
     proc_env.update(overrides.get("env", {}))
-    gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
-    if gh_token:
-        proc_env["GH_TOKEN"] = gh_token
+    if requires_gh_write:
+        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
+        if gh_token:
+            proc_env["GH_TOKEN"] = gh_token
     for var in contract.get("env_vars_required", []):
 ```
+
+`requires_gh_write` is already an in-scope parameter of `dispatch_agent()` (`synlynk/dispatch.py:815`) — no new parameter needed, this just reads the one that already exists.
 
 - [ ] **Step 8: Run test to verify it passes**
 
 Run: `pytest tests/test_dispatch_github_identity.py -v`
-Expected: PASS (4 passed)
+Expected: PASS (5 passed)
 
 - [ ] **Step 9: Run the full dispatch test file to check for regressions**
 
@@ -1053,7 +1142,167 @@ Co-Authored-By: Codex <noreply@openai.com>"
 
 ---
 
-## Task 7: Auto-register newly provisioned roles into `.synlynk/roles.yaml`
+## Task 7: Hygiene hardening — permission enforcement + gitignore verification
+
+**Files:**
+- Modify: `synlynk/doctor.py` (new health check)
+- Modify: `synlynk/team.py` (`_write_role_app_config` — set perms defensively, don't just trust the initial `os.chmod`)
+- Test: `tests/test_identity_file_permissions.py`
+
+Panel-mandated hygiene items #2 and #4 from the "Panel Decision" section: `.pem`/`.json` identity files must actually carry `0o600` at rest (not just at the moment they're written — a doctor check catches drift, e.g. from an `umask` misconfiguration or a careless `cp`), and `.gitignore` must be proven to exclude `.synlynk/github_apps/` rather than assumed to inherit the top-level `.synlynk/` ignore.
+
+- [ ] **Step 1: Write the failing test for the gitignore verification**
+
+```python
+# tests/test_identity_file_permissions.py
+import os
+import stat
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+def test_gitignore_excludes_github_apps_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], check=True, cwd=tmp_path)
+    gitignore_src = os.path.join(os.path.dirname(__file__), "..", ".gitignore")
+    with open(gitignore_src) as fh:
+        gitignore_content = fh.read()
+    (tmp_path / ".gitignore").write_text(gitignore_content)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "dev.json").write_text("{}")
+    (apps_dir / "dev.pem").write_text("fake-key")
+
+    result = subprocess.run(
+        ["git", "check-ignore", ".synlynk/github_apps/dev.json", ".synlynk/github_apps/dev.pem"],
+        cwd=tmp_path, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, (
+        f".synlynk/github_apps/*.json and *.pem must be gitignored — "
+        f"git check-ignore exited {result.returncode}: {result.stderr}"
+    )
+```
+
+- [ ] **Step 2: Run test to verify it currently passes (this locks in existing behavior from Task 1's gitignore edit, it's a regression guard, not new functionality)**
+
+Run: `pytest tests/test_identity_file_permissions.py::test_gitignore_excludes_github_apps_directory -v`
+Expected: PASS — Task 1's `!.synlynk/roles.yaml` negation only un-ignores that one file; `.synlynk/github_apps/` is still covered by the top-level `.synlynk/` ignore. This test exists so a future edit to `.gitignore` can't silently break that without a test failing.
+
+- [ ] **Step 3: Write the failing test for the doctor permission check**
+
+```python
+def test_hc_identity_file_perms_warns_on_loose_permissions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    pem_path = apps_dir / "dev.pem"
+    pem_path.write_text("fake-key")
+    os.chmod(pem_path, 0o644)  # too permissive
+
+    from synlynk.doctor import _hc_identity_file_perms
+
+    result = _hc_identity_file_perms()
+    assert result.status == "warn"
+    assert "dev.pem" in result.message
+
+
+def test_hc_identity_file_perms_ok_when_0600(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    pem_path = apps_dir / "dev.pem"
+    pem_path.write_text("fake-key")
+    os.chmod(pem_path, 0o600)
+    json_path = apps_dir / "dev.json"
+    json_path.write_text("{}")
+    os.chmod(json_path, 0o600)
+
+    from synlynk.doctor import _hc_identity_file_perms
+
+    result = _hc_identity_file_perms()
+    assert result.status == "ok"
+
+
+def test_hc_identity_file_perms_ok_when_no_apps_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    from synlynk.doctor import _hc_identity_file_perms
+
+    result = _hc_identity_file_perms()
+    assert result.status == "ok"
+```
+
+- [ ] **Step 4: Run tests to verify they fail**
+
+Run: `pytest tests/test_identity_file_permissions.py -k "perms" -v`
+Expected: FAIL with `ImportError: cannot import name '_hc_identity_file_perms'`
+
+- [ ] **Step 5: Add `_hc_identity_file_perms` to `synlynk/doctor.py`, directly after `_hc_identity_roles` (added in Task 6)**
+
+```python
+def _hc_identity_file_perms() -> HealthCheck:
+    """Verifies .synlynk/github_apps/*.{json,pem} are still 0o600 — private key
+    material and installation IDs at rest must not be group/world-readable."""
+    apps_dir = os.path.join(".synlynk", "github_apps")
+    if not os.path.isdir(apps_dir):
+        return HealthCheck("identity_file_perms", "ok", "No .synlynk/github_apps/ directory yet")
+    loose = []
+    for fname in sorted(os.listdir(apps_dir)):
+        if not (fname.endswith(".json") or fname.endswith(".pem")):
+            continue
+        path = os.path.join(apps_dir, fname)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if mode != 0o600:
+            loose.append(f"{fname} ({oct(mode)})")
+    if not loose:
+        return HealthCheck("identity_file_perms", "ok", "All identity files are 0o600")
+    return HealthCheck(
+        "identity_file_perms",
+        "warn",
+        f"Loose permissions on: {', '.join(loose)}",
+        fix="Run: chmod 600 .synlynk/github_apps/*.json .synlynk/github_apps/*.pem",
+    )
+```
+
+Add `import stat` to `synlynk/doctor.py`'s imports if not already present.
+
+- [ ] **Step 6: Register it in `HEALTH_CHECKS`, directly after `_hc_identity_roles`**
+
+```python
+HEALTH_CHECKS = [
+    _hc_python_version,
+    _hc_project_init,
+    _hc_docs_dir,
+    _hc_identity_key,
+    _hc_identity_roles,
+    _hc_identity_file_perms,
+    _hc_agent_profiles,
+    _hc_instruction_files,
+    _hc_model_rates,
+    _hc_version_current,
+]
+```
+
+- [ ] **Step 7: Run tests to verify they pass**
+
+Run: `pytest tests/test_identity_file_permissions.py -v`
+Expected: PASS (4 passed)
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add synlynk/doctor.py tests/test_identity_file_permissions.py
+git commit -m "feat: doctor checks for identity file permission drift and gitignore coverage
+
+Co-Authored-By: Codex <noreply@openai.com>"
+```
+
+---
+
+## Task 8: Auto-register newly provisioned roles into `.synlynk/roles.yaml`
 
 **Files:**
 - Modify: `synlynk/team.py` (`cmd_identity_init_role`)
@@ -1142,17 +1391,132 @@ Co-Authored-By: Codex <noreply@openai.com>"
 
 ---
 
-## Task 8: End-to-end manual validation (rollout step 2 from the spec)
+## Task 9: Redact minted GH_TOKEN values from `synlynk logs` display
 
-**Not automatable — this is the spec's explicit real-world validation pass.** No file changes; this is a checklist to run once Tasks 1-7 are merged.
+**Files:**
+- Modify: `synlynk/__init__.py` (`cmd_logs`)
+- Test: `tests/test_logs_token_redaction.py`
+
+Panel-mandated hygiene item #5. `synlynk/dispatch.py:1096-1109` redirects the dispatched CLI's raw stdout+stderr straight into `.synlynk/logs/<job_id>.log` via shell `2>&1` — Python never sees that content as it's written, so it can't be filtered at write time without restructuring the subprocess model (out of scope here). What *is* in scope: `.synlynk/logs/` is already gitignored (covered by the top-level `.synlynk/` ignore, same as `.synlynk/github_apps/` — see Task 7), so the persistence risk is local-disk only, not repo/remote leakage. The realistic exposure surface this task closes is **display**: `cmd_logs` (`synlynk/__init__.py:2281`) prints that file's raw content straight to the terminal via `synlynk logs <job_id>` — if the dispatched CLI ever echoed its env (crash dump, debug flag, a sub-command that runs `env`), a viewer would see the token verbatim. Redact any minted token value at display time, using the in-memory cache `github_app_auth._token_cache` already populated during that session.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_logs_token_redaction.py
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+def test_cmd_logs_redacts_active_token_values(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    logs_dir = tmp_path / ".synlynk" / "logs"
+    logs_dir.mkdir(parents=True)
+    log_file = logs_dir / "job-test.log"
+    log_file.write_text("normal output line\nGH_TOKEN=ghs_supersecrettoken123 leaked by accident\nmore output\n")
+
+    import synlynk as sl
+    from synlynk import github_app_auth as gh_auth
+
+    gh_auth._token_cache.clear()
+    gh_auth._token_cache["dev"] = {"token": "ghs_supersecrettoken123", "expires_at": 9999999999}
+
+    monkeypatch.setattr(sl, "_load_jobs", lambda: [
+        {"id": "job-test", "agent": "codex", "log_file": str(log_file)}
+    ])
+
+    sl.cmd_logs("job-test", tail=50)
+    out = capsys.readouterr().out
+    assert "ghs_supersecrettoken123" not in out
+    assert "***REDACTED***" in out
+    assert "normal output line" in out  # non-secret lines still display normally
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_logs_token_redaction.py -v`
+Expected: FAIL — `ghs_supersecrettoken123` appears verbatim in captured output (no redaction exists yet).
+
+- [ ] **Step 3: Add a redaction helper and wire it into `cmd_logs` in `synlynk/__init__.py`**
+
+Add near `cmd_logs` (before its definition, around line 2280):
+
+```python
+def _redact_active_tokens(text: str) -> str:
+    """Strip any currently-cached GitHub App installation token values from
+    display text. Best-effort: only catches tokens minted this process
+    lifetime (github_app_auth._token_cache), not tokens from prior runs —
+    those have already expired by the time a later `synlynk logs` call
+    could display them, since installation tokens live ~1hr."""
+    from synlynk.github_app_auth import _token_cache
+
+    for entry in _token_cache.values():
+        token = entry.get("token")
+        if token:
+            text = text.replace(token, "***REDACTED***")
+    return text
+```
+
+Edit `cmd_logs`'s display loop — replace:
+
+```python
+    if renderer is not None:
+        for line in display_lines:
+            rendered = renderer(line)
+            if rendered is not None:
+                print(rendered, end="")
+    else:
+        for line in display_lines:
+            print(line, end="")
+```
+
+with:
+
+```python
+    if renderer is not None:
+        for line in display_lines:
+            rendered = renderer(line)
+            if rendered is not None:
+                print(_redact_active_tokens(rendered), end="")
+    else:
+        for line in display_lines:
+            print(_redact_active_tokens(line), end="")
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_logs_token_redaction.py -v`
+Expected: PASS
+
+- [ ] **Step 5: Run the existing `cmd_logs` test coverage for regressions**
+
+Run: `grep -rn "cmd_logs" tests/*.py` to find existing tests, then run them, e.g. `pytest tests/test_jobs.py -k logs -v`
+Expected: All pass — redaction is a no-op when `_token_cache` is empty (the common case for any job that isn't a `requires_gh_write` dispatch), so non-GitHub-identity jobs see identical output to before this task.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add synlynk/__init__.py tests/test_logs_token_redaction.py
+git commit -m "feat: redact minted GH_TOKEN values from synlynk logs display
+
+Co-Authored-By: Codex <noreply@openai.com>"
+```
+
+---
+
+## Task 10: End-to-end manual validation (rollout step 2 from the spec, narrowed per panel decision)
+
+**Not automatable — this is the spec's explicit real-world validation pass.** No file changes; this is a checklist to run once Tasks 1-9 are merged.
+
+**Narrowed per the 2026-07-25 panel decision: validate a single role (`dev`) end-to-end first. Do not provision `qa` or any other role in this pass — that's an explicit follow-up step gated on this validation succeeding, not bundled into it.**
 
 - [ ] **Step 1:** On the `rxcc` repo (or synlynk itself, whichever the user designates), run `synlynk identity init --role dev` and complete the two-click flow against the `Dialify` org (per the spec's provisioning target).
-- [ ] **Step 2:** Repeat for `qa`.
-- [ ] **Step 3:** Run `synlynk identity list` — confirm both show `provisioned`.
-- [ ] **Step 4:** Run `synlynk doctor` — confirm `_hc_identity_roles` reports `ok`.
-- [ ] **Step 5:** Dispatch a trivial `dev`-role job that opens a PR (`--requires-gh-write`); confirm via `gh pr view <n> --json author` that the author is `rxcc-dev[bot]`, not the human's personal account.
-- [ ] **Step 6:** Dispatch a `qa`-role job that runs `gh pr review <n> --approve` on that PR; confirm it succeeds (the original #423/#417 failure mode) and `gh pr view <n> --json reviewDecision` returns `APPROVED`, not empty.
-- [ ] **Step 7:** Report results back — this validates the spec's core motivating claims before any further rollout (`synlynk init`/`upgrade` auto-triggering from rollout steps 3-4) is scheduled.
+- [ ] **Step 2:** Run `synlynk identity list` — confirm `dev` shows `provisioned`.
+- [ ] **Step 3:** Run `synlynk doctor` — confirm `_hc_identity_roles` and `_hc_identity_file_perms` (Task 7) both report `ok`.
+- [ ] **Step 4:** Dispatch a trivial `dev`-role job that opens a PR (`--requires-gh-write`); confirm via `gh pr view <n> --json author` that the author is `rxcc-dev[bot]`, not the human's personal account.
+- [ ] **Step 5:** Run `synlynk logs <job-id>` on that dispatch and confirm the minted token does not appear verbatim in the output (Task 9's redaction working against a real token, not just the unit test's fake one).
+- [ ] **Step 6:** Report results back to the user. Only after this single-role slice is confirmed working should a follow-up plan be written to (a) provision the `qa` role and validate the cross-role review scenario from #423/#417 (`gh pr review <n> --approve` succeeding with a non-empty `reviewDecision`), and (b) generalize `GH_TOKEN` injection beyond the current `--requires-gh-write`-gated single-role case. Do not fold either into this validation pass — that's the "ship fully as planned" scope the panel explicitly rejected.
 
 ---
 
@@ -1162,4 +1526,8 @@ Co-Authored-By: Codex <noreply@openai.com>"
 
 **Gaps flagged to the user, not silently resolved:** the RS256-signing dependency question (resolved via user decision: shell out to `openssl`) and the `init`/`upgrade` vs. `doctor` integration point (flagged above, recommend confirming before Task 6 execution if the literal spec wording matters more than matching existing extension points).
 
-**Type/name consistency check:** `get_installation_token(role, app_config)` (Task 2) is called identically in Task 5's `_resolve_dispatch_gh_token`. `load_declared_roles()`/`write_declared_roles()` (Task 1) are called identically in Tasks 6 and 7. `cmd_identity_init_role(role, project=None)` (Task 3) signature matches its Task 7 modification and its Task 3/8 CLI call site (`cmd_identity_init_role(role)`).
+**Type/name consistency check:** `get_installation_token(role, app_config)` (Task 2) is called identically in Task 5's `_resolve_dispatch_gh_token`. `load_declared_roles()`/`write_declared_roles()` (Task 1) are called identically in Tasks 6 and 7. `cmd_identity_init_role(role, project=None)` (Task 3) signature matches its Task 7 modification and its Task 3/8 CLI call site (`cmd_identity_init_role(role)`). `_token_cache` (Task 2, `github_app_auth.py`) is read identically by Task 9's `_redact_active_tokens`.
+
+**Panel review (2026-07-25):** Because this touches auth, `synlynk decide --panel claude,agy,codex,grok --record` was run before dispatch (`project-docs/decisions/2026-07-25-should-synlynk-implement-per-role-github.md`). All three responding panelists (agy returned no output) converged: proceed with Codex as implementer per the capability table, but narrow scope and add hygiene gates before merge. This plan was revised in response — see "Panel Decision (2026-07-25) — Read This Second" near the top, and the six items it lists map onto this plan as: narrower first slice → Task 10 validates `dev` only, `qa` deferred; `GH_TOKEN` injection gated on `requires_gh_write` → Task 5 (already matched existing #426 pattern, no change needed); hardened openssl path resolution → Task 2's `_resolve_openssl_path`; 0o600 permission drift-check → Task 7's `_hc_identity_file_perms`; log/telemetry secret scrubbing → Task 9; extra security review gate before merge → this is a process instruction for the PR itself (not a code task): **the PR implementing this plan requires an explicit Claude security-focused review pass covering the threat model and token-handling details, in addition to the standard non-authoring-reviewer + `synlynk pr check` rule from CLAUDE.md's PR Review Discipline** — flag this to whoever merges the PR.
+
+**Total tasks: 10** (was 8 before panel revision — Task 7 "Hygiene hardening" and Task 9 "Redact minted GH_TOKEN values" are new; old Task 7 "Auto-register roles" renumbered to Task 8; old Task 8 "End-to-end manual validation" renumbered to Task 10 and narrowed to single-role scope).
