@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 import time
 from pathlib import Path
 import importlib.util
@@ -270,6 +271,64 @@ def test_cmd_quota_json(project_dir, capsys):
     assert "grok" in agents
     assert agents["grok"]["windows"]
     assert any(w["used"] == 600 for w in agents["grok"]["windows"] if w["unit"] == "tokens")
+
+
+def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import synlynk as sl
+
+    db_path = tmp_path / ".synlynk" / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(sl._DB_SCHEMA)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('story-stale', 'Stale view')")
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, discipline, org_domain, role, stage, "
+        " industry, phase, signal_source, quality) "
+        "VALUES ('story-stale', 'claude', 'claude-sonnet-4-6', 'backend', 'backend', "
+        "'platform', 'dev', 'open', 'ott', 'build', 'auto', 9.0)"
+    )
+    conn.execute("DROP VIEW IF EXISTS capability_scores")
+    conn.executescript("""
+        CREATE VIEW capability_scores AS
+        SELECT
+            agent,
+            model_version,
+            engg_domain,
+            org_domain,
+            industry,
+            phase,
+            SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
+              SUM(pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER)))
+              AS weighted_score,
+            COUNT(*) AS sample_count,
+            MAX(ts) AS last_seen
+        FROM capability_ratings
+        WHERE split_model = 0
+        GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
+    """)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(sl, "DB_PATH", str(db_path))
+
+    conn = sl._get_db()
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_scores)")}
+        assert {"discipline", "role", "stage"} <= cols
+
+        discipline = conn.execute(
+            "SELECT discipline FROM capability_scores LIMIT 1"
+        ).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM capability_scores WHERE discipline=?",
+            (discipline,),
+        ).fetchone()[0]
+        assert count >= 1
+    finally:
+        conn.close()
 
 
 def test_agent_from_command_path_and_gemini_alias(project_dir):
