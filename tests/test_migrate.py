@@ -519,6 +519,18 @@ def test_cmd_memory_add_updates_existing_section(tmp_path, monkeypatch):
     assert count == 1
 
 
+def test_cmd_memory_add_writes_pre_migration_too(project_dir):
+    from synlynk.db import cmd_memory_add
+
+    cmd_memory_add("Test Section", "test body", author="nikhil")
+
+    path = os.path.join(str(project_dir), "project-docs", "memory.md")
+    assert os.path.exists(path)
+    content = open(path).read()
+    assert "Test Section" in content
+    assert "test body" in content
+
+
 def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
     synlynk.cmd_devlog_append(

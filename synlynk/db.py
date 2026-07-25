@@ -1438,23 +1438,35 @@ def _generate_costs_md() -> None:
         _dr_sync("costs.md")
 
 def _write_memory_md() -> None:
-    """Regenerate .synlynk/project-docs/memory.md from memory_entries table."""
-    from synlynk import _get_db, _synlynk_project_docs_dir
+    """Regenerate memory.md from memory_entries table.
+    Post-migration: writes to .synlynk/project-docs/memory.md.
+    Pre-migration: writes to project-docs/memory.md."""
+    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
+
+    if _is_migrated():
+        path = os.path.join(_synlynk_project_docs_dir(), "memory.md")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        path = os.path.join(docs_dir, "memory.md")
+
     conn = _get_db()
-    rows = conn.execute(
-        "SELECT section, body FROM memory_entries ORDER BY id"
-    ).fetchall()
+    rows = conn.execute("SELECT section, body FROM memory_entries ORDER BY id").fetchall()
     conn.close()
-    lines = ["# synlynk Memory\n\n"]
+    lines = [
+        "# synlynk Memory (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk memory add | Do NOT hand-edit this file\n\n",
+    ]
     for section, body in rows:
         lines.append(f"## {section}\n\n{body}\n\n")
-    path = os.path.join(_synlynk_project_docs_dir(), "memory.md")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.writelines(lines)
 
 def cmd_memory_add(section: str, body: str, author: str = None) -> None:
-    """Add or update a memory entry. Writes through to flat file if migrated."""
+    """Add or update a memory entry. Always writes through to the flat file;
+    DR sync only fires once this repo is migrated."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     conn = _get_db()
     existing = conn.execute(
@@ -1472,8 +1484,8 @@ def cmd_memory_add(section: str, body: str, author: str = None) -> None:
         )
     conn.commit()
     conn.close()
+    _write_memory_md()
     if _is_migrated():
-        _write_memory_md()
         _dr_sync("memory.md")
 
 def _write_devlog_file(author: str) -> None:
