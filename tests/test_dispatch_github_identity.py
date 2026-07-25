@@ -121,7 +121,12 @@ def _dispatch_with_fake_popen(
     monkeypatch.setattr(
         dispatch_mod,
         "_create_job_worktree",
-        lambda job_id, agent: str(tmp_path),
+        lambda job_id, agent, base=None: {
+            "path": str(tmp_path),
+            "branch": "branch",
+            "base_branch": "main",
+            "base_sha": "0" * 40,
+        },
     )
     monkeypatch.setattr(
         dispatch_mod,
