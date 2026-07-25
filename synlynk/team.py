@@ -7,6 +7,9 @@ import subprocess
 import re
 import sys
 import time
+from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 
@@ -74,6 +77,159 @@ def _ensure_identity_key() -> str:
         except (FileNotFoundError, OSError):
             pass
     return key_path
+
+
+def _role_slug(role: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", role.lower()).strip("-")
+    return slug or "role"
+
+
+def _role_app_dir() -> Path:
+    return Path("synlynk") / "github_apps"
+
+
+def _role_app_paths(role: str) -> tuple[Path, Path, Path]:
+    slug = _role_slug(role)
+    app_dir = _role_app_dir()
+    return app_dir, app_dir / f"{slug}.json", app_dir / f"{slug}.pem"
+
+
+def _build_app_manifest_url(role: str) -> str:
+    slug = _role_slug(role)
+    manifest = {
+        "name": f"synlynk-{slug}",
+        "url": "https://synlynk.com",
+        "hook_attributes": {
+            "url": f"https://synlynk.com/github-apps/{slug}/webhook",
+        },
+        "redirect_url": f"https://synlynk.com/github-apps/{slug}/callback",
+        "public": False,
+        "default_events": [],
+        "default_permissions": {
+            "metadata": "read",
+            "contents": "read",
+            "issues": "write",
+            "pull_requests": "write",
+        },
+    }
+    query = urlencode({"manifest": json.dumps(manifest, separators=(",", ":"))})
+    return f"https://github.com/settings/apps/new?{query}"
+
+
+def _github_auth_token() -> str:
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        return token.strip()
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _extract_manifest_code(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.query:
+        code = parse_qs(parsed.query).get("code", [""])[0]
+        if code:
+            return code.strip()
+    if "code=" in value:
+        parsed_qs = parse_qs(value.split("?", 1)[-1])
+        code = parsed_qs.get("code", [""])[0]
+        if code:
+            return code.strip()
+    return value
+
+
+def _exchange_manifest_code(code: str) -> dict:
+    token = _github_auth_token()
+    url = f"https://api.github.com/app-manifests/{code}/conversions"
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, data=b"", method="POST", headers=headers)
+    with urlopen(request) as response:
+        payload = response.read().decode("utf-8")
+    return json.loads(payload)
+
+
+def _write_role_app_config(role: str, app_config: dict) -> dict:
+    app_dir, json_path, pem_path = _role_app_paths(role)
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    pem = (
+        app_config.get("pem")
+        or app_config.get("private_key")
+        or app_config.get("private_key_pem")
+        or ""
+    )
+    pem_path.write_text(pem)
+    try:
+        os.chmod(pem_path, 0o600)
+    except OSError:
+        pass
+
+    config = {
+        "role": role,
+        "slug": _role_slug(role),
+        "app_id": app_config.get("id"),
+        "client_id": app_config.get("client_id"),
+        "client_secret": app_config.get("client_secret"),
+        "webhook_secret": app_config.get("webhook_secret"),
+        "name": app_config.get("name"),
+        "html_url": app_config.get("html_url"),
+        "pem_path": str(pem_path),
+    }
+    if "manifest_url" in app_config:
+        config["manifest_url"] = app_config["manifest_url"]
+    if "installation_id" in app_config:
+        config["installation_id"] = app_config["installation_id"]
+
+    json_path.write_text(json.dumps(config, indent=2) + "\n")
+    return config
+
+
+def _confirm_installation(role: str, app_config: dict) -> dict:
+    from synlynk.github_app_auth import _sign_jwt
+
+    app_id = app_config.get("app_id") or app_config.get("id")
+    pem_path = app_config.get("pem_path")
+    if not pem_path:
+        raise ValueError("missing pem_path for role app config")
+
+    try:
+        jwt = _sign_jwt(pem_path, app_id=app_id)
+    except TypeError:
+        try:
+            jwt = _sign_jwt(pem_path, app_id)
+        except TypeError:
+            jwt = _sign_jwt(pem_path)
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {jwt}",
+    }
+    request = Request("https://api.github.com/app", headers=headers)
+    with urlopen(request) as response:
+        confirmation = json.loads(response.read().decode("utf-8"))
+
+    if app_id is not None:
+        confirmed_id = confirmation.get("id")
+        if confirmed_id is not None and str(confirmed_id) != str(app_id):
+            raise RuntimeError(
+                f"installation confirmation mismatch for {role}: {confirmed_id} != {app_id}"
+            )
+    return confirmation
 
 
 def _sign_capability_rating(data: dict) -> str:
@@ -509,3 +665,37 @@ def cmd_identity_init() -> None:
         print(f"  Public key: {pub}")
     else:
         print("  (public key file not found)")
+
+
+def cmd_identity_init_role(role: str) -> None:
+    if not role:
+        raise ValueError("role is required")
+
+    manifest_url = _build_app_manifest_url(role)
+    print(f"  role: {role}")
+    print(f"  manifest url: {manifest_url}")
+
+    response = input("Paste the GitHub manifest code or redirect URL: ").strip()
+    code = _extract_manifest_code(response)
+    if not code:
+        raise ValueError("manifest code is required")
+
+    app_config = _exchange_manifest_code(code)
+    app_config["role"] = role
+    app_config["manifest_url"] = manifest_url
+    app_config["manifest_code"] = code
+
+    written = _write_role_app_config(role, app_config)
+    confirmation = _confirm_installation(role, written)
+    _, json_path, pem_path = _role_app_paths(role)
+
+    print(f"  app config: {json_path}")
+    print(f"  pem: {pem_path}")
+    if confirmation.get("html_url"):
+        print(f"  confirmed: {confirmation['html_url']}")
+    elif confirmation.get("id") is not None:
+        print(f"  confirmed app id: {confirmation['id']}")
+
+
+def cmd_identity_list() -> None:
+    pass
