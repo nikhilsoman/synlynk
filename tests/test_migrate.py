@@ -539,16 +539,15 @@ def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
 
 def test_update_costs_writes_to_db_and_flat_file_post_migration(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
-    (backup / "costs.md").write_text("| Date | Agent | In | Out | Cost | Notes |\n")
-    before_lines = (backup / "costs.md").read_text().splitlines()
     synlynk.update_costs("scan", 50000, 10000, 12.5)
     conn = synlynk._get_db()
     count = conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0]
     conn.close()
     assert count == 1
-    content_lines = (backup / "costs.md").read_text().splitlines()
-    assert len(content_lines) == len(before_lines) + 1
-    assert sum(1 for line in content_lines if "scan" in line) == 1
+    content = (backup / "costs.md").read_text()
+    assert "# Costs (generated - source of truth is state.db)" in content
+    assert "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |" in content
+    assert sum(1 for line in content.splitlines() if "scan" in line) == 1
 
 
 def test_generate_context_uses_db_when_migrated(tmp_path, monkeypatch):

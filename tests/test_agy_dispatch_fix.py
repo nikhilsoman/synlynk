@@ -1368,19 +1368,18 @@ def test_extend_tokencost_extraction_with_cache_b_update_costs_inserts_fk_column
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk" / "project-docs").mkdir(parents=True)
 
-    captured = {}
+    calls = []
 
     class FakeConn(object):
         def execute(self, query, params=None):
-            captured["query"] = query
-            captured["params"] = params
+            calls.append((query, params))
             return self
 
         def commit(self):
-            captured["committed"] = True
+            calls.append(("commit", None))
 
         def close(self):
-            captured["closed"] = True
+            calls.append(("close", None))
 
     monkeypatch.setattr(sl, "_is_migrated", lambda: True)
     monkeypatch.setattr(sl, "_get_db", lambda: FakeConn())
@@ -1398,14 +1397,19 @@ def test_extend_tokencost_extraction_with_cache_b_update_costs_inserts_fk_column
         phase_id=11,
     )
 
-    assert "story_id" in captured["query"]
-    assert "epic_id" in captured["query"]
-    assert "phase_id" in captured["query"]
-    assert captured["params"][2] == "claude-sonnet-4-6"
-    assert captured["params"][5] == 128
-    assert captured["params"][13] == "story-1"
-    assert captured["params"][14] == 7
-    assert captured["params"][15] == 11
+    insert_query, insert_params = next(
+        (query, params)
+        for query, params in calls
+        if "INSERT INTO cost_entries" in query or "UPDATE cost_entries" in query
+    )
+    assert "story_id" in insert_query
+    assert "epic_id" in insert_query
+    assert "phase_id" in insert_query
+    assert insert_params[2] == "claude-sonnet-4-6"
+    assert insert_params[5] == 128
+    assert insert_params[13] == "story-1"
+    assert insert_params[14] == 7
+    assert insert_params[15] == 11
 
 
 def test_extend_tokencost_extraction_with_cache_b_update_costs_backwards_compatible_default_args(tmp_path, monkeypatch):
@@ -1434,7 +1438,8 @@ def test_extend_tokencost_extraction_with_cache_b_update_costs_backwards_compati
     sl.update_costs("claude", 100, 50, 5.0)
 
     assert calls
-    assert "cost_entries" in calls[0][0]
+    insert_query = next(query for query, _ in calls if "INSERT INTO cost_entries" in query)
+    assert "cost_entries" in insert_query
 
 
 def test_fix_a_nameerror_regression_in_your_own_prior_work_exec_command_does_not_raise(

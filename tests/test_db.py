@@ -1,6 +1,6 @@
 import os
 
-from synlynk.db import _generate_roadmap_md, cmd_roadmap_add
+from synlynk.db import _generate_costs_md, _generate_roadmap_md, cmd_cost_log, cmd_roadmap_add
 
 
 def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
@@ -91,3 +91,61 @@ def test_cmd_roadmap_add_phase_without_arc_raises(project_dir):
 
     with pytest.raises(ValueError, match="no roadmap arc"):
         cmd_roadmap_add(version="v9.9.9", phase_title="Orphan phase")
+
+
+def test_generate_costs_md_creates_file_pre_migration(project_dir):
+    from synlynk import _insert_cost_row
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="claude",
+        model="claude-sonnet-5",
+        input_tokens=1000,
+        output_tokens=200,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=0.0057,
+        notes="test row",
+        story_id=None,
+        api_equivalent_usd=0.0057,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _generate_costs_md()
+
+    path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    assert os.path.exists(path)
+    content = open(path).read()
+    assert "claude" in content
+    assert "test row" in content
+    assert "Do NOT hand-edit" in content
+
+
+def test_cmd_cost_log_regenerates_costs_md(project_dir):
+    cmd_cost_log(agent="codex", tokens_in=500, tokens_out=100, note="from cmd_cost_log")
+
+    path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    assert os.path.exists(path)
+    assert "from cmd_cost_log" in open(path).read()
+
+
+def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
+    import json
+
+    from tests.test_migrate import _setup_migrated
+
+    dr_dir = tmp_path / "dr_mirror"
+    dr_dir.mkdir()
+    _setup_migrated(tmp_path, monkeypatch)
+    cfg_path = os.path.join(".synlynk", "config.json")
+    with open(cfg_path, "w") as f:
+        json.dump({"dr_sync_path": str(dr_dir)}, f)
+
+    cmd_cost_log(agent="gemini", tokens_in=10, tokens_out=5)
+
+    md_path = os.path.join(".synlynk", "project-docs", "costs.md")
+    assert os.path.exists(md_path)
+    dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
+    assert os.path.exists(dr_path)

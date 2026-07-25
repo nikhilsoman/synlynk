@@ -422,7 +422,9 @@ def test_costs_md_shows_two_dollar_columns_for_subscription_row(tmp_path, monkey
     with open(costs_file) as f:
         content = f.read()
 
-    assert "[in-quota]" in content
+    assert "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |" in content
+    assert "| codex |" in content
+    assert "| estimated_token_rate |" in content
 
 
 def test_parse_costs_md_sums_actual_not_api_equivalent_for_new_format_rows(

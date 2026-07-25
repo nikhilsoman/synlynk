@@ -3773,6 +3773,7 @@ def init(force: bool = False, agents: list = None,
 # --- module extractions (backwards compat) ---
 from synlynk.cli import main, cmd_watch  # noqa: E402
 from synlynk.db import (  # noqa: E402
+    _generate_costs_md,
     _generate_todo_md,
     _import_todo_to_stories,
     _migrate_db,

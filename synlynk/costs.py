@@ -704,10 +704,7 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             actual_usd=actual_usd,
             payment_mode=payment_value.mode,
         )
-        costs_file = os.path.join(_pkg("_synlynk_project_docs_dir")(), "costs.md")
-        os.makedirs(os.path.dirname(costs_file), exist_ok=True)
-        with open(costs_file, "a") as f:
-            f.write(entry)
+        _pkg("_generate_costs_md")()
         _pkg("_dr_sync")("costs.md")
     else:
         _pkg("_check_upstream_divergence")()

@@ -1396,6 +1396,47 @@ def _generate_roadmap_md() -> None:
     if _is_migrated():
         _dr_sync("roadmap.md")
 
+def _generate_costs_md() -> None:
+    """Writes costs.md as a generated view of cost_entries.
+    Post-migration: writes to .synlynk/project-docs/costs.md.
+    Pre-migration: writes to project-docs/costs.md."""
+    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
+    if _is_migrated():
+        costs_path = os.path.join(_synlynk_project_docs_dir(), "costs.md")
+        os.makedirs(os.path.dirname(costs_path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        costs_path = os.path.join(docs_dir, "costs.md")
+
+    conn = _get_db()
+    cursor = conn.execute(
+        "SELECT session_date, agent, model, input_tokens, output_tokens, "
+        "total_cost_usd, cost_source, story_id, notes FROM cost_entries ORDER BY id ASC"
+    )
+    rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
+    conn.close()
+
+    lines = [
+        "# Costs (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk cost log | Do NOT hand-edit this file\n\n",
+        "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n",
+        "|---|---|---|---|---|---|---|---|---|\n",
+    ]
+    for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes in rows:
+        cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
+        lines.append(
+            f"| {session_date} | {agent} | {model or '-'} | {input_tokens} | {output_tokens} | "
+            f"{cost_str} | {cost_source} | {story_id or '-'} | {notes or ''} |\n"
+        )
+
+    with open(costs_path, "w") as f:
+        f.writelines(lines)
+
+    if _is_migrated():
+        _dr_sync("costs.md")
+
 def _write_memory_md() -> None:
     """Regenerate .synlynk/project-docs/memory.md from memory_entries table."""
     from synlynk import _get_db, _synlynk_project_docs_dir
@@ -1838,9 +1879,12 @@ def cmd_cost_log(
     from synlynk import (
         _GREEN,
         _RESET,
+        _dr_sync,
         _get_db,
+        _is_migrated,
         _insert_cost_row,
         extract_model_version,
+        _generate_costs_md,
     )
     from synlynk.costs import resolve_payment_value
 
@@ -1879,6 +1923,9 @@ def cmd_cost_log(
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
     )
+    _generate_costs_md()
+    if _is_migrated():
+        _dr_sync("costs.md")
     label = f"story {story_id}" if story_id else f"phase={phase or 'dream/plan'} (no story)"
     print(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
