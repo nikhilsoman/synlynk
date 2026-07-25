@@ -165,6 +165,27 @@ def test_dispatch_agent_injects_gh_token_when_requires_gh_write(tmp_path, monkey
     assert captured_env.get("GH_TOKEN") == "minted-token-abc"
 
 
+def test_dispatch_agent_strips_inherited_gh_tokens_when_requires_gh_write_token_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GH_TOKEN", "fake-personal-token-should-not-leak")
+    monkeypatch.setenv("GITHUB_TOKEN", "fake-personal-token-should-not-leak-2")
+
+    dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        agent="grok",
+        requires_gh_write=True,
+        token_resolver=lambda role: None,
+        role_for_story="qa",
+    )
+
+    stderr = capsys.readouterr().err
+
+    assert job["agent"] == "grok"
+    assert "GH_TOKEN" not in captured_env
+    assert "GITHUB_TOKEN" not in captured_env
+    assert "no role-scoped GitHub token available" in stderr
+
+
 def test_dispatch_agent_does_not_inject_gh_token_by_default(tmp_path, monkeypatch):
     dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
         tmp_path,

@@ -1320,6 +1320,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
         if gh_token:
             proc_env["GH_TOKEN"] = gh_token
+        else:
+            proc_env.pop("GH_TOKEN", None)
+            proc_env.pop("GITHUB_TOKEN", None)
+            print(
+                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
+                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
+                "silently fall back to a personal credential; GitHub write actions in this "
+                "job will fail until a role App is provisioned (see `synlynk identity init`).",
+                file=sys.stderr,
+            )
     for var in contract.get("env_vars_required", []):
         if "=" in var:
             k, v = var.split("=", 1)
