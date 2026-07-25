@@ -1,8 +1,10 @@
 """synlynk team: onboarding (join), team digest, consensus (decide), identity keys."""
 
 import hashlib
+import html
 import json
 import os
+from pathlib import Path
 import subprocess
 import re
 import sys
@@ -59,6 +61,74 @@ def get_mode() -> str:
         except (json.JSONDecodeError, IOError):
             pass
     return "single"
+
+
+def _role_slug(value):
+    return re.sub(r"[^a-z0-9]+", "-", str(value).lower()).strip("-")
+
+
+def _resolve_project_slug() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            git_common_dir = os.path.abspath(result.stdout.strip())
+            repo_root = os.path.dirname(git_common_dir)
+            return _role_slug(os.path.basename(repo_root))
+    except Exception:
+        pass
+    return _role_slug(os.path.basename(os.getcwd()))
+
+
+def _truncate_app_name(project_slug: str, role_slug: str, max_len: int = 34) -> str:
+    prefix = "synlynk-"
+    suffix = f"-{role_slug}"
+    available = max_len - len(prefix) - len(suffix)
+    if available < 1:
+        return f"{prefix}{role_slug}"[:max_len]
+    trimmed_project = project_slug[:available]
+    return f"{prefix}{trimmed_project}{suffix}"
+
+
+def _build_app_manifest_url(project, role: str) -> str:
+    project_slug = _role_slug(project) if project else _resolve_project_slug()
+    role_slug = _role_slug(role)
+    app_name = _truncate_app_name(project_slug, role_slug)
+    manifest = {
+        "name": app_name,
+        "url": "https://synlynk.com",
+        "hook_attributes": {
+            "url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/webhook",
+        },
+        "redirect_url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/callback",
+        "public": False,
+        "default_events": [],
+        "default_permissions": {
+            "metadata": "read",
+            "contents": "read",
+            "issues": "write",
+            "pull_requests": "write",
+        },
+    }
+    manifest_json = json.dumps(manifest)
+    escaped_manifest = html.escape(manifest_json, quote=True)
+    form_html = (
+        "<!doctype html><html><body>"
+        '<form id="ghform" action="https://github.com/settings/apps/new" method="post">'
+        f'<input type="hidden" name="manifest" value="{escaped_manifest}">'
+        "</form>"
+        '<script>document.getElementById("ghform").submit();</script>'
+        "</body></html>"
+    )
+    forms_dir = Path("synlynk") / "manifest_forms"
+    forms_dir.mkdir(parents=True, exist_ok=True)
+    form_path = forms_dir / f"{role_slug}.html"
+    form_path.write_text(form_html)
+    return form_path.resolve().as_uri()
 
 
 def _ensure_identity_key() -> str:
@@ -509,3 +579,12 @@ def cmd_identity_init() -> None:
         print(f"  Public key: {pub}")
     else:
         print("  (public key file not found)")
+
+
+_package = sys.modules.get("synlynk")
+if _package is not None:
+    _package._build_app_manifest_url = _build_app_manifest_url
+    _package._resolve_project_slug = _resolve_project_slug
+    _package._truncate_app_name = _truncate_app_name
+    _package._exchange_manifest_code = getattr(_package, "_exchange_manifest_code", lambda *args, **kwargs: None)
+    _package._confirm_installation = getattr(_package, "_confirm_installation", lambda *args, **kwargs: None)
