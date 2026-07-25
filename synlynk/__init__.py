@@ -2309,16 +2309,18 @@ def _render_claude_log_line(line: str):
 
 def _redact_active_tokens(text: str) -> str:
     """Strip any currently-cached GitHub App installation token values from
-    display text. Best-effort: only catches tokens minted this process
-    lifetime (github_app_auth._token_cache), not tokens from prior runs —
-    those have already expired by the time a later `synlynk logs` call
-    could display them, since installation tokens live ~1hr."""
-    from synlynk.github_app_auth import _token_cache
+    display text. Checks both the in-process cache (same-process dispatch)
+    and the on-disk redaction cache (tokens minted by an earlier, separate
+    `synlynk dispatch` process), since installation tokens live ~1hr and
+    `dispatch`/`logs` are normally different CLI invocations."""
+    from synlynk.github_app_auth import _load_redaction_tokens, _token_cache
 
     for entry in _token_cache.values():
         token = entry.get("token")
         if token:
             text = text.replace(token, "***REDACTED***")
+    for token in _load_redaction_tokens():
+        text = text.replace(token, "***REDACTED***")
     return text
 
 

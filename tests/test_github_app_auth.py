@@ -86,3 +86,67 @@ def test_get_installation_token_mints_when_no_cache_entry(monkeypatch):
     app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
     token = gh_auth.get_installation_token("qa", app_config)
     assert token == "brand-new-token"
+
+
+def test_get_installation_token_persists_redaction_cache(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    gh_auth._token_cache.clear()
+    monkeypatch.setattr(
+        gh_auth,
+        "_mint_installation_token",
+        lambda app_id, installation_id, private_key_path: ("persisted-token", time.time() + 3600),
+    )
+    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
+
+    token = gh_auth.get_installation_token("dev", app_config)
+
+    assert token == "persisted-token"
+    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
+    assert cache_path.exists()
+    cache_data = json.loads(cache_path.read_text())
+    assert cache_data["persisted-token"]["role"] == "dev"
+    assert cache_data["persisted-token"]["expires_at"] > time.time()
+    assert (cache_path.stat().st_mode & 0o777) == 0o600
+
+
+def test_load_redaction_tokens_omits_expired_entries(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({
+        "expired-token": {"expires_at": time.time() - 10, "role": "dev"},
+        "valid-token": {"expires_at": time.time() + 3600, "role": "dev"},
+    }))
+
+    tokens = gh_auth._load_redaction_tokens()
+
+    assert tokens == ["valid-token"]
+
+
+def test_get_installation_token_prunes_expired_redaction_entries(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({
+        "expired-token": {"expires_at": time.time() - 10, "role": "old"},
+    }))
+    gh_auth._token_cache.clear()
+    monkeypatch.setattr(
+        gh_auth,
+        "_mint_installation_token",
+        lambda app_id, installation_id, private_key_path: ("fresh-token", time.time() + 3600),
+    )
+    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
+
+    token = gh_auth.get_installation_token("dev", app_config)
+
+    assert token == "fresh-token"
+    cache_data = json.loads(cache_path.read_text())
+    assert "expired-token" not in cache_data
+    assert "fresh-token" in cache_data
