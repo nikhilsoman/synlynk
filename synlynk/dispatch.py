@@ -457,6 +457,16 @@ def _summary_status_label(summary_text: str) -> Optional[str]:
     return match.group(1).strip()
 
 
+def _summary_files_touched_count(summary_text: str) -> Optional[int]:
+    match = re.search(r"^files:\s+(\d+)\s+touched$", summary_text, re.MULTILINE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
 def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         exit_code: Optional[int], duration_s: Optional[float],
                         in_tokens: int, out_tokens: int, cost_usd: float,
@@ -567,8 +577,18 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
         except OSError:
             existing_summary = None
     existing_status = _summary_status_label(existing_summary) if existing_summary else None
+    existing_files_touched = _summary_files_touched_count(existing_summary) if existing_summary else None
     new_status = _summary_status_label(summary)
     if existing_status == "OK (exit 0)" and new_status == "UNKNOWN (exit unknown)":
+        return existing_summary
+    if (
+        existing_summary
+        and existing_files_touched
+        and not (files_touched or [])
+        and exit_code in (None, -1)
+        and existing_status
+        and re.match(r"^(?:OK|FAILED)\s+\(exit\s+-?\d+\)$", existing_status)
+    ):
         return existing_summary
     with open(summary_path, "w") as f:
         f.write(summary)
