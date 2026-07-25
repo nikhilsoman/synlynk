@@ -104,3 +104,12 @@
 | 2026-07-20 21:40 | grok | 1 | 36218/5785 | [est] $0.1954 | exec: grok job job-3b38792... |
 | 2026-07-22 09:11 | grok | 1 | 39030/4746 | [est] $0.1883 | exec: grok job job-d1fe5a3... |
 | 2026-07-22 09:12 | grok | 1 | 70431/7752 | [est] $0.3276 | exec: grok job job-f312219... |
+| 2026-07-25 09:49 | agy | 1 | 5000/1500 | [est] $0.0375 | backfill: jetski repro test #1 (grant-based flag, job-960141f6) — success, no jetski repro |
+| 2026-07-25 09:49 | agy | 1 | 5000/1500 | [est] $0.0375 | backfill: jetski repro test #2 (grant-based flag, settings.json removed, job-8bdc9484) — success, no jetski repro |
+| 2026-07-25 09:49 | agy | 1 | 6000/1800 | [est] $0.0450 | backfill: jetski repro test #3 (harness_overrides matching rxcc config, job-9d04920e) — success, no jetski repro |
+| 2026-07-25 09:49 | agy | 1 | 4000/500 | [est] $0.0195 | backfill: jetski repro test #4 attempt (forced command-tool use, job-f570bc1a) — failed on transient network error, inconclusive, retried |
+| 2026-07-25 09:49 | agy | 1 | 6000/2000 | [est] $0.0480 | backfill: jetski repro test #4 retry (forced command-tool use, job-26c14922) — success, no jetski repro |
+| 2026-07-25 09:49 | codex | 1 | 8000/1500 | [est] $0.0465 | backfill: PR check job-7edd3a56 — wrong-syntax instruction (pr check <N> invalid), redispatched |
+| 2026-07-25 09:49 | codex | 1 | 10000/2000 | [est] $0.0600 | backfill: PR #479 check (job-452cb8a3) — sandbox DB-open limitation, ground-truthed clean outside sandbox |
+| 2026-07-25 09:49 | codex | 1 | 10000/2000 | [est] $0.0600 | backfill: PR #476 check (job-06b9635a) — sandbox DB-open limitation, ground-truthed clean outside sandbox |
+| 2026-07-25 09:49 | claude | 1 | 45000/12000 | [est] $0.3150 | backfill: PM-level native work — agy jetski investigation repro design/analysis, RCA doc write-up, PR #479/#476 review+merge coordination — not captured by dispatch telemetry |
