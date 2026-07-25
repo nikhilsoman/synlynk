@@ -365,6 +365,43 @@ def test_fix_synlynk_jobs_all_permanently_shows_unknown_shared_exit_marker_race(
     assert os.path.exists(exit_path)
 
 
+def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.doctor as doctor_mod
+
+    monkeypatch.setattr(
+        doctor_mod,
+        "HEALTH_CHECKS",
+        [lambda: sl.HealthCheck("identity_roles", "ok", "all declared roles provisioned")],
+    )
+    monkeypatch.setattr(
+        doctor_mod,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "agy": {
+                "cli": "agy",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True})
+    monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {}})
+
+    exit_code = sl.cmd_doctor()
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "synlynk doctor" in out
+    assert "identity_roles" in out
+    assert "doctor [agy]" in out
+
+
 def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
