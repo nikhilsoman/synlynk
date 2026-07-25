@@ -7,6 +7,9 @@ import subprocess
 import re
 import sys
 import time
+from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 
@@ -74,6 +77,163 @@ def _ensure_identity_key() -> str:
         except (FileNotFoundError, OSError):
             pass
     return key_path
+
+
+def _role_slug(role: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", role.lower()).strip("-")
+    return slug or "role"
+
+
+def _role_app_dir() -> Path:
+    return Path(".synlynk") / "github_apps"
+
+
+def _role_app_paths(role: str) -> tuple[Path, Path, Path]:
+    slug = _role_slug(role)
+    app_dir = _role_app_dir()
+    return app_dir, app_dir / f"{slug}.json", app_dir / f"{slug}.pem"
+
+
+def _build_app_manifest_url(project, role: str) -> str:
+    project_slug = _role_slug(project) if project else _role_slug(os.path.basename(os.getcwd()))
+    role_slug = _role_slug(role)
+    manifest = {
+        "name": f"synlynk-{project_slug}-{role_slug}",
+        "url": "https://synlynk.com",
+        "hook_attributes": {
+            "url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/webhook",
+        },
+        "redirect_url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/callback",
+        "public": False,
+        "default_events": [],
+        "default_permissions": {
+            "metadata": "read",
+            "contents": "read",
+            "issues": "write",
+            "pull_requests": "write",
+        },
+    }
+    query = urlencode({"manifest": json.dumps(manifest, separators=(",", ":"))})
+    return f"https://github.com/settings/apps/new?{query}"
+
+
+def _github_auth_token() -> str:
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        return token.strip()
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _extract_manifest_code(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.query:
+        code = parse_qs(parsed.query).get("code", [""])[0]
+        if code:
+            return code.strip()
+    if "code=" in value:
+        parsed_qs = parse_qs(value.split("?", 1)[-1])
+        code = parsed_qs.get("code", [""])[0]
+        if code:
+            return code.strip()
+    return value
+
+
+def _exchange_manifest_code(code: str) -> dict:
+    token = _github_auth_token()
+    url = f"https://api.github.com/app-manifests/{code}/conversions"
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, data=b"", method="POST", headers=headers)
+    with urlopen(request) as response:
+        payload = response.read().decode("utf-8")
+    return json.loads(payload)
+
+
+def _write_role_app_config(role: str, conversion: dict) -> dict:
+    app_dir, json_path, pem_path = _role_app_paths(role)
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    pem = (
+        conversion.get("pem")
+        or conversion.get("private_key")
+        or conversion.get("private_key_pem")
+        or ""
+    )
+    pem_path.write_text(pem)
+    try:
+        os.chmod(pem_path, 0o600)
+    except OSError:
+        pass
+
+    config = {
+        "role": role,
+        "app_id": conversion.get("id"),
+        "client_id": conversion.get("client_id"),
+        "app_slug": conversion.get("slug") or conversion.get("name") or _role_slug(role),
+        "installation_id": conversion.get("installation_id"),
+        "private_key_path": str(pem_path),
+    }
+    json_path.write_text(json.dumps(config, indent=2) + "\n")
+    return config
+
+
+def _confirm_installation(app_slug: str, json_path: Path) -> dict:
+    from synlynk.github_app_auth import _sign_jwt
+
+    with open(json_path) as f:
+        config = json.load(f)
+
+    app_id = config["app_id"]
+    private_key_path = config["private_key_path"]
+    jwt = _sign_jwt(app_id, private_key_path)
+
+    request = Request(
+        "https://api.github.com/app/installations",
+        method="GET",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Authorization": f"Bearer {jwt}",
+        },
+    )
+    with urlopen(request) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    installations = payload if isinstance(payload, list) else payload.get("installations", [])
+    installation = None
+    for item in installations:
+        if not isinstance(item, dict):
+            continue
+        if item.get("app_slug") == app_slug or item.get("slug") == app_slug or item.get("name") == app_slug:
+            installation = item
+            break
+    if installation is None and installations:
+        first = installations[0]
+        if isinstance(first, dict):
+            installation = first
+    if installation is None or "id" not in installation:
+        raise RuntimeError(f"no installation found for {app_slug}")
+
+    config["installation_id"] = installation["id"]
+    with open(json_path, "w") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+    return installation
 
 
 def _sign_capability_rating(data: dict) -> str:
@@ -509,3 +669,33 @@ def cmd_identity_init() -> None:
         print(f"  Public key: {pub}")
     else:
         print("  (public key file not found)")
+
+
+def cmd_identity_init_role(role: str, project=None) -> None:
+    app_dir, json_path, pem_path = _role_app_paths(role)
+    if json_path.exists():
+        try:
+            existing = json.loads(json_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+        if existing.get("installation_id") and existing.get("private_key_path") and os.path.exists(existing["private_key_path"]):
+            print(f"  role '{role}' already provisioned at {json_path}")
+            return
+
+    manifest_url = _build_app_manifest_url(project, role)
+    print(f"  Open this GitHub App manifest URL for '{role}':")
+    print(f"  {manifest_url}")
+    code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+    if not code:
+        raise RuntimeError("no manifest code provided")
+
+    conversion = _exchange_manifest_code(code)
+    conversion.setdefault("slug", conversion.get("name", _role_slug(role)))
+    conversion["private_key_path"] = str(pem_path)
+    config = _write_role_app_config(role, conversion)
+    _confirm_installation(config["app_slug"], json_path)
+    print(f"  role '{role}' provisioned at {json_path}")
+
+
+def cmd_identity_list():
+    pass

@@ -120,12 +120,18 @@ from synlynk.doctor import (
 )
 from synlynk.team import (
     _build_team_digest,
+    _build_app_manifest_url,
     _ensure_identity_key,
+    _exchange_manifest_code,
+    _confirm_installation,
     _run_agent_sync,
     _sign_capability_rating,
+    _write_role_app_config,
     _write_decision_record,
     cmd_decide,
     cmd_identity_init,
+    cmd_identity_init_role,
+    cmd_identity_list,
     cmd_join,
     cmd_team_status,
     get_mode,
