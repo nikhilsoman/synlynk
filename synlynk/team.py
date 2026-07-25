@@ -7,6 +7,7 @@ import subprocess
 import re
 import sys
 import time
+from pathlib import Path
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 
@@ -74,6 +75,49 @@ def _ensure_identity_key() -> str:
         except (FileNotFoundError, OSError):
             pass
     return key_path
+
+
+def _role_slug(role: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", role.lower()).strip("-")
+    return slug or "role"
+
+
+def _role_app_paths(role: str) -> tuple[Path, Path, Path]:
+    slug = _role_slug(role)
+    app_dir = Path(".synlynk") / "github_apps"
+    return app_dir, app_dir / f"{slug}.json", app_dir / f"{slug}.pem"
+
+
+def _write_role_app_config(role: str, conversion: dict) -> dict:
+    app_dir, json_path, pem_path = _role_app_paths(role)
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    pem = (
+        conversion.get("pem")
+        or conversion.get("private_key")
+        or conversion.get("private_key_pem")
+        or ""
+    )
+    pem_path.write_text(pem)
+    try:
+        os.chmod(pem_path, 0o600)
+    except OSError:
+        pass
+
+    config = {
+        "role": role,
+        "app_id": conversion.get("id"),
+        "client_id": conversion.get("client_id"),
+        "app_slug": conversion.get("slug") or conversion.get("name") or _role_slug(role),
+        "installation_id": conversion.get("installation_id"),
+        "private_key_path": str(pem_path),
+    }
+    json_path.write_text(json.dumps(config, indent=2) + "\n")
+    try:
+        os.chmod(json_path, 0o600)
+    except OSError:
+        pass
+    return config
 
 
 def _sign_capability_rating(data: dict) -> str:

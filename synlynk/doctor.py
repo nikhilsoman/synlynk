@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import stat
 
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
@@ -112,6 +113,30 @@ def _hc_identity_key() -> HealthCheck:
         "warn",
         "No identity key — capability ratings will be unsigned",
         fix="Run: synlynk identity init",
+    )
+
+
+def _hc_identity_file_perms() -> HealthCheck:
+    """Verifies .synlynk/github_apps/*.{json,pem} are still 0o600 — private key
+    material and installation IDs at rest must not be group/world-readable."""
+    apps_dir = os.path.join(".synlynk", "github_apps")
+    if not os.path.isdir(apps_dir):
+        return HealthCheck("identity_file_perms", "ok", "No .synlynk/github_apps/ directory yet")
+    loose = []
+    for fname in sorted(os.listdir(apps_dir)):
+        if not (fname.endswith(".json") or fname.endswith(".pem")):
+            continue
+        path = os.path.join(apps_dir, fname)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if mode != 0o600:
+            loose.append(f"{fname} ({oct(mode)})")
+    if not loose:
+        return HealthCheck("identity_file_perms", "ok", "All identity files are 0o600")
+    return HealthCheck(
+        "identity_file_perms",
+        "warn",
+        f"Loose permissions on: {', '.join(loose)}",
+        fix="Run: chmod 600 .synlynk/github_apps/*.json .synlynk/github_apps/*.pem",
     )
 
 
@@ -248,6 +273,7 @@ HEALTH_CHECKS = [
     _hc_project_init,
     _hc_docs_dir,
     _hc_identity_key,
+    _hc_identity_file_perms,
     _hc_agent_profiles,
     _hc_instruction_files,
     _hc_model_rates,
