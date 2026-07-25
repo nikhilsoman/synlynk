@@ -245,6 +245,9 @@ def _confirm_installation(app_slug: str, json_path: Path) -> dict:
     with open(json_path) as f:
         config = json.load(f)
 
+    print(f"  → Install the App now: https://github.com/apps/{app_slug}/installations/new")
+    input("  Press Enter once you've installed it on the org... ")
+
     app_id = config["app_id"]
     private_key_path = config["private_key_path"]
     jwt = _sign_jwt(app_id, private_key_path)
