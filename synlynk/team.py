@@ -509,3 +509,36 @@ def cmd_identity_init() -> None:
         print(f"  Public key: {pub}")
     else:
         print("  (public key file not found)")
+
+
+def cmd_identity_init_role(role: str, project=None) -> None:
+    app_dir, json_path, pem_path = _role_app_paths(role)
+    if json_path.exists():
+        try:
+            existing = json.loads(json_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+        if existing.get("installation_id") and existing.get("private_key_path") and os.path.exists(existing["private_key_path"]):
+            print(f"  role '{role}' already provisioned at {json_path}")
+            return
+
+    manifest_url = _build_app_manifest_url(project, role)
+    print(f"  Open this GitHub App manifest URL for '{role}':")
+    print(f"  {manifest_url}")
+    code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+    if not code:
+        raise RuntimeError("no manifest code provided")
+
+    conversion = _exchange_manifest_code(code)
+    conversion.setdefault("slug", conversion.get("name", _role_slug(role)))
+    conversion["private_key_path"] = str(pem_path)
+    config = _write_role_app_config(role, conversion)
+    _confirm_installation(config["app_slug"], json_path)
+    print(f"  role '{role}' provisioned at {json_path}")
+
+    from synlynk.identity_roles import load_declared_roles, write_declared_roles
+
+    declared = load_declared_roles()
+    if role not in declared:
+        write_declared_roles(declared + [role])
+        print(f"  ✓ added '{role}' to synlynk/roles.yaml")
