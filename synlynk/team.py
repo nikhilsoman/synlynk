@@ -1,12 +1,15 @@
 """synlynk team: onboarding (join), team digest, consensus (decide), identity keys."""
 
 import hashlib
+import html
 import json
 import os
 import subprocess
 import re
 import sys
 import time
+import webbrowser
+from pathlib import Path
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 
@@ -74,6 +77,79 @@ def _ensure_identity_key() -> str:
         except (FileNotFoundError, OSError):
             pass
     return key_path
+
+
+def _build_app_manifest_url(project, role: str) -> str:
+    project_slug = _role_slug(project) if project else _role_slug(os.path.basename(os.getcwd()))
+    role_slug = _role_slug(role)
+    manifest = {
+        "name": f"synlynk-{project_slug}-{role_slug}",
+        "url": "https://synlynk.com",
+        "hook_attributes": {
+            "url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/webhook",
+        },
+        "redirect_url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/callback",
+        "public": False,
+        "default_events": [],
+        "default_permissions": {
+            "metadata": "read",
+            "contents": "read",
+            "issues": "write",
+            "pull_requests": "write",
+        },
+    }
+    manifest_json = json.dumps(manifest)
+    escaped_manifest = html.escape(manifest_json, quote=True)
+    form_html = (
+        "<!doctype html><html><body>"
+        '<form id="ghform" action="https://github.com/settings/apps/new" method="post">'
+        f'<input type="hidden" name="manifest" value="{escaped_manifest}">'
+        "</form>"
+        '<script>document.getElementById("ghform").submit();</script>'
+        "</body></html>"
+    )
+    forms_dir = Path("synlynk") / "manifest_forms"
+    forms_dir.mkdir(parents=True, exist_ok=True)
+    form_path = forms_dir / f"{role_slug}.html"
+    form_path.write_text(form_html)
+    return form_path.resolve().as_uri()
+
+
+def cmd_identity_init_role(role: str, project=None) -> None:
+    app_dir, json_path, pem_path = _role_app_paths(role)
+    if json_path.exists():
+        try:
+            existing = json.loads(json_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+        if existing.get("installation_id") and existing.get("private_key_path") and os.path.exists(existing["private_key_path"]):
+            print(f"  role '{role}' already provisioned at {json_path}")
+            return
+
+    manifest_url = _build_app_manifest_url(project, role)
+    print(f"  Open this GitHub App manifest form for '{role}':")
+    print(f"  {manifest_url}")
+    try:
+        webbrowser.open(manifest_url)
+    except Exception:
+        pass
+    code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+    if not code:
+        raise RuntimeError("no manifest code provided")
+
+    conversion = _exchange_manifest_code(code)
+    conversion.setdefault("slug", conversion.get("name", _role_slug(role)))
+    conversion["private_key_path"] = str(pem_path)
+    config = _write_role_app_config(role, conversion)
+    _confirm_installation(config["app_slug"], json_path)
+    print(f"  role '{role}' provisioned at {json_path}")
+
+    from synlynk.identity_roles import load_declared_roles, write_declared_roles
+
+    declared = load_declared_roles()
+    if role not in declared:
+        write_declared_roles(declared + [role])
+        print(f"  ✓ added '{role}' to synlynk/roles.yaml")
 
 
 def _sign_capability_rating(data: dict) -> str:
