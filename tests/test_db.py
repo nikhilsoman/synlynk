@@ -1,6 +1,13 @@
 import os
+import subprocess
 
-from synlynk.db import _generate_costs_md, _generate_roadmap_md, cmd_cost_log, cmd_roadmap_add
+from synlynk.db import (
+    _detect_hand_edit,
+    _generate_costs_md,
+    _generate_roadmap_md,
+    cmd_cost_log,
+    cmd_roadmap_add,
+)
 
 
 def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
@@ -194,3 +201,68 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     index_path = os.path.join(archive_dir, "INDEX.md")
     assert os.path.exists(index_path)
     assert "costs-" in open(index_path).read()
+
+
+def test_detect_hand_edit_no_warning_when_content_matches_regeneration(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk.db import _generate_costs_md
+
+    _setup_migrated(tmp_path, monkeypatch)
+    _generate_costs_md()
+
+    warning = _detect_hand_edit("costs.md")
+    assert warning is None
+
+
+def test_detect_hand_edit_warns_on_genuine_uncommitted_edit(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk.db import _generate_costs_md
+
+    _setup_migrated(tmp_path, monkeypatch)
+    _generate_costs_md()
+
+    path = os.path.join(".synlynk", "project-docs", "costs.md")
+    with open(path, "a") as f:
+        f.write("\nSOMEONE HAND-EDITED THIS LINE\n")
+
+    warning = _detect_hand_edit("costs.md")
+    assert warning is not None
+    assert "costs.md" in warning
+    assert "hand-edit" in warning.lower()
+
+
+def test_detect_hand_edit_no_warning_on_pull_then_resync_case(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    _setup_migrated(tmp_path, monkeypatch)
+    _generate_costs_md()
+
+    path = os.path.join(".synlynk", "project-docs", "costs.md")
+    subprocess.run(["git", "init", "-q"], check=True)
+    subprocess.run(["git", "add", path], check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "seed"],
+        check=True,
+    )
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="claude",
+        model="claude-sonnet-5",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=1.0,
+        notes="not yet regenerated",
+        story_id=None,
+        api_equivalent_usd=1.0,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    warning = _detect_hand_edit("costs.md")
+    assert warning is None

@@ -310,6 +310,13 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
             if arch_section:
                 out.write(arch_section)
 
+        detect_hand_edit = _pkg("_detect_hand_edit")
+        if callable(detect_hand_edit):
+            for fname in ("todo.md", "roadmap.md", "memory.md", "costs.md"):
+                warning = detect_hand_edit(fname)
+                if warning is not None:
+                    print(warning)
+
         # Roadmap: header rows + In Progress rows only
         roadmap_path = os.path.join(docs_dir, "roadmap.md")
         if os.path.exists(roadmap_path):

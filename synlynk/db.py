@@ -43,6 +43,13 @@ _ORG_DOMAIN_DRIFT_MAP = {
 
 _PROJECT_DOC_KEEP_N = 50
 
+_GENERATORS_BY_FILENAME = {
+    "todo.md": "_generate_todo_md",
+    "roadmap.md": "_generate_roadmap_md",
+    "memory.md": "_write_memory_md",
+    "costs.md": "_generate_costs_md",
+}
+
 
 def _validate_enum_value(field_name: str, value: str, allowed: tuple[str, ...]) -> str:
     normalized = str(value).strip()
@@ -1386,6 +1393,73 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
 
     return live_rows
 
+
+def _detect_hand_edit(filename: str) -> str | None:
+    """Detect a genuine uncommitted hand-edit for a generated project doc."""
+    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+
+    if _is_migrated():
+        file_path = os.path.join(_synlynk_project_docs_dir(), filename)
+    else:
+        file_path = os.path.join(_docs_dir(), filename)
+    if not os.path.exists(file_path):
+        return None
+
+    with open(file_path) as f:
+        working_tree_content = f.read()
+
+    committed_blob = None
+    workspace_root = os.path.abspath(os.getcwd())
+    while True:
+        if os.path.exists(os.path.join(workspace_root, ".git")):
+            rel_path = os.path.relpath(file_path, workspace_root).replace(os.sep, "/")
+            try:
+                proc = subprocess.run(
+                    ["git", "show", f"HEAD:{rel_path}"],
+                    cwd=workspace_root,
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.returncode == 0:
+                    committed_blob = proc.stdout
+            except Exception:
+                committed_blob = None
+            break
+        parent = os.path.dirname(workspace_root)
+        if parent == workspace_root:
+            break
+        workspace_root = parent
+
+    if committed_blob is not None and working_tree_content == committed_blob:
+        return None
+
+    generator_name = _GENERATORS_BY_FILENAME.get(filename)
+    generator = globals().get(generator_name)
+    if not callable(generator):
+        return None
+
+    try:
+        generator()
+        if os.path.exists(file_path):
+            with open(file_path) as f:
+                regenerated_content = f.read()
+        else:
+            regenerated_content = ""
+    except Exception:
+        regenerated_content = None
+    finally:
+        with open(file_path, "w") as f:
+            f.write(working_tree_content)
+
+    if regenerated_content is None:
+        return None
+    if working_tree_content == regenerated_content:
+        return None
+    return (
+        f"⚠ hand-edit detected in {filename}: working-tree content differs from "
+        "git HEAD and fresh regeneration output"
+    )
+
 def _generate_roadmap_md() -> None:
     """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
     Post-migration: writes to .synlynk/project-docs/roadmap.md.
@@ -2023,6 +2097,13 @@ def cmd_pr_check() -> None:
         _is_github_remote,
     )
     from synlynk.sentinel import _extract_pr_review_cycles
+
+    detect_hand_edit = globals().get("_detect_hand_edit")
+    if callable(detect_hand_edit):
+        for fname in ("todo.md", "roadmap.md", "memory.md", "costs.md"):
+            warning = detect_hand_edit(fname)
+            if warning is not None:
+                print(warning)
 
     conn = _get_db()
     if _is_github_remote():
