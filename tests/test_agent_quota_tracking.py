@@ -2,9 +2,11 @@
 
 import json
 import os
+import sqlite3
 import time
 from pathlib import Path
 import importlib.util
+import subprocess
 
 import pytest
 
@@ -271,6 +273,64 @@ def test_cmd_quota_json(project_dir, capsys):
     assert any(w["used"] == 600 for w in agents["grok"]["windows"] if w["unit"] == "tokens")
 
 
+def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import synlynk as sl
+
+    db_path = tmp_path / ".synlynk" / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(sl._DB_SCHEMA)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('story-stale', 'Stale view')")
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, discipline, org_domain, role, stage, "
+        " industry, phase, signal_source, quality) "
+        "VALUES ('story-stale', 'claude', 'claude-sonnet-4-6', 'backend', 'backend', "
+        "'platform', 'dev', 'open', 'ott', 'build', 'auto', 9.0)"
+    )
+    conn.execute("DROP VIEW IF EXISTS capability_scores")
+    conn.executescript("""
+        CREATE VIEW capability_scores AS
+        SELECT
+            agent,
+            model_version,
+            engg_domain,
+            org_domain,
+            industry,
+            phase,
+            SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
+              SUM(pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER)))
+              AS weighted_score,
+            COUNT(*) AS sample_count,
+            MAX(ts) AS last_seen
+        FROM capability_ratings
+        WHERE split_model = 0
+        GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
+    """)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(sl, "DB_PATH", str(db_path))
+
+    conn = sl._get_db()
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_scores)")}
+        assert {"discipline", "role", "stage"} <= cols
+
+        discipline = conn.execute(
+            "SELECT discipline FROM capability_scores LIMIT 1"
+        ).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM capability_scores WHERE discipline=?",
+            (discipline,),
+        ).fetchone()[0]
+        assert count >= 1
+    finally:
+        conn.close()
+
+
 def test_agent_from_command_path_and_gemini_alias(project_dir):
     from synlynk.quota import _agent_from_telemetry_event, _aggregate_usage_from_telemetry
 
@@ -446,3 +506,73 @@ def test_fix_github_issue_382_nikhilsomansynlynk_backfill_updates_only_eligible_
     assert rows[1][5] is None
     assert rows[2][4] == "subscription"
     assert rows[2][5] is None
+
+
+def test_synlynk_selftest_live_clobbers_real_repo(monkeypatch, tmp_path):
+    from synlynk import selftest as selftest_mod
+    import synlynk.scheduler as scheduler_mod
+
+    real_repo = tmp_path / "real-repo"
+    (real_repo / "project-docs").mkdir(parents=True)
+    (real_repo / ".synlynk").mkdir(parents=True)
+    (real_repo / "project-docs" / "todo.md").write_text(
+        "# Project Todo List\n"
+        "- [ ] keep me <!-- id: story-keep -->\n"
+    )
+    (real_repo / "GEMINI.md").write_text(
+        "<!-- synlynk:start version=\"1\" tool=\"agy\" -->\n"
+        "## keep me\n"
+        "<!-- synlynk:end -->\n"
+    )
+    (real_repo / ".synlynk" / "config.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "budget": {"limit_usd": 10.0, "limit_requests": 100},
+                "project_docs_dir": "project-docs",
+                "dispatch_mode": "daily-grind",
+            }
+        )
+    )
+    subprocess.run(["git", "init", "-q"], cwd=real_repo, check=True)
+    subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=real_repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Codex"], cwd=real_repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=real_repo, check=True)
+    subprocess.run(["git", "commit", "-m", "baseline", "-q"], cwd=real_repo, check=True)
+
+    todo_before = (real_repo / "project-docs" / "todo.md").read_text()
+    gemini_before = (real_repo / "GEMINI.md").read_text()
+
+    monkeypatch.chdir(real_repo)
+    monkeypatch.setattr(
+        selftest_mod,
+        "dispatch_agent",
+        lambda *args, **kwargs: {"id": "job-selftest", "pid": 1, "fence": None},
+    )
+    monkeypatch.setattr(selftest_mod, "exec_command", lambda argv: 0)
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda execute=True, max_stories=1: None)
+
+    results = selftest_mod.run_selftest(live=True)
+
+    assert all(result.status != "fail" for result in results)
+    assert subprocess.run(
+        ["git", "status", "--short"],
+        cwd=real_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip() == ""
+    assert (real_repo / "project-docs" / "todo.md").read_text() == todo_before
+    assert (real_repo / "GEMINI.md").read_text() == gemini_before
+
+
+def test_live_selftest_scenario_coverage_gap_init(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = {"command": "init"}
+
+    result = selftest_mod.SELFTEST_SCENARIOS["init"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "without clobbering existing files" in result.detail

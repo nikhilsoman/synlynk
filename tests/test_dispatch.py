@@ -19,6 +19,28 @@ def test_format_job_summary_includes_watch_reminder():
     assert "$12.26" in summary
 
 
+def test_format_job_summary_includes_base_and_suite_result_when_present():
+    from synlynk.dispatch import _format_job_summary
+
+    summary = _format_job_summary(
+        "job-abc",
+        "codex",
+        "story-1",
+        0,
+        12.5,
+        100,
+        200,
+        0.01,
+        files_touched=["a.py"],
+        base_branch="feat/example",
+        base_sha="deadbeefcafe",
+        suite_result={"passed": 5, "failed": 0, "skipped": 1, "ran_at": "2026-07-23T00:00:00"},
+    )
+
+    assert "base:     feat/example @ deadbeef" in summary
+    assert "suite:    5 passed, 0 failed, 1 skipped" in summary
+
+
 def test_format_job_summary_falls_back_when_jobs_not_allowlisted(monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
@@ -187,6 +209,74 @@ def test_cli_dispatch_passes_requires_gh_write_flag(project_dir, monkeypatch):
     assert captured["requires_gh_write"] is True
 
 
+def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_worktree_repo, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+    import os as _os
+
+    monkeypatch.chdir(git_worktree_repo)
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+    tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    result = dispatch_mod._create_job_worktree("job-test1", "codex")
+
+    assert result["path"] == _os.path.join("worktrees", "job-test1")
+    assert result["base_branch"] == "feat/example"
+    assert result["base_sha"] == tip
+    assert _os.path.isdir(result["path"])
+
+
+def test_dispatch_agent_records_base_branch_and_sha_on_job(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 4242
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "reasons": []})
+    monkeypatch.setattr(
+        dispatch_mod, "_create_job_worktree",
+        lambda job_id, agent, base=None: {
+            "path": "worktrees/job-fake",
+            "branch": f"dispatch/{agent}/job-fake",
+            "base_branch": base or "feat/example",
+            "base_sha": "deadbeef",
+        },
+    )
+
+    job = dispatch_mod.dispatch_agent("codex", "do the thing", force_agent=True, base="feat/example")
+
+    assert job["base_branch"] == "feat/example"
+    assert job["base_sha"] == "deadbeef"
+    assert job["suite_result"] is None
+
+
+def test_cli_dispatch_passes_base_flag(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch(agent, task, **kwargs):
+        captured.update(kwargs)
+        return {"id": "job-x", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "do it", "--base", "feat/example", "--force-agent"],
+    )
+
+    cli_mod.main()
+
+    assert captured["base"] == "feat/example"
+
+
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
@@ -264,3 +354,220 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
             "agy", "review and merge PR #500", story_id="story-manual-1",
             context_mode="none", requires_gh_write=True,
         )
+
+
+def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags("agy", []) == []
+    out = capsys.readouterr().out
+    assert "no write/run permissions granted" in out
+
+
+def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warning(capsys):
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags("agy", ["write:src/"]) == ["--dangerously-skip-permissions"]
+    out = capsys.readouterr().out
+    assert out == ""
+
+
+def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="auto"
+    )
+
+    assert base_ref == "feat/example"
+
+
+def test_resolve_dispatch_base_ref_falls_back_to_mainline_on_main_branch(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kw):
+        if cmd[:2] == ["git", "fetch"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="no remote")
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", fake_run)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="auto"
+    )
+
+    assert base_ref == "main"
+
+
+def test_resolve_dispatch_base_ref_stacking_never_always_uses_mainline(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="never"
+    )
+
+    assert base_ref == "main"
+
+
+def test_resolve_dispatch_base_ref_stacking_always_errors_on_mainline(git_worktree_repo):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+    import pytest
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    with pytest.raises(RuntimeError, match="stacking is 'always'"):
+        dispatch_mod._resolve_dispatch_worktree_base_ref(
+            str(git_worktree_repo), stacking_mode="always"
+        )
+
+
+def test_resolve_dispatch_base_ref_explicit_base_wins(git_worktree_repo):
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(git_worktree_repo), stacking_mode="auto", explicit_base="main"
+    )
+
+    assert base_ref == "main"
+
+
+def test_run_dispatch_gate_parses_pytest_summary_and_flags_failures(tmp_path, monkeypatch):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeResult:
+        returncode = 1
+        stdout = "2 passed, 1 failed, 1 skipped in 0.05s"
+        stderr = ""
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", lambda *a, **kw: FakeResult())
+
+    job = {"worktree_path": str(tmp_path)}
+    result = dispatch_mod._run_dispatch_gate(job, "pytest tests/ -q")
+
+    assert result == {"passed": 2, "failed": 1, "skipped": 1}
+
+
+def test_run_dispatch_gate_returns_none_when_no_gate_cmd_configured(tmp_path):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    job = {"worktree_path": str(tmp_path)}
+    result = dispatch_mod._run_dispatch_gate(job, "")
+
+    assert result is None
+
+
+def test_check_dispatch_base_still_fresh_true_when_sha_matches_current_tip(git_worktree_repo):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+    tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    job = {"base_branch": "main", "base_sha": tip}
+    assert dispatch_mod._check_dispatch_base_still_fresh(job, repo_path=str(git_worktree_repo)) is True
+
+
+def test_check_dispatch_base_still_fresh_false_when_branch_advanced(git_worktree_repo):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
+    old_tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    (git_worktree_repo / "new_file.txt").write_text("more work\n")
+    subprocess.run(["git", "add", "."], cwd=git_worktree_repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "advance branch"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    job = {"base_branch": "main", "base_sha": old_tip}
+    assert dispatch_mod._check_dispatch_base_still_fresh(job, repo_path=str(git_worktree_repo)) is False
+
+
+def test_sequential_dispatch_jobs_stack_with_zero_conflicts(git_worktree_repo, monkeypatch, tmp_path):
+    """Simulates Task N and Task N+1 of a plan: job2 should be anchored to
+    the tip left behind after job1's commit is merged, so merging job2
+    produces no conflicts even though both jobs touch the same file
+    """
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+    import subprocess
+
+    subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    monkeypatch.chdir(git_worktree_repo)
+
+    # --- Job 1 ---
+    worktree1 = dispatch_mod._create_job_worktree("job-seq1", "codex")
+    shared_file = os_path_join(worktree1["path"], "shared.py")
+    with open(shared_file, "w") as f:
+        f.write("value = 1\n")
+    subprocess.run(["git", "add", "."], cwd=worktree1["path"], capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "job1: set value=1"], cwd=worktree1["path"], capture_output=True, check=True)
+
+    # Simulate the reviewer merging job1's commit back onto the feature branch
+    subprocess.run(["git", "checkout", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
+    merge1 = subprocess.run(
+        ["git", "merge", "--no-ff", "-m", "merge job1", worktree1["branch"]],
+        cwd=git_worktree_repo, capture_output=True, text=True,
+    )
+    assert merge1.returncode == 0, merge1.stderr
+
+    # --- Job 2, dispatched after job1 merged ---
+    worktree2 = dispatch_mod._create_job_worktree("job-seq2", "codex")
+
+    assert worktree2["base_branch"] == "feat/example"
+    new_tip = subprocess.run(
+        ["git", "-C", str(git_worktree_repo), "rev-parse", "feat/example"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert worktree2["base_sha"] == new_tip
+
+    with open(os_path_join(worktree2["path"], "shared.py"), "w") as f:
+        f.write("value = 1\nextra = 2\n")
+    subprocess.run(["git", "add", "."], cwd=worktree2["path"], capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "job2: add extra=2"], cwd=worktree2["path"], capture_output=True, check=True)
+
+    merge2 = subprocess.run(
+        ["git", "merge", "--no-ff", "-m", "merge job2", worktree2["branch"]],
+        cwd=git_worktree_repo, capture_output=True, text=True,
+    )
+    assert merge2.returncode == 0, merge2.stderr
+    assert "CONFLICT" not in (merge2.stdout + merge2.stderr)
+
+
+def os_path_join(*parts):
+    import os
+    return os.path.join(*parts)
+
+
+def test_check_dispatch_base_still_fresh_true_when_no_base_recorded():
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    job = {"base_branch": None, "base_sha": None}
+    assert dispatch_mod._check_dispatch_base_still_fresh(job) is True

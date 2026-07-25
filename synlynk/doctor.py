@@ -2,6 +2,8 @@
 
 import json
 import os
+import shutil
+import tempfile
 import sqlite3 as _sqlite3
 import sys
 import time
@@ -273,6 +275,28 @@ def _hc_model_rates() -> HealthCheck:
         "ok",
         f"Model rates are fresh (updated {rates_updated_at})",
     )
+
+
+def cleanup_selftest_workspaces(temp_root: str = None) -> int:
+    """Remove orphaned synlynk selftest scratch workspaces under the temp dir."""
+    root = temp_root or tempfile.gettempdir()
+    removed = 0
+    try:
+        entries = os.listdir(root)
+    except OSError:
+        return 0
+    for name in entries:
+        if not name.startswith("synlynk-selftest-"):
+            continue
+        path = os.path.join(root, name)
+        if not os.path.isdir(path):
+            continue
+        try:
+            shutil.rmtree(path)
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 HEALTH_CHECKS = [

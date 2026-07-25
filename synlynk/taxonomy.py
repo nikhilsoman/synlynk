@@ -162,6 +162,9 @@ COMMAND_TAXONOMY = [
     {"command": "upgrade", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human", "trigger_phrases": ["upgrade synlynk"],
      "hook_event": None},
+    {"command": "rollback", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["roll back the last change"],
+     "hook_event": None},
 
     # --- Tier 3: Team/Enterprise ---
     {"command": "team status", "governs_stage": "notify", "maturity_tier": 3, "prominence": "primary",

@@ -151,6 +151,10 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
 
     if agent == "agy":
         if not permissions or set(permissions) <= {"read:*"}:
+            print(
+                "  ⚠ agy dispatched with no write/run permissions granted -- "
+                "headless mode will auto-deny command/write tool calls and may silently no-op"
+            )
             return []
         return ["--dangerously-skip-permissions"]
     if agent == "claude":
@@ -421,6 +425,72 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
     return sorted(touched)
 
 
+def _run_dispatch_gate(job: dict, gate_suite_cmd: str) -> Optional[dict]:
+    """Runs the configured test-suite command inside a job's worktree.
+
+    Returns {"passed": int, "failed": int, "skipped": int} parsed from the
+    command's combined output, or None if no gate command is configured or
+    the worktree is unavailable.
+    """
+    if not gate_suite_cmd:
+        return None
+    worktree_path = job.get("worktree_path")
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return None
+
+    try:
+        result = subprocess.run(
+            gate_suite_cmd,
+            shell=True,
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    combined = (result.stdout or "") + "\n" + (result.stderr or "")
+
+    def _count(pattern: str) -> int:
+        match = re.search(pattern, combined)
+        return int(match.group(1)) if match else 0
+
+    return {
+        "passed": _count(r"(\d+)\s+passed"),
+        "failed": _count(r"(\d+)\s+failed"),
+        "skipped": _count(r"(\d+)\s+skipped"),
+    }
+
+
+def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None) -> bool:
+    """Returns False if job base_branch has moved past job base_sha since dispatch.
+
+    True (fresh) when no base was recorded (legacy jobs, or stacking: never).
+    """
+    base_branch = job.get("base_branch")
+    base_sha = job.get("base_sha")
+    if not base_branch or not base_sha:
+        return True
+
+    repo_path = repo_path or os.getcwd()
+    try:
+        tip_result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", base_branch],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except Exception:
+        return True
+
+    current_tip = (tip_result.stdout or "").strip()
+    if tip_result.returncode != 0 or not current_tip:
+        return True
+
+    return current_tip == base_sha
+
+
 def _job_summary_path(job_id: str) -> str:
     return os.path.join(".synlynk/logs", f"{job_id}.summary")
 
@@ -439,7 +509,10 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         worktree_path: Optional[str] = None,
                         worktree_branch: Optional[str] = None,
                         status_label: Optional[str] = None,
-                        note: Optional[str] = None) -> str:
+                        note: Optional[str] = None,
+                        base_branch: Optional[str] = None,
+                        base_sha: Optional[str] = None,
+                        suite_result: Optional[dict] = None) -> str:
     """Formats the structured completion summary for a finished job."""
     files_touched = sorted(set(files_touched or []))
     story_label = story_id or "-"
@@ -448,6 +521,17 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
     worktree_line = ""
     note_line = f"note:     {note}\n" if note else ""
+    base_line = ""
+    if base_branch:
+        sha_label = f" @ {base_sha[:8]}" if base_sha else ""
+        base_line = f"base:     {base_branch}{sha_label}\n"
+    suite_line = ""
+    if suite_result:
+        suite_line = (
+            f"suite:    {suite_result.get('passed', 0)} passed, "
+            f"{suite_result.get('failed', 0)} failed, "
+            f"{suite_result.get('skipped', 0)} skipped\n"
+        )
     if worktree_path:
         branch_note = f" (branch: {worktree_branch})" if worktree_branch else ""
         worktree_line = f"worktree: {worktree_path}{branch_note}\n"
@@ -477,6 +561,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             f"agent:    {agent}   story: {story_label}\n"
             f"status:   {status_label}\n"
             f"{note_line}"
+            f"{base_line}"
+            f"{suite_line}"
             f"duration: {duration_label}\n"
             f"{render_task_fence(fence)}"
             f"{worktree_line}"
@@ -488,6 +574,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"agent:    {agent}   story: {story_label}\n"
         f"status:   {status_label}\n"
         f"{note_line}"
+        f"{base_line}"
+        f"{suite_line}"
         f"duration: {duration_label}\n"
         f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
         f"{worktree_line}"
@@ -503,13 +591,17 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
                        worktree_path: Optional[str] = None,
                        worktree_branch: Optional[str] = None,
                        status_label: Optional[str] = None,
-                       note: Optional[str] = None) -> str:
+                       note: Optional[str] = None,
+                       base_branch: Optional[str] = None,
+                       base_sha: Optional[str] = None,
+                       suite_result: Optional[dict] = None) -> str:
     """Writes a structured completion summary for a job and returns the text."""
     os.makedirs(".synlynk/logs", exist_ok=True)
     summary = _format_job_summary(
         job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
         cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch,
-        status_label=status_label, note=note
+        status_label=status_label, note=note, base_branch=base_branch, base_sha=base_sha,
+        suite_result=suite_result
     )
     summary_path = _job_summary_path(job_id)
     existing_summary = None
@@ -581,10 +673,45 @@ def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     return worktree_path, worktree_branch
 
 
-def _resolve_dispatch_worktree_base_ref(repo_path: Optional[str]) -> str:
-    """Resolve the freshest mainline ref available for a new dispatch worktree."""
+def _resolve_dispatch_worktree_base_ref(
+    repo_path: Optional[str],
+    stacking_mode: str = "auto",
+    explicit_base: Optional[str] = None,
+) -> str:
+    """Resolve the base ref a new dispatch worktree should be anchored to.
+
+    stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
+    "always" (stack on current branch, error on mainline/detached HEAD),
+    "never" (always mainline — legacy behavior)
+    """
+    if explicit_base:
+        return explicit_base
+
     if not repo_path or not os.path.isdir(repo_path):
         return "HEAD"
+
+    if stacking_mode != "never":
+        try:
+            branch_result = subprocess.run(
+                ["git", "-C", repo_path, "branch", "--show-current"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception:
+            branch_result = None
+        current_branch = (
+            (branch_result.stdout or "").strip()
+            if branch_result and branch_result.returncode == 0
+            else ""
+        )
+        if current_branch and current_branch not in ("main", "master"):
+            return current_branch
+        if stacking_mode == "always":
+            raise RuntimeError(
+                f"dispatch stacking is 'always' but current branch is "
+                f"'{current_branch or '(detached HEAD)'}' — refusing to stack on mainline"
+            )
 
     for candidate in ("main", "master"):
         try:
@@ -659,13 +786,37 @@ def _assert_dispatch_worktree_base_is_fresh(worktree_path: str, base_ref: str) -
     print(f"  worktree base verified against {base_ref} @ {ref_commit}")
 
 
-def _create_job_worktree(job_id: str, agent: str) -> str:
-    """Create the isolated git worktree for a dispatched job."""
+def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) -> dict:
+    """Create the isolated git worktree for a dispatched job.
+
+    Returns {"path": str, "branch": str, "base_branch": str, "base_sha": str}
+    """
     worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
     os.makedirs(os.path.dirname(worktree_path), exist_ok=True)
-    base_ref = _resolve_dispatch_worktree_base_ref(os.getcwd())
-    worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
+
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    stacking_mode = (config.get("dispatch") or {}).get("stacking", "auto")
+
+    base_ref = _resolve_dispatch_worktree_base_ref(
+        os.getcwd(), stacking_mode=stacking_mode, explicit_base=base
+    )
+
+    base_sha = None
     if base_ref and base_ref != "HEAD":
+        sha_result = subprocess.run(
+            ["git", "-C", os.getcwd(), "rev-parse", base_ref],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if sha_result.returncode == 0:
+            base_sha = (sha_result.stdout or "").strip()
+
+    worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
+    if base_sha:
+        worktree_cmd.append(base_sha)
+    elif base_ref and base_ref != "HEAD":
         worktree_cmd.append(base_ref)
     result = subprocess.run(
         worktree_cmd,
@@ -684,7 +835,12 @@ def _create_job_worktree(job_id: str, agent: str) -> str:
             + (f"\n{details}" if details else "")
         )
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
-    return worktree_path
+    return {
+        "path": worktree_path,
+        "branch": worktree_branch,
+        "base_branch": base_ref,
+        "base_sha": base_sha,
+    }
 
 
 def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
@@ -861,7 +1017,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    grants: list = None,
                    revokes: list = None,
                    job_id: str = None,
-                   issue: int = None) -> dict:
+                   issue: int = None,
+                   base: str = None) -> dict:
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     dispatch_time = None
     if not story_id:
@@ -997,8 +1154,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         job_seed = dispatch_time if dispatch_time is not None else time.time()
         job_id = "job-" + _hashlib.md5(f"{agent}{task}{job_seed}".encode()).hexdigest()[:8]
 
-    worktree_path, worktree_branch = _job_worktree_details(job_id, agent)
-    worktree_path = _create_job_worktree(job_id, agent)
+    _unused_path, worktree_branch = _job_worktree_details(job_id, agent)
+    worktree_info = _create_job_worktree(job_id, agent, base=base)
+    worktree_path = worktree_info["path"]
+    base_branch = worktree_info["base_branch"]
+    base_sha = worktree_info["base_sha"]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
@@ -1186,6 +1346,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "context_file": context_file if context_mode != "none" else "",
         "worktree_path": worktree_path,
         "worktree_branch": worktree_branch,
+        "base_branch": base_branch,
+        "base_sha": base_sha,
+        "suite_result": None,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "ended_at": None,
         "status": "running",

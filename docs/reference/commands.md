@@ -58,6 +58,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain
 - `upgrade` (secondary) — sustain
+- `rollback` (secondary) — sustain
 
 ## Tier 3 — Team / Enterprise
 

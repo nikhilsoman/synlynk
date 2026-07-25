@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -225,3 +226,175 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     assert reconciled["status"] == "permission_denied"
     assert "PERMISSION_DENIED" in out
     assert "OK (exit 0)" not in out
+
+
+def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    config_path = ".synlynk/config.json"
+    import json
+    with open(config_path, "w") as f:
+        json.dump({"dispatch": {"gate_suite_cmd": "pytest tests/ -q"}}, f)
+
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: {
+            "load_config": sl.load_config,
+            "_run_dispatch_gate": lambda job, cmd: {"passed": 3, "failed": 2, "skipped": 0},
+        }.get(name, default),
+    )
+
+    job = {"id": "job-gate1", "status": "completed", "worktree_path": "worktrees/job-gate1"}
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "needs_fix"
+    assert job["suite_result"]["failed"] == 2
+
+
+def test_apply_dispatch_gate_leaves_status_completed_when_no_gate_configured(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {"load_config": sl.load_config}.get(name, default))
+
+    job = {"id": "job-gate2", "status": "completed", "worktree_path": "worktrees/job-gate2"}
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "completed"
+    assert job.get("suite_result") is None
+
+
+def test_apply_dispatch_gate_flags_stale_base(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: {
+            "load_config": sl.load_config,
+            "_check_dispatch_base_still_fresh": lambda job: False,
+        }.get(name, default),
+    )
+
+    job = {
+        "id": "job-stale1", "status": "completed",
+        "worktree_path": "worktrees/job-stale1",
+        "base_branch": "feat/example", "base_sha": "abc123",
+    }
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "stale_base"
+
+
+def test_apply_dispatch_gate_end_to_end_with_real_failing_suite(git_worktree_repo, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+    import synlynk.dispatch as dispatch_mod
+    import synlynk as sl
+    import json
+    import os
+    import subprocess
+
+    tests_dir = os.path.join(str(git_worktree_repo), "tests")
+    os.makedirs(tests_dir, exist_ok=True)
+    with open(os.path.join(tests_dir, "test_deliberate_failure.py"), "w") as f:
+        f.write("def test_deliberately_fails():\n    assert 1 == 2\n")
+    subprocess.run(["git", "add", "."], cwd=git_worktree_repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed failing test"], cwd=git_worktree_repo, capture_output=True, check=True)
+
+    config_path = os.path.join(str(git_worktree_repo), ".synlynk", "config.json")
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    with open(config_path, "w") as f:
+        json.dump({"dispatch": {"gate_suite_cmd": "python3 -m pytest tests/ -q"}}, f)
+
+    monkeypatch.chdir(git_worktree_repo)
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: {
+            "load_config": sl.load_config,
+            "_run_dispatch_gate": dispatch_mod._run_dispatch_gate,
+        }.get(name, default),
+    )
+
+    job = {"id": "job-realgate", "status": "completed", "worktree_path": str(git_worktree_repo)}
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "needs_fix"
+    assert job["suite_result"]["failed"] >= 1
+
+
+@pytest.mark.parametrize(
+    "available_refs, expected_base",
+    [
+        ({"origin/main"}, "main"),
+        ({"origin/master"}, "master"),
+    ],
+)
+def test_resolve_default_base_branch_prefers_origin_head_then_fallbacks(
+    tmp_path, monkeypatch, available_refs, expected_base
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            candidate = cmd[5]
+            if candidate in available_refs:
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+
+    assert jobs_mod._resolve_default_base_branch(str(worktree_path)) == expected_base
+
+
+def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    captured = []
+
+    def fake_run(cmd, **kwargs):
+        captured.append(cmd)
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            candidate = cmd[5]
+            if candidate == "origin/master":
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/octo/repo/pull/42\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {"id": "job-1", "task": "do the thing"},
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in captured if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "master"

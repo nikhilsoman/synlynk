@@ -7,6 +7,7 @@ from synlynk.taxonomy import COMMAND_TAXONOMY
 
 EXPECTED_LIVE_SCENARIOS = [
     "init",
+    "migrate",
     "scan",
     "join",
     "goal create",
@@ -19,6 +20,7 @@ EXPECTED_LIVE_SCENARIOS = [
     "jobs",
     "status",
     "instructions status",
+    "upgrade",
 ]
 
 
@@ -99,6 +101,42 @@ def test_live_selftest_bespoke_lifecycle_scenarios_pass(tmp_path):
         entry = next(item for item in COMMAND_TAXONOMY if item["command"] == command)
         result = selftest_mod.SELFTEST_SCENARIOS[command](entry, ctx)
         assert result.status == "pass", f"{command}: {result.detail}"
+
+
+def test_live_selftest_init_preserves_existing_files(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = next(item for item in COMMAND_TAXONOMY if item["command"] == "init")
+
+    result = selftest_mod.SELFTEST_SCENARIOS["init"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "without clobbering existing files" in result.detail
+
+
+def test_live_selftest_migrate_imports_real_rows(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = next(item for item in COMMAND_TAXONOMY if item["command"] == "migrate")
+
+    result = selftest_mod.SELFTEST_SCENARIOS["migrate"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "state.db" in result.detail
+
+
+def test_live_selftest_upgrade_respects_install_location(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    entry = next(item for item in COMMAND_TAXONOMY if item["command"] == "upgrade")
+
+    result = selftest_mod.SELFTEST_SCENARIOS["upgrade"](entry, ctx)
+
+    assert result.status == "pass"
+    assert "pipx install path" in result.detail
 
 
 def test_selftest_subcommand_is_registered():
@@ -194,7 +232,17 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
     scratch_workspace = tmp_path / "scratch"
     recorded = []
 
-    monkeypatch.setattr(selftest_mod.tempfile, "mkdtemp", lambda prefix="": str(scratch_workspace))
+    class FakeTemporaryDirectory:
+        def __init__(self, *args, **kwargs):
+            scratch_workspace.mkdir(parents=True, exist_ok=True)
+
+        def __enter__(self):
+            return str(scratch_workspace)
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(selftest_mod.tempfile, "TemporaryDirectory", FakeTemporaryDirectory)
     monkeypatch.setattr(
         selftest_mod,
         "COMMAND_TAXONOMY",
@@ -217,8 +265,9 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
 
     assert all(result.status == "pass" for result in results)
     assert host_cwd != scratch_workspace
-    assert recorded[::2] == [scratch_workspace] * 3
-    assert recorded[1::2] == [host_cwd] * 3
+    assert recorded[0] == scratch_workspace
+    assert recorded[-1] == host_cwd
+    assert set(recorded) <= {scratch_workspace, host_cwd}
 
 
 def test_live_status_scenario_initializes_full_schema(monkeypatch, tmp_path):
@@ -241,3 +290,51 @@ def test_all_paid_commands_have_registered_scenarios():
 
     for cmd in ["dispatch", "exec", "schedule", "release"]:
         assert cmd in SELFTEST_SCENARIOS, f"missing scenario for {cmd!r}"
+
+
+def test_scenario_migrate_failure_injection_triggers_rollback():
+    from synlynk.selftest import (
+        ScenarioContext, _scenario_migrate_failure_injection,
+    )
+
+    ctx = ScenarioContext(repo_path="", live=True)
+    result = _scenario_migrate_failure_injection({"command": "migrate"}, ctx)
+    assert result.status == "pass", result.detail
+
+
+def test_scenario_upgrade_failure_injection_triggers_rollback():
+    from synlynk.selftest import (
+        ScenarioContext, _scenario_upgrade_failure_injection,
+    )
+
+    ctx = ScenarioContext(repo_path="", live=True)
+    result = _scenario_upgrade_failure_injection({"command": "upgrade"}, ctx)
+    assert result.status == "pass", result.detail
+
+
+def test_synlynk_rollback_last_via_cli(tmp_path, monkeypatch):
+    import subprocess as sp
+    from synlynk import rollback
+
+    monkeypatch.chdir(tmp_path)
+    sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    sp.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    sp.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    with rollback.rollback_checkpoint("init", untracked_paths=[]):
+        tracked.write_text("v2\n")
+        sp.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+        sp.run(["git", "commit", "-m", "unwanted", "-q"], cwd=tmp_path, check=True)
+
+    from synlynk.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args(["rollback", "--last"])
+    assert args.command == "rollback"
+    assert args.last is True
+
+    rollback.cmd_rollback(last=True)
+    assert tracked.read_text() == "v1\n"

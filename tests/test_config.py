@@ -41,3 +41,28 @@ def test_load_config_preserves_explicit_story_classification_method(project_dir)
     config = sl.load_config()
 
     assert config["story_classification"] == {"method": "pm_manual"}
+
+
+def test_load_config_fills_dispatch_defaults_when_missing(project_dir):
+    import synlynk as sl
+
+    config_path = os.path.join(".synlynk", "config.json")
+    with open(config_path, "w") as f:
+        json.dump({"schema_version": 1}, f)
+
+    config = sl.load_config()
+
+    assert config["dispatch"] == {"stacking": "auto", "gate_suite_cmd": ""}
+
+
+def test_load_config_preserves_partial_dispatch_block(project_dir):
+    import synlynk as sl
+
+    config_path = os.path.join(".synlynk", "config.json")
+    with open(config_path, "w") as f:
+        json.dump({"schema_version": 1, "dispatch": {"stacking": "never"}}, f)
+
+    config = sl.load_config()
+
+    assert config["dispatch"]["stacking"] == "never"
+    assert config["dispatch"]["gate_suite_cmd"] == ""
