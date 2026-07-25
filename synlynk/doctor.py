@@ -113,6 +113,37 @@ def _hc_identity_key() -> HealthCheck:
     )
 
 
+def _hc_identity_roles() -> HealthCheck:
+    """Diffs .synlynk/roles.yaml's declared roles against provisioned GitHub Apps."""
+    from synlynk.identity_roles import load_declared_roles
+
+    roles = load_declared_roles()
+    missing = []
+    for role in roles:
+        json_path = os.path.join(".synlynk", "github_apps", f"{role}.json")
+        if not os.path.exists(json_path):
+            missing.append(role)
+            continue
+        try:
+            with open(json_path) as fh:
+                config = json.load(fh)
+        except (OSError, ValueError):
+            missing.append(role)
+            continue
+        if not config.get("installation_id"):
+            missing.append(role)
+    if not missing:
+        return HealthCheck("identity_roles", "ok", f"All declared roles provisioned ({', '.join(roles)})")
+    return HealthCheck(
+        "identity_roles",
+        "warn",
+        f"Missing GitHub App identity for role(s): {', '.join(missing)}",
+        fix=f"Run: synlynk identity init --role {missing[0]}" + (
+            f" (and {len(missing) - 1} more)" if len(missing) > 1 else ""
+        ),
+    )
+
+
 def _hc_agent_profiles() -> HealthCheck:
     """Checks that each agent in config's agent_slots has a .agents/<name>.json profile."""
     try:
@@ -224,6 +255,7 @@ HEALTH_CHECKS = [
     _hc_project_init,
     _hc_docs_dir,
     _hc_identity_key,
+    _hc_identity_roles,
     _hc_agent_profiles,
     _hc_instruction_files,
     _hc_model_rates,
