@@ -23,6 +23,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Bumped `linkify-it` to 5.0.2 in `website/package-lock.json`, resolving a high-severity quadratic-complexity DoS (CVE-2026-59887, GHSA-v245-v573-v5vm) in its `mailto:` schema validator. Dev-only, transitive via `markdown-it`; fixes GitHub Dependabot alert #6.
 - `synlynk jobs` now resolves the repo's real default base branch before `gh pr create`, avoiding hardcoded `--base main` failures on repos whose default branch is `master` or another tracked branch.
 - `synlynk dispatch agy` now warns when no write/run permissions are granted, so headless dispatches do not fail silently when approval-gated tool calls are auto-denied.
+- Bumped `brace-expansion` to 1.1.16 in `website/package-lock.json`, resolving a high-severity exponential-time DoS (CVE-2026-13149, GHSA-3jxr-9vmj-r5cp) in expansion of consecutive non-expanding `{}` groups. Dev-only, transitive via `minimatch`; fixes GitHub Dependabot alert #7.
 
 ## [0.13.0] - 2026-07-22
 
