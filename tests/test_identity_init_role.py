@@ -1,6 +1,7 @@
 import html as html_lib
 import json
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -23,6 +24,26 @@ def test_build_app_manifest_url_encodes_role_and_project(tmp_path, monkeypatch):
     assert manifest["name"] == "synlynk-alpha-project-review"
     assert "alpha-project" in manifest["hook_attributes"]["url"]
     assert "review" in manifest["redirect_url"]
+
+
+def test_build_app_manifest_url_resolves_project_from_git_root_and_caps_name_length(tmp_path, monkeypatch):
+    long_dir = tmp_path / "a-very-long-worktree-directory-name-for-a-feature-branch"
+    long_dir.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=long_dir, check=True)
+    monkeypatch.chdir(long_dir)
+
+    url = sl._build_app_manifest_url(None, "dev")
+
+    form_path = Path(unquote(urlparse(url).path))
+    form_html = form_path.read_text()
+    match = re.search(r'name="manifest" value="([^"]*)"', form_html)
+    assert match is not None
+    manifest = json.loads(html_lib.unescape(match.group(1)))
+
+    assert len(manifest["name"]) <= 34
+    assert manifest["name"].startswith("synlynk-")
+    assert manifest["name"].endswith("-dev")
+    assert manifest["name"] != "synlynk-a-very-long-worktree-directory-name-for-a-feature-branch-dev"
 
 
 def test_cmd_identity_init_role_noops_if_already_provisioned(tmp_path, monkeypatch):

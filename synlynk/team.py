@@ -4,12 +4,12 @@ import hashlib
 import html
 import json
 import os
+from pathlib import Path
 import subprocess
 import re
 import sys
 import time
 import webbrowser
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
@@ -96,11 +96,39 @@ def _role_app_paths(role: str) -> tuple[Path, Path, Path]:
     return app_dir, app_dir / f"{slug}.json", app_dir / f"{slug}.pem"
 
 
+def _resolve_project_slug() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            git_common_dir = os.path.abspath(result.stdout.strip())
+            repo_root = os.path.dirname(git_common_dir)
+            return _role_slug(os.path.basename(repo_root))
+    except Exception:
+        pass
+    return _role_slug(os.path.basename(os.getcwd()))
+
+
+def _truncate_app_name(project_slug: str, role_slug: str, max_len: int = 34) -> str:
+    prefix = "synlynk-"
+    suffix = f"-{role_slug}"
+    available = max_len - len(prefix) - len(suffix)
+    if available < 1:
+        return f"{prefix}{role_slug}"[:max_len]
+    trimmed_project = project_slug[:available]
+    return f"{prefix}{trimmed_project}{suffix}"
+
+
 def _build_app_manifest_url(project, role: str) -> str:
-    project_slug = _role_slug(project) if project else _role_slug(os.path.basename(os.getcwd()))
+    project_slug = _role_slug(project) if project else _resolve_project_slug()
     role_slug = _role_slug(role)
+    app_name = _truncate_app_name(project_slug, role_slug)
     manifest = {
-        "name": f"synlynk-{project_slug}-{role_slug}",
+        "name": app_name,
         "url": "https://synlynk.com",
         "hook_attributes": {
             "url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/webhook",
