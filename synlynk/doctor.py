@@ -313,34 +313,40 @@ HEALTH_CHECKS = [
 ]
 
 
+def _print_health_check_report(checks: _List) -> bool:
+    _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+
+    results = [fn() for fn in checks]
+    failed = [r for r in results if r.status == "fail"]
+    warned = [r for r in results if r.status == "warn"]
+
+    print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
+    for r in results:
+        icon = _STATUS_ICON.get(r.status, "?")
+        print(f"  {icon}  {r.name}: {r.message}")
+        if r.fix and r.status != "ok":
+            print(f"     {_DIM}→ {r.fix}{_RESET}")
+
+    print()
+    if failed:
+        print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
+    elif warned:
+        print(f"  {len(warned)} advisory warning(s). Everything should still work.")
+    else:
+        print(f"  {_GREEN}All checks passed.{_RESET}")
+    print()
+    return bool(failed)
+
+
 def cmd_doctor(args=None, checks: _List = None) -> int:
     """Runs all registered health checks and prints a formatted report.
 
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
     if checks is not None:
-        _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+        return 1 if _print_health_check_report(checks) else 0
 
-        results = [fn() for fn in checks]
-        failed = [r for r in results if r.status == "fail"]
-        warned = [r for r in results if r.status == "warn"]
-
-        print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
-        for r in results:
-            icon = _STATUS_ICON.get(r.status, "?")
-            print(f"  {icon}  {r.name}: {r.message}")
-            if r.fix and r.status != "ok":
-                print(f"     {_DIM}→ {r.fix}{_RESET}")
-
-        print()
-        if failed:
-            print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
-        elif warned:
-            print(f"  {len(warned)} advisory warning(s). Everything should still work.")
-        else:
-            print(f"  {_GREEN}All checks passed.{_RESET}")
-        print()
-        return 1 if failed else 0
+    _print_health_check_report(HEALTH_CHECKS)
 
     agent_filter = getattr(args, "agent", None) if args is not None else None
     db_conn = _pkg("_get_db")()
