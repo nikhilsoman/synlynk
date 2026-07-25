@@ -206,6 +206,12 @@ def _seed_stories(*story_ids):
     conn.close()
 
 
+def _init_git_repo(path):
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True)
+
+
 def test_migrate_dry_run_imports_nothing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -543,6 +549,48 @@ def test_migrate_dr_sync_on_migrate(tmp_path, monkeypatch):
     _seed_stories("story-bs12a-roles")
     synlynk.cmd_migrate()
     assert (dr_path / "project-docs" / "memory.md").exists()
+
+
+def test_migrate_force_adds_sentinel_inside_ignored_synlynk_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _init_git_repo(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".gitignore").write_text(
+        ".superpowers/\n"
+        ".synlynk/\n"
+        ".synlynk/viz-cache/\n"
+        ".synlynk/viz-meta.json\n"
+        "__pycache__/\n"
+        "*.pyc\n"
+    )
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    synlynk.cmd_migrate()
+
+    sentinel = tmp_path / ".synlynk" / ".synlynk_migrated"
+    assert sentinel.exists()
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", ".synlynk/.synlynk_migrated"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert tracked.stdout.strip() == ".synlynk/.synlynk_migrated"
+
+    commit_files = subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    assert ".synlynk/.synlynk_migrated" in commit_files
 
 
 def _setup_migrated(tmp_path, monkeypatch):

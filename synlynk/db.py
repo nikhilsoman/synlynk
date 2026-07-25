@@ -1309,7 +1309,8 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
                 f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
             print("  ✓ Sentinel written")
 
-            subprocess.run(["git", "add", ".gitignore", sentinel], check=True)
+            subprocess.run(["git", "add", ".gitignore"], check=True)
+            subprocess.run(["git", "add", "-f", sentinel], check=True)
             subprocess.run(
                 [
                     "git",
