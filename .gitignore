@@ -11,6 +11,7 @@ test_context_output/
 .venv/
 *.egg-info/
 .worktrees/
+worktrees/
 .antigravitycli/
 .claude/
 bin/statusline.py
