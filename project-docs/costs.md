@@ -113,3 +113,10 @@
 | 2026-07-25 09:49 | codex | 1 | 10000/2000 | [est] $0.0600 | backfill: PR #479 check (job-452cb8a3) — sandbox DB-open limitation, ground-truthed clean outside sandbox |
 | 2026-07-25 09:49 | codex | 1 | 10000/2000 | [est] $0.0600 | backfill: PR #476 check (job-06b9635a) — sandbox DB-open limitation, ground-truthed clean outside sandbox |
 | 2026-07-25 09:49 | claude | 1 | 45000/12000 | [est] $0.3150 | backfill: PM-level native work — agy jetski investigation repro design/analysis, RCA doc write-up, PR #479/#476 review+merge coordination — not captured by dispatch telemetry |
+| 2026-07-22 12:52 | grok | 1 | 5000/2000 | [est] $0.0450 | $0.0450 | exec: grok job job-1e5fbdb... |
+| 2026-07-22 13:38 | codex | 1 | 5550187/63256 | [est?] $17.5994 | $17.5994 | exec: codex job job-2d1027... |
+| 2026-07-22 15:20 | grok | 1 | 124997/19183 | [est] $0.6627 | $0.6627 | exec: grok job job-c5a2c5c... |
+| 2026-07-22 17:37 | codex | 1 | 31498355/124793 | [est?] $96.3670 | $96.3670 | exec: codex job job-b87c2d... |
+| 2026-07-22 17:53 | grok | 1 | 59182/7035 | [est] $0.2831 | $0.2831 | exec: grok job job-c8de7fd... |
+| 2026-07-24 18:50 | codex | 1 | 5000/2000 | [est] $0.0450 | $0.0450 | exec: codex job job-a839d1... |
+| 2026-07-24 18:50 | codex | 1 | 5000/2000 | [est] $0.0450 | $0.0450 | exec: codex job job-b6bbeb... |
