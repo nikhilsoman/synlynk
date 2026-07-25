@@ -1690,7 +1690,7 @@ def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
             status = checkbox_status.get(mark)
             if status is None:
                 continue
-            id_match = re.search(r'<!--\s*id:(story-[a-f0-9]+)\s*-->', line)
+            id_match = re.search(r'<!--\s*id:(story-[\w-]+)\s*-->', line)
             if id_match and id_match.group(1) in existing_ids:
                 continue
 

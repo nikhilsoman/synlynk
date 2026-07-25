@@ -431,6 +431,55 @@ def test_migrate_import_backfills_checked_todo_story_row(tmp_path, monkeypatch):
     assert row[2] == "#999"
 
 
+def test_migrate_import_backfills_slug_todo_story_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [x] Slug style story [platform] <!-- id:story-bs12a-roles --> <!-- gh:#123 -->\n"
+    )
+
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT story_id, title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-bs12a-roles",),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "story-bs12a-roles"
+    assert row[1] == "Slug style story"
+    assert row[2] == "done"
+    assert row[3] == "#123"
+
+
+def test_import_todo_to_stories_preserves_slug_story_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [x] Single slug story [platform] <!-- id:story-jlgv-128 -->\n"
+    )
+
+    conn = synlynk._get_db()
+    try:
+        inserted = synlynk._import_todo_to_stories(str(docs), conn=conn)
+        row = conn.execute(
+            "SELECT story_id, title, status FROM stories WHERE title=?",
+            ("Single slug story",),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert inserted == 1
+    assert row[0] == "story-jlgv-128"
+    assert row[1] == "Single slug story"
+    assert row[2] == "done"
+
+
 def test_migrate_rolls_back_on_mid_operation_failure(tmp_path, monkeypatch):
     import subprocess as sp
     from synlynk import db as db_mod
