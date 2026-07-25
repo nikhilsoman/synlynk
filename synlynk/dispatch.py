@@ -13,6 +13,7 @@ import time
 from typing import Optional, Tuple
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk.github_app_auth import get_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
 
@@ -71,6 +72,50 @@ def _load_harness_overrides(agent: str) -> dict:
     except (json.JSONDecodeError, OSError):
         sys.stderr.write(f"Warning: corrupt {path}, ignoring harness overrides\n")
         return empty
+
+
+def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
+    """Resolve a role-scoped GitHub App installation token for dispatch.
+
+    Falls back to the synlynk-bot catch-all identity if the role has no
+    provisioned App. Returns None (never a human's personal token) if
+    neither is provisioned — dispatch proceeds using whatever `gh auth`
+    is already configured on the host in that case.
+    """
+    for candidate_role in (role, "synlynk-bot"):
+        json_path = os.path.join(".synlynk", "github_apps", f"{candidate_role}.json")
+        if not os.path.exists(json_path):
+            continue
+        try:
+            with open(json_path) as fh:
+                app_config = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not app_config.get("installation_id"):
+            continue
+        try:
+            return get_installation_token(candidate_role, app_config)
+        except Exception as exc:
+            print(
+                f"  ⚠ could not mint GitHub App token for role '{candidate_role}': {exc}",
+                file=sys.stderr,
+            )
+            return None
+    return None
+
+
+def _role_for_story(story_id: str) -> Optional[str]:
+    """Look up stories.role for a story_id. Returns None if no story_id or no row."""
+    if not story_id:
+        return None
+    get_db = _pkg("_get_db")
+    if not get_db:
+        return None
+    conn = get_db()
+    if conn is None:
+        return None
+    row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
+    return row[0] if row else None
 
 
 def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:
@@ -1111,6 +1156,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     contract = baselines.get("headless_contract", {})
     proc_env = os.environ.copy()
     proc_env.update(overrides.get("env", {}))
+    if requires_gh_write:
+        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
+        if gh_token:
+            proc_env["GH_TOKEN"] = gh_token
     for var in contract.get("env_vars_required", []):
         if "=" in var:
             k, v = var.split("=", 1)
