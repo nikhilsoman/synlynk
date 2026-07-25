@@ -18,7 +18,7 @@ _openssl_path_cache = None
 
 
 def _redaction_cache_path() -> str:
-    return os.path.join("synlynk", "token_redaction_cache.json")
+    return os.path.join(".synlynk", "token_redaction_cache.json")
 
 
 def _persist_token_for_redaction(role: str, token: str, expires_at: float) -> None:

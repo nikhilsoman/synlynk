@@ -103,7 +103,7 @@ def test_get_installation_token_persists_redaction_cache(monkeypatch, tmp_path):
     token = gh_auth.get_installation_token("dev", app_config)
 
     assert token == "persisted-token"
-    cache_path = tmp_path / "synlynk" / "token_redaction_cache.json"
+    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
     assert cache_path.exists()
     cache_data = json.loads(cache_path.read_text())
     assert cache_data["persisted-token"]["role"] == "dev"
@@ -115,7 +115,7 @@ def test_load_redaction_tokens_omits_expired_entries(monkeypatch, tmp_path):
     from synlynk import github_app_auth as gh_auth
 
     monkeypatch.chdir(tmp_path)
-    cache_path = tmp_path / "synlynk" / "token_redaction_cache.json"
+    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({
         "expired-token": {"expires_at": time.time() - 10, "role": "dev"},
@@ -131,7 +131,7 @@ def test_get_installation_token_prunes_expired_redaction_entries(monkeypatch, tm
     from synlynk import github_app_auth as gh_auth
 
     monkeypatch.chdir(tmp_path)
-    cache_path = tmp_path / "synlynk" / "token_redaction_cache.json"
+    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({
         "expired-token": {"expires_at": time.time() - 10, "role": "old"},
