@@ -123,3 +123,15 @@
 | 2026-07-25 19:19 | codex | 1 | 2067044/18542 | [est?] $6.4793 | $6.4793 | exec: codex job job-e88634... |
 | 2026-07-25 19:19 | grok | 1 | 29280/1169 | [est] $0.1054 | $0.1054 | exec: grok job job-6eaeee0... |
 | 2026-07-25 19:19 | grok | 1 | 29196/2714 | [est] $0.1283 | $0.1283 | exec: grok job job-d094d99... |
+| 2026-07-25 20:54 | grok | 1 | 29624/1368 | [est] $0.1094 | $0.1094 | exec: grok job job-531e56b... |
+| 2026-07-25 20:54 | codex | 1 | 5000/2000 | [est] $0.0450 | $0.0450 | exec: codex job job-455be5... |
+| 2026-07-25 20:54 | claude | 1 | 5000/2000 | [est] $0.0450 | $0.0450 | exec: claude job job-7bbcb... |
+| 2026-07-25 20:54 | grok | 1 | 100004/30608 | [est] $0.7591 | $0.7591 | exec: grok job job-1e212ed... |
+| 2026-07-25 20:54 | grok | 1 | 30703/3220 | [est] $0.1404 | $0.1404 | exec: grok job job-778e4be... |
+| 2026-07-25 20:54 | grok | 1 | 25873/1085 | [est] $0.0939 | $0.0939 | exec: grok job job-4de3341... |
+| 2026-07-25 20:59 | codex | 1 | 1132572/9837 | [est] $3.5453 | $3.5453 | exec: codex job job-64eed1... |
+| 2026-07-25 21:04 | grok | 1 | 25369/1777 | [est] $0.1028 | $0.1028 | exec: grok job job-bfb205a... |
+| 2026-07-25 21:21 | codex | 1 | 2211598/18958 | [est?] $6.9192 | $6.9192 | exec: codex job job-c051d1... |
+| 2026-07-25 21:29 | codex | 1 | 929727/6071 | [est] $2.8802 | $2.8802 | exec: codex job job-0f9a4b... |
+| 2026-07-25 21:22 | codex | 1 | 3732215/41679 | [est?] $2.99 | $2.99 | exec: codex job job-6bd241... (backfill: completion only surfaced via `synlynk jobs`, not a live dispatch print — see [[feedback: cost-capture auto-gap]]) |
+| 2026-07-25 21:32 | grok | 1 | 39237/3511 | [est] $0.17 | $0.17 | exec: grok job job-554610... (backfill: nested worktree job, not visible to top-level `synlynk logs`/auto-capture) |
