@@ -700,6 +700,13 @@ def cmd_identity_init_role(role: str, project=None) -> None:
     _confirm_installation(config["app_slug"], json_path)
     print(f"  role '{role}' provisioned at {json_path}")
 
+    from synlynk.identity_roles import load_declared_roles, write_declared_roles
+
+    declared = load_declared_roles()
+    if role not in declared:
+        write_declared_roles(declared + [role])
+        print(f"  ✓ added '{role}' to .synlynk/roles.yaml")
+
 
 def cmd_identity_list() -> None:
     """List every declared role's GitHub App identity provisioning status."""
