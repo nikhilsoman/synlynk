@@ -287,10 +287,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN previous_agents TEXT")
         except sqlite3.OperationalError:
             pass
-    try:
-        conn.executescript(_DB_SCORES_VIEW)
-    except sqlite3.OperationalError:
-        pass  # view already exists with same definition
+    conn.execute("DROP VIEW IF EXISTS capability_scores")
+    conn.executescript(_DB_SCORES_VIEW)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS harness_baselines (
             harness_name TEXT NOT NULL,
