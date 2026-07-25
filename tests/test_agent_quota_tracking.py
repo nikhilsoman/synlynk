@@ -397,6 +397,71 @@ def test_fix_github_issue_378_nikhilsomansynk_terminal_summary_survives_unknown_
     assert overwritten == terminal
 
 
+def test_chore_synlynk_jobs_all_shows_stale_faile_terminal_summary_survives_daemon_reconcile(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": []})
+
+    summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
+    terminal = sl._write_job_summary(
+        "job-race",
+        "codex",
+        "story-202",
+        0,
+        4.0,
+        120,
+        30,
+        0.02,
+        ["src/terminal.py"],
+        status_label="OK (exit 0)",
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "job-race",
+            "codex",
+            "task",
+            "story-202",
+            "running",
+            5,
+            "[]",
+            99999999,
+            "2026-07-25T00:00:00",
+            "2026-07-25T00:00:01",
+            str(project_dir / ".synlynk" / "logs" / "job-race.log"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    def pkg_side_effect(name, default=None):
+        if name == "_get_db":
+            return sl._get_db
+        if name == "extract_tokens":
+            return lambda log_text, agent="": (0, 0)
+        if name == "extract_model_version":
+            return lambda log_text, agent="": "unknown"
+        if name == "update_costs":
+            return lambda *args, **kwargs: None
+        return getattr(sl, name, default)
+
+    monkeypatch.setattr(jobs_mod, "_pkg", pkg_side_effect)
+    monkeypatch.setattr(jobs_mod.os, "waitpid", lambda pid, opts: (_ for _ in ()).throw(ChildProcessError()))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()))
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    assert summary_path.read_text() == terminal
+    assert "FAILED (exit -1)" not in summary_path.read_text()
+    assert "files:    0 touched" not in summary_path.read_text()
+
+
 def _load_backfill_script():
     script_path = Path(__file__).resolve().parents[1] / "bin" / "backfill_api_equivalent_usd.py"
     spec = importlib.util.spec_from_file_location("backfill_api_equivalent_usd", script_path)
