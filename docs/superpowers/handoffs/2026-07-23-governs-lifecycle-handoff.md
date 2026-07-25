@@ -87,8 +87,20 @@ happen": it's a process gap, not a missing log entry.
 subagents, even if reaching for `subagent-driven-development` or
 `executing-plans` feels natural.**
 
+## Status update (2026-07-25)
+PR #464 merged 2026-07-23. The section is live in generated instruction files.
+
+## GOVERNS goal
+`goal-90e73dfd` created 2026-07-25 — this work shipped and merged with no
+linked GOVERNS goal, discovered only when asked about it post-hoc (a live
+example of the exact gap this feature is meant to close going forward). No
+story exists to link it to (`synlynk goal link`) because implementation
+bypassed `synlynk dispatch` entirely — see "Process deviation" above. If a
+follow-up story/dispatch is ever opened for this branch, link it to
+`goal-90e73dfd` rather than creating a second goal.
+
 ## Immediate next step (if picking this back up)
-PR #464 is open, green, mergeable — it just needs a merge decision. Nothing
-else is blocking it. If extending scope, start from the "Future Work" section
-of the spec (the two deferred items above) rather than re-opening settled
-scope questions from the panel decision.
+Feature is shipped. Next work starts from the spec's "Future Work" section
+(the two deferred items above: default-on GOVERNS induction, extending
+checkpoint directives to other skill-completion points) rather than
+re-opening settled scope questions from the panel decision.
