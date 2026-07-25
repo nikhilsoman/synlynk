@@ -138,7 +138,7 @@ def _build_app_manifest_url(project, role: str) -> str:
         "default_events": [],
         "default_permissions": {
             "metadata": "read",
-            "contents": "read",
+            "contents": "write",
             "issues": "write",
             "pull_requests": "write",
         },
