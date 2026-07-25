@@ -725,6 +725,8 @@ def main() -> None:
         cmd_doctor,
         cmd_exit,
         cmd_identity_init,
+        cmd_identity_init_role,
+        cmd_identity_list,
         cmd_instructions_ack,
         cmd_instructions_diff,
         cmd_instructions_status,
