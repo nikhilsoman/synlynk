@@ -273,6 +273,98 @@ def test_cmd_quota_json(project_dir, capsys):
     assert any(w["used"] == 600 for w in agents["grok"]["windows"] if w["unit"] == "tokens")
 
 
+@pytest.mark.parametrize(
+    "reconcile_order",
+    [
+        ("jobs", "daemon"),
+        ("daemon", "jobs"),
+    ],
+)
+def test_fix_synlynk_jobs_all_permanently_shows_unknown_shared_exit_marker_race(
+    project_dir, monkeypatch, reconcile_order
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    log_path = project_dir / ".synlynk" / "logs" / "job-shared.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("Input tokens: 12\nOutput tokens: 34\n")
+    exit_path = str(log_path) + ".exit"
+    with open(exit_path, "w") as f:
+        f.write("0")
+
+    sl._save_jobs([
+        {
+            "id": "job-shared",
+            "agent": "claude",
+            "story_id": "story-shared",
+            "task": "shared exit marker test",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": "",
+            "worktree_branch": "",
+            "started_at": "2026-07-25T10:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "job-shared",
+            "claude",
+            "shared exit marker test",
+            "story-shared",
+            "running",
+            5,
+            "[]",
+            99999999,
+            "2026-07-25T10:00:00",
+            "2026-07-25T10:00:00",
+            str(log_path),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(
+        jobs_mod.os,
+        "kill",
+        lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()),
+    )
+    monkeypatch.setattr(
+        jobs_mod.os,
+        "waitpid",
+        lambda *a, **kw: (_ for _ in ()).throw(ChildProcessError()),
+    )
+
+    for reconcile in reconcile_order:
+        if reconcile == "jobs":
+            jobs_mod._reconcile_jobs()
+        else:
+            jobs_mod._reconcile_daemon_jobs()
+
+    jobs = sl._load_jobs()
+    job_row = next(job for job in jobs if job["id"] == "job-shared")
+    assert job_row["status"] == "completed"
+    assert job_row["exit_code"] == 0
+
+    conn = sl._get_db()
+    try:
+        daemon_row = conn.execute(
+            "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?",
+            ("job-shared",),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert daemon_row == ("done", 0)
+    assert os.path.exists(exit_path)
+
+
 def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)

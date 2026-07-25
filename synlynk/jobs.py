@@ -1161,7 +1161,6 @@ def _reconcile_jobs() -> None:
                     try:
                         with open(exit_file) as f:
                             exit_code = int(f.read().strip())
-                        os.remove(exit_file)
                     except Exception:
                         pass
                 elif job.get("worktree_path"):
@@ -1359,17 +1358,17 @@ def _reconcile_daemon_jobs() -> None:
 
             if exited:
                 exit_code = None
+                exit_file = None
                 if raw_exit_status is not None:
                     exit_code = _exit_code_from_wait_status(raw_exit_status)
                 elif log_path:
                     exit_file = log_path + ".exit"
-                    if os.path.exists(exit_file):
-                        try:
-                            with open(exit_file) as f:
-                                exit_code = int(f.read().strip())
-                            os.remove(exit_file)
-                        except Exception:
-                            pass
+                if exit_file and os.path.exists(exit_file):
+                    try:
+                        with open(exit_file) as f:
+                            exit_code = int(f.read().strip())
+                    except Exception:
+                        pass
                 if exit_code == 0:
                     status = "done"
                 elif exit_code is None:

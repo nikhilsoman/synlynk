@@ -2298,7 +2298,7 @@ def test_reconcile_marks_completed_from_exit_file(project_dir):
     assert job["status"] == "completed"
     assert job["exit_code"] == 0
     assert job["ended_at"] is not None
-    assert not os.path.exists(log_file + ".exit")
+    assert os.path.exists(log_file + ".exit")
 
 
 def test_reconcile_marks_failed_from_exit_file(project_dir):
@@ -2319,7 +2319,7 @@ def test_reconcile_marks_failed_from_exit_file(project_dir):
     assert job["status"] == "failed"
     assert job["exit_code"] == 1
     assert job["ended_at"] is not None
-    assert not os.path.exists(log_file + ".exit")
+    assert os.path.exists(log_file + ".exit")
 
 
 def test_reconcile_attributes_origin_branch_activity_when_assigned_worktree_is_clean(project_dir, monkeypatch, capsys):
@@ -5415,7 +5415,7 @@ def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
     conn2.close()
     assert row[0] == "done"
     assert row[1] == 0
-    assert not os.path.exists(exit_path), ".exit file should have been deleted by reconcile"
+    assert os.path.exists(exit_path), ".exit file should remain readable for the other reconciler"
 
 
 def test_reconcile_jobs_uses_model_rate_table_for_completed_job_cost(project_dir, monkeypatch):
