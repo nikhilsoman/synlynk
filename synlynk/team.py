@@ -189,6 +189,10 @@ def _write_role_app_config(role: str, conversion: dict) -> dict:
         "private_key_path": str(pem_path),
     }
     json_path.write_text(json.dumps(config, indent=2) + "\n")
+    try:
+        os.chmod(json_path, 0o600)
+    except OSError:
+        pass
     return config
 
 
