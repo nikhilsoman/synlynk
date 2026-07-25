@@ -1,14 +1,16 @@
 """synlynk team: onboarding (join), team digest, consensus (decide), identity keys."""
 
 import hashlib
+import html
 import json
 import os
 import subprocess
 import re
 import sys
 import time
+import webbrowser
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
@@ -113,8 +115,21 @@ def _build_app_manifest_url(project, role: str) -> str:
             "pull_requests": "write",
         },
     }
-    query = urlencode({"manifest": json.dumps(manifest, separators=(",", ":"))})
-    return f"https://github.com/settings/apps/new?{query}"
+    manifest_json = json.dumps(manifest)
+    escaped_manifest = html.escape(manifest_json, quote=True)
+    form_html = (
+        "<!doctype html><html><body>"
+        '<form id="ghform" action="https://github.com/settings/apps/new" method="post">'
+        f'<input type="hidden" name="manifest" value="{escaped_manifest}">'
+        "</form>"
+        '<script>document.getElementById("ghform").submit();</script>'
+        "</body></html>"
+    )
+    forms_dir = Path(".synlynk") / "manifest_forms"
+    forms_dir.mkdir(parents=True, exist_ok=True)
+    form_path = forms_dir / f"{role_slug}.html"
+    form_path.write_text(form_html)
+    return form_path.resolve().as_uri()
 
 
 def _github_auth_token() -> str:
@@ -687,8 +702,12 @@ def cmd_identity_init_role(role: str, project=None) -> None:
             return
 
     manifest_url = _build_app_manifest_url(project, role)
-    print(f"  Open this GitHub App manifest URL for '{role}':")
+    print(f"  Open this GitHub App manifest form for '{role}':")
     print(f"  {manifest_url}")
+    try:
+        webbrowser.open(manifest_url)
+    except Exception:
+        pass
     code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
     if not code:
         raise RuntimeError("no manifest code provided")

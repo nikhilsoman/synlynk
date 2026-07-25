@@ -1,14 +1,25 @@
+import html as html_lib
 import json
-from urllib.parse import parse_qs, urlparse
+import re
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import synlynk as sl
 
 
-def test_build_app_manifest_url_encodes_role_and_project():
+def test_build_app_manifest_url_encodes_role_and_project(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     url = sl._build_app_manifest_url("alpha-project", "review")
 
-    assert url.startswith("https://github.com/settings/apps/new?")
-    manifest = json.loads(parse_qs(urlparse(url).query)["manifest"][0])
+    assert url.startswith("file://")
+    form_path = Path(unquote(urlparse(url).path))
+    form_html = form_path.read_text()
+    assert 'action="https://github.com/settings/apps/new"' in form_html
+    assert 'method="post"' in form_html
+
+    match = re.search(r'name="manifest" value="([^"]*)"', form_html)
+    assert match is not None
+    manifest = json.loads(html_lib.unescape(match.group(1)))
     assert manifest["name"] == "synlynk-alpha-project-review"
     assert "alpha-project" in manifest["hook_attributes"]["url"]
     assert "review" in manifest["redirect_url"]
