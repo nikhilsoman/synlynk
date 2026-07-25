@@ -1642,7 +1642,7 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
         _dr_sync(f"devlogs/{author}.md")
 
 def _import_todo_to_stories() -> int:
-    """Reads '- [ ]' lines from todo.md and inserts missing story rows."""
+    """Reads checkbox lines from todo.md and inserts missing story rows."""
     from synlynk import _docs_dir, _get_db
     import hashlib as _hashlib
 
@@ -1653,32 +1653,48 @@ def _import_todo_to_stories() -> int:
 
     conn = _get_db()
     existing_ids = {row[0] for row in conn.execute("SELECT story_id FROM stories")}
+    checkbox_status = {
+        " ": "open",
+        "x": "done",
+        "-": "deferred",
+        "~": "superseded",
+        ">": "absorbed",
+    }
 
     imported = 0
     with open(todo_path) as f:
         for line in f:
-            if "- [ ]" not in line:
+            checkbox_match = re.match(r"\s*-\s*\[(?P<mark>[ x\-~>])\]\s*(?P<body>.+?)\s*$", line)
+            if not checkbox_match:
+                continue
+            mark = checkbox_match.group("mark")
+            status = checkbox_status.get(mark)
+            if status is None:
                 continue
             id_match = re.search(r'<!--\s*id:(story-[a-f0-9]+)\s*-->', line)
             if id_match and id_match.group(1) in existing_ids:
                 continue
 
             title_match = re.match(
-                r'\s*-\s*\[\s*\]\s*(.+?)(?:\s*\[.*?\])?(?:\s*<!--.*-->)?\s*$',
-                line,
+                r"(?P<title>.+?)(?:\s*\[.*?\])?(?:\s*<!--.*-->)?\s*$",
+                checkbox_match.group("body"),
             )
             if not title_match:
                 continue
-            title = title_match.group(1).strip()
-            story_id = "story-" + _hashlib.md5(title.encode()).hexdigest()[:8]
+            title = title_match.group("title").strip()
+            story_id = (
+                id_match.group(1)
+                if id_match is not None
+                else "story-" + _hashlib.md5(title.encode()).hexdigest()[:8]
+            )
             if story_id in existing_ids:
                 continue
             if conn.execute("SELECT 1 FROM stories WHERE title=?", (title,)).fetchone():
                 continue
             try:
                 conn.execute(
-                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, 'open')",
-                    (story_id, title),
+                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
+                    (story_id, title, status),
                 )
                 imported += 1
                 existing_ids.add(story_id)

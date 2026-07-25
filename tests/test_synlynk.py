@@ -4100,7 +4100,7 @@ def test_cmd_story_create_generates_todo_md(project_dir):
 
 
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
-    """_import_todo_to_stories creates story rows for - [ ] lines."""
+    """_import_todo_to_stories creates story rows for all supported checkbox states."""
     import synlynk as sl
     (project_dir / "project-docs" / "todo.md").write_text(
         "- [ ] Migrate auth module\n"
@@ -4108,13 +4108,45 @@ def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
         "- [ ] Write API docs\n"
     )
     count = sl._import_todo_to_stories()
-    assert count == 2
+    assert count == 3
     conn = sl._get_db()
-    titles = {row[0] for row in conn.execute("SELECT title FROM stories")}
+    rows = conn.execute(
+        "SELECT title, status FROM stories ORDER BY title"
+    ).fetchall()
     conn.close()
-    assert "Migrate auth module" in titles
-    assert "Write API docs" in titles
-    assert "Old done task" not in titles
+    assert rows == [
+        ("Migrate auth module", "open"),
+        ("Old done task", "done"),
+        ("Write API docs", "open"),
+    ]
+
+
+def test_import_todo_to_stories_backfills_completed_rows(project_dir):
+    """_import_todo_to_stories also backfills checked rows for metadata sync."""
+    import synlynk as sl
+
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Some completed story [platform] <!-- id:story-abc12345 --> <!-- gh:#999 -->\n"
+    )
+
+    count = sl._import_todo_to_stories()
+    assert count == 1
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT story_id, title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-abc12345",),
+    ).fetchone()
+    assert row == ("story-abc12345", "Some completed story", "done", None)
+
+    conn.execute("UPDATE stories SET gh_issue=? WHERE story_id=?", ("#999", "story-abc12345"))
+    conn.commit()
+    updated = conn.execute(
+        "SELECT story_id, title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-abc12345",),
+    ).fetchone()
+    conn.close()
+    assert updated == ("story-abc12345", "Some completed story", "done", "#999")
 
 
 def test_import_todo_to_stories_skips_existing_stories(project_dir):
