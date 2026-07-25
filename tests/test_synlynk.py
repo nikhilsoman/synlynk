@@ -4486,6 +4486,20 @@ def test_cmd_logs_error_for_missing_job(project_dir, capsys):
     assert "not found" in out.lower() or "no job" in out.lower()
 
 
+def test_redact_active_tokens_uses_on_disk_redaction_cache(tmp_path, monkeypatch):
+    import synlynk as sl
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    gh_auth._token_cache.clear()
+    gh_auth._persist_token_for_redaction("dev", "token-value", time.time() + 3600)
+
+    redacted = sl._redact_active_tokens("prefix token-value suffix")
+
+    assert "token-value" not in redacted
+    assert "***REDACTED***" in redacted
+
+
 def test_cmd_shell_spawns_subshell(project_dir, monkeypatch):
     import synlynk as sl
     spawned = []

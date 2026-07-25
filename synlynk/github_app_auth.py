@@ -17,6 +17,55 @@ _token_cache = {}  # role -> {"token": str, "expires_at": float}
 _openssl_path_cache = None
 
 
+def _redaction_cache_path() -> str:
+    return os.path.join("synlynk", "token_redaction_cache.json")
+
+
+def _persist_token_for_redaction(role: str, token: str, expires_at: float) -> None:
+    """Best-effort: append this token to the on-disk redaction cache so a
+    later `synlynk logs` process (different PID) can still redact it."""
+    path = _redaction_cache_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        entries = {}
+        if os.path.exists(path):
+            with open(path) as f:
+                entries = json.load(f)
+        if not isinstance(entries, dict):
+            entries = {}
+        now = time.time()
+        entries = {
+            k: v for k, v in entries.items()
+            if isinstance(v, dict) and v.get("expires_at", 0) > now
+        }
+        entries[token] = {"expires_at": expires_at, "role": role}
+        with open(path, "w") as f:
+            json.dump(entries, f)
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def _load_redaction_tokens() -> list:
+    """Return currently-valid token strings from the on-disk redaction cache."""
+    path = _redaction_cache_path()
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path) as f:
+            entries = json.load(f)
+        if not isinstance(entries, dict):
+            return []
+    except (OSError, ValueError, TypeError):
+        return []
+    now = time.time()
+    return [
+        tok
+        for tok, meta in entries.items()
+        if isinstance(meta, dict) and meta.get("expires_at", 0) > now
+    ]
+
+
 def _resolve_openssl_path() -> str:
     """Resolve a verified, absolute openssl path once."""
     global _openssl_path_cache
@@ -114,4 +163,5 @@ def get_installation_token(role: str, app_config: dict) -> str:
         app_config["app_id"], app_config["installation_id"], app_config["private_key_path"],
     )
     _token_cache[role] = {"token": token, "expires_at": expires_at}
+    _persist_token_for_redaction(role, token, expires_at)
     return token
