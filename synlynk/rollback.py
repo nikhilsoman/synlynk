@@ -108,7 +108,11 @@ def _git_dirty() -> bool:
 
 
 def _is_git_ignored(path: str) -> bool:
-    result = subprocess.run(["git", "check-ignore", "-q", path])
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     return result.returncode == 0
 
 
