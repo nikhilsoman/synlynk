@@ -178,6 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_scan,
         cmd_cost_log,
         cmd_quota,
+        cmd_roadmap_add,
         cmd_score_add,
         cmd_score_attest,
         cmd_score_list,
@@ -602,6 +603,18 @@ def build_parser() -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
     cost_log_parser.add_argument("--note", default=None)
 
+    roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
+    roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
+    roadmap_add_parser = roadmap_sub.add_parser("add", help="Add or update a roadmap arc or phase")
+    roadmap_add_parser.add_argument("--version", required=True)
+    roadmap_add_parser.add_argument("--title", default=None)
+    roadmap_add_parser.add_argument("--status", default="planned")
+    roadmap_add_parser.add_argument("--target-date", default=None, dest="target_date")
+    roadmap_add_parser.add_argument("--notes", default=None)
+    roadmap_add_parser.add_argument("--phase-title", default=None, dest="phase_title")
+    roadmap_add_parser.add_argument("--priority", default=None)
+    roadmap_add_parser.add_argument("--story-id", default=None, dest="story_id")
+
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
     grant_parser = credit_sub.add_parser("grant", help="Record a credit grant for an agent")
@@ -764,6 +777,7 @@ def main() -> None:
         cmd_relay_start,
         cmd_release,
         cmd_repair,
+        cmd_roadmap_add,
         cmd_roles,
         cmd_run_trio,
         cmd_scan,
@@ -962,6 +976,22 @@ def main() -> None:
                 story_id=args.story_id,
                 note=args.note,
             )
+    elif args.command == "roadmap":
+        if args.roadmap_action == "add":
+            try:
+                cmd_roadmap_add(
+                    args.version,
+                    title=args.title,
+                    status=args.status,
+                    target_date=args.target_date,
+                    notes=args.notes,
+                    phase_title=args.phase_title,
+                    priority=args.priority,
+                    story_id=args.story_id,
+                )
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
     elif args.command == "credit":
         if args.credit_action == "grant":
             cmd_credit_grant(

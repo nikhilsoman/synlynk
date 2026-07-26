@@ -1,10 +1,13 @@
 import json
 import os
 import subprocess
+import sqlite3
 
 import pytest
 
+import synlynk
 from synlynk import rollback
+from synlynk.db import MigrationImportError
 
 
 def test_dest_for_relative_path(tmp_path):
@@ -96,6 +99,52 @@ def test_rollback_checkpoint_restores_on_exception(tmp_path, monkeypatch):
     assert not os.path.exists(rollback.MANIFEST_PATH)
 
 
+def test_cmd_migrate_rolls_back_real_db_path_on_import_failure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "project-docs").mkdir()
+
+    external_db = tmp_path.parent / f"{tmp_path.name}-external" / "projects" / "deadbeef" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(external_db))
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES (?,?,?)",
+        ("story-sentinel", "sentinel", "open"),
+    )
+    conn.commit()
+    conn.close()
+
+    def fake_migrate_import(docs_dir: str, dry_run: bool = False) -> None:
+        db = sqlite3.connect(synlynk.DB_PATH)
+        try:
+            db.execute(
+                "INSERT INTO stories (story_id, title, status) VALUES (?,?,?)",
+                ("story-bad", "bad", "open"),
+            )
+            db.commit()
+        finally:
+            db.close()
+        raise MigrationImportError("simulated partial import failure")
+
+    monkeypatch.setattr(synlynk, "_migrate_import", fake_migrate_import, raising=False)
+    monkeypatch.setattr(rollback.subprocess, "run", lambda *args, **kwargs: None)
+
+    with pytest.raises(SystemExit) as excinfo:
+        synlynk.cmd_migrate()
+
+    assert excinfo.value.code == 1
+
+    conn = sqlite3.connect(str(external_db))
+    rows = conn.execute(
+        "SELECT story_id, title FROM stories ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+
+    assert ("story-sentinel", "sentinel") in rows
+    assert ("story-bad", "bad") not in rows
+
+
 def test_rollback_checkpoint_restores_dirty_tree_stash(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _init_git_repo(tmp_path)
@@ -109,6 +158,54 @@ def test_rollback_checkpoint_restores_dirty_tree_stash(tmp_path, monkeypatch):
         with rollback.rollback_checkpoint("init", untracked_paths=[]):
             tracked.write_text("mutated during op\n")
             raise RuntimeError("simulated failure")
+
+    assert tracked.read_text() == "uncommitted local edit\n"
+
+
+def test_rollback_checkpoint_stash_excludes_out_of_repo_untracked_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.write_text("uncommitted local edit\n")
+
+    external_db = tmp_path.parent / f"{tmp_path.name}-external" / "state.db"
+    external_db.parent.mkdir(parents=True, exist_ok=True)
+    external_db.write_text("db\n")
+
+    with rollback.rollback_checkpoint("migrate", untracked_paths=[str(external_db)]) as manifest:
+        assert manifest["op_type"] == "migrate"
+
+    assert tracked.read_text() == "uncommitted local edit\n"
+
+
+def test_rollback_checkpoint_stash_excludes_gitignored_untracked_path(tmp_path, monkeypatch):
+    """Regression test: an untracked_paths entry that lives inside a
+    gitignored directory (e.g. .synlynk/project-docs, .synlynk/.synlynk_migrated)
+    must NOT get an explicit `:!` exclude pathspec in the auto-stash command —
+    git treats that as an attempt to add an ignored file and aborts the whole
+    `git stash push` with exit 1, even though `-u` would already have skipped
+    the ignored path on its own.
+    """
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    (tmp_path / ".gitignore").write_text(".synlynk/\n")
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", ".gitignore", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.write_text("uncommitted local edit\n")
+
+    docs_dir = tmp_path / ".synlynk" / "project-docs"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "roadmap.md").write_text("v1\n")
+
+    with rollback.rollback_checkpoint(
+        "migrate", untracked_paths=[".synlynk/project-docs", ".synlynk/.synlynk_migrated"]
+    ) as manifest:
+        assert manifest["op_type"] == "migrate"
 
     assert tracked.read_text() == "uncommitted local edit\n"
 

@@ -206,6 +206,12 @@ def _seed_stories(*story_ids):
     conn.close()
 
 
+def _init_git_repo(path):
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True)
+
+
 def test_migrate_dry_run_imports_nothing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -368,7 +374,16 @@ def test_migrate_import_genuine_zero_insert_still_raises(tmp_path, monkeypatch):
                     def fetchone(self):
                         return None
 
+                    def fetchall(self):
+                        return []
+
                 return EmptyCursor()
+            if sql_u.startswith("INSERT INTO STORIES"):
+
+                class InsertCursor:
+                    rowcount = 1
+
+                return InsertCursor()
             if sql_u.startswith(("INSERT", "UPDATE")):
                 raise RuntimeError("forced write failure")
 
@@ -397,6 +412,78 @@ def test_migrate_import_genuine_zero_insert_still_raises(tmp_path, monkeypatch):
     assert "memory_entries" in msg
     assert "roadmap_arcs" in msg
     assert "roadmap_phases" in msg
+
+
+def test_migrate_import_backfills_checked_todo_story_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [x] Some completed story [platform] <!-- id:story-abc12345 --> <!-- gh:#999 -->\n"
+    )
+
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-abc12345",),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "Some completed story"
+    assert row[1] == "done"
+    assert row[2] == "#999"
+
+
+def test_migrate_import_backfills_slug_todo_story_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [x] Slug style story [platform] <!-- id:story-bs12a-roles --> <!-- gh:#123 -->\n"
+    )
+
+    synlynk._migrate_import(str(docs))
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT story_id, title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-bs12a-roles",),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "story-bs12a-roles"
+    assert row[1] == "Slug style story"
+    assert row[2] == "done"
+    assert row[3] == "#123"
+
+
+def test_import_todo_to_stories_preserves_slug_story_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    docs = tmp_path / "project-docs"
+    docs.mkdir()
+    (docs / "todo.md").write_text(
+        "- [x] Single slug story [platform] <!-- id:story-jlgv-128 -->\n"
+    )
+
+    conn = synlynk._get_db()
+    try:
+        inserted = synlynk._import_todo_to_stories(str(docs), conn=conn)
+        row = conn.execute(
+            "SELECT story_id, title, status FROM stories WHERE title=?",
+            ("Single slug story",),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert inserted == 1
+    assert row[0] == "story-jlgv-128"
+    assert row[1] == "Single slug story"
+    assert row[2] == "done"
 
 
 def test_migrate_rolls_back_on_mid_operation_failure(tmp_path, monkeypatch):
@@ -464,6 +551,48 @@ def test_migrate_dr_sync_on_migrate(tmp_path, monkeypatch):
     assert (dr_path / "project-docs" / "memory.md").exists()
 
 
+def test_migrate_force_adds_sentinel_inside_ignored_synlynk_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _init_git_repo(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".gitignore").write_text(
+        ".superpowers/\n"
+        ".synlynk/\n"
+        ".synlynk/viz-cache/\n"
+        ".synlynk/viz-meta.json\n"
+        "__pycache__/\n"
+        "*.pyc\n"
+    )
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    synlynk.cmd_migrate()
+
+    sentinel = tmp_path / ".synlynk" / ".synlynk_migrated"
+    assert sentinel.exists()
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", ".synlynk/.synlynk_migrated"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert tracked.stdout.strip() == ".synlynk/.synlynk_migrated"
+
+    commit_files = subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    assert ".synlynk/.synlynk_migrated" in commit_files
+
+
 def _setup_migrated(tmp_path, monkeypatch):
     """Helper: set up a migrated environment."""
     monkeypatch.chdir(tmp_path)
@@ -519,6 +648,18 @@ def test_cmd_memory_add_updates_existing_section(tmp_path, monkeypatch):
     assert count == 1
 
 
+def test_cmd_memory_add_writes_pre_migration_too(project_dir):
+    from synlynk.db import cmd_memory_add
+
+    cmd_memory_add("Test Section", "test body", author="nikhil")
+
+    path = os.path.join(str(project_dir), "project-docs", "memory.md")
+    assert os.path.exists(path)
+    content = open(path).read()
+    assert "Test Section" in content
+    assert "test body" in content
+
+
 def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
     synlynk.cmd_devlog_append(
@@ -539,16 +680,15 @@ def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
 
 def test_update_costs_writes_to_db_and_flat_file_post_migration(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
-    (backup / "costs.md").write_text("| Date | Agent | In | Out | Cost | Notes |\n")
-    before_lines = (backup / "costs.md").read_text().splitlines()
     synlynk.update_costs("scan", 50000, 10000, 12.5)
     conn = synlynk._get_db()
     count = conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0]
     conn.close()
     assert count == 1
-    content_lines = (backup / "costs.md").read_text().splitlines()
-    assert len(content_lines) == len(before_lines) + 1
-    assert sum(1 for line in content_lines if "scan" in line) == 1
+    content = (backup / "costs.md").read_text()
+    assert "# Costs (generated - source of truth is state.db)" in content
+    assert "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |" in content
+    assert sum(1 for line in content.splitlines() if "scan" in line) == 1
 
 
 def test_generate_context_uses_db_when_migrated(tmp_path, monkeypatch):

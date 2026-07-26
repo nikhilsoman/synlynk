@@ -1416,7 +1416,8 @@ def test_update_costs_costs_md_includes_provenance_prefix(project_dir, monkeypat
 
     update_costs("claude -p 'x'", 0, 0, 5.0, model_version="claude-sonnet-4-6", agent="claude")
     estimated_line = costs_path.read_text().strip().splitlines()[-1]
-    assert "[est] $" in estimated_line
+    assert "| estimated_tshirt |" in estimated_line
+    assert "$0.0450" in estimated_line
 
     update_costs(
         "local -p 'x'",
@@ -1428,9 +1429,32 @@ def test_update_costs_costs_md_includes_provenance_prefix(project_dir, monkeypat
         basis="regex_pair",
     )
     actual_line = costs_path.read_text().strip().splitlines()[-1]
-    assert "| $" in actual_line
-    assert "[est] $" not in actual_line
-    assert "[legacy] $" not in actual_line
+    assert "| actual |" in actual_line
+    assert "[est]" not in actual_line
+    assert "[legacy]" not in actual_line
+
+
+def test_update_costs_regenerates_costs_md_and_syncs(project_dir, monkeypatch):
+    import synlynk
+
+    calls = []
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "_generate_costs_md", lambda: calls.append("generate"))
+    monkeypatch.setattr(synlynk, "_dr_sync", lambda path: calls.append(("sync", path)))
+
+    update_costs(
+        "claude -p 'x'",
+        100,
+        50,
+        5.0,
+        model_version="claude-sonnet-4-6",
+        agent="claude",
+    )
+
+    assert calls[0] == "generate"
+    assert ("sync", "costs.md") in calls
 
 
 def test_update_costs_flags_implausible_token_outlier(project_dir, monkeypatch, capsys):
@@ -1455,7 +1479,8 @@ def test_update_costs_flags_implausible_token_outlier(project_dir, monkeypatch, 
     assert "WARNING: extracted token count 2,500,000/120 exceeds the 2,000,000 ceiling" in captured
 
     last_line = costs_path.read_text().strip().splitlines()[-1]
-    assert "[est?] $" in last_line
+    assert "| estimated_token_rate |" in last_line
+    assert "[est?" not in last_line
 
 
 def test_load_model_rates_missing_file_uses_hardcoded_default(project_dir):

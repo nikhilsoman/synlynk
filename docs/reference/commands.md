@@ -31,6 +31,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `story list` (primary) — goal
 - `story ready` (secondary) — goal
 - `story draft` (secondary) — goal
+- `roadmap add` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
 - `roles` (secondary) — open

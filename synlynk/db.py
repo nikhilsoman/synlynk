@@ -41,6 +41,15 @@ _ORG_DOMAIN_DRIFT_MAP = {
     "marketing": "growth",
 }
 
+_PROJECT_DOC_KEEP_N = 50
+
+_GENERATORS_BY_FILENAME = {
+    "todo.md": "_generate_todo_md",
+    "roadmap.md": "_generate_roadmap_md",
+    "memory.md": "_write_memory_md",
+    "costs.md": "_generate_costs_md",
+}
+
 
 def _validate_enum_value(field_name: str, value: str, allowed: tuple[str, ...]) -> str:
     normalized = str(value).strip()
@@ -1082,6 +1091,9 @@ def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
                         print(f"  ⚠ devlog entry skipped ({fname}): {ex}")
     counts["devlog_entries"] = devlog_count
 
+    if not dry_run:
+        _import_todo_to_stories(docs_dir, conn=conn)
+
     todo_path = os.path.join(docs_dir, "todo.md")
     todo_sync_count = 0
     inserted_counts["todo_metadata"] = 0
@@ -1239,19 +1251,25 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
 
     backup_dir = _synlynk_project_docs_dir()
     from synlynk.rollback import rollback_checkpoint
+    abs_db_path = os.path.abspath(DB_PATH)
+    cwd = os.path.abspath(os.getcwd())
+    db_path_for_rollback = DB_PATH
+    if os.path.commonpath([abs_db_path, cwd]) == cwd:
+        db_path_for_rollback = os.path.relpath(abs_db_path, cwd)
+    untracked_paths = [
+        db_path_for_rollback,
+        f"{db_path_for_rollback}-wal",
+        f"{db_path_for_rollback}-shm",
+        f"{db_path_for_rollback}-journal",
+        backup_dir,
+        sentinel,
+        docs_dir,
+    ]
 
     try:
         with rollback_checkpoint(
             "migrate",
-            untracked_paths=[
-                os.path.join(".synlynk", "state.db"),
-                os.path.join(".synlynk", "state.db-wal"),
-                os.path.join(".synlynk", "state.db-shm"),
-                os.path.join(".synlynk", "state.db-journal"),
-                backup_dir,
-                sentinel,
-                docs_dir,
-            ],
+            untracked_paths=untracked_paths,
         ):
             print("  ▶ Importing flat files → state.db ...")
             try:
@@ -1289,7 +1307,8 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
                 f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
             print("  ✓ Sentinel written")
 
-            subprocess.run(["git", "add", ".gitignore", sentinel], check=True)
+            subprocess.run(["git", "add", ".gitignore"], check=True)
+            subprocess.run(["git", "add", "-f", sentinel], check=True)
             subprocess.run(
                 [
                     "git",
@@ -1344,24 +1363,235 @@ def _generate_todo_md() -> None:
     if _is_migrated():
         _dr_sync("todo.md")
 
-def _write_memory_md() -> None:
-    """Regenerate .synlynk/project-docs/memory.md from memory_entries table."""
-    from synlynk import _get_db, _synlynk_project_docs_dir
+
+def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
+    """Rotate older generated project-doc rows into archive files."""
+    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+
+    n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
+    if len(all_rows) <= n:
+        return all_rows
+
+    archived_rows = all_rows[:-n]
+    live_rows = all_rows[-n:]
+
+    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _docs_dir()
+    archive_dir = os.path.join(base_dir, "archive")
+    os.makedirs(archive_dir, exist_ok=True)
+
+    period = time.strftime("%Y-H%m")
+    archive_filename = f"{file_stem}-{period}.md"
+    archive_path = os.path.join(archive_dir, archive_filename)
+    with open(archive_path, "a") as f:
+        for row in archived_rows:
+            f.write(str(row) + "\n")
+
+    index_path = os.path.join(archive_dir, "INDEX.md")
+    existing_index = ""
+    if os.path.exists(index_path):
+        with open(index_path) as f:
+            existing_index = f.read()
+    if archive_filename not in existing_index:
+        with open(index_path, "a") as f:
+            if not existing_index:
+                f.write("# Archive Index\n\n")
+            f.write(
+                f"- [{archive_filename}]({archive_filename}) — {file_stem} entries older than the live window\n"
+            )
+
+    return live_rows
+
+
+def _detect_hand_edit(filename: str) -> str | None:
+    """Detect a genuine uncommitted hand-edit for a generated project doc."""
+    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+
+    if _is_migrated():
+        file_path = os.path.join(_synlynk_project_docs_dir(), filename)
+    else:
+        file_path = os.path.join(_docs_dir(), filename)
+    if not os.path.exists(file_path):
+        return None
+
+    with open(file_path) as f:
+        working_tree_content = f.read()
+
+    committed_blob = None
+    workspace_root = os.path.abspath(os.getcwd())
+    while True:
+        if os.path.exists(os.path.join(workspace_root, ".git")):
+            rel_path = os.path.relpath(file_path, workspace_root).replace(os.sep, "/")
+            try:
+                proc = subprocess.run(
+                    ["git", "show", f"HEAD:{rel_path}"],
+                    cwd=workspace_root,
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.returncode == 0:
+                    committed_blob = proc.stdout
+            except Exception:
+                committed_blob = None
+            break
+        parent = os.path.dirname(workspace_root)
+        if parent == workspace_root:
+            break
+        workspace_root = parent
+
+    if committed_blob is not None and working_tree_content == committed_blob:
+        return None
+
+    generator_name = _GENERATORS_BY_FILENAME.get(filename)
+    generator = globals().get(generator_name)
+    if not callable(generator):
+        return None
+
+    try:
+        generator()
+        if os.path.exists(file_path):
+            with open(file_path) as f:
+                regenerated_content = f.read()
+        else:
+            regenerated_content = ""
+    except Exception:
+        regenerated_content = None
+    finally:
+        with open(file_path, "w") as f:
+            f.write(working_tree_content)
+
+    if regenerated_content is None:
+        return None
+    if working_tree_content == regenerated_content:
+        return None
+    return (
+        f"⚠ hand-edit detected in {filename}: working-tree content differs from "
+        "git HEAD and fresh regeneration output"
+    )
+
+def _generate_roadmap_md() -> None:
+    """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
+    Post-migration: writes to .synlynk/project-docs/roadmap.md.
+    Pre-migration: writes to project-docs/roadmap.md."""
+    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
+    if _is_migrated():
+        roadmap_path = os.path.join(_synlynk_project_docs_dir(), "roadmap.md")
+        os.makedirs(os.path.dirname(roadmap_path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        roadmap_path = os.path.join(docs_dir, "roadmap.md")
+
     conn = _get_db()
-    rows = conn.execute(
-        "SELECT section, body FROM memory_entries ORDER BY id"
+    arcs = conn.execute(
+        "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id ASC"
     ).fetchall()
+    phases_by_arc = {}
+    for arc_version, phase_title, status, priority, story_id, notes in conn.execute(
+        "SELECT arc_version, phase_title, status, priority, story_id, notes "
+        "FROM roadmap_phases ORDER BY id ASC"
+    ).fetchall():
+        phases_by_arc.setdefault(arc_version, []).append((phase_title, status, priority, story_id, notes))
     conn.close()
-    lines = ["# synlynk Memory\n\n"]
+    arcs = _rotate_project_doc("roadmap", arcs)
+
+    lines = [
+        "# Roadmap (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk roadmap add | Do NOT hand-edit this file\n\n",
+    ]
+    for version, title, status, target_date, notes in arcs:
+        date_str = f" (target: {target_date})" if target_date else ""
+        lines.append(f"## {version} — {title or version} [{status}]{date_str}\n\n")
+        if notes:
+            lines.append(f"{notes}\n\n")
+        for phase_title, p_status, priority, story_id, p_notes in phases_by_arc.get(version, []):
+            check = "x" if p_status == "done" else ("-" if p_status == "deferred" else " ")
+            prio = f" ({priority})" if priority else ""
+            story = f" <!-- story:{story_id} -->" if story_id else ""
+            lines.append(f"- [{check}] {phase_title}{prio}{story}\n")
+            if p_notes:
+                lines.append(f"  {p_notes}\n")
+        lines.append("\n")
+
+    with open(roadmap_path, "w") as f:
+        f.writelines(lines)
+
+    if _is_migrated():
+        _dr_sync("roadmap.md")
+
+def _generate_costs_md() -> None:
+    """Writes costs.md as a generated view of cost_entries.
+    Post-migration: writes to .synlynk/project-docs/costs.md.
+    Pre-migration: writes to project-docs/costs.md."""
+    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
+    if _is_migrated():
+        costs_path = os.path.join(_synlynk_project_docs_dir(), "costs.md")
+        os.makedirs(os.path.dirname(costs_path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        costs_path = os.path.join(docs_dir, "costs.md")
+
+    conn = _get_db()
+    cursor = conn.execute(
+        "SELECT session_date, agent, model, input_tokens, output_tokens, "
+        "total_cost_usd, cost_source, story_id, notes FROM cost_entries ORDER BY id ASC"
+    )
+    rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
+    conn.close()
+    rows = _rotate_project_doc("costs", rows)
+
+    lines = [
+        "# Costs (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk cost log | Do NOT hand-edit this file\n\n",
+        "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n",
+        "|---|---|---|---|---|---|---|---|---|\n",
+    ]
+    for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes in rows:
+        cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
+        lines.append(
+            f"| {session_date} | {agent} | {model or '-'} | {input_tokens} | {output_tokens} | "
+            f"{cost_str} | {cost_source} | {story_id or '-'} | {notes or ''} |\n"
+        )
+
+    with open(costs_path, "w") as f:
+        f.writelines(lines)
+
+    if _is_migrated():
+        _dr_sync("costs.md")
+
+def _write_memory_md() -> None:
+    """Regenerate memory.md from memory_entries table.
+    Post-migration: writes to .synlynk/project-docs/memory.md.
+    Pre-migration: writes to project-docs/memory.md."""
+    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
+
+    if _is_migrated():
+        path = os.path.join(_synlynk_project_docs_dir(), "memory.md")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        path = os.path.join(docs_dir, "memory.md")
+
+    conn = _get_db()
+    rows = conn.execute("SELECT section, body FROM memory_entries ORDER BY id").fetchall()
+    conn.close()
+    rows = _rotate_project_doc("memory", rows)
+    lines = [
+        "# synlynk Memory (generated - source of truth is state.db)\n",
+        "# Edit via: synlynk memory add | Do NOT hand-edit this file\n\n",
+    ]
     for section, body in rows:
         lines.append(f"## {section}\n\n{body}\n\n")
-    path = os.path.join(_synlynk_project_docs_dir(), "memory.md")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.writelines(lines)
 
 def cmd_memory_add(section: str, body: str, author: str = None) -> None:
-    """Add or update a memory entry. Writes through to flat file if migrated."""
+    """Add or update a memory entry. Always writes through to the flat file;
+    DR sync only fires once this repo is migrated."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     conn = _get_db()
     existing = conn.execute(
@@ -1379,8 +1609,8 @@ def cmd_memory_add(section: str, body: str, author: str = None) -> None:
         )
     conn.commit()
     conn.close()
+    _write_memory_md()
     if _is_migrated():
-        _write_memory_md()
         _dr_sync("memory.md")
 
 def _write_devlog_file(author: str) -> None:
@@ -1419,52 +1649,87 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
         _write_devlog_file(author)
         _dr_sync(f"devlogs/{author}.md")
 
-def _import_todo_to_stories() -> int:
-    """Reads '- [ ]' lines from todo.md and inserts missing story rows."""
+def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
+    """Reads checkbox lines from todo.md and inserts missing story rows."""
     from synlynk import _docs_dir, _get_db
     import hashlib as _hashlib
 
-    docs_dir = _docs_dir()
+    if docs_dir is None:
+        docs_dir = _docs_dir()
     todo_path = os.path.join(docs_dir, "todo.md")
     if not os.path.exists(todo_path):
         return 0
 
-    conn = _get_db()
-    existing_ids = {row[0] for row in conn.execute("SELECT story_id FROM stories")}
+    owns_conn = conn is None
+    if conn is None:
+        conn = _get_db()
+
+    def _fetchall(cursor):
+        fetchall = getattr(cursor, "fetchall", None)
+        if callable(fetchall):
+            return fetchall()
+        return []
+
+    def _fetchone(cursor):
+        fetchone = getattr(cursor, "fetchone", None)
+        if callable(fetchone):
+            return fetchone()
+        return None
+
+    existing_ids = {row[0] for row in _fetchall(conn.execute("SELECT story_id FROM stories"))}
+    checkbox_status = {
+        " ": "open",
+        "x": "done",
+        "-": "deferred",
+        "~": "superseded",
+        ">": "absorbed",
+    }
 
     imported = 0
     with open(todo_path) as f:
         for line in f:
-            if "- [ ]" not in line:
+            checkbox_match = re.match(r"\s*-\s*\[(?P<mark>[ x\-~>])\]\s*(?P<body>.+?)\s*$", line)
+            if not checkbox_match:
                 continue
-            id_match = re.search(r'<!--\s*id:(story-[a-f0-9]+)\s*-->', line)
+            mark = checkbox_match.group("mark")
+            status = checkbox_status.get(mark)
+            if status is None:
+                continue
+            id_match = re.search(r'<!--\s*id:(story-[\w-]+)\s*-->', line)
             if id_match and id_match.group(1) in existing_ids:
                 continue
 
             title_match = re.match(
-                r'\s*-\s*\[\s*\]\s*(.+?)(?:\s*\[.*?\])?(?:\s*<!--.*-->)?\s*$',
-                line,
+                r"(?P<title>.+?)(?:\s*\[.*?\])?(?:\s*<!--.*-->)?\s*$",
+                checkbox_match.group("body"),
             )
             if not title_match:
                 continue
-            title = title_match.group(1).strip()
-            story_id = "story-" + _hashlib.md5(title.encode()).hexdigest()[:8]
+            title = title_match.group("title").strip()
+            story_id = (
+                id_match.group(1)
+                if id_match is not None
+                else "story-" + _hashlib.md5(title.encode()).hexdigest()[:8]
+            )
             if story_id in existing_ids:
                 continue
-            if conn.execute("SELECT 1 FROM stories WHERE title=?", (title,)).fetchone():
-                continue
             try:
+                if _fetchone(conn.execute("SELECT 1 FROM stories WHERE title=?", (title,))):
+                    continue
                 conn.execute(
-                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, 'open')",
-                    (story_id, title),
+                    "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
+                    (story_id, title, status),
                 )
                 imported += 1
                 existing_ids.add(story_id)
             except sqlite3.IntegrityError:
                 pass
+            except Exception as e:
+                print(f"  ⚠ todo.md story import skipped ({story_id}): {e}")
 
-    conn.commit()
-    conn.close()
+    if owns_conn:
+        conn.commit()
+        conn.close()
     return imported
 
 def cmd_story_create(title: str, engg_domain: str = None,
@@ -1512,6 +1777,57 @@ def cmd_story_create(title: str, engg_domain: str = None,
         f"[{_taxonomy_label('sfia', engg_domain)} · {_taxonomy_label('apqc', org_domain)} · {_taxonomy_label('naics', industry)}]"
     )
     return story_id
+
+def cmd_roadmap_add(
+    version: str,
+    title: str = None,
+    status: str = "planned",
+    target_date: str = None,
+    notes: str = None,
+    phase_title: str = None,
+    priority: str = None,
+    story_id: str = None,
+) -> None:
+    """Add or update a roadmap arc, or a phase within an existing arc.
+
+    If phase_title is None: create/update the arc row identified by `version`.
+    If phase_title is set: add a phase to the arc `version` (which must already exist).
+    """
+    from synlynk import _GREEN, _RESET, _get_db
+
+    conn = _get_db()
+    try:
+        arc_row = conn.execute(
+            "SELECT version FROM roadmap_arcs WHERE version=?", (version,)
+        ).fetchone()
+
+        if phase_title is None:
+            if arc_row:
+                conn.execute(
+                    "UPDATE roadmap_arcs SET title=?, status=?, target_date=?, notes=? WHERE version=?",
+                    (title, status, target_date, notes, version),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO roadmap_arcs (version, title, status, target_date, notes) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (version, title, status, target_date, notes),
+                )
+        else:
+            if not arc_row:
+                raise ValueError(f"no roadmap arc with version={version!r}; create it first")
+            conn.execute(
+                "INSERT INTO roadmap_phases (arc_version, phase_title, status, priority, story_id, notes) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (version, phase_title, status, priority, story_id, notes),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _generate_roadmap_md()
+    label = phase_title if phase_title else (title or version)
+    print(f"  {_GREEN}✓{_RESET} Roadmap updated — {version}: {label}")
 
 def cmd_story_list() -> None:
     """Prints all stories in state.db."""
@@ -1735,9 +2051,12 @@ def cmd_cost_log(
     from synlynk import (
         _GREEN,
         _RESET,
+        _dr_sync,
         _get_db,
+        _is_migrated,
         _insert_cost_row,
         extract_model_version,
+        _generate_costs_md,
     )
     from synlynk.costs import resolve_payment_value
 
@@ -1776,6 +2095,9 @@ def cmd_cost_log(
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
     )
+    _generate_costs_md()
+    if _is_migrated():
+        _dr_sync("costs.md")
     label = f"story {story_id}" if story_id else f"phase={phase or 'dream/plan'} (no story)"
     print(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
@@ -1818,6 +2140,13 @@ def cmd_pr_check() -> None:
         _is_github_remote,
     )
     from synlynk.sentinel import _extract_pr_review_cycles
+
+    detect_hand_edit = globals().get("_detect_hand_edit")
+    if callable(detect_hand_edit):
+        for fname in ("todo.md", "roadmap.md", "memory.md", "costs.md"):
+            warning = detect_hand_edit(fname)
+            if warning is not None:
+                print(warning)
 
     conn = _get_db()
     if _is_github_remote():

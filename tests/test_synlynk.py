@@ -679,6 +679,28 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
     assert called == {"agent_name": "claude", "dry_run": False}
 
 
+def test_cli_roadmap_add_dispatches_without_nameerror(monkeypatch):
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_roadmap_add(version, **kwargs):
+        captured["version"] = version
+        captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(synlynk, "cmd_roadmap_add", fake_roadmap_add)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "roadmap", "add", "--version", "v0.13.0", "--title", "State Engine Tier 1", "--status", "in_progress"],
+    )
+
+    cli_mod.main()
+
+    assert captured["version"] == "v0.13.0"
+    assert captured["kwargs"]["title"] == "State Engine Tier 1"
+
+
 def test_cli_configure_agent_accepts_bare_flag(monkeypatch):
     import synlynk.cli as cli_mod
 
@@ -807,6 +829,38 @@ def test_parse_costs_md_missing(tmp_path, monkeypatch):
     total_usd, total_requests = synlynk.parse_costs_md()
     assert total_usd == 0.0
     assert total_requests == 0
+
+
+def test_check_budgets_reads_cost_entries_not_markdown(project_dir, capsys, monkeypatch):
+    from synlynk import _insert_cost_row
+    from synlynk.costs import check_budgets
+
+    costs_path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    with open(costs_path, "w") as f:
+        f.write("# Costs\n\n| Date | Agent | Cost |\n|---|---|---|\n")
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="claude",
+        model="claude-sonnet-5",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=9.50,
+        notes=None,
+        story_id=None,
+        api_equivalent_usd=9.50,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    check_budgets()
+
+    captured = capsys.readouterr()
+    assert "Budget Warning" in captured.out
+    assert "9.50" in captured.out
 
 
 def test_set_state_writes_file(project_dir):
@@ -1085,14 +1139,32 @@ def test_init_config_schema_version(tmp_path, monkeypatch):
 
 
 def test_check_budgets_no_alert_under_threshold(project_dir, capsys):
-    # costs.md has $1.24 out of $10.00
+    # cost_entries has $1.24 out of $10.00
     synlynk.check_budgets()
     captured = capsys.readouterr()
     assert "Budget Alert" not in captured.out
 
 
 def test_check_budgets_warning_at_80_percent(project_dir, capsys):
+    from synlynk import _insert_cost_row
     import json
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="claude",
+        model="claude-sonnet-5",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=1.24,
+        notes=None,
+        story_id=None,
+        api_equivalent_usd=1.24,
+        actual_usd=None,
+        payment_mode=None,
+    )
     config = json.loads((project_dir / ".synlynk" / "config.json").read_text())
     config["budget"]["limit_usd"] = 1.50  # $1.24 is 82% of $1.50
     (project_dir / ".synlynk" / "config.json").write_text(json.dumps(config))
@@ -4050,7 +4122,7 @@ def test_cmd_story_create_generates_todo_md(project_dir):
 
 
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
-    """_import_todo_to_stories creates story rows for - [ ] lines."""
+    """_import_todo_to_stories creates story rows for all supported checkbox states."""
     import synlynk as sl
     (project_dir / "project-docs" / "todo.md").write_text(
         "- [ ] Migrate auth module\n"
@@ -4058,13 +4130,45 @@ def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
         "- [ ] Write API docs\n"
     )
     count = sl._import_todo_to_stories()
-    assert count == 2
+    assert count == 3
     conn = sl._get_db()
-    titles = {row[0] for row in conn.execute("SELECT title FROM stories")}
+    rows = conn.execute(
+        "SELECT title, status FROM stories ORDER BY title"
+    ).fetchall()
     conn.close()
-    assert "Migrate auth module" in titles
-    assert "Write API docs" in titles
-    assert "Old done task" not in titles
+    assert rows == [
+        ("Migrate auth module", "open"),
+        ("Old done task", "done"),
+        ("Write API docs", "open"),
+    ]
+
+
+def test_import_todo_to_stories_backfills_completed_rows(project_dir):
+    """_import_todo_to_stories also backfills checked rows for metadata sync."""
+    import synlynk as sl
+
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Some completed story [platform] <!-- id:story-abc12345 --> <!-- gh:#999 -->\n"
+    )
+
+    count = sl._import_todo_to_stories()
+    assert count == 1
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT story_id, title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-abc12345",),
+    ).fetchone()
+    assert row == ("story-abc12345", "Some completed story", "done", None)
+
+    conn.execute("UPDATE stories SET gh_issue=? WHERE story_id=?", ("#999", "story-abc12345"))
+    conn.commit()
+    updated = conn.execute(
+        "SELECT story_id, title, status, gh_issue FROM stories WHERE story_id=?",
+        ("story-abc12345",),
+    ).fetchone()
+    conn.close()
+    assert updated == ("story-abc12345", "Some completed story", "done", "#999")
 
 
 def test_import_todo_to_stories_skips_existing_stories(project_dir):

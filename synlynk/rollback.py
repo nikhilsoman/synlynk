@@ -107,6 +107,15 @@ def _git_dirty() -> bool:
     return bool(result.stdout.strip())
 
 
+def _is_git_ignored(path: str) -> bool:
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
 def _pop_stash(stash_ref: str) -> None:
     listing = subprocess.run(["git", "stash", "list"], capture_output=True, text=True)
     if listing is None:
@@ -157,12 +166,22 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
         # untracked_paths are the op's own outputs (already covered by the
         # _backup_paths/_restore_paths mechanism above) — exclude them from
         # the auto-stash so popping the stash back on success doesn't clobber
-        # what the op just wrote.
-        exclude_pathspecs = [f":!{p}" for p in untracked_paths]
-        subprocess.run(
-            ["git", "stash", "push", "-u", "-m", stash_ref, "--", ".", *exclude_pathspecs],
-            check=True,
-        )
+        # what the op just wrote. Paths already covered by .gitignore (e.g.
+        # anything under .synlynk/) must NOT get an explicit `:!` exclude
+        # pathspec — git treats an exclude pathspec pointing at an ignored
+        # path as an attempt to add an ignored file and aborts with exit 1,
+        # even though the stash itself already succeeded.
+        exclude_pathspecs = [
+            f":!{p}" for p in untracked_paths if not _is_git_ignored(p)
+        ]
+        try:
+            subprocess.run(
+                ["git", "stash", "push", "-u", "-m", stash_ref, "--", ".", *exclude_pathspecs],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+            raise
     checkpoint_sha = _git_head_sha()
     manifest = {
         "op_id": op_id,
