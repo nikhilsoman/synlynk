@@ -135,3 +135,10 @@
 | 2026-07-25 21:29 | codex | 1 | 929727/6071 | [est] $2.8802 | $2.8802 | exec: codex job job-0f9a4b... |
 | 2026-07-25 21:22 | codex | 1 | 3732215/41679 | [est?] $2.99 | $2.99 | exec: codex job job-6bd241... (backfill: completion only surfaced via `synlynk jobs`, not a live dispatch print — see [[feedback: cost-capture auto-gap]]) |
 | 2026-07-25 21:32 | grok | 1 | 39237/3511 | [est] $0.17 | $0.17 | exec: grok job job-554610... (backfill: nested worktree job, not visible to top-level `synlynk logs`/auto-capture) |
+| 2026-07-25 21:49 | codex | 1 | 796237/7141 | [est] $2.4958 | $2.4958 | exec: codex job job-d05571... |
+| 2026-07-25 21:52 | grok | 1 | 29686/4052 | [est] $0.1498 | $0.1498 | exec: grok job job-77bca9b... |
+| 2026-07-25 23:16 | codex | 1 | 4305991/34681 | [est?] $13.4382 | $13.4382 | exec: codex job job-faf642... |
+| 2026-07-25 23:42 | codex | 1 | 637615/13477 | [est?] $2.1150 | $2.1150 | exec: codex job job-b5df15ce (#530 .gitignore fix impl; committed locally, could not push — no GitHub egress in sandbox; formula-estimated, no total_cost_usd in log) |
+| 2026-07-25 23:53 | grok | 1 | 31016/2555 | [est] $0.1314 | $0.1314 | exec: grok job job-e6a66ce6 (#530 push + PR #533 open) |
+| 2026-07-26 00:05 | agy | 1 | 92089/8934 | [est] $0.4103 | $0.4103 | exec: agy job job-0d3b2b0f (PR #533 non-authoring review, COMMENT approve checklist) |
+| 2026-07-26 00:17 | grok | 1 | 27667/1211 | [est] $0.1012 | $0.1012 | exec: grok job job-da38baad (PR #533 merge, SHA 8804111b; completion never auto-surfaced — worktree removed before a later dispatch could reprint it) |
