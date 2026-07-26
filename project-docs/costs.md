@@ -135,3 +135,6 @@
 | 2026-07-25 21:29 | codex | 1 | 929727/6071 | [est] $2.8802 | $2.8802 | exec: codex job job-0f9a4b... |
 | 2026-07-25 21:22 | codex | 1 | 3732215/41679 | [est?] $2.99 | $2.99 | exec: codex job job-6bd241... (backfill: completion only surfaced via `synlynk jobs`, not a live dispatch print — see [[feedback: cost-capture auto-gap]]) |
 | 2026-07-25 21:32 | grok | 1 | 39237/3511 | [est] $0.17 | $0.17 | exec: grok job job-554610... (backfill: nested worktree job, not visible to top-level `synlynk logs`/auto-capture) |
+| 2026-07-26 07:51 | codex | 1 | 5000/2000 | [est] $0.0450 | $0.0450 | exec: codex job job-235008... |
+| 2026-07-25 21:33 | codex | 1 | 3011734/19991 | [est] $9.3351 | $9.3351 | exec: codex job job-67052f14 (fix #524: cross-process token redaction cache, PR #535) (backfill: dispatch completion not auto-captured to this ledger — see [[feedback: cost-capture auto-gap]]) |
+| 2026-07-25 21:42 | codex | 1 | 1983635/21369 | [est] $6.2714 | $6.2714 | exec: codex job job-a6115feb (fix #525: HEALTH_CHECKS wiring in synlynk doctor, PR #536) (backfill: dispatch completion not auto-captured to this ledger — see [[feedback: cost-capture auto-gap]]) |
