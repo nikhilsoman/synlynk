@@ -162,6 +162,54 @@ def test_rollback_checkpoint_restores_dirty_tree_stash(tmp_path, monkeypatch):
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
+def test_rollback_checkpoint_stash_excludes_out_of_repo_untracked_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.write_text("uncommitted local edit\n")
+
+    external_db = tmp_path.parent / f"{tmp_path.name}-external" / "state.db"
+    external_db.parent.mkdir(parents=True, exist_ok=True)
+    external_db.write_text("db\n")
+
+    with rollback.rollback_checkpoint("migrate", untracked_paths=[str(external_db)]) as manifest:
+        assert manifest["op_type"] == "migrate"
+
+    assert tracked.read_text() == "uncommitted local edit\n"
+
+
+def test_rollback_checkpoint_stash_excludes_gitignored_untracked_path(tmp_path, monkeypatch):
+    """Regression test: an untracked_paths entry that lives inside a
+    gitignored directory (e.g. .synlynk/project-docs, .synlynk/.synlynk_migrated)
+    must NOT get an explicit `:!` exclude pathspec in the auto-stash command —
+    git treats that as an attempt to add an ignored file and aborts the whole
+    `git stash push` with exit 1, even though `-u` would already have skipped
+    the ignored path on its own.
+    """
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    (tmp_path / ".gitignore").write_text(".synlynk/\n")
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", ".gitignore", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.write_text("uncommitted local edit\n")
+
+    docs_dir = tmp_path / ".synlynk" / "project-docs"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "roadmap.md").write_text("v1\n")
+
+    with rollback.rollback_checkpoint(
+        "migrate", untracked_paths=[".synlynk/project-docs", ".synlynk/.synlynk_migrated"]
+    ) as manifest:
+        assert manifest["op_type"] == "migrate"
+
+    assert tracked.read_text() == "uncommitted local edit\n"
+
+
 def test_rollback_checkpoint_leaves_manifest_on_success(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _init_git_repo(tmp_path)
