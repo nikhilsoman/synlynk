@@ -2370,7 +2370,7 @@ def test_reconcile_marks_completed_from_exit_file(project_dir):
     assert job["status"] == "completed"
     assert job["exit_code"] == 0
     assert job["ended_at"] is not None
-    assert not os.path.exists(log_file + ".exit")
+    assert os.path.exists(log_file + ".exit")
 
 
 def test_reconcile_marks_failed_from_exit_file(project_dir):
@@ -2391,7 +2391,7 @@ def test_reconcile_marks_failed_from_exit_file(project_dir):
     assert job["status"] == "failed"
     assert job["exit_code"] == 1
     assert job["ended_at"] is not None
-    assert not os.path.exists(log_file + ".exit")
+    assert os.path.exists(log_file + ".exit")
 
 
 def test_reconcile_attributes_origin_branch_activity_when_assigned_worktree_is_clean(project_dir, monkeypatch, capsys):
@@ -4590,6 +4590,20 @@ def test_cmd_logs_error_for_missing_job(project_dir, capsys):
     assert "not found" in out.lower() or "no job" in out.lower()
 
 
+def test_redact_active_tokens_uses_on_disk_redaction_cache(tmp_path, monkeypatch):
+    import synlynk as sl
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    gh_auth._token_cache.clear()
+    gh_auth._persist_token_for_redaction("dev", "token-value", time.time() + 3600)
+
+    redacted = sl._redact_active_tokens("prefix token-value suffix")
+
+    assert "token-value" not in redacted
+    assert "***REDACTED***" in redacted
+
+
 def test_cmd_shell_spawns_subshell(project_dir, monkeypatch):
     import synlynk as sl
     spawned = []
@@ -5519,7 +5533,7 @@ def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
     conn2.close()
     assert row[0] == "done"
     assert row[1] == 0
-    assert not os.path.exists(exit_path), ".exit file should have been deleted by reconcile"
+    assert os.path.exists(exit_path), ".exit file should remain readable for the other reconciler"
 
 
 def test_reconcile_jobs_uses_model_rate_table_for_completed_job_cost(project_dir, monkeypatch):

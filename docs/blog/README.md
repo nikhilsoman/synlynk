@@ -78,6 +78,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [74](./74-pr475-dispatch-base-branch-agy-warning.md) | PR #475 — Dynamic PR Base Resolution + Silent Agy No-Op Warning | [#475](https://github.com/nikhilsoman/synlynk/pull/475) | 2026-07-24 |
 | [75](./75-pr479-agy-jetski-rca.md) | PR #479 — The Agy Jetski Investigation: An RCA With No Fix | [#479](https://github.com/nikhilsoman/synlynk/pull/479) | 2026-07-24 |
 | [76](./76-pr476-brace-expansion-cve.md) | PR #476 — Closing Dependabot Alert #7: brace-expansion CVE-2026-13149 | [#476](https://github.com/nikhilsoman/synlynk/pull/476) | 2026-07-24 |
+| [77](./77-pr517-per-role-github-identity.md) | PR #517 — Per-Role GitHub App Identity for Dispatched Agents (#423) | [#517](https://github.com/nikhilsoman/synlynk/pull/517) | 2026-07-25 |
+| [78](./78-pr535-cross-process-token-redaction.md) | PR #535 — Cross-Process Token Redaction for GitHub App Installation Tokens (#524) | [#535](https://github.com/nikhilsoman/synlynk/pull/535) | 2026-07-25 |
+| [79](./79-pr536-doctor-health-checks-wiring.md) | PR #536 — Wiring HEALTH_CHECKS Into the Real synlynk doctor CLI Path (#525) | [#536](https://github.com/nikhilsoman/synlynk/pull/536) | 2026-07-25 |
 
 
 ## Per-PR Post Template

@@ -76,6 +76,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `checkpoint` — execute
 - `daemon` — sustain
 - `identity init` — sustain
+- `identity list` — sustain
 - `repair` — sustain
 - `exit` — sustain
 - `agent run` — execute

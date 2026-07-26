@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import stat
 
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
@@ -112,6 +113,61 @@ def _hc_identity_key() -> HealthCheck:
         "warn",
         "No identity key — capability ratings will be unsigned",
         fix="Run: synlynk identity init",
+    )
+
+
+def _hc_identity_roles() -> HealthCheck:
+    """Diffs .synlynk/roles.yaml's declared roles against provisioned GitHub Apps."""
+    from synlynk.identity_roles import load_declared_roles
+
+    roles = load_declared_roles()
+    missing = []
+    for role in roles:
+        json_path = os.path.join(".synlynk", "github_apps", f"{role}.json")
+        if not os.path.exists(json_path):
+            missing.append(role)
+            continue
+        try:
+            with open(json_path) as fh:
+                config = json.load(fh)
+        except (OSError, ValueError):
+            missing.append(role)
+            continue
+        if not config.get("installation_id"):
+            missing.append(role)
+    if not missing:
+        return HealthCheck("identity_roles", "ok", f"All declared roles provisioned ({', '.join(roles)})")
+    return HealthCheck(
+        "identity_roles",
+        "warn",
+        f"Missing GitHub App identity for role(s): {', '.join(missing)}",
+        fix=f"Run: synlynk identity init --role {missing[0]}" + (
+            f" (and {len(missing) - 1} more)" if len(missing) > 1 else ""
+        ),
+    )
+
+
+def _hc_identity_file_perms() -> HealthCheck:
+    """Verifies .synlynk/github_apps/*.{json,pem} are still 0o600 — private key
+    material and installation IDs at rest must not be group/world-readable."""
+    apps_dir = os.path.join(".synlynk", "github_apps")
+    if not os.path.isdir(apps_dir):
+        return HealthCheck("identity_file_perms", "ok", "No .synlynk/github_apps/ directory yet")
+    loose = []
+    for fname in sorted(os.listdir(apps_dir)):
+        if not (fname.endswith(".json") or fname.endswith(".pem")):
+            continue
+        path = os.path.join(apps_dir, fname)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if mode != 0o600:
+            loose.append(f"{fname} ({oct(mode)})")
+    if not loose:
+        return HealthCheck("identity_file_perms", "ok", "All identity files are 0o600")
+    return HealthCheck(
+        "identity_file_perms",
+        "warn",
+        f"Loose permissions on: {', '.join(loose)}",
+        fix="Run: chmod 600 .synlynk/github_apps/*.json .synlynk/github_apps/*.pem",
     )
 
 
@@ -248,11 +304,38 @@ HEALTH_CHECKS = [
     _hc_project_init,
     _hc_docs_dir,
     _hc_identity_key,
+    _hc_identity_roles,
+    _hc_identity_file_perms,
     _hc_agent_profiles,
     _hc_instruction_files,
     _hc_model_rates,
     _hc_version_current,
 ]
+
+
+def _print_health_check_report(checks: _List) -> bool:
+    _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+
+    results = [fn() for fn in checks]
+    failed = [r for r in results if r.status == "fail"]
+    warned = [r for r in results if r.status == "warn"]
+
+    print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
+    for r in results:
+        icon = _STATUS_ICON.get(r.status, "?")
+        print(f"  {icon}  {r.name}: {r.message}")
+        if r.fix and r.status != "ok":
+            print(f"     {_DIM}→ {r.fix}{_RESET}")
+
+    print()
+    if failed:
+        print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
+    elif warned:
+        print(f"  {len(warned)} advisory warning(s). Everything should still work.")
+    else:
+        print(f"  {_GREEN}All checks passed.{_RESET}")
+    print()
+    return bool(failed)
 
 
 def cmd_doctor(args=None, checks: _List = None) -> int:
@@ -261,28 +344,9 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
     if checks is not None:
-        _STATUS_ICON = {"ok": f"{_GREEN}✓{_RESET}", "warn": f"{_YELLOW}⚠{_RESET}", "fail": f"\033[31m✗{_RESET}"}
+        return 1 if _print_health_check_report(checks) else 0
 
-        results = [fn() for fn in checks]
-        failed = [r for r in results if r.status == "fail"]
-        warned = [r for r in results if r.status == "warn"]
-
-        print(f"\n{_BOLD}synlynk doctor{_RESET}\n")
-        for r in results:
-            icon = _STATUS_ICON.get(r.status, "?")
-            print(f"  {icon}  {r.name}: {r.message}")
-            if r.fix and r.status != "ok":
-                print(f"     {_DIM}→ {r.fix}{_RESET}")
-
-        print()
-        if failed:
-            print(f"  {len(failed)} check(s) failed — fix these before running synlynk.")
-        elif warned:
-            print(f"  {len(warned)} advisory warning(s). Everything should still work.")
-        else:
-            print(f"  {_GREEN}All checks passed.{_RESET}")
-        print()
-        return 1 if failed else 0
+    _print_health_check_report(HEALTH_CHECKS)
 
     agent_filter = getattr(args, "agent", None) if args is not None else None
     db_conn = _pkg("_get_db")()

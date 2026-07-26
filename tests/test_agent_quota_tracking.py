@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 import time
 from pathlib import Path
 import importlib.util
@@ -272,6 +273,193 @@ def test_cmd_quota_json(project_dir, capsys):
     assert any(w["used"] == 600 for w in agents["grok"]["windows"] if w["unit"] == "tokens")
 
 
+@pytest.mark.parametrize(
+    "reconcile_order",
+    [
+        ("jobs", "daemon"),
+        ("daemon", "jobs"),
+    ],
+)
+def test_fix_synlynk_jobs_all_permanently_shows_unknown_shared_exit_marker_race(
+    project_dir, monkeypatch, reconcile_order
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    log_path = project_dir / ".synlynk" / "logs" / "job-shared.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("Input tokens: 12\nOutput tokens: 34\n")
+    exit_path = str(log_path) + ".exit"
+    with open(exit_path, "w") as f:
+        f.write("0")
+
+    sl._save_jobs([
+        {
+            "id": "job-shared",
+            "agent": "claude",
+            "story_id": "story-shared",
+            "task": "shared exit marker test",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": "",
+            "worktree_branch": "",
+            "started_at": "2026-07-25T10:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "job-shared",
+            "claude",
+            "shared exit marker test",
+            "story-shared",
+            "running",
+            5,
+            "[]",
+            99999999,
+            "2026-07-25T10:00:00",
+            "2026-07-25T10:00:00",
+            str(log_path),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(
+        jobs_mod.os,
+        "kill",
+        lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()),
+    )
+    monkeypatch.setattr(
+        jobs_mod.os,
+        "waitpid",
+        lambda *a, **kw: (_ for _ in ()).throw(ChildProcessError()),
+    )
+
+    for reconcile in reconcile_order:
+        if reconcile == "jobs":
+            jobs_mod._reconcile_jobs()
+        else:
+            jobs_mod._reconcile_daemon_jobs()
+
+    jobs = sl._load_jobs()
+    job_row = next(job for job in jobs if job["id"] == "job-shared")
+    assert job_row["status"] == "completed"
+    assert job_row["exit_code"] == 0
+
+    conn = sl._get_db()
+    try:
+        daemon_row = conn.execute(
+            "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?",
+            ("job-shared",),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert daemon_row == ("done", 0)
+    assert os.path.exists(exit_path)
+
+
+def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.doctor as doctor_mod
+
+    monkeypatch.setattr(
+        doctor_mod,
+        "HEALTH_CHECKS",
+        [lambda: sl.HealthCheck("identity_roles", "ok", "all declared roles provisioned")],
+    )
+    monkeypatch.setattr(
+        doctor_mod,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "agy": {
+                "cli": "agy",
+                "dispatch_flags": {},
+                "network_deps": {"required_endpoints": []},
+                "headless_contract": {},
+            }
+        },
+    )
+    monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True})
+    monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {}})
+
+    exit_code = sl.cmd_doctor()
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "synlynk doctor" in out
+    assert "identity_roles" in out
+    assert "doctor [agy]" in out
+
+
+def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import synlynk as sl
+
+    db_path = tmp_path / ".synlynk" / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(sl._DB_SCHEMA)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('story-stale', 'Stale view')")
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, engg_domain, discipline, org_domain, role, stage, "
+        " industry, phase, signal_source, quality) "
+        "VALUES ('story-stale', 'claude', 'claude-sonnet-4-6', 'backend', 'backend', "
+        "'platform', 'dev', 'open', 'ott', 'build', 'auto', 9.0)"
+    )
+    conn.execute("DROP VIEW IF EXISTS capability_scores")
+    conn.executescript("""
+        CREATE VIEW capability_scores AS
+        SELECT
+            agent,
+            model_version,
+            engg_domain,
+            org_domain,
+            industry,
+            phase,
+            SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
+              SUM(pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER)))
+              AS weighted_score,
+            COUNT(*) AS sample_count,
+            MAX(ts) AS last_seen
+        FROM capability_ratings
+        WHERE split_model = 0
+        GROUP BY agent, model_version, engg_domain, org_domain, industry, phase;
+    """)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(sl, "DB_PATH", str(db_path))
+
+    conn = sl._get_db()
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_scores)")}
+        assert {"discipline", "role", "stage"} <= cols
+
+        discipline = conn.execute(
+            "SELECT discipline FROM capability_scores LIMIT 1"
+        ).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM capability_scores WHERE discipline=?",
+            (discipline,),
+        ).fetchone()[0]
+        assert count >= 1
+    finally:
+        conn.close()
+
+
 def test_agent_from_command_path_and_gemini_alias(project_dir):
     from synlynk.quota import _agent_from_telemetry_event, _aggregate_usage_from_telemetry
 
@@ -336,6 +524,71 @@ def test_fix_github_issue_378_nikhilsomansynk_terminal_summary_survives_unknown_
     summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
     assert summary_path.read_text() == terminal
     assert overwritten == terminal
+
+
+def test_chore_synlynk_jobs_all_shows_stale_faile_terminal_summary_survives_daemon_reconcile(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": []})
+
+    summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
+    terminal = sl._write_job_summary(
+        "job-race",
+        "codex",
+        "story-202",
+        0,
+        4.0,
+        120,
+        30,
+        0.02,
+        ["src/terminal.py"],
+        status_label="OK (exit 0)",
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "job-race",
+            "codex",
+            "task",
+            "story-202",
+            "running",
+            5,
+            "[]",
+            99999999,
+            "2026-07-25T00:00:00",
+            "2026-07-25T00:00:01",
+            str(project_dir / ".synlynk" / "logs" / "job-race.log"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    def pkg_side_effect(name, default=None):
+        if name == "_get_db":
+            return sl._get_db
+        if name == "extract_tokens":
+            return lambda log_text, agent="": (0, 0)
+        if name == "extract_model_version":
+            return lambda log_text, agent="": "unknown"
+        if name == "update_costs":
+            return lambda *args, **kwargs: None
+        return getattr(sl, name, default)
+
+    monkeypatch.setattr(jobs_mod, "_pkg", pkg_side_effect)
+    monkeypatch.setattr(jobs_mod.os, "waitpid", lambda pid, opts: (_ for _ in ()).throw(ChildProcessError()))
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()))
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    assert summary_path.read_text() == terminal
+    assert "FAILED (exit -1)" not in summary_path.read_text()
+    assert "files:    0 touched" not in summary_path.read_text()
 
 
 def _load_backfill_script():
