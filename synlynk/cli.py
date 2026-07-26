@@ -767,6 +767,7 @@ def main() -> None:
         cmd_relay_start,
         cmd_release,
         cmd_repair,
+        cmd_roadmap_add,
         cmd_roles,
         cmd_run_trio,
         cmd_scan,

@@ -679,6 +679,28 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
     assert called == {"agent_name": "claude", "dry_run": False}
 
 
+def test_cli_roadmap_add_dispatches_without_nameerror(monkeypatch):
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_roadmap_add(version, **kwargs):
+        captured["version"] = version
+        captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(synlynk, "cmd_roadmap_add", fake_roadmap_add)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "roadmap", "add", "--version", "v0.13.0", "--title", "State Engine Tier 1", "--status", "in_progress"],
+    )
+
+    cli_mod.main()
+
+    assert captured["version"] == "v0.13.0"
+    assert captured["kwargs"]["title"] == "State Engine Tier 1"
+
+
 def test_cli_configure_agent_accepts_bare_flag(monkeypatch):
     import synlynk.cli as cli_mod
 
