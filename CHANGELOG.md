@@ -18,6 +18,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `--dry-run` on `synlynk init` and `synlynk upgrade` — preview what would be written/changed without touching disk or making network/subprocess calls.
 - Failure-injection live selftest coverage for both rollback legs, plus dedicated `rollback --last`/`--clear` scenario tests.
 
+**State Engine PR1 — DB-canonical roadmap/memory/costs (design 2026-07-20, plan 2026-07-25)**
+- `roadmap.md`, `memory.md`, and `costs.md` are now write-through generated from `state.db` (roadmap_arcs/roadmap_phases, memory_entries, cost_entries), with rotation/archive and a warn-and-continue mutation guard for hand-edits.
+- `check_budgets()` reads `cost_entries` directly instead of regex-parsing `costs.md`.
+- `synlynk migrate` run on this repo itself — `project-docs/` relocated under `.synlynk/`, `.synlynk_migrated` sentinel committed.
+
 ### Fixed
 
 - Bumped `linkify-it` to 5.0.2 in `website/package-lock.json`, resolving a high-severity quadratic-complexity DoS (CVE-2026-59887, GHSA-v245-v573-v5vm) in its `mailto:` schema validator. Dev-only, transitive via `markdown-it`; fixes GitHub Dependabot alert #6.
