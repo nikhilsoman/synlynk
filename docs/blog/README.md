@@ -81,6 +81,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [77](./77-pr517-per-role-github-identity.md) | PR #517 — Per-Role GitHub App Identity for Dispatched Agents (#423) | [#517](https://github.com/nikhilsoman/synlynk/pull/517) | 2026-07-25 |
 | [78](./78-pr535-cross-process-token-redaction.md) | PR #535 — Cross-Process Token Redaction for GitHub App Installation Tokens (#524) | [#535](https://github.com/nikhilsoman/synlynk/pull/535) | 2026-07-25 |
 | [79](./79-pr536-doctor-health-checks-wiring.md) | PR #536 — Wiring HEALTH_CHECKS Into the Real synlynk doctor CLI Path (#525) | [#536](https://github.com/nikhilsoman/synlynk/pull/536) | 2026-07-25 |
+| [80](./80-pr542-state-engine-pr1-db-canonical.md) | PR #542 — State Engine PR1: DB-Canonical Roadmap, Memory, and Costs | [#542](https://github.com/nikhilsoman/synlynk/pull/542) | 2026-07-26 |
+| [81](./81-pr549-live3-content-recovery-rca.md) | PR #549 — LIVE-3: Recovering What a Merge Conflict Actually Deleted | [#549](https://github.com/nikhilsoman/synlynk/pull/549) | 2026-07-26 |
 
 
 ## Per-PR Post Template
