@@ -56,6 +56,7 @@ from synlynk.probe import (
     _run_tc4,
     _run_tc5,
     SOP_BLOCKS,
+    SOP_SECTION_HEADERS,
     cmd_probe,
     _fence_exists,
     _probe_model_version,
@@ -1777,6 +1778,161 @@ def _read_harness_fence_body(file_path: str) -> str:
     return match.group(1)
 
 
+def _repair_config_agents(cfg: dict) -> list:
+    """Return the directive-backed agents that should be considered for SOP repair."""
+    cfg_roles = cfg.get("roles") or {}
+    workgroup_agents = list(cfg.get("workgroup_agents") or [])
+    if workgroup_agents:
+        return workgroup_agents
+    return [agent for agent in cfg_roles.keys() if agent in {"claude", "agy", "codex", "grok"}]
+
+
+def _repair_role_list(value) -> list:
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _repair_agent_label(agent: str) -> str:
+    return agent[:1].upper() + agent[1:] if agent else ""
+
+
+def _repair_branch_convention(cfg: dict, agent: str) -> str:
+    """Return the repo-specific branch pattern for an agent, if recorded."""
+    for key in ("branch_conventions", "branch_convention", "branch_naming", "branch_pattern", "branch_prefix"):
+        value = cfg.get(key)
+        if not value:
+            continue
+        if isinstance(value, dict):
+            agent_value = value.get(agent) or value.get(agent.lower()) or value.get(_repair_agent_label(agent))
+            if agent_value:
+                return str(agent_value).strip()
+            for nested_key in ("pattern", "value", "summary", "description"):
+                nested_value = value.get(nested_key)
+                if nested_value:
+                    return str(nested_value).strip()
+            prefix = str(value.get("prefix") or "").strip()
+            suffix = str(value.get("suffix") or "").strip()
+            if prefix and suffix:
+                return f"{prefix}{suffix}"
+            if prefix:
+                return prefix
+            continue
+        value_text = str(value).strip()
+        if value_text:
+            return value_text
+    return ""
+
+
+def _repair_escalation_target(cfg: dict) -> str:
+    """Pick the configured PM/review owner, if any, for escalation text."""
+    cfg_roles = cfg.get("roles") or {}
+    candidates = _repair_config_agents(cfg)
+    if not candidates:
+        candidates = list(cfg_roles.keys())
+
+    def _role_set(agent: str) -> set:
+        return set(_repair_role_list(cfg_roles.get(agent)))
+
+    for agent in candidates:
+        roles = _role_set(agent)
+        if {"pm", "review"} <= roles:
+            return _repair_agent_label(agent)
+    for agent in candidates:
+        if "review" in _role_set(agent):
+            return _repair_agent_label(agent)
+    for agent in candidates:
+        if "pm" in _role_set(agent):
+            return _repair_agent_label(agent)
+    return ""
+
+
+def _repair_pr_review_sop(cfg: dict) -> str:
+    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
+    return (
+        "## PR Review Discipline\n"
+        "1. Assign a non-authoring agent to review the PR.\n"
+        "2. The reviewer must run `synlynk pr check <pr#>`.\n"
+        "3. The reviewer alone must merge the PR.\n"
+        f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
+        "**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* "
+        "enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents "
+        "share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different "
+        "reviewer and `gh pr review --approve` fails with \"Can not approve your own pull request\" on "
+        "every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an "
+        "explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.\n"
+    )
+
+
+def _repair_capability_allocation_sop(cfg: dict) -> str:
+    cfg_roles = cfg.get("roles") or {}
+    ordered_agents = _repair_config_agents(cfg)
+    if not ordered_agents:
+        ordered_agents = [agent for agent in cfg_roles.keys()]
+
+    rows = []
+    for agent in ordered_agents:
+        role_list = _repair_role_list(cfg_roles.get(agent))
+        if not role_list:
+            continue
+        role_label = " / ".join(role_list)
+        rows.append(f"| {role_label} | {_repair_agent_label(agent)} | {', '.join(role_list)} |")
+
+    if not rows:
+        return (
+            "## Capability-Based Task Allocation\n"
+            "No repo-specific roles are recorded in `.synlynk/config.json`; keep work scoped to the "
+            "agent you were assigned and follow the repo's own routing notes.\n"
+        )
+
+    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
+    table = "\n".join([
+        "## Capability-Based Task Allocation",
+        "| Role | Agent | Tasks |",
+        "| :--- | :--- | :--- |",
+        *rows,
+        f"Do not start a task outside your role column without explicit approval from {escalation_target}.",
+        "",
+        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
+        "rather than synlynk's default fleet assumptions.",
+    ])
+    return table + "\n"
+
+
+def _repair_repo_hygiene_sop(cfg: dict, agent: str) -> str:
+    branch_convention = _repair_branch_convention(cfg, agent)
+    if branch_convention:
+        branch_line = f"2. Use task-scoped branch naming recorded for this repo: `{branch_convention}`."
+    else:
+        branch_line = (
+            "2. Use the repo's documented task-scoped branch pattern; if none is recorded, follow the "
+            "project's existing feature/fix/chore naming convention."
+        )
+    return (
+        "## Repo Hygiene\n"
+        "1. Do not commit directly to main or master.\n"
+        f"{branch_line}\n"
+        "3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), "
+        "Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), "
+        "Grok (`Co-Authored-By: Grok <noreply@x.ai>`).\n"
+        "4. Use worktree per feature with `git worktree add`.\n"
+        "5. Run `git branch --show-current` before committing to verify branch.\n"
+    )
+
+
+def _build_repair_sop_block(header: str, cfg: dict) -> str:
+    if header == "## PR Review Discipline":
+        return _repair_pr_review_sop(cfg)
+    if header == "## Capability-Based Task Allocation":
+        return _repair_capability_allocation_sop(cfg)
+    if header == "## Repo Hygiene":
+        return _repair_repo_hygiene_sop(cfg, "")
+    idx = SOP_SECTION_HEADERS.index(header)
+    return SOP_BLOCKS[idx]
+
+
 def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
     """Repair missing SOP sections without rewriting unrelated sync artifacts."""
     from synlynk.probe import SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
@@ -1788,7 +1944,7 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
         "grok": "GROK.md",
     }
     cfg = load_config()
-    cfg_agents = list(cfg.get("workgroup_agents") or [])
+    cfg_agents = _repair_config_agents(cfg)
     agent_names = [agent_name] if agent_name else cfg_agents
     for agent in agent_names:
         fpath = directive_files.get(agent)
@@ -1805,8 +1961,10 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
         existing_body = _read_harness_fence_body(fpath)
         blocks = []
         for missing_header in missing_headers:
-            idx = _SOP_HEADERS.index(missing_header)
-            blocks.append(SOP_BLOCKS[idx])
+            if missing_header == "## Repo Hygiene":
+                blocks.append(_repair_repo_hygiene_sop(cfg, agent))
+            else:
+                blocks.append(_build_repair_sop_block(missing_header, cfg))
         missing_body = "\n".join(blocks)
         trimmed_existing_body = existing_body.rstrip("\n")
         body = missing_body if not existing_body else f"{trimmed_existing_body}\n{missing_body}"

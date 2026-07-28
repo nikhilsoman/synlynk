@@ -37,6 +37,99 @@ def _write_telemetry(project_dir, events):
     (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(events))
 
 
+def _write_repair_config(tmp_path, config):
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
+
+
+def test_repair_sops_only_injects_synlynks_own_h_repo_specific_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_repair_config(
+        tmp_path,
+        {
+            "roles": {
+                "agy": ["pm", "review"],
+                "codex": ["implement", "test", "refactor"],
+            },
+            "workgroup_agents": ["agy", "codex"],
+            "branch_conventions": {
+                "agy": "feat/agy/<description>",
+                "codex": "feat/codex/<description>",
+            },
+        },
+    )
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / "GEMINI.md").write_text("# Gemini\n")
+    (tmp_path / "AGENTS.md").write_text("# Codex\n")
+
+    import synlynk as sl
+
+    sl._repair_sops_only(dry_run=False)
+
+    gemini = (tmp_path / "GEMINI.md").read_text()
+    agents = (tmp_path / "AGENTS.md").read_text()
+
+    assert "escalate to Agy." in gemini
+    assert "`feat/agy/<description>`" in gemini
+    assert "| pm / review | Agy | pm, review |" in gemini
+    assert "| implement / test / refactor | Codex | implement, test, refactor |" in gemini
+
+    assert "escalate to Agy." in agents
+    assert "`feat/codex/<description>`" in agents
+    assert "| pm / review | Agy | pm, review |" in agents
+
+
+def test_repair_sops_only_injects_synlynks_own_h_generic_branch_fallback(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_repair_config(
+        tmp_path,
+        {
+            "roles": {"claude": ["pm", "review"]},
+            "workgroup_agents": ["claude"],
+        },
+    )
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / "CLAUDE.md").write_text("# Claude\n")
+
+    import synlynk as sl
+
+    sl._repair_sops_only(dry_run=False)
+
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "Use the repo's documented task-scoped branch pattern" in content
+    assert "feat/<agent>/<description>" not in content
+    assert "escalate to Claude." in content
+
+
+def test_repair_sops_only_injects_synlynks_own_h_default_config_keeps_current_shape(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_repair_config(
+        tmp_path,
+        {
+            "roles": {
+                "claude": ["pm", "review", "deploy"],
+                "agy": ["implement", "test", "css", "templates", "content"],
+                "codex": ["implement", "test", "refactor"],
+                "grok": ["implement", "test", "canvas", "js", "infra"],
+            },
+            "workgroup_agents": ["claude", "agy", "codex", "grok"],
+            "branch_convention": "feat/<description>",
+        },
+    )
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / "CLAUDE.md").write_text("# Claude\n")
+
+    import synlynk as sl
+
+    sl._repair_sops_only(dry_run=False)
+
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "escalate to Claude." in content
+    assert "`feat/<description>`" in content
+    assert "| pm / review / deploy | Claude | pm, review, deploy |" in content
+    assert "| implement / test / css / templates / content | Agy | implement, test, css, templates, content |" in content
+
+
 def test_refresh_populates_agent_quotas_from_telemetry(project_dir):
     import synlynk as sl
 
