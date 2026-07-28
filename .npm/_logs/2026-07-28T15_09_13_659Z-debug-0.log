@@ -1,0 +1,14 @@
+0 verbose cli /Users/nikhilsoman/.nvm/versions/node/v24.15.0/bin/node /Users/nikhilsoman/.nvm/versions/node/v24.15.0/bin/npm
+1 info using npm@11.12.1
+2 info using node@v24.15.0
+3 silly config load:file:/Users/nikhilsoman/.nvm/versions/node/v24.15.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/private/var/folders/gm/pn6p7c_1097b2_8v_8dklzrw0000gn/T/pytest-of-nikhilsoman/pytest-699/test_probe_extracts_claude_ver0/.npmrc
+5 silly config load:file:/Users/nikhilsoman/dev/synlynk/worktrees/job-d0d24273/.npmrc
+6 silly config load:file:/Users/nikhilsoman/.nvm/versions/node/v24.15.0/etc/npmrc
+7 verbose title npm info @anthropic-ai/claude-code version
+8 verbose argv "info" "@anthropic-ai/claude-code" "version"
+9 verbose logfile logs-max:10 dir:/Users/nikhilsoman/dev/synlynk/worktrees/job-d0d24273/.npm/_logs/2026-07-28T15_09_13_659Z-
+10 verbose logfile /Users/nikhilsoman/dev/synlynk/worktrees/job-d0d24273/.npm/_logs/2026-07-28T15_09_13_659Z-debug-0.log
+11 silly logfile done cleaning log files
+12 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with ENOTFOUND
+13 http fetch GET https://registry.npmjs.org/@anthropic-ai%2fclaude-code attempt 1 failed with ENOTFOUND
