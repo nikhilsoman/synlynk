@@ -787,19 +787,12 @@ TASK_STATUSES = {
 
 
 def _resolve_db_path() -> str:
-    """Return the active project's `state.db` path.
+    """Centralise DB at ~/.synlynk/projects/<key>/state.db so all worktrees share one DB.
 
-    Prefer the repo-local `.synlynk/state.db` once a project has been
-    initialized there. Fall back to the shared per-workspace DB only when the
-    current directory does not look like an initialized synlynk project.
+    Key is an 8-char MD5 of the git repo root (common dir parent), falling back to CWD.
+    This avoids the .synlynk/state flat-file collision and the per-worktree isolation bug.
     """
-    local_db_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
-    local_state_dir = os.path.dirname(local_db_path)
-    if os.path.isdir(local_state_dir):
-        return local_db_path
-
     import hashlib as _h
-
     try:
         common = subprocess.check_output(
             ["git", "rev-parse", "--git-common-dir"], stderr=subprocess.DEVNULL

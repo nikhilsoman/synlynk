@@ -14,6 +14,7 @@ Extending:
   4. Follow the naming convention: test_<feature>_<scenario>
 """
 import json
+import os
 import subprocess
 import sqlite3
 import time
@@ -30,7 +31,21 @@ pytestmark = pytest.mark.e2e
 def _seed_probe_row(project_dir: Path, agent_name: str) -> None:
     import synlynk
 
-    db_path = project_dir / ".synlynk" / "state.db"
+    cwd = Path.cwd()
+    home = os.environ.get("HOME")
+    try:
+        # Seed the exact DB path the subprocess will resolve for this repo/worktree.
+        os.environ["HOME"] = str(project_dir)
+        os.chdir(project_dir)
+        db_path = Path(synlynk._resolve_db_path())
+    finally:
+        if home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = home
+        os.chdir(cwd)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     synlynk._migrate_db(conn)
     baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
@@ -64,6 +79,7 @@ class Cli:
 
     def __init__(self, project_dir: Path):
         self.dir = project_dir
+        self.env = {**os.environ, "HOME": str(project_dir)}
 
     @classmethod
     def from_dir(cls, directory: Path) -> "Cli":
@@ -72,12 +88,14 @@ class Cli:
 
     def run(self, *args, timeout: int = 30, **kwargs) -> subprocess.CompletedProcess:
         """Run synlynk with the given args in the project directory."""
+        env = {**kwargs.pop("env", {}), **self.env}
         return subprocess.run(
             [PYTHON, str(SYNLYNK_BIN)] + list(args),
             cwd=str(self.dir),
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
             **kwargs,
         )
 
