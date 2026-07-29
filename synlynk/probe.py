@@ -98,6 +98,71 @@ def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     return _hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+def _baseline_schema_issues(agent_name: str, baseline: dict) -> list:
+    """Return human-readable schema issues for a baseline."""
+    issues = []
+    if not isinstance(baseline, dict):
+        return [f"{agent_name}: baseline missing or not a dict"]
+
+    required_sections = {
+        "dispatch_flags": {
+            "type": dict,
+            "keys": {
+                "valid_flags": list,
+                "invalid_flags": list,
+                "required_flags": list,
+            },
+        },
+        "headless_contract": {
+            "type": dict,
+            "keys": {
+                "requires_pty": bool,
+                "stdout_flush_method": str,
+                "env_vars_required": list,
+                "non_interactive_flag": str,
+            },
+        },
+        "network_deps": {
+            "type": dict,
+            "keys": {
+                "required_endpoints": list,
+                "optional_endpoints": list,
+            },
+        },
+    }
+
+    for section_name, spec in required_sections.items():
+        section = baseline.get(section_name)
+        if not isinstance(section, spec["type"]):
+            issues.append(f"{agent_name}: {section_name} must be a dict")
+            continue
+
+        missing = [key for key in spec["keys"] if key not in section]
+        if missing:
+            issues.append(f"{agent_name}: {section_name} missing keys: {', '.join(missing)}")
+            continue
+
+        for key, expected_type in spec["keys"].items():
+            value = section.get(key)
+            if expected_type is bool:
+                if not isinstance(value, bool):
+                    issues.append(f"{agent_name}: {section_name}.{key} must be a bool")
+            elif expected_type is str:
+                if not isinstance(value, str) or not value.strip():
+                    issues.append(f"{agent_name}: {section_name}.{key} must be a non-empty string")
+            elif expected_type is list:
+                if not isinstance(value, list):
+                    issues.append(f"{agent_name}: {section_name}.{key} must be a list")
+    return issues
+
+
+def _run_tc0(agent_name: str, baseline: dict = None) -> dict:
+    """TC-0: baseline schema completeness."""
+    baseline = baseline if baseline is not None else AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    issues = _baseline_schema_issues(agent_name, baseline)
+    return {"passed": not issues, "schema_issues": issues}
+
+
 _re = re
 
 
@@ -358,6 +423,8 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     harness_name = harness_map.get(agent_name, agent_name)
     baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    schema_result = _run_tc0(agent_name, baseline)
+    schema_issues = schema_result["schema_issues"]
 
     try:
         result = subprocess.run([agent_name, "--version"], capture_output=True, text=True, timeout=5)
@@ -370,13 +437,19 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     flags = baseline.get("dispatch_flags", {})
     new_hash = _compute_capability_hash(contract, flags)
 
-    if fast_path_ok:
+    if fast_path_ok and not schema_issues:
         row = db_conn.execute(
             "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
             (agent_name,),
         ).fetchone()
         if row and row[0] == installed_version and row[1] == new_hash:
-            return {"skipped": True, "version": installed_version, "version_detected": version_detected, "status": "ok"}
+            return {
+                "skipped": True,
+                "version": installed_version,
+                "version_detected": version_detected,
+                "status": "ok",
+                "schema_issues": schema_issues,
+            }
 
     network_ok = True
     for endpoint in baseline.get("network_deps", {}).get("required_endpoints", []):
@@ -387,7 +460,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
         except OSError:
             network_ok = False
 
-    compliance = "ok" if network_ok else "degraded"
+    compliance = "ok" if network_ok and not schema_issues else "degraded"
 
     prev_row = db_conn.execute(
         "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
@@ -522,7 +595,13 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
 
     db_conn.commit()
-    return {"skipped": False, "version": installed_version, "version_detected": version_detected, "status": compliance}
+    return {
+        "skipped": False,
+        "version": installed_version,
+        "version_detected": version_detected,
+        "status": compliance,
+        "schema_issues": schema_issues,
+    }
 
 
 def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
@@ -655,6 +734,8 @@ def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
                 )
             status = "skipped (up to date)" if result["skipped"] else result["status"]
             print(f"  probe [{agent_name}] {result['version']} → {status}")
+            for issue in result.get("schema_issues", []):
+                print(f"    schema incomplete: {issue}")
             results.append({"agent": agent_name, **result})
     finally:
         db_conn.close()

@@ -14,12 +14,21 @@ def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "agy" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "local" in synlynk.AGENT_CAPABILITY_BASELINES
     for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
         assert "roles" in caps
         assert "cli" in caps
         assert "non_interactive_flags" in caps
+        assert isinstance(caps.get("dispatch_flags"), dict)
+        assert isinstance(caps.get("headless_contract"), dict)
+        assert isinstance(caps.get("network_deps"), dict)
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
+    assert synlynk.AGENT_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == ["--sandbox"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]["non_interactive_flag"] == "--single"
+    assert synlynk.AGENT_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
 
 
 def test_sop_section_headers_defined():
@@ -175,6 +184,7 @@ def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
             }
         },
     )
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -607,6 +617,7 @@ def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, mon
     monkeypatch.setattr("synlynk.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr("synlynk._constants.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr("synlynk.doctor.AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -654,6 +665,7 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
             }
         },
     )
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})

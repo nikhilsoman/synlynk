@@ -50,6 +50,7 @@ from synlynk.probe import (
     _write_scan_fences,
     _build_fence_body_from_record,
     _probe_agent,
+    _run_tc0,
     _run_tc1,
     _run_tc2,
     _run_tc3,
