@@ -103,6 +103,7 @@ from synlynk.costs import (
     parse_costs_md,
     update_costs,
 )
+from synlynk.capability_roles import _load_capability_roles
 from synlynk.taxonomy import entries_for_tier
 from synlynk.doctor import (
     HEALTH_CHECKS,
@@ -1334,20 +1335,6 @@ def _default_roles_for_agent(agent: str) -> list:
 def _default_roles_map() -> dict:
     """Return the default role mapping for supported agents."""
     return {name: _default_roles_for_agent(name) for name in _AGENT_DIRECTIVE_FILES}
-
-
-def _load_capability_roles(config_dir: str = ".synlynk") -> dict | None:
-    """Load repo-specific capability roles if the committed file exists."""
-    path = os.path.join(config_dir, "capability-roles.json")
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path) as f:
-            payload = json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return None
-    roles = payload.get("roles")
-    return roles if isinstance(roles, dict) else None
 
 
 def _directive_file_for_agent(agent: str) -> str:
