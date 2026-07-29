@@ -1336,6 +1336,20 @@ def _default_roles_map() -> dict:
     return {name: _default_roles_for_agent(name) for name in _AGENT_DIRECTIVE_FILES}
 
 
+def _load_capability_roles(config_dir: str = ".synlynk") -> dict | None:
+    """Load repo-specific capability roles if the committed file exists."""
+    path = os.path.join(config_dir, "capability-roles.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
+    roles = payload.get("roles")
+    return roles if isinstance(roles, dict) else None
+
+
 def _directive_file_for_agent(agent: str) -> str:
     return _AGENT_DIRECTIVE_FILES.get(agent, f"{agent}.md")
 
@@ -1389,6 +1403,7 @@ def _docs_dir() -> str:
 
 def load_config() -> dict:
     """Loads .synlynk/config.json with schema-v1 defaults."""
+    capability_roles = _load_capability_roles()
     defaults = {
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
@@ -1412,7 +1427,7 @@ def load_config() -> dict:
         "agents": {},
         "payment_models": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
-        "roles": _default_roles_map(),
+        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
     }
     config_file = ".synlynk/config.json"
@@ -1424,6 +1439,10 @@ def load_config() -> dict:
         for key, val in defaults.items():
             if key not in config:
                 config[key] = val
+        if capability_roles is not None:
+            config["roles"] = capability_roles
+        elif "roles" not in config:
+            config["roles"] = _default_roles_map()
         for key, val in defaults["budget"].items():
             if key not in config.get("budget", {}):
                 config.setdefault("budget", {})[key] = val

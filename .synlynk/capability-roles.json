@@ -1,0 +1,8 @@
+{
+  "roles": {
+    "claude": ["pm", "review", "deploy", "brainstorm"],
+    "agy": ["implement", "test", "css", "templates", "content", "subpages"],
+    "grok": ["implement", "test", "canvas", "js", "infra"],
+    "codex": ["implement", "test", "refactor", "cli-plumbing"]
+  }
+}
