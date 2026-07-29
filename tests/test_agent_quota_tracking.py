@@ -504,6 +504,7 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
             }
         },
     )
+    monkeypatch.setattr(sl, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -518,6 +519,85 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
     assert "synlynk doctor" in out
     assert "identity_roles" in out
     assert "doctor [agy]" in out
+
+
+def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_incomplete(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"roles": {}}))
+
+    import synlynk as sl
+
+    monkeypatch.setattr(
+        sl,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "claude": {
+                "cli": "claude",
+                "dispatch_flags": {},
+                "headless_contract": {},
+                "network_deps": {"required_endpoints": []},
+                "non_interactive_flags": ["--print"],
+            }
+        },
+    )
+    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
+    monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+
+    exit_code = sl.cmd_doctor()
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "TC-0 schema" in out
+    assert "schema incomplete" in out
+
+
+def test_synlynk_doctor_reports_local_tc5_skip(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"roles": {}}))
+
+    import synlynk as sl
+
+    patched_baselines = {
+        "local": {
+            "cli": "aider",
+            "dispatch_flags": {
+                "valid_flags": ["--no-auto-commits", "--yes-always", "--openai-api-base", "--model", "--edit-format"],
+                "invalid_flags": ["--dangerously-skip-permissions", "--non-interactive"],
+                "required_flags": ["--no-auto-commits", "--yes-always"],
+            },
+            "headless_contract": {
+                "requires_pty": False,
+                "stdout_flush_method": "native",
+                "env_vars_required": [],
+                "non_interactive_flag": "--version",
+            },
+            "network_deps": {"required_endpoints": ["127.0.0.1:8080"], "optional_endpoints": []},
+            "non_interactive_flags": [],
+        }
+    }
+    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
+    monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
+    monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+
+    exit_code = sl.cmd_doctor()
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "TC-5 sops" in out
+    assert "intentionally skipped" in out
 
 
 def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):

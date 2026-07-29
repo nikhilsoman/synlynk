@@ -46,7 +46,21 @@ AGENT_CAPABILITY_BASELINES = {
         "cli": "claude",
         "can_gh_write": True,
         "non_interactive_flags": ["--print"],
-        "dispatch_flags": ["--dangerously-skip-permissions"],
+        "dispatch_flags": {
+            "valid_flags": ["--dangerously-skip-permissions", "--model", "--output-format"],
+            "invalid_flags": ["--always-approve", "--non-interactive"],
+            "required_flags": ["--dangerously-skip-permissions"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--print",
+        },
+        "network_deps": {
+            "required_endpoints": [],
+            "optional_endpoints": [],
+        },
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
@@ -62,6 +76,25 @@ AGENT_CAPABILITY_BASELINES = {
             "exec", "-",
             "-s", "workspace-write",
         ],
+        "dispatch_flags": {
+            "valid_flags": ["--approval-policy", "--model", "--sandbox"],
+            "invalid_flags": [
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--dangerously-skip-permissions",
+                "--print",
+            ],
+            "required_flags": ["--sandbox"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--version",
+        },
+        "network_deps": {
+            "required_endpoints": [],
+            "optional_endpoints": [],
+        },
         "roles": ["builder"],
         "strengths": ["code completion", "inline edits", "fast iteration"],
     },
@@ -100,6 +133,12 @@ AGENT_CAPABILITY_BASELINES = {
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
             "required_flags": ["--always-approve"],
         },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--single",
+        },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
             "optional_endpoints": [],
@@ -111,8 +150,24 @@ AGENT_CAPABILITY_BASELINES = {
         "cli": "aider",
         "can_gh_write": False,
         "non_interactive_flags": [],
-        "dispatch_flags": ["--no-auto-commits", "--yes-always"],
+        "dispatch_flags": {
+            "valid_flags": [
+                "--no-auto-commits",
+                "--yes-always",
+                "--openai-api-base",
+                "--model",
+                "--edit-format",
+            ],
+            "invalid_flags": ["--dangerously-skip-permissions", "--non-interactive"],
+            "required_flags": ["--no-auto-commits", "--yes-always"],
+        },
         "prompt_file_flag": "--message-file",
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--version",
+        },
         "network_deps": {
             "required_endpoints": ["127.0.0.1:8080"],
             "optional_endpoints": [],

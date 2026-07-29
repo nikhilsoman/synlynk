@@ -35,7 +35,7 @@ def test_sentinel_symbols_importable_from_package():
 
 
 def test_probe_symbols_importable_from_package():
-    from synlynk import _build_fence_body_from_record, _build_fence_content, _compute_capability_hash, _fence_exists, _probe_agent, _probe_model_version, _run_tc1, _run_tc2, _run_tc3, _run_tc4, _scan_command_palette, _upsert_harness_fence, _write_scan_fences, cmd_probe
+    from synlynk import _build_fence_body_from_record, _build_fence_content, _compute_capability_hash, _fence_exists, _probe_agent, _probe_model_version, _run_tc0, _run_tc1, _run_tc2, _run_tc3, _run_tc4, _scan_command_palette, _upsert_harness_fence, _write_scan_fences, cmd_probe
 
     assert callable(_build_fence_body_from_record)
     assert callable(_build_fence_content)
@@ -43,6 +43,7 @@ def test_probe_symbols_importable_from_package():
     assert callable(_fence_exists)
     assert callable(_probe_agent)
     assert callable(_probe_model_version)
+    assert callable(_run_tc0)
     assert callable(_run_tc1)
     assert callable(_run_tc2)
     assert callable(_run_tc3)

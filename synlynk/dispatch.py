@@ -866,24 +866,7 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
 def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
     import socket as _socket
 
-    baseline = {}
-    if db_conn:
-        try:
-            row = db_conn.execute(
-                "SELECT active_flags, active_contract FROM harness_records WHERE agent_name=?",
-                (agent_name,),
-            ).fetchone()
-        except Exception:
-            row = None
-        if row:
-            try:
-                baseline["dispatch_flags"] = json.loads(row[0]) if row[0] else {}
-                baseline["headless_contract"] = json.loads(row[1]) if row[1] else {}
-                baseline["network_deps"] = baseline["headless_contract"].get("network_deps", {})
-            except Exception:
-                baseline = {}
-    if not baseline:
-        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
 
     if db_conn:
         try:
@@ -935,15 +918,28 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
     else:
         valid_flags, required_flags = [], []
     if valid_flags or required_flags:
-        from synlynk.probe import _run_tc2
-
-        tc2 = _run_tc2(agent_name, flags_spec)
-        if not tc2.get("passed", True):
+        probe_row = None
+        if db_conn:
+            try:
+                probe_row = db_conn.execute(
+                    "SELECT compliance_status, active_flags FROM harness_records WHERE agent_name=?",
+                    (agent_name,),
+                ).fetchone()
+            except Exception:
+                probe_row = None
+        if not probe_row:
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"no probe data for agent; run synlynk probe {agent_name}",
+            }
+        compliance_status, _active_flags_json = probe_row
+        if compliance_status != "ok":
             return {
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": (
-                    f"TC-2 flag check failed for {agent_name}: {tc2.get('failed_flags', [])}. "
+                    f"TC-2 flag check failed for {agent_name}: probe status is {compliance_status!r}. "
                     f"Run synlynk probe {agent_name} to update."
                 ),
             }

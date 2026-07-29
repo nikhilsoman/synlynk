@@ -14,12 +14,21 @@ def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "agy" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "local" in synlynk.AGENT_CAPABILITY_BASELINES
     for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
         assert "roles" in caps
         assert "cli" in caps
         assert "non_interactive_flags" in caps
+        assert isinstance(caps.get("dispatch_flags"), dict)
+        assert isinstance(caps.get("headless_contract"), dict)
+        assert isinstance(caps.get("network_deps"), dict)
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
+    assert synlynk.AGENT_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == ["--sandbox"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]["non_interactive_flag"] == "--single"
+    assert synlynk.AGENT_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
 
 
 def test_sop_section_headers_defined():
@@ -175,6 +184,7 @@ def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
             }
         },
     )
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -431,19 +441,41 @@ def test_permissions_to_flags_agy_returns_skip_permissions_for_write():
     assert result == ["--dangerously-skip-permissions"]
 
 
-def test_preflight_allows_agy_dangerously_skip_permissions_flag(monkeypatch):
+def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkeypatch):
     import socket
+    import sqlite3
+    import time
 
-    from synlynk import probe as probe_mod
+    import synlynk
     from synlynk import _preflight_dispatch
-
-    monkeypatch.setattr(probe_mod, "_run_tc2", lambda agent, flags_spec, **kw: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
+
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    synlynk._migrate_db(db)
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES["agy"]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "agy",
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
 
     result = _preflight_dispatch(
         agent_name="agy",
         dispatch_flags=["--dangerously-skip-permissions"],
-        db_conn=None,
+        db_conn=db,
     )
     assert result["passed"] is True
 
@@ -607,6 +639,7 @@ def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, mon
     monkeypatch.setattr("synlynk.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr("synlynk._constants.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr("synlynk.doctor.AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -654,6 +687,7 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
             }
         },
     )
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -4514,36 +4548,90 @@ def test_preflight_blocks_invalid_flag():
     assert "--yes" in result["reason"]
 
 
-def test_preflight_blocks_unreachable_endpoint(monkeypatch):
+def test_preflight_blocks_unreachable_endpoint(tmp_path, monkeypatch):
     import socket
+    import sqlite3
+    import synlynk as sl
 
-    def mock_connect(self, addr):
-        raise ConnectionRefusedError("unreachable")
+    class MockSocket:
+        def __init__(self, *args, **kwargs):
+            pass
 
-    monkeypatch.setattr(socket.socket, "connect", mock_connect)
+        def settimeout(self, *args, **kwargs):
+            pass
 
-    # TC-2 now runs before network check — mock it to pass so we reach the network gate.
-    from synlynk import probe as probe_mod
-    monkeypatch.setattr(probe_mod, "_run_tc2",
-                        lambda agent, flags_spec, **kw: {"passed": True, "failed_flags": []})
+        def connect(self, addr):
+            raise ConnectionRefusedError("unreachable")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(socket, "socket", MockSocket)
+    # TC-2 is now persisted in harness_records; seed the last probe row so this
+    # test can exercise the network gate directly.
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    baseline = sl.AGENT_CAPABILITY_BASELINES["grok"]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "grok",
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
 
     from synlynk import _preflight_dispatch
     result = _preflight_dispatch(
         agent_name="grok",
         dispatch_flags=["--always-approve"],
-        db_conn=None,
+        db_conn=db,
     )
     assert result["passed"] is False
     assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
     assert "cli-chat-proxy.grok.com" in result["reason"]
 
 
-def test_preflight_passes_for_valid_claude_dispatch():
+def test_preflight_passes_for_valid_claude_dispatch(tmp_path):
+    import sqlite3
+    import synlynk as sl
     from synlynk import _preflight_dispatch
+
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    baseline = sl.AGENT_CAPABILITY_BASELINES["claude"]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "claude",
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
     result = _preflight_dispatch(
         agent_name="claude",
         dispatch_flags=["--print", "--dangerously-skip-permissions"],
-        db_conn=None,
+        db_conn=db,
     )
     assert result["passed"] is True
 
@@ -5616,7 +5704,26 @@ def test_dispatch_ready_jobs_respects_max_parallel(project_dir, monkeypatch):
 
 def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
     """Launches a queued job when under max_parallel."""
+    import json as _json
     conn = synlynk._get_db()
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES["claude"]
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "claude",
+            baseline["cli"],
+            "1.0.0",
+            _json.dumps(baseline["headless_contract"]),
+            _json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
         "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
@@ -5754,6 +5861,7 @@ def test_dispatch_ready_jobs_fails_job_with_failed_dep(project_dir, monkeypatch)
 
 def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
     """Each launched job is committed immediately so a crash doesn't leave duplicates."""
+    import json as _json
     commits_after_update = []
     original_commit = None
 
@@ -5780,6 +5888,24 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
             self._real.close()
 
     conn = synlynk._get_db()
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES["claude"]
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "claude",
+            baseline["cli"],
+            "1.0.0",
+            _json.dumps(baseline["headless_contract"]),
+            _json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
     for i in range(2):
         conn.execute(
             "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
