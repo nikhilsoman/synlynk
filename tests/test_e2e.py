@@ -15,6 +15,8 @@ Extending:
 """
 import json
 import subprocess
+import sqlite3
+import time
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,34 @@ SYNLYNK_BIN = Path(__file__).parent.parent / "bin" / "synlynk.py"
 PYTHON = "python3"
 
 pytestmark = pytest.mark.e2e
+
+
+def _seed_probe_row(project_dir: Path, agent_name: str) -> None:
+    import synlynk
+
+    db_path = project_dir / ".synlynk" / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    synlynk._migrate_db(conn)
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            agent_name,
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    conn.commit()
+    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +305,7 @@ def test_dispatch_creates_job(cli):
     fake_claude.write_text("#!/bin/sh\ncat > /dev/null\n")
     fake_claude.chmod(0o755)
     env = {**_os.environ, "PATH": str(fake_bin) + ":" + _os.environ["PATH"]}
+    _seed_probe_row(cli.dir, "claude")
     r = cli.run("dispatch", "claude", "--task", "test task", env=env)
     assert r.returncode == 0, r.stderr
     jobs_file = cli.dir / ".synlynk" / "jobs.json"

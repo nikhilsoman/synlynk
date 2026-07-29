@@ -215,6 +215,7 @@ def test_fence_preserves_surrounding_bytes(tmp_path):
 
 
 def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch):
+    import socket
     import sqlite3
     import time
     import synlynk
@@ -238,6 +239,7 @@ def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch)
     stub.write_text("#!/bin/sh\necho 'agy 2.0.0'\n")
     stub.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
+    monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
 
     sentinel_events = []
     original_write = synlynk._write_sentinel_alert
