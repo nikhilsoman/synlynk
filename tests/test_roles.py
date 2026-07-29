@@ -50,6 +50,49 @@ def test_load_config_roles_default_has_four_agents(tmp_path, monkeypatch):
     assert set(roles.keys()) >= {"claude", "agy", "grok", "codex"}
 
 
+def test_load_config_roles_prefers_capability_roles_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "roles": {"claude": ["pm"]},
+        })
+    )
+    (tmp_path / ".synlynk" / "capability-roles.json").write_text(
+        json.dumps({
+            "roles": {
+                "claude": ["pm", "review", "deploy", "brainstorm"],
+                "agy": ["implement", "test", "css", "templates", "content", "subpages"],
+                "grok": ["implement", "test", "canvas", "js", "infra"],
+                "codex": ["implement", "test", "refactor", "cli-plumbing"],
+            }
+        })
+    )
+
+    cfg = synlynk.load_config()
+
+    assert cfg["roles"]["claude"] == ["pm", "review", "deploy", "brainstorm"]
+    assert cfg["roles"]["codex"] == ["implement", "test", "refactor", "cli-plumbing"]
+
+
+def test_load_config_roles_falls_back_to_config_when_capability_roles_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "roles": {"claude": ["pm", "review"], "codex": ["implement", "test"]},
+        })
+    )
+
+    cfg = synlynk.load_config()
+
+    assert cfg["roles"] == {"claude": ["pm", "review"], "codex": ["implement", "test"]}
+
+
 def test_load_config_roles_claude_is_pm(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg = synlynk.load_config()

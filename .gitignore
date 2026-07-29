@@ -1,8 +1,10 @@
 .superpowers/
 .synlynk/*
+.synlynk/config.json
 .synlynk/viz-cache/
 .synlynk/viz-meta.json
 !.synlynk/roles.yaml
+!.synlynk/capability-roles.json
 __pycache__/
 *.pyc
 .DS_Store

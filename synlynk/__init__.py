@@ -103,6 +103,7 @@ from synlynk.costs import (
     parse_costs_md,
     update_costs,
 )
+from synlynk.capability_roles import _load_capability_roles
 from synlynk.taxonomy import entries_for_tier
 from synlynk.doctor import (
     HEALTH_CHECKS,
@@ -1389,6 +1390,7 @@ def _docs_dir() -> str:
 
 def load_config() -> dict:
     """Loads .synlynk/config.json with schema-v1 defaults."""
+    capability_roles = _load_capability_roles()
     defaults = {
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
@@ -1412,7 +1414,7 @@ def load_config() -> dict:
         "agents": {},
         "payment_models": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
-        "roles": _default_roles_map(),
+        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
     }
     config_file = ".synlynk/config.json"
@@ -1424,6 +1426,10 @@ def load_config() -> dict:
         for key, val in defaults.items():
             if key not in config:
                 config[key] = val
+        if capability_roles is not None:
+            config["roles"] = capability_roles
+        elif "roles" not in config:
+            config["roles"] = _default_roles_map()
         for key, val in defaults["budget"].items():
             if key not in config.get("budget", {}):
                 config.setdefault("budget", {})[key] = val
@@ -1894,6 +1900,8 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
         "| :--- | :--- | :--- |",
         *rows,
         f"Do not start a task outside your role column without explicit approval from {escalation_target}.",
+        "",
+        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok by default**. Agy headless can complete `gh pr review`, `gh pr comment`, and `gh pr merge` writes when the machine-local `~/.gemini/antigravity-cli/settings.json` already contains scoped `command(gh pr review)`, `command(gh pr comment)`, and `command(gh pr merge)` allow-rules; that precondition is operator-confirmed, not reliably verifiable mid-task. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically, but do not treat it as a hard identity guarantee yet: the token-stripping fallback does not prevent `gh` from using a locally logged-in personal keyring identity when no role-scoped GitHub App token is available (#569).",
         "",
         "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
         "rather than synlynk's default fleet assumptions.",

@@ -130,6 +130,31 @@ def test_repair_sops_only_injects_synlynks_own_h_default_config_keeps_current_sh
     assert "| implement / test / css / templates / content | Agy | implement, test, css, templates, content |" in content
 
 
+def test_repair_capability_allocation_sop_uses_committed_capability_roles(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 100},
+    }))
+    (tmp_path / ".synlynk" / "capability-roles.json").write_text(json.dumps({
+        "roles": {
+            "claude": ["pm", "review", "deploy", "brainstorm"],
+            "agy": ["implement", "test", "css", "templates", "content", "subpages"],
+            "grok": ["implement", "test", "canvas", "js", "infra"],
+            "codex": ["implement", "test", "refactor", "cli-plumbing"],
+        }
+    }))
+
+    import synlynk as sl
+
+    sop = sl._repair_capability_allocation_sop(sl.load_config())
+
+    assert "| pm / review / deploy / brainstorm | Claude | pm, review, deploy, brainstorm |" in sop
+    assert "| implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |" in sop
+    assert "**GitHub write routing (#426):**" in sop
+
+
 def test_refresh_populates_agent_quotas_from_telemetry(project_dir):
     import synlynk as sl
 
