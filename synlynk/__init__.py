@@ -54,7 +54,7 @@ from synlynk.probe import (
     _run_tc2,
     _run_tc3,
     _run_tc4,
-    _run_tc5,
+    _run_tc5 as _probe_run_tc5,
     SOP_BLOCKS,
     SOP_SECTION_HEADERS,
     cmd_probe,
@@ -1941,10 +1941,46 @@ def _build_repair_sop_block(header: str, cfg: dict) -> str:
     return SOP_BLOCKS[idx]
 
 
+def _run_tc5(directive_files: dict) -> dict:
+    """TC-5 wrapper that resolves current repair canonical blocks from config."""
+    cfg = load_config()
+    return _probe_run_tc5(
+        directive_files,
+        repair_block_builder=lambda header, agent, _cfg=cfg: (
+            _repair_repo_hygiene_sop(_cfg, agent) if header == "## Repo Hygiene" else _build_repair_sop_block(header, _cfg)
+        ),
+    )
+
+
+def _split_sop_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
+    prefix_lines = []
+    sections = []
+    current_header = None
+    current_lines = []
+    for line in body.splitlines(keepends=True):
+        stripped = line.rstrip("\r\n")
+        if stripped in SOP_SECTION_HEADERS:
+            if current_header is not None:
+                sections.append((current_header, "".join(current_lines)))
+            current_header = stripped
+            current_lines = [line]
+        elif current_header is not None:
+            current_lines.append(line)
+        else:
+            prefix_lines.append(line)
+    if current_header is not None:
+        sections.append((current_header, "".join(current_lines)))
+    return "".join(prefix_lines), sections
+
+
+def _repair_sop_block_for_agent(header: str, cfg: dict, agent: str) -> str:
+    if header == "## Repo Hygiene":
+        return _repair_repo_hygiene_sop(cfg, agent)
+    return _build_repair_sop_block(header, cfg)
+
+
 def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
     """Repair missing SOP sections without rewriting unrelated sync artifacts."""
-    from synlynk.probe import SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
-
     directive_files = {
         "claude": "CLAUDE.md",
         "agy": "GEMINI.md",
@@ -1958,27 +1994,52 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
         fpath = directive_files.get(agent)
         if not fpath or not os.path.exists(fpath):
             continue
-        tc5 = _run_tc5_local({agent: fpath})
+        tc5 = _run_tc5({agent: fpath})
         missing_headers = tc5.get("missing", {}).get(agent, [])
-        if not missing_headers:
+        stale_headers = tc5.get("stale", {}).get(agent, [])
+        if not missing_headers and not stale_headers:
             continue
         if dry_run:
             for missing_header in missing_headers:
-                print(f"    → repair SOP '{missing_header}' in {fpath}")
+                print(f"    → will fill missing SOP '{missing_header}' in {fpath}")
+            for stale_header in stale_headers:
+                print(
+                    f"    → will refresh stale SOP '{stale_header}' in {fpath} "
+                    "(current text differs from canonical)"
+                )
             continue
         existing_body = _read_harness_fence_body(fpath)
-        blocks = []
-        for missing_header in missing_headers:
-            if missing_header == "## Repo Hygiene":
-                blocks.append(_repair_repo_hygiene_sop(cfg, agent))
+        prefix, sections = _split_sop_sections(existing_body)
+        target_headers = set(missing_headers) | set(stale_headers)
+        rebuilt_sections = []
+        seen_headers = set()
+        for header, section_text in sections:
+            if header in target_headers:
+                canonical = _repair_sop_block_for_agent(header, cfg, agent)
+                trailing_ws = section_text[len(section_text.rstrip("\n")):]
+                rebuilt_sections.append(canonical.rstrip("\n") + trailing_ws)
+                seen_headers.add(header)
             else:
-                blocks.append(_build_repair_sop_block(missing_header, cfg))
-        missing_body = "\n".join(blocks)
-        trimmed_existing_body = existing_body.rstrip("\n")
-        body = missing_body if not existing_body else f"{trimmed_existing_body}\n{missing_body}"
+                rebuilt_sections.append(section_text)
+        for missing_header in missing_headers:
+            if missing_header in seen_headers:
+                continue
+            rebuilt_sections.append(_repair_sop_block_for_agent(missing_header, cfg, agent))
+            seen_headers.add(missing_header)
+        for stale_header in stale_headers:
+            if stale_header in seen_headers:
+                continue
+            rebuilt_sections.append(_repair_sop_block_for_agent(stale_header, cfg, agent))
+            seen_headers.add(stale_header)
+        body = prefix + "".join(rebuilt_sections)
         _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
         for missing_header in missing_headers:
-            print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
+            print(f"    ✓ will fill missing SOP '{missing_header}' in {fpath}")
+        for stale_header in stale_headers:
+            print(
+                f"    ✓ will refresh stale SOP '{stale_header}' in {fpath} "
+                "(current text differs from canonical)"
+            )
 
 
 

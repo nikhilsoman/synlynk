@@ -435,6 +435,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             else:
                 for ag, missing in tc5["missing"].items():
                     print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
+                for ag, stale in tc5.get("stale", {}).items():
+                    print(f"    TC-5 sops:    ⚠ {ag}: stale {len(stale)} section(s): {', '.join(stale)}")
 
             if not tc1["passed"]:
                 choice = _pkg("_doctor_fix_menu")(agent, "tc1", tc1)
@@ -469,7 +471,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                     )
                 elif choice == "escalate":
                     _pkg("_doctor_maybe_escalate")(agent, {"tc4": tc4})
-            if tc5["missing"].get(agent):
+            if tc5["missing"].get(agent) or tc5.get("stale", {}).get(agent):
                 choice = _pkg("_doctor_fix_menu")(agent, "tc5", tc5)
                 if choice == "1":
                     _pkg("_repair_sops_only")(agent_name=agent)
@@ -512,7 +514,8 @@ _DOCTOR_FIX_MENUS = {
         f"Run: synlynk configure agent {agent} (adds missing verbs: {tc.get('failed_verbs', [])})",
     ],
     "tc5": lambda agent, tc: [
-        f"Run: synlynk sync --repair-sops (re-inject {len(tc.get('missing', {}).get(agent, []))} missing sections)",
+        f"Run: synlynk sync --repair-sops (re-inject {len(tc.get('missing', {}).get(agent, []))} missing sections"
+        f" and refresh {len(tc.get('stale', {}).get(agent, []))} stale sections)",
     ],
 }
 

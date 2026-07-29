@@ -623,18 +623,68 @@ def _run_tc4(agent_name: str, db_conn) -> dict:
     return {"failed_verbs": failed, "passed": len(failed) == 0}
 
 
-def _run_tc5(directive_files: dict) -> dict:
-    """TC-5: SOP section presence validation."""
+def _extract_harness_body(content: str) -> str:
+    match = re.search(
+        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+    return match.group(1)
+
+
+def _split_sop_body_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
+    prefix_lines = []
+    sections = []
+    current_header = None
+    current_lines = []
+    for line in body.splitlines(keepends=True):
+        stripped = line.rstrip("\r\n")
+        if stripped in SOP_SECTION_HEADERS:
+            if current_header is not None:
+                sections.append((current_header, "".join(current_lines)))
+            current_header = stripped
+            current_lines = [line]
+        elif current_header is not None:
+            current_lines.append(line)
+        else:
+            prefix_lines.append(line)
+    if current_header is not None:
+        sections.append((current_header, "".join(current_lines)))
+    prefix = "".join(prefix_lines) if prefix_lines else ""
+    return prefix, sections
+
+
+def _run_tc5(directive_files: dict, repair_block_builder=None) -> dict:
+    """TC-5: SOP section presence and drift validation."""
     missing = {}
+    stale = {}
     for agent, path in (directive_files or {}).items():
         try:
-            content = open(path).read() if os.path.exists(path) else ""
+            content = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
         except OSError:
             content = ""
-        absent = [header for header in SOP_SECTION_HEADERS if header not in content]
+        body = _extract_harness_body(content)
+        absent = []
+        stale_headers = []
+        _, sections = _split_sop_body_sections(body)
+        section_map = {header: section for header, section in sections}
+        for idx, header in enumerate(SOP_SECTION_HEADERS):
+            current = section_map.get(header)
+            if current is None:
+                absent.append(header)
+                continue
+            canonical = repair_block_builder(header, agent) if callable(repair_block_builder) else None
+            if canonical is None:
+                canonical = SOP_BLOCKS[idx]
+            if current.rstrip("\n") != canonical.rstrip("\n"):
+                stale_headers.append(header)
         if absent:
             missing[agent] = absent
-    return {"passed": not missing, "missing": missing}
+        if stale_headers:
+            stale[agent] = stale_headers
+    return {"passed": not missing and not stale, "missing": missing, "stale": stale}
 
 
 def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
