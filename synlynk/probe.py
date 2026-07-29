@@ -21,6 +21,12 @@ SOP_SECTION_HEADERS = [
     "## Repo Hygiene",
 ]
 
+# Only the live config-driven routing section participates in stale detection.
+# The other SOP sections are repaired only when missing.
+STALE_REPAIR_HEADERS = {
+    "## Capability-Based Task Allocation",
+}
+
 _PR_REVIEW_SOP = """\
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
@@ -656,8 +662,13 @@ def _split_sop_body_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
     return prefix, sections
 
 
-def _run_tc5(directive_files: dict, repair_block_builder=None) -> dict:
-    """TC-5: SOP section presence and drift validation."""
+def _run_tc5(directive_files: dict) -> dict:
+    """TC-5: SOP section presence validation.
+
+    Stale detection is intentionally narrow: only the live capability-allocation
+    block is compared against the canonical generator, and only when a harness
+    fence already exists.
+    """
     missing = {}
     stale = {}
     for agent, path in (directive_files or {}).items():
@@ -665,19 +676,21 @@ def _run_tc5(directive_files: dict, repair_block_builder=None) -> dict:
             content = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
         except OSError:
             content = ""
+        has_harness_fence = bool(_FENCE_OPEN_PATTERN.search(content))
         body = _extract_harness_body(content)
-        absent = []
-        stale_headers = []
         _, sections = _split_sop_body_sections(body)
         section_map = {header: section for header, section in sections}
+
+        absent = []
+        stale_headers = []
         for idx, header in enumerate(SOP_SECTION_HEADERS):
             current = section_map.get(header)
             if current is None:
                 absent.append(header)
                 continue
-            canonical = repair_block_builder(header, agent) if callable(repair_block_builder) else None
-            if canonical is None:
-                canonical = SOP_BLOCKS[idx]
+            if not has_harness_fence or header not in STALE_REPAIR_HEADERS:
+                continue
+            canonical = SOP_BLOCKS[idx]
             if current.rstrip("\n") != canonical.rstrip("\n"):
                 stale_headers.append(header)
         if absent:

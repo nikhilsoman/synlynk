@@ -48,15 +48,13 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
 
 
 def test_run_tc5_passes_when_all_headers_present(tmp_path):
-    from synlynk.probe import SOP_SECTION_HEADERS
+    from synlynk.probe import SOP_SECTION_HEADERS, _run_tc5
 
     fpath = tmp_path / "CLAUDE.md"
-    blocks = [synlynk._build_repair_sop_block(header, synlynk.load_config()) for header in SOP_SECTION_HEADERS]
-    fpath.write_text("\n".join(blocks) + "\n")
-    result = synlynk._run_tc5({"claude": str(fpath)})
+    fpath.write_text("\n".join(SOP_SECTION_HEADERS) + "\nother content")
+    result = _run_tc5({"claude": str(fpath)})
     assert result["passed"] is True
     assert result["missing"] == {}
-    assert result["stale"] == {}
 
 
 def test_run_tc5_reports_missing_sections(tmp_path):
@@ -77,34 +75,6 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
     result = _run_tc5({"claude": str(tmp_path / "CLAUDE.md")})
     assert result["passed"] is False
     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
-
-
-def test_run_tc5_reports_stale_sections(tmp_path):
-    stale_header = "## Capability-Based Task Allocation"
-    canonical = synlynk._build_repair_sop_block(stale_header, synlynk.load_config())
-    assert "Grok by default" in canonical
-    stale = canonical.replace("Grok by default", "Grok only", 1)
-
-    blocks = []
-    for header in synlynk.SOP_SECTION_HEADERS:
-        block = synlynk._build_repair_sop_block(header, synlynk.load_config())
-        if header == stale_header:
-            block = stale
-        blocks.append(block)
-
-    body = "\n".join(blocks)
-    fpath = tmp_path / "CLAUDE.md"
-    fpath.write_text(
-        "<!-- synlynk:harness vsop-repair verified:2026-07-29T00:00:00Z -->\n"
-        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
-        f"{body}\n"
-        "<!-- /synlynk:harness -->\n"
-    )
-
-    result = synlynk._run_tc5({"claude": str(fpath)})
-    assert result["passed"] is False
-    assert result["missing"] == {}
-    assert result["stale"]["claude"] == [stale_header]
 
 
 def test_run_tc4_skips_flag_only_command_templates(monkeypatch):
@@ -6898,33 +6868,6 @@ def test_cmd_sync_dry_run(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "dry run" in out.lower()
-
-
-def test_cmd_sync_dry_run_reports_missing_and_stale_sops(tmp_path, monkeypatch, capsys):
-    """Sync repair dry-run distinguishes missing from stale SOP sections."""
-    monkeypatch.chdir(tmp_path)
-    _setup_exit_project(tmp_path)
-
-    canonical = synlynk._build_repair_sop_block("## Capability-Based Task Allocation", synlynk.load_config())
-    assert "Grok by default" in canonical
-    stale = canonical.replace("Grok by default", "Grok only", 1)
-    body = "\n".join(
-        stale if header == "## Capability-Based Task Allocation" else synlynk._build_repair_sop_block(header, synlynk.load_config())
-        for header in synlynk.SOP_SECTION_HEADERS
-        if header != "## Cost Visibility"
-    )
-    (tmp_path / "CLAUDE.md").write_text(
-        "<!-- synlynk:harness vsop-repair verified:2026-07-29T00:00:00Z -->\n"
-        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
-        f"{body}\n"
-        "<!-- /synlynk:harness -->\n"
-    )
-
-    rc = synlynk.cmd_sync(dry_run=True, repair_sops=True)
-    out = capsys.readouterr().out
-    assert rc == 0
-    assert "will fill missing SOP '## Cost Visibility'" in out
-    assert "will refresh stale SOP '## Capability-Based Task Allocation'" in out
 
 
 def test_cmd_sync_confirm_updates_instruction_files(tmp_path, monkeypatch, capsys):

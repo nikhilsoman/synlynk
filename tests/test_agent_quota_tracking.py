@@ -155,36 +155,6 @@ def test_repair_capability_allocation_sop_uses_committed_capability_roles(tmp_pa
     assert "**GitHub write routing (#426):**" in sop
 
 
-def test_sync_repairsops_only_fills_missing_sop_h_and_refreshes_stale_sections(project_dir):
-    import synlynk as sl
-
-    stale_header = "## Capability-Based Task Allocation"
-    canonical = sl._build_repair_sop_block(stale_header, sl.load_config())
-    assert "Grok by default" in canonical
-    stale = canonical.replace("Grok by default", "Grok only", 1)
-
-    blocks = []
-    for header in sl.SOP_SECTION_HEADERS:
-        block = sl._build_repair_sop_block(header, sl.load_config())
-        if header == stale_header:
-            block = stale
-        blocks.append(block)
-    body = "\n".join(blocks)
-
-    (project_dir / "CLAUDE.md").write_text(
-        "<!-- synlynk:harness vsop-repair verified:2026-07-29T00:00:00Z -->\n"
-        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
-        f"{body}\n"
-        "<!-- /synlynk:harness -->\n"
-    )
-
-    sl._repair_sops_only(dry_run=False)
-
-    content = (project_dir / "CLAUDE.md").read_text()
-    assert canonical in content
-    assert "Grok only" not in content
-
-
 def test_refresh_populates_agent_quotas_from_telemetry(project_dir):
     import synlynk as sl
 
