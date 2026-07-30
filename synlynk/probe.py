@@ -896,6 +896,14 @@ def _extract_sop_section(body: str, header: str) -> str:
     return match.group(0).rstrip("\n") if match else ""
 
 
+def _repair_sop_body_parts(*parts: str) -> str:
+    """Join SOP body fragments with exactly one blank line between sections."""
+    cleaned = [part.strip("\n") for part in parts if part and part.strip("\n")]
+    if not cleaned:
+        return ""
+    return "\n\n".join(cleaned) + "\n"
+
+
 def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = False) -> None:
     """Repair missing SOP sections without rewriting unrelated sync artifacts."""
     if cfg is None:
@@ -947,14 +955,15 @@ def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = 
         body = existing_body.rstrip("\n")
         for missing_header in fill_headers:
             block = _repair_repo_hygiene_sop(cfg, agent) if missing_header == "## Repo Hygiene" else _build_repair_sop_block(missing_header, cfg)
-            body = block if not body else f"{body}\n{block}"
+            body = _repair_sop_body_parts(body, block)
         for stale_header in stale_headers:
-            block = _build_repair_sop_block(stale_header, cfg).rstrip("\n")
+            block = _build_repair_sop_block(stale_header, cfg)
             section_pattern = rf"(?ms)^{re.escape(stale_header)}\n.*?(?=^## |\Z)"
-            if _extract_sop_section(body, stale_header):
-                body = re.sub(section_pattern, block, body, count=1)
+            match = re.search(section_pattern, body)
+            if match:
+                body = _repair_sop_body_parts(body[:match.start()], block, body[match.end():])
             else:
-                body = block if not body else f"{body}\n{block}"
+                body = _repair_sop_body_parts(body, block)
 
         _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
         for missing_header in fill_headers:
