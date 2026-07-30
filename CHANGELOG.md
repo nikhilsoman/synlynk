@@ -168,7 +168,7 @@ Design spec: `docs/superpowers/specs/2026-07-13-measurement-ledger-hardening-des
 ### Added
 
 **Agent Autonomy Bridge (BS-12, PR #119)**
-- **`synlynk dispatch --grant <perm> --revoke <perm>`** — per-task permission overrides; role defaults in `.synlynk/config.json` map 12 roles (pm, review, implement, test, css, infra, etc.) to capability tiers. Resolved set translates to `--allowedTools` (Claude), `--approval-policy` (Codex), or a `## Permissions` context header (Agy).
+- **`synlynk dispatch --grant <perm> --revoke <perm>`** — per-task permission overrides; role defaults in `.synlynk/config.json` map 12 roles (pm, review, implement, test, css, infra, etc.) to capability tiers. Resolved set translates to `--allowedTools` (Claude), `--ask-for-approval` (Codex), or a `## Permissions` context header (Agy).
 - **`synlynk configure agent <name> [--flag k=v] [--env K=V] [--network-dep host:port]`** — write per-project harness overrides to `.agents/<agent>.json`; `dispatch_agent()` merges at call time: baseline → per-project overrides → per-task grant/revoke.
 - **`synlynk jobs --stalled`** — list jobs with `HANDOFF_PENDING` sentinel (set when a job accumulates STALL_NO_OUTPUT, FLATLINE, or QUOTA_EXHAUSTED). Shows job ID, agent, failure sentinel, elapsed time, and recommended next agent.
 - **`synlynk jobs handoff <job_id> [--to <agent>]`** — transfer a stalled job to a new agent; appends `## Handoff Note` to the job context file, increments `handoff_count`, updates `previous_agents` (JSON array), launches new dispatch with full context, clears `HANDOFF_PENDING`.

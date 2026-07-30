@@ -13,7 +13,7 @@
 ## Maintenance & calibration (standing task)
 
 This doc is a **living reference, not a one-time snapshot** — treat updating it as a recurring Sustain/Maintain task (GOVERNS model), not a one-off artifact of this design spec. Recalibrate when:
-- Any tracked CLI's version bumps by a minor version or more (`brew upgrade`/`npm update`/vendor release notes), since flag surfaces and config schemas are exactly what drifts between versions (see Codex's `--approval-policy` → `--ask-for-approval` rename below — that class of drift is silent unless re-checked).
+- Any tracked CLI's version bumps by a minor version or more (`brew upgrade`/`npm update`/vendor release notes), since flag surfaces and config schemas are exactly what drifts between versions (see the Codex approval-flag correction below — that class of drift is silent unless re-checked).
 - A dispatched job hits an unexpected permission/capability wall that contradicts what's recorded here.
 - At minimum, once per quarter, independent of any triggering incident.
 
@@ -125,7 +125,7 @@ Permission-class translation is effectively a no-op in `_permissions_to_flags` �
 
 **Config & control surfaces — corrects synlynk's prior assumption**
 - `~/.codex/config.toml` is real; `-c/--config`, `--profile`, `--ignore-user-config`, `--strict-config`, `--enable`/`--disable` are real controls.
-- **Correction: the approval flag is `--ask-for-approval` (`untrusted|on-request|never`), not `--approval-policy`** as `AGENT_CAPABILITY_BASELINES` currently assumes.
+- **Correction: the approval flag is `--ask-for-approval` (`untrusted|on-request|never`), not the legacy Codex approval-flag name** as `AGENT_CAPABILITY_BASELINES` currently assumes.
 - `--sandbox` is real, with `read-only|workspace-write|danger-full-access`. `--dangerously-bypass-approvals-and-sandbox` exists and is explicitly unsafe (confirms the existing code-comment warning against ever defaulting to it).
 - **Cannot confirm the `[sandbox_workspace_write]` TOML table with `network_access`/`writable_roots` keys from the current binary's own help output** — this is the exact write-back target §2a's Codex remediation path assumes exists. The `codex sandbox` subcommand instead exposes `--sandbox-state-disable-network`, `--sandbox-state-readable-root`, `--allow-unix-socket`, `--permission-profile`. **This needs independent verification (e.g. against actual `config.toml` schema docs, not just `--help`) before §2a's Codex write-back mechanism is implemented — treat as unconfirmed, not as a known-good target.**
 
@@ -148,7 +148,7 @@ Permission-class translation is effectively a no-op in `_permissions_to_flags` �
 | Claude | Loud error (exception surfaced) | Runtime propose-and-apply diff to `settings.json`, `--yes`-gated | Yes |
 | Agy | Silent auto-deny (`PERMISSION_DENIED`) | Pre-flight manifest seeding into `settings.json` before invocation | Yes |
 | Grok | Cancelled-and-reported-to-model, no hang | Dispatch-time CLI flags (`--allow`/`--deny`/`--permission-mode`); config diffs for durable policy only | Corrected — Grok has real native config, not just Claude-inheritance |
-| Codex | Loud failure surfaced back into the run, not silent | Direct flags/config overrides at invocation (`--ask-for-approval`, `--sandbox`), not runtime diff prompts | **No** — flag name was wrong (`--ask-for-approval`, not `--approval-policy`), and the assumed `[sandbox_workspace_write]` write-back target is unconfirmed by the CLI's own `--help` output |
+| Codex | Loud failure surfaced back into the run, not silent | Direct flags/config overrides at invocation (`--ask-for-approval`, `--sandbox`), not runtime diff prompts | **No** — the approval flag name was wrong, and the assumed `[sandbox_workspace_write]` write-back target is unconfirmed by the CLI's own `--help` output |
 
 **Pattern across all four:** none confirmed a silent-deny-only or hang failure mode except Agy. Three of four (Claude, Codex, Grok) push back on a uniform "runtime `--yes` diff prompt" remediation mechanism, each for a different reason (loud-error-already-informative, flags-are-the-real-interface, or headless-can't-answer-a-prompt-anyway). Only Agy's failure mode and only Claude's remediation fit match the design spec's original uniform assumption.
 

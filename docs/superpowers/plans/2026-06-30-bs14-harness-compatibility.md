@@ -832,7 +832,7 @@ def _load_agent_profile(agent_name: str, agents_dir: str = ".agents") -> dict:
   "agent": "codex",
   "harness": "codex",
   "model": "o4-mini",
-  "dispatch_flags": ["--quiet", "--approval-policy=auto-edit"]
+  "dispatch_flags": ["--quiet", "--ask-for-approval=on-request"]
 }
 ```
 
@@ -1322,7 +1322,7 @@ _VERB_MAP_SEED = [
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy --prompt {task} --non-interactive --model gemini-2.5-pro", "full", None),
     ("dispatch.task",     "dispatch",      "grok",   "grok --prompt {task} --yes --model grok-3", "full", None),
-    ("dispatch.task",     "dispatch",      "codex",  "codex --quiet {task} --approval-policy=auto-edit", "full", None),
+    ("dispatch.task",     "dispatch",      "codex",  "codex --quiet {task} --ask-for-approval=on-request", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy --non-interactive --prompt {task}", "partial", "May hang without PTY on some agy versions"),
     ("dispatch.headless", "dispatch",      "grok",   "grok --yes --prompt {task}", "partial", "Network dep required"),
@@ -1334,7 +1334,7 @@ _VERB_MAP_SEED = [
     ("dispatch.approve",  "dispatch",      "claude", "claude --allowedTools {tools}", "full", None),
     ("dispatch.approve",  "dispatch",      "agy",    None, "none", None),
     ("dispatch.approve",  "dispatch",      "grok",   None, "none", None),
-    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "approval-policy=none only"),
+    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "ask-for-approval=never only"),
     ("dispatch.model",    "dispatch",      "claude", "--model {model}", "full", None),
     ("dispatch.model",    "dispatch",      "agy",    "--model {model}", "full", None),
     ("dispatch.model",    "dispatch",      "grok",   "--model {model}", "full", None),
@@ -1342,7 +1342,7 @@ _VERB_MAP_SEED = [
     ("dispatch.tools",    "dispatch",      "claude", "--allowedTools {tools}", "full", None),
     ("dispatch.tools",    "dispatch",      "agy",    None, "partial", "No tool_list flag"),
     ("dispatch.tools",    "dispatch",      "grok",   None, "none", None),
-    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "approval-policy only"),
+    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "ask-for-approval only"),
     ("dispatch.context",  "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.context",  "dispatch",      "agy",    "agy --prompt {task}", "full", None),
     ("dispatch.context",  "dispatch",      "grok",   "grok --prompt {task}", "partial", "No explicit context file flag"),
