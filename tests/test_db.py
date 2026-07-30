@@ -138,6 +138,26 @@ def test_cmd_cost_log_regenerates_costs_md(project_dir):
     assert "from cmd_cost_log" in open(path).read()
 
 
+def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
+    import json
+
+    from tests.test_migrate import _setup_migrated
+
+    dr_dir = tmp_path / "dr_mirror"
+    dr_dir.mkdir()
+    _setup_migrated(tmp_path, monkeypatch)
+    cfg_path = os.path.join(".synlynk", "config.json")
+    with open(cfg_path, "w") as f:
+        json.dump({"dr_sync_path": str(dr_dir)}, f)
+
+    cmd_cost_log(agent="gemini", tokens_in=10, tokens_out=5)
+
+    md_path = os.path.join(".synlynk", "project-docs", "costs.md")
+    assert os.path.exists(md_path)
+    dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
+    assert os.path.exists(dr_path)
+
+
 def test_cmd_remediation_log_appends_past_telemetry_cap(project_dir):
     import synlynk
     from synlynk.db import cmd_remediation_log
@@ -177,26 +197,6 @@ def test_cmd_remediation_log_appends_past_telemetry_cap(project_dir):
         "diff-100",
         "non-interactive --yes",
     )
-
-
-def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
-    import json
-
-    from tests.test_migrate import _setup_migrated
-
-    dr_dir = tmp_path / "dr_mirror"
-    dr_dir.mkdir()
-    _setup_migrated(tmp_path, monkeypatch)
-    cfg_path = os.path.join(".synlynk", "config.json")
-    with open(cfg_path, "w") as f:
-        json.dump({"dr_sync_path": str(dr_dir)}, f)
-
-    cmd_cost_log(agent="gemini", tokens_in=10, tokens_out=5)
-
-    md_path = os.path.join(".synlynk", "project-docs", "costs.md")
-    assert os.path.exists(md_path)
-    dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
-    assert os.path.exists(dr_path)
 
 
 def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
