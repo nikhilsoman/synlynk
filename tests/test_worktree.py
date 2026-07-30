@@ -1,6 +1,7 @@
 from synlynk.worktree import (
     WorktreeEntry,
     WorktreeVerdict,
+    _apply_nesting_floor,
     _build_worktree_entries,
     _classify_worktree,
     _parse_worktree_porcelain,
@@ -57,6 +58,38 @@ def test_build_worktree_entries_computes_nesting():
     by_path = {e.path: e for e in entries}
     assert by_path["/repo/.worktrees/parent"].nested_under is None
     assert by_path["/repo/.worktrees/parent/worktrees/job-1"].nested_under == "/repo/.worktrees/parent"
+
+
+def test_nesting_floor_nested_under_safe_parent_stays_safe():
+    parent = WorktreeVerdict(path="/p", branch="chore/parent", verdict="safe", reason="merged, direct ancestor")
+    child = WorktreeVerdict(
+        path="/p/worktrees/job-1", branch="dispatch/codex/job-1", verdict="safe",
+        reason="merged, direct ancestor", nested_under="/p",
+    )
+    result = _apply_nesting_floor([parent, child])
+    by_path = {v.path: v for v in result}
+    assert by_path["/p/worktrees/job-1"].verdict == "safe"
+
+
+def test_nesting_floor_raises_child_to_parent_verdict():
+    parent_needs_review = WorktreeVerdict(path="/p", branch="chore/parent", verdict="needs-review", reason="no PR found, 1 commits ahead of main")
+    child_safe = WorktreeVerdict(
+        path="/p/worktrees/job-1", branch="dispatch/codex/job-1", verdict="safe",
+        reason="merged, direct ancestor", nested_under="/p",
+    )
+    result = _apply_nesting_floor([parent_needs_review, child_safe])
+    by_path = {v.path: v for v in result}
+    assert by_path["/p/worktrees/job-1"].verdict == "needs-review"
+    assert "parent worktree not yet safe" in by_path["/p/worktrees/job-1"].reason
+
+    parent_unsafe = WorktreeVerdict(path="/q", branch="chore/parent2", verdict="unsafe", reason="PR #1 open — active work")
+    child_needs_review = WorktreeVerdict(
+        path="/q/worktrees/job-2", branch="dispatch/codex/job-2", verdict="needs-review",
+        reason="no PR found, 1 commits ahead of main", nested_under="/q",
+    )
+    result2 = _apply_nesting_floor([parent_unsafe, child_needs_review])
+    by_path2 = {v.path: v for v in result2}
+    assert by_path2["/q/worktrees/job-2"].verdict == "unsafe"
 
 
 def _entry(path="/repo/.worktrees/x", branch="chore/x"):

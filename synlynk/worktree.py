@@ -138,3 +138,30 @@ def _classify_worktree(
         entry.path, entry.branch, "needs-review",
         f"no PR found, {commits_ahead} commits ahead of main", entry.nested_under,
     )
+
+
+_VERDICT_RANK = {"safe": 0, "needs-review": 1, "unsafe": 2}
+
+
+def _apply_nesting_floor(verdicts: list) -> list:
+    """Second pass: a nested worktree's verdict can never be better than its
+    parent's.
+
+    `needs-review` is the floor unless the parent is `unsafe`.
+    """
+    by_path = {v.path: v for v in verdicts}
+    result = []
+    for v in verdicts:
+        parent = by_path.get(v.nested_under) if v.nested_under else None
+        if parent is None or parent.verdict == "safe":
+            result.append(v)
+            continue
+        floor_verdict = "unsafe" if parent.verdict == "unsafe" else "needs-review"
+        if _VERDICT_RANK[floor_verdict] > _VERDICT_RANK[v.verdict]:
+            result.append(WorktreeVerdict(
+                v.path, v.branch, floor_verdict,
+                f"{v.reason}; parent worktree not yet safe", v.nested_under,
+            ))
+        else:
+            result.append(v)
+    return result
