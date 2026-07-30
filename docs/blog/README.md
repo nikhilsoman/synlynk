@@ -87,6 +87,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [83](./83-prTBD-codex-approval-flag-correction.md) | PR #TBD — Codex Approval Flag Correction | TBD | 2026-07-30 |
 | [84](./84-pr600-team-py-timeout-config.md) | PR #600 — Team Panel Queries Get Per-Agent Timeout Overrides | [#600](https://github.com/nikhilsoman/synlynk/pull/600) | 2026-07-30 |
 | [85](./85-pr599-grok-flag-mapping.md) | PR #599 — Grok Flag Mapping: Real Permission Translation in `_permissions_to_flags` | [#599](https://github.com/nikhilsoman/synlynk/pull/599) | 2026-07-30 |
+| [86](./86-prTBD-remediation-audit-log.md) | PR #TBD — Phase 3: Remediation Audit Log | TBD | 2026-07-30 |
 
 
 ## Per-PR Post Template
