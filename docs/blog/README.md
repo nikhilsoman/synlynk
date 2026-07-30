@@ -86,6 +86,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [82](./82-pr587-harness-compatibility-capability-design.md) | PR #587 — Harness Compatibility & Capability: A Design Spec That Corrected Itself | [#587](https://github.com/nikhilsoman/synlynk/pull/587) | 2026-07-30 |
 | [83](./83-prTBD-codex-approval-flag-correction.md) | PR #TBD — Codex Approval Flag Correction | TBD | 2026-07-30 |
 | [84](./84-pr600-team-py-timeout-config.md) | PR #600 — Team Panel Queries Get Per-Agent Timeout Overrides | [#600](https://github.com/nikhilsoman/synlynk/pull/600) | 2026-07-30 |
+| [85](./85-pr599-grok-flag-mapping.md) | PR #599 — Grok Flag Mapping: Real Permission Translation in `_permissions_to_flags` | [#599](https://github.com/nikhilsoman/synlynk/pull/599) | 2026-07-30 |
 
 
 ## Per-PR Post Template

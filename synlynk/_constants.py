@@ -93,12 +93,12 @@ AGENT_CAPABILITY_BASELINES = {
         "cli": "grok",
         "can_gh_write": True,
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
             "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--always-approve"],
+            "required_flags": [],
         },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
