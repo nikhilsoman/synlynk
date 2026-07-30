@@ -83,6 +83,11 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [79](./79-pr536-doctor-health-checks-wiring.md) | PR #536 — Wiring HEALTH_CHECKS Into the Real synlynk doctor CLI Path (#525) | [#536](https://github.com/nikhilsoman/synlynk/pull/536) | 2026-07-25 |
 | [80](./80-pr542-state-engine-pr1-db-canonical.md) | PR #542 — State Engine PR1: DB-Canonical Roadmap, Memory, and Costs | [#542](https://github.com/nikhilsoman/synlynk/pull/542) | 2026-07-26 |
 | [81](./81-pr549-live3-content-recovery-rca.md) | PR #549 — LIVE-3: Recovering What a Merge Conflict Actually Deleted | [#549](https://github.com/nikhilsoman/synlynk/pull/549) | 2026-07-26 |
+| [82](./82-pr584-doctor-baseline-schema-parity.md) | PR #584 — #339: When "Green Across the Board" Meant the Checks Weren't Running | [#584](https://github.com/nikhilsoman/synlynk/pull/584) | 2026-07-29 |
+| [83](./83-pr588-stale-sop-detection.md) | PR #588 — #583: Teaching synlynk to Notice Its Own Instructions Went Stale | [#588](https://github.com/nikhilsoman/synlynk/pull/588) | 2026-07-29 |
+| [84](./84-pr589-codex-sandbox-flag-regression.md) | PR #589 — When #339's Own Fix Broke Every Codex Dispatch | [#589](https://github.com/nikhilsoman/synlynk/pull/589) | 2026-07-29 |
+| [85](./85-pr591-stale-sop-newline-spacing.md) | PR #591 — The Blank Line That Broke a Markdown Header | [#591](https://github.com/nikhilsoman/synlynk/pull/591) | 2026-07-30 |
+| [86](./86-pr592-claude-md-regeneration.md) | PR #592 — Finally, the CLAUDE.md Regeneration | [#592](https://github.com/nikhilsoman/synlynk/pull/592) | 2026-07-30 |
 
 
 ## Per-PR Post Template
