@@ -59,7 +59,7 @@ Nikhil asked for a deep research pass across four topics plus adjacent ones, exp
 - `_permissions_to_flags` (`synlynk/dispatch.py:148-173`) is the single chokepoint translating synlynk's internal permission grants into actual CLI flags, and it is **inconsistent per agent today**:
   - **agy**: fixed by PR #417/#475 (was the unconditional-empty-list bug reported in the incident — already resolved on `main`, contrary to what the live incident log suggested; worth confirming the incident job ran against a stale binary/deploy).
   - **claude**: maps through `_PERMISSION_TO_TOOL_MAP` into `--allowedTools` — the most complete mapping.
-  - **codex**: binary only (`--approval-policy untrusted` or nothing) — no fine-grained tool-level mapping exists or is possible given the sandbox model.
+  - **codex**: binary only (`--ask-for-approval untrusted` or nothing) — no fine-grained tool-level mapping exists or is possible given the sandbox model.
   - **grok**: falls through to `return []` — permissions computed by `_resolve_dispatch_permissions` are never translated into a Grok flag at all. This is the same *class* of bug the Agy incident found, still live, just not yet triggered into a visible failure (possibly because Grok inherits Claude's instructions and rarely needs fine-grained grants).
 - **#338** names this directly: "role-based permission/grants system is a no-op for Agy, Grok, and Local dispatch" — filed, open, unscoped to a PR yet.
 - **#419** — permission-denied jobs are misclassified as OK in telemetry. This means the exact failure mode from the incident (job runs, does nothing, silently denied) may not even be visible in `synlynk status`/cost tracking today — a monitoring gap layered on top of the permission gap.

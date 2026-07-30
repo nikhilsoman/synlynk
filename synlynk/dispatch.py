@@ -222,7 +222,7 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         if not has_write:
-            return ["--approval-policy", "untrusted"]
+            return ["--ask-for-approval", "untrusted"]
         return []
     if agent == "grok":
         return _grok_permission_flags(permissions)

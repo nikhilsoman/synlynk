@@ -2,7 +2,7 @@
 title: "PR #599 — Grok Flag Mapping: Real Permission Translation in `_permissions_to_flags`"
 date: 2026-07-30
 series: "Building the OS for Multi-Agent Development"
-post: 84
+post: 85
 pr: "#599"
 merged: status: open
 ---

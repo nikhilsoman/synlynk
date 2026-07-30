@@ -84,7 +84,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [80](./80-pr542-state-engine-pr1-db-canonical.md) | PR #542 — State Engine PR1: DB-Canonical Roadmap, Memory, and Costs | [#542](https://github.com/nikhilsoman/synlynk/pull/542) | 2026-07-26 |
 | [81](./81-pr549-live3-content-recovery-rca.md) | PR #549 — LIVE-3: Recovering What a Merge Conflict Actually Deleted | [#549](https://github.com/nikhilsoman/synlynk/pull/549) | 2026-07-26 |
 | [82](./82-pr587-harness-compatibility-capability-design.md) | PR #587 — Harness Compatibility & Capability: A Design Spec That Corrected Itself | [#587](https://github.com/nikhilsoman/synlynk/pull/587) | 2026-07-30 |
-| [84](./84-pr599-grok-flag-mapping.md) | PR #599 — Grok Flag Mapping: Real Permission Translation in `_permissions_to_flags` | [#599](https://github.com/nikhilsoman/synlynk/pull/599) | 2026-07-30 |
+| [83](./83-prTBD-codex-approval-flag-correction.md) | PR #TBD — Codex Approval Flag Correction | TBD | 2026-07-30 |
+| [84](./84-pr600-team-py-timeout-config.md) | PR #600 — Team Panel Queries Get Per-Agent Timeout Overrides | [#600](https://github.com/nikhilsoman/synlynk/pull/600) | 2026-07-30 |
+| [85](./85-pr599-grok-flag-mapping.md) | PR #599 — Grok Flag Mapping: Real Permission Translation in `_permissions_to_flags` | [#599](https://github.com/nikhilsoman/synlynk/pull/599) | 2026-07-30 |
 
 
 ## Per-PR Post Template
