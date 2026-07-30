@@ -121,3 +121,7 @@ AGENT_CAPABILITY_BASELINES = {
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
 }
+
+AGENT_PANEL_QUERY_TIMEOUT_SECONDS = {
+    "codex": 300,
+}

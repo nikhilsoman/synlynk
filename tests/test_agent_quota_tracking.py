@@ -235,6 +235,7 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
     finally:
         conn.close()
 
+
     written = sl.refresh_agent_quotas_from_telemetry(now=now)
     assert written > 0
 
@@ -257,6 +258,29 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         assert exhausted["degraded"] is False
     finally:
         conn.close()
+
+
+def test_phase_7_of_docssuperpowersplans20260730h_panel_timeout_override_respected(monkeypatch):
+    import synlynk.team as team
+
+    calls = []
+
+    class Result:
+        stdout = "panel output\n"
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Result()
+
+    monkeypatch.setattr(team.subprocess, "run", fake_run)
+
+    codex_output = team._run_agent_sync("codex", "review prompt")
+    claude_output = team._run_agent_sync("claude", "review prompt")
+
+    assert codex_output == "panel output"
+    assert claude_output == "panel output"
+    assert calls[0][1]["timeout"] == 300
+    assert calls[1][1]["timeout"] == 120
 
 
 def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):
