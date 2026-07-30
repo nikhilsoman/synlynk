@@ -42,6 +42,25 @@ def _write_repair_config(tmp_path, config):
     (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
 
 
+def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_at=None):
+    from synlynk import _migrate_db
+
+    _migrate_db(db)
+    last_probe_at = last_probe_at or time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.localtime(time.time())
+    )
+    db.execute(
+        """
+        INSERT INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (agent, agent, "1.0.0", compliance_status, "{}", "{}", "cap-hash", last_probe_at),
+    )
+    db.commit()
+
+
 def test_repair_sops_only_injects_synlynks_own_h_repo_specific_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_repair_config(
@@ -257,6 +276,173 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         assert exhausted["degraded"] is False
     finally:
         conn.close()
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_trust_gate_forces_no_coverage_for_fresh_probe(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db, last_probe_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+
+    result = _dispatch_capability_preflight(
+        "agy",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "degraded"
+    assert result["branch"] == "no-coverage"
+    assert result["probe_trustworthy"] is False
+    assert result["reason"]
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_stale_probe_branch_reprobes_and_blocks_on_timeout(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+    dispatch_globals = _dispatch_capability_preflight.__globals__
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    stale_probe_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 7200))
+    _seed_harness_record(db, last_probe_at=stale_probe_at)
+    original_trust = dispatch_globals["_probe_results_trustworthy"]
+    original_reprobe = dispatch_globals["_reprobe_harness_sync"]
+    dispatch_globals["_probe_results_trustworthy"] = lambda: True
+    dispatch_globals["_reprobe_harness_sync"] = lambda agent, timeout_s=120: {
+        "passed": False,
+        "reason": f"Fresh probe for '{agent}' timed out after {timeout_s}s.",
+    }
+    try:
+        result = _dispatch_capability_preflight(
+            "agy",
+            "ship the fix",
+            db_conn=db,
+            cwd=str(tmp_path),
+            requires=[],
+        )
+
+        assert result["passed"] is False
+        assert result["status"] == "blocked"
+        assert result["branch"] == "stale"
+        assert "timed out" in result["reason"]
+    finally:
+        dispatch_globals["_probe_results_trustworthy"] = original_trust
+        dispatch_globals["_reprobe_harness_sync"] = original_reprobe
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_failing_probe_branch_blocks(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+    dispatch_globals = _dispatch_capability_preflight.__globals__
+    from synlynk import _migrate_db
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+    last_probe_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime(time.time()))
+    db.execute(
+        """
+        INSERT INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("codex", "codex", "1.0.0", "degraded", "{}", "{}", "cap-hash", last_probe_at),
+    )
+    db.commit()
+    original_trust = dispatch_globals["_probe_results_trustworthy"]
+    dispatch_globals["_probe_results_trustworthy"] = lambda: True
+    try:
+        result = _dispatch_capability_preflight(
+            "codex",
+            "ship the fix",
+            db_conn=db,
+            cwd=str(tmp_path),
+            requires=[],
+        )
+
+        assert result["passed"] is False
+        assert result["status"] == "blocked"
+        assert result["branch"] == "failing"
+        assert "compliance_status" in result["reason"]
+    finally:
+        dispatch_globals["_probe_results_trustworthy"] = original_trust
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_no_coverage_required_blocks(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+
+    result = _dispatch_capability_preflight(
+        "agy",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=["docker"],
+    )
+
+    assert result["passed"] is False
+    assert result["status"] == "blocked"
+    assert result["branch"] == "no-coverage"
+    assert "doctor --fix agy" in result["remediation"]
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_no_coverage_optional_degrades(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+
+    result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "degraded"
+    assert result["branch"] == "no-coverage"
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_repo_artifact_presence_vs_declared_split(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+    (tmp_path / "Dockerfile").write_text("FROM python:3.11\n")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: ci\n")
+
+    soft_result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+    hard_result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=["docker"],
+    )
+
+    assert soft_result["passed"] is True
+    assert soft_result["status"] == "degraded"
+    assert "docker" in soft_result["reason"]
+    assert hard_result["passed"] is False
+    assert hard_result["status"] == "blocked"
+    assert hard_result["branch"] == "no-coverage"
 
 
 def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):

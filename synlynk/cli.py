@@ -463,6 +463,12 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
         help="Task needs gh pr review/merge - reroute to a capable agent unless --force-agent is set (see #426)")
     dispatch_parser.add_argument(
+        "--requires",
+        action="append",
+        default=[],
+        help="Declare a required capability for this dispatch (repeatable, e.g. docker, mcp, gh-write)",
+    )
+    dispatch_parser.add_argument(
         "--context-mode", choices=["none", "task", "full"], default="task",
         dest="context_mode", help="Context injection mode"
     )
@@ -882,12 +888,19 @@ def main() -> None:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
+                                 requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
                                  issue=getattr(args, "issue", None))
+            if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
+                print(f"Error: {job.get('reason')}")
+                remediation = job.get("remediation")
+                if remediation:
+                    print(f"  {remediation}")
+                sys.exit(1)
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):

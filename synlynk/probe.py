@@ -296,6 +296,28 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
     return updated
 
 
+def _scan_repo_requirements(repo_path: str) -> set:
+    """Return the repo artifacts that imply an operational requirement.
+
+    Presence-only scan: this reports signals from files/directories only and
+    intentionally avoids interpreting their contents.
+    """
+    repo_path = repo_path or "."
+    requirements = set()
+
+    def _exists(*parts) -> bool:
+        return os.path.exists(os.path.join(repo_path, *parts))
+
+    if _exists("Dockerfile") or _exists("docker-compose.yml"):
+        requirements.add("docker")
+    if _exists(".mcp.json"):
+        requirements.add("mcp")
+    if os.path.isdir(os.path.join(repo_path, ".github", "workflows")):
+        requirements.add("gh-actions")
+
+    return requirements
+
+
 def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
     import json as _j
 
