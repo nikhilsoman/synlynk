@@ -698,20 +698,6 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             applied_at TEXT NOT NULL
         )
     """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS remediation_actions (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp   TEXT NOT NULL,
-            agent       TEXT NOT NULL,
-            target_file TEXT NOT NULL,
-            exact_diff  TEXT NOT NULL,
-            operator    TEXT NOT NULL
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp "
-        "ON remediation_actions(timestamp)"
-    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
     )
@@ -2127,7 +2113,6 @@ def cmd_cost_log(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
         f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
     )
-
 
 
 def cmd_remediation_log(

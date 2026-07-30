@@ -872,18 +872,6 @@ CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
     applied_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS remediation_actions (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp   TEXT NOT NULL,
-    agent       TEXT NOT NULL,
-    target_file TEXT NOT NULL,
-    exact_diff  TEXT NOT NULL,
-    operator    TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
-    ON remediation_actions(timestamp);
-
 CREATE TABLE IF NOT EXISTS source_symbols (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     head_sha    TEXT NOT NULL,

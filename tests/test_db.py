@@ -197,49 +197,6 @@ def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
     assert os.path.exists(md_path)
     dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
     assert os.path.exists(dr_path)
-
-
-def test_cmd_remediation_log_appends_past_telemetry_cap(project_dir):
-    import synlynk
-    from synlynk.db import cmd_remediation_log
-
-    for idx in range(101):
-        hour = 10 + (idx // 60)
-        minute = idx % 60
-        cmd_remediation_log(
-            timestamp=f"2026-07-30 {hour:02d}:{minute:02d}",
-            agent="agy",
-            target_file="synlynk/doctor.py",
-            exact_diff=f"diff-{idx}",
-            operator="non-interactive --yes",
-        )
-
-    conn = synlynk._get_db()
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(remediation_actions)")}
-    rows = conn.execute(
-        "SELECT timestamp, agent, target_file, exact_diff, operator "
-        "FROM remediation_actions ORDER BY id ASC"
-    ).fetchall()
-    conn.close()
-
-    assert {"timestamp", "agent", "target_file", "exact_diff", "operator"} <= cols
-    assert len(rows) == 101
-    assert rows[0] == (
-        "2026-07-30 10:00",
-        "agy",
-        "synlynk/doctor.py",
-        "diff-0",
-        "non-interactive --yes",
-    )
-    assert rows[-1] == (
-        "2026-07-30 11:40",
-        "agy",
-        "synlynk/doctor.py",
-        "diff-100",
-        "non-interactive --yes",
-    )
-
-
 def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     from tests.test_migrate import _setup_migrated
     from synlynk import _insert_cost_row
