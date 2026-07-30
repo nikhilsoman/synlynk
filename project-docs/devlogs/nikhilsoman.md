@@ -1,4 +1,23 @@
 
+## 2026-07-30
+### Harness Compatibility & Capability (PR #587 plan) — all 7 phases merged
+
+**Shipped**, all onto `dispatch/claude/job-a7eb31f5` per plan `docs/superpowers/plans/2026-07-30-harness-compatibility-capability.md`:
+
+- **PR #598** — Phase 1: Codex `--ask-for-approval` baseline flag fix (`synlynk/_constants.py`).
+- **PR #599** — Phase 2: Grok flag mapping (`_permissions_to_flags` in `synlynk/dispatch.py`).
+- **PR #600** — Phase 7: configurable `_run_agent_sync` panel-query timeout, per-agent override (`synlynk/team.py`).
+- **PR #607** — Phase 3: remediation audit log foundation — `remediation_actions` table + `cmd_remediation_log` (`synlynk/db.py`).
+- **PR #606** — Phase 5: `_scan_repo_requirements` presence-only artifact scan (`synlynk/probe.py`), not yet wired into preflight.
+- **PR #612** — Phase 4: `synlynk doctor --fix agy` — JSON patch diff vs `~/.gemini/antigravity-cli/settings.json`, write-only-on-`--yes`, every write logged via Phase 3's audit log.
+- **PR #614** — Phase 6: preflight capability gate in `dispatch_agent()` — four-way branch (stale/failing/no-coverage-required/no-coverage-optional), `_probe_results_trustworthy()` correctly hardcoded to return `False` (blocked on #578/#580 unmerged), Phase 5 presence-vs-declared wiring, new generic `--requires <capability>` flag generalizing `--requires-gh-write`.
+
+**Deferred (correctly, per plan)**: Phase 4b (`UNVERIFIED_CAPABILITY` telemetry tag) remains unscheduled — hard-blocked on issue #419 landing.
+
+**Process finding — filed as issue #616**: every Codex-authored PR in this stack (4/4: #606, #607, #612, #614) opened against GitHub base `main` instead of the requested stack base, despite the dispatch CLI's own preflight correctly verifying the worktree base before spawning. Root cause not yet confirmed (likely a `gh pr create` fallback path inside Codex's sandbox that can't reach `api.github.com` for the real base). Fixed each time by routing a Grok dispatch to `gh pr edit --base` + resolve resulting conflicts — same pattern as the existing GitHub-write routing SOP (#426), just extended to cover base-branch correction, not only review/merge. Recommend the dispatch wrapper itself retarget the base immediately after Codex creates a PR (outside the sandbox), rather than relying on the reviewing agent to catch it each time.
+
+All PRs reviewed by a non-authoring agent (Grok) per PR Review Discipline, using the sanctioned COMMENT-approve fallback (#423) since all dispatched agents share one GitHub identity.
+
 ## 2026-07-11
 ### Epic #137 close-out — Fleet Dispatch Scheduler v1 shipped, v2 deferred to a tracked goal
 
