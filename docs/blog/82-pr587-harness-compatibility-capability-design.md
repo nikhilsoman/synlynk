@@ -4,7 +4,7 @@ date: 2026-07-30
 series: "Building the OS for Multi-Agent Development"
 post: 82
 pr: "#587"
-merged: status: open (DRAFT, pending Nikhil sign-off)
+merged: status: open (spec approved 2026-07-30; implementation plan committed)
 ---
 
 ## The Broader Goal at the End of the Previous PR
@@ -45,4 +45,4 @@ This PR is the first time synlynk's own design process caught itself asserting a
 
 ## Strategic Note: The Goal at the End of This PR
 
-The design spec is DRAFT, pending Nikhil's sign-off, per the Brainstorm-First Policy. Once approved, the next step is an implementation plan at `docs/superpowers/plans/`, before any code dispatch begins. Two follow-ups are explicitly deferred, not forgotten: the Version Snapshot table's IDE/web/desktop/API version cells for all four harnesses (captured only for CLI this pass), and making `synlynk/team.py:329`'s 120s panel timeout configurable so Codex doesn't need a manual bypass on every future self-review round.
+Nikhil approved the design spec on 2026-07-30. The implementation plan (`docs/superpowers/plans/2026-07-30-harness-compatibility-capability.md`) is now committed, per the Design → Plan → Build Sequence. It surfaced one finding the spec itself had anticipated but this session confirmed as live: the spec's own hard-gate dependency, #339, is closed, but its actual fix PRs (**#578, #580**) are still open and unmerged. That means the preflight-gating phase in the plan is scoped to run its "no-coverage" fallback path — never trusting a literal TC1-5 probe result — until those land, and the plan calls out re-checking their merge status immediately before that phase is dispatched rather than trusting this snapshot. Similarly, #419 (permission-denial telemetry misclassification) is confirmed open with no fix yet, so the plan tracks the `UNVERIFIED_CAPABILITY` telemetry tag as blocked follow-up rather than scheduling it now. Two smaller follow-ups remain explicitly deferred, not forgotten: the Version Snapshot table's IDE/web/desktop/API version cells for all four harnesses (captured only for CLI this pass), and making `synlynk/team.py:329`'s 120s panel timeout configurable so Codex doesn't need a manual bypass on every future self-review round — the plan schedules that as its own low-risk, dependency-free phase.

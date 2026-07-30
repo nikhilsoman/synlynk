@@ -1,6 +1,6 @@
 # Harness Compatibility & Capability — Design Spec
 
-**Status: DRAFT — pending Nikhil review, not approved. Amended per two `synlynk decide` panel rounds: (1) design critique (Claude/Codex/Grok; Agy returned no output), (2) per-harness maintainer self-review (Claude/Agy/Grok self-reported; Codex self-reported on retry after an initial 120s timeout) — see amendment notes.**
+**Status: APPROVED (2026-07-30, Nikhil).** Amended per two `synlynk decide` panel rounds: (1) design critique (Claude/Codex/Grok; Agy returned no output), (2) per-harness maintainer self-review (Claude/Agy/Grok self-reported; Codex self-reported on retry after an initial 120s timeout) — see amendment notes. Implementation plan: `docs/superpowers/plans/2026-07-30-harness-compatibility-capability.md`.
 
 **Date:** 2026-07-29 (amended 2026-07-30, twice)
 **Author:** Claude (PM), produced headless via `synlynk dispatch` in non-interactive mode
