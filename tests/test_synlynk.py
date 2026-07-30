@@ -395,11 +395,11 @@ def test_permissions_to_flags_claude_allowedtools():
     assert "Edit" in tools_str
 
 
-def test_permissions_to_flags_codex_approval_policy():
+def test_permissions_to_flags_codex_ask_for_approval():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("codex", ["read:*"])
-    assert "--approval-policy" in result
+    assert "--ask-for-approval" in result
     assert "untrusted" in result
 
 
@@ -4422,11 +4422,14 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
         captured["cmd"] = cmd
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"codex": ["review"]}})
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
     assert "workspace-write" in shell_cmd
+    assert "--ask-for-approval" in shell_cmd
+    assert shell_cmd.count("--ask-for-approval") == 1
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
 
 
