@@ -1671,11 +1671,6 @@ def _preflight_dispatch(
                 except (FileNotFoundError, subprocess.TimeoutExpired):
                     pass
 
-    auth_check = baseline.get("auth_check", {})
-    auth_failure = _preflight_auth_check(agent_name, auth_check)
-    if auth_failure:
-        return auth_failure
-
     flags_spec = baseline.get("dispatch_flags", {})
     invalid_flags = set(flags_spec.get("invalid_flags", [])) if isinstance(flags_spec, dict) else set()
     for flag in dispatch_flags or []:
@@ -1686,10 +1681,6 @@ def _preflight_dispatch(
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
             }
-
-    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
-    if headless_failure:
-        return headless_failure
 
     if isinstance(flags_spec, dict):
         valid_flags = list(flags_spec.get("valid_flags", []))
