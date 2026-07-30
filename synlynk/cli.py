@@ -319,7 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser.add_argument("--agent", default=None,
                               help="Probe a single agent instead of all known agents")
 
-    subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+    doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+    doctor_parser.add_argument("--fix", default=None,
+                               help="Apply a targeted remediation for the named agent (agy only)")
+    doctor_parser.add_argument("--yes", action="store_true",
+                               help="Write the proposed remediation without prompting")
 
     exit_parser = subparsers.add_parser(
         "exit", help="Remove synlynk from this repository (reversible via repair)")
@@ -1098,7 +1102,7 @@ def main() -> None:
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
-        sys.exit(cmd_doctor())
+        sys.exit(cmd_doctor(args))
     elif args.command == "roles":
         cmd_roles(fix=getattr(args, "fix", False))
     elif args.command == "release":

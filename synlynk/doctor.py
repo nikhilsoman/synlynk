@@ -1,6 +1,7 @@
 """synlynk doctor: installation health checks and TC-1..TC-5 compliance suite."""
 
 import json
+import difflib
 import os
 import shutil
 import tempfile
@@ -15,6 +16,7 @@ from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION
+from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
 from synlynk.probe import (
     _compute_capability_hash,
@@ -46,6 +48,17 @@ class HealthCheck:
     status: str
     message: str
     fix: str = ""
+
+
+@_dataclass
+class FixPlan:
+    agent: str
+    target_file: str
+    current_content: str
+    desired_content: str
+    diff: str
+    needs_write: bool
+    message: str
 
 
 def _hc_python_version() -> HealthCheck:
@@ -242,6 +255,119 @@ def _hc_version_current() -> HealthCheck:
     except Exception:
         return HealthCheck("version_current", "warn", "Version check failed (unexpected error)")
 
+
+def _agy_settings_path() -> str:
+    return os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
+
+
+def _load_json_file(path: str) -> dict:
+    if not os.path.exists(path):
+        return {}
+    with open(path) as fh:
+        content = fh.read().strip()
+    if not content:
+        return {}
+    return json.loads(content)
+
+
+def _dump_json(data: dict) -> str:
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
+def _build_agy_fix_plan() -> FixPlan:
+    target_file = _agy_settings_path()
+    current = _load_json_file(target_file)
+    permissions = current.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+    allow_rules = permissions.get("allow")
+    if not isinstance(allow_rules, list):
+        allow_rules = []
+
+    required_rules = [
+        "command(gh pr review)",
+        "command(gh pr comment)",
+        "command(gh pr merge)",
+    ]
+    desired_rules = list(allow_rules)
+    for rule in required_rules:
+        if rule not in desired_rules:
+            desired_rules.append(rule)
+
+    desired = dict(current)
+    desired_permissions = dict(permissions)
+    desired_permissions["allow"] = desired_rules
+    desired["permissions"] = desired_permissions
+
+    current_content = _dump_json(current)
+    desired_content = _dump_json(desired)
+    diff = "".join(
+        difflib.unified_diff(
+            current_content.splitlines(keepends=True),
+            desired_content.splitlines(keepends=True),
+            fromfile=target_file,
+            tofile=target_file,
+        )
+    )
+    needs_write = current_content != desired_content
+    message = (
+        "Agy settings.json is missing required GitHub write allow-rules."
+        if needs_write
+        else "Agy settings.json already contains required GitHub write allow-rules."
+    )
+    return FixPlan(
+        agent="agy",
+        target_file=target_file,
+        current_content=current_content,
+        desired_content=desired_content,
+        diff=diff,
+        needs_write=needs_write,
+        message=message,
+    )
+
+
+def _confirm_fix(prompt: str, args=None) -> bool:
+    if getattr(args, "yes", False):
+        return True
+    if not sys.stdin.isatty():
+        return False
+    response = input(f"{prompt} [y/N] ").strip().lower()
+    return response in {"y", "yes"}
+
+
+def _apply_fix_plan(plan: FixPlan, operator: str) -> None:
+    os.makedirs(os.path.dirname(plan.target_file), exist_ok=True)
+    with open(plan.target_file, "w") as fh:
+        fh.write(plan.desired_content)
+    cmd_remediation_log(
+        agent=plan.agent,
+        target_file=plan.target_file,
+        exact_diff=plan.diff,
+        operator=operator,
+    )
+
+
+def cmd_doctor_fix(agent: str, args=None) -> int:
+    if agent != "agy":
+        raise ValueError("synlynk doctor --fix currently supports only agy")
+
+    plan = _build_agy_fix_plan()
+    print(plan.diff or f"No diff for {plan.target_file} (already compliant).")
+    if not plan.needs_write:
+        print(f"  {plan.message}")
+        return 0
+
+    should_write = _confirm_fix(f"Apply remediation to {plan.target_file}?", args=args)
+    if not should_write:
+        print("  Aborted. No files written.")
+        return 1
+
+    operator = "non-interactive --yes" if getattr(args, "yes", False) else "interactive confirm"
+    _apply_fix_plan(plan, operator=operator)
+    print(f"  Wrote {plan.target_file}")
+    return 0
+
+
 def _hc_model_rates() -> HealthCheck:
     from synlynk.costs import _load_model_rates
     rates = _load_model_rates()
@@ -343,6 +469,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
 
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
+    if args is not None and getattr(args, "fix", None):
+        return cmd_doctor_fix(getattr(args, "fix"), args=args)
     if checks is not None:
         return 1 if _print_health_check_report(checks) else 0
 
