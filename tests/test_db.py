@@ -197,6 +197,8 @@ def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
     assert os.path.exists(md_path)
     dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
     assert os.path.exists(dr_path)
+
+
 def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     from tests.test_migrate import _setup_migrated
     from synlynk import _insert_cost_row

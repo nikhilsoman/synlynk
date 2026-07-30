@@ -2114,7 +2114,6 @@ def cmd_cost_log(
         f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
     )
 
-
 def cmd_remediation_log(
     agent: str,
     target_file: str,
