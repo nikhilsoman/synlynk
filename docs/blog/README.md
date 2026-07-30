@@ -91,6 +91,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [86](./86-prTBD-remediation-audit-log.md) | PR #TBD — Phase 3: Remediation Audit Log | TBD | 2026-07-30 |
 | [87](./87-pr606-scan-repo-requirements.md) | PR #606 — `_scan_repo_requirements`: Presence-Only Repo Requirement Discovery | [#606](https://github.com/nikhilsoman/synlynk/pull/606) | 2026-07-30 |
 | [88](./88-prTBD-doctor-fix-agy.md) | PR #TBD — Phase 4: synlynk doctor --fix agy | TBD | 2026-07-30 |
+| [89](./89-pr614-dispatch-preflight-gate.md) | PR #614 — Dispatch Preflight Capability Gate | [#614](https://github.com/nikhilsoman/synlynk/pull/614) | 2026-07-31 |
 
 
 
