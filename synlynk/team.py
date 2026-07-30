@@ -15,7 +15,10 @@ import webbrowser
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import (
+    AGENT_CAPABILITY_BASELINES,
+    AGENT_PANEL_QUERY_TIMEOUT_SECONDS,
+)
 
 
 def _pkg(name: str, default=None):
@@ -326,7 +329,13 @@ def _sign_capability_rating(data: dict) -> str:
     return ""
 
 
-def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
+def _panel_query_timeout(agent: str, timeout: int | None = None) -> int:
+    if timeout is not None:
+        return timeout
+    return AGENT_PANEL_QUERY_TIMEOUT_SECONDS.get(agent, 120)
+
+
+def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
     """Run an agent synchronously and return its stdout. Returns '' on any failure."""
     import tempfile as _tmp
 
@@ -340,6 +349,7 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
     flags = agent_cfg["non_interactive_flags"]
     prompt_via_arg = agent_cfg.get("prompt_via_arg", False)
     prompt_flag = agent_cfg.get("prompt_flag")
+    effective_timeout = _panel_query_timeout(agent, timeout)
 
     prompt_file = None
     try:
@@ -354,14 +364,14 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int = 120) -> str:
                 cmd = [cli] + flags + [prompt]
             result = subprocess.run(
                 cmd,
-                capture_output=True, text=True, timeout=timeout
+                capture_output=True, text=True, timeout=effective_timeout
             )
         else:
             with open(prompt_file) as stdin_file:
                 result = subprocess.run(
                     [cli] + flags,
                     stdin=stdin_file, capture_output=True,
-                    text=True, timeout=timeout
+                    text=True, timeout=effective_timeout
                 )
         return result.stdout.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
