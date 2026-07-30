@@ -841,7 +841,9 @@ def test_harden_preflight_dispatch_check_agent_auth_fails_loudly_on_not_signed_i
     tmp_path, monkeypatch
 ):
     import sqlite3
+    import socket
     import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
     from synlynk.dispatch import _preflight_dispatch
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -878,6 +880,19 @@ def test_harden_preflight_dispatch_check_agent_auth_fails_loudly_on_not_signed_i
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+    class _SuccessSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _SuccessSocket())
 
     result = _preflight_dispatch("grok", ["--always-approve"], db_conn=db)
 
@@ -886,11 +901,131 @@ def test_harden_preflight_dispatch_check_agent_auth_fails_loudly_on_not_signed_i
     assert "not authenticated" in result["reason"].lower()
 
 
-def test_harden_preflight_dispatch_check_agent_au_blocks_known_headless_permission_denial(
+def _seed_hardened_preflight_record(db, agent_name: str, baseline: dict):
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            agent_name,
+            agent_name,
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        ),
+    )
+    db.commit()
+
+
+def test_fixdispatch_harden_reporting_and_preflight_allows_agy_dangerously_skip_permissions_flag(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    _seed_hardened_preflight_record(db, "agy", sl.AGENT_CAPABILITY_BASELINES["agy"])
+
+    class _SuccessSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _SuccessSocket())
+
+    result = _preflight_dispatch(
+        "agy",
+        ["--dangerously-skip-permissions"],
+        db_conn=db,
+        permissions=["read:*"],
+    )
+
+    assert result["passed"] is True
+    assert result["reason"] is None
+
+
+def test_fixdispatch_harden_reporting_and_preflight_blocks_invalid_flag(
     tmp_path, monkeypatch
 ):
     import sqlite3
     import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
+
+    result = _preflight_dispatch("grok", ["--yes"], db_conn=db)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "--yes" in result["reason"]
+
+
+def test_fixdispatch_harden_reporting_and_preflight_blocks_unreachable_endpoint(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+
+    class _FailSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            raise OSError("unreachable")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _FailSocket())
+
+    result = _preflight_dispatch("grok", ["--always-approve"], db_conn=db)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "cli-chat-proxy.grok.com" in result["reason"]
+
+
+def test_harden_preflight_dispatch_check_agent_au_blocks_known_headless_permission_denial(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
     from synlynk.dispatch import _preflight_dispatch
 
     monkeypatch.chdir(tmp_path)
@@ -947,6 +1082,19 @@ def test_harden_preflight_dispatch_check_agent_au_blocks_known_headless_permissi
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+    class _SuccessSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _SuccessSocket())
 
     result = _preflight_dispatch("agy", [], db_conn=db, permissions=["read:*"])
 

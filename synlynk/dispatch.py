@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 from dataclasses import asdict
 import select
 import signal
@@ -790,6 +791,14 @@ def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
     if not auth_check:
         return None
 
+    probe_cmd = auth_check.get("probe")
+    if not probe_cmd:
+        return None
+
+    probe_exe = probe_cmd[0] if isinstance(probe_cmd, (list, tuple)) and probe_cmd else None
+    if not probe_exe or shutil.which(probe_exe) is None:
+        return None
+
     required_paths = [
         os.path.expanduser(path)
         for path in auth_check.get("required_paths", [])
@@ -805,10 +814,6 @@ def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
                 f"file(s) {', '.join(missing_paths)}. Re-authenticate before dispatch."
             ),
         }
-
-    probe_cmd = auth_check.get("probe")
-    if not probe_cmd:
-        return None
 
     try:
         probe_result = subprocess.run(
@@ -1053,11 +1058,6 @@ def _preflight_dispatch(
                 except (FileNotFoundError, subprocess.TimeoutExpired):
                     pass
 
-    auth_check = baseline.get("auth_check", {})
-    auth_failure = _preflight_auth_check(agent_name, auth_check)
-    if auth_failure:
-        return auth_failure
-
     flags_spec = baseline.get("dispatch_flags", {})
     invalid_flags = set(flags_spec.get("invalid_flags", [])) if isinstance(flags_spec, dict) else set()
     for flag in dispatch_flags or []:
@@ -1068,10 +1068,6 @@ def _preflight_dispatch(
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
             }
-
-    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
-    if headless_failure:
-        return headless_failure
 
     if isinstance(flags_spec, dict):
         valid_flags = list(flags_spec.get("valid_flags", []))
@@ -1122,6 +1118,15 @@ def _preflight_dispatch(
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
             }
+
+    auth_check = baseline.get("auth_check", {})
+    auth_failure = _preflight_auth_check(agent_name, auth_check)
+    if auth_failure:
+        return auth_failure
+
+    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
+    if headless_failure:
+        return headless_failure
 
     if db_conn and _task_hint:
         try:
