@@ -6718,6 +6718,72 @@ def test_cmd_doctor_with_warn_only(tmp_path, monkeypatch, capsys):
     assert "advisory warning" in out
 
 
+def test_doctor_fix_agy_prints_diff_and_writes_on_yes(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings_dir = tmp_path / ".gemini" / "antigravity-cli"
+    settings_dir.mkdir(parents=True)
+    settings_path = settings_dir / "settings.json"
+    settings_path.write_text(json.dumps({"permissions": {"allow": ["command(gh pr review)"]}}, indent=2))
+
+    args = SimpleNamespace(fix="agy", yes=True)
+    exit_code = synlynk.cmd_doctor(args=args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "command(gh pr merge)" in out
+    assert "Wrote" in out
+    saved = json.loads(settings_path.read_text())
+    assert saved["permissions"]["allow"] == [
+        "command(gh pr review)",
+        "command(gh pr comment)",
+        "command(gh pr merge)",
+    ]
+
+    conn = synlynk._get_db()
+    try:
+        row = conn.execute(
+            "SELECT agent, target_file, exact_diff, operator "
+            "FROM remediation_actions ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row[0] == "agy"
+    assert row[1].endswith("settings.json")
+    assert "command(gh pr merge)" in row[2]
+    assert row[3] == "non-interactive --yes"
+
+
+def test_doctor_fix_agy_without_yes_aborts_when_noninteractive(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings_dir = tmp_path / ".gemini" / "antigravity-cli"
+    settings_dir.mkdir(parents=True)
+    settings_path = settings_dir / "settings.json"
+    settings_path.write_text(json.dumps({"permissions": {"allow": []}}, indent=2))
+    monkeypatch.setattr("synlynk.doctor.sys.stdin.isatty", lambda: False)
+
+    args = SimpleNamespace(fix="agy", yes=False)
+    exit_code = synlynk.cmd_doctor(args=args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "command(gh pr merge)" in out
+    assert "Aborted" in out
+    assert json.loads(settings_path.read_text())["permissions"]["allow"] == []
+
+
 def test_health_check_dataclass():
     import synlynk
     hc = synlynk.HealthCheck("test", "ok", "msg")
