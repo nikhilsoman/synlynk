@@ -83,7 +83,11 @@ AGENT_CAPABILITY_BASELINES = {
                 "--dangerously-skip-permissions",
                 "--print",
             ],
-            "required_flags": ["--sandbox"],
+            # Sandbox mode is already supplied with its value via non_interactive_flags
+            # (-s workspace-write). Do NOT put --sandbox here: required_flags are appended
+            # as bare flags with no values by _dispatch_flags_for_agent(), and a bare
+            # --sandbox makes codex CLI fail with "a value is required".
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,

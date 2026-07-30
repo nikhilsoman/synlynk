@@ -26,7 +26,11 @@ def test_agent_capability_baselines_exist():
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
-    assert synlynk.AGENT_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == ["--sandbox"]
+    # Sandbox is enforced via non_interactive_flags (-s workspace-write), not required_flags
+    # (required_flags are bare flags with no values; bare --sandbox breaks codex CLI).
+    assert synlynk.AGENT_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == []
+    assert "-s" in synlynk.AGENT_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
+    assert "workspace-write" in synlynk.AGENT_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
     assert synlynk.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]["non_interactive_flag"] == "--single"
     assert synlynk.AGENT_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
 
@@ -4462,6 +4466,8 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     assert "codex exec" in shell_cmd
     assert "workspace-write" in shell_cmd
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
+    # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
+    assert "--sandbox" not in shell_cmd
 
 
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
