@@ -1,6 +1,8 @@
 import os
 import sqlite3
 
+import pytest
+
 
 class _DummySocket:
     def close(self):
@@ -328,3 +330,39 @@ def test_read_toml_string_value_top_level_and_section(tmp_path):
     assert _read_toml_string_value(str(path), "default", section="models") == "grok-test"
     assert _read_toml_string_value(str(path), "missing") is None
     assert _read_toml_string_value(str(path / "nope"), "model") is None
+
+
+def _make_repo_requirement_fixture(repo_path, requirements):
+    if "docker" in requirements:
+        (repo_path / "Dockerfile").write_text("FROM scratch\n")
+
+    if "mcp" in requirements:
+        (repo_path / ".mcp.json").write_text('{"name": "fixture"}\n')
+
+    if "gh-actions" in requirements:
+        workflows = repo_path / ".github" / "workflows"
+        workflows.mkdir(parents=True, exist_ok=True)
+        (workflows / "ci.yml").write_text("name: ci\n")
+
+
+@pytest.mark.parametrize(
+    ("requirements", "expected"),
+    [
+        (set(), set()),
+        ({"docker"}, {"docker"}),
+        ({"mcp"}, {"mcp"}),
+        ({"gh-actions"}, {"gh-actions"}),
+        ({"docker", "mcp"}, {"docker", "mcp"}),
+        ({"docker", "gh-actions"}, {"docker", "gh-actions"}),
+        ({"mcp", "gh-actions"}, {"mcp", "gh-actions"}),
+        ({"docker", "mcp", "gh-actions"}, {"docker", "mcp", "gh-actions"}),
+    ],
+)
+def test_scan_repo_requirements_detects_artifact_presence(tmp_path, requirements, expected):
+    from synlynk.probe import _scan_repo_requirements
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _make_repo_requirement_fixture(repo, requirements)
+
+    assert _scan_repo_requirements(str(repo)) == expected
