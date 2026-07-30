@@ -19,6 +19,7 @@ def test_migrate_db_creates_new_tables(tmp_path, monkeypatch):
     assert "roadmap_arcs" in tables
     assert "roadmap_phases" in tables
     assert "cost_entries" in tables
+    assert "remediation_actions" in tables
     assert "devlog_entries" in tables
 
 

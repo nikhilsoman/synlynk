@@ -145,6 +145,60 @@ def _resolve_dispatch_permissions(
     return sorted(effective)
 
 
+_GROK_PERMISSION_RULES = {
+    "read:*": ["Read", "Grep", "Glob", "LS"],
+    "write:src/": ["Edit", "Write", "MultiEdit"],
+    "write:docs/": ["Edit", "Write", "MultiEdit"],
+    "run:tests": ["Bash(pytest:*)"],
+    "run:shell": ["Bash"],
+}
+
+
+def _grok_permission_flags(permissions: list) -> list:
+    """Translate resolved permission strings into Grok CLI permission flags."""
+    permission_set = {perm for perm in (permissions or []) if perm}
+    if not permission_set:
+        return []
+
+    if set(_GROK_PERMISSION_RULES).issubset(permission_set):
+        return ["--always-approve"]
+
+    flags = ["--permission-mode", "dontAsk"]
+    allow_rules = []
+    has_write = "write:src/" in permission_set or "write:docs/" in permission_set
+    has_tests = "run:tests" in permission_set
+    has_shell = "run:shell" in permission_set
+
+    for perm in permissions or []:
+        rules = _GROK_PERMISSION_RULES.get(perm)
+        if not rules:
+            continue
+        allow_rules.extend(rules)
+
+    if not allow_rules:
+        return []
+
+    deny_rules = []
+    if not has_write:
+        deny_rules.extend(["Edit", "Write", "MultiEdit"])
+    if not (has_tests or has_shell):
+        deny_rules.append("Bash")
+
+    seen = set()
+    for rule in allow_rules:
+        if rule not in seen:
+            flags.extend(["--allow", rule])
+            seen.add(rule)
+
+    seen = set()
+    for rule in deny_rules:
+        if rule not in seen:
+            flags.extend(["--deny", rule])
+            seen.add(rule)
+
+    return flags
+
+
 def _permissions_to_flags(agent: str, permissions: list) -> list:
     """Translate permission strings into agent-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
@@ -168,8 +222,10 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         if not has_write:
-            return ["--approval-policy", "untrusted"]
+            return ["--ask-for-approval", "untrusted"]
         return []
+    if agent == "grok":
+        return _grok_permission_flags(permissions)
     return []
 
 

@@ -160,6 +160,42 @@ def _scan_command_palette(agent_name: str, harness_name: str, cli_version: str, 
     return list(found_commands.keys())
 
 
+def _scan_repo_requirements(repo_path: str) -> set[str]:
+    """Return repo artifact requirements detected by presence only.
+
+    This is a discovery primitive, not a policy decision. The caller decides
+    whether a detected requirement should block, degrade, or be ignored.
+    """
+    requirements = set()
+    root = os.fspath(repo_path)
+
+    if not root:
+        return requirements
+
+    try:
+        if any(
+            os.path.exists(os.path.join(root, name))
+            for name in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml")
+        ):
+            requirements.add("docker")
+
+        if any(
+            os.path.exists(os.path.join(root, name))
+            for name in (".mcp.json", "mcp.json")
+        ):
+            requirements.add("mcp")
+
+        workflows_dir = os.path.join(root, ".github", "workflows")
+        if os.path.isdir(workflows_dir):
+            with os.scandir(workflows_dir) as entries:
+                if any(True for _ in entries):
+                    requirements.add("gh-actions")
+    except OSError:
+        pass
+
+    return requirements
+
+
 _FENCE_OPEN_PATTERN = _re.compile(
     r"<!-- synlynk:harness v\S+ verified:\S+ -->.*?<!-- /synlynk:harness -->",
     _re.DOTALL,
@@ -294,28 +330,6 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
         updated.append(fpath)
 
     return updated
-
-
-def _scan_repo_requirements(repo_path: str) -> set:
-    """Return the repo artifacts that imply an operational requirement.
-
-    Presence-only scan: this reports signals from files/directories only and
-    intentionally avoids interpreting their contents.
-    """
-    repo_path = repo_path or "."
-    requirements = set()
-
-    def _exists(*parts) -> bool:
-        return os.path.exists(os.path.join(repo_path, *parts))
-
-    if _exists("Dockerfile") or _exists("docker-compose.yml"):
-        requirements.add("docker")
-    if _exists(".mcp.json"):
-        requirements.add("mcp")
-    if os.path.isdir(os.path.join(repo_path, ".github", "workflows")):
-        requirements.add("gh-actions")
-
-    return requirements
 
 
 def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:

@@ -28,11 +28,11 @@ The spec hard-gates two things on external issues. Checked at plan-authoring tim
 
 Each phase is one PR, one branch, one dispatch. Branch names follow `fix/<phase-slug>` or `feat/<phase-slug>` per repo convention. All are Python/CLI/tests work in `synlynk/` — routed to **Codex** per the Capability-Based Task Allocation table, except GitHub-write actions on each PR (review/merge), which route to **Grok only** per the GitHub write routing SOP.
 
-### Phase 1 — Codex baseline fix: `--ask-for-approval`, not `--approval-policy`
+### Phase 1 — Codex baseline fix: `--ask-for-approval`, not the legacy Codex approval-flag name
 **Why first:** zero-risk, self-contained bugfix already fully specified by the canon doc; no dependency on anything else in this plan.
 - File: `synlynk/_constants.py`, `AGENT_CAPABILITY_BASELINES` Codex entry.
 - Change the approval-flag name and its enum values (`untrusted|on-request|never`) to match `docs/reference/harness-capability-matrix.md`'s Codex section.
-- Grep the codebase for any other `--approval-policy` references (dispatch.py flag construction, tests, docs) and fix those too — this was a baseline-data error, likely propagated wherever Codex approval flags are constructed.
+- Grep the codebase for any other legacy Codex approval-flag references (dispatch.py flag construction, tests, docs) and fix those too — this was a baseline-data error, likely propagated wherever Codex approval flags are constructed.
 - Test: unit test asserting the constructed Codex CLI args use `--ask-for-approval`, not the old flag.
 - Dispatch: Codex, `--force-agent`, context-mode full.
 
