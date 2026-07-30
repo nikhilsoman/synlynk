@@ -259,6 +259,89 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         conn.close()
 
 
+def _flag_values(flags, name):
+    values = []
+    for idx, flag in enumerate(flags):
+        if flag == name and idx + 1 < len(flags):
+            values.append(flags[idx + 1])
+    return values
+
+
+@pytest.mark.parametrize(
+    "role_name, expected_allow, expected_deny",
+    [
+        ("pm", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        ("review", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        ("deploy", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        (
+            "implement",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "test",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "refactor",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "css",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "templates",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "content",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "canvas",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+        (
+            "js",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+        (
+            "infra",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+    ],
+)
+def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(role_name, expected_allow, expected_deny):
+    from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
+
+    permissions = _resolve_dispatch_permissions("grok", role_list=[role_name])
+    flags = _permissions_to_flags("grok", permissions)
+
+    assert flags[:2] == ["--permission-mode", "dontAsk"]
+    assert "--always-approve" not in flags
+    assert set(_flag_values(flags, "--allow")) == expected_allow
+    assert set(_flag_values(flags, "--deny")) == expected_deny
+
+
+def test_phase_2_of_docssuperpowersplans20260730h_grok_regression_no_empty_fallthrough():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("grok", ["read:*"])
+    assert flags
+    assert flags[:2] == ["--permission-mode", "dontAsk"]
+    assert "--always-approve" not in flags
+    assert "Read" in _flag_values(flags, "--allow")
+
+
 def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):
     """_best_agent_for_story must call telemetry refresh so gate sees real usage."""
     import synlynk as sl
