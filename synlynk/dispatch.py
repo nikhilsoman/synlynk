@@ -586,7 +586,7 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
 
 
 def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return sorted file paths changed in a worktree since the resolved merge-base."""
+    """Return sorted file paths committed in a worktree since the resolved merge-base."""
     if not worktree_path or not os.path.isdir(worktree_path):
         return []
 
@@ -615,27 +615,6 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
             path = path.strip()
             if path:
                 touched.add(path)
-
-    try:
-        status_result = subprocess.run(
-            ["git", "-C", worktree_path, "status", "--short", "--porcelain"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except Exception:
-        status_result = None
-
-    if status_result and status_result.returncode == 0:
-        for line in (status_result.stdout or "").splitlines():
-            if len(line) < 4:
-                continue
-            path = line[3:].strip()
-            if not path:
-                continue
-            if " -> " in path:
-                path = path.split(" -> ", 1)[1].strip()
-            touched.add(path)
 
     return sorted(touched)
 
@@ -1692,6 +1671,11 @@ def _preflight_dispatch(
                 except (FileNotFoundError, subprocess.TimeoutExpired):
                     pass
 
+    auth_check = baseline.get("auth_check", {})
+    auth_failure = _preflight_auth_check(agent_name, auth_check)
+    if auth_failure:
+        return auth_failure
+
     flags_spec = baseline.get("dispatch_flags", {})
     invalid_flags = set(flags_spec.get("invalid_flags", [])) if isinstance(flags_spec, dict) else set()
     for flag in dispatch_flags or []:
@@ -1702,6 +1686,10 @@ def _preflight_dispatch(
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
             }
+
+    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
+    if headless_failure:
+        return headless_failure
 
     if isinstance(flags_spec, dict):
         valid_flags = list(flags_spec.get("valid_flags", []))
