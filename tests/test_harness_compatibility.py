@@ -238,8 +238,12 @@ def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch)
     stub = tmp_path / "agy"
     stub.write_text("#!/bin/sh\necho 'agy 2.0.0'\n")
     stub.chmod(0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
     monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
+    auth_state = tmp_path / ".gemini" / "antigravity-cli"
+    auth_state.mkdir(parents=True, exist_ok=True)
+    (auth_state / "jetski_state.pbtxt").write_text("session: valid\n")
 
     sentinel_events = []
     original_write = synlynk._write_sentinel_alert
@@ -250,6 +254,6 @@ def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch)
 
     monkeypatch.setattr(synlynk, "_write_sentinel_alert", capture_sentinel)
 
-    result = _preflight_dispatch("agy", [], db_conn=db)
+    result = _preflight_dispatch("agy", [], db_conn=db, permissions=["write:src/"])
     assert result["passed"] is True
     assert "HARNESS_VERSION_DRIFT" in sentinel_events

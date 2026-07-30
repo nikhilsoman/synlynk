@@ -88,7 +88,7 @@ def test_extract_build_parser_from_clipy_main_for_cli_introspection():
     assert args.task == "build"
 
 
-def test_dispatch_real_files_touched_via_git_diff_lists_committed_and_dirty_files(git_worktree_repo, monkeypatch):
+def test_dispatch_real_files_touched_via_git_diff_lists_committed_files_only(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
     job = _dispatch_git_worktree_job(monkeypatch)
@@ -102,7 +102,7 @@ def test_dispatch_real_files_touched_via_git_diff_lists_committed_and_dirty_file
 
     touched = sl._worktree_files_touched(job["worktree_path"])
 
-    assert touched == ["alpha.txt", "beta.txt", "dirty.txt"]
+    assert touched == ["alpha.txt", "beta.txt"]
 
 
 def test_dispatch_real_files_touched_via_git_diff_clean_worktree_returns_empty(git_worktree_repo, monkeypatch):
@@ -142,6 +142,27 @@ def test_dispatch_real_files_touched_via_git_diff_summary_lists_and_truncates_fi
     assert "          src/file-19.py" in text
     assert "          src/file-20.py" not in text
     assert "          +3 more" in text
+
+
+def test_dispatch_real_files_touched_via_git_diff_ignores_uncommitted_noise_in_summary():
+    import synlynk as sl
+
+    text = sl._format_job_summary(
+        "job-123",
+        "codex",
+        "story-9",
+        0,
+        12.4,
+        100,
+        20,
+        0.14,
+        ["alpha.txt", "beta.txt"],
+        worktree_path="worktrees/job-123",
+        worktree_branch="dispatch/codex/job-123",
+    )
+
+    assert "files:    2 touched" in text
+    assert "dirty.txt" not in text
 
 
 def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_worktree_repo, monkeypatch):
@@ -747,8 +768,7 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
         summary = f.read()
 
     assert "status:   FAILED_UNVERIFIED (exit unknown)" in summary
-    assert "files:    1 touched" in summary
-    assert "late-write.txt" in summary
+    assert "files:    0 touched" in summary
     assert "git-state recheck recovered" in summary
 
 

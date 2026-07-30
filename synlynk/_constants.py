@@ -123,6 +123,15 @@ AGENT_CAPABILITY_BASELINES = {
             "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
             "optional_endpoints": [],
         },
+        "auth_check": {
+            "probe": ["agy", "--version"],
+            "required_paths": ["~/.gemini/antigravity-cli/jetski_state.pbtxt"],
+            "unauthenticated_markers": [
+                "not signed in",
+                "sign in",
+                "login",
+            ],
+        },
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
@@ -146,6 +155,14 @@ AGENT_CAPABILITY_BASELINES = {
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
             "optional_endpoints": [],
+        },
+        "auth_check": {
+            "probe": ["grok", "--version"],
+            "unauthenticated_markers": [
+                "not signed in",
+                "sign in",
+                "login",
+            ],
         },
         "roles": ["builder", "architect"],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],

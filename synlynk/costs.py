@@ -129,7 +129,8 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
 
 def _log_has_permission_denied_signature(output_text: str) -> bool:
     """Detect the headless permission auto-denial signature in agent output."""
-    lines = [line for line in (output_text or "").splitlines() if line.strip()]
+    text = output_text or ""
+    lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
         return False
 
@@ -138,35 +139,34 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
         "permission that headless mode cannot prompt for",
         "auto-denied",
     )
-    signature_window = lines[-40:]
-    try:
-        last_event = json.loads(signature_window[-1].strip())
-    except (ValueError, TypeError, IndexError):
-        last_event = None
-    else:
-        if isinstance(last_event, dict):
-            signature_window = signature_window[:-1]
-
+    signature_window = lines[-80:]
     lowered_window = "\n".join(
         line.lower() for line in signature_window if line == line.lstrip()
     )
     if lowered_window and any(phrase in lowered_window for phrase in signature_phrases):
         return True
 
-    try:
-        event = json.loads(lines[-1].strip())
-    except (ValueError, TypeError):
-        return False
+    # Some logs append a short trailer after the structured result. Scan the
+    # tail backwards so the signal stays deterministic when the JSON line is
+    # not literally the final non-empty line.
+    for line in reversed(signature_window):
+        try:
+            event = json.loads(line.strip())
+        except (ValueError, TypeError):
+            continue
 
-    if not isinstance(event, dict) or event.get("status") != "SUCCESS":
-        return False
-    if event.get("response", None) != "":
-        return False
-    try:
-        num_turns = int(event.get("num_turns", 0))
-    except (TypeError, ValueError):
-        return False
-    return num_turns <= 1
+        if not isinstance(event, dict) or event.get("status") != "SUCCESS":
+            continue
+        if event.get("response", None) != "":
+            continue
+        try:
+            num_turns = int(event.get("num_turns", 0))
+        except (TypeError, ValueError):
+            continue
+        if num_turns <= 1:
+            return True
+
+    return False
 
 
 def _extract_grok_structured(output_text: str) -> Optional[_TokenCounts]:

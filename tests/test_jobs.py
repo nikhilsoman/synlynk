@@ -196,6 +196,7 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     log_path.write_text(
         "jetski: no output produced - a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied\n"
         '{"conversation_id":"job-a59f065a","status":"SUCCESS","response":"","duration_seconds":149,"num_turns":1,"usage":{"input_tokens":10,"output_tokens":0}}\n'
+        "postscript: cleanup complete\n"
     )
     (log_path.parent / "job-denied.log.exit").write_text("0")
 
