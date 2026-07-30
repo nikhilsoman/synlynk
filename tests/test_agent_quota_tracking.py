@@ -130,6 +130,54 @@ def test_repair_sops_only_injects_synlynks_own_h_default_config_keeps_current_sh
     assert "| implement / test / css / templates / content | Agy | implement, test, css, templates, content |" in content
 
 
+def test_repair_sops_only_refreshes_stale_capability_allocation_with_single_blank_line(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_repair_config(
+        tmp_path,
+        {
+            "roles": {
+                "claude": ["pm", "review"],
+                "codex": ["implement", "test"],
+            },
+            "workgroup_agents": ["claude", "codex"],
+        },
+    )
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / "CLAUDE.md").write_text(
+        "<!-- synlynk:harness v0.1 verified:2026-01-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## Capability-Based Task Allocation\n"
+        "| Role | Agent | Tasks |\n"
+        "| :--- | :--- | :--- |\n"
+        "| stale | data | stale |\n"
+        "Do not start a task outside your role column without explicit approval from Claude.\n\n"
+        "**GitHub write routing (#426):** stale text.\n\n"
+        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
+        "rather than synlynk's default fleet assumptions.\n\n"
+        "## Cost Visibility\n"
+        "1. Log estimated_cost in the job context header before dispatch.\n"
+        "2. Check `synlynk status` for current burn rate.\n"
+        "3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.\n"
+        "4. Append actual cost to `project-docs/costs.md`.\n\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+
+    import synlynk as sl
+
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {"claude": []}})
+
+    sl._repair_sops_only(dry_run=False, agent_name="claude")
+
+    repaired = (tmp_path / "CLAUDE.md").read_text()
+    boundary = (
+        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
+        "rather than synlynk's default fleet assumptions.\n\n## Cost Visibility"
+    )
+    assert boundary in repaired
+    assert boundary.replace("\n\n## Cost Visibility", "\n\n\n## Cost Visibility") not in repaired
+    assert "\n\n<!-- /synlynk:harness -->" in repaired
+
+
 def test_repair_capability_allocation_sop_uses_committed_capability_roles(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
