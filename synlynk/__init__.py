@@ -962,6 +962,17 @@ CREATE TABLE IF NOT EXISTS credit_grants (
     expires_at      TEXT,
     note            TEXT
 );
+
+CREATE TABLE IF NOT EXISTS remediation_actions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT NOT NULL,
+    agent       TEXT NOT NULL,
+    target_file TEXT NOT NULL,
+    exact_diff  TEXT NOT NULL,
+    operator    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
+    ON remediation_actions(timestamp);
 """
 
 _DB_SCORES_VIEW = """
@@ -3968,6 +3979,7 @@ from synlynk.db import (  # noqa: E402
     _parse_todo_metadata,
     cmd_devlog_append,
     cmd_cost_log,
+    cmd_remediation_log,
     cmd_roadmap_add,
     cmd_memory_add,
     cmd_migrate,

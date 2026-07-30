@@ -465,6 +465,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             job_id            TEXT,
             recorded_at       TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS remediation_actions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp   TEXT NOT NULL,
+            agent       TEXT NOT NULL,
+            target_file TEXT NOT NULL,
+            exact_diff  TEXT NOT NULL,
+            operator    TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
+            ON remediation_actions(timestamp);
         CREATE TABLE IF NOT EXISTS devlog_entries (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             author        TEXT NOT NULL,
@@ -2103,6 +2113,27 @@ def cmd_cost_log(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
         f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
     )
+
+def cmd_remediation_log(
+    agent: str,
+    target_file: str,
+    exact_diff: str,
+    operator: str = "non-interactive --yes",
+    timestamp: str = None,
+) -> None:
+    """Append a remediation audit row to the canonical DB log."""
+    from synlynk import _get_db
+
+    logged_at = timestamp or time.strftime("%Y-%m-%d %H:%M")
+    conn = _get_db()
+    conn.execute(
+        """INSERT INTO remediation_actions
+            (timestamp, agent, target_file, exact_diff, operator)
+           VALUES (?, ?, ?, ?, ?)""",
+        (logged_at, agent, target_file, exact_diff, operator),
+    )
+    conn.commit()
+    conn.close()
 
 def cmd_credit_grant(
     agent: str,
