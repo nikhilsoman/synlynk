@@ -45,6 +45,7 @@ from synlynk.sentinel import (
 from synlynk.probe import (
     _compute_capability_hash,
     _scan_command_palette,
+    _scan_repo_requirements,
     _build_fence_content,
     _upsert_harness_fence,
     _write_scan_fences,
