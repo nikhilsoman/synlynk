@@ -45,6 +45,7 @@ from synlynk.sentinel import (
 from synlynk.probe import (
     _compute_capability_hash,
     _scan_command_palette,
+    _scan_repo_requirements,
     _build_fence_content,
     _upsert_harness_fence,
     _write_scan_fences,
@@ -974,6 +975,17 @@ CREATE TABLE IF NOT EXISTS credit_grants (
     expires_at      TEXT,
     note            TEXT
 );
+
+CREATE TABLE IF NOT EXISTS remediation_actions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT NOT NULL,
+    agent       TEXT NOT NULL,
+    target_file TEXT NOT NULL,
+    exact_diff  TEXT NOT NULL,
+    operator    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
+    ON remediation_actions(timestamp);
 """
 
 _DB_SCORES_VIEW = """
@@ -1217,11 +1229,11 @@ _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
-    ("dispatch.task",     "dispatch",      "grok",   "grok --always-approve --single {task}", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
-    ("dispatch.headless", "dispatch",      "grok",   "grok --always-approve --single {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --single {task}", "partial", "Network dep required"),
     ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
     ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
@@ -1230,7 +1242,7 @@ _VERB_MAP_SEED = [
     ("dispatch.approve",  "dispatch",      "claude", "claude --allowedTools {tools}", "full", None),
     ("dispatch.approve",  "dispatch",      "agy",    None, "none", None),
     ("dispatch.approve",  "dispatch",      "grok",   None, "none", None),
-    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "approval-policy=none only"),
+    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "ask-for-approval=untrusted only"),
     ("dispatch.model",    "dispatch",      "claude", "--model {model}", "full", None),
     ("dispatch.model",    "dispatch",      "agy",    "--model {model}", "full", None),
     ("dispatch.model",    "dispatch",      "grok",   "--model {model}", "full", None),
@@ -1238,7 +1250,7 @@ _VERB_MAP_SEED = [
     ("dispatch.tools",    "dispatch",      "claude", "--allowedTools {tools}", "full", None),
     ("dispatch.tools",    "dispatch",      "agy",    None, "partial", "No tool_list flag"),
     ("dispatch.tools",    "dispatch",      "grok",   None, "none", None),
-    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "approval-policy only"),
+    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "ask-for-approval only"),
     ("dispatch.context",  "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.context",  "dispatch",      "agy",    "agy -p {task}", "full", None),
     ("dispatch.context",  "dispatch",      "grok",   "grok --prompt {task}", "partial", "No explicit context file flag"),

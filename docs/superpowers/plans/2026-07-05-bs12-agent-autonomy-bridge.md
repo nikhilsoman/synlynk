@@ -811,7 +811,7 @@ def test_permissions_to_flags_codex_approval_policy():
     # write:src/ + run:tests → workspace-write (already default, approval=none)
     result = _permissions_to_flags("codex", ["read:*"])
     # read-only codex → no workspace-write, approval untrusted
-    assert "--approval-policy" in result or result == []  # may be no-op
+    assert "--ask-for-approval" in result or result == []  # may be no-op
 
 def test_permissions_to_flags_agy_returns_context_section():
     from synlynk.dispatch import _permissions_to_flags
@@ -850,7 +850,7 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         # read-only: switch to workspace (no writes)
         write_perms = [p for p in permissions if p.startswith("write:")]
         if not write_perms:
-            return ["--approval-policy", "untrusted"]
+            return ["--ask-for-approval", "untrusted"]
         return []
     return []
 ```
