@@ -20,6 +20,26 @@ from synlynk.dispatch import dispatch_agent, exec_command
 from synlynk.cli import build_parser
 from synlynk.taxonomy import COMMAND_TAXONOMY
 
+try:
+    from synlynk.jobs import _resolve_worktree_pr_base_branch
+except ImportError:  # pragma: no cover - compatibility with older branches
+    def _resolve_worktree_pr_base_branch(job: dict, worktree_path: str) -> str | None:
+        base_branch = job.get("base_branch")
+        if not worktree_path or not os.path.isdir(worktree_path) or not base_branch:
+            return None
+        try:
+            verify_result = subprocess.run(
+                ["git", "-C", worktree_path, "rev-parse", "--verify", base_branch],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            return None
+        if verify_result.returncode != 0:
+            return None
+        return base_branch
+
 
 @dataclass
 class ScenarioContext:
@@ -1068,6 +1088,23 @@ def _scenario_upgrade_failure_injection(entry: dict, ctx: ScenarioContext) -> Sc
 _TRIVIAL_PROMPT = "Reply with the single word OK and do nothing else."
 
 
+def _wait_for_worktree_finalization(job: dict, timeout_s: int = 60) -> dict:
+    """Poll until the dispatched worktree job's process exits."""
+    import time as _time
+
+    pid = job.get("pid")
+    if not pid:
+        return job
+    deadline = _time.time() + timeout_s
+    while _time.time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except (ProcessLookupError, PermissionError):
+            break
+        _time.sleep(1)
+    return job
+
+
 def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult]:
     import os
     from synlynk import discover_agents
@@ -1094,6 +1131,24 @@ def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult
                 job = dispatch_agent(agent_name, _TRIVIAL_PROMPT, force_agent=True)
             fence = job.get("fence")
             cost = fence.cost_usd if fence else 0.0
+            job = _wait_for_worktree_finalization(job)
+            worktree_path = job.get("worktree_path")
+            expected_base = job.get("base_branch")
+            if worktree_path and expected_base:
+                actual_base = _resolve_worktree_pr_base_branch(job, worktree_path)
+                if actual_base != expected_base:
+                    results.append(
+                        ScenarioResult(
+                            command=f"dispatch[{agent_name}]",
+                            status="fail",
+                            detail=(
+                                f"PR base branch mismatch: expected {expected_base!r}, "
+                                f"resolved {actual_base!r}"
+                            ),
+                        )
+                    )
+                    ctx.spent_usd += cost
+                    continue
             results.append(
                 ScenarioResult(
                     command=f"dispatch[{agent_name}]",
