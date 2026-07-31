@@ -1406,6 +1406,7 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
         "watch_interval_seconds": 30,
+        "auto_smoke_test": False,
         "auto_launch_after_wizard": True,
         "dispatch_mode": "daily-grind",
         "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
