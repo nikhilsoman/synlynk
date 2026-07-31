@@ -234,6 +234,45 @@ def _resolve_default_base_branch(worktree_path: Optional[str]) -> Optional[str]:
     return None
 
 
+def _resolve_worktree_pr_base_branch(job: dict, worktree_path: str) -> Optional[str]:
+    """Resolve the PR base branch for a finalized worktree job.
+
+    Prefer the dispatch-recorded base branch when it still exists in the
+    worktree, but normalize the resolved ref to a PR-friendly branch name
+    before handing it to `gh pr create`.
+    """
+    recorded_base = (job or {}).get("base_branch")
+    if recorded_base:
+        try:
+            verify_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    worktree_path,
+                    "rev-parse",
+                    "--symbolic-full-name",
+                    "--verify",
+                    f"{recorded_base}^{{commit}}",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            verify_result = None
+
+        if verify_result and verify_result.returncode == 0:
+            resolved_ref = (verify_result.stdout or "").strip()
+            if resolved_ref.startswith("refs/heads/"):
+                return resolved_ref[len("refs/heads/") :]
+            if resolved_ref.startswith("refs/remotes/"):
+                return resolved_ref.rsplit("/", 1)[-1]
+            if resolved_ref:
+                return resolved_ref.rsplit("/", 1)[-1]
+
+    return _resolve_default_base_branch(worktree_path) or "main"
+
+
 def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
     """Opens a PR for a finalized worktree if one does not already exist."""
     if not worktree_path or not worktree_branch:
@@ -291,7 +330,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         f"Task: {task_line}\n\n"
         f"This PR was created automatically by synlynk, not hand-written.\n"
     )
-    base_branch = _resolve_default_base_branch(worktree_path) or "main"
+    base_branch = _resolve_worktree_pr_base_branch(job, worktree_path)
     try:
         create_result = subprocess.run(
             [
