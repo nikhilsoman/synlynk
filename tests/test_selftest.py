@@ -264,6 +264,57 @@ def test_dispatch_scenario_loops_over_discovered_harnesses(tmp_path):
     assert called_agents == {"codex", "grok"}
 
 
+def test_dispatch_scenario_asserts_pr_base_branch(tmp_path):
+    from synlynk.selftest import ScenarioContext, _dispatch_scenario
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    discovered = [{"name": "codex"}]
+    fake_job = {
+        "id": "job-1",
+        "pid": 123,
+        "fence": None,
+        "base_branch": "dispatch/claude/job-parent",
+        "worktree_path": str(tmp_path / "worktree"),
+        "worktree_branch": "dispatch/codex/job-1",
+    }
+    with patch("synlynk.discover_agents", return_value=discovered), patch(
+        "synlynk.selftest.dispatch_agent", return_value=fake_job
+    ), patch(
+        "synlynk.selftest._wait_for_worktree_finalization", return_value=fake_job
+    ), patch(
+        "synlynk.selftest._resolve_worktree_pr_base_branch",
+        return_value="dispatch/claude/job-parent",
+    ) as mock_resolve:
+        results = _dispatch_scenario({"command": "dispatch"}, ctx)
+    assert results[0].status == "pass"
+    mock_resolve.assert_called_once()
+
+
+def test_dispatch_scenario_fails_on_pr_base_branch_mismatch(tmp_path):
+    from synlynk.selftest import ScenarioContext, _dispatch_scenario
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    discovered = [{"name": "codex"}]
+    fake_job = {
+        "id": "job-1",
+        "pid": 123,
+        "fence": None,
+        "base_branch": "dispatch/claude/job-parent",
+        "worktree_path": str(tmp_path / "worktree"),
+        "worktree_branch": "dispatch/codex/job-1",
+    }
+    with patch("synlynk.discover_agents", return_value=discovered), patch(
+        "synlynk.selftest.dispatch_agent", return_value=fake_job
+    ), patch(
+        "synlynk.selftest._wait_for_worktree_finalization", return_value=fake_job
+    ), patch(
+        "synlynk.selftest._resolve_worktree_pr_base_branch", return_value="main"
+    ):
+        results = _dispatch_scenario({"command": "dispatch"}, ctx)
+    assert results[0].status == "fail"
+    assert "base branch" in results[0].detail
+
+
 def test_exec_scenario_loops_over_discovered_harnesses(tmp_path):
     from synlynk.selftest import ScenarioContext, _exec_scenario
 
