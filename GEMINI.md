@@ -139,7 +139,7 @@ rather than resolving it silently. This project tracks those conflicts as resear
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.0.0 verified:2026-07-15T20:50:35Z -->
+<!-- synlynk:harness v2.0.0 verified:2026-07-31T18:41:06Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
@@ -148,7 +148,7 @@ rather than resolving it silently. This project tracks those conflicts as resear
 - Stdout flush: unbuffered (set PYTHONUNBUFFERED=1)
 
 ## Active Dispatch Flags
-- Valid: --print --model --add-dir --sandbox
+- Valid: --print --model --add-dir --sandbox --dangerously-skip-permissions
 - Invalid (do not use): --always-approve --non-interactive
 
 ## Network Dependencies
