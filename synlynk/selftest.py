@@ -1195,7 +1195,6 @@ def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult
                             ),
                         )
                     )
-                    ctx.spent_usd += cost
                     continue
             results.append(
                 ScenarioResult(
@@ -1205,7 +1204,6 @@ def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult
                     cost_usd=cost,
                 )
             )
-            ctx.spent_usd += cost
         except Exception as exc:
             results.append(
                 ScenarioResult(

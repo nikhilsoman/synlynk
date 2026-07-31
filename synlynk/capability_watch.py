@@ -118,6 +118,8 @@ def _last_commit_before(repo_path: str, iso_timestamp: str) -> str:
 
 def _run_paid_smoke_test(conn) -> None:
     """Runs `synlynk selftest --live`, respecting its own $2 budget cap."""
+    from synlynk.capability_classifier import classify_failure
+
     result = subprocess.run(
         [sys.executable, "-m", "synlynk", "selftest", "--live"],
         capture_output=True,
@@ -125,6 +127,20 @@ def _run_paid_smoke_test(conn) -> None:
         cwd=os.getcwd(),
         check=False,
     )
+    if result.returncode != 0:
+        row = conn.execute(
+            "SELECT last_green_smoke_at FROM capability_watch WHERE id = 1"
+        ).fetchone()
+        last_green = row[0] if row else None
+        if last_green:
+            classify_failure(
+                conn,
+                harness="selftest",
+                failing_path="synlynk/selftest.py",
+                repo_path=os.getcwd(),
+                last_green_sha=_last_commit_before(os.getcwd(), last_green),
+                harness_fingerprint_changed=False,
+            )
     mark_smoke_test_run(conn, green=result.returncode == 0)
 
 

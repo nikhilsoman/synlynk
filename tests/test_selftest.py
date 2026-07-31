@@ -256,6 +256,36 @@ def test_dispatch_scenario_uses_fence_estimate_as_cost(tmp_path, monkeypatch):
     assert result[0].cost_usd == 0.03
 
 
+def test_dispatch_scenario_does_not_increment_context_spend(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.fencing import FenceData
+    from synlynk.selftest import ScenarioContext, _dispatch_scenario
+
+    fake_job = {
+        "id": "job-selftest",
+        "pid": 12345,
+        "fence": FenceData(
+            command="dispatch",
+            kind="estimate",
+            in_tokens=100,
+            out_tokens=50,
+            cost_usd=0.5,
+            basis="prompt_estimate",
+        ),
+    }
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=2.0)
+    with patch("synlynk.discover_agents", return_value=[{"name": "codex"}]), patch(
+        "synlynk.selftest.dispatch_agent", return_value=fake_job
+    ):
+        results = _dispatch_scenario({"command": "dispatch"}, ctx)
+
+    assert ctx.spent_usd == 0.0
+    assert isinstance(results, list)
+    assert len(results) == 1
+    assert results[0].status == "pass"
+    assert results[0].cost_usd == 0.5
+
+
 def test_exec_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS

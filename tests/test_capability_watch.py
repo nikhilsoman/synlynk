@@ -124,6 +124,27 @@ def test_run_free_probe_classifies_failures(conn, tmp_path):
     assert call_kwargs["harness"] == "codex"
 
 
+def test_run_paid_smoke_test_classifies_failures(conn, tmp_path):
+    from unittest.mock import patch
+
+    from synlynk.capability_watch import _run_paid_smoke_test
+
+    conn.execute(
+        "UPDATE capability_watch SET last_green_smoke_at = datetime('now') WHERE id = 1"
+    )
+    conn.commit()
+
+    fake_result = type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
+    with patch("subprocess.run", return_value=fake_result), patch(
+        "synlynk.capability_classifier.classify_failure"
+    ) as mock_classify:
+        _run_paid_smoke_test(conn)
+    mock_classify.assert_called_once()
+    call_kwargs = mock_classify.call_args.kwargs
+    assert call_kwargs["harness"] == "selftest"
+    assert call_kwargs["failing_path"] == "synlynk/selftest.py"
+
+
 def test_cli_main_does_not_crash_when_staleness_check_raises(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with patch(
