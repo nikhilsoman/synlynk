@@ -353,6 +353,37 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             recorded_at TEXT NOT NULL
         );
     """)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS capability_watch (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            last_probe_at TEXT,
+            last_green_probe_at TEXT,
+            last_smoke_test_at TEXT,
+            last_green_smoke_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS gh_write_capability (
+            harness TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'unknown',
+            checked_at TEXT,
+            PRIMARY KEY (harness, mode, action)
+        );
+
+        CREATE TABLE IF NOT EXISTS capability_incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            harness TEXT NOT NULL,
+            failing_path TEXT NOT NULL,
+            classification TEXT NOT NULL,
+            evidence TEXT NOT NULL DEFAULT '',
+            detected_at TEXT NOT NULL
+        );
+    """)
+    conn.execute(
+        "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
+        "last_smoke_test_at, last_green_smoke_at) VALUES (1, NULL, NULL, NULL, NULL)"
+    )
     harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
     if "verb" not in harness_verb_cols:
         try:
