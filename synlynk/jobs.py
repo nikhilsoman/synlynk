@@ -266,7 +266,8 @@ def _resolve_worktree_pr_base_branch(job: dict, worktree_path: str) -> Optional[
             if resolved_ref.startswith("refs/heads/"):
                 return resolved_ref[len("refs/heads/") :]
             if resolved_ref.startswith("refs/remotes/"):
-                return resolved_ref.rsplit("/", 1)[-1]
+                remote_relative = resolved_ref[len("refs/remotes/") :]
+                return remote_relative.split("/", 1)[-1] if "/" in remote_relative else remote_relative
             if resolved_ref:
                 return resolved_ref.rsplit("/", 1)[-1]
 

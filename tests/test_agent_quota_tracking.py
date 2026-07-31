@@ -339,6 +339,66 @@ def test_fix_issue_616__maybe_open_worktree_pr_sy_prefers_recorded_base_branch_w
     assert create_call[create_call.index("--base") + 1] == "dispatch/claude/some-branch"
 
 
+def test_fix_issue_616__maybe_open_worktree_pr_sy_preserves_multisegment_remote_branch_name(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ]:
+            assert cmd[-1] == "dispatch/claude/some-branch^{commit}"
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/dispatch/claude/some-branch\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-1",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/some-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "dispatch/claude/some-branch"
+
+
 @pytest.mark.parametrize("job", [{"id": "job-legacy-none", "task": "do the thing", "base_branch": None}, {"id": "job-legacy-missing", "task": "do the thing"}])
 def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_to_default_base_when_missing(
     tmp_path, monkeypatch, job
