@@ -74,6 +74,7 @@ def mark_smoke_test_run(conn, green: bool) -> None:
 def _run_free_probe(conn) -> None:
     """Runs the structural TC1-5 probe for every discovered agent."""
     from synlynk import discover_agents
+    from synlynk.capability_classifier import classify_failure
 
     ok = True
     for agent in discover_agents():
@@ -86,7 +87,33 @@ def _run_free_probe(conn) -> None:
         )
         if result.returncode != 0:
             ok = False
+            row = conn.execute(
+                "SELECT last_green_probe_at FROM capability_watch WHERE id = 1"
+            ).fetchone()
+            last_green = row[0] if row else None
+            if last_green:
+                classify_failure(
+                    conn,
+                    harness=agent["name"],
+                    failing_path="synlynk/probe.py",
+                    repo_path=os.getcwd(),
+                    last_green_sha=_last_commit_before(os.getcwd(), last_green),
+                    harness_fingerprint_changed=False,
+                )
     mark_probe_run(conn, green=ok)
+
+
+def _last_commit_before(repo_path: str, iso_timestamp: str) -> str:
+    """Resolves the last commit sha at or before a given ISO timestamp."""
+    result = subprocess.run(
+        ["git", "rev-list", "-1", f"--before={iso_timestamp}", "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    sha = result.stdout.strip()
+    return sha if sha else "HEAD"
 
 
 def _run_paid_smoke_test(conn) -> None:

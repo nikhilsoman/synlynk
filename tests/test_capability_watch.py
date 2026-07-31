@@ -104,6 +104,26 @@ def test_maybe_trigger_staleness_checks_runs_paid_smoke_when_opted_in(conn):
     mock_smoke.assert_called_once()
 
 
+def test_run_free_probe_classifies_failures(conn, tmp_path):
+    from unittest.mock import patch
+
+    from synlynk.capability_watch import _run_free_probe
+
+    conn.execute(
+        "UPDATE capability_watch SET last_green_probe_at = datetime('now') WHERE id = 1"
+    )
+    conn.commit()
+
+    fake_result = type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
+    with patch("synlynk.discover_agents", return_value=[{"name": "codex"}]), patch(
+        "subprocess.run", return_value=fake_result
+    ), patch("synlynk.capability_classifier.classify_failure") as mock_classify:
+        _run_free_probe(conn)
+    mock_classify.assert_called_once()
+    call_kwargs = mock_classify.call_args.kwargs
+    assert call_kwargs["harness"] == "codex"
+
+
 def test_cli_main_does_not_crash_when_staleness_check_raises(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with patch(
