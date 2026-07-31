@@ -139,6 +139,43 @@ def test_live_selftest_upgrade_respects_install_location(tmp_path):
     assert "pipx install path" in result.detail
 
 
+def test_gh_write_scenario_records_capability_per_harness_and_mode(tmp_path):
+    import sqlite3
+    from synlynk.selftest import ScenarioContext, _scenario_gh_write_actions
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    ctx.state["workspace_dir"] = tmp_path
+    db_path = tmp_path / ".synlynk" / "state.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    import synlynk as synlynk_pkg
+
+    with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        conn = synlynk_pkg._get_db()
+        conn.close()
+
+    discovered = [{"name": "codex"}]
+
+    def fake_gh_write(agent_name, mode, action):
+        return "pass" if action == "gh pr review" else "fail"
+
+    with patch("synlynk.selftest.discover_agents", return_value=discovered), patch(
+        "synlynk.selftest._attempt_gh_write_action", side_effect=fake_gh_write
+    ), patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        results = _scenario_gh_write_actions({"command": "gh-write-check"}, ctx)
+
+    statuses = {r.command: r.status for r in results}
+    assert any("gh pr review" in cmd for cmd in statuses)
+    assert any("gh pr merge" in cmd and statuses[cmd] == "fail" for cmd in statuses)
+
+    conn = sqlite3.connect(str(db_path))
+    rows = conn.execute(
+        "SELECT harness, mode, action, status FROM gh_write_capability"
+    ).fetchall()
+    conn.close()
+    assert ("codex", "home", "gh pr review", "pass") in rows
+    assert ("codex", "home", "gh pr merge", "fail") in rows
+
+
 def test_selftest_subcommand_is_registered():
     from synlynk.cli import build_parser
 

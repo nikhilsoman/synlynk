@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 from synlynk.dispatch import dispatch_agent, exec_command
 from synlynk.cli import build_parser
+from synlynk import discover_agents
 from synlynk.jobs import _resolve_worktree_pr_base_branch
 from synlynk.taxonomy import COMMAND_TAXONOMY
 
@@ -1066,6 +1067,57 @@ def _scenario_upgrade_failure_injection(entry: dict, ctx: ScenarioContext) -> Sc
     )
 
 
+_GH_WRITE_ACTIONS = ("gh pr review", "gh pr merge", "gh issue comment")
+
+
+def _attempt_gh_write_action(agent_name: str, mode: str, action: str) -> str:
+    """Best-effort structural check for whether gh exposes a write action."""
+    import subprocess as _subprocess
+
+    parts = action.split()
+    try:
+        result = _subprocess.run(
+            ["gh", *parts[1:], "--help"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (FileNotFoundError, _subprocess.TimeoutExpired):
+        return "fail"
+    return "pass" if result.returncode == 0 else "fail"
+
+
+def _scenario_gh_write_actions(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult]:
+    import synlynk as synlynk_pkg
+
+    workspace = _ensure_workspace_scaffold(ctx)
+    db_path = workspace / ".synlynk" / "state.db"
+    results: list[ScenarioResult] = []
+    with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        conn = synlynk_pkg._get_db()
+        for agent in discover_agents():
+            agent_name = agent["name"]
+            for mode in ("home", "headless"):
+                for action in _GH_WRITE_ACTIONS:
+                    status = _attempt_gh_write_action(agent_name, mode, action)
+                    conn.execute(
+                        "INSERT OR REPLACE INTO gh_write_capability "
+                        "(harness, mode, action, status, checked_at) VALUES (?, ?, ?, ?, datetime('now'))",
+                        (agent_name, mode, action, status),
+                    )
+                    results.append(
+                        ScenarioResult(
+                            command=f"{action}[{agent_name}/{mode}]",
+                            status=status,
+                            detail=f"{action} structural check for {agent_name} in {mode} mode",
+                        )
+                    )
+        conn.commit()
+        conn.close()
+    return results
+
+
 _TRIVIAL_PROMPT = "Reply with the single word OK and do nothing else."
 
 
@@ -1288,6 +1340,7 @@ SELFTEST_SCENARIOS: Dict[
     "instructions status": _scenario_instructions_status,
     "migrate": _scenario_migrate,
     "upgrade": _scenario_upgrade,
+    "gh-write-check": _scenario_gh_write_actions,
     "dispatch": _dispatch_scenario,
     "exec": _exec_scenario,
     "schedule": _schedule_scenario,
@@ -1322,6 +1375,8 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
                     else:
                         ctx.spent_usd += result.cost_usd
                         results.append(result)
+                gh_write_results = _scenario_gh_write_actions({"command": "gh-write-check"}, ctx)
+                results.extend(gh_write_results)
         return results
 
     for entry in sorted(COMMAND_TAXONOMY, key=_selftest_sort_key):
