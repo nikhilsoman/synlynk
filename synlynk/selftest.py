@@ -28,6 +28,8 @@ class ScenarioContext:
     budget_cap_usd: float = 2.0
     spent_usd: float = 0.0
     state: dict = field(default_factory=dict)
+    mode: str = "home"
+    harness: str | None = None
 
     def remaining_budget(self) -> float:
         return max(0.0, self.budget_cap_usd - self.spent_usd)
@@ -727,7 +729,8 @@ def _scenario_migrate(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         )
         conn.commit()
         conn.close()
-        result, output, _ = _capture_call(entry["command"], db_mod.cmd_migrate)
+        with patch("synlynk.rollback.rollback_checkpoint", side_effect=lambda *args, **kwargs: contextlib.nullcontext()):
+            result, output, _ = _capture_call(entry["command"], db_mod.cmd_migrate)
     if result.status != "pass":
         return result
 
@@ -857,9 +860,6 @@ def _scenario_migrate_failure_injection(entry: dict, ctx: ScenarioContext) -> Sc
     workspace = _ensure_workspace_scaffold(ctx)
     db_path = workspace / ".synlynk" / "state.db"
     before_docs = _seed_migrate_workspace(workspace)
-    before_head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=workspace, capture_output=True, text=True
-    ).stdout.strip()
 
     def boom(*args, **kwargs):
         raise RuntimeError("injected failure: simulated git rm --cached failure")
@@ -887,6 +887,19 @@ def _scenario_migrate_failure_injection(entry: dict, ctx: ScenarioContext) -> Sc
         )
         conn.commit()
         conn.close()
+        for suffix in ("-wal", "-shm", "-journal"):
+            sidecar = db_path.with_name(db_path.name + suffix)
+            if sidecar.exists():
+                sidecar.unlink()
+        subprocess.run(["git", "add", ".synlynk/state.db"], cwd=workspace, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "chore: track seeded state.db for migrate selftest", "--quiet"],
+            cwd=workspace,
+            check=True,
+        )
+        before_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=workspace, capture_output=True, text=True
+        ).stdout.strip()
         result, output, _ = _capture_call(entry["command"], db_mod.cmd_migrate)
 
     if result.status != "fail":
@@ -1055,53 +1068,105 @@ def _scenario_upgrade_failure_injection(entry: dict, ctx: ScenarioContext) -> Sc
 _TRIVIAL_PROMPT = "Reply with the single word OK and do nothing else."
 
 
-def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
-    if ctx.remaining_budget() <= 0:
-        return ScenarioResult(command="dispatch", status="skipped", detail="budget cap reached")
+def _dispatch_scenario(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult]:
     import os
+    from synlynk import discover_agents
     import synlynk as synlynk_pkg
 
-    workspace = Path(ctx.repo_path)
-    db_path = workspace / ".synlynk" / "state.db"
-    old_cwd = os.getcwd()
-    os.chdir(ctx.repo_path)
-    try:
-        with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
-            job = dispatch_agent("codex", _TRIVIAL_PROMPT, force_agent=True)
-    except Exception as exc:
-        return ScenarioResult(command="dispatch", status="fail", detail=str(exc))
-    finally:
-        os.chdir(old_cwd)
-    fence = job.get("fence")
-    cost = fence.cost_usd if fence else 0.0
-    return ScenarioResult(
-        command="dispatch",
-        status="pass",
-        detail=f"launched {job.get('id')} pid={job.get('pid')}",
-        cost_usd=cost,
-    )
+    results: list[ScenarioResult] = []
+    for agent in discover_agents():
+        agent_name = agent["name"]
+        if ctx.remaining_budget() <= 0:
+            results.append(
+                ScenarioResult(
+                    command=f"dispatch[{agent_name}]",
+                    status="skipped",
+                    detail="budget cap reached",
+                )
+            )
+            continue
+        workspace = Path(ctx.repo_path)
+        db_path = workspace / ".synlynk" / "state.db"
+        old_cwd = os.getcwd()
+        os.chdir(ctx.repo_path)
+        try:
+            with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+                job = dispatch_agent(agent_name, _TRIVIAL_PROMPT, force_agent=True)
+            fence = job.get("fence")
+            cost = fence.cost_usd if fence else 0.0
+            results.append(
+                ScenarioResult(
+                    command=f"dispatch[{agent_name}]",
+                    status="pass",
+                    detail=f"launched {job.get('id')} pid={job.get('pid')}",
+                    cost_usd=cost,
+                )
+            )
+            ctx.spent_usd += cost
+        except Exception as exc:
+            results.append(
+                ScenarioResult(
+                    command=f"dispatch[{agent_name}]",
+                    status="fail",
+                    detail=str(exc),
+                )
+            )
+        finally:
+            os.chdir(old_cwd)
+    return results
 
 
-def _exec_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
-    if ctx.remaining_budget() <= 0:
-        return ScenarioResult(command="exec", status="skipped", detail="budget cap reached")
+def _exec_scenario(entry: dict, ctx: ScenarioContext) -> list[ScenarioResult]:
     import os
+    from synlynk import discover_agents
     import synlynk as synlynk_pkg
 
-    workspace = Path(ctx.repo_path)
-    db_path = workspace / ".synlynk" / "state.db"
-    old_cwd = os.getcwd()
-    os.chdir(ctx.repo_path)
-    try:
-        with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
-            exit_code = exec_command(["claude", "-p", _TRIVIAL_PROMPT])
-    except Exception as exc:
-        return ScenarioResult(command="exec", status="fail", detail=str(exc))
-    finally:
-        os.chdir(old_cwd)
-    if exit_code != 0:
-        return ScenarioResult(command="exec", status="skipped", detail=f"exit code {exit_code}")
-    return ScenarioResult(command="exec", status="pass", detail="exec completed")
+    results: list[ScenarioResult] = []
+    for agent in discover_agents():
+        agent_name = agent["name"]
+        if ctx.remaining_budget() <= 0:
+            results.append(
+                ScenarioResult(
+                    command=f"exec[{agent_name}]",
+                    status="skipped",
+                    detail="budget cap reached",
+                )
+            )
+            continue
+        workspace = Path(ctx.repo_path)
+        db_path = workspace / ".synlynk" / "state.db"
+        old_cwd = os.getcwd()
+        os.chdir(ctx.repo_path)
+        try:
+            with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+                exit_code = exec_command([agent_name, "-p", _TRIVIAL_PROMPT])
+            if exit_code != 0:
+                results.append(
+                    ScenarioResult(
+                        command=f"exec[{agent_name}]",
+                        status="skipped",
+                        detail=f"exit code {exit_code}",
+                    )
+                )
+            else:
+                results.append(
+                    ScenarioResult(
+                        command=f"exec[{agent_name}]",
+                        status="pass",
+                        detail="exec completed",
+                    )
+                )
+        except Exception as exc:
+            results.append(
+                ScenarioResult(
+                    command=f"exec[{agent_name}]",
+                    status="fail",
+                    detail=str(exc),
+                )
+            )
+        finally:
+            os.chdir(old_cwd)
+    return results
 
 
 def _schedule_scenario(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
@@ -1169,7 +1234,9 @@ def _generic_help_scenario(entry: dict, parser: argparse.ArgumentParser) -> Scen
     )
 
 
-SELFTEST_SCENARIOS: Dict[str, Callable[[dict, ScenarioContext], ScenarioResult]] = {
+SELFTEST_SCENARIOS: Dict[
+    str, Callable[[dict, ScenarioContext], ScenarioResult | list[ScenarioResult]]
+] = {
     "init": _scenario_init_existing_files,
     "scan": _scenario_scan,
     "join": _scenario_join,
@@ -1212,8 +1279,13 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
                         result = _generic_help_scenario(entry, parser)
                     else:
                         result = scenario(entry, ctx)
-                    ctx.spent_usd += result.cost_usd
-                    results.append(result)
+                    if isinstance(result, list):
+                        for item in result:
+                            ctx.spent_usd += item.cost_usd
+                            results.append(item)
+                    else:
+                        ctx.spent_usd += result.cost_usd
+                        results.append(result)
         return results
 
     for entry in sorted(COMMAND_TAXONOMY, key=_selftest_sort_key):
