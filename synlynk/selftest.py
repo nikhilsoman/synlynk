@@ -18,27 +18,8 @@ from unittest.mock import patch
 
 from synlynk.dispatch import dispatch_agent, exec_command
 from synlynk.cli import build_parser
+from synlynk.jobs import _resolve_worktree_pr_base_branch
 from synlynk.taxonomy import COMMAND_TAXONOMY
-
-try:
-    from synlynk.jobs import _resolve_worktree_pr_base_branch
-except ImportError:  # pragma: no cover - compatibility with older branches
-    def _resolve_worktree_pr_base_branch(job: dict, worktree_path: str) -> str | None:
-        base_branch = job.get("base_branch")
-        if not worktree_path or not os.path.isdir(worktree_path) or not base_branch:
-            return None
-        try:
-            verify_result = subprocess.run(
-                ["git", "-C", worktree_path, "rev-parse", "--verify", base_branch],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except Exception:
-            return None
-        if verify_result.returncode != 0:
-            return None
-        return base_branch
 
 
 @dataclass
