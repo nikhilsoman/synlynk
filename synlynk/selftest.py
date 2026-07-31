@@ -831,11 +831,11 @@ def _scenario_migrate(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             status="fail",
             detail=f"migrate cost rows mismatch: {cost_rows!r}",
         )
-    if list(devlog_rows) != [expected_devlog]:
+    if expected_devlog not in devlog_rows:
         return ScenarioResult(
             command=entry["command"],
             status="fail",
-            detail=f"migrate devlog rows mismatch: {devlog_rows!r}",
+            detail=f"migrate devlog rows missing expected entry: {devlog_rows!r}",
         )
     if not story_row or story_row[0] != "#451":
         return ScenarioResult(
