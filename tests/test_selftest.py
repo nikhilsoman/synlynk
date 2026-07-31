@@ -139,6 +139,27 @@ def test_live_selftest_upgrade_respects_install_location(tmp_path):
     assert "pipx install path" in result.detail
 
 
+def test_scenario_join_creates_real_devlog_file(tmp_path):
+    from synlynk.selftest import ScenarioContext, _scenario_join
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    ctx.state["workspace_dir"] = tmp_path
+    result = _scenario_join({"command": "join"}, ctx)
+    assert result.status == "pass"
+    devlog_dir = tmp_path / "project-docs" / "devlogs"
+    assert devlog_dir.exists()
+    assert any(devlog_dir.iterdir())
+
+
+def test_scenario_decide_surfaces_each_agent_response(tmp_path):
+    from synlynk.selftest import ScenarioContext, _scenario_decide
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    ctx.state["workspace_dir"] = tmp_path
+    result = _scenario_decide({"command": "decide"}, ctx)
+    assert result.status == "pass"
+
+
 def test_gh_write_scenario_records_capability_per_harness_and_mode(tmp_path):
     import sqlite3
     from synlynk.selftest import ScenarioContext, _scenario_gh_write_actions
