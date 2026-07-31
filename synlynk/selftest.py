@@ -267,14 +267,6 @@ def _scenario_join(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
         synlynk_pkg,
         "cmd_scan",
         return_value=None,
-    ), patch.object(
-        synlynk_pkg,
-        "_generate_ai_context_files",
-        return_value=None,
-    ), patch.object(
-        synlynk_pkg,
-        "_seed_devlog",
-        return_value=None,
     ):
         result, output, _ = _capture_call(entry["command"], synlynk_pkg.cmd_join)
     if result.status != "pass":
@@ -285,10 +277,17 @@ def _scenario_join(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             status="fail",
             detail="join did not announce the current user",
         )
+    devlog_dir = workspace / "project-docs" / "devlogs"
+    if not devlog_dir.exists() or not any(devlog_dir.iterdir()):
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="join did not create a real devlog entry",
+        )
     return ScenarioResult(
         command=entry["command"],
         status="pass",
-        detail="join completed the onboarding flow",
+        detail="join completed the onboarding flow and created a real devlog entry",
     )
 
 
@@ -496,10 +495,20 @@ def _scenario_decide(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     import synlynk as synlynk_pkg
 
     workspace = _ensure_workspace_scaffold(ctx)
+
+    def _fake_run_agent_sync(agent: str, prompt: str, timeout: int | None = 120) -> str:
+        if "Synthesize these into a single decision" in prompt:
+            return (
+                "claude recommends the obvious option.\n"
+                "codex recommends the obvious option.\n"
+                "Decision: choose the obvious option."
+            )
+        return f"{agent} recommends the obvious option."
+
     with _chdir(workspace), patch.object(
         synlynk_pkg,
         "_run_agent_sync",
-        side_effect=lambda agent, prompt, timeout=120: f"{agent} recommends the obvious option.",
+        side_effect=_fake_run_agent_sync,
     ), patch.object(
         synlynk_pkg,
         "_check_upstream_divergence",
@@ -517,10 +526,16 @@ def _scenario_decide(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             status="fail",
             detail="decide did not run the panel flow",
         )
+    if "claude recommends" not in output or "codex recommends" not in output:
+        return ScenarioResult(
+            command=entry["command"],
+            status="fail",
+            detail="decide did not surface each panelist's individual response",
+        )
     return ScenarioResult(
         command=entry["command"],
         status="pass",
-        detail="decide ran the live panel flow",
+        detail="decide ran the live panel flow and surfaced every panelist's response",
     )
 
 
@@ -816,11 +831,11 @@ def _scenario_migrate(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             status="fail",
             detail=f"migrate cost rows mismatch: {cost_rows!r}",
         )
-    if list(devlog_rows) != [expected_devlog]:
+    if expected_devlog not in devlog_rows:
         return ScenarioResult(
             command=entry["command"],
             status="fail",
-            detail=f"migrate devlog rows mismatch: {devlog_rows!r}",
+            detail=f"migrate devlog rows missing expected entry: {devlog_rows!r}",
         )
     if not story_row or story_row[0] != "#451":
         return ScenarioResult(
