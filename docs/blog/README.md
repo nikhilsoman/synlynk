@@ -92,6 +92,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [87](./87-pr606-scan-repo-requirements.md) | PR #606 — `_scan_repo_requirements`: Presence-Only Repo Requirement Discovery | [#606](https://github.com/nikhilsoman/synlynk/pull/606) | 2026-07-30 |
 | [88](./88-prTBD-doctor-fix-agy.md) | PR #TBD — Phase 4: synlynk doctor --fix agy | TBD | 2026-07-30 |
 | [89](./89-pr614-dispatch-preflight-gate.md) | PR #614 — Dispatch Preflight Capability Gate | [#614](https://github.com/nikhilsoman/synlynk/pull/614) | 2026-07-31 |
+| [90](./90-pr587-capability-drift-regression-classification.md) | PR #587 — Harness Capability Drift & Regression Classification | [#587](https://github.com/nikhilsoman/synlynk/pull/587) | 2026-08-01 |
 
 
 
