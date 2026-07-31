@@ -371,6 +371,7 @@ def _format_status_terminal(
 def cmd_status(db_conn=None, json_output: bool = False) -> str:
     """Print ecosystem status for the current workspace."""
     from synlynk import _get_db, _read_sentinel_alerts, load_config
+    from synlynk.capability_watch import is_smoke_test_stale
     from synlynk.costs import _load_model_rates
 
     if db_conn is None:
@@ -392,5 +393,23 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
         json_output=json_output,
         rates_updated_at=rates_updated_at,
     )
+    if not json_output:
+        extra_lines = []
+        if is_smoke_test_stale(db_conn, threshold_days=7):
+            extra_lines.append(
+                "⚠ smoke test overdue - run `synlynk selftest --live` or enable `auto_smoke_test` in config"
+            )
+
+        recent_incidents = db_conn.execute(
+            "SELECT harness, failing_path, classification, detected_at FROM capability_incidents "
+            "WHERE classification = 'regression' ORDER BY detected_at DESC LIMIT 5"
+        ).fetchall()
+        if recent_incidents:
+            extra_lines.append("Recent regressions:")
+            for harness, path, classification, detected_at in recent_incidents:
+                extra_lines.append(f"  [{classification}] {harness} - {path} ({detected_at})")
+
+        if extra_lines:
+            output = output + "\n" + "\n".join(extra_lines)
     print(output)
     return output

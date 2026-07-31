@@ -1,12 +1,17 @@
 import json
 import os
 import sys
+import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from synlynk.db import _migrate_db
+from synlynk.status import cmd_status
 
 
 def _utc_iso(hours_ago: int) -> str:
@@ -121,3 +126,37 @@ def test_cmd_status_platform_flag_wired(project_dir, monkeypatch):
 
     assert exc.value.code == 0
     assert captured == {"json_output": False, "platform": True}
+
+
+def test_status_flags_overdue_smoke_test(tmp_path, capsys):
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    old_ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 8 * 86400))
+    conn.execute(
+        "UPDATE capability_watch SET last_smoke_test_at = ? WHERE id = 1", (old_ts,)
+    )
+    conn.commit()
+
+    output = cmd_status(db_conn=conn, json_output=False)
+    printed = capsys.readouterr().out
+    assert "smoke test overdue" in output.lower()
+    assert "smoke test overdue" in printed.lower()
+
+
+def test_status_surfaces_recent_regression_incidents(tmp_path, capsys):
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    conn.execute(
+        "INSERT INTO capability_incidents (harness, failing_path, classification, evidence, detected_at) "
+        "VALUES ('codex', 'synlynk/jobs.py', 'regression', 'test evidence', datetime('now'))"
+    )
+    conn.commit()
+
+    output = cmd_status(db_conn=conn, json_output=False)
+    printed = capsys.readouterr().out
+    assert "regression" in output.lower()
+    assert "codex" in output.lower()
+    assert "regression" in printed.lower()
+    assert "codex" in printed.lower()
