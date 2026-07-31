@@ -158,11 +158,15 @@ def test_dispatch_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
     from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS
 
     ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=1.0, spent_usd=1.0)
-    with patch("synlynk.selftest.dispatch_agent") as mock_dispatch:
+    with patch("synlynk.discover_agents", return_value=[{"name": "codex"}]), patch(
+        "synlynk.selftest.dispatch_agent"
+    ) as mock_dispatch:
         result = SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
     mock_dispatch.assert_not_called()
-    assert result.status == "skipped"
-    assert "budget" in result.detail.lower()
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0].status == "skipped"
+    assert "budget" in result[0].detail.lower()
 
 
 def test_dispatch_scenario_uses_fence_estimate_as_cost(tmp_path, monkeypatch):
@@ -183,11 +187,15 @@ def test_dispatch_scenario_uses_fence_estimate_as_cost(tmp_path, monkeypatch):
         ),
     }
     ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=2.0)
-    with patch("synlynk.selftest.dispatch_agent", return_value=fake_job) as mock_dispatch:
+    with patch("synlynk.discover_agents", return_value=[{"name": "codex"}]), patch(
+        "synlynk.selftest.dispatch_agent", return_value=fake_job
+    ) as mock_dispatch:
         result = SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
     mock_dispatch.assert_called_once()
-    assert result.status == "pass"
-    assert result.cost_usd == 0.03
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0].status == "pass"
+    assert result[0].cost_usd == 0.03
 
 
 def test_exec_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
@@ -195,10 +203,14 @@ def test_exec_scenario_skips_when_budget_exhausted(tmp_path, monkeypatch):
     from synlynk.selftest import ScenarioContext, SELFTEST_SCENARIOS
 
     ctx = ScenarioContext(repo_path=str(tmp_path), live=True, budget_cap_usd=1.0, spent_usd=1.0)
-    with patch("synlynk.selftest.exec_command") as mock_exec:
+    with patch("synlynk.discover_agents", return_value=[{"name": "claude"}]), patch(
+        "synlynk.selftest.exec_command"
+    ) as mock_exec:
         result = SELFTEST_SCENARIOS["exec"]({"command": "exec"}, ctx)
     mock_exec.assert_not_called()
-    assert result.status == "skipped"
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0].status == "skipped"
 
 
 def test_dispatch_scenario_patches_db_path_to_scratch_workspace(tmp_path, monkeypatch):
@@ -217,11 +229,52 @@ def test_dispatch_scenario_patches_db_path_to_scratch_workspace(tmp_path, monkey
         return {"id": "job-fake", "pid": 1, "fence": None}
 
     ctx = ScenarioContext(repo_path=str(scratch_workspace), live=True, budget_cap_usd=2.0)
-    with patch("synlynk.selftest.dispatch_agent", side_effect=fake_dispatch_agent):
-        SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
+    with patch("synlynk.discover_agents", return_value=[{"name": "codex"}]), patch(
+        "synlynk.selftest.dispatch_agent", side_effect=fake_dispatch_agent
+    ):
+        results = SELFTEST_SCENARIOS["dispatch"]({"command": "dispatch"}, ctx)
 
     assert seen_db_path.get("value") == str(scratch_workspace / ".synlynk" / "state.db")
     assert synlynk_pkg.DB_PATH == host_db_path
+    assert isinstance(results, list)
+    assert results[0].status == "pass"
+
+
+def test_scenario_context_has_mode_and_harness_fields():
+    from synlynk.selftest import ScenarioContext
+
+    ctx = ScenarioContext(repo_path="", live=True)
+    assert ctx.mode == "home"
+    assert ctx.harness is None
+
+
+def test_dispatch_scenario_loops_over_discovered_harnesses(tmp_path):
+    from synlynk.selftest import ScenarioContext, _dispatch_scenario
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    discovered = [{"name": "codex"}, {"name": "grok"}]
+    with patch("synlynk.discover_agents", return_value=discovered), patch(
+        "synlynk.selftest.dispatch_agent",
+        return_value={"id": "job-1", "pid": 123, "fence": None},
+    ) as mock_dispatch:
+        results = _dispatch_scenario({"command": "dispatch"}, ctx)
+    assert isinstance(results, list)
+    assert len(results) == 2
+    called_agents = {call.args[0] for call in mock_dispatch.call_args_list}
+    assert called_agents == {"codex", "grok"}
+
+
+def test_exec_scenario_loops_over_discovered_harnesses(tmp_path):
+    from synlynk.selftest import ScenarioContext, _exec_scenario
+
+    ctx = ScenarioContext(repo_path=str(tmp_path), live=True)
+    discovered = [{"name": "claude"}, {"name": "agy"}]
+    with patch("synlynk.discover_agents", return_value=discovered), patch(
+        "synlynk.selftest.exec_command", return_value=0
+    ) as mock_exec:
+        results = _exec_scenario({"command": "exec"}, ctx)
+    assert len(results) == 2
+    assert mock_exec.call_count == 2
 
 
 def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_path):
@@ -253,7 +306,7 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
         "dispatch_agent",
         lambda *args, **kwargs: {"id": "job-selftest", "pid": 1, "fence": None},
     )
-    monkeypatch.setattr(selftest_mod, "exec_command", lambda argv: 0)
+    monkeypatch.setattr(selftest_mod, "exec_command", lambda argv: 1)
     monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda execute=True, max_stories=1: None)
 
     def fake_chdir(path):
