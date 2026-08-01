@@ -1,9 +1,14 @@
+import json
+import os
+import subprocess as _subprocess
+
 from synlynk.worktree import (
     WorktreeEntry,
     WorktreeVerdict,
     _apply_nesting_floor,
     _build_worktree_entries,
     _classify_worktree,
+    cmd_worktree_audit,
     _parse_worktree_porcelain,
 )
 
@@ -182,3 +187,96 @@ def test_classify_missing_worktree_directory_is_safe():
     )
     assert v.verdict == "safe"
     assert v.reason == "worktree directory missing — stale registration"
+
+
+def _run(cmd, cwd):
+    result = _subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, f"{cmd} failed: {result.stderr}"
+    return result
+
+
+def _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False):
+    """Real git repo fixture: main repo with one linked worktree on a
+    feature branch. If branch_ahead_of_main, the feature branch gets an
+    extra commit main doesn't have (so merge-base --is-ancestor is false)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _run(["git", "init", "-b", "main"], cwd=repo)
+    _run(["git", "config", "user.email", "test@test.com"], cwd=repo)
+    _run(["git", "config", "user.name", "Test"], cwd=repo)
+    (repo / "README.md").write_text("hello\n")
+    _run(["git", "add", "."], cwd=repo)
+    _run(["git", "commit", "-m", "init"], cwd=repo)
+    _run(["git", "remote", "add", "origin", str(repo)], cwd=repo)
+    _run(["git", "branch", "origin/main"], cwd=repo)
+
+    wt_dir = tmp_path / "wt-feature"
+    _run(["git", "worktree", "add", str(wt_dir), "-b", "chore/feature"], cwd=repo)
+    if branch_ahead_of_main:
+        (wt_dir / "extra.txt").write_text("new stuff\n")
+        _run(["git", "add", "."], cwd=wt_dir)
+        _run(["git", "commit", "-m", "extra work"], cwd=wt_dir)
+    return repo, wt_dir
+
+
+def _make_stub_gh(tmp_path, monkeypatch, auth_ok=True, pr_json="[]"):
+    script = tmp_path / "gh"
+    script.write_text(
+        f"""#!/bin/sh
+if [ "$1" = "auth" ]; then
+  {"exit 0" if auth_ok else "exit 1"}
+fi
+if [ "$1" = "pr" ]; then
+  echo '{pr_json}'
+  exit 0
+fi
+exit 0
+"""
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_cmd_worktree_audit_reports_safe_ancestor(tmp_path, monkeypatch):
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    _make_stub_gh(tmp_path, monkeypatch, auth_ok=True)
+    monkeypatch.chdir(repo)
+
+    output = cmd_worktree_audit(json_output=False)
+    assert "SAFE (1)" in output
+    assert "chore/feature" in output
+    assert "merged, direct ancestor" in output
+
+
+def test_cmd_worktree_audit_json_output_shape(tmp_path, monkeypatch):
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    _make_stub_gh(tmp_path, monkeypatch, auth_ok=True)
+    monkeypatch.chdir(repo)
+
+    output = cmd_worktree_audit(json_output=True)
+    payload = json.loads(output)
+    assert payload == [
+        {
+            "path": str(wt_dir),
+            "branch": "chore/feature",
+            "verdict": "safe",
+            "reason": "merged, direct ancestor",
+            "nested_under": None,
+        }
+    ]
+
+
+def test_cmd_worktree_audit_no_worktrees_prints_one_liner(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _run(["git", "init", "-b", "main"], cwd=repo)
+    _run(["git", "config", "user.email", "test@test.com"], cwd=repo)
+    _run(["git", "config", "user.name", "Test"], cwd=repo)
+    (repo / "README.md").write_text("hello\n")
+    _run(["git", "add", "."], cwd=repo)
+    _run(["git", "commit", "-m", "init"], cwd=repo)
+    _make_stub_gh(tmp_path, monkeypatch, auth_ok=True)
+    monkeypatch.chdir(repo)
+
+    output = cmd_worktree_audit(json_output=False)
+    assert output == "No stale worktrees — nothing to audit."

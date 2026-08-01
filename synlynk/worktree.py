@@ -165,3 +165,203 @@ def _apply_nesting_floor(verdicts: list) -> list:
         else:
             result.append(v)
     return result
+
+
+def _gh_auth_available() -> bool:
+    try:
+        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _git_status_dirty(path: str):
+    result = subprocess.run(
+        ["git", "status", "--short"], cwd=path, capture_output=True, text=True, timeout=10,
+    )
+    output = result.stdout.strip()
+    if not output:
+        return False, ""
+    return True, output.splitlines()[0]
+
+
+def _git_is_ancestor(branch: str, path: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", branch, "origin/main"],
+        cwd=path, capture_output=True, text=True, timeout=10,
+    )
+    return result.returncode == 0
+
+
+def _git_commits_ahead(branch: str, path: str) -> int:
+    result = subprocess.run(
+        ["git", "log", f"origin/main..{branch}", "--oneline"],
+        cwd=path, capture_output=True, text=True, timeout=10,
+    )
+    return len([line for line in result.stdout.splitlines() if line.strip()])
+
+
+def _git_net_diff_lines(branch: str, path: str) -> int:
+    result = subprocess.run(
+        ["git", "diff", f"origin/main..{branch}", "--shortstat"],
+        cwd=path, capture_output=True, text=True, timeout=10,
+    )
+    text = result.stdout.strip()
+    ins_match = re.search(r"(\d+) insertion", text)
+    del_match = re.search(r"(\d+) deletion", text)
+    insertions = int(ins_match.group(1)) if ins_match else 0
+    deletions = int(del_match.group(1)) if del_match else 0
+    return insertions - deletions
+
+
+def _gh_pr_for_branch(branch: str):
+    result = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--search",
+            f"head:{branch}",
+            "--json",
+            "number,state,mergedAt",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+    except (ValueError, json.JSONDecodeError):
+        return None
+    return data[0] if data else None
+
+
+def _gather_worktree_signals(entry: WorktreeEntry, gh_available: bool) -> dict:
+    if not os.path.isdir(entry.path):
+        return {"worktree_missing": True}
+    try:
+        is_dirty, dirty_summary = _git_status_dirty(entry.path)
+        if is_dirty:
+            return {"worktree_missing": False, "is_dirty": True, "dirty_summary": dirty_summary}
+
+        is_ancestor = _git_is_ancestor(entry.branch, entry.path)
+        if is_ancestor:
+            return {"worktree_missing": False, "is_dirty": False, "is_ancestor": True}
+
+        pr_info = None
+        net_diff_lines = None
+        if gh_available:
+            pr_info = _gh_pr_for_branch(entry.branch)
+            if pr_info and pr_info.get("state") == "CLOSED":
+                net_diff_lines = _git_net_diff_lines(entry.branch, entry.path)
+        commits_ahead = _git_commits_ahead(entry.branch, entry.path)
+        return {
+            "worktree_missing": False,
+            "is_dirty": False,
+            "is_ancestor": False,
+            "gh_available": gh_available,
+            "pr_info": pr_info,
+            "net_diff_lines": net_diff_lines,
+            "commits_ahead": commits_ahead,
+        }
+    except (subprocess.SubprocessError, OSError) as exc:
+        return {"error": str(exc)}
+
+
+def _verdict_from_signals(entry: WorktreeEntry, signals: dict, gh_available: bool) -> WorktreeVerdict:
+    if signals.get("error"):
+        return WorktreeVerdict(entry.path, entry.branch, "needs-review", signals["error"], entry.nested_under)
+    return _classify_worktree(
+        entry,
+        worktree_missing=signals.get("worktree_missing", False),
+        is_dirty=signals.get("is_dirty", False),
+        dirty_summary=signals.get("dirty_summary", ""),
+        is_ancestor=signals.get("is_ancestor", False),
+        gh_available=signals.get("gh_available", gh_available),
+        pr_info=signals.get("pr_info"),
+        net_diff_lines=signals.get("net_diff_lines"),
+        commits_ahead=signals.get("commits_ahead", 0),
+    )
+
+
+def _get_repo_root() -> str:
+    result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=10)
+    return result.stdout.strip()
+
+
+def _list_worktrees(main_repo_path: str, cwd_worktree_path: str) -> list:
+    result = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=main_repo_path, capture_output=True, text=True, timeout=10,
+    )
+    raw = _parse_worktree_porcelain(result.stdout)
+    return _build_worktree_entries(raw, main_repo_path, cwd_worktree_path)
+
+
+def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str) -> list:
+    entries = _list_worktrees(main_repo_path, cwd_worktree_path)
+    gh_available = _gh_auth_available()
+    verdicts = []
+    for entry in entries:
+        signals = _gather_worktree_signals(entry, gh_available)
+        verdicts.append(_verdict_from_signals(entry, signals, gh_available))
+    return _apply_nesting_floor(verdicts)
+
+
+def _format_audit_report(verdicts: list, json_output: bool = False) -> str:
+    if json_output:
+        payload = [
+            {
+                "path": v.path,
+                "branch": v.branch,
+                "verdict": v.verdict,
+                "reason": v.reason,
+                "nested_under": v.nested_under,
+            }
+            for v in verdicts
+        ]
+        return json.dumps(payload, indent=2)
+
+    if not verdicts:
+        return "No stale worktrees — nothing to audit."
+
+    safe = [v for v in verdicts if v.verdict == "safe"]
+    needs_review = [v for v in verdicts if v.verdict == "needs-review"]
+    unsafe = [v for v in verdicts if v.verdict == "unsafe"]
+
+    lines = [
+        f"SYNLYNK WORKTREE AUDIT   {len(verdicts)} worktrees checked (excluding main + current session)",
+        "",
+    ]
+    if safe:
+        lines.append(f"SAFE ({len(safe)}) — merged/stale, no action needed but removable")
+        for v in safe:
+            lines.append(f"  {v.branch:<30}  {v.reason}")
+        lines.append("")
+    if needs_review:
+        lines.append(f"NEEDS-REVIEW ({len(needs_review)}) — a human should look")
+        for v in needs_review:
+            lines.append(f"  {v.branch:<30}  {v.reason}")
+        lines.append("")
+    if unsafe:
+        lines.append(f"UNSAFE ({len(unsafe)}) — active, do not touch")
+        for v in unsafe:
+            lines.append(f"  {v.branch:<30}  {v.reason}")
+        lines.append("")
+    if safe:
+        lines.append(f"Run `synlynk worktree clean --apply` to remove the {len(safe)} SAFE items")
+
+    return "\n".join(lines).rstrip()
+
+
+def cmd_worktree_audit(json_output: bool = False) -> str:
+    main_repo_path = _get_repo_root()
+    cwd_worktree_path = os.getcwd()
+    verdicts = _collect_verdicts(main_repo_path, cwd_worktree_path)
+    output = _format_audit_report(verdicts, json_output)
+    print(output)
+    return output
