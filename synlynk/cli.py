@@ -319,7 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser.add_argument("--agent", default=None,
                               help="Probe a single agent instead of all known agents")
 
-    subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+    doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+    doctor_parser.add_argument("--fix", default=None,
+                               help="Apply a targeted remediation for the named agent (agy only)")
+    doctor_parser.add_argument("--yes", action="store_true",
+                               help="Write the proposed remediation without prompting")
 
     exit_parser = subparsers.add_parser(
         "exit", help="Remove synlynk from this repository (reversible via repair)")
@@ -462,6 +466,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Bypass capability routing — dispatch to the exact agent specified")
     dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
         help="Task needs gh pr review/merge - reroute to a capable agent unless --force-agent is set (see #426)")
+    dispatch_parser.add_argument(
+        "--requires",
+        action="append",
+        default=[],
+        help="Declare a required capability for this dispatch (repeatable, e.g. docker, mcp, gh-write)",
+    )
     dispatch_parser.add_argument(
         "--context-mode", choices=["none", "task", "full"], default="task",
         dest="context_mode", help="Context injection mode"
@@ -808,6 +818,14 @@ def main() -> None:
     from synlynk.scheduler import cmd_schedule
     from synlynk.db import cmd_credit_grant
     _reconcile_jobs()
+    try:
+        from synlynk.capability_watch import spawn_staleness_check_thread
+        from synlynk import _get_db, load_config
+
+        _watch_conn = _get_db()
+        spawn_staleness_check_thread(_watch_conn, load_config())
+    except Exception:
+        pass  # staleness checks are best-effort; never block a real command on this
     parser = build_parser()
     args = parser.parse_args()
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
@@ -882,12 +900,19 @@ def main() -> None:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
+                                 requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
                                  issue=getattr(args, "issue", None))
+            if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
+                print(f"Error: {job.get('reason')}")
+                remediation = job.get("remediation")
+                if remediation:
+                    print(f"  {remediation}")
+                sys.exit(1)
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
@@ -1098,7 +1123,7 @@ def main() -> None:
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
-        sys.exit(cmd_doctor())
+        sys.exit(cmd_doctor(args))
     elif args.command == "roles":
         cmd_roles(fix=getattr(args, "fix", False))
     elif args.command == "release":

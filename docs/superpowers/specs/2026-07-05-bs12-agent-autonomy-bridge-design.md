@@ -34,7 +34,7 @@ Stored under a new `permissions` key in `.agents/<agent>.json`. Individual dispa
 
 The resolved permission set is translated into per-agent dispatch flags:
 - Claude: `--allowedTools` list
-- Codex: `--approval-policy` (none / untrusted / all)
+- Codex: `--ask-for-approval` (untrusted / on-request / never)
 - Agy: included in task context header as a `## Permissions` section (no CLI flag available)
 
 ### B — Harness Config

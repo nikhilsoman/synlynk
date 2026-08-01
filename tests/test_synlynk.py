@@ -409,11 +409,11 @@ def test_permissions_to_flags_claude_allowedtools():
     assert "Edit" in tools_str
 
 
-def test_permissions_to_flags_codex_approval_policy():
+def test_permissions_to_flags_codex_ask_for_approval():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("codex", ["read:*"])
-    assert "--approval-policy" in result
+    assert "--ask-for-approval" in result
     assert "untrusted" in result
 
 
@@ -3549,14 +3549,17 @@ def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     # requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges
     if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    assert "--always-approve" in shell_cmd
-    assert "--yes" not in shell_cmd
+    assert "--permission-mode dontAsk" in shell_cmd
+    assert "--always-approve" not in shell_cmd
+    assert "--allow Read" in shell_cmd
+    assert "Bash(pytest:*)" in shell_cmd
     assert "--output-format json" in shell_cmd
 
 
@@ -3588,6 +3591,7 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"always_approve_unsupported": True})
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
@@ -3625,17 +3629,19 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    # --single must appear after required Grok dispatch flags and directly before "$PROMPT"
+    # --single must appear after the Grok permission flags and directly before "$PROMPT"
+    assert "--permission-mode dontAsk" in shell_cmd
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
     prompt_pos = shell_cmd.index('"$PROMPT"')
     assert single_pos < prompt_pos, "--single must come before $PROMPT"
-    approve_pos = shell_cmd.index("--always-approve")
-    assert approve_pos < single_pos, "--always-approve must come before --single"
-    assert "--yes" not in shell_cmd
+    perm_pos = shell_cmd.index("--permission-mode")
+    assert perm_pos < single_pos, "--permission-mode must come before --single"
+    assert "--always-approve" not in shell_cmd
 
 
 def test_agy_prompt_flag_split_from_non_interactive_flags():
@@ -4460,11 +4466,14 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
         captured["cmd"] = cmd
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"codex": ["review"]}})
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
     assert "workspace-write" in shell_cmd
+    assert "--ask-for-approval" in shell_cmd
+    assert shell_cmd.count("--ask-for-approval") == 1
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
     # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
     assert "--sandbox" not in shell_cmd
@@ -6473,24 +6482,24 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    # --always-approve is the correct required flag (Grok dropped --yes)
+    # Grok now derives permission mode from the resolved permission set.
     assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
-    assert "--always-approve" in grok["dispatch_flags"]["required_flags"]
+    assert grok["dispatch_flags"]["required_flags"] == []
     assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
 
 
-def test_grok_baseline_uses_always_approve():
-    # Grok dropped --yes; --always-approve is now the correct headless flag
+def test_grok_baseline_no_longer_requires_always_approve():
+    # Grok no longer hardcodes always-approve as a required dispatch flag.
     from synlynk import AGENT_CAPABILITY_BASELINES
     grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
     assert "--always-approve" in flags.get("valid_flags", []), \
         "--always-approve must be valid for Grok (--yes was dropped)"
-    assert "--always-approve" in flags.get("required_flags", []), \
-        "--always-approve must be required for Grok"
+    assert flags.get("required_flags", []) == [], \
+        "Grok must not require --always-approve by default"
     assert "--yes" in flags.get("invalid_flags", []), \
         "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 
@@ -6839,6 +6848,72 @@ def test_cmd_doctor_with_warn_only(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "advisory warning" in out
+
+
+def test_doctor_fix_agy_prints_diff_and_writes_on_yes(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings_dir = tmp_path / ".gemini" / "antigravity-cli"
+    settings_dir.mkdir(parents=True)
+    settings_path = settings_dir / "settings.json"
+    settings_path.write_text(json.dumps({"permissions": {"allow": ["command(gh pr review)"]}}, indent=2))
+
+    args = SimpleNamespace(fix="agy", yes=True)
+    exit_code = synlynk.cmd_doctor(args=args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "command(gh pr merge)" in out
+    assert "Wrote" in out
+    saved = json.loads(settings_path.read_text())
+    assert saved["permissions"]["allow"] == [
+        "command(gh pr review)",
+        "command(gh pr comment)",
+        "command(gh pr merge)",
+    ]
+
+    conn = synlynk._get_db()
+    try:
+        row = conn.execute(
+            "SELECT agent, target_file, exact_diff, operator "
+            "FROM remediation_actions ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row[0] == "agy"
+    assert row[1].endswith("settings.json")
+    assert "command(gh pr merge)" in row[2]
+    assert row[3] == "non-interactive --yes"
+
+
+def test_doctor_fix_agy_without_yes_aborts_when_noninteractive(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings_dir = tmp_path / ".gemini" / "antigravity-cli"
+    settings_dir.mkdir(parents=True)
+    settings_path = settings_dir / "settings.json"
+    settings_path.write_text(json.dumps({"permissions": {"allow": []}}, indent=2))
+    monkeypatch.setattr("synlynk.doctor.sys.stdin.isatty", lambda: False)
+
+    args = SimpleNamespace(fix="agy", yes=False)
+    exit_code = synlynk.cmd_doctor(args=args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "command(gh pr merge)" in out
+    assert "Aborted" in out
+    assert json.loads(settings_path.read_text())["permissions"]["allow"] == []
 
 
 def test_health_check_dataclass():

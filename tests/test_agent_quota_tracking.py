@@ -42,6 +42,25 @@ def _write_repair_config(tmp_path, config):
     (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
 
 
+def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_at=None):
+    from synlynk import _migrate_db
+
+    _migrate_db(db)
+    last_probe_at = last_probe_at or time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.localtime(time.time())
+    )
+    db.execute(
+        """
+        INSERT INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (agent, agent, "1.0.0", compliance_status, "{}", "{}", "cap-hash", last_probe_at),
+    )
+    db.commit()
+
+
 def test_repair_sops_only_injects_synlynks_own_h_repo_specific_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_repair_config(
@@ -308,6 +327,7 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
     finally:
         conn.close()
 
+
     written = sl.refresh_agent_quotas_from_telemetry(now=now)
     assert written > 0
 
@@ -319,7 +339,7 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         assert after["unit"] == "tokens"
         assert after["headroom"] is not None
         assert after["headroom"] > 0
-        # used was 50k on a 100k hourly default → headroom finite and < limit
+        # used was 50k on a 100k hourly default -> headroom finite and < limit
         assert after["headroom"] < 200_000
 
         # Exhausting estimate: 200k needed, headroom should block if lower
@@ -330,6 +350,506 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         assert exhausted["degraded"] is False
     finally:
         conn.close()
+
+
+def test_fix_issue_616__maybe_open_worktree_pr_sy_prefers_recorded_base_branch_when_valid(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ]:
+            assert cmd[-1] == "dispatch/claude/some-branch^{commit}"
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/heads/dispatch/claude/some-branch\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-1",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/some-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "dispatch/claude/some-branch"
+
+
+def test_fix_issue_616__maybe_open_worktree_pr_sy_preserves_multisegment_remote_branch_name(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ]:
+            assert cmd[-1] == "dispatch/claude/some-branch^{commit}"
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/dispatch/claude/some-branch\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-1",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/some-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "dispatch/claude/some-branch"
+
+
+@pytest.mark.parametrize("job", [{"id": "job-legacy-none", "task": "do the thing", "base_branch": None}, {"id": "job-legacy-missing", "task": "do the thing"}])
+def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_to_default_base_when_missing(
+    tmp_path, monkeypatch, job
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/main\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(job, str(worktree_path), "feat/example")
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert create_call[create_call.index("--base") + 1] == "main"
+
+
+def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_when_recorded_base_is_stale(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ] and cmd[-1] == "dispatch/claude/deleted-branch^{commit}":
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/master\n",
+                stderr="",
+            )
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            if cmd[5] == "origin/master":
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-stale",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/deleted-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert create_call[create_call.index("--base") + 1] == "master"
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_trust_gate_forces_no_coverage_for_fresh_probe(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db, last_probe_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+
+    result = _dispatch_capability_preflight(
+        "agy",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "degraded"
+    assert result["branch"] == "no-coverage"
+    assert result["probe_trustworthy"] is False
+    assert result["reason"]
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_stale_probe_branch_reprobes_and_blocks_on_timeout(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+    dispatch_globals = _dispatch_capability_preflight.__globals__
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    stale_probe_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 7200))
+    _seed_harness_record(db, last_probe_at=stale_probe_at)
+    original_trust = dispatch_globals["_probe_results_trustworthy"]
+    original_reprobe = dispatch_globals["_reprobe_harness_sync"]
+    dispatch_globals["_probe_results_trustworthy"] = lambda: True
+    dispatch_globals["_reprobe_harness_sync"] = lambda agent, timeout_s=120: {
+        "passed": False,
+        "reason": f"Fresh probe for '{agent}' timed out after {timeout_s}s.",
+    }
+    try:
+        result = _dispatch_capability_preflight(
+            "agy",
+            "ship the fix",
+            db_conn=db,
+            cwd=str(tmp_path),
+            requires=[],
+        )
+
+        assert result["passed"] is False
+        assert result["status"] == "blocked"
+        assert result["branch"] == "stale"
+        assert "timed out" in result["reason"]
+    finally:
+        dispatch_globals["_probe_results_trustworthy"] = original_trust
+        dispatch_globals["_reprobe_harness_sync"] = original_reprobe
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_failing_probe_branch_blocks(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+    dispatch_globals = _dispatch_capability_preflight.__globals__
+    from synlynk import _migrate_db
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+    last_probe_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime(time.time()))
+    db.execute(
+        """
+        INSERT INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("codex", "codex", "1.0.0", "degraded", "{}", "{}", "cap-hash", last_probe_at),
+    )
+    db.commit()
+    original_trust = dispatch_globals["_probe_results_trustworthy"]
+    dispatch_globals["_probe_results_trustworthy"] = lambda: True
+    try:
+        result = _dispatch_capability_preflight(
+            "codex",
+            "ship the fix",
+            db_conn=db,
+            cwd=str(tmp_path),
+            requires=[],
+        )
+
+        assert result["passed"] is False
+        assert result["status"] == "blocked"
+        assert result["branch"] == "failing"
+        assert "compliance_status" in result["reason"]
+    finally:
+        dispatch_globals["_probe_results_trustworthy"] = original_trust
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_no_coverage_required_blocks(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+
+    result = _dispatch_capability_preflight(
+        "agy",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=["docker"],
+    )
+
+    assert result["passed"] is False
+    assert result["status"] == "blocked"
+    assert result["branch"] == "no-coverage"
+    assert "doctor --fix agy" in result["remediation"]
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_no_coverage_optional_degrades(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+
+    result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "degraded"
+    assert result["branch"] == "no-coverage"
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_repo_artifact_presence_vs_declared_split(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+    (tmp_path / "Dockerfile").write_text("FROM python:3.11\n")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: ci\n")
+
+    soft_result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+    hard_result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=["docker"],
+    )
+
+    assert soft_result["passed"] is True
+    assert soft_result["status"] == "degraded"
+    assert "docker" in soft_result["reason"]
+    assert hard_result["passed"] is False
+    assert hard_result["status"] == "blocked"
+    assert hard_result["branch"] == "no-coverage"
+def _flag_values(flags, name):
+    values = []
+    for idx, flag in enumerate(flags):
+        if flag == name and idx + 1 < len(flags):
+            values.append(flags[idx + 1])
+    return values
+
+
+@pytest.mark.parametrize(
+    "role_name, expected_allow, expected_deny",
+    [
+        ("pm", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        ("review", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        ("deploy", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        (
+            "implement",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "test",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "refactor",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "css",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "templates",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "content",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "canvas",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+        (
+            "js",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+        (
+            "infra",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+    ],
+)
+def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(role_name, expected_allow, expected_deny):
+    from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
+
+    permissions = _resolve_dispatch_permissions("grok", role_list=[role_name])
+    flags = _permissions_to_flags("grok", permissions)
+
+    assert flags[:2] == ["--permission-mode", "dontAsk"]
+    assert "--always-approve" not in flags
+    assert set(_flag_values(flags, "--allow")) == expected_allow
+    assert set(_flag_values(flags, "--deny")) == expected_deny
+
+
+def test_phase_2_of_docssuperpowersplans20260730h_grok_regression_no_empty_fallthrough():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("grok", ["read:*"])
+    assert flags
+    assert flags[:2] == ["--permission-mode", "dontAsk"]
+    assert "--always-approve" not in flags
+    assert "Read" in _flag_values(flags, "--allow")
+
+
+def test_phase_7_of_docssuperpowersplans20260730h_panel_timeout_override_respected(monkeypatch):
+    import synlynk.team as team
+
+    calls = []
+
+    class Result:
+        stdout = "panel output\n"
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Result()
+
+    monkeypatch.setattr(team.subprocess, "run", fake_run)
+
+    codex_output = team._run_agent_sync("codex", "review prompt")
+    claude_output = team._run_agent_sync("claude", "review prompt")
+
+    assert codex_output == "panel output"
+    assert claude_output == "panel output"
+    assert calls[0][1]["timeout"] == 300
+    assert calls[1][1]["timeout"] == 120
 
 
 def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):

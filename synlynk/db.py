@@ -353,6 +353,37 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             recorded_at TEXT NOT NULL
         );
     """)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS capability_watch (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            last_probe_at TEXT,
+            last_green_probe_at TEXT,
+            last_smoke_test_at TEXT,
+            last_green_smoke_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS gh_write_capability (
+            harness TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'unknown',
+            checked_at TEXT,
+            PRIMARY KEY (harness, mode, action)
+        );
+
+        CREATE TABLE IF NOT EXISTS capability_incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            harness TEXT NOT NULL,
+            failing_path TEXT NOT NULL,
+            classification TEXT NOT NULL,
+            evidence TEXT NOT NULL DEFAULT '',
+            detected_at TEXT NOT NULL
+        );
+    """)
+    conn.execute(
+        "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
+        "last_smoke_test_at, last_green_smoke_at) VALUES (1, NULL, NULL, NULL, NULL)"
+    )
     harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
     if "verb" not in harness_verb_cols:
         try:
@@ -465,6 +496,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             job_id            TEXT,
             recorded_at       TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS remediation_actions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp   TEXT NOT NULL,
+            agent       TEXT NOT NULL,
+            target_file TEXT NOT NULL,
+            exact_diff  TEXT NOT NULL,
+            operator    TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
+            ON remediation_actions(timestamp);
         CREATE TABLE IF NOT EXISTS devlog_entries (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             author        TEXT NOT NULL,
@@ -2103,6 +2144,27 @@ def cmd_cost_log(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
         f"{tokens_in:,} in / {tokens_out:,} out, est ${est_cost:.4f}"
     )
+
+def cmd_remediation_log(
+    agent: str,
+    target_file: str,
+    exact_diff: str,
+    operator: str = "non-interactive --yes",
+    timestamp: str = None,
+) -> None:
+    """Append a remediation audit row to the canonical DB log."""
+    from synlynk import _get_db
+
+    logged_at = timestamp or time.strftime("%Y-%m-%d %H:%M")
+    conn = _get_db()
+    conn.execute(
+        """INSERT INTO remediation_actions
+            (timestamp, agent, target_file, exact_diff, operator)
+           VALUES (?, ?, ?, ?, ?)""",
+        (logged_at, agent, target_file, exact_diff, operator),
+    )
+    conn.commit()
+    conn.close()
 
 def cmd_credit_grant(
     agent: str,

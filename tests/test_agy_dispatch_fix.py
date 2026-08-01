@@ -88,7 +88,7 @@ def test_extract_build_parser_from_clipy_main_for_cli_introspection():
     assert args.task == "build"
 
 
-def test_dispatch_real_files_touched_via_git_diff_lists_committed_files_only(git_worktree_repo, monkeypatch):
+def test_dispatch_real_files_touched_via_git_diff_lists_committed_and_dirty_files(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
     job = _dispatch_git_worktree_job(monkeypatch)
@@ -102,7 +102,7 @@ def test_dispatch_real_files_touched_via_git_diff_lists_committed_files_only(git
 
     touched = sl._worktree_files_touched(job["worktree_path"])
 
-    assert touched == ["alpha.txt", "beta.txt"]
+    assert touched == ["alpha.txt", "beta.txt", "dirty.txt"]
 
 
 def test_dispatch_real_files_touched_via_git_diff_clean_worktree_returns_empty(git_worktree_repo, monkeypatch):
@@ -768,7 +768,7 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
         summary = f.read()
 
     assert "status:   FAILED_UNVERIFIED (exit unknown)" in summary
-    assert "files:    0 touched" in summary
+    assert "files:    1 touched" in summary
     assert "git-state recheck recovered" in summary
 
 

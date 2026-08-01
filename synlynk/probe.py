@@ -1,5 +1,7 @@
 """synlynk probe: agent capability probing, fence management, TC compliance."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -223,6 +225,42 @@ def _scan_command_palette(agent_name: str, harness_name: str, cli_version: str, 
 
     db_conn.commit()
     return list(found_commands.keys())
+
+
+def _scan_repo_requirements(repo_path: str) -> set[str]:
+    """Return repo artifact requirements detected by presence only.
+
+    This is a discovery primitive, not a policy decision. The caller decides
+    whether a detected requirement should block, degrade, or be ignored.
+    """
+    requirements = set()
+    root = os.fspath(repo_path)
+
+    if not root:
+        return requirements
+
+    try:
+        if any(
+            os.path.exists(os.path.join(root, name))
+            for name in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml")
+        ):
+            requirements.add("docker")
+
+        if any(
+            os.path.exists(os.path.join(root, name))
+            for name in (".mcp.json", "mcp.json")
+        ):
+            requirements.add("mcp")
+
+        workflows_dir = os.path.join(root, ".github", "workflows")
+        if os.path.isdir(workflows_dir):
+            with os.scandir(workflows_dir) as entries:
+                if any(True for _ in entries):
+                    requirements.add("gh-actions")
+    except OSError:
+        pass
+
+    return requirements
 
 
 _FENCE_OPEN_PATTERN = _re.compile(

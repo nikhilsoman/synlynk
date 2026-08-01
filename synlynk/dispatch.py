@@ -146,6 +146,60 @@ def _resolve_dispatch_permissions(
     return sorted(effective)
 
 
+_GROK_PERMISSION_RULES = {
+    "read:*": ["Read", "Grep", "Glob", "LS"],
+    "write:src/": ["Edit", "Write", "MultiEdit"],
+    "write:docs/": ["Edit", "Write", "MultiEdit"],
+    "run:tests": ["Bash(pytest:*)"],
+    "run:shell": ["Bash"],
+}
+
+
+def _grok_permission_flags(permissions: list) -> list:
+    """Translate resolved permission strings into Grok CLI permission flags."""
+    permission_set = {perm for perm in (permissions or []) if perm}
+    if not permission_set:
+        return []
+
+    if set(_GROK_PERMISSION_RULES).issubset(permission_set):
+        return ["--always-approve"]
+
+    flags = ["--permission-mode", "dontAsk"]
+    allow_rules = []
+    has_write = "write:src/" in permission_set or "write:docs/" in permission_set
+    has_tests = "run:tests" in permission_set
+    has_shell = "run:shell" in permission_set
+
+    for perm in permissions or []:
+        rules = _GROK_PERMISSION_RULES.get(perm)
+        if not rules:
+            continue
+        allow_rules.extend(rules)
+
+    if not allow_rules:
+        return []
+
+    deny_rules = []
+    if not has_write:
+        deny_rules.extend(["Edit", "Write", "MultiEdit"])
+    if not (has_tests or has_shell):
+        deny_rules.append("Bash")
+
+    seen = set()
+    for rule in allow_rules:
+        if rule not in seen:
+            flags.extend(["--allow", rule])
+            seen.add(rule)
+
+    seen = set()
+    for rule in deny_rules:
+        if rule not in seen:
+            flags.extend(["--deny", rule])
+            seen.add(rule)
+
+    return flags
+
+
 def _permissions_to_flags(agent: str, permissions: list) -> list:
     """Translate permission strings into agent-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
@@ -169,8 +223,10 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         if not has_write:
-            return ["--approval-policy", "untrusted"]
+            return ["--ask-for-approval", "untrusted"]
         return []
+    if agent == "grok":
+        return _grok_permission_flags(permissions)
     return []
 
 
@@ -372,7 +428,7 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
 
 
 def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return sorted file paths committed in a worktree since the resolved merge-base."""
+    """Return sorted file paths changed in a worktree since the resolved merge-base."""
     if not worktree_path or not os.path.isdir(worktree_path):
         return []
 
@@ -401,6 +457,27 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
             path = path.strip()
             if path:
                 touched.add(path)
+
+    try:
+        status_result = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--short", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        status_result = None
+
+    if status_result and status_result.returncode == 0:
+        for line in (status_result.stdout or "").splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:].strip()
+            if not path:
+                continue
+            if " -> " in path:
+                path = path.split(" -> ", 1)[1].strip()
+            touched.add(path)
 
     return sorted(touched)
 
@@ -1014,6 +1091,235 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
     }
 
 
+def _probe_results_trustworthy() -> bool:
+    """Hard gate for TC1-5 trust.
+
+    #578/#580 are still open, so literal probe pass/fail values are not
+    # authoritative yet. Flip this to True only when that fix stack lands.
+    """
+    return False
+
+
+def _parse_probe_timestamp(last_probe_at: Optional[str]) -> Optional[float]:
+    if not last_probe_at:
+        return None
+    try:
+        return time.mktime(time.strptime(last_probe_at, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_dispatch_requires(requires: Optional[list] = None, requires_gh_write: bool = False) -> list:
+    declared = []
+    for requirement in list(requires or []):
+        if requirement and requirement not in declared:
+            declared.append(requirement)
+    del requires_gh_write
+    return declared
+
+
+def _capability_block_remediation(agent: str, declared_requires: list) -> str:
+    if agent == "agy":
+        return "Run `synlynk doctor --fix agy` and review the diff, then rerun dispatch."
+    if declared_requires:
+        declared = ", ".join(f"`{cap}`" for cap in declared_requires)
+        return f"Remove {declared} from `--requires` if the job does not truly need it, or rerun after a fresh probe."
+    return f"Run `synlynk probe {agent}` and rerun dispatch."
+
+
+def _reprobe_harness_sync(agent: str, timeout_s: int = 120) -> dict:
+    """Re-run probe in-process via the CLI when the cached probe is stale."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "synlynk", "probe", agent],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            cwd=os.getcwd(),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "passed": False,
+            "timed_out": True,
+            "reason": f"Fresh probe for '{agent}' timed out after {timeout_s}s.",
+        }
+    except Exception as exc:
+        return {
+            "passed": False,
+            "timed_out": False,
+            "reason": f"Fresh probe for '{agent}' could not run: {exc}",
+        }
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip() or "probe command failed"
+        return {
+            "passed": False,
+            "timed_out": False,
+            "reason": f"Fresh probe for '{agent}' failed: {detail}",
+        }
+
+    return {"passed": True, "timed_out": False, "reason": None}
+
+
+def _dispatch_capability_preflight(
+    agent: str,
+    task: str,
+    *,
+    db_conn=None,
+    cwd: Optional[str] = None,
+    requires: Optional[list] = None,
+) -> dict:
+    """Preflight the capability gate before dispatch spawns a subprocess."""
+    from synlynk.probe import _scan_repo_requirements
+
+    del task
+    cwd = cwd or os.getcwd()
+    declared_requires = _normalize_dispatch_requires(requires=requires)
+    repo_requirements = sorted(_scan_repo_requirements(cwd))
+
+    probe_row = None
+    if db_conn is not None:
+        try:
+            probe_row = db_conn.execute(
+                "SELECT compliance_status, last_probe_at FROM harness_records WHERE agent_name=?",
+                (agent,),
+            ).fetchone()
+        except Exception:
+            probe_row = None
+
+    probe_status = (probe_row[0] if probe_row else None) or "unknown"
+    last_probe_at = probe_row[1] if probe_row else None
+    probe_age_seconds = None
+    probe_state = "no_coverage"
+    trusted = _probe_results_trustworthy()
+    if probe_row:
+        probe_ts = _parse_probe_timestamp(last_probe_at)
+        if probe_ts is not None:
+            probe_age_seconds = max(0.0, time.time() - probe_ts)
+        if trusted:
+            if probe_ts is None:
+                probe_state = "no_coverage"
+            elif probe_age_seconds is not None and probe_age_seconds > 3600:
+                probe_state = "stale"
+            elif probe_status not in {"ok", "passed"}:
+                probe_state = "failing"
+            else:
+                probe_state = "covered"
+        else:
+            probe_state = "no_coverage"
+
+    stale_reprobe = None
+    if probe_state == "stale":
+        stale_reprobe = _reprobe_harness_sync(agent)
+        if not stale_reprobe.get("passed", False):
+            return {
+                "passed": False,
+                "status": "blocked",
+                "decision": "block",
+                "branch": "stale",
+                "reason": stale_reprobe.get("reason") or (
+                    f"Cached probe for '{agent}' is stale and a fresh probe failed."
+                ),
+                "remediation": _capability_block_remediation(agent, declared_requires),
+                "probe_trustworthy": trusted,
+                "probe_status": probe_status,
+                "probe_age_seconds": probe_age_seconds,
+                "repo_requirements": repo_requirements,
+                "declared_requires": declared_requires,
+            }
+        probe_state = "covered"
+
+    if probe_state == "failing":
+        return {
+            "passed": False,
+            "status": "blocked",
+            "decision": "block",
+            "branch": "failing",
+            "reason": f"Latest probe for '{agent}' reports compliance_status={probe_status!r}.",
+            "remediation": _capability_block_remediation(agent, declared_requires),
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": declared_requires,
+        }
+
+    hard_required = list(declared_requires)
+    soft_requirements = [cap for cap in repo_requirements if cap not in hard_required]
+
+    if hard_required and probe_state in {"no_coverage", "stale", "failing"}:
+        return {
+            "passed": False,
+            "status": "blocked",
+            "decision": "block",
+            "branch": "no-coverage",
+            "reason": (
+                f"Dispatch for '{agent}' explicitly requires {', '.join(sorted(hard_required))}, "
+                "but the current probe state is treated as no-coverage."
+            ),
+            "remediation": _capability_block_remediation(agent, hard_required),
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": hard_required,
+        }
+
+    if probe_state == "no_coverage" and (soft_requirements or not hard_required):
+        reason_bits = []
+        if soft_requirements:
+            reason_bits.append(
+                "repo artifacts present for " + ", ".join(sorted(soft_requirements))
+            )
+        if not hard_required:
+            reason_bits.append("no explicit `--requires` declaration")
+        reason = "; ".join(reason_bits) or "no authoritative probe coverage"
+        return {
+            "passed": True,
+            "status": "degraded",
+            "decision": "degrade",
+            "branch": "no-coverage",
+            "reason": reason,
+            "remediation": None,
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": hard_required,
+        }
+
+    if soft_requirements:
+        return {
+            "passed": True,
+            "status": "degraded",
+            "decision": "degrade",
+            "branch": "repo-present",
+            "reason": "repo artifacts present: " + ", ".join(sorted(soft_requirements)),
+            "remediation": None,
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": hard_required,
+        }
+
+    return {
+        "passed": True,
+        "status": "ok",
+        "decision": "allow",
+        "branch": probe_state,
+        "reason": None,
+        "remediation": None,
+        "probe_trustworthy": trusted,
+        "probe_status": probe_status,
+        "probe_age_seconds": probe_age_seconds,
+        "repo_requirements": repo_requirements,
+        "declared_requires": hard_required,
+        "stale_probe": stale_reprobe,
+    }
+
+
 def _preflight_dispatch(
     agent_name: str,
     dispatch_flags: list,
@@ -1196,6 +1502,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
                    requires_gh_write: bool = False,
+                   requires: list = None,
                    grants: list = None,
                    revokes: list = None,
                    job_id: str = None,
@@ -1274,6 +1581,22 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "agy" and permissions:
         perm_lines = "\n".join(f"- {p}" for p in permissions)
         task = f"## Permissions\n{perm_lines}\n\n{task}"
+    declared_requires = _normalize_dispatch_requires(requires=requires, requires_gh_write=requires_gh_write)
+    if not skip_preflight:
+        capability_gate_fn = _pkg("_dispatch_capability_preflight", _dispatch_capability_preflight)
+        _get_db_fn = _pkg("_get_db")
+        _capability_db = _get_db_fn() if _get_db_fn else None
+        capability_gate = capability_gate_fn(
+            agent,
+            task,
+            db_conn=_capability_db,
+            cwd=os.getcwd(),
+            requires=declared_requires,
+        )
+        if not capability_gate.get("passed", False):
+            return capability_gate
+        if capability_gate.get("status") == "degraded":
+            print(f"  ⚠ capability gate degraded: {capability_gate.get('reason')}")
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
         _get_db_fn = _pkg("_get_db")
