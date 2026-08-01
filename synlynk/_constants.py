@@ -46,7 +46,21 @@ AGENT_CAPABILITY_BASELINES = {
         "cli": "claude",
         "can_gh_write": True,
         "non_interactive_flags": ["--print"],
-        "dispatch_flags": ["--dangerously-skip-permissions"],
+        "dispatch_flags": {
+            "valid_flags": ["--dangerously-skip-permissions", "--model", "--output-format"],
+            "invalid_flags": ["--always-approve", "--non-interactive"],
+            "required_flags": ["--dangerously-skip-permissions"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--print",
+        },
+        "network_deps": {
+            "required_endpoints": [],
+            "optional_endpoints": [],
+        },
         "roles": ["architect", "builder"],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
@@ -62,6 +76,29 @@ AGENT_CAPABILITY_BASELINES = {
             "exec", "-",
             "-s", "workspace-write",
         ],
+        "dispatch_flags": {
+            "valid_flags": ["--approval-policy", "--model", "--sandbox"],
+            "invalid_flags": [
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--dangerously-skip-permissions",
+                "--print",
+            ],
+            # Sandbox mode is already supplied with its value via non_interactive_flags
+            # (-s workspace-write). Do NOT put --sandbox here: required_flags are appended
+            # as bare flags with no values by _dispatch_flags_for_agent(), and a bare
+            # --sandbox makes codex CLI fail with "a value is required".
+            "required_flags": [],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--version",
+        },
+        "network_deps": {
+            "required_endpoints": [],
+            "optional_endpoints": [],
+        },
         "roles": ["builder"],
         "strengths": ["code completion", "inline edits", "fast iteration"],
     },
@@ -86,6 +123,15 @@ AGENT_CAPABILITY_BASELINES = {
             "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
             "optional_endpoints": [],
         },
+        "auth_check": {
+            "probe": ["agy", "--version"],
+            "required_paths": ["~/.gemini/antigravity-cli/jetski_state.pbtxt"],
+            "unauthenticated_markers": [
+                "not signed in",
+                "sign in",
+                "login",
+            ],
+        },
         "roles": ["builder", "verifier"],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
@@ -100,9 +146,23 @@ AGENT_CAPABILITY_BASELINES = {
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
             "required_flags": [],
         },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--single",
+        },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
             "optional_endpoints": [],
+        },
+        "auth_check": {
+            "probe": ["grok", "--version"],
+            "unauthenticated_markers": [
+                "not signed in",
+                "sign in",
+                "login",
+            ],
         },
         "roles": ["builder", "architect"],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
@@ -111,8 +171,24 @@ AGENT_CAPABILITY_BASELINES = {
         "cli": "aider",
         "can_gh_write": False,
         "non_interactive_flags": [],
-        "dispatch_flags": ["--no-auto-commits", "--yes-always"],
+        "dispatch_flags": {
+            "valid_flags": [
+                "--no-auto-commits",
+                "--yes-always",
+                "--openai-api-base",
+                "--model",
+                "--edit-format",
+            ],
+            "invalid_flags": ["--dangerously-skip-permissions", "--non-interactive"],
+            "required_flags": ["--no-auto-commits", "--yes-always"],
+        },
         "prompt_file_flag": "--message-file",
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--version",
+        },
         "network_deps": {
             "required_endpoints": ["127.0.0.1:8080"],
             "optional_endpoints": [],

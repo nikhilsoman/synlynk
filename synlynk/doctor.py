@@ -20,6 +20,7 @@ from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
 from synlynk.probe import (
     _compute_capability_hash,
+    _run_tc0,
     _run_tc1,
     _run_tc2,
     _run_tc3,
@@ -486,6 +487,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             print(f"\n  doctor [{agent}]")
             baseline = baselines.get(agent, {})
 
+            tc0 = _pkg("_run_tc0")(agent, baseline)
             tc1 = _pkg("_run_tc1")(agent)
             tc2 = _pkg("_run_tc2")(agent, baseline.get("dispatch_flags", {}))
             endpoints = []
@@ -500,9 +502,13 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 "codex": "AGENTS.md",
                 "grok": "GROK.md",
             }
-            tc5 = _pkg("_run_tc5")({a: tc5_files[a] for a in agents if a in tc5_files and os.path.exists(tc5_files[a])})
+            tc5_targets = {a: tc5_files[a] for a in agents if a in tc5_files and os.path.exists(tc5_files[a])}
+            tc5_skips = []
+            if "local" in agents:
+                tc5_skips.append("local has no directive file configured; TC-5 intentionally skipped")
+            tc5 = _pkg("_run_tc5")(tc5_targets)
 
-            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
+            all_passed = tc0["passed"] and tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
             if not all_passed:
                 any_failed = True
             status = "ok" if all_passed else "degraded"
@@ -550,10 +556,12 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 pass
             db_conn.commit()
 
+            tc0_status = "✓" if tc0["passed"] else f"✗ schema incomplete: {tc0['schema_issues']}"
             tc1_status = "✓" if tc1["passed"] else f"✗ requires_pty={tc1.get('requires_pty')}"
             tc2_status = "✓" if tc2["passed"] else f"✗ failed={tc2['failed_flags']}"
             tc3_status = "✓" if tc3["passed"] else f"✗ unreachable={tc3['unreachable']}"
             tc4_status = "✓" if tc4["passed"] else f"✗ failed={tc4['failed_verbs']}"
+            print(f"    TC-0 schema:  {tc0_status}")
             print(f"    TC-1 stdout:  {tc1_status}")
             print(f"    TC-2 flags:   {tc2_status}")
             print(f"    TC-3 network: {tc3_status}")
@@ -563,6 +571,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             else:
                 for ag, missing in tc5["missing"].items():
                     print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
+            for skip in tc5_skips:
+                print(f"    TC-5 sops:    ⚪ {skip}")
 
             if not tc1["passed"]:
                 choice = _pkg("_doctor_fix_menu")(agent, "tc1", tc1)

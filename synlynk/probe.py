@@ -98,6 +98,71 @@ def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     return _hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+def _baseline_schema_issues(agent_name: str, baseline: dict) -> list:
+    """Return human-readable schema issues for a baseline."""
+    issues = []
+    if not isinstance(baseline, dict):
+        return [f"{agent_name}: baseline missing or not a dict"]
+
+    required_sections = {
+        "dispatch_flags": {
+            "type": dict,
+            "keys": {
+                "valid_flags": list,
+                "invalid_flags": list,
+                "required_flags": list,
+            },
+        },
+        "headless_contract": {
+            "type": dict,
+            "keys": {
+                "requires_pty": bool,
+                "stdout_flush_method": str,
+                "env_vars_required": list,
+                "non_interactive_flag": str,
+            },
+        },
+        "network_deps": {
+            "type": dict,
+            "keys": {
+                "required_endpoints": list,
+                "optional_endpoints": list,
+            },
+        },
+    }
+
+    for section_name, spec in required_sections.items():
+        section = baseline.get(section_name)
+        if not isinstance(section, spec["type"]):
+            issues.append(f"{agent_name}: {section_name} must be a dict")
+            continue
+
+        missing = [key for key in spec["keys"] if key not in section]
+        if missing:
+            issues.append(f"{agent_name}: {section_name} missing keys: {', '.join(missing)}")
+            continue
+
+        for key, expected_type in spec["keys"].items():
+            value = section.get(key)
+            if expected_type is bool:
+                if not isinstance(value, bool):
+                    issues.append(f"{agent_name}: {section_name}.{key} must be a bool")
+            elif expected_type is str:
+                if not isinstance(value, str) or not value.strip():
+                    issues.append(f"{agent_name}: {section_name}.{key} must be a non-empty string")
+            elif expected_type is list:
+                if not isinstance(value, list):
+                    issues.append(f"{agent_name}: {section_name}.{key} must be a list")
+    return issues
+
+
+def _run_tc0(agent_name: str, baseline: dict = None) -> dict:
+    """TC-0: baseline schema completeness."""
+    baseline = baseline if baseline is not None else AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    issues = _baseline_schema_issues(agent_name, baseline)
+    return {"passed": not issues, "schema_issues": issues}
+
+
 _re = re
 
 
@@ -394,6 +459,8 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     harness_name = harness_map.get(agent_name, agent_name)
     baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    schema_result = _run_tc0(agent_name, baseline)
+    schema_issues = schema_result["schema_issues"]
 
     try:
         result = subprocess.run([agent_name, "--version"], capture_output=True, text=True, timeout=5)
@@ -406,13 +473,19 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     flags = baseline.get("dispatch_flags", {})
     new_hash = _compute_capability_hash(contract, flags)
 
-    if fast_path_ok:
+    if fast_path_ok and not schema_issues:
         row = db_conn.execute(
             "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
             (agent_name,),
         ).fetchone()
         if row and row[0] == installed_version and row[1] == new_hash:
-            return {"skipped": True, "version": installed_version, "version_detected": version_detected, "status": "ok"}
+            return {
+                "skipped": True,
+                "version": installed_version,
+                "version_detected": version_detected,
+                "status": "ok",
+                "schema_issues": schema_issues,
+            }
 
     network_ok = True
     for endpoint in baseline.get("network_deps", {}).get("required_endpoints", []):
@@ -423,7 +496,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
         except OSError:
             network_ok = False
 
-    compliance = "ok" if network_ok else "degraded"
+    compliance = "ok" if network_ok and not schema_issues else "degraded"
 
     prev_row = db_conn.execute(
         "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
@@ -558,7 +631,13 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
 
     db_conn.commit()
-    return {"skipped": False, "version": installed_version, "version_detected": version_detected, "status": compliance}
+    return {
+        "skipped": False,
+        "version": installed_version,
+        "version_detected": version_detected,
+        "status": compliance,
+        "schema_issues": schema_issues,
+    }
 
 
 def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
@@ -673,6 +752,262 @@ def _run_tc5(directive_files: dict) -> dict:
     return {"passed": not missing, "missing": missing}
 
 
+def _read_harness_fence_body(file_path: str) -> str:
+    """Return the current body inside the synlynk harness fence, if present."""
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return ""
+    match = re.search(
+        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return ""
+    return match.group(1)
+
+
+def _repair_config_agents(cfg: dict) -> list:
+    """Return the directive-backed agents that should be considered for SOP repair."""
+    cfg_roles = cfg.get("roles") or {}
+    workgroup_agents = list(cfg.get("workgroup_agents") or [])
+    if workgroup_agents:
+        return workgroup_agents
+    return [agent for agent in cfg_roles.keys() if agent in {"claude", "agy", "codex", "grok"}]
+
+
+def _repair_role_list(value) -> list:
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _repair_agent_label(agent: str) -> str:
+    return agent[:1].upper() + agent[1:] if agent else ""
+
+
+def _repair_branch_convention(cfg: dict, agent: str) -> str:
+    """Return the repo-specific branch pattern for an agent, if recorded."""
+    for key in ("branch_conventions", "branch_convention", "branch_naming", "branch_pattern", "branch_prefix"):
+        value = cfg.get(key)
+        if not value:
+            continue
+        if isinstance(value, dict):
+            agent_value = value.get(agent) or value.get(agent.lower()) or value.get(_repair_agent_label(agent))
+            if agent_value:
+                return str(agent_value).strip()
+            for nested_key in ("pattern", "value", "summary", "description"):
+                nested_value = value.get(nested_key)
+                if nested_value:
+                    return str(nested_value).strip()
+            prefix = str(value.get("prefix") or "").strip()
+            suffix = str(value.get("suffix") or "").strip()
+            if prefix and suffix:
+                return f"{prefix}{suffix}"
+            if prefix:
+                return prefix
+            continue
+        value_text = str(value).strip()
+        if value_text:
+            return value_text
+    return ""
+
+
+def _repair_escalation_target(cfg: dict) -> str:
+    """Pick the configured PM/review owner, if any, for escalation text."""
+    cfg_roles = cfg.get("roles") or {}
+    candidates = _repair_config_agents(cfg)
+    if not candidates:
+        candidates = list(cfg_roles.keys())
+
+    def _role_set(agent: str) -> set:
+        return set(_repair_role_list(cfg_roles.get(agent)))
+
+    for agent in candidates:
+        roles = _role_set(agent)
+        if {"pm", "review"} <= roles:
+            return _repair_agent_label(agent)
+    for agent in candidates:
+        if "review" in _role_set(agent):
+            return _repair_agent_label(agent)
+    for agent in candidates:
+        if "pm" in _role_set(agent):
+            return _repair_agent_label(agent)
+    return ""
+
+
+def _repair_pr_review_sop(cfg: dict) -> str:
+    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
+    return (
+        "## PR Review Discipline\n"
+        "1. Assign a non-authoring agent to review the PR.\n"
+        "2. The reviewer must run `synlynk pr check <pr#>`.\n"
+        "3. The reviewer alone must merge the PR.\n"
+        f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
+        "**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* "
+        "enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents "
+        "share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different "
+        "reviewer and `gh pr review --approve` fails with \"Can not approve your own pull request\" on "
+        "every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an "
+        "explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.\n"
+    )
+
+
+def _repair_capability_allocation_sop(cfg: dict) -> str:
+    cfg_roles = cfg.get("roles") or {}
+    ordered_agents = _repair_config_agents(cfg)
+    if not ordered_agents:
+        ordered_agents = [agent for agent in cfg_roles.keys()]
+
+    rows = []
+    for agent in ordered_agents:
+        role_list = _repair_role_list(cfg_roles.get(agent))
+        if not role_list:
+            continue
+        role_label = " / ".join(role_list)
+        rows.append(f"| {role_label} | {_repair_agent_label(agent)} | {', '.join(role_list)} |")
+
+    if not rows:
+        return (
+            "## Capability-Based Task Allocation\n"
+            "No repo-specific roles are recorded in `.synlynk/config.json`; keep work scoped to the "
+            "agent you were assigned and follow the repo's own routing notes.\n"
+        )
+
+    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
+    table = "\n".join([
+        "## Capability-Based Task Allocation",
+        "| Role | Agent | Tasks |",
+        "| :--- | :--- | :--- |",
+        *rows,
+        f"Do not start a task outside your role column without explicit approval from {escalation_target}.",
+        "",
+        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok by default**. Agy headless can complete `gh pr review`, `gh pr comment`, and `gh pr merge` writes when the machine-local `~/.gemini/antigravity-cli/settings.json` already contains scoped `command(gh pr review)`, `command(gh pr comment)`, and `command(gh pr merge)` allow-rules; that precondition is operator-confirmed, not reliably verifiable mid-task. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically, but do not treat it as a hard identity guarantee yet: the token-stripping fallback does not prevent `gh` from using a locally logged-in personal keyring identity when no role-scoped GitHub App token is available (#569).",
+        "",
+        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
+        "rather than synlynk's default fleet assumptions.",
+    ])
+    return table + "\n"
+
+
+def _repair_repo_hygiene_sop(cfg: dict, agent: str) -> str:
+    branch_convention = _repair_branch_convention(cfg, agent)
+    if branch_convention:
+        branch_line = f"2. Use task-scoped branch naming recorded for this repo: `{branch_convention}`."
+    else:
+        branch_line = (
+            "2. Use the repo's documented task-scoped branch pattern; if none is recorded, follow the "
+            "project's existing feature/fix/chore naming convention."
+        )
+    return (
+        "## Repo Hygiene\n"
+        "1. Do not commit directly to main or master.\n"
+        f"{branch_line}\n"
+        "3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), "
+        "Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), "
+        "Grok (`Co-Authored-By: Grok <noreply@x.ai>`).\n"
+        "4. Use worktree per feature with `git worktree add`.\n"
+        "5. Run `git branch --show-current` before committing to verify branch.\n"
+    )
+
+
+def _build_repair_sop_block(header: str, cfg: dict) -> str:
+    if header == "## PR Review Discipline":
+        return _repair_pr_review_sop(cfg)
+    if header == "## Capability-Based Task Allocation":
+        return _repair_capability_allocation_sop(cfg)
+    if header == "## Repo Hygiene":
+        return _repair_repo_hygiene_sop(cfg, "")
+    idx = SOP_SECTION_HEADERS.index(header)
+    return SOP_BLOCKS[idx]
+
+
+def _extract_sop_section(body: str, header: str) -> str:
+    pattern = re.compile(rf"(?ms)^{re.escape(header)}\n.*?(?=^## |\Z)")
+    match = pattern.search(body or "")
+    return match.group(0).rstrip("\n") if match else ""
+
+
+def _repair_sop_body_parts(*parts: str) -> str:
+    """Join SOP body fragments with exactly one blank line between sections."""
+    cleaned = [part.strip("\n") for part in parts if part and part.strip("\n")]
+    if not cleaned:
+        return ""
+    return "\n\n".join(cleaned) + "\n"
+
+
+def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = False) -> None:
+    """Repair missing SOP sections without rewriting unrelated sync artifacts."""
+    if cfg is None:
+        from synlynk import load_config as _load_config
+
+        cfg = _load_config()
+
+    directive_files = {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "codex": "AGENTS.md",
+        "grok": "GROK.md",
+    }
+    cfg_agents = _repair_config_agents(cfg)
+    agent_names = [agent_name] if agent_name else cfg_agents
+    for agent in agent_names:
+        fpath = directive_files.get(agent)
+        if not fpath or not os.path.exists(fpath):
+            continue
+        tc5 = _run_tc5({agent: fpath})
+        missing_headers = tc5.get("missing", {}).get(agent, [])
+        has_harness_fence = _fence_exists(fpath)
+        if not missing_headers and not has_harness_fence:
+            continue
+        existing_body = _read_harness_fence_body(fpath)
+        stale_headers = []
+        fill_headers = list(missing_headers)
+
+        if has_harness_fence and existing_body:
+            stale_candidates = ["## Capability-Based Task Allocation"]
+            for header in stale_candidates:
+                canonical = _build_repair_sop_block(header, cfg).rstrip("\n")
+                current = _extract_sop_section(existing_body, header)
+                if current and current != canonical:
+                    stale_headers.append(header)
+                    if header in fill_headers:
+                        fill_headers.remove(header)
+
+        if dry_run:
+            for missing_header in fill_headers:
+                print(f"    → fill missing SOP '{missing_header}' in {fpath}")
+            for stale_header in stale_headers:
+                print(f"    → refresh stale SOP '{stale_header}' in {fpath}")
+            continue
+
+        if not fill_headers and not stale_headers:
+            continue
+
+        body = existing_body.rstrip("\n")
+        for missing_header in fill_headers:
+            block = _repair_repo_hygiene_sop(cfg, agent) if missing_header == "## Repo Hygiene" else _build_repair_sop_block(missing_header, cfg)
+            body = _repair_sop_body_parts(body, block)
+        for stale_header in stale_headers:
+            block = _build_repair_sop_block(stale_header, cfg)
+            section_pattern = rf"(?ms)^{re.escape(stale_header)}\n.*?(?=^## |\Z)"
+            match = re.search(section_pattern, body)
+            if match:
+                body = _repair_sop_body_parts(body[:match.start()], block, body[match.end():])
+            else:
+                body = _repair_sop_body_parts(body, block)
+
+        _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
+        for missing_header in fill_headers:
+            print(f"    ✓ fill missing SOP '{missing_header}' in {fpath}")
+        for stale_header in stale_headers:
+            print(f"    ✓ refresh stale SOP '{stale_header}' in {fpath}")
+
+
 def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
     agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
     package = sys.modules.get("synlynk")
@@ -691,6 +1026,8 @@ def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
                 )
             status = "skipped (up to date)" if result["skipped"] else result["status"]
             print(f"  probe [{agent_name}] {result['version']} → {status}")
+            for issue in result.get("schema_issues", []):
+                print(f"    schema incomplete: {issue}")
             results.append({"agent": agent_name, **result})
     finally:
         db_conn.close()

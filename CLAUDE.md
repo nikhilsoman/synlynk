@@ -115,7 +115,7 @@ mandatory on every PR.
 
 Enforced by discipline (Claude/PM checks it as part of PR housekeeping), not CI — matches how the Blog Post Protocol already operates. Not a blocking CI gate.
 
-<!-- synlynk:harness vsop-repair verified:2026-07-15T19:50:56Z -->
+<!-- synlynk:harness vsop-repair verified:2026-07-30T07:33:24Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
@@ -143,14 +143,15 @@ pm, review, deploy
 ## Capability-Based Task Allocation
 | Role | Agent | Tasks |
 | :--- | :--- | :--- |
-| Python/CLI/tests | Codex | Python, CLI, tests |
-| HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
-| canvas/JS/infra | Grok | canvas, JS, infra |
-| PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
-| GitHub write actions | **Grok only** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` |
-Do not start a task outside your role column without explicit Claude approval.
+| pm / review / deploy / brainstorm | Claude | pm, review, deploy, brainstorm |
+| implement / test / css / templates / content / subpages | Agy | implement, test, css, templates, content, subpages |
+| implement / test / canvas / js / infra | Grok | implement, test, canvas, js, infra |
+| implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
+Do not start a task outside your role column without explicit approval from Claude.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok only**. Agy headless auto-denies the `command` permission class for external-mutating GitHub writes even with `--dangerously-skip-permissions`. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Only Grok has been shown to complete `gh` write actions headless. Pass --requires-gh-write on synlynk dispatch to have this enforced automatically instead of relying on manual routing (see #426).
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok by default**. Agy headless can complete `gh pr review`, `gh pr comment`, and `gh pr merge` writes when the machine-local `~/.gemini/antigravity-cli/settings.json` already contains scoped `command(gh pr review)`, `command(gh pr comment)`, and `command(gh pr merge)` allow-rules; that precondition is operator-confirmed, not reliably verifiable mid-task. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically, but do not treat it as a hard identity guarantee yet: the token-stripping fallback does not prevent `gh` from using a locally logged-in personal keyring identity when no role-scoped GitHub App token is available (#569).
+
+This table is generated from `.synlynk/config.json` so it tracks the repo's own routing rather than synlynk's default fleet assumptions.
 
 ## Cost Visibility
 1. Log estimated_cost in the job context header before dispatch.

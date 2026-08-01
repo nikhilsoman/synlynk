@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 from dataclasses import asdict
 import select
 import signal
@@ -862,6 +863,177 @@ def _assert_dispatch_worktree_base_is_fresh(worktree_path: str, base_ref: str) -
     print(f"  worktree base verified against {base_ref} @ {ref_commit}")
 
 
+def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
+    """Run a lightweight auth probe and fail when it reports an unauthenticated state."""
+    if not auth_check:
+        return None
+
+    probe_cmd = auth_check.get("probe")
+    if not probe_cmd:
+        return None
+
+    probe_exe = probe_cmd[0] if isinstance(probe_cmd, (list, tuple)) and probe_cmd else None
+    if not probe_exe or shutil.which(probe_exe) is None:
+        return None
+
+    required_paths = [
+        os.path.expanduser(path)
+        for path in auth_check.get("required_paths", [])
+        if path
+    ]
+    missing_paths = [path for path in required_paths if not os.path.exists(path)]
+    if missing_paths:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' auth preflight failed: missing required auth state "
+                f"file(s) {', '.join(missing_paths)}. Re-authenticate before dispatch."
+            ),
+        }
+
+    try:
+        probe_result = subprocess.run(
+            probe_cmd,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except FileNotFoundError:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' auth preflight failed: probe command "
+                f"{' '.join(probe_cmd)!r} is unavailable."
+            ),
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' auth preflight failed: probe command "
+                f"{' '.join(probe_cmd)!r} timed out."
+            ),
+        }
+
+    auth_text = "\n".join(
+        part for part in [probe_result.stdout or "", probe_result.stderr or ""] if part
+    ).lower()
+    markers = [marker.lower() for marker in auth_check.get("unauthenticated_markers", []) if marker]
+    if markers and any(marker in auth_text for marker in markers):
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' is not authenticated: "
+                f"{(probe_result.stderr or probe_result.stdout or 'auth probe failed').strip()}"
+            ),
+        }
+    return None
+
+
+def _known_headless_permission_denial(agent_name: str) -> Optional[dict]:
+    """Return a known matching permission-denial log id when we have one."""
+    get_db = _pkg("_get_db")
+    if get_db:
+        try:
+            conn = get_db()
+        except Exception:
+            conn = None
+        if conn is not None:
+            try:
+                row = conn.execute(
+                    "SELECT job_id, log_path FROM daemon_jobs "
+                    "WHERE agent=? AND status='permission_denied' "
+                    "ORDER BY completed_at DESC LIMIT 1",
+                    (agent_name,),
+                ).fetchone()
+            except Exception:
+                row = None
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            if row:
+                job_id, log_path = row
+                if log_path and os.path.exists(log_path):
+                    try:
+                        with open(log_path) as fh:
+                            log_text = fh.read()
+                    except OSError:
+                        log_text = ""
+                    detector = _pkg("_log_has_permission_denied_signature")
+                    if detector and detector(log_text):
+                        return {
+                            "job_id": job_id,
+                            "log_path": log_path,
+                        }
+
+    load_jobs = _pkg("_load_jobs")
+    if not load_jobs:
+        return None
+    try:
+        jobs = load_jobs() or []
+    except Exception:
+        return None
+    for job in reversed(jobs):
+        if job.get("agent") != agent_name:
+            continue
+        log_path = job.get("log_file") or job.get("log_path")
+        if not log_path or not os.path.exists(log_path):
+            continue
+        try:
+            with open(log_path) as fh:
+                log_text = fh.read()
+        except OSError:
+            continue
+        detector = _pkg("_log_has_permission_denied_signature")
+        if detector and detector(log_text):
+            return {
+                "job_id": job.get("id") or job.get("job_id"),
+                "log_path": log_path,
+            }
+    return None
+
+
+def _preflight_headless_permission_check(agent_name: str, permissions: list, dispatch_flags: list) -> Optional[dict]:
+    """Block known headless permission auto-denials before dispatching."""
+    if agent_name != "agy":
+        return None
+
+    permissions = permissions or []
+    dispatch_flags = dispatch_flags or []
+    has_write_or_run = any(not (perm or "").startswith("read:*") for perm in permissions)
+    bypass_flag = "--dangerously-skip-permissions" in dispatch_flags
+    if has_write_or_run or bypass_flag:
+        return None
+
+    known = _known_headless_permission_denial(agent_name)
+    if known:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' would dispatch headless with read-only permissions, "
+                f"and prior job {known['job_id']} hit the same auto-denial pattern. "
+                "Grant a write/run permission or reroute this work."
+            ),
+        }
+
+    return {
+        "passed": False,
+        "sentinel": "HARNESS_PREFLIGHT_FAIL",
+        "reason": (
+            f"Agent '{agent_name}' would dispatch headless with read-only permissions, "
+            "which is a known auto-denial pattern. Grant a write/run permission or reroute this work."
+        ),
+    }
+
+
 def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) -> dict:
     """Create the isolated git worktree for a dispatched job.
 
@@ -1148,27 +1320,16 @@ def _dispatch_capability_preflight(
     }
 
 
-def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
+def _preflight_dispatch(
+    agent_name: str,
+    dispatch_flags: list,
+    db_conn=None,
+    _task_hint: str = "",
+    permissions: Optional[list] = None,
+) -> dict:
     import socket as _socket
 
-    baseline = {}
-    if db_conn:
-        try:
-            row = db_conn.execute(
-                "SELECT active_flags, active_contract FROM harness_records WHERE agent_name=?",
-                (agent_name,),
-            ).fetchone()
-        except Exception:
-            row = None
-        if row:
-            try:
-                baseline["dispatch_flags"] = json.loads(row[0]) if row[0] else {}
-                baseline["headless_contract"] = json.loads(row[1]) if row[1] else {}
-                baseline["network_deps"] = baseline["headless_contract"].get("network_deps", {})
-            except Exception:
-                baseline = {}
-    if not baseline:
-        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
 
     if db_conn:
         try:
@@ -1220,15 +1381,28 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
     else:
         valid_flags, required_flags = [], []
     if valid_flags or required_flags:
-        from synlynk.probe import _run_tc2
-
-        tc2 = _run_tc2(agent_name, flags_spec)
-        if not tc2.get("passed", True):
+        probe_row = None
+        if db_conn:
+            try:
+                probe_row = db_conn.execute(
+                    "SELECT compliance_status, active_flags FROM harness_records WHERE agent_name=?",
+                    (agent_name,),
+                ).fetchone()
+            except Exception:
+                probe_row = None
+        if not probe_row:
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"no probe data for agent; run synlynk probe {agent_name}",
+            }
+        compliance_status, _active_flags_json = probe_row
+        if compliance_status != "ok":
             return {
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": (
-                    f"TC-2 flag check failed for {agent_name}: {tc2.get('failed_flags', [])}. "
+                    f"TC-2 flag check failed for {agent_name}: probe status is {compliance_status!r}. "
                     f"Run synlynk probe {agent_name} to update."
                 ),
             }
@@ -1250,6 +1424,15 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
             }
+
+    auth_check = baseline.get("auth_check", {})
+    auth_failure = _preflight_auth_check(agent_name, auth_check)
+    if auth_failure:
+        return auth_failure
+
+    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
+    if headless_failure:
+        return headless_failure
 
     if db_conn and _task_hint:
         try:
@@ -1419,9 +1602,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _get_db_fn = _pkg("_get_db")
         _preflight_db = _get_db_fn() if _get_db_fn else None
         try:
-            preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db, _task_hint=task)
+            preflight = preflight_fn(
+                agent_name=agent,
+                dispatch_flags=flags,
+                db_conn=_preflight_db,
+                _task_hint=task,
+                permissions=permissions,
+            )
         except TypeError:
-            preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
+            try:
+                preflight = preflight_fn(
+                    agent_name=agent,
+                    dispatch_flags=flags,
+                    db_conn=_preflight_db,
+                    _task_hint=task,
+                )
+            except TypeError:
+                preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
         if isinstance(preflight, dict):
             if not preflight.get("passed", False):
                 sentinel_path = os.path.join(".synlynk", "sentinel.md")

@@ -14,7 +14,10 @@ Extending:
   4. Follow the naming convention: test_<feature>_<scenario>
 """
 import json
+import os
 import subprocess
+import sqlite3
+import time
 from pathlib import Path
 
 import pytest
@@ -23,6 +26,48 @@ SYNLYNK_BIN = Path(__file__).parent.parent / "bin" / "synlynk.py"
 PYTHON = "python3"
 
 pytestmark = pytest.mark.e2e
+
+
+def _seed_probe_row(project_dir: Path, agent_name: str) -> None:
+    import synlynk
+
+    cwd = Path.cwd()
+    home = os.environ.get("HOME")
+    try:
+        # Seed the exact DB path the subprocess will resolve for this repo/worktree.
+        os.environ["HOME"] = str(project_dir)
+        os.chdir(project_dir)
+        db_path = Path(synlynk._resolve_db_path())
+    finally:
+        if home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = home
+        os.chdir(cwd)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    synlynk._migrate_db(conn)
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            agent_name,
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    conn.commit()
+    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -34,6 +79,7 @@ class Cli:
 
     def __init__(self, project_dir: Path):
         self.dir = project_dir
+        self.env = {**os.environ, "HOME": str(project_dir)}
 
     @classmethod
     def from_dir(cls, directory: Path) -> "Cli":
@@ -42,12 +88,14 @@ class Cli:
 
     def run(self, *args, timeout: int = 30, **kwargs) -> subprocess.CompletedProcess:
         """Run synlynk with the given args in the project directory."""
+        env = {**kwargs.pop("env", {}), **self.env}
         return subprocess.run(
             [PYTHON, str(SYNLYNK_BIN)] + list(args),
             cwd=str(self.dir),
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
             **kwargs,
         )
 
@@ -275,6 +323,7 @@ def test_dispatch_creates_job(cli):
     fake_claude.write_text("#!/bin/sh\ncat > /dev/null\n")
     fake_claude.chmod(0o755)
     env = {**_os.environ, "PATH": str(fake_bin) + ":" + _os.environ["PATH"]}
+    _seed_probe_row(cli.dir, "claude")
     r = cli.run("dispatch", "claude", "--task", "test task", env=env)
     assert r.returncode == 0, r.stderr
     jobs_file = cli.dir / ".synlynk" / "jobs.json"
