@@ -1,5 +1,7 @@
 """synlynk probe: agent capability probing, fence management, TC compliance."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
