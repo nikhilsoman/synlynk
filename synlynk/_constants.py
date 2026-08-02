@@ -203,6 +203,20 @@ AGENT_CAPABILITY_BASELINES = {
     },
 }
 
+# Core fleet = product-supported interactive + dispatch agents.
+# local remains dispatchable via experimental path but is not in CORE_FLEET.
+CORE_FLEET = frozenset({"claude", "agy", "codex", "grok"})
+EXPERIMENTAL_FLEET = frozenset({"local"})
+PROVEN_FRESHNESS_DAYS = 7
+MATRIX_LIVE_BUDGET_USD = 10.0
+AGENT_BUILDER_ONLY = frozenset({"codex"})
+CORE_INSTRUCTION_FILES = {
+    "claude": "CLAUDE.md",
+    "agy": "GEMINI.md",
+    "codex": "AGENTS.md",
+    "grok": "GROK.md",
+}
+
 AGENT_PANEL_QUERY_TIMEOUT_SECONDS = {
     "codex": 300,
 }

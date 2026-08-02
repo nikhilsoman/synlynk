@@ -135,6 +135,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 def build_parser() -> argparse.ArgumentParser:
+    from synlynk._constants import CORE_FLEET
     from synlynk import (
         AGENT_CAPABILITY_BASELINES,
         VERSION,
@@ -539,7 +540,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     open_parser = subparsers.add_parser(
         "open", help="Open an agent CLI interactively with pre-loaded context")
-    open_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
+    open_parser.add_argument(
+        "agent",
+        choices=sorted(CORE_FLEET),
+        help=(
+            f"Agent name: {', '.join(sorted(CORE_FLEET))} "
+            "(local is experimental — use dispatch, not open)"
+        ),
+    )
     open_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 
