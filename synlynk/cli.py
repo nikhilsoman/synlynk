@@ -432,6 +432,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--live", action="store_true",
         help="Run against a real throwaway git repo, including real paid-agent-CLI invocations, capped at $2 total spend",
     )
+    selftest_parser.add_argument(
+        "--matrix", action="store_true",
+        help="Run fleet operability matrix (dry by default; combine with --live for paid cells)",
+    )
+    selftest_parser.add_argument(
+        "--budget", type=float, default=None,
+        help="Live matrix budget USD (default 10 when --matrix --live)",
+    )
     selftest_parser._synlynk_skip_taxonomy = True
 
     config_parser = subparsers.add_parser("config", help="Manage synlynk config")
@@ -887,7 +895,13 @@ def main() -> None:
     elif args.command == "selftest":
         from synlynk.selftest import cmd_selftest
 
-        sys.exit(cmd_selftest(live=getattr(args, "live", False)))
+        sys.exit(
+            cmd_selftest(
+                live=getattr(args, "live", False),
+                matrix=getattr(args, "matrix", False),
+                budget=getattr(args, "budget", None),
+            )
+        )
     elif args.command == "config":
         if getattr(args, "config_action", None) == "set":
             from synlynk import cmd_config_set

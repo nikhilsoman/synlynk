@@ -183,3 +183,20 @@ def test_record_matrix_run(project_dir):
     ).fetchone()
     conn.close()
     assert row == ("codex", "instruction", "red")
+
+
+def test_selftest_matrix_flag_parsed():
+    from synlynk.cli import build_parser
+
+    args = build_parser().parse_args(["selftest", "--matrix"])
+    assert args.matrix is True
+    assert args.budget is None
+
+
+def test_selftest_matrix_budget_flag_parsed():
+    from synlynk.cli import build_parser
+
+    args = build_parser().parse_args(["selftest", "--matrix", "--live", "--budget", "5.5"])
+    assert args.matrix is True
+    assert args.live is True
+    assert args.budget == 5.5
