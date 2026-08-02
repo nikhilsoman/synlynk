@@ -1,5 +1,6 @@
 """Fleet operability: core fleet constants and open allowlist."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -309,10 +310,40 @@ def test_live_matrix_budget_abort():
     assert calls["n"] >= 1
 
 
-def test_live_matrix_default_zero_cost_mock():
+def test_live_matrix_mock_zero_cost():
     from synlynk.fleet import run_matrix_live
 
-    results = run_matrix_live(".", budget_usd=10.0)
+    results = run_matrix_live(".", budget_usd=10.0, mock=True)
     assert len(results) == len(CORE_FLEET)
     assert all(r.status == "green" for r in results)
     assert all(r.cost_usd == 0.0 for r in results)
+
+
+def test_sandbox_fallback_avoids_worktree_cwd(tmp_path):
+    from synlynk.fleet import sandbox_fallback_db_path
+
+    # Normal cwd → repo-local .synlynk/state.db
+    normal = sandbox_fallback_db_path(str(tmp_path / "repo"))
+    assert normal.endswith(os.path.join(".synlynk", "state.db"))
+    assert "worktrees" not in normal.replace("\\", "/")
+
+    # Job worktree cwd → tmpdir, not under worktrees/
+    wt = tmp_path / "worktrees" / "job-abc" / "checkout"
+    wt.mkdir(parents=True)
+    fb = sandbox_fallback_db_path(str(wt))
+    assert "synlynk-sandbox" in fb
+    assert "/worktrees/" not in fb.replace("\\", "/")
+
+
+def test_purge_nested_product_state_under(tmp_path):
+    from synlynk.fleet import purge_nested_product_state_under
+
+    nest = tmp_path / ".synlynk" / "projects" / "deadbeef"
+    nest.mkdir(parents=True)
+    db = nest / "state.db"
+    db.write_bytes(b"x")
+    (tmp_path / "other.db").write_bytes(b"y")
+    n = purge_nested_product_state_under(str(tmp_path))
+    assert n >= 1
+    assert not db.exists()
+    assert (tmp_path / "other.db").exists()

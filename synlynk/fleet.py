@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Optional, Sequence
 
 from synlynk._constants import (
     AGENT_BUILDER_ONLY,
@@ -18,6 +21,15 @@ from synlynk._constants import (
     MATRIX_LIVE_BUDGET_USD,
     PROVEN_FRESHNESS_DAYS,
 )
+
+# Trivial live-smoke prompt: forces a real headless agent turn without file edits.
+_LIVE_SMOKE_PROMPT = (
+    "Reply with exactly the single word pong and nothing else. "
+    "Do not run tools, edit files, or ask questions."
+)
+_LIVE_SMOKE_TIMEOUT_S = 90
+# Flat estimate per live cell when token scrape is unavailable (budget accounting).
+_LIVE_SMOKE_COST_USD = 0.25
 
 
 def check_core_instruction_files(
@@ -51,6 +63,48 @@ def find_nested_product_state_dbs(root: str | Path) -> List[str]:
             if ".synlynk" in parts or p.parent.name == ".synlynk":
                 hits.append(str(p))
     return hits
+
+
+def sandbox_fallback_db_path(cwd: Optional[str] = None) -> str:
+    """Path for #650 empty-DB fallback that never lands under a job worktree.
+
+    Prefer cwd/.synlynk/state.db only when cwd is not a nested worktree tree.
+    Otherwise use $TMPDIR/synlynk-sandbox/<hash>/state.db so matrix/doctor
+    nested_state stays green after dispatch.
+    """
+    cwd = os.path.abspath(cwd or os.getcwd())
+    candidate = os.path.join(cwd, ".synlynk", "state.db")
+    if not is_nested_worktree_state_path(candidate):
+        return candidate
+    import hashlib
+
+    key = hashlib.md5(cwd.encode()).hexdigest()[:12]
+    return os.path.join(tempfile.gettempdir(), "synlynk-sandbox", key, "state.db")
+
+
+def purge_nested_product_state_under(worktree_path: str) -> int:
+    """Delete product state.db (+ wal/shm) under a single worktree. Returns count removed."""
+    if not worktree_path or not os.path.isdir(worktree_path):
+        return 0
+    root = Path(worktree_path)
+    removed = 0
+    for p in root.rglob("state.db"):
+        parts = set(p.parts)
+        if ".synlynk" not in parts and p.parent.name != ".synlynk":
+            continue
+        for candidate in (
+            p,
+            Path(str(p) + "-wal"),
+            Path(str(p) + "-shm"),
+            Path(str(p) + "-journal"),
+        ):
+            if candidate.is_file():
+                try:
+                    candidate.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+    return removed
 
 
 def is_nested_worktree_state_path(path: str) -> bool:
@@ -298,23 +352,115 @@ def tier_for_agent(conn, agent: str, *, now: float | None = None) -> str:
     return "supported"
 
 
+def live_agent_smoke(home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> MatrixCellResult:
+    """Run one real headless CLI smoke turn for *home* (no file edits)."""
+    baseline = AGENT_CAPABILITY_BASELINES.get(home) or {}
+    cli = baseline.get("cli", home)
+    cell = f"live_self:{home}"
+    if shutil.which(cli) is None:
+        return MatrixCellResult(
+            home=home,
+            cell=cell,
+            tier=2,
+            status="red",
+            detail=f"{cli} not on PATH",
+            cost_usd=0.0,
+        )
+
+    prompt = _LIVE_SMOKE_PROMPT
+    ni = list(baseline.get("non_interactive_flags") or [])
+    prompt_via_arg = baseline.get("prompt_via_arg", False)
+    prompt_flag = baseline.get("prompt_flag")
+
+    try:
+        if home == "claude":
+            cmd = [cli, "--print", prompt]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout_s
+            )
+        elif home == "codex":
+            cmd = [cli, "exec", "-", "-s", "workspace-write"]
+            proc = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+            )
+        elif prompt_via_arg and prompt_flag:
+            cmd = [cli] + ni + [prompt_flag, prompt]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout_s
+            )
+        else:
+            cmd = [cli] + ni
+            proc = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+            )
+    except subprocess.TimeoutExpired:
+        return MatrixCellResult(
+            home=home,
+            cell=cell,
+            tier=2,
+            status="red",
+            detail=f"timeout after {timeout_s}s",
+            cost_usd=_LIVE_SMOKE_COST_USD,
+        )
+    except OSError as exc:
+        return MatrixCellResult(
+            home=home,
+            cell=cell,
+            tier=2,
+            status="red",
+            detail=f"spawn failed: {exc}",
+            cost_usd=0.0,
+        )
+
+    out = ((proc.stdout or "") + (proc.stderr or "")).lower()
+    ok = proc.returncode == 0 and ("pong" in out or len((proc.stdout or "").strip()) > 0)
+    # Some CLIs exit 0 with empty stdout on auth failure — treat auth markers as red
+    auth_fail = any(
+        m in out for m in ("not signed in", "login required", "unauthorized", "auth error")
+    )
+    if auth_fail:
+        ok = False
+    return MatrixCellResult(
+        home=home,
+        cell=cell,
+        tier=2,
+        status="green" if ok else "red",
+        detail=(
+            f"exit={proc.returncode} bytes_out={len(proc.stdout or '')}"
+            if ok
+            else f"exit={proc.returncode} auth_fail={auth_fail}"
+        ),
+        cost_usd=_LIVE_SMOKE_COST_USD if proc.returncode == 0 or ok else 0.05,
+    )
+
+
 def run_matrix_live(
     root: str = ".",
     budget_usd: float = MATRIX_LIVE_BUDGET_USD,
     dispatch_fn=None,
+    *,
+    mock: bool = False,
 ) -> list[MatrixCellResult]:
-    """Tier-2 live cells: one trivial self-dispatch per Core 4 agent under budget.
+    """Tier-2 live cells: one trivial self-smoke per Core 4 agent under budget.
 
     Phase 2 minimum grid (4 cells) to stay under $10/week. Full 4×4 can expand later.
     ``dispatch_fn(home) -> MatrixCellResult`` is injectable for tests.
+    ``mock=True`` forces zero-cost green stubs (unit tests / CI without agent CLIs).
+    Default is a real headless CLI smoke via :func:`live_agent_smoke`.
     """
     results: list[MatrixCellResult] = []
     spent = 0.0
     homes = sorted(CORE_FLEET)
 
-    def _default_dispatch(home: str) -> MatrixCellResult:
-        # Zero-cost mock path when no real dispatch is wired; production --live
-        # should pass a real dispatch_fn from selftest.
+    def _mock_dispatch(home: str) -> MatrixCellResult:
         return MatrixCellResult(
             home=home,
             cell=f"live_self:{home}",
@@ -324,7 +470,12 @@ def run_matrix_live(
             cost_usd=0.0,
         )
 
-    fn = dispatch_fn or _default_dispatch
+    if dispatch_fn is not None:
+        fn = dispatch_fn
+    elif mock:
+        fn = _mock_dispatch
+    else:
+        fn = live_agent_smoke
     remaining = list(homes)
     for home in homes:
         if spent >= budget_usd:

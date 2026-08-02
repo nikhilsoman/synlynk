@@ -401,6 +401,18 @@ def _resolve_finalize_worktree_branch(job: dict, worktree_path: str) -> Optional
 
 def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> None:
     """Best-effort git finalization for a completed job with genuine work."""
+    # Always purge nested product state.db under the job worktree (fleet nested_state).
+    worktree_path = (job or {}).get("worktree_path")
+    if worktree_path and os.path.isdir(worktree_path):
+        try:
+            from synlynk.fleet import purge_nested_product_state_under
+
+            n = purge_nested_product_state_under(worktree_path)
+            if n:
+                print(f"  🧹 purged {n} nested product state file(s) under {worktree_path}")
+        except Exception:
+            pass
+
     if not job or not git_state or not _job_has_real_work_landed(git_state):
         return
 

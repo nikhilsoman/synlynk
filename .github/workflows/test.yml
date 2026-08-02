@@ -38,3 +38,11 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v -m "not local_hardware"
+
+      # Dry fleet matrix (no model spend). Only on one Python version — gate is
+      # about repo hygiene/baselines, not interpreter variance.
+      - name: Fleet matrix (dry)
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m pip install -e . 2>/dev/null || true
+          PYTHONPATH=. python -m synlynk selftest --matrix
