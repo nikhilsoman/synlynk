@@ -1663,9 +1663,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             from synlynk._constants import CORE_FLEET as _CORE_FLEET
 
             if agent in _CORE_FLEET:
-                _missing = check_core_instruction_files(os.getcwd(), agents=[agent])
+                _cwd = os.getcwd()
+                _missing = check_core_instruction_files(_cwd, agents=[agent])
                 if preflight_blocks_dispatch(
-                    agent, missing_instructions=_missing, force_agent=force_agent
+                    agent,
+                    missing_instructions=_missing,
+                    force_agent=force_agent,
+                    root=_cwd,
                 ):
                     raise RuntimeError(
                         f"Dispatch blocked — missing instruction file for Core 4 agent "

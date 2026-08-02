@@ -203,18 +203,38 @@ def run_matrix_dry(root: str = ".") -> list[MatrixCellResult]:
     return results
 
 
+def repo_has_any_core_instruction_file(root: str | Path = ".") -> bool:
+    """True if cwd looks like a real multi-agent project (has ≥1 instruction file).
+
+    Bare temp dirs used by unit tests have none — instruction preflight is skipped
+    there so dispatch unit tests keep working. Real repos with CLAUDE.md/etc. enforce.
+    """
+    root = Path(root)
+    for rel in CORE_INSTRUCTION_FILES.values():
+        if (root / rel).is_file():
+            return True
+    return False
+
+
 def preflight_blocks_dispatch(
     agent: str,
     *,
     missing_instructions: Sequence[str],
     force_agent: bool = False,
+    root: str | Path = ".",
 ) -> bool:
-    """True when Core 4 dispatch should be blocked without --force-agent."""
+    """True when Core 4 dispatch should be blocked without --force-agent.
+
+    Only enforces when the repo already has at least one core instruction file
+    (so disposable test sandboxes without CLAUDE.md/etc. are not blocked).
+    """
     if force_agent:
         return False
     if agent not in CORE_FLEET:
         return False
-    return agent in set(missing_instructions)
+    if agent not in set(missing_instructions):
+        return False
+    return repo_has_any_core_instruction_file(root)
 
 
 def tier_for_agent(conn, agent: str, *, now: float | None = None) -> str:

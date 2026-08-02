@@ -22,6 +22,7 @@ from synlynk.fleet import (
     check_core_instruction_files,
     doctor_hard_fail,
     find_nested_product_state_dbs,
+    repo_has_any_core_instruction_file,
 )
 from synlynk.probe import (
     _compute_capability_hash,
@@ -489,7 +490,12 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     any_failed = False
     # Once per doctor run: nested product state.db under worktrees is a hard fail.
     nested_state_dbs = find_nested_product_state_dbs(".")
-    missing_core_instructions = check_core_instruction_files(".", agents=agents)
+    # Only enforce missing-instruction FAIL when the repo already looks like a
+    # multi-agent project (has ≥1 instruction file). Bare test sandboxes skip.
+    enforce_instructions = repo_has_any_core_instruction_file(".")
+    missing_core_instructions = (
+        check_core_instruction_files(".", agents=agents) if enforce_instructions else []
+    )
     try:
         if nested_state_dbs:
             any_failed = True

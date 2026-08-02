@@ -202,20 +202,41 @@ def test_selftest_matrix_budget_flag_parsed():
     assert args.budget == 5.5
 
 
-def test_preflight_blocks_dispatch_helper():
+def test_preflight_blocks_dispatch_helper(tmp_path):
     from synlynk.fleet import preflight_blocks_dispatch
 
+    # Bare sandbox (no instruction files): do not block — unit-test friendly
+    assert not preflight_blocks_dispatch(
+        "codex",
+        missing_instructions=["codex"],
+        force_agent=False,
+        root=tmp_path,
+    )
+    # Real project shape: at least one instruction file present
+    (tmp_path / "CLAUDE.md").write_text("ok")
     assert preflight_blocks_dispatch(
-        "codex", missing_instructions=["codex"], force_agent=False
+        "codex",
+        missing_instructions=["codex"],
+        force_agent=False,
+        root=tmp_path,
     )
     assert not preflight_blocks_dispatch(
-        "codex", missing_instructions=["codex"], force_agent=True
+        "codex",
+        missing_instructions=["codex"],
+        force_agent=True,
+        root=tmp_path,
     )
     assert not preflight_blocks_dispatch(
-        "codex", missing_instructions=[], force_agent=False
+        "codex",
+        missing_instructions=[],
+        force_agent=False,
+        root=tmp_path,
     )
     assert not preflight_blocks_dispatch(
-        "local", missing_instructions=["local"], force_agent=False
+        "local",
+        missing_instructions=["local"],
+        force_agent=False,
+        root=tmp_path,
     )
 
 
