@@ -132,3 +132,12 @@ def test_no_unknown_terminal_label():
 
     assert "UNKNOWN" not in terminal_status_for_unknown_exit()
     assert terminal_status_for_unknown_exit().startswith("FAILED_UNVERIFIED")
+
+
+def test_fleet_matrix_runs_table(project_dir):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(fleet_matrix_runs)").fetchall()}
+    assert {"run_id", "tier", "home", "cell", "status", "detail", "cost_usd", "ts"} <= cols
+    conn.close()

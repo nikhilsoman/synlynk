@@ -976,6 +976,20 @@ CREATE TABLE IF NOT EXISTS remediation_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
     ON remediation_actions(timestamp);
+
+CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    tier INTEGER NOT NULL,
+    home TEXT NOT NULL,
+    cell TEXT NOT NULL,
+    status TEXT NOT NULL,
+    detail TEXT,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
+    ON fleet_matrix_runs(home, cell, tier, ts);
 """
 
 _DB_SCORES_VIEW = """
