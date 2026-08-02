@@ -1,0 +1,40 @@
+<h2>Block 1 — Is the live matrix a hard gate?</h2>
+<p class="subtitle">Panel said: freeze fleet-parity scatter until a live audit matrix exists. How hard is that freeze?</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Tiered Supported / Proven (7-day live freshness)<br>
+     ✓ <strong>Core fleet of 4:</strong> claude · agy · codex · grok<br>
+     ✓ local = not core until open + TC-1/TC-3 + dry matrix green</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="hard-freeze" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Hard freeze (recommended)</h3>
+      <p>No new “fleet parity / harness compatibility” stories merge until matrix runner lands (dry + live tiers). Stop-the-line bugfixes still allowed (e.g. TC-2 crash, #648-class).</p>
+    </div>
+  </div>
+  <div class="option" data-choice="soft-priority" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Soft priority only</h3>
+      <p>Matrix is P0, but other fleet stories can still land if reviewed. Risk: scatter continues under a different name.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="no-gate" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>No gate — build matrix in parallel</h3>
+      <p>Keep shipping parity fixes while matrix is built. Fastest short-term; exactly the pattern that produced inconsistent behaviour.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="gate-after-mvp" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Gate after dry-only MVP</h3>
+      <p>Freeze only until <em>dry</em> matrix + fail-closed doctor exist; live weekly can follow. Unblocks docs/truth faster; Proven tier waits for live.</p>
+    </div>
+  </div>
+</div>

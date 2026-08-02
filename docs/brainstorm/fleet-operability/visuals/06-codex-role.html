@@ -1,0 +1,38 @@
+<h2>Block 2 — How do we treat Codex in the Core 4?</h2>
+<p class="subtitle">Core 4 is locked, but Codex is the weakest headless target (TC-2, #577, #340). What product role until those are green?</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Core 4 · Hard freeze · <code>selftest --matrix</code> · $10/week live cap · Proven ≤7d</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="full-core" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Full core peer</h3>
+      <p>Same claims as claude/agy/grok for home + headless. Docs must still show red cells honestly via matrix. Risk: overclaim GH-write / package-install.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="builder-only" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Builder-only (recommended)</h3>
+      <p>In Core 4 for implement/test dispatch. Explicitly <strong>not</strong> claimed for GH-write, package-install, or network-heavy sandbox work until TC-2 / #577 / #340 green on matrix. Matches capability table reality.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="core-but-no-gh" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Core for code; GH-write forbidden only</h3>
+      <p>Narrower than B — only GH-write is off-limits; package-install still claimed. Leaves #340 as a silent landmine.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="experimental" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Move Codex out of Core to experimental</h3>
+      <p>Too harsh given it’s a primary implementer in this repo. Contradicts Core 4 choice unless we shrink to Core 3.</p>
+    </div>
+  </div>
+</div>

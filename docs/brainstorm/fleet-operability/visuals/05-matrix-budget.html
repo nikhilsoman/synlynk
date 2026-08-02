@@ -1,0 +1,44 @@
+<h2>Block 1 — Live matrix budget cap</h2>
+<p class="subtitle">Weekly Proven requires paid agent calls. What’s the hard ceiling so the gate doesn’t become an unbounded cost center?</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Runner: <code>synlynk selftest --matrix</code> (dry in CI; live scheduled/manual)<br>
+     ✓ Proven freshness: 7 days · Hard freeze until runner lands</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="2usd" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>$2 / week (matches current selftest --live)</h3>
+      <p>Very tight. Forces tiny prompts, maybe not full 4×4 live dispatch. Good as a floor for smoke only.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="10usd" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>$10 / week (recommended)</h3>
+      <p>~enough for core 4× trivial live dispatches + a few verb checks if prompts stay minimal. Hard stop mid-matrix if exceeded.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="25usd" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>$25 / week</h3>
+      <p>Room for GH-write tier cells (claude/grok only) + fuller verb set. Still bounded.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="manual-only" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>No weekly auto — manual only with per-run flag</h3>
+      <p><code>--live --budget N</code> each time; no cron. Cheapest ops; Proven tier may go stale often.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Note</p>
+  <p>Dry matrix is free (no model calls). Budget only applies to live tiers 2–4.</p>
+</div>

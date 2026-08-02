@@ -1,0 +1,40 @@
+<h2>Block 0 continued — How fresh must “Proven” be?</h2>
+<p class="subtitle">You locked <strong>D (tiered)</strong>: Supported = fail-closed doctor + dry matrix; Proven = plus live matrix. What’s the max age of a green live cell before we drop back to Supported-only?</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ <strong>Supported</strong> = doctor FAIL-closed green + last dry matrix green<br>
+     ✓ <strong>Proven</strong> = Supported + live matrix cell green within N days<br>
+     ✓ Docs never claim more than the tier</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="24h" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>24 hours</h3>
+      <p>Near-continuous proof. Highest confidence, highest $ and flakiness from vendor outages.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="7d" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>7 days (recommended)</h3>
+      <p>Weekly live matrix. Matches “weekly green” language from the agenda; affordable; still catches drift before it ages into myth.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="30d" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>30 days</h3>
+      <p>Monthly proof. Cheap, but can hide multi-week flag/auth regressions (#577-class).</p>
+    </div>
+  </div>
+  <div class="option" data-choice="per-release" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Per named release only</h3>
+      <p>Proven only when cut with a release. No continuous decay. Simple ops; weak for “daily driver” trust.</p>
+    </div>
+  </div>
+</div>

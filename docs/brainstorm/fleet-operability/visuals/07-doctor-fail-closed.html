@@ -1,0 +1,57 @@
+<h2>Block 3 — Which doctor checks become FAIL (not warn)?</h2>
+<p class="subtitle">Multi-select. These define the fail-closed half of “Supported.” Click all that should hard-fail.</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Core 4 · Codex = <strong>builder-only</strong> · matrix gate hard · $10/wk · Proven ≤7d</p>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="missing-instruction" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Missing instruction file for core agent</h3>
+      <p>e.g. no AGENTS.md for codex, no CLAUDE.md for claude. (#347)</p>
+    </div>
+  </div>
+  <div class="option" data-choice="nested-state-db" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Nested worktree <code>state.db</code></h3>
+      <p>Any <code>worktrees/**/.synlynk/**/state.db</code> under repo. (#330)</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tc2-hard" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>TC-2 flag failures</h3>
+      <p>Invalid/required flags fail doctor (today codex <code>--approval-policy</code>). (#112)</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tc3-hard" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>TC-3 required endpoint unreachable</h3>
+      <p>Required network deps hard-fail (local 8080 today).</p>
+    </div>
+  </div>
+  <div class="option" data-choice="version-skew" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>CLI version skew vs status/baseline</h3>
+      <p>Installed CLI major/minor ahead of recorded baseline without probe update.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tc5-sop" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>TC-5 SOP missing sections</h3>
+      <p>Currently warn only (agy missing 6 sections). Promoting to FAIL is noisy across non-synlynk repos.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Recommended set</p>
+  <p><strong>1 + 2 + 3 + 4</strong> for Core 4 agents. Keep 5 as warn initially. Keep 6 as warn (or scope only to synlynk’s own repo).</p>
+</div>
