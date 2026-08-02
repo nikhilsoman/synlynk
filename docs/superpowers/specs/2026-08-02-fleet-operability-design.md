@@ -1,7 +1,7 @@
 # Design: Full-Fleet Operability (Home + Headless Truth Gate)
 
 **Date:** 2026-08-02  
-**Status:** Approved — implementation plan `docs/superpowers/plans/2026-08-02-fleet-operability.md`  
+**Status:** Implemented (Phase 1–2 code on `feat/fleet-operability`) — plan `docs/superpowers/plans/2026-08-02-fleet-operability.md`  
 **Brainstorm agenda:** `docs/brainstorm/fleet-operability/2026-08-02-agenda.md`  
 **Decide panel:** `project-docs/decisions/2026-08-02-fleet-operability-deep-survey.md` (`dec-2f979483`)  
 **Visuals:** `docs/brainstorm/fleet-operability/visuals/`  
