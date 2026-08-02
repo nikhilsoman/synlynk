@@ -417,11 +417,11 @@ def test_permissions_to_flags_codex_ask_for_approval():
     assert "untrusted" in result
 
 
-def test_permissions_to_flags_agy_returns_empty_for_read_only():
-    from synlynk.dispatch import _permissions_to_flags
+def test_permissions_to_flags_agy_raises_for_read_only():
+    from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
 
-    result = _permissions_to_flags("agy", ["read:*"])
-    assert result == []
+    with pytest.raises(PermissionEnforcementError, match="agy"):
+        _permissions_to_flags("agy", ["read:*"])
 
 
 def test_permissions_to_flags_agy_returns_empty_for_no_permissions():
