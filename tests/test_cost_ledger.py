@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import subprocess
 
 import pytest
 
@@ -1379,6 +1380,50 @@ def test_update_costs_zero_tokens_still_writes_tshirt_row(project_dir, monkeypat
     conn.close()
     assert row[0] == "estimated_tshirt"
     assert row[1] > 0
+
+
+def test_update_costs_uses_shared_state_db_from_linked_worktree(git_worktree_repo, monkeypatch):
+    import sqlite3
+    import synlynk as sl
+    from synlynk.costs import update_costs
+
+    worktree_path = git_worktree_repo.parent / "nested-worktree"
+    subprocess.run(
+        ["git", "worktree", "add", "-q", str(worktree_path), "-b", "feat/nested-costs"],
+        cwd=git_worktree_repo,
+        capture_output=True,
+        check=True,
+    )
+
+    (git_worktree_repo / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01T00:00:00Z")
+    monkeypatch.chdir(worktree_path)
+    monkeypatch.setenv("HOME", str(worktree_path.parent / "home"))
+    monkeypatch.setattr(sl, "DB_PATH", sl._resolve_db_path())
+    monkeypatch.setattr(sl, "_generate_costs_md", lambda: None)
+    monkeypatch.setattr(sl, "_dr_sync", lambda *_args, **_kwargs: None)
+
+    update_costs(
+        "codex exec --json",
+        in_tokens=123,
+        out_tokens=45,
+        duration=3.0,
+        model_version="gpt-5-codex",
+        agent="codex",
+        basis="structured_output",
+    )
+
+    conn = sqlite3.connect(sl.DB_PATH)
+    try:
+        row = conn.execute(
+            "SELECT agent, input_tokens, output_tokens, cost_source FROM cost_entries ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row[0] == "codex"
+    assert row[1] == 123
+    assert row[2] == 45
 
 
 def test_update_costs_failed_job_marker_survives_short_cmd_truncation(project_dir, monkeypatch):
