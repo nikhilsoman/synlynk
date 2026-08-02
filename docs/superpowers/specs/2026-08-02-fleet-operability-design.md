@@ -100,8 +100,8 @@ synlynk selftest --matrix --live --budget 10
 |------|------|-------|------|
 | 1 | Dry / contract | Phase 1 (S3) | Free |
 | 2 | Live trivial | Phase 2 (S4) | ≤ $10/week |
-| 3 | Live git-only | Future | TBD |
-| 4 | Live GH-write | Phase 3 epic | TBD |
+| 3 | Live git-only | Future (not in S1–S4) | Budget TBD at plan time |
+| 4 | Live GH-write | Phase 3 epic | Budget TBD with GH-write plan |
 
 ### 4.4 Storage
 
