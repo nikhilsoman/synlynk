@@ -47,6 +47,8 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `pr check` (primary) — release
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain
+- `worktree audit` (secondary) — sustain
+- `worktree clean` (secondary) — sustain
 - `exec` (secondary) — execute
 - `logs` (secondary) — execute
 - `shell` (secondary) — execute

@@ -333,3 +333,19 @@ def test_cmd_worktree_clean_apply_partial_failure_continues_batch(tmp_path, monk
     output = worktree_mod.cmd_worktree_clean(apply=True, json_output=False)
     assert "chore/feature   wt=removed   branch=FAILED" in output
     assert "chore/feature-b   wt=removed   branch=deleted" in output
+
+
+def test_cli_registers_worktree_audit_and_clean_subcommands():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["worktree", "audit", "--json"])
+    assert args.command == "worktree"
+    assert args.worktree_action == "audit"
+    assert args.json_output is True
+
+    args2 = parser.parse_args(["worktree", "clean", "--apply"])
+    assert args2.command == "worktree"
+    assert args2.worktree_action == "clean"
+    assert args2.apply is True
+    assert args2.json_output is False
