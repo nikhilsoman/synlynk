@@ -349,3 +349,81 @@ def test_cli_registers_worktree_audit_and_clean_subcommands():
     assert args2.worktree_action == "clean"
     assert args2.apply is True
     assert args2.json_output is False
+
+
+def test_worktree_status_hint_counts_non_dirty_worktrees(tmp_path, monkeypatch):
+    from synlynk.worktree import _worktree_status_hint
+
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=True)
+    monkeypatch.chdir(repo)
+
+    hint = _worktree_status_hint()
+    assert hint == {"local": 1, "stale_hint": 1}
+
+
+def test_worktree_status_hint_returns_none_when_no_worktrees(tmp_path, monkeypatch):
+    from synlynk.worktree import _worktree_status_hint
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _run(["git", "init", "-b", "main"], cwd=repo)
+    _run(["git", "config", "user.email", "test@test.com"], cwd=repo)
+    _run(["git", "config", "user.name", "Test"], cwd=repo)
+    (repo / "README.md").write_text("hello\n")
+    _run(["git", "add", "."], cwd=repo)
+    _run(["git", "commit", "-m", "init"], cwd=repo)
+    monkeypatch.chdir(repo)
+
+    assert _worktree_status_hint() is None
+
+
+def test_worktree_status_hint_never_invokes_gh(tmp_path, monkeypatch):
+    from synlynk import worktree as worktree_mod
+
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    monkeypatch.chdir(repo)
+
+    real_run = worktree_mod.subprocess.run
+
+    def _guarded_run(cmd, *args, **kwargs):
+        assert cmd[0] != "gh", "_worktree_status_hint must never call gh"
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(worktree_mod.subprocess, "run", _guarded_run)
+    hint = worktree_mod._worktree_status_hint()
+    assert hint == {"local": 1, "stale_hint": 1}
+
+
+def test_status_terminal_includes_worktrees_line_when_stale_present():
+    from synlynk.status import _format_status_terminal
+
+    output = _format_status_terminal(
+        harness_rows=[], cycle_map={}, efficiency_ratio=1.0, dispatch_mode="daily-grind",
+        sentinels_active=0, json_output=False, rates_updated_at="2026-07-29",
+        worktree_hint={"local": 6, "stale_hint": 2},
+    )
+    assert "WORKTREES  6 local, 2 look stale — run `synlynk worktree audit`" in output
+
+
+def test_status_terminal_omits_worktrees_line_when_no_stale():
+    from synlynk.status import _format_status_terminal
+
+    output = _format_status_terminal(
+        harness_rows=[], cycle_map={}, efficiency_ratio=1.0, dispatch_mode="daily-grind",
+        sentinels_active=0, json_output=False, rates_updated_at="2026-07-29",
+        worktree_hint=None,
+    )
+    assert "WORKTREES" not in output
+
+
+def test_status_json_includes_worktrees_field():
+    import json as _json
+    from synlynk.status import _format_status_terminal
+
+    output = _format_status_terminal(
+        harness_rows=[], cycle_map={}, efficiency_ratio=1.0, dispatch_mode="daily-grind",
+        sentinels_active=0, json_output=True, rates_updated_at="2026-07-29",
+        worktree_hint={"local": 6, "stale_hint": 2},
+    )
+    payload = _json.loads(output)
+    assert payload["worktrees"] == {"local": 6, "stale_hint": 2}

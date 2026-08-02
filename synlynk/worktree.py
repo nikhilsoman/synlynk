@@ -302,6 +302,35 @@ def _list_worktrees(main_repo_path: str, cwd_worktree_path: str) -> list:
     return _build_worktree_entries(raw, main_repo_path, cwd_worktree_path)
 
 
+def _worktree_status_hint():
+    """Cheap local-only pre-pass for ``synlynk status``.
+
+    Returns None when there is nothing to report. This deliberately performs
+    no GitHub calls.
+    """
+    try:
+        main_repo_path = _get_repo_root()
+        entries = _list_worktrees(main_repo_path, os.getcwd())
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if not entries:
+        return None
+
+    stale = 0
+    for entry in entries:
+        if not os.path.isdir(entry.path):
+            stale += 1
+            continue
+        try:
+            is_dirty, _ = _git_status_dirty(entry.path)
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if not is_dirty:
+            stale += 1
+
+    return {"local": len(entries), "stale_hint": stale}
+
+
 def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str) -> list:
     entries = _list_worktrees(main_repo_path, cwd_worktree_path)
     gh_available = _gh_auth_available()

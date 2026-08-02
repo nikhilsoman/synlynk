@@ -305,6 +305,7 @@ def _format_status_terminal(
     sentinels_active: int,
     json_output: bool = False,
     rates_updated_at: Optional[str] = None,
+    worktree_hint: Optional[dict] = None,
 ) -> str:
     """Format status output for terminal or JSON consumers."""
     agents = [r["agent_name"] for r in harness_rows] or sorted(AGENT_CAPABILITY_BASELINES)
@@ -323,6 +324,7 @@ def _format_status_terminal(
             "capacity": TIER1_CAPACITY,
             "sentinels_active": sentinels_active,
             "rates_updated_at": rates_updated_at,
+            "worktrees": worktree_hint or {"local": 0, "stale_hint": 0},
         }
         return json.dumps(payload, indent=2)
 
@@ -335,6 +337,13 @@ def _format_status_terminal(
         f"HEADLESS EFFICIENCY  {efficiency_ratio}×   headless dispatch baseline",
         "",
         f"FLEET   {attached}/{len(agents)} attached   mode: {dispatch_mode}",
+    ]
+    if worktree_hint and worktree_hint.get("stale_hint", 0) > 0:
+        lines.append(
+            f"WORKTREES  {worktree_hint['local']} local, {worktree_hint['stale_hint']} "
+            "look stale — run `synlynk worktree audit`",
+        )
+    lines += [
         "BUDGET  limit tracked via .synlynk/config.json",
         _format_rates_line(rates_updated_at),
         "",
@@ -372,6 +381,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
     """Print ecosystem status for the current workspace."""
     from synlynk import _get_db, _read_sentinel_alerts, load_config
     from synlynk.costs import _load_model_rates
+    from synlynk.worktree import _worktree_status_hint
 
     if db_conn is None:
         db_conn = _get_db()
@@ -383,6 +393,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
     efficiency = _headless_efficiency_ratio(_load_exec_jobs_from_telemetry())
     sentinels_active = len(_read_sentinel_alerts())
     rates_updated_at = _load_model_rates().get("rates_updated_at")
+    worktree_hint = _worktree_status_hint()
     output = _format_status_terminal(
         harness_rows,
         cycle_map,
@@ -391,6 +402,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
         sentinels_active,
         json_output=json_output,
         rates_updated_at=rates_updated_at,
+        worktree_hint=worktree_hint,
     )
     print(output)
     return output
