@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
@@ -39,6 +40,21 @@ def find_nested_product_state_dbs(root: str | Path) -> List[str]:
             if ".synlynk" in parts or p.parent.name == ".synlynk":
                 hits.append(str(p))
     return hits
+
+
+def is_nested_worktree_state_path(path: str) -> bool:
+    """True if path sits under a job/feature worktree layout (not canonical home)."""
+    norm = os.path.abspath(path).replace("\\", "/")
+    return any(seg in norm for seg in ("/worktrees/", "/.worktrees/", "/.claude/worktrees/"))
+
+
+def assert_not_nested_product_ledger(path: str, *, home_writable: bool) -> None:
+    """Refuse product ledger under worktrees when the home canonical path is usable."""
+    if home_writable and is_nested_worktree_state_path(path):
+        raise RuntimeError(
+            f"nested product state.db refused ({path}); "
+            "use canonical ~/.synlynk/projects/<key>/state.db"
+        )
 
 
 def doctor_hard_fail(

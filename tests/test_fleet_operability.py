@@ -91,3 +91,37 @@ def test_doctor_hard_fail_ignores_tc5():
         missing_instructions=["codex"],
         nested_state_dbs=[],
     ) is True
+
+
+def test_assert_not_nested_product_ledger_raises(tmp_path):
+    from synlynk.fleet import assert_not_nested_product_ledger
+
+    nested = str(tmp_path / "worktrees" / "job-x" / ".synlynk" / "state.db")
+    with pytest.raises(RuntimeError, match="nested product state"):
+        assert_not_nested_product_ledger(nested, home_writable=True)
+    # home not writable: no raise
+    assert_not_nested_product_ledger(nested, home_writable=False)
+
+
+def test_is_nested_worktree_state_path():
+    from synlynk.fleet import is_nested_worktree_state_path
+
+    assert is_nested_worktree_state_path("/repo/worktrees/job-1/.synlynk/state.db")
+    assert is_nested_worktree_state_path("/repo/.worktrees/feat/.synlynk/state.db")
+    assert is_nested_worktree_state_path("/repo/.claude/worktrees/x/.synlynk/state.db")
+    assert not is_nested_worktree_state_path(
+        "/Users/me/.synlynk/projects/abc12345/state.db"
+    )
+
+
+def test_get_db_refuses_nested_primary_path(tmp_path, monkeypatch):
+    """Primary DB_PATH under worktrees must raise before connect (#330 / S2a)."""
+    import synlynk
+
+    nested = tmp_path / "worktrees" / "job-x" / ".synlynk" / "state.db"
+    nested.parent.mkdir(parents=True)
+    monkeypatch.setattr(synlynk, "DB_PATH", str(nested))
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="nested product state"):
+        synlynk._get_db()

@@ -1008,12 +1008,22 @@ def _get_db() -> _sqlite3.Connection:
     commonly mount $HOME read-only; that surfaces as OSError(EROFS) from
     os.makedirs (not PermissionError) or as sqlite3.OperationalError from
     connect when the directory already exists. See #648.
+
+    Primary product ledger must not live under job/feature worktrees when the
+    home path is the intended path (#330 / fleet S2a). Sandbox fallback after
+    OSError/OperationalError may still open a nested cwd path (#650).
     """
+    from synlynk.fleet import assert_not_nested_product_ledger
+
     db_path = DB_PATH
     fallback_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
     tried_fallback = False
     while True:
         try:
+            # Refuse nested worktree product ledger on the primary attempt only.
+            # After #650 sandbox fallback, nested cwd/.synlynk/state.db is allowed.
+            if not tried_fallback:
+                assert_not_nested_product_ledger(db_path, home_writable=True)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
             conn = _sqlite3.connect(db_path)
             conn.execute("PRAGMA journal_mode=WAL")
@@ -1023,6 +1033,7 @@ def _get_db() -> _sqlite3.Connection:
         # OSError covers PermissionError, EROFS (read-only mounts), ENOSPC, etc.
         # OperationalError covers "unable to open database file" when the dir
         # exists but the file/FS is still unwritable (sandbox case in #648).
+        # RuntimeError from nested-ledger refusal must not trigger fallback.
         except (OSError, _sqlite3.OperationalError) as exc:
             if tried_fallback:
                 raise
