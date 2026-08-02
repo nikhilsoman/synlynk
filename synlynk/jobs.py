@@ -10,6 +10,7 @@ from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk.fleet import terminal_status_for_unknown_exit
 
 
 _BOLD = "[1m"
@@ -1158,7 +1159,7 @@ def _reconcile_jobs() -> None:
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
                 )
             if job.get("status") == "unknown":
-                summary_status = "UNKNOWN (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
                 _finalize_completed_worktree_job(job, git_state)
                 _apply_dispatch_gate(job)
@@ -1324,7 +1325,7 @@ def _reconcile_jobs() -> None:
                     f"job exited ambiguously, but a git-state recheck recovered {details} "
                     f"in the worktree (worktree: {job.get('worktree_path')})"
                 )
-                summary_status = "FAILED_UNVERIFIED (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             elif ambiguous_exit and git_state:
                 commit_count = git_state.get("commits_ahead", 0)
                 dirty = git_state.get("dirty", False)
@@ -1338,9 +1339,9 @@ def _reconcile_jobs() -> None:
                     f"job exited ambiguously but the worktree contains {details} "
                     f"— inspect before discarding (worktree: {job.get('worktree_path')})"
                 )
-                summary_status = "FAILED_UNVERIFIED (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             elif job.get("status") == "unknown":
-                summary_status = "UNKNOWN (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
                 _finalize_completed_worktree_job(job, git_state)
                 _apply_dispatch_gate(job)
@@ -1468,7 +1469,7 @@ def _reconcile_daemon_jobs() -> None:
                         "(response empty, num_turns <= 1, or explicit no-output marker)"
                     )
                 elif status == "unknown":
-                    summary_status = "UNKNOWN (exit unknown)"
+                    summary_status = terminal_status_for_unknown_exit()
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
                     out_tokens, cost_usd, [], status_label=summary_status, note=summary_note

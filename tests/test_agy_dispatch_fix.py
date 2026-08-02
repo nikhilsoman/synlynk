@@ -784,8 +784,9 @@ def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktre
 
     assert reconciled["status"] == "unknown"
     assert reconciled["exit_code"] is None
-    assert "UNKNOWN (exit unknown)" in out
-    assert "FAILED_UNVERIFIED" not in out
+    # Terminal summary must never say bare UNKNOWN for unknown exit.
+    assert "FAILED_UNVERIFIED (exit unknown)" in out
+    assert "UNKNOWN (exit unknown)" not in out
     assert "worktree:" in out
 
 

@@ -753,8 +753,10 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
     existing_status = _summary_status_label(existing_summary) if existing_summary else None
     existing_files_touched = _summary_files_touched_count(existing_summary) if existing_summary else None
     new_status = _summary_status_label(summary)
-    if existing_status == "OK (exit 0)" and new_status == "UNKNOWN (exit unknown)":
-        return existing_summary
+    # Do not downgrade a verified OK summary with an ambiguous race rewrite.
+    if existing_status == "OK (exit 0)" and new_status:
+        if new_status.startswith("FAILED_UNVERIFIED") or new_status == "UNKNOWN (exit unknown)":
+            return existing_summary
     if (
         existing_summary
         and existing_files_touched

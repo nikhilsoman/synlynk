@@ -74,3 +74,12 @@ def doctor_hard_fail(
     if not tc_results.get("tc3", True):
         return True
     return False
+
+
+def terminal_status_for_unknown_exit() -> str:
+    """Terminal summary label when a job ends without a verified exit code.
+
+    Never emit bare UNKNOWN as a terminal status — operators must treat
+    ambiguous exits as FAILED_UNVERIFIED and inspect the worktree.
+    """
+    return "FAILED_UNVERIFIED (exit unknown)"

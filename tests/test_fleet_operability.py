@@ -125,3 +125,10 @@ def test_get_db_refuses_nested_primary_path(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="nested product state"):
         synlynk._get_db()
+
+
+def test_no_unknown_terminal_label():
+    from synlynk.fleet import terminal_status_for_unknown_exit
+
+    assert "UNKNOWN" not in terminal_status_for_unknown_exit()
+    assert terminal_status_for_unknown_exit().startswith("FAILED_UNVERIFIED")

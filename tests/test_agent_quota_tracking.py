@@ -1284,7 +1284,7 @@ def test_fix_github_issue_378_nikhilsomansynk_terminal_summary_survives_unknown_
         0,
         0.00,
         [],
-        status_label="UNKNOWN (exit unknown)",
+        status_label="FAILED_UNVERIFIED (exit unknown)",
     )
 
     summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
