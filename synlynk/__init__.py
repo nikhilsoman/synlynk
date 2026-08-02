@@ -788,20 +788,34 @@ TASK_STATUSES = {
 }
 
 
+def _project_root() -> str:
+    """Return the shared repo root for the current git worktree, or CWD fallback."""
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if common:
+            return os.path.abspath(os.path.join(common, ".."))
+    except Exception:
+        pass
+    return os.getcwd()
+
+
+def _get_project_root() -> str:
+    """Backwards-compatible alias for callers that expect a root helper."""
+    return _project_root()
+
+
 def _resolve_db_path() -> str:
     """Centralise DB at ~/.synlynk/projects/<key>/state.db so all worktrees share one DB.
 
-    Key is an 8-char MD5 of the git repo root (common dir parent), falling back to CWD.
+    Key is an 8-char MD5 of the shared repo root, falling back to CWD outside git.
     This avoids the .synlynk/state flat-file collision and the per-worktree isolation bug.
     """
     import hashlib as _h
-    try:
-        common = subprocess.check_output(
-            ["git", "rev-parse", "--git-common-dir"], stderr=subprocess.DEVNULL
-        ).decode().strip()
-        root = os.path.abspath(os.path.join(common, ".."))
-    except Exception:
-        root = os.getcwd()
+
+    root = _project_root()
     key = _h.md5(root.encode()).hexdigest()[:8]
     return os.path.expanduser(f"~/.synlynk/projects/{key}/state.db")
 
@@ -1026,11 +1040,11 @@ def _get_db() -> _sqlite3.Connection:
 
 
 def _is_migrated() -> bool:
-    return os.path.exists(os.path.join('.synlynk', '.synlynk_migrated'))
+    return os.path.exists(os.path.join(_project_root(), ".synlynk", ".synlynk_migrated"))
 
 
 def _synlynk_project_docs_dir() -> str:
-    return os.path.join('.synlynk', 'project-docs')
+    return os.path.join(_project_root(), ".synlynk", "project-docs")
 
 
 def _dr_sync(relative_path: str) -> None:

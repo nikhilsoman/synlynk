@@ -1235,10 +1235,11 @@ def _migrate_dr_mirror(backup_dir: str) -> None:
 
 def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = False) -> None:
     """Migrate project-docs/ -> .synlynk/project-docs/ and state.db."""
-    from synlynk import DB_PATH, _docs_dir, _migrate_import, _synlynk_project_docs_dir
+    from synlynk import DB_PATH, _docs_dir, _get_project_root, _migrate_import, _synlynk_project_docs_dir
     import shutil as _shutil
 
     print(f"  DB path: {DB_PATH}")
+    project_root = _get_project_root()
 
     if setup_dr:
         path = input(
@@ -1249,7 +1250,7 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         if not os.path.isdir(path):
             print(f"  ✗ Path not found: {path}")
             return
-        cfg_path = os.path.join(".synlynk", "config.json")
+        cfg_path = os.path.join(project_root, ".synlynk", "config.json")
         cfg = {}
         if os.path.exists(cfg_path):
             with open(cfg_path) as f:
@@ -1260,7 +1261,7 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         print(f"  ✓ DR sync path set: {path}")
         return
 
-    sentinel = os.path.join(".synlynk", ".synlynk_migrated")
+    sentinel = os.path.join(project_root, ".synlynk", ".synlynk_migrated")
 
     if recover:
         backup_dir = _synlynk_project_docs_dir()
