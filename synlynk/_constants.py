@@ -62,6 +62,7 @@ AGENT_CAPABILITY_BASELINES = {
             "optional_endpoints": [],
         },
         "roles": ["architect", "builder"],
+        "env_passthrough": [],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
     "codex": {
@@ -100,6 +101,7 @@ AGENT_CAPABILITY_BASELINES = {
             "optional_endpoints": [],
         },
         "roles": ["builder"],
+        "env_passthrough": [],
         "strengths": ["code completion", "inline edits", "fast iteration"],
     },
     "agy": {
@@ -133,6 +135,7 @@ AGENT_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["builder", "verifier"],
+        "env_passthrough": [],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
     "grok": {
@@ -165,6 +168,7 @@ AGENT_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["builder", "architect"],
+        "env_passthrough": [],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
     },
     "local": {
@@ -194,6 +198,7 @@ AGENT_CAPABILITY_BASELINES = {
             "optional_endpoints": [],
         },
         "roles": ["builder"],
+        "env_passthrough": [],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
 }
