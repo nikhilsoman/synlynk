@@ -194,7 +194,7 @@ AGENT_CAPABILITY_BASELINES = {
             "non_interactive_flag": "--version",
         },
         "network_deps": {
-            "required_endpoints": ["127.0.0.1:8080"],
+            "required_endpoints": ["127.0.0.1:8000"],
             "optional_endpoints": [],
         },
         "roles": ["builder"],
