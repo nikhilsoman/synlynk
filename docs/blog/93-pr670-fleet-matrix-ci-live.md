@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — Dry matrix in CI + real live smoke for Proven"
+title: "PR #670 — Dry matrix in CI + real live smoke for Proven"
 date: 2026-08-02
 series: "Building the OS for Multi-Agent Development"
 post: 93
-pr: "#TBD"
+pr: "#670"
 ---
 
 ## The Broader Goal at the End of the Previous PR
