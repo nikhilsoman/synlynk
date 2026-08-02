@@ -321,6 +321,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
 
+    worktree_parser = subparsers.add_parser(
+        "worktree", help="Audit and clean up stale git worktrees/branches"
+    )
+    worktree_sub = worktree_parser.add_subparsers(dest="worktree_action")
+    worktree_audit_parser = worktree_sub.add_parser(
+        "audit", help="Report worktree safety classification (read-only)"
+    )
+    worktree_audit_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output machine-readable JSON"
+    )
+    worktree_clean_parser = worktree_sub.add_parser(
+        "clean", help="Remove SAFE worktrees/branches (dry-run unless --apply)"
+    )
+    worktree_clean_parser.add_argument(
+        "--apply", action="store_true",
+        help="Actually remove SAFE items (default is dry-run)"
+    )
+    worktree_clean_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output machine-readable JSON"
+    )
+
     exit_parser = subparsers.add_parser(
         "exit", help="Remove synlynk from this repository (reversible via repair)")
     exit_parser.add_argument(
@@ -705,6 +728,7 @@ def build_parser() -> argparse.ArgumentParser:
         "relay": relay_parser,
         "run": run_parser,
         "team": team_parser,
+        "worktree": worktree_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1099,6 +1123,15 @@ def main() -> None:
         cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
         sys.exit(cmd_doctor())
+    elif args.command == "worktree":
+        from synlynk.worktree import cmd_worktree_audit, cmd_worktree_clean
+        action = getattr(args, "worktree_action", None)
+        if action == "audit":
+            cmd_worktree_audit(json_output=args.json_output)
+        elif action == "clean":
+            cmd_worktree_clean(apply=args.apply, json_output=args.json_output)
+        else:
+            help_parsers.get("worktree", parser).print_help()
     elif args.command == "roles":
         cmd_roles(fix=getattr(args, "fix", False))
     elif args.command == "release":
