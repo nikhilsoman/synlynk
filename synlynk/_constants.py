@@ -202,7 +202,7 @@ AGENT_CAPABILITY_BASELINES = {
             "optional_endpoints": [],
         },
         "roles": ["builder"],
-        "env_passthrough": [],
+        "env_passthrough": ["OPENAI_API_KEY"],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
 }

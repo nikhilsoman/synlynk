@@ -46,9 +46,12 @@ def _pinned_model(config: dict) -> str:
     return config["models"][0]["id"]
 
 
-def _health_check(endpoint: str, timeout: int = 5) -> dict:
+def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
     """GETs {endpoint}/v1/models and reports reachability plus model ids."""
-    req = urllib.request.Request(f"{endpoint}/v1/models", method="GET")
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(f"{endpoint}/v1/models", method="GET", headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
@@ -90,10 +93,14 @@ def cmd_local_doctor(config_path: str = None) -> int:
             print(f"  ✗ {exc}")
             return 1
     endpoint = config["endpoint"]
-    result = _health_check(endpoint)
+    api_key = os.environ.get("OPENAI_API_KEY")
+    result = _health_check(endpoint, api_key=api_key)
     if not result["reachable"]:
         print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
-        print("    Start it with: omlx serve")
+        if "401" in result["error"]:
+            print("    oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry")
+        else:
+            print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
     from synlynk.local_agent_seed import seed_local_capability_envelope

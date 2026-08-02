@@ -144,3 +144,91 @@ class TestCmdLocalDoctorAiderCheck(unittest.TestCase):
                     }, f)
                 result = local_agent.cmd_local_doctor(path)
         self.assertEqual(result, 0)
+
+
+class TestHealthCheckApiKey(unittest.TestCase):
+    def test_sends_authorization_header_when_api_key_provided(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"data": [{"id": "Ornith-1.0-9B-4bit"}]}'
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return FakeResponse()
+
+        with patch("synlynk.local_agent.urllib.request.urlopen", side_effect=fake_urlopen):
+            result = local_agent._health_check("http://127.0.0.1:8000", api_key="sk-test-123")
+        self.assertTrue(result["reachable"])
+        self.assertEqual(captured["headers"].get("Authorization"), "Bearer sk-test-123")
+
+    def test_no_authorization_header_when_api_key_absent(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"data": []}'
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return FakeResponse()
+
+        with patch("synlynk.local_agent.urllib.request.urlopen", side_effect=fake_urlopen):
+            local_agent._health_check("http://127.0.0.1:8000")
+        self.assertNotIn("Authorization", captured["headers"])
+
+
+class TestCmdLocalDoctorApiKey(unittest.TestCase):
+    def test_reads_openai_api_key_env_and_passes_to_health_check(self):
+        healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response) as mock_check, \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"), \
+             patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                local_agent.cmd_local_doctor(path)
+        mock_check.assert_called_once_with("http://127.0.0.1:8000", api_key="sk-env-key")
+
+    def test_401_reports_auth_hint_not_unreachable_hint(self):
+        unauthorized_response = {"reachable": False, "error": "HTTP Error 401: Unauthorized"}
+        with patch("synlynk.local_agent._health_check", return_value=unauthorized_response), \
+             patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENAI_API_KEY", None)
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 1)
+        self.assertIn("401", printed)
+        self.assertIn("OPENAI_API_KEY", printed)
+        self.assertNotIn("Start it with: omlx serve", printed)
