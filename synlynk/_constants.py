@@ -78,11 +78,15 @@ AGENT_CAPABILITY_BASELINES = {
             "-s", "workspace-write",
         ],
         "dispatch_flags": {
-            "valid_flags": ["--approval-policy", "--model", "--sandbox"],
+            # Codex CLI renamed --approval-policy → --ask-for-approval (values:
+            # untrusted|on-request|never). TC-2 scans `codex --help` for these names.
+            # Keep --sandbox as a valid long form of -s used in non_interactive_flags.
+            "valid_flags": ["--ask-for-approval", "--model", "--sandbox"],
             "invalid_flags": [
                 "--dangerously-bypass-approvals-and-sandbox",
                 "--dangerously-skip-permissions",
                 "--print",
+                "--approval-policy",  # removed from Codex CLI; must not reappear
             ],
             # Sandbox mode is already supplied with its value via non_interactive_flags
             # (-s workspace-write). Do NOT put --sandbox here: required_flags are appended
