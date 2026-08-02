@@ -223,3 +223,25 @@ one worktree per branch, off `main`).
   dev machine load (browser, IDE, etc.). If real-world testing shows memory pressure,
   the fallback is dropping the default roster to smaller models (e.g. Qwen-Coder at a
   smaller size) — flagged here so it's not a surprise during PR 3's real-hardware testing.
+
+## Addendum (2026-08-02): `synlynk local doctor` doesn't check for Aider itself
+
+**Found during:** brainstorming the follow-on "Local Agents with Synlynk" goal (herdr +
+aider + oMLX), while verifying this spec's rollout was actually complete on a real
+machine. All 4 planned PRs (Rollout / PR Sequence, above) had already shipped — but
+`cmd_local_doctor()` (`synlynk/local_agent.py:77`) only ever checked oMLX reachability
+and the model roster (the Testing section's own description above: "verifies oMLX is
+installed, reachable, and the roster models are present"). It never checked whether
+`aider` — the agentic editor this entire design depends on (see "Two layers" above) — is
+even on `PATH`. Confirmed no existing test covers `cmd_local_doctor()` at all, so this
+gap had no regression coverage either. Net effect: on a machine with oMLX running but
+Aider not installed, doctor reports fully healthy, yet dispatching a `local` job fails
+immediately with a raw "command not found" instead of the actionable guidance every
+other doctor failure path already gives.
+
+**Fix (implementation plan Task Group 6):** add a `shutil.which("aider")` check to
+`cmd_local_doctor()`, printed and scored alongside the existing oMLX/model-roster checks
+rather than short-circuiting before them, so a single doctor run surfaces every gap in
+one pass. See `docs/superpowers/plans/2026-07-12-local-agent-mlx-driver.md`, Task Group 6.
+No architecture change — this is a gap in the already-approved design's own onboarding
+surface, not a new decision.

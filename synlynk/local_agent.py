@@ -7,8 +7,11 @@ Aider or oMLX's chat-completions endpoint directly; Aider does that."""
 
 import json
 import os
+import shutil
 import urllib.error
 import urllib.request
+
+from synlynk import _get_db
 
 _DEFAULT_CONFIG_PATH = os.path.join(".agents", "local.json")
 _DEFAULT_LOCAL_CONFIG = {
@@ -93,7 +96,6 @@ def cmd_local_doctor(config_path: str = None) -> int:
         print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
-    from synlynk import _get_db
     from synlynk.local_agent_seed import seed_local_capability_envelope
     seed_local_capability_envelope(_get_db())
     print("  ✓ starter capability envelope seeded (docs/testing, execute stage)")
@@ -105,5 +107,12 @@ def cmd_local_doctor(config_path: str = None) -> int:
         print(f"  {mark} {model_id}")
     if missing:
         print(f"    Missing models: {', '.join(missing)} — download via oMLX admin panel or CLI")
+    aider_missing = shutil.which("aider") is None
+    if aider_missing:
+        print("  ✗ aider not found on PATH")
+        print("    Install it with: pipx install aider-chat")
+    else:
+        print("  ✓ aider installed")
+    if missing or aider_missing:
         return 1
     return 0
