@@ -248,6 +248,60 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     return []
 
 
+_ENV_ALLOWLIST_BASE = [
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "TMPDIR",
+    "USER",
+    "SHELL",
+    "SSH_AUTH_SOCK",
+    "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL",
+    "GIT_COMMITTER_NAME",
+    "GIT_COMMITTER_EMAIL",
+    "GIT_SSH_COMMAND",
+]
+
+
+def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str) -> dict:
+    """Build a minimal, allowlisted environment for a dispatched subprocess.
+
+    Replaces copying the full parent environment: only a fixed base set of
+    vars (PATH/HOME/git identity/etc.) plus each agent's declared
+    env_passthrough vars are inherited. Everything else the operator's shell
+    happens to have set (AWS keys, unrelated API tokens, etc.) is excluded by
+    default.
+    """
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
+    proc_env = {k: v for k, v in os.environ.items() if k in allowed}
+    proc_env.update(overrides.get("env", {}))
+
+    for var in baseline.get("headless_contract", {}).get("env_vars_required", []):
+        if "=" in var:
+            k, v = var.split("=", 1)
+            proc_env[k] = v
+
+    if requires_gh_write:
+        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
+        if gh_token:
+            proc_env["GH_TOKEN"] = gh_token
+        else:
+            proc_env.pop("GH_TOKEN", None)
+            proc_env.pop("GITHUB_TOKEN", None)
+            print(
+                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
+                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
+                "silently fall back to a personal credential; GitHub write actions in this "
+                "job will fail until a role App is provisioned (see `synlynk identity init`).",
+                file=sys.stderr,
+            )
+    return proc_env
+
+
 def _spawn_with_pty_fallback(cmd, env, cwd):
     """Try pipe mode first; fall back to PTY if stdout hangs (POSIX only)."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -1850,27 +1904,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    contract = baselines.get("headless_contract", {})
-    proc_env = os.environ.copy()
-    proc_env.update(overrides.get("env", {}))
-    if requires_gh_write:
-        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
-        if gh_token:
-            proc_env["GH_TOKEN"] = gh_token
-        else:
-            proc_env.pop("GH_TOKEN", None)
-            proc_env.pop("GITHUB_TOKEN", None)
-            print(
-                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
-                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
-                "silently fall back to a personal credential; GitHub write actions in this "
-                "job will fail until a role App is provisioned (see `synlynk identity init`).",
-                file=sys.stderr,
-            )
-    for var in contract.get("env_vars_required", []):
-        if "=" in var:
-            k, v = var.split("=", 1)
-            proc_env[k] = v
+    proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id)
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],

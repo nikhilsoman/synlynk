@@ -277,6 +277,63 @@ def test_cli_dispatch_passes_base_flag(project_dir, monkeypatch):
     assert captured["base"] == "feat/example"
 
 
+def test_build_subprocess_env_allowlists_base_vars_only(monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv("HOME", "/home/test")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-if-present")
+    monkeypatch.setenv("SOME_RANDOM_API_TOKEN", "also-leaked-if-present")
+
+    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
+
+    assert env.get("PATH") == "/usr/bin"
+    assert env.get("HOME") == "/home/test"
+    assert "AWS_SECRET_ACCESS_KEY" not in env
+    assert "SOME_RANDOM_API_TOKEN" not in env
+
+
+def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setenv("MY_AGENT_TOKEN", "should-be-included")
+    fake_baselines = {
+        "codex": {"env_passthrough": ["MY_AGENT_TOKEN"], "headless_contract": {}},
+    }
+    monkeypatch.setattr(dispatch_mod, "AGENT_CAPABILITY_BASELINES", fake_baselines)
+
+    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
+
+    assert env.get("MY_AGENT_TOKEN") == "should-be-included"
+
+
+def test_build_subprocess_env_applies_headless_contract_required_vars():
+    from synlynk.dispatch import _build_subprocess_env
+    import synlynk.dispatch as dispatch_mod
+
+    fake_baselines = {
+        "agy": {"env_passthrough": [], "headless_contract": {"env_vars_required": ["PYTHONUNBUFFERED=1"]}},
+    }
+    dispatch_mod_patch_target = dispatch_mod.AGENT_CAPABILITY_BASELINES
+    dispatch_mod.AGENT_CAPABILITY_BASELINES = fake_baselines
+    try:
+        env = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
+        assert env.get("PYTHONUNBUFFERED") == "1"
+    finally:
+        dispatch_mod.AGENT_CAPABILITY_BASELINES = dispatch_mod_patch_target
+
+
+def test_build_subprocess_env_overrides_win_over_allowlist(monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    env = _build_subprocess_env("codex", {"env": {"PATH": "/custom/bin"}}, requires_gh_write=False, story_id="story-1")
+
+    assert env.get("PATH") == "/custom/bin"
+
+
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
