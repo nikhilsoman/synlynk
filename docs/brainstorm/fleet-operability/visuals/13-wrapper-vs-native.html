@@ -1,0 +1,40 @@
+<h2>Block 5 — Wrapper vs native harness</h2>
+<p class="subtitle"><code>docs/strategy/synlynk-as-a-harness.md</code>. Panel: decide only after matrix data exists. You’re about to lock that go/no-go stance for the design.</p>
+
+<div class="section">
+  <p class="label">Sequencing locked</p>
+  <p>1. Matrix runner (hard freeze)<br>
+     2. GH-write + grants epic for Core 4 (matrix = gate)<br>
+     3. Strategy question now:</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="defer-after-matrix" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Defer go/no-go until first Proven week (recommended)</h3>
+      <p>Ship matrix; collect 1–2 weekly live runs; then dedicated strategy brainstorm. No native-harness design work in this epic. Wrapper patches only if matrix/stop-the-line requires them.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="no-go-wrapper" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>No-go native for now — commit to wrapper parity</h3>
+      <p>Double down on vendor CLIs. Native park for 6+ months. Matrix + grants stay in wrapper world.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="go-native-schedule" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Go-native schedule now</h3>
+      <p>Start native harness design in parallel (dual-mode). Risk: two platforms before truth matrix exists.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="native-after-grants" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Defer until after GH-write + grants epic</h3>
+      <p>Matrix → invest epic → then native go/no-go. Longer path; more wrapper investment first.</p>
+    </div>
+  </div>
+</div>

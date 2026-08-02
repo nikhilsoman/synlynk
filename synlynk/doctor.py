@@ -15,9 +15,15 @@ import stat
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION
+from synlynk._constants import AGENT_CAPABILITY_BASELINES, CORE_FLEET, CORE_INSTRUCTION_FILES, VERSION
 from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
+from synlynk.fleet import (
+    check_core_instruction_files,
+    doctor_hard_fail,
+    find_nested_product_state_dbs,
+    repo_has_any_core_instruction_file,
+)
 from synlynk.probe import (
     _compute_capability_hash,
     _run_tc0,
@@ -482,7 +488,25 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     baselines = AGENT_CAPABILITY_BASELINES
     agents = [agent_filter] if agent_filter else list(baselines.keys())
     any_failed = False
+    # Once per doctor run: nested product state.db under worktrees is a hard fail.
+    nested_state_dbs = find_nested_product_state_dbs(".")
+    # Only enforce missing-instruction FAIL when the repo already looks like a
+    # multi-agent project (has ≥1 instruction file). Bare test sandboxes skip.
+    enforce_instructions = repo_has_any_core_instruction_file(".")
+    missing_core_instructions = (
+        check_core_instruction_files(".", agents=agents) if enforce_instructions else []
+    )
     try:
+        if nested_state_dbs:
+            any_failed = True
+            for path in nested_state_dbs:
+                print(f"  ✗  nested product state.db: {path}")
+        for agent in missing_core_instructions:
+            fname = CORE_INSTRUCTION_FILES.get(agent, f"{agent}.md")
+            print(f"  ✗  core instruction missing [{agent}]: {fname}")
+        if missing_core_instructions:
+            any_failed = True
+
         for agent in agents:
             print(f"\n  doctor [{agent}]")
             baseline = baselines.get(agent, {})
@@ -496,22 +520,32 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 endpoints.append((host, int(port_s) if port_s.isdigit() else 443))
             tc3 = _pkg("_run_tc3")(endpoints)
             tc4 = _pkg("_run_tc4")(agent, db_conn)
-            tc5_files = {
-                "claude": "CLAUDE.md",
-                "agy": "GEMINI.md",
-                "codex": "AGENTS.md",
-                "grok": "GROK.md",
-            }
+            tc5_files = dict(CORE_INSTRUCTION_FILES)
             tc5_targets = {a: tc5_files[a] for a in agents if a in tc5_files and os.path.exists(tc5_files[a])}
             tc5_skips = []
             if "local" in agents:
                 tc5_skips.append("local has no directive file configured; TC-5 intentionally skipped")
             tc5 = _pkg("_run_tc5")(tc5_targets)
 
-            all_passed = tc0["passed"] and tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
-            if not all_passed:
+            # TC-5 is warn-only for exit code; still surfaces as ⚠ below.
+            hard_tcs_passed = (
+                tc0["passed"] and tc1["passed"] and tc2["passed"]
+                and tc3["passed"] and tc4["passed"]
+            )
+            agent_missing = [agent] if agent in missing_core_instructions else []
+            # Nested DBs already counted once above; avoid re-flagging per agent.
+            hard = doctor_hard_fail(
+                tc_results={
+                    "tc2": tc2["passed"],
+                    "tc3": tc3["passed"],
+                    "tc5": tc5["passed"],
+                },
+                missing_instructions=agent_missing if agent in CORE_FLEET else [],
+                nested_state_dbs=[],
+            )
+            if not hard_tcs_passed or hard:
                 any_failed = True
-            status = "ok" if all_passed else "degraded"
+            status = "ok" if hard_tcs_passed and not hard else "degraded"
             now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             capability_hash = _pkg("_compute_capability_hash")(
                 baseline.get("headless_contract", {}),

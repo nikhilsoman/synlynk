@@ -1399,8 +1399,47 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     return results
 
 
-def cmd_selftest(live: bool = False) -> int:
-    """CLI entry point for the command selftest."""
+def cmd_selftest(
+    live: bool = False,
+    matrix: bool = False,
+    budget: float | None = None,
+) -> int:
+    """CLI entry point for the command selftest (or fleet matrix)."""
+    if matrix:
+        from synlynk import _get_db
+        from synlynk._constants import MATRIX_LIVE_BUDGET_USD
+        from synlynk.fleet import (
+            new_run_id,
+            record_matrix_run,
+            run_matrix_dry,
+            run_matrix_live,
+        )
+
+        run_id = new_run_id()
+        results = run_matrix_dry(".")
+        if live:
+            cap = budget if budget is not None else MATRIX_LIVE_BUDGET_USD
+            results.extend(run_matrix_live(".", budget_usd=cap))
+        conn = _get_db()
+        try:
+            record_matrix_run(conn, run_id, results)
+        finally:
+            conn.close()
+
+        print(f"fleet matrix run_id={run_id}")
+        print(f"{'HOME':8s} {'CELL':16s} {'TIER':4s} {'STATUS':10s} DETAIL")
+        for r in results:
+            print(
+                f"{r.home:8s} {r.cell:16s} {r.tier:<4d} {r.status:10s} {r.detail}"
+            )
+        reds = [r for r in results if r.status == "red" and r.tier == 1]
+        greens = sum(1 for r in results if r.status == "green")
+        nas = sum(1 for r in results if r.status == "na")
+        print(
+            f"summary: {len(results)} cells, {greens} green, {len(reds)} tier-1 red, {nas} na"
+        )
+        return 1 if reds else 0
+
     results = run_selftest(live=live)
     passes = sum(1 for result in results if result.status == "pass")
     failures = sum(1 for result in results if result.status == "fail")

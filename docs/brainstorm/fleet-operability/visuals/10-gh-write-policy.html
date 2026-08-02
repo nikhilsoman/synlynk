@@ -1,0 +1,31 @@
+<h2>Block 4 — GitHub write routing policy</h2>
+<p class="subtitle">#426 / #577: Agy/Codex can’t be trusted for headless PR review/merge. What’s the product rule?</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Nested state.db = hard refuse · UNKNOWN banned as terminal · Codex builder-only</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="claude-grok-only" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Claude + Grok only (recommended product fact)</h3>
+      <p>Document as allowlist, not a soft warning. <code>--requires-gh-write</code> routes only to claude/grok; dispatch to agy/codex with GH-write required → fail closed. Close #426 as “wontfix until role tokens work” or re-scope.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="invest-426" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Invest to make all Core 4 GH-write capable</h3>
+      <p>Role-scoped tokens + sandbox allow-rules for agy/codex. Large; conflicts with hard freeze until matrix exists unless treated as stop-the-line.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="allowlist-config" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Config-driven allowlist</h3>
+      <p>Default claude+grok; operator can add agents when matrix proves GH-write. Flexible; more surface to misconfigure.</p>
+    </div>
+  </div>
+</div>

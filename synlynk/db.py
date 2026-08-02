@@ -767,6 +767,22 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             note            TEXT
         )
     """)
+    # Fleet operability matrix (Supported / Proven tracking)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            tier INTEGER NOT NULL,
+            home TEXT NOT NULL,
+            cell TEXT NOT NULL,
+            status TEXT NOT NULL,
+            detail TEXT,
+            cost_usd REAL NOT NULL DEFAULT 0,
+            ts TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
+            ON fleet_matrix_runs(home, cell, tier, ts);
+    """)
     # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
     from synlynk.taxonomy_standards import (
         LEGACY_DISCIPLINE_CROSSWALK,

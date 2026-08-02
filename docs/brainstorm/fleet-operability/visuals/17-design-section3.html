@@ -1,0 +1,40 @@
+<h2>Design §3 — Truth signals (doctor · state · completion)</h2>
+<p class="subtitle">Fail-closed product behaviour. Approve to continue to phases / backlog.</p>
+
+<div class="section">
+  <p class="label">Doctor severity</p>
+  <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+    <tr style="border-bottom:1px solid var(--border,#333)"><th align="left">Check</th><th align="left">Severity</th></tr>
+    <tr style="border-bottom:1px solid var(--border,#333)"><td>Missing instruction file for Core 4 agent</td><td><strong>FAIL</strong></td></tr>
+    <tr style="border-bottom:1px solid var(--border,#333)"><td>Nested worktree product state.db</td><td><strong>FAIL</strong></td></tr>
+    <tr style="border-bottom:1px solid var(--border,#333)"><td>TC-2 flag failures</td><td><strong>FAIL</strong></td></tr>
+    <tr style="border-bottom:1px solid var(--border,#333)"><td>TC-3 required endpoint down</td><td><strong>FAIL</strong></td></tr>
+    <tr style="border-bottom:1px solid var(--border,#333)"><td>CLI version skew vs baseline</td><td>WARN</td></tr>
+    <tr><td>TC-5 SOP missing sections</td><td>WARN</td></tr>
+  </table>
+  <p style="margin-top:0.5rem">Any FAIL ⇒ doctor non-zero exit; agent cannot be advertised as Supported.</p>
+</div>
+
+<div class="section">
+  <p class="label">Canonical state.db</p>
+  <ul>
+    <li>Product ledger: only <code>~/.synlynk/projects/&lt;key&gt;/state.db</code> (git-common-dir key)</li>
+    <li>Creating/using nested product ledger under job worktrees: <strong>error</strong> (not silent success)</li>
+    <li>#650 sandbox fallback to empty local DB remains for <em>unwritable $HOME</em> only; must warn; never written as Proven ledger; doctor may still FAIL if nested files linger from old jobs</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">Completion / UNKNOWN (#579)</p>
+  <ul>
+    <li><code>jobs</code> / completion banners never show UNKNOWN as final status</li>
+    <li>In-flight: “reconciling…”; after timeout: <code>FAILED_UNVERIFIED</code> + reason</li>
+    <li>Matrix live cells require reconciled terminal (OK or FAILED_*), never UNKNOWN</li>
+    <li>Do not overwrite a prior terminal summary with empty/ambiguous data (keep existing race fix)</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">Preflight</p>
+  <p>Dispatch to a Core 4 target: if doctor FAIL for that agent, block dispatch (fail closed) unless <code>--force-agent</code> with explicit warning. Aligns with #112.</p>
+</div>

@@ -1,0 +1,38 @@
+<h2>Block 1 — Where does the matrix runner live?</h2>
+<p class="subtitle">Hard freeze is locked until the matrix exists. Pick the command surface that owns dry + live runs.</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Supported / Proven (7d) · Core 4 · <strong>Hard freeze</strong> on fleet-parity stories until matrix lands (stop-the-line bugs ok)</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="selftest-live" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3><code>synlynk selftest --matrix</code> (recommended)</h3>
+      <p>Extend existing selftest dry/live infrastructure. One place for “does the product work.” CI can run dry; weekly job runs live with budget cap.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="doctor-matrix" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3><code>synlynk doctor --matrix</code></h3>
+      <p>Doctor becomes the truth surface (status + gate). Couples health checks with expensive live runs — risk of blurring “install health” vs “fleet proof.”</p>
+    </div>
+  </div>
+  <div class="option" data-choice="new-audit" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>New <code>synlynk audit fleet</code></h3>
+      <p>Clean noun, no overloading. Extra command surface to document; may be right if selftest stays “unit-ish.”</p>
+    </div>
+  </div>
+  <div class="option" data-choice="ci-only" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>CI workflow only (no CLI verb)</h3>
+      <p>GitHub Actions matrix job writes artifacts to state.db. Harder to dogfood locally; weaker for “home harness” claim.</p>
+    </div>
+  </div>
+</div>
