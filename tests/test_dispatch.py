@@ -372,6 +372,30 @@ def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warni
     assert out == ""
 
 
+def test_permissions_to_flags_agy_raises_on_read_only_permissions():
+    from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
+
+    with pytest.raises(PermissionEnforcementError, match="agy"):
+        _permissions_to_flags("agy", ["read:*"])
+
+
+def test_permissions_to_flags_local_raises_on_any_permissions():
+    from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
+
+    with pytest.raises(PermissionEnforcementError, match="local"):
+        _permissions_to_flags("local", ["read:*"])
+
+    with pytest.raises(PermissionEnforcementError, match="local"):
+        _permissions_to_flags("local", ["write:src/"])
+
+
+def test_permissions_to_flags_local_no_permissions_is_noop():
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags("local", []) == []
+    assert _permissions_to_flags("local", None) == []
+
+
 def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
     import synlynk.dispatch as dispatch_mod
     import subprocess

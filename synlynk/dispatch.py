@@ -200,17 +200,27 @@ def _grok_permission_flags(permissions: list) -> list:
     return flags
 
 
+class PermissionEnforcementError(RuntimeError):
+    """Raised when an agent has no real mechanism to enforce requested permissions."""
+
+
 def _permissions_to_flags(agent: str, permissions: list) -> list:
     """Translate permission strings into agent-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
     if agent == "agy":
-        if not permissions or set(permissions) <= {"read:*"}:
+        if not permissions:
             print(
                 "  ⚠ agy dispatched with no write/run permissions granted -- "
                 "headless mode will auto-deny command/write tool calls and may silently no-op"
             )
             return []
+        if set(permissions) <= {"read:*"}:
+            raise PermissionEnforcementError(
+                f"agy has no mechanism to enforce a read-only-only permission set {sorted(permissions)}; "
+                "headless mode cannot reliably block write/command tool calls. Refusing to dispatch "
+                "rather than silently granting more than requested."
+            )
         return ["--dangerously-skip-permissions"]
     if agent == "claude":
         tools = []
@@ -227,6 +237,14 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         return []
     if agent == "grok":
         return _grok_permission_flags(permissions)
+    if agent == "local":
+        if permissions:
+            raise PermissionEnforcementError(
+                f"local (aider) has no mechanism to enforce permissions {sorted(permissions)}; "
+                "aider's declared CLI flags include no read-only/file-scope restriction. Refusing "
+                "to dispatch rather than silently granting full read/write access."
+            )
+        return []
     return []
 
 
