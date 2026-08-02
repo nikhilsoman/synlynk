@@ -16,7 +16,7 @@ from synlynk import _get_db
 _DEFAULT_CONFIG_PATH = os.path.join(".agents", "local.json")
 _DEFAULT_LOCAL_CONFIG = {
     "name": "local",
-    "endpoint": "http://127.0.0.1:8080",
+    "endpoint": "http://127.0.0.1:8000",
     "models": [
         {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
         {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
