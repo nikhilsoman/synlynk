@@ -1001,7 +1001,14 @@ GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage,
 """
 
 def _get_db() -> _sqlite3.Connection:
-    """Returns a WAL-mode SQLite connection to state.db, running migrations."""
+    """Returns a WAL-mode SQLite connection to state.db, running migrations.
+
+    Falls back to ./.synlynk/state.db when the centralised path under
+    ~/.synlynk/projects/<key>/ is unwritable. Dispatched-agent sandboxes
+    commonly mount $HOME read-only; that surfaces as OSError(EROFS) from
+    os.makedirs (not PermissionError) or as sqlite3.OperationalError from
+    connect when the directory already exists. See #648.
+    """
     db_path = DB_PATH
     fallback_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
     tried_fallback = False
@@ -1013,16 +1020,21 @@ def _get_db() -> _sqlite3.Connection:
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)
             return conn
-        except PermissionError:
+        # OSError covers PermissionError, EROFS (read-only mounts), ENOSPC, etc.
+        # OperationalError covers "unable to open database file" when the dir
+        # exists but the file/FS is still unwritable (sandbox case in #648).
+        except (OSError, _sqlite3.OperationalError) as exc:
             if tried_fallback:
                 raise
+            print(
+                f"warning: cannot open project state DB at {db_path} ({exc}); "
+                f"no project state found on this machine — falling back to "
+                f"local {fallback_path}",
+                file=sys.stderr,
+            )
             db_path = fallback_path
             tried_fallback = True
-        except _sqlite3.OperationalError:
-            if tried_fallback:
-                raise
-            db_path = fallback_path
-            tried_fallback = True
+
 
 
 def _is_migrated() -> bool:
