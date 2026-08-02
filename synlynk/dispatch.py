@@ -1657,6 +1657,29 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         task = f"## Permissions\n{perm_lines}\n\n{task}"
     declared_requires = _normalize_dispatch_requires(requires=requires, requires_gh_write=requires_gh_write)
     if not skip_preflight:
+        # Core 4: missing instruction file is a hard preflight fail unless --force-agent
+        try:
+            from synlynk.fleet import check_core_instruction_files, preflight_blocks_dispatch
+            from synlynk._constants import CORE_FLEET as _CORE_FLEET
+
+            if agent in _CORE_FLEET:
+                _missing = check_core_instruction_files(os.getcwd(), agents=[agent])
+                if preflight_blocks_dispatch(
+                    agent, missing_instructions=_missing, force_agent=force_agent
+                ):
+                    raise RuntimeError(
+                        f"Dispatch blocked — missing instruction file for Core 4 agent "
+                        f"'{agent}' (run from repo root or pass --force-agent)"
+                    )
+                if _missing and force_agent:
+                    print(
+                        f"  ⚠ missing instruction for '{agent}' — proceeding because "
+                        f"--force-agent was set"
+                    )
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
         capability_gate_fn = _pkg("_dispatch_capability_preflight", _dispatch_capability_preflight)
         _get_db_fn = _pkg("_get_db")
         _capability_db = _get_db_fn() if _get_db_fn else None

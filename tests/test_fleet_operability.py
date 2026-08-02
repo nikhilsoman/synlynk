@@ -200,3 +200,98 @@ def test_selftest_matrix_budget_flag_parsed():
     assert args.matrix is True
     assert args.live is True
     assert args.budget == 5.5
+
+
+def test_preflight_blocks_dispatch_helper():
+    from synlynk.fleet import preflight_blocks_dispatch
+
+    assert preflight_blocks_dispatch(
+        "codex", missing_instructions=["codex"], force_agent=False
+    )
+    assert not preflight_blocks_dispatch(
+        "codex", missing_instructions=["codex"], force_agent=True
+    )
+    assert not preflight_blocks_dispatch(
+        "codex", missing_instructions=[], force_agent=False
+    )
+    assert not preflight_blocks_dispatch(
+        "local", missing_instructions=["local"], force_agent=False
+    )
+
+
+def test_tier_for_agent_experimental_and_supported(project_dir):
+    from synlynk import _get_db
+    from synlynk.fleet import MatrixCellResult, new_run_id, record_matrix_run, tier_for_agent
+
+    assert tier_for_agent(None, "local") == "experimental"
+    assert tier_for_agent(None, "unknown-agent") == "unsupported"
+
+    conn = _get_db()
+    run_id = new_run_id()
+    # all green dry for claude → supported (no live yet)
+    record_matrix_run(
+        conn,
+        run_id,
+        [
+            MatrixCellResult(home="claude", cell="instruction", tier=1, status="green"),
+            MatrixCellResult(home="claude", cell="nested_state", tier=1, status="green"),
+        ],
+    )
+    assert tier_for_agent(conn, "claude") == "supported"
+
+    # red dry → unsupported
+    run2 = new_run_id()
+    record_matrix_run(
+        conn,
+        run2,
+        [MatrixCellResult(home="agy", cell="instruction", tier=1, status="red")],
+    )
+    assert tier_for_agent(conn, "agy") == "unsupported"
+
+    # live green within window → proven
+    run3 = new_run_id()
+    record_matrix_run(
+        conn,
+        run3,
+        [
+            MatrixCellResult(home="grok", cell="instruction", tier=1, status="green"),
+            MatrixCellResult(
+                home="grok", cell="live_self:grok", tier=2, status="green", cost_usd=0.0
+            ),
+        ],
+    )
+    assert tier_for_agent(conn, "grok") == "proven"
+    conn.close()
+
+
+def test_live_matrix_budget_abort():
+    from synlynk.fleet import MatrixCellResult, run_matrix_live
+
+    calls = {"n": 0}
+
+    def fake_dispatch(home):
+        calls["n"] += 1
+        return MatrixCellResult(
+            home=home,
+            cell=f"live_self:{home}",
+            tier=2,
+            status="green",
+            cost_usd=6.0,
+            detail="mock",
+        )
+
+    results = run_matrix_live(".", budget_usd=10.0, dispatch_fn=fake_dispatch)
+    assert any(r.status == "incomplete" for r in results)
+    # first cell 6, second would be 12 > 10
+    greens = [r for r in results if r.status == "green"]
+    assert len(greens) == 1
+    assert calls["n"] >= 1
+
+
+def test_live_matrix_default_zero_cost_mock():
+    from synlynk.fleet import run_matrix_live
+
+    results = run_matrix_live(".", budget_usd=10.0)
+    assert len(results) == len(CORE_FLEET)
+    assert all(r.status == "green" for r in results)
+    assert all(r.cost_usd == 0.0 for r in results)

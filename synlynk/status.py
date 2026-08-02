@@ -338,7 +338,7 @@ def _format_status_terminal(
         "BUDGET  limit tracked via .synlynk/config.json",
         _format_rates_line(rates_updated_at),
         "",
-        f"{'AGENT SCORE':<14} {'ATTACH':>8}  {'COMPLETE':>9}  {'VERSION':>10}",
+        f"{'AGENT SCORE':<14} {'TIER':>10}  {'ATTACH':>8}  {'COMPLETE':>9}  {'VERSION':>10}",
     ]
     for row in harness_rows:
         attach = f"{float(row.get('attach_rate_24h', 0.0) or 0.0) * 100:.0f}%"
@@ -346,7 +346,10 @@ def _format_status_terminal(
         complete = f"{completion * 100:.0f}%" if completion is not None else "—"
         ver = row.get("installed_version") or "—"
         drift = " ⚠" if row.get("latest_version") and row.get("latest_version") != ver else ""
-        lines.append(f"  {row['agent_name']:<12} {attach:>8}  {complete:>9}  {ver}{drift}")
+        tier = row.get("fleet_tier") or "—"
+        lines.append(
+            f"  {row['agent_name']:<12} {tier:>10}  {attach:>8}  {complete:>9}  {ver}{drift}"
+        )
 
     lines += ["", f"{'CAPACITY':<14} {'R(read)':>8}  {'W(write)':>9}  {'T(tools)':>8}  {'CTX':>8}"]
     for agent in agents:
@@ -380,6 +383,15 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
     config = load_config()
     dispatch_mode = config.get("dispatch_mode", "daily-grind")
     harness_rows = _load_harness_status_rows(db_conn)
+    # Annotate fleet operability tier (Supported / Proven / Experimental / …)
+    try:
+        from synlynk.fleet import tier_for_agent
+
+        for row in harness_rows:
+            row["fleet_tier"] = tier_for_agent(db_conn, row.get("agent_name", ""))
+    except Exception:
+        for row in harness_rows:
+            row.setdefault("fleet_tier", "—")
     cycle_map = _load_cycle_capability_rows(db_conn)
     efficiency = _headless_efficiency_ratio(_load_exec_jobs_from_telemetry())
     sentinels_active = len(_read_sentinel_alerts())

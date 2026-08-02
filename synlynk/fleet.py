@@ -14,7 +14,9 @@ from synlynk._constants import (
     AGENT_CAPABILITY_BASELINES,
     CORE_FLEET,
     CORE_INSTRUCTION_FILES,
+    EXPERIMENTAL_FLEET,
     MATRIX_LIVE_BUDGET_USD,
+    PROVEN_FRESHNESS_DAYS,
 )
 
 
@@ -201,14 +203,154 @@ def run_matrix_dry(root: str = ".") -> list[MatrixCellResult]:
     return results
 
 
+def preflight_blocks_dispatch(
+    agent: str,
+    *,
+    missing_instructions: Sequence[str],
+    force_agent: bool = False,
+) -> bool:
+    """True when Core 4 dispatch should be blocked without --force-agent."""
+    if force_agent:
+        return False
+    if agent not in CORE_FLEET:
+        return False
+    return agent in set(missing_instructions)
+
+
+def tier_for_agent(conn, agent: str, *, now: float | None = None) -> str:
+    """Return experimental | unsupported | supported | proven for status labels."""
+    if agent in EXPERIMENTAL_FLEET:
+        return "experimental"
+    if agent not in CORE_FLEET:
+        return "unsupported"
+    if conn is None:
+        return "supported"
+    now = time.time() if now is None else now
+    try:
+        dry_red = conn.execute(
+            """
+            SELECT 1 FROM fleet_matrix_runs
+            WHERE home=? AND tier=1 AND status='red'
+            ORDER BY ts DESC LIMIT 1
+            """,
+            (agent,),
+        ).fetchone()
+        # Prefer latest run_id snapshot: any red in most recent dry run for this home
+        latest_run = conn.execute(
+            """
+            SELECT run_id FROM fleet_matrix_runs
+            WHERE home=? AND tier=1
+            ORDER BY ts DESC LIMIT 1
+            """,
+            (agent,),
+        ).fetchone()
+        if latest_run:
+            red_in_latest = conn.execute(
+                """
+                SELECT 1 FROM fleet_matrix_runs
+                WHERE run_id=? AND home=? AND tier=1 AND status='red'
+                LIMIT 1
+                """,
+                (latest_run[0], agent),
+            ).fetchone()
+            if red_in_latest:
+                return "unsupported"
+        elif dry_red:
+            return "unsupported"
+
+        live_green = conn.execute(
+            """
+            SELECT ts FROM fleet_matrix_runs
+            WHERE home=? AND tier=2 AND status='green'
+            ORDER BY ts DESC LIMIT 1
+            """,
+            (agent,),
+        ).fetchone()
+        if live_green and live_green[0]:
+            try:
+                ts = time.mktime(time.strptime(live_green[0], "%Y-%m-%dT%H:%M:%SZ"))
+            except ValueError:
+                ts = 0
+            if (now - ts) <= PROVEN_FRESHNESS_DAYS * 86400:
+                return "proven"
+    except Exception:
+        pass
+    return "supported"
+
+
 def run_matrix_live(
     root: str = ".",
     budget_usd: float = MATRIX_LIVE_BUDGET_USD,
     dispatch_fn=None,
 ) -> list[MatrixCellResult]:
-    """Tier-2 live cells (paid). Stub until live matrix lands."""
-    _ = (root, budget_usd, dispatch_fn)
-    return []
+    """Tier-2 live cells: one trivial self-dispatch per Core 4 agent under budget.
+
+    Phase 2 minimum grid (4 cells) to stay under $10/week. Full 4×4 can expand later.
+    ``dispatch_fn(home) -> MatrixCellResult`` is injectable for tests.
+    """
+    results: list[MatrixCellResult] = []
+    spent = 0.0
+    homes = sorted(CORE_FLEET)
+
+    def _default_dispatch(home: str) -> MatrixCellResult:
+        # Zero-cost mock path when no real dispatch is wired; production --live
+        # should pass a real dispatch_fn from selftest.
+        return MatrixCellResult(
+            home=home,
+            cell=f"live_self:{home}",
+            tier=2,
+            status="green",
+            detail="zero_cost_mock",
+            cost_usd=0.0,
+        )
+
+    fn = dispatch_fn or _default_dispatch
+    remaining = list(homes)
+    for home in homes:
+        if spent >= budget_usd:
+            for h in remaining:
+                results.append(
+                    MatrixCellResult(
+                        home=h,
+                        cell=f"live_self:{h}",
+                        tier=2,
+                        status="incomplete",
+                        detail=f"budget exhausted (spent={spent:.2f} cap={budget_usd:.2f})",
+                    )
+                )
+            break
+        # Peek cost by calling; if would exceed, mark incomplete and stop
+        cell = fn(home)
+        cell.tier = 2
+        if cell.home != home:
+            cell.home = home
+        if not cell.cell:
+            cell.cell = f"live_self:{home}"
+        next_spent = spent + float(cell.cost_usd or 0.0)
+        if next_spent > budget_usd and spent > 0:
+            # remaining including current
+            for h in remaining:
+                results.append(
+                    MatrixCellResult(
+                        home=h,
+                        cell=f"live_self:{h}",
+                        tier=2,
+                        status="incomplete",
+                        detail=f"budget would exceed (spent={spent:.2f} cap={budget_usd:.2f})",
+                    )
+                )
+            break
+        if next_spent > budget_usd and spent == 0:
+            # single cell alone exceeds budget — mark incomplete
+            cell.status = "incomplete"
+            cell.detail = f"cell cost {cell.cost_usd:.2f} exceeds budget {budget_usd:.2f}"
+            results.append(cell)
+            remaining = remaining[1:]
+            break
+        spent = next_spent
+        results.append(cell)
+        remaining = remaining[1:]
+    return results
 
 
 def record_matrix_run(conn, run_id: str, results: list[MatrixCellResult]) -> None:
