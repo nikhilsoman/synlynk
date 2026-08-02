@@ -10,6 +10,7 @@ from synlynk.worktree import (
     _classify_worktree,
     cmd_worktree_audit,
     _parse_worktree_porcelain,
+    cmd_worktree_clean,
 )
 
 
@@ -280,3 +281,55 @@ def test_cmd_worktree_audit_no_worktrees_prints_one_liner(tmp_path, monkeypatch)
 
     output = cmd_worktree_audit(json_output=False)
     assert output == "No stale worktrees — nothing to audit."
+
+
+def test_cmd_worktree_clean_dry_run_does_not_mutate(tmp_path, monkeypatch):
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    _make_stub_gh(tmp_path, monkeypatch, auth_ok=True)
+    monkeypatch.chdir(repo)
+
+    output = cmd_worktree_clean(apply=False, json_output=False)
+    assert "[dry-run] would remove 1 worktrees + branches (use --apply)" in output
+    assert wt_dir.exists()
+    branches = _run(["git", "branch", "--list", "chore/feature"], cwd=repo).stdout
+    assert "chore/feature" in branches
+
+
+def test_cmd_worktree_clean_apply_removes_safe_items(tmp_path, monkeypatch):
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    _make_stub_gh(tmp_path, monkeypatch, auth_ok=True)
+    monkeypatch.chdir(repo)
+
+    output = cmd_worktree_clean(apply=True, json_output=False)
+    assert "wt=removed" in output
+    assert "branch=deleted" in output
+    assert not wt_dir.exists()
+    branches = _run(["git", "branch", "--list", "chore/feature"], cwd=repo).stdout
+    assert "chore/feature" not in branches
+
+
+def test_cmd_worktree_clean_apply_partial_failure_continues_batch(tmp_path, monkeypatch):
+    from synlynk import worktree as worktree_mod
+
+    repo, wt_dir_a = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    wt_dir_b = tmp_path / "wt-feature-b"
+    _run(["git", "worktree", "add", str(wt_dir_b), "-b", "chore/feature-b"], cwd=repo)
+    _make_stub_gh(tmp_path, monkeypatch, auth_ok=True)
+    monkeypatch.chdir(repo)
+
+    real_run = worktree_mod.subprocess.run
+
+    def _flaky_run(cmd, *args, **kwargs):
+        if cmd[:3] == ["git", "branch", "-D"] and cmd[3] == "chore/feature":
+            class _Result:
+                returncode = 1
+                stderr = "branch is checked out elsewhere"
+                stdout = ""
+            return _Result()
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(worktree_mod.subprocess, "run", _flaky_run)
+
+    output = worktree_mod.cmd_worktree_clean(apply=True, json_output=False)
+    assert "chore/feature   wt=removed   branch=FAILED" in output
+    assert "chore/feature-b   wt=removed   branch=deleted" in output

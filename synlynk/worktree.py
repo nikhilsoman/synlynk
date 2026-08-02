@@ -365,3 +365,97 @@ def cmd_worktree_audit(json_output: bool = False) -> str:
     output = _format_audit_report(verdicts, json_output)
     print(output)
     return output
+
+
+def _nesting_depth(verdict: WorktreeVerdict, by_path: dict) -> int:
+    depth = 0
+    cur = verdict
+    seen = set()
+    while cur.nested_under and cur.nested_under in by_path and cur.path not in seen:
+        seen.add(cur.path)
+        depth += 1
+        cur = by_path[cur.nested_under]
+    return depth
+
+
+def cmd_worktree_clean(apply: bool = False, json_output: bool = False) -> str:
+    main_repo_path = _get_repo_root()
+    cwd_worktree_path = os.getcwd()
+    verdicts = _collect_verdicts(main_repo_path, cwd_worktree_path)
+
+    if not apply:
+        safe_count = sum(1 for v in verdicts if v.verdict == "safe")
+        if json_output:
+            payload = {
+                "dry_run": True,
+                "would_remove": safe_count,
+                "items": [
+                    {
+                        "path": v.path,
+                        "branch": v.branch,
+                        "verdict": v.verdict,
+                        "reason": v.reason,
+                        "nested_under": v.nested_under,
+                    }
+                    for v in verdicts
+                ],
+            }
+            output = json.dumps(payload, indent=2)
+        else:
+            report = _format_audit_report(verdicts, json_output=False)
+            summary = f"[dry-run] would remove {safe_count} worktrees + branches (use --apply)"
+            output = f"{report}\n\n{summary}" if report != "No stale worktrees — nothing to audit." else report
+        print(output)
+        return output
+
+    by_path = {v.path: v for v in verdicts}
+    safe_verdicts = [v for v in verdicts if v.verdict == "safe"]
+    safe_verdicts.sort(key=lambda v: _nesting_depth(v, by_path), reverse=True)
+
+    result_lines = []
+    for v in safe_verdicts:
+        wt_status = "removed"
+        try:
+            result = subprocess.run(
+                ["git", "worktree", "remove", "--force", v.path],
+                cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                wt_status = f"FAILED({result.stderr.strip()[:80]})"
+        except (subprocess.SubprocessError, OSError) as exc:
+            wt_status = f"FAILED({exc})"
+
+        branch_status = "deleted"
+        try:
+            result = subprocess.run(
+                ["git", "branch", "-D", v.branch],
+                cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                branch_status = f"FAILED({result.stderr.strip()[:80]})"
+        except (subprocess.SubprocessError, OSError) as exc:
+            branch_status = f"FAILED({exc})"
+
+        remote_status = "remote-none/skip"
+        try:
+            result = subprocess.run(
+                ["git", "push", "origin", "--delete", v.branch],
+                cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+            )
+            remote_status = "remote-deleted" if result.returncode == 0 else "remote-none/skip"
+        except (subprocess.SubprocessError, OSError):
+            remote_status = "remote-none/skip"
+
+        result_lines.append(f"{v.branch}   wt={wt_status}   branch={branch_status}   {remote_status}")
+
+    subprocess.run(
+        ["git", "worktree", "prune"],
+        cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+    )
+
+    if json_output:
+        output = json.dumps({"applied": True, "results": result_lines}, indent=2)
+    else:
+        output = "\n".join(result_lines) if result_lines else "No SAFE items to remove."
+    print(output)
+    return output
