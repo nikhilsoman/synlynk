@@ -141,3 +141,45 @@ def test_fleet_matrix_runs_table(project_dir):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(fleet_matrix_runs)").fetchall()}
     assert {"run_id", "tier", "home", "cell", "status", "detail", "cost_usd", "ts"} <= cols
     conn.close()
+
+
+def test_run_matrix_dry_marks_missing_instruction_red(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    for name in ("CLAUDE.md", "GEMINI.md", "GROK.md"):
+        (tmp_path / name).write_text("ok")
+    # no AGENTS.md
+    from synlynk.fleet import run_matrix_dry
+
+    results = run_matrix_dry(str(tmp_path))
+    codex_instr = [r for r in results if r.home == "codex" and r.cell == "instruction"]
+    assert codex_instr and codex_instr[0].status == "red"
+
+
+def test_run_matrix_dry_codex_gh_write_na(tmp_path):
+    from synlynk.fleet import run_matrix_dry
+
+    for name in ("CLAUDE.md", "GEMINI.md", "GROK.md", "AGENTS.md"):
+        (tmp_path / name).write_text("ok")
+    results = run_matrix_dry(str(tmp_path))
+    codex_gh = [r for r in results if r.home == "codex" and r.cell == "gh_write"]
+    assert codex_gh and codex_gh[0].status == "na"
+    other_gh = [r for r in results if r.home != "codex" and r.cell == "gh_write"]
+    assert other_gh == []
+
+
+def test_record_matrix_run(project_dir):
+    from synlynk import _get_db
+    from synlynk.fleet import MatrixCellResult, new_run_id, record_matrix_run
+
+    conn = _get_db()
+    run_id = new_run_id()
+    results = [
+        MatrixCellResult(home="codex", cell="instruction", tier=1, status="red", detail="missing"),
+    ]
+    record_matrix_run(conn, run_id, results)
+    row = conn.execute(
+        "SELECT home, cell, status FROM fleet_matrix_runs WHERE run_id=?",
+        (run_id,),
+    ).fetchone()
+    conn.close()
+    assert row == ("codex", "instruction", "red")
