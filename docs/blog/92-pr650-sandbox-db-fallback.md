@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — Sandbox DB Fallback: Don't Crash When $HOME Is Read-Only"
+title: "PR #650 — Sandbox DB Fallback: Don't Crash When $HOME Is Read-Only"
 date: 2026-08-02
 series: "Building the OS for Multi-Agent Development"
 post: 92
-pr: "#TBD"
+pr: "#650"
 issue: "#648"
 merged: —
 ---
