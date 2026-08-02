@@ -92,3 +92,55 @@ class TestLocalDispatchModelFlags(unittest.TestCase):
     def test_returns_empty_list_when_config_missing(self):
         flags = local_agent._local_dispatch_model_flags(config_path="/nonexistent/local.json")
         self.assertEqual(flags, [])
+
+
+class TestCmdLocalDoctorAiderCheck(unittest.TestCase):
+    def test_reports_missing_aider_even_when_omlx_healthy(self):
+        healthy_response = {
+            "reachable": True,
+            "available_models": ["ornith-1.0-9b", "qwen-coder", "gemma-coder"],
+        }
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value=None), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8080",
+                        "models": [
+                            {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
+                            {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
+                            {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
+                        ],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                result = local_agent.cmd_local_doctor(path)
+        self.assertEqual(result, 1)
+
+    def test_healthy_when_aider_and_omlx_both_present(self):
+        healthy_response = {
+            "reachable": True,
+            "available_models": ["ornith-1.0-9b", "qwen-coder", "gemma-coder"],
+        }
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8080",
+                        "models": [
+                            {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
+                            {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
+                            {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
+                        ],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                result = local_agent.cmd_local_doctor(path)
+        self.assertEqual(result, 0)
