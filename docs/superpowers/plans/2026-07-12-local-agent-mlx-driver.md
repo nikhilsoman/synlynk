@@ -1438,6 +1438,131 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
+## Task Group 8: litellm provider prefix for real dispatch (post-ship gap fix, added 2026-08-03)
+
+**Branch:** `fix/omlx-litellm-provider-prefix`
+
+**Why this task group exists:** the first real end-to-end test dispatch after Task
+Group 7 shipped (PR #672) — `synlynk dispatch local --task "..."` — reported
+`OK (exit 0)` but the captured log showed Aider's request never reached oMLX:
+`litellm.BadRequestError: LLM Provider NOT provided. Pass in the LLM provider you
+are trying to call. You passed model=Ornith-1.0-9B-4bit`. See the third Addendum
+(2026-08-03) in `docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md`
+for full root-cause detail. litellm needs an explicit `openai/` provider prefix on
+the model name when the endpoint is a custom `--openai-api-base` rather than a
+recognized OpenAI model — this has been broken since the `local` agent's original
+ship (PR #204/205/207); it was masked until now because no real dispatch had been
+run against a live oMLX instance before.
+
+**Files:**
+- Modify: `synlynk/local_agent.py`
+- Test: `tests/test_local_agent.py`
+
+### Step 1: Write the failing test
+
+Append to `tests/test_local_agent.py`:
+
+```python
+class TestLocalDispatchModelFlagsProviderPrefix(unittest.TestCase):
+    def test_model_flag_has_openai_provider_prefix(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        self.assertIn("--model", flags)
+        model_index = flags.index("--model")
+        self.assertEqual(flags[model_index + 1], "openai/Ornith-1.0-9B-4bit")
+
+    def test_doctor_roster_matching_unaffected_by_prefix(self):
+        healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 0)
+        self.assertIn("Ornith-1.0-9B-4bit", printed)
+        self.assertNotIn("Missing models", printed)
+```
+
+### Step 2: Run tests to verify they fail
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ProviderPrefix" -v`
+Expected: `test_model_flag_has_openai_provider_prefix` FAILS (flags currently have
+`"Ornith-1.0-9B-4bit"`, not `"openai/Ornith-1.0-9B-4bit"`);
+`test_doctor_roster_matching_unaffected_by_prefix` PASSES already (doctor doesn't
+touch `--model` flags at all — this test documents that it must keep passing after
+the fix, not that it's currently broken).
+
+### Step 3: Add the provider prefix
+
+Modify `_local_dispatch_model_flags()` in `synlynk/local_agent.py` — change:
+
+```python
+    return [
+        "--openai-api-base", f"{endpoint}/v1",
+        "--model", model_id,
+        "--edit-format", edit_format,
+    ]
+```
+
+to:
+
+```python
+    return [
+        "--openai-api-base", f"{endpoint}/v1",
+        "--model", f"openai/{model_id}",
+        "--edit-format", edit_format,
+    ]
+```
+
+`_pinned_model()`, `cmd_local_doctor()`'s roster comparison, and `.agents/local.json`
+itself are unchanged — the prefix is added only where the Aider CLI flags are
+constructed, not to the roster ID's stored form.
+
+### Step 4: Run tests to verify they pass
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ProviderPrefix" -v`
+Expected: both PASS.
+
+### Step 5: Run the full local-agent test suite for regressions
+
+Run: `python3 -m pytest tests/test_local_agent.py tests/test_dispatch_local_agent.py tests/test_local_agent_concurrency.py tests/test_local_agent_seed.py tests/test_local_agent_hardware.py tests/test_agent_quota_tracking.py -v`
+Expected: all PASS.
+
+### Step 6: Run the full project suite
+
+Run: `python3 -m pytest`
+Expected: all PASS, no regressions outside the local-agent surface.
+
+### Step 7: Commit
+
+```bash
+git add synlynk/local_agent.py tests/test_local_agent.py
+git commit -m "fix(local-agent): prefix aider --model with openai/ for litellm routing
+
+Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review Notes (for whoever executes this plan)
 
 - **Spec coverage:** Task Group 1 covers Architecture + Model Roster + `.agents/local.json`;

@@ -288,3 +288,47 @@ operator (`export OPENAI_API_KEY=<key from oMLX settings>`) before running docto
 dispatching to `local`. No architecture change — this closes a second onboarding gap in
 the same already-approved design, discovered the same way Addendum 1 was: running the
 real thing against a real machine.
+
+## Addendum (2026-08-03): a real dispatch never reaches oMLX — litellm needs a provider prefix
+
+**Found during:** the first real end-to-end test dispatch after Addendum 2 shipped
+(PR #672) — `synlynk dispatch local --task "Scan this repo and give me a summary"`.
+The job reported `OK (exit 0)` and `0 tokens in / 0 tokens out`, which looked like
+success at the job-status level. The captured log told a different story:
+
+```
+litellm.BadRequestError: LLM Provider NOT provided. Pass in the LLM provider you
+are trying to call. You passed model=Ornith-1.0-9B-4bit
+```
+
+Root cause: Aider's underlying request library, litellm, infers which provider's
+request format to use from the `--model` string itself. Known OpenAI model names
+(`gpt-4o`, etc.) resolve automatically; an arbitrary local model name like
+`Ornith-1.0-9B-4bit` does not, even though `--openai-api-base` was also passed.
+litellm requires an explicit provider prefix in that case — `openai/Ornith-1.0-9B-4bit`
+— to route the call through its OpenAI-compatible client rather than erroring before
+sending anything.
+
+`_local_dispatch_model_flags()` (`synlynk/local_agent.py:61`) builds `--model` from
+the bare roster ID (`synlynk/local_agent.py:75`, `"--model", model_id`) with no
+prefix, so every real `local` dispatch has been failing at the litellm layer since
+this feature shipped (PR #204/205/207) — `exit 0` reflects "the Aider subprocess ran
+and terminated," not "Aider talked to the model." This is a second instance of the
+false-positive-completion trap already documented in this project's own memory
+(`feedback.md`: never trust job status alone) — this time inside the tool being
+dispatched, not synlynk's dispatch layer itself.
+
+**Fix (implementation plan Task Group 8):**
+1. `_local_dispatch_model_flags()` prefixes the `--model` value with `openai/` —
+   `f"openai/{model_id}"` — when building the Aider CLI flags. `_pinned_model()` and
+   the roster/doctor logic are untouched; the prefix is added only at the point the
+   flag list is constructed, so `.agents/local.json`'s roster IDs stay in their
+   natural oMLX form (matching what `/v1/models` actually returns, which doctor
+   depends on).
+2. No change needed to `_health_check()` or `cmd_local_doctor()` — those call
+   oMLX's `/v1/models` directly via `urllib`, not through litellm, and were never
+   affected by this bug.
+
+Scope is a single-line change plus regression tests confirming the prefix is applied
+and that doctor's own model-matching logic (which compares against the unprefixed
+roster ID) is unaffected.
