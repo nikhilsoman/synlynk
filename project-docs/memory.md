@@ -95,6 +95,7 @@ Changes to agent directive files pending outcome of BS-14 brainstorm. Do not app
 
 ## State DB & Agentic PM (decided 2026-06-07)
 - **Core invariant:** State never branches. All worktrees share one `~/.synlynk/projects/<key>/state.db` where `<key>` = 8-char MD5 of `git rev-parse --git-common-dir/..` (repo root). [@nikhilsoman] Implemented v0.4.1.
+- **Nested worktree fix (PR #646 — 2026-08-02):** `_project_root()` introduced in `synlynk/__init__.py` using `git rev-parse --path-format=absolute --git-common-dir` so `_resolve_db_path()`, `_is_migrated()`, `_synlynk_project_docs_dir()`, and `cmd_migrate` reliably resolve the absolute shared repo root across nested linked worktrees instead of writing to isolated DBs.
 - **project-docs/ retired:** Markdown files become gitignored. state.db is primary. Context bridge unchanged — agents still see `.synlynk/context.md`.
 - **Agentic PM hierarchy:** Project → Arc → Phase → Epic → Story → Event. Replaces time/capacity anchoring with dependency/verification anchoring.
   - **Arc** — strategic direction (pivot/archive/merge). The layer missing from every PM tool.
