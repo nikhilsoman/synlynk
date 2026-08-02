@@ -2289,6 +2289,28 @@ def _redact_active_tokens(text: str) -> str:
     return text
 
 
+_SECRET_PATTERNS = [
+    re.compile(r"ghp_[A-Za-z0-9]{36}"),
+    re.compile(r"gh[oprsu]_[A-Za-z0-9]{36}"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
+]
+
+
+def _redact_secret_patterns(text: str) -> str:
+    """Redact common, recognizable secret-shaped substrings from captured output.
+
+    Pattern-based and necessarily incomplete (can't catch arbitrary
+    high-entropy secrets with no recognizable prefix) -- defense-in-depth
+    alongside the dispatched-subprocess env allowlist, for the case where a
+    secret still ends up in captured output some other way.
+    """
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
@@ -2314,10 +2336,10 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
         for line in display_lines:
             rendered = renderer(line)
             if rendered is not None:
-                print(_redact_active_tokens(rendered), end="")
+                print(_redact_secret_patterns(_redact_active_tokens(rendered)), end="")
     else:
         for line in display_lines:
-            print(_redact_active_tokens(line), end="")
+            print(_redact_secret_patterns(_redact_active_tokens(line)), end="")
     if len(lines) > tail:
         print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
     summary_path = _job_summary_path(job_id)
