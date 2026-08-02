@@ -357,6 +357,18 @@ generated session-protocol instructions** (`synlynk/instructions.py` or equivale
 the installed package) rather than assuming — the two conventions produce opposite
 guidance and getting it backwards will mislead every future agent session.
 
+⚠️ **Lesson from cc-videoreframing (confirmed, not hypothetical — see Lesson #9
+below):** as of this writing, `synlynk checkpoint` does **not** re-import
+`{DOCS_DIR}/memory.md` or `{DOCS_DIR}/devlogs/*.md` edits into `state.db` — it only
+archives resolved `todo.md` lines and refreshes context. Do not write CLAUDE.md
+wording that says hand-edits get "synced" by `checkpoint` (the original
+cc-videoreframing plan did, and it was wrong). Correct wording: these files are a
+one-time write-through snapshot from the last `migrate`, and post-migrate hand-edits
+to them are local-only reference until synlynk#645 lands — they carry no automatic
+durability guarantee. Check that issue's status before writing this section; if it's
+closed, verify the fix actually re-syncs before reverting to the "checkpoint syncs"
+wording.
+
 For each SOP section `synlynk doctor` flags as missing: check whether equivalent
 content already exists under a different heading before adding a new section wholesale
 — point the new heading at the existing content rather than duplicating it. If a
@@ -541,3 +553,14 @@ playbook gets reused on more repos:
 8. **Assumed merge-commit was allowed**: `gh pr merge --merge` failed because the repo
    only allows squash merges — wasted a round trip that a one-line `gh api` check
    would have avoided. → Task 11 Step 3.
+9. **`synlynk checkpoint` does not sync `{DOCS_DIR}` file edits back into `state.db`**:
+   confirmed by reading the installed package source (`checkpoint()` only archives
+   `todo.md`'s `[x]` lines into the devlog *file* and refreshes context; the only
+   writers of `memory_entries`/`devlog_entries` anywhere in the codebase are inside
+   `migrate()` itself). Post-migration hand-edits to `{DOCS_DIR}/memory.md` and
+   `{DOCS_DIR}/devlogs/*.md` are real but **local-only and one-way** — they never make
+   it back into the DB of record, and the gitignored files carry no durability
+   guarantee beyond the machine they were written on. Filed as
+   [synlynk#645](https://github.com/nikhilsoman/synlynk/issues/645); until that's
+   fixed, do not write CLAUDE.md wording implying `checkpoint` "syncs" these files —
+   see Task 7 Step 2.
