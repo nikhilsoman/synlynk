@@ -1419,7 +1419,8 @@ def cmd_selftest(
         results = run_matrix_dry(".")
         if live:
             cap = budget if budget is not None else MATRIX_LIVE_BUDGET_USD
-            results.extend(run_matrix_live(".", budget_usd=cap))
+            # Real headless CLI smoke per Core 4 agent (budget-capped).
+            results.extend(run_matrix_live(".", budget_usd=cap, mock=False))
         conn = _get_db()
         try:
             record_matrix_run(conn, run_id, results)

@@ -1039,17 +1039,17 @@ def _get_db() -> _sqlite3.Connection:
 
     Primary product ledger must not live under job/feature worktrees when the
     home path is the intended path (#330 / fleet S2a). Sandbox fallback after
-    OSError/OperationalError may still open a nested cwd path (#650).
+    OSError/OperationalError uses a path that never lands under worktrees
+    (tmpdir when cwd is a job/feature worktree) so nested_state matrix stays clean.
     """
-    from synlynk.fleet import assert_not_nested_product_ledger
+    from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
     db_path = DB_PATH
-    fallback_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
+    fallback_path = sandbox_fallback_db_path()
     tried_fallback = False
     while True:
         try:
             # Refuse nested worktree product ledger on the primary attempt only.
-            # After #650 sandbox fallback, nested cwd/.synlynk/state.db is allowed.
             if not tried_fallback:
                 assert_not_nested_product_ledger(db_path, home_writable=True)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
