@@ -245,3 +245,46 @@ rather than short-circuiting before them, so a single doctor run surfaces every 
 one pass. See `docs/superpowers/plans/2026-07-12-local-agent-mlx-driver.md`, Task Group 6.
 No architecture change — this is a gap in the already-approved design's own onboarding
 surface, not a new decision.
+
+## Addendum (2026-08-02): oMLX requires an API key, which nothing sends
+
+**Found during:** the same "Local Agents with Synlynk" verification pass, immediately
+after PR #665 (port 8080 → 8000) fixed the endpoint literal itself. With oMLX actually
+reachable on the corrected port and a model loaded, `synlynk local doctor` still failed:
+`oMLX unreachable at http://127.0.0.1:8000: HTTP Error 401: Unauthorized`. Root cause: the
+locally-installed oMLX build requires `Authorization: Bearer <api_key>` on every request
+(`auth.skip_api_key_verification: false` in oMLX's own `~/.omlx/settings.json`), but
+neither `_health_check()` (`synlynk/local_agent.py:48`) nor
+`_local_dispatch_model_flags()` (`synlynk/local_agent.py:60`) send any auth header —
+this design's own "Two layers" section describes Aider talking to oMLX as an
+OpenAI-compatible backend, but never accounted for oMLX requiring auth on that backend.
+A second, independent drift was found in the same pass: the roster ID in
+`.agents/local.json` (`ornith-1.0-9b`) does not match the model ID oMLX actually serves
+(`Ornith-1.0-9B-4bit`, derived from the on-disk HuggingFace repo path) — doctor's roster
+check would report the pinned model "missing" even once auth is fixed. Both were config
+values the design never had a chance to verify against a real running oMLX instance.
+
+**Fix (implementation plan Task Group 7):**
+1. Correct `.agents/local.json`'s roster ID to `Ornith-1.0-9B-4bit` (already applied,
+   config-only, no code involved).
+2. `_health_check()` gains an optional `api_key` parameter; when set, sends
+   `Authorization: Bearer <api_key>` on the `/v1/models` GET.
+3. `cmd_local_doctor()` reads `os.environ.get("OPENAI_API_KEY")` and passes it through —
+   this is the same env var Aider itself already reads natively for OpenAI-compatible
+   backends, so doctor and a real dispatch now agree on one convention rather than
+   inventing an oMLX-specific variable name.
+4. A 401 response is reported distinctly from "not reachable at all" — `oMLX rejected the
+   request (401 Unauthorized) — export OPENAI_API_KEY and retry` rather than the
+   misleading `Start it with: omlx serve` (oMLX *is* running; the problem is auth, not
+   absence).
+5. `AGENT_CAPABILITY_BASELINES["local"]["env_passthrough"]` (`synlynk/_constants.py:197`)
+   gains `"OPENAI_API_KEY"`, so `_build_subprocess_env()`'s existing allowlist mechanism
+   (no new plumbing) passes the operator's exported key through to the real `aider`
+   subprocess on dispatch — the same var doctor now checks.
+
+The actual API key value itself is never stored in the repo or in any synlynk config
+file — it lives in oMLX's own `~/.omlx/settings.json` and must be exported by the
+operator (`export OPENAI_API_KEY=<key from oMLX settings>`) before running doctor or
+dispatching to `local`. No architecture change — this closes a second onboarding gap in
+the same already-approved design, discovered the same way Addendum 1 was: running the
+real thing against a real machine.

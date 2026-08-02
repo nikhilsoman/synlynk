@@ -1232,6 +1232,212 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
+## Task Group 7: oMLX API-key auth (post-ship gap fix, added 2026-08-02)
+
+**Branch:** `fix/omlx-api-key`
+
+**Why this task group exists:** discovered immediately after PR #665 corrected the
+oMLX endpoint's port literal (8080 → 8000). With the port fixed and oMLX actually
+reachable, `synlynk local doctor` still failed — oMLX requires
+`Authorization: Bearer <api_key>` on every request, and nothing in this codebase ever
+sent one. See the second Addendum (2026-08-02) in
+`docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md` for full context.
+`.agents/local.json`'s roster ID (`ornith-1.0-9b` → `Ornith-1.0-9B-4bit`) has already
+been corrected on this branch as a config-only change — this task group covers only the
+code changes.
+
+**Files:**
+- Modify: `synlynk/local_agent.py`
+- Modify: `synlynk/_constants.py`
+- Test: `tests/test_local_agent.py`
+
+### Step 1: Write the failing tests
+
+Append to `tests/test_local_agent.py`:
+
+```python
+class TestHealthCheckApiKey(unittest.TestCase):
+    def test_sends_authorization_header_when_api_key_provided(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"data": [{"id": "Ornith-1.0-9B-4bit"}]}'
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return FakeResponse()
+
+        with patch("synlynk.local_agent.urllib.request.urlopen", side_effect=fake_urlopen):
+            result = local_agent._health_check("http://127.0.0.1:8000", api_key="sk-test-123")
+        self.assertTrue(result["reachable"])
+        self.assertEqual(captured["headers"].get("Authorization"), "Bearer sk-test-123")
+
+    def test_no_authorization_header_when_api_key_absent(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"data": []}'
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return FakeResponse()
+
+        with patch("synlynk.local_agent.urllib.request.urlopen", side_effect=fake_urlopen):
+            local_agent._health_check("http://127.0.0.1:8000")
+        self.assertNotIn("Authorization", captured["headers"])
+
+
+class TestCmdLocalDoctorApiKey(unittest.TestCase):
+    def test_reads_openai_api_key_env_and_passes_to_health_check(self):
+        healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response) as mock_check, \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"), \
+             patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                local_agent.cmd_local_doctor(path)
+        mock_check.assert_called_once_with("http://127.0.0.1:8000", api_key="sk-env-key")
+
+    def test_401_reports_auth_hint_not_unreachable_hint(self):
+        unauthorized_response = {"reachable": False, "error": "HTTP Error 401: Unauthorized"}
+        with patch("synlynk.local_agent._health_check", return_value=unauthorized_response), \
+             patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENAI_API_KEY", None)
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 1)
+        self.assertIn("401", printed)
+        self.assertIn("OPENAI_API_KEY", printed)
+        self.assertNotIn("Start it with: omlx serve", printed)
+```
+
+### Step 2: Run tests to verify they fail
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ApiKey" -v`
+Expected: all FAIL — `_health_check()` doesn't accept `api_key` yet, and
+`cmd_local_doctor()` doesn't read `OPENAI_API_KEY` or differentiate 401 from other
+unreachable errors.
+
+### Step 3: Add `api_key` support to `_health_check()`
+
+Modify `synlynk/local_agent.py` — replace the existing `_health_check()`:
+
+```python
+def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
+    """GETs {endpoint}/v1/models and reports reachability plus model ids."""
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(f"{endpoint}/v1/models", method="GET", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        return {"reachable": False, "error": str(exc)}
+    available = [m.get("id") for m in payload.get("data", [])]
+    return {"reachable": True, "available_models": available}
+```
+
+### Step 4: Read `OPENAI_API_KEY` in `cmd_local_doctor()` and differentiate 401
+
+Modify `cmd_local_doctor()`'s reachability block:
+
+```python
+    endpoint = config["endpoint"]
+    api_key = os.environ.get("OPENAI_API_KEY")
+    result = _health_check(endpoint, api_key=api_key)
+    if not result["reachable"]:
+        print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
+        if "401" in result["error"]:
+            print("    oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry")
+        else:
+            print("    Start it with: omlx serve")
+        return 1
+```
+
+This replaces the two existing lines (`result = _health_check(endpoint)` and the
+`Start it with: omlx serve` print) — everything else in the function is unchanged.
+
+### Step 5: Add `OPENAI_API_KEY` to local's `env_passthrough`
+
+Modify `synlynk/_constants.py:197` area — in `AGENT_CAPABILITY_BASELINES["local"]`,
+change:
+
+```python
+        "env_passthrough": [],
+```
+
+to:
+
+```python
+        "env_passthrough": ["OPENAI_API_KEY"],
+```
+
+This is the only change needed for real dispatch: `_build_subprocess_env()`
+(`synlynk/dispatch.py:269`) already passes through any var listed in an agent's
+`env_passthrough` from the operator's shell into the subprocess environment — no new
+plumbing, just widening the existing allowlist for `local`. Aider itself already reads
+`OPENAI_API_KEY` natively for OpenAI-compatible backends.
+
+### Step 6: Run tests to verify they pass
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ApiKey" -v`
+Expected: all PASS.
+
+### Step 7: Run the full local-agent test suite for regressions
+
+Run: `python3 -m pytest tests/test_local_agent.py tests/test_dispatch_local_agent.py tests/test_local_agent_concurrency.py tests/test_local_agent_seed.py tests/test_local_agent_hardware.py tests/test_agent_quota_tracking.py -v`
+Expected: all PASS.
+
+### Step 8: Run the full project suite
+
+Run: `python3 -m pytest`
+Expected: all PASS, no regressions outside the local-agent surface.
+
+### Step 9: Commit
+
+```bash
+git add synlynk/local_agent.py synlynk/_constants.py tests/test_local_agent.py
+git commit -m "fix(local-agent): send OPENAI_API_KEY to oMLX for doctor and dispatch
+
+Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review Notes (for whoever executes this plan)
 
 - **Spec coverage:** Task Group 1 covers Architecture + Model Roster + `.agents/local.json`;
