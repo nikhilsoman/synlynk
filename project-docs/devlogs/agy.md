@@ -29,3 +29,13 @@
   - Supports zoom-in and zoom-out operations on the SVG canvas.
 - Added comprehensive unit tests in `tests/test_viz.py` for both setup-prompt and configured states.
 - Verified successful cache generation with `python3 bin/synlynk.py viz --generate`.
+
+## 2026-08-03 — PR #683 Review & Merge (docs: blog post for PR #676)
+
+### Shipped
+- Reviewed PR #683 (`docs: blog post for PR #676 — worktree audit/clean command group`).
+- Confirmed `synlynk pr check` passed cleanly.
+- Verified `gh pr diff 683` touched strictly one file (`docs/blog/96-pr676-worktree-audit-clean.md`) with zero code changes.
+- Merged PR #683 via `gh pr merge 683 --squash`.
+- Verified test suite (`pytest tests/test_agent_quota_tracking.py`).
+
