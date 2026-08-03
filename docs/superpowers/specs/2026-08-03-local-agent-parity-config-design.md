@@ -195,12 +195,12 @@ transition ships:
 1. `N = 10` confirmed as the Starter → Full graduation bar.
 2. Full-tier architect mode self-architects with the pinned model in both planner and
    editor roles for now — no separate planner model.
+3. The Starter-tier follow-up PR (chat-mode restriction, explicit
+   `auto-lint`/`auto-test: false`, `map-tokens` cap) ships now against
+   `Ornith-1.0-9B-4bit` as currently pinned, rather than waiting on the A/B test. If
+   `Qwen3.6-27B-4bit` wins the A/B test, `.agents/local.json` gets re-pinned afterward —
+   the Starter-tier guardrails themselves are model-agnostic (they constrain chat mode,
+   auto-lint/auto-test, and repo-map size, not which model is pinned), so a re-pin is a
+   one-line follow-up, not a re-do of this PR.
 
-## Open question for you
-
-3. Given the A/B test is now a prerequisite gate, should the Starter-tier follow-up PR
-   (chat-mode restriction, explicit `auto-lint`/`auto-test: false`, `map-tokens` cap)
-   wait until the A/B test picks a winning model, or ship now against
-   `Ornith-1.0-9B-4bit` as currently pinned and get re-pinned afterward if
-   `Qwen3.6-27B-4bit` wins? Waiting avoids a possible re-pin/re-PR; shipping now means
-   Starter-tier guardrails land sooner regardless of which model ultimately wins.
+No open questions remain — proceeding to the implementation plan.
