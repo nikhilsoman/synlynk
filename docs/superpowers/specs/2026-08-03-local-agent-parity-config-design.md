@@ -25,6 +25,12 @@ Graduation from Starter to Full, and eventually from `EXPERIMENTAL_FLEET` toward
 `CORE_FLEET`-adjacent trust, is gated on a track record defined below — not on this spec
 alone.
 
+**Decisions from review (2026-08-03):** `N = 10` confirmed as the Starter → Full
+graduation bar. Full-tier architect mode will self-architect with Ornith in both
+planner and editor roles for now (no second model dedicated to planning yet). Before
+either tier's pinned model is finalized, an A/B test against a second model now loaded
+in oMLX — Qwen3.6-27B-4bit — gates the choice (see new section below).
+
 ## Background: what we learned building it
 
 Three real bugs surfaced in `local`'s first end-to-end dispatches, none caught by
@@ -76,6 +82,41 @@ settings, chat modes, LLM connection docs):
   `--auto-test`/`--test-cmd`, `--map-tokens` (repo-map context cost, relevant on a small
   local context window).
 
+## Prerequisite: Ornith vs Qwen3.6-27B-4bit A/B test
+
+Before pinning a model for either tier, run an A/B comparison between the two models
+currently loaded in oMLX: `Ornith-1.0-9B-4bit` (currently pinned, currently in
+`.agents/local.json`) and `Qwen3.6-27B-4bit` (loaded for comparison, not yet in the
+roster config). **Whichever model wins becomes the pinned Starter-tier model**,
+replacing or confirming the current entry — this gates `.agents/local.json` before any
+Starter-tier follow-up PR ships, and before the N=10 graduation track record starts
+(the track record is run against the winning model, not run twice).
+
+Three dimensions, all in scope:
+
+1. **Task quality/correctness** — run the same small battery of Starter-scoped tasks
+   (single-file edits: docstring addition, mechanical rename, small extraction/refactor)
+   against both models with identical `diff` edit-format config. Score by whether the
+   diff applies cleanly, compiles/imports, and does what the prompt asked — not by
+   subjective code style.
+2. **Safety/reliability** — run each model against the same class of prompt that caused
+   the PR #690 runaway (a plain non-edit question, e.g. "scan this repo and summarize
+   it") under Starter-tier guardrails (`diff` format, `auto-lint`/`auto-test: false`).
+   Record whether either model still drifts into unwanted file edits, and if so how
+   quickly the `--no-auto-commits` safety net would have to catch it.
+3. **Resource cost/latency** — Qwen3.6-27B-4bit is roughly 3x the parameter count of
+   Ornith-1.0-9B-4bit; measure wall-clock time-to-response and peak memory on the actual
+   oMLX host for a representative Starter-scoped task. A quality win from the larger
+   model only matters if the latency/memory cost doesn't undermine the "offload cheap,
+   fast work" premise this whole track is built on.
+
+**Process:** same discipline as the rest of this project — dispatch the comparison runs,
+verify results directly (diff correctness, actual file state, actual timings), never
+trust a dispatched job's own `done`/exit-0 report given this session's track record of
+that lying. Record results as a short comparison note (not a full RCA) before updating
+`.agents/local.json` with the winning model. This is a one-time gating step, not a
+recurring evaluation — re-run only if a new candidate model is loaded into oMLX later.
+
 ## Tier 1: Starter (safety-first, ship next)
 
 **Objective:** offload only what's provably safe — single-file, narrowly-scoped edit
@@ -83,7 +124,7 @@ tasks — with no path for the model's own output to trigger further autonomous 
 
 | Setting | Value | Why |
 |---|---|---|
-| `edit_format` | `diff`, pinned per model in `.agents/local.json` | Already fixed in PR #690. `whole` stays available for roster models that need it, but never for a task-facing dispatch without explicit review. |
+| `edit_format` | `diff`, pinned per model in `.agents/local.json` | Already fixed in PR #690 for `Ornith-1.0-9B-4bit`; applies identically to whichever model wins the A/B test above. `whole` stays available for roster models that need it, but never for a task-facing dispatch without explicit review. |
 | Chat mode | `code` only | No `--architect`. One inference call per dispatch — nothing to desynchronize between a planner and an editor. |
 | `--no-auto-commits --yes-always` | unchanged | Harness owns commits (matches how the rest of the fleet works); `--yes-always` is required for headless dispatch, not a relaxation. |
 | `auto-lint` | `false` | No autonomous command execution triggered by a weak model's output. This is the single highest-leverage guardrail given the `whole`-format incident — a hallucinating model with lint/test execution wired up can do more than rewrite files. |
@@ -110,7 +151,7 @@ is earned.
 
 | Setting | Value | Why |
 |---|---|---|
-| Chat mode | `--architect` with `editor_model_name` set | A stronger local model (or a cloud model, cost permitting) plans; Ornith or a coder-tuned model executes via `editor-diff`. Directly addresses "weak on architecture, strong on focused edits" instead of avoiding architecture-shaped tasks altogether. |
+| Chat mode | `--architect`, self-architect (same pinned model as both planner and `editor_model_name`) | Decided 2026-08-03: no dedicated planner model for now — Ornith (or the A/B winner) plans and edits via `editor-diff`. Weaker signal than a genuinely separate stronger planner, but zero additional resource cost. Revisit once a larger model is dedicated to planning specifically. |
 | `auto-lint` | `true`, `lint-cmd` wired to the repo's real linter | Closes the loop the core harnesses already get for free via real tool use — a bad edit gets caught and fed back before the dispatch reports done. |
 | `auto-test` | `true`, `test-cmd` scoped to the touched module (not the full suite — cost control) | Same reasoning; scoped to avoid full-suite cost on every dispatch. |
 | `map-tokens` | tuned up once context-window headroom is confirmed per model via `.aider.model.settings.yml` | Broader repo awareness once the smaller-context risk from Tier 1 is retired. |
@@ -127,17 +168,15 @@ reviewer role) but the floor of "safe to hand to `local`" rises substantially.
 Not a code change — a track-record gate, evaluated by Claude as PM before either
 transition ships:
 
-1. **Starter → Full**: N (proposed: 10) consecutive clean Starter-tier dispatches — no
-   runaway, no reverted/lost commits, `doctor` and live dispatch both green each time.
+1. **Starter → Full**: N = 10 (confirmed 2026-08-03) consecutive clean Starter-tier
+   dispatches on the A/B-winning model — no runaway, no reverted/lost commits, `doctor`
+   and live dispatch both green each time.
 2. **Full → any `roles`/`can_gh_write` expansion**: a further clean track record on Full
    config itself, evaluated the same way, before any change to
    `AGENT_CAPABILITY_BASELINES["local"]`'s `roles` or `can_gh_write` fields. GH-write
    parity in particular is blocked independently on the role-scoped GitHub App token gap
    already tracked under #423/#569 — that's an identity problem, not a config-tier
    problem, and Full-tier config alone does not resolve it.
-
-`N` and the exact clean-dispatch definition are open for your input — proposed here as a
-starting point, not a final number.
 
 ## Non-goals
 
@@ -151,14 +190,17 @@ starting point, not a final number.
 - This does not change `can_gh_write` or add GH-write capability to `local` at either
   tier — orthogonal to this spec, gated on #423/#569 regardless of config tier.
 
-## Open questions for you
+## Resolved (2026-08-03)
 
-1. Is `N = 10` clean dispatches a reasonable graduation bar, or do you want it
-   time-boxed instead (e.g., "two weeks of production use") or higher/lower?
-2. For Full tier's architect mode, is there hardware/model budget for a second local
-   model as the planner, or should the planner also be Ornith (self-architect, same
-   model in both roles — weaker signal but zero additional resource cost)?
-3. Should Starter ship as a follow-up PR now (config-only: chat mode restriction,
-   `auto-lint`/`auto-test` explicitly `false`, `map-tokens` cap), or is PR #690's
-   `edit_format` fix sufficient for Starter as-is and this spec is purely forward-looking
-   until Full is scoped?
+1. `N = 10` confirmed as the Starter → Full graduation bar.
+2. Full-tier architect mode self-architects with the pinned model in both planner and
+   editor roles for now — no separate planner model.
+
+## Open question for you
+
+3. Given the A/B test is now a prerequisite gate, should the Starter-tier follow-up PR
+   (chat-mode restriction, explicit `auto-lint`/`auto-test: false`, `map-tokens` cap)
+   wait until the A/B test picks a winning model, or ship now against
+   `Ornith-1.0-9B-4bit` as currently pinned and get re-pinned afterward if
+   `Qwen3.6-27B-4bit` wins? Waiting avoids a possible re-pin/re-PR; shipping now means
+   Starter-tier guardrails land sooner regardless of which model ultimately wins.
