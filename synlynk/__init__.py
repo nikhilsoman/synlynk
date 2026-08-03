@@ -1031,6 +1031,15 @@ GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage,
 def _get_db() -> _sqlite3.Connection:
     """Returns a WAL-mode SQLite connection to state.db, running migrations.
 
+    SYNLYNK_STATE_DB_PATH, if set, is used verbatim and takes precedence over
+    everything below: no nested-worktree guard, no fallback chain. A caller
+    setting this env var has made a deliberate choice about ledger location
+    (e.g. a sandbox restricted to the repo workspace root, where neither the
+    home path nor the tmpdir fallback is reachable). If that path is itself
+    unwritable, the resulting exception propagates uncaught — an explicit
+    override that fails should surface loudly, not be silently re-routed.
+    See #681.
+
     Falls back to ./.synlynk/state.db when the centralised path under
     ~/.synlynk/projects/<key>/ is unwritable. Dispatched-agent sandboxes
     commonly mount $HOME read-only; that surfaces as OSError(EROFS) from
@@ -1042,6 +1051,15 @@ def _get_db() -> _sqlite3.Connection:
     OSError/OperationalError uses a path that never lands under worktrees
     (tmpdir when cwd is a job/feature worktree) so nested_state matrix stays clean.
     """
+    override = os.environ.get("SYNLYNK_STATE_DB_PATH")
+    if override:
+        os.makedirs(os.path.dirname(override), exist_ok=True)
+        conn = _sqlite3.connect(override)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        _migrate_db(conn)
+        return conn
+
     from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
     db_path = DB_PATH
