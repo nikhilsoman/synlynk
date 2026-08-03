@@ -1,6 +1,13 @@
+import os
+import tempfile
 import unittest
 
-from scripts.local_agent_ab_test import _build_temp_config
+from scripts.local_agent_ab_test import (
+    _build_result_row,
+    _build_temp_config,
+    _load_config,
+    _write_config,
+)
 
 
 class TestBuildTempConfig(unittest.TestCase):
@@ -40,3 +47,34 @@ class TestBuildTempConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConfigReadWrite(unittest.TestCase):
+    def test_write_then_load_roundtrips(self):
+        config = {"name": "local", "models": [{"id": "x", "pinned": True}]}
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            _write_config(config, path)
+            loaded = _load_config(path)
+            self.assertEqual(loaded, config)
+
+
+class TestBuildResultRow(unittest.TestCase):
+    def test_builds_expected_schema(self):
+        row = _build_result_row(
+            model_id="qwen-coder",
+            label="quality-docstring",
+            prompt="add a docstring to foo()",
+            wall_time_s=12.345,
+            peak_rss_kb=204800,
+            exit_code=0,
+            diff_stat=" 1 file changed, 3 insertions(+)",
+            stdout="...long output..." + "x" * 1000,
+        )
+        self.assertEqual(row["model_id"], "qwen-coder")
+        self.assertEqual(row["label"], "quality-docstring")
+        self.assertEqual(row["wall_time_s"], 12.35)
+        self.assertEqual(row["peak_rss_kb"], 204800)
+        self.assertEqual(row["exit_code"], 0)
+        self.assertEqual(row["git_diff_stat"], " 1 file changed, 3 insertions(+)")
+        self.assertEqual(len(row["stdout_tail"]), 500)

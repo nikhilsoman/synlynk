@@ -39,3 +39,35 @@ def _build_temp_config(base_config: dict, model_id: str) -> dict:
     if not found:
         raise ValueError(f"model_id {model_id!r} not present in roster")
     return config
+
+
+def _load_config(path: str = _CONFIG_PATH) -> dict:
+    with open(path) as f:
+        return json.load(f)
+
+
+def _write_config(config: dict, path: str = _CONFIG_PATH) -> None:
+    with open(path, "w") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+
+
+def _git_diff_stat() -> str:
+    result = subprocess.run(
+        ["git", "diff", "--stat"], capture_output=True, text=True, check=False
+    )
+    return result.stdout.strip()
+
+
+def _build_result_row(model_id, label, prompt, wall_time_s, peak_rss_kb,
+                       exit_code, diff_stat, stdout):
+    return {
+        "model_id": model_id,
+        "label": label,
+        "prompt": prompt,
+        "wall_time_s": round(wall_time_s, 2),
+        "peak_rss_kb": peak_rss_kb,
+        "exit_code": exit_code,
+        "git_diff_stat": diff_stat,
+        "stdout_tail": stdout[-500:],
+    }
