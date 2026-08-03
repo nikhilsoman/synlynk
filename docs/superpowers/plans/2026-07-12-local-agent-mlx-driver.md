@@ -1563,6 +1563,104 @@ Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
 
 ---
 
+## Task Group 9: `diff` edit-format for the pinned model (post-ship gap fix, added 2026-08-03)
+
+**Branch:** `fix/omlx-aider-edit-format`
+
+**Why this task group exists:** the re-run of the same test dispatch after Task
+Group 8 shipped (PR #678) — `synlynk dispatch local --task "Scan this repo and
+give me a summary"` — reached Ornith-1.0-9B-4bit successfully this time (litellm
+fix confirmed working), but the model never answered. It entered a `THINKING` →
+`ANSWER` loop proposing whole-file rewrites of unrelated test files — starting
+with `tests/test_agent_quota_tracking.py`, collapsed to a 1-line near-empty stub
+— repeating for 44 minutes and 94,000+ log lines with no coherent response, and
+was killed manually. See the fourth Addendum (2026-08-03) in
+`docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md` for full
+root-cause detail. The fix is a **data** correction, not a code change:
+`.agents/local.json`'s pinned `Ornith-1.0-9B-4bit` entry declares
+`"edit_format": "whole"`, which forces every response — including plain
+questions — through Aider's full-file-replacement code path. A 9B model can't
+reliably tell "answer in prose" from "must emit a whole file," so a Q&A prompt
+degenerates into near-empty file rewrites. `_local_dispatch_model_flags()`
+already reads `edit_format` correctly per-model from config
+(`synlynk/local_agent.py:75`) — nothing in that function needs to change.
+
+**Files:**
+- Modify: `.agents/local.json`
+- Test: `tests/test_local_agent.py`
+
+### Step 1: Write the failing test
+
+Append to `tests/test_local_agent.py`:
+
+```python
+class TestLocalAgentConfigEditFormat(unittest.TestCase):
+    def test_pinned_ornith_model_uses_diff_edit_format(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        with open(repo_root / ".agents" / "local.json") as f:
+            config = json.load(f)
+        pinned = next(m for m in config["models"] if m.get("pinned"))
+        self.assertEqual(pinned["id"], "Ornith-1.0-9B-4bit")
+        self.assertEqual(pinned["edit_format"], "diff")
+```
+
+(Add `from pathlib import Path` to the top of `tests/test_local_agent.py` if not
+already imported.)
+
+### Step 2: Run the test to verify it fails
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "test_pinned_ornith_model_uses_diff_edit_format" -v`
+Expected: FAILS — `.agents/local.json` currently has `"edit_format": "whole"` for
+the pinned model, so `pinned["edit_format"]` is `"whole"`, not `"diff"`.
+
+### Step 3: Fix the config
+
+Edit `.agents/local.json` — change the pinned model entry from:
+
+```json
+    {"id": "Ornith-1.0-9B-4bit", "pinned": true, "edit_format": "whole"},
+```
+
+to:
+
+```json
+    {"id": "Ornith-1.0-9B-4bit", "pinned": true, "edit_format": "diff"},
+```
+
+Leave the `qwen-coder` and `gemma-coder` entries exactly as they are — they
+aren't actually downloaded into oMLX yet (a separate, already-flagged gap) and
+this task group doesn't touch them.
+
+### Step 4: Run the test to verify it passes
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "test_pinned_ornith_model_uses_diff_edit_format" -v`
+Expected: PASSES.
+
+### Step 5: Run the full local-agent test suite for regressions
+
+Run: `python3 -m pytest tests/test_local_agent.py tests/test_dispatch_local_agent.py tests/test_local_agent_concurrency.py tests/test_local_agent_seed.py tests/test_local_agent_hardware.py tests/test_agent_quota_tracking.py -v`
+Expected: all PASS. In particular, confirm no existing test hardcodes an
+expectation of `"whole"` for the pinned Ornith model specifically (tests that use
+their own inline fixture JSON with `"edit_format": "whole"` for a *different*
+purpose — e.g. asserting the `--edit-format` flag round-trips from config — are
+fine as-is; they aren't reading `.agents/local.json` off disk).
+
+### Step 6: Run the full project suite
+
+Run: `python3 -m pytest`
+Expected: all PASS, no regressions outside the local-agent surface.
+
+### Step 7: Commit
+
+```bash
+git add .agents/local.json tests/test_local_agent.py
+git commit -m "fix(local-agent): use diff edit-format for pinned Ornith model
+
+Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review Notes (for whoever executes this plan)
 
 - **Spec coverage:** Task Group 1 covers Architecture + Model Roster + `.agents/local.json`;
