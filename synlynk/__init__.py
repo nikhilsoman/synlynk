@@ -45,18 +45,20 @@ from synlynk.sentinel import (
 from synlynk.probe import (
     _compute_capability_hash,
     _scan_command_palette,
+    _scan_repo_requirements,
     _build_fence_content,
     _upsert_harness_fence,
     _write_scan_fences,
     _build_fence_body_from_record,
     _probe_agent,
+    _run_tc0,
     _run_tc1,
     _run_tc2,
     _run_tc3,
     _run_tc4,
     _run_tc5,
-    SOP_BLOCKS,
-    SOP_SECTION_HEADERS,
+    _repair_capability_allocation_sop,
+    _repair_sops_only,
     cmd_probe,
     _fence_exists,
     _probe_model_version,
@@ -786,20 +788,34 @@ TASK_STATUSES = {
 }
 
 
+def _project_root() -> str:
+    """Return the shared repo root for the current git worktree, or CWD fallback."""
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if common:
+            return os.path.abspath(os.path.join(common, ".."))
+    except Exception:
+        pass
+    return os.getcwd()
+
+
+def _get_project_root() -> str:
+    """Backwards-compatible alias for callers that expect a root helper."""
+    return _project_root()
+
+
 def _resolve_db_path() -> str:
     """Centralise DB at ~/.synlynk/projects/<key>/state.db so all worktrees share one DB.
 
-    Key is an 8-char MD5 of the git repo root (common dir parent), falling back to CWD.
+    Key is an 8-char MD5 of the shared repo root, falling back to CWD outside git.
     This avoids the .synlynk/state flat-file collision and the per-worktree isolation bug.
     """
     import hashlib as _h
-    try:
-        common = subprocess.check_output(
-            ["git", "rev-parse", "--git-common-dir"], stderr=subprocess.DEVNULL
-        ).decode().strip()
-        root = os.path.abspath(os.path.join(common, ".."))
-    except Exception:
-        root = os.getcwd()
+
+    root = _project_root()
     key = _h.md5(root.encode()).hexdigest()[:8]
     return os.path.expanduser(f"~/.synlynk/projects/{key}/state.db")
 
@@ -963,6 +979,31 @@ CREATE TABLE IF NOT EXISTS credit_grants (
     expires_at      TEXT,
     note            TEXT
 );
+
+CREATE TABLE IF NOT EXISTS remediation_actions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT NOT NULL,
+    agent       TEXT NOT NULL,
+    target_file TEXT NOT NULL,
+    exact_diff  TEXT NOT NULL,
+    operator    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
+    ON remediation_actions(timestamp);
+
+CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    tier INTEGER NOT NULL,
+    home TEXT NOT NULL,
+    cell TEXT NOT NULL,
+    status TEXT NOT NULL,
+    detail TEXT,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
+    ON fleet_matrix_runs(home, cell, tier, ts);
 """
 
 _DB_SCORES_VIEW = """
@@ -988,36 +1029,59 @@ GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage,
 """
 
 def _get_db() -> _sqlite3.Connection:
-    """Returns a WAL-mode SQLite connection to state.db, running migrations."""
+    """Returns a WAL-mode SQLite connection to state.db, running migrations.
+
+    Falls back to ./.synlynk/state.db when the centralised path under
+    ~/.synlynk/projects/<key>/ is unwritable. Dispatched-agent sandboxes
+    commonly mount $HOME read-only; that surfaces as OSError(EROFS) from
+    os.makedirs (not PermissionError) or as sqlite3.OperationalError from
+    connect when the directory already exists. See #648.
+
+    Primary product ledger must not live under job/feature worktrees when the
+    home path is the intended path (#330 / fleet S2a). Sandbox fallback after
+    OSError/OperationalError uses a path that never lands under worktrees
+    (tmpdir when cwd is a job/feature worktree) so nested_state matrix stays clean.
+    """
+    from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
+
     db_path = DB_PATH
-    fallback_path = os.path.join(os.getcwd(), ".synlynk", "state.db")
+    fallback_path = sandbox_fallback_db_path()
     tried_fallback = False
     while True:
         try:
+            # Refuse nested worktree product ledger on the primary attempt only.
+            if not tried_fallback:
+                assert_not_nested_product_ledger(db_path, home_writable=True)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
             conn = _sqlite3.connect(db_path)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)
             return conn
-        except PermissionError:
+        # OSError covers PermissionError, EROFS (read-only mounts), ENOSPC, etc.
+        # OperationalError covers "unable to open database file" when the dir
+        # exists but the file/FS is still unwritable (sandbox case in #648).
+        # RuntimeError from nested-ledger refusal must not trigger fallback.
+        except (OSError, _sqlite3.OperationalError) as exc:
             if tried_fallback:
                 raise
+            print(
+                f"warning: cannot open project state DB at {db_path} ({exc}); "
+                f"no project state found on this machine — falling back to "
+                f"local {fallback_path}",
+                file=sys.stderr,
+            )
             db_path = fallback_path
             tried_fallback = True
-        except _sqlite3.OperationalError:
-            if tried_fallback:
-                raise
-            db_path = fallback_path
-            tried_fallback = True
+
 
 
 def _is_migrated() -> bool:
-    return os.path.exists(os.path.join('.synlynk', '.synlynk_migrated'))
+    return os.path.exists(os.path.join(_project_root(), ".synlynk", ".synlynk_migrated"))
 
 
 def _synlynk_project_docs_dir() -> str:
-    return os.path.join('.synlynk', 'project-docs')
+    return os.path.join(_project_root(), ".synlynk", "project-docs")
 
 
 def _dr_sync(relative_path: str) -> None:
@@ -1206,11 +1270,11 @@ _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
-    ("dispatch.task",     "dispatch",      "grok",   "grok --always-approve --single {task}", "full", None),
+    ("dispatch.task",     "dispatch",      "grok",   "grok --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.headless", "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.headless", "dispatch",      "agy",    "agy -p {task}", "partial", "May hang without PTY on some agy versions"),
-    ("dispatch.headless", "dispatch",      "grok",   "grok --always-approve --single {task}", "partial", "Network dep required"),
+    ("dispatch.headless", "dispatch",      "grok",   "grok --single {task}", "partial", "Network dep required"),
     ("dispatch.headless", "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
     ("dispatch.resume",   "dispatch",      "claude", "claude --resume {session_id}", "full", None),
     ("dispatch.resume",   "dispatch",      "agy",    None, "none", None),
@@ -1219,7 +1283,7 @@ _VERB_MAP_SEED = [
     ("dispatch.approve",  "dispatch",      "claude", "claude --allowedTools {tools}", "full", None),
     ("dispatch.approve",  "dispatch",      "agy",    None, "none", None),
     ("dispatch.approve",  "dispatch",      "grok",   None, "none", None),
-    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "approval-policy=none only"),
+    ("dispatch.approve",  "dispatch",      "codex",  None, "partial", "ask-for-approval=untrusted only"),
     ("dispatch.model",    "dispatch",      "claude", "--model {model}", "full", None),
     ("dispatch.model",    "dispatch",      "agy",    "--model {model}", "full", None),
     ("dispatch.model",    "dispatch",      "grok",   "--model {model}", "full", None),
@@ -1227,7 +1291,7 @@ _VERB_MAP_SEED = [
     ("dispatch.tools",    "dispatch",      "claude", "--allowedTools {tools}", "full", None),
     ("dispatch.tools",    "dispatch",      "agy",    None, "partial", "No tool_list flag"),
     ("dispatch.tools",    "dispatch",      "grok",   None, "none", None),
-    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "approval-policy only"),
+    ("dispatch.tools",    "dispatch",      "codex",  None, "partial", "ask-for-approval only"),
     ("dispatch.context",  "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.context",  "dispatch",      "agy",    "agy -p {task}", "full", None),
     ("dispatch.context",  "dispatch",      "grok",   "grok --prompt {task}", "partial", "No explicit context file flag"),
@@ -1396,6 +1460,7 @@ def load_config() -> dict:
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
         "watch_interval_seconds": 30,
+        "auto_smoke_test": False,
         "auto_launch_after_wizard": True,
         "dispatch_mode": "daily-grind",
         "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
@@ -1762,224 +1827,9 @@ def cmd_sync(dry_run: bool = True, repair_sops: bool = False) -> int:
     print()
 
     if repair_sops:
-        _repair_sops_only(dry_run=dry_run)
+        _repair_sops_only(load_config(), dry_run=dry_run)
 
     return 0
-
-
-def _read_harness_fence_body(file_path: str) -> str:
-    """Return the current body inside the synlynk harness fence, if present."""
-    try:
-        with open(file_path, encoding="utf-8") as f:
-            content = f.read()
-    except OSError:
-        return ""
-    match = re.search(
-        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
-        content,
-        re.DOTALL,
-    )
-    if not match:
-        return ""
-    return match.group(1)
-
-
-def _repair_config_agents(cfg: dict) -> list:
-    """Return the directive-backed agents that should be considered for SOP repair."""
-    cfg_roles = cfg.get("roles") or {}
-    workgroup_agents = list(cfg.get("workgroup_agents") or [])
-    if workgroup_agents:
-        return workgroup_agents
-    return [agent for agent in cfg_roles.keys() if agent in {"claude", "agy", "codex", "grok"}]
-
-
-def _repair_role_list(value) -> list:
-    if isinstance(value, str):
-        value = [value]
-    if not isinstance(value, (list, tuple)):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _repair_agent_label(agent: str) -> str:
-    return agent[:1].upper() + agent[1:] if agent else ""
-
-
-def _repair_branch_convention(cfg: dict, agent: str) -> str:
-    """Return the repo-specific branch pattern for an agent, if recorded."""
-    for key in ("branch_conventions", "branch_convention", "branch_naming", "branch_pattern", "branch_prefix"):
-        value = cfg.get(key)
-        if not value:
-            continue
-        if isinstance(value, dict):
-            agent_value = value.get(agent) or value.get(agent.lower()) or value.get(_repair_agent_label(agent))
-            if agent_value:
-                return str(agent_value).strip()
-            for nested_key in ("pattern", "value", "summary", "description"):
-                nested_value = value.get(nested_key)
-                if nested_value:
-                    return str(nested_value).strip()
-            prefix = str(value.get("prefix") or "").strip()
-            suffix = str(value.get("suffix") or "").strip()
-            if prefix and suffix:
-                return f"{prefix}{suffix}"
-            if prefix:
-                return prefix
-            continue
-        value_text = str(value).strip()
-        if value_text:
-            return value_text
-    return ""
-
-
-def _repair_escalation_target(cfg: dict) -> str:
-    """Pick the configured PM/review owner, if any, for escalation text."""
-    cfg_roles = cfg.get("roles") or {}
-    candidates = _repair_config_agents(cfg)
-    if not candidates:
-        candidates = list(cfg_roles.keys())
-
-    def _role_set(agent: str) -> set:
-        return set(_repair_role_list(cfg_roles.get(agent)))
-
-    for agent in candidates:
-        roles = _role_set(agent)
-        if {"pm", "review"} <= roles:
-            return _repair_agent_label(agent)
-    for agent in candidates:
-        if "review" in _role_set(agent):
-            return _repair_agent_label(agent)
-    for agent in candidates:
-        if "pm" in _role_set(agent):
-            return _repair_agent_label(agent)
-    return ""
-
-
-def _repair_pr_review_sop(cfg: dict) -> str:
-    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
-    return (
-        "## PR Review Discipline\n"
-        "1. Assign a non-authoring agent to review the PR.\n"
-        "2. The reviewer must run `synlynk pr check <pr#>`.\n"
-        "3. The reviewer alone must merge the PR.\n"
-        f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
-        "**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* "
-        "enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents "
-        "share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different "
-        "reviewer and `gh pr review --approve` fails with \"Can not approve your own pull request\" on "
-        "every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an "
-        "explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.\n"
-    )
-
-
-def _repair_capability_allocation_sop(cfg: dict) -> str:
-    cfg_roles = cfg.get("roles") or {}
-    ordered_agents = _repair_config_agents(cfg)
-    if not ordered_agents:
-        ordered_agents = [agent for agent in cfg_roles.keys()]
-
-    rows = []
-    for agent in ordered_agents:
-        role_list = _repair_role_list(cfg_roles.get(agent))
-        if not role_list:
-            continue
-        role_label = " / ".join(role_list)
-        rows.append(f"| {role_label} | {_repair_agent_label(agent)} | {', '.join(role_list)} |")
-
-    if not rows:
-        return (
-            "## Capability-Based Task Allocation\n"
-            "No repo-specific roles are recorded in `.synlynk/config.json`; keep work scoped to the "
-            "agent you were assigned and follow the repo's own routing notes.\n"
-        )
-
-    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
-    table = "\n".join([
-        "## Capability-Based Task Allocation",
-        "| Role | Agent | Tasks |",
-        "| :--- | :--- | :--- |",
-        *rows,
-        f"Do not start a task outside your role column without explicit approval from {escalation_target}.",
-        "",
-        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok by default**. Agy headless can complete `gh pr review`, `gh pr comment`, and `gh pr merge` writes when the machine-local `~/.gemini/antigravity-cli/settings.json` already contains scoped `command(gh pr review)`, `command(gh pr comment)`, and `command(gh pr merge)` allow-rules; that precondition is operator-confirmed, not reliably verifiable mid-task. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically, but do not treat it as a hard identity guarantee yet: the token-stripping fallback does not prevent `gh` from using a locally logged-in personal keyring identity when no role-scoped GitHub App token is available (#569).",
-        "",
-        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
-        "rather than synlynk's default fleet assumptions.",
-    ])
-    return table + "\n"
-
-
-def _repair_repo_hygiene_sop(cfg: dict, agent: str) -> str:
-    branch_convention = _repair_branch_convention(cfg, agent)
-    if branch_convention:
-        branch_line = f"2. Use task-scoped branch naming recorded for this repo: `{branch_convention}`."
-    else:
-        branch_line = (
-            "2. Use the repo's documented task-scoped branch pattern; if none is recorded, follow the "
-            "project's existing feature/fix/chore naming convention."
-        )
-    return (
-        "## Repo Hygiene\n"
-        "1. Do not commit directly to main or master.\n"
-        f"{branch_line}\n"
-        "3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), "
-        "Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), "
-        "Grok (`Co-Authored-By: Grok <noreply@x.ai>`).\n"
-        "4. Use worktree per feature with `git worktree add`.\n"
-        "5. Run `git branch --show-current` before committing to verify branch.\n"
-    )
-
-
-def _build_repair_sop_block(header: str, cfg: dict) -> str:
-    if header == "## PR Review Discipline":
-        return _repair_pr_review_sop(cfg)
-    if header == "## Capability-Based Task Allocation":
-        return _repair_capability_allocation_sop(cfg)
-    if header == "## Repo Hygiene":
-        return _repair_repo_hygiene_sop(cfg, "")
-    idx = SOP_SECTION_HEADERS.index(header)
-    return SOP_BLOCKS[idx]
-
-
-def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
-    """Repair missing SOP sections without rewriting unrelated sync artifacts."""
-    from synlynk.probe import SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
-
-    directive_files = {
-        "claude": "CLAUDE.md",
-        "agy": "GEMINI.md",
-        "codex": "AGENTS.md",
-        "grok": "GROK.md",
-    }
-    cfg = load_config()
-    cfg_agents = _repair_config_agents(cfg)
-    agent_names = [agent_name] if agent_name else cfg_agents
-    for agent in agent_names:
-        fpath = directive_files.get(agent)
-        if not fpath or not os.path.exists(fpath):
-            continue
-        tc5 = _run_tc5_local({agent: fpath})
-        missing_headers = tc5.get("missing", {}).get(agent, [])
-        if not missing_headers:
-            continue
-        if dry_run:
-            for missing_header in missing_headers:
-                print(f"    → repair SOP '{missing_header}' in {fpath}")
-            continue
-        existing_body = _read_harness_fence_body(fpath)
-        blocks = []
-        for missing_header in missing_headers:
-            if missing_header == "## Repo Hygiene":
-                blocks.append(_repair_repo_hygiene_sop(cfg, agent))
-            else:
-                blocks.append(_build_repair_sop_block(missing_header, cfg))
-        missing_body = "\n".join(blocks)
-        trimmed_existing_body = existing_body.rstrip("\n")
-        body = missing_body if not existing_body else f"{trimmed_existing_body}\n{missing_body}"
-        _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
-        for missing_header in missing_headers:
-            print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
-
 
 
 
@@ -2490,6 +2340,28 @@ def _redact_active_tokens(text: str) -> str:
     return text
 
 
+_SECRET_PATTERNS = [
+    re.compile(r"ghp_[A-Za-z0-9]{36}"),
+    re.compile(r"gh[oprsu]_[A-Za-z0-9]{36}"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
+]
+
+
+def _redact_secret_patterns(text: str) -> str:
+    """Redact common, recognizable secret-shaped substrings from captured output.
+
+    Pattern-based and necessarily incomplete (can't catch arbitrary
+    high-entropy secrets with no recognizable prefix) -- defense-in-depth
+    alongside the dispatched-subprocess env allowlist, for the case where a
+    secret still ends up in captured output some other way.
+    """
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
 def cmd_logs(job_id: str, tail: int = 50) -> None:
     """Prints the captured stdout of a dispatched job."""
     jobs = _load_jobs()
@@ -2515,10 +2387,10 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
         for line in display_lines:
             rendered = renderer(line)
             if rendered is not None:
-                print(_redact_active_tokens(rendered), end="")
+                print(_redact_secret_patterns(_redact_active_tokens(rendered)), end="")
     else:
         for line in display_lines:
-            print(_redact_active_tokens(line), end="")
+            print(_redact_secret_patterns(_redact_active_tokens(line)), end="")
     if len(lines) > tail:
         print(f"\n{_DIM}(showing last {tail} of {len(lines)} lines){_RESET}")
     summary_path = _job_summary_path(job_id)
@@ -3976,6 +3848,7 @@ from synlynk.db import (  # noqa: E402
     _parse_todo_metadata,
     cmd_devlog_append,
     cmd_cost_log,
+    cmd_remediation_log,
     cmd_roadmap_add,
     cmd_memory_add,
     cmd_migrate,

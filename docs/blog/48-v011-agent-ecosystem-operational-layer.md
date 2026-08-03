@@ -72,7 +72,7 @@ The Efficiency tab went from placeholder cards to a genuine capability dashboard
 
 The largest single PR in v0.11.0. Five scopes:
 
-**Scope A — Permission Grants.** Role entries in `.synlynk/config.json` now carry default permission sets. `synlynk dispatch --grant <perm> --revoke <perm>` overrides per-task. The resolved set translates to `--allowedTools` for Claude, `--approval-policy` for Codex, and a `## Permissions` header section for Agy.
+**Scope A — Permission Grants.** Role entries in `.synlynk/config.json` now carry default permission sets. `synlynk dispatch --grant <perm> --revoke <perm>` overrides per-task. The resolved set translates to `--allowedTools` for Claude, `--ask-for-approval` for Codex, and a `## Permissions` header section for Agy.
 
 **Scope B — Per-Project Harness Config.** `synlynk configure agent <name>` writes overrides to `.agents/<agent>.json`. `dispatch_agent()` now merges at call time: baseline → project overrides → task grant/revoke. No more editing source to adjust a flag for a specific repo.
 

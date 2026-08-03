@@ -25,6 +25,19 @@ def git_worktree_repo(project_dir):
 
 
 @pytest.fixture(autouse=True)
+def stub_staleness_check_thread(monkeypatch):
+    """Prevent cli.py's real background staleness-probe thread from firing in tests.
+
+    Without this, any test that invokes cli.py's main() spawns a real thread that
+    calls subprocess.run() against real agent CLIs, racing unrelated tests' own
+    subprocess mocks and causing nondeterministic collisions/failures.
+    """
+    import synlynk.capability_watch as capability_watch_mod
+
+    monkeypatch.setattr(capability_watch_mod, "spawn_staleness_check_thread", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
 def stub_dispatch_worktree(monkeypatch, request):
     """Avoid real git worktree creation unless a test asks for it explicitly."""
     if "git_worktree_repo" in request.fixturenames:

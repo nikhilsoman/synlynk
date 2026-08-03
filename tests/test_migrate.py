@@ -19,6 +19,7 @@ def test_migrate_db_creates_new_tables(tmp_path, monkeypatch):
     assert "roadmap_arcs" in tables
     assert "roadmap_phases" in tables
     assert "cost_entries" in tables
+    assert "remediation_actions" in tables
     assert "devlog_entries" in tables
 
 
@@ -140,7 +141,7 @@ def test_is_migrated_true_with_sentinel(tmp_path, monkeypatch):
 def test_synlynk_project_docs_dir_returns_path(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = synlynk._synlynk_project_docs_dir()
-    assert result == os.path.join(".synlynk", "project-docs")
+    assert result == os.path.join(str(tmp_path), ".synlynk", "project-docs")
 
 
 def test_dr_sync_copies_file(tmp_path, monkeypatch):

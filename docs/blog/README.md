@@ -83,6 +83,20 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [79](./79-pr536-doctor-health-checks-wiring.md) | PR #536 — Wiring HEALTH_CHECKS Into the Real synlynk doctor CLI Path (#525) | [#536](https://github.com/nikhilsoman/synlynk/pull/536) | 2026-07-25 |
 | [80](./80-pr542-state-engine-pr1-db-canonical.md) | PR #542 — State Engine PR1: DB-Canonical Roadmap, Memory, and Costs | [#542](https://github.com/nikhilsoman/synlynk/pull/542) | 2026-07-26 |
 | [81](./81-pr549-live3-content-recovery-rca.md) | PR #549 — LIVE-3: Recovering What a Merge Conflict Actually Deleted | [#549](https://github.com/nikhilsoman/synlynk/pull/549) | 2026-07-26 |
+| [82](./82-pr584-doctor-baseline-schema-parity.md) | PR #584 — #339: When "Green Across the Board" Meant the Checks Weren't Running | [#584](https://github.com/nikhilsoman/synlynk/pull/584) | 2026-07-29 |
+| [83](./83-pr588-stale-sop-detection.md) | PR #588 — #583: Teaching synlynk to Notice Its Own Instructions Went Stale | [#588](https://github.com/nikhilsoman/synlynk/pull/588) | 2026-07-29 |
+| [84](./84-pr589-codex-sandbox-flag-regression.md) | PR #589 — When #339's Own Fix Broke Every Codex Dispatch | [#589](https://github.com/nikhilsoman/synlynk/pull/589) | 2026-07-29 |
+| [85](./85-pr591-stale-sop-newline-spacing.md) | PR #591 — The Blank Line That Broke a Markdown Header | [#591](https://github.com/nikhilsoman/synlynk/pull/591) | 2026-07-30 |
+| [86](./86-pr592-claude-md-regeneration.md) | PR #592 — Finally, the CLAUDE.md Regeneration | [#592](https://github.com/nikhilsoman/synlynk/pull/592) | 2026-07-30 |
+| [82](./82-pr587-harness-compatibility-capability-design.md) | PR #587 — Harness Compatibility & Capability: A Design Spec That Corrected Itself | [#587](https://github.com/nikhilsoman/synlynk/pull/587) | 2026-07-30 |
+| [83](./83-prTBD-codex-approval-flag-correction.md) | PR #TBD — Codex Approval Flag Correction | TBD | 2026-07-30 |
+| [84](./84-pr600-team-py-timeout-config.md) | PR #600 — Team Panel Queries Get Per-Agent Timeout Overrides | [#600](https://github.com/nikhilsoman/synlynk/pull/600) | 2026-07-30 |
+| [85](./85-pr599-grok-flag-mapping.md) | PR #599 — Grok Flag Mapping: Real Permission Translation in `_permissions_to_flags` | [#599](https://github.com/nikhilsoman/synlynk/pull/599) | 2026-07-30 |
+| [86](./86-prTBD-remediation-audit-log.md) | PR #TBD — Phase 3: Remediation Audit Log | TBD | 2026-07-30 |
+| [87](./87-pr606-scan-repo-requirements.md) | PR #606 — `_scan_repo_requirements`: Presence-Only Repo Requirement Discovery | [#606](https://github.com/nikhilsoman/synlynk/pull/606) | 2026-07-30 |
+| [88](./88-prTBD-doctor-fix-agy.md) | PR #TBD — Phase 4: synlynk doctor --fix agy | TBD | 2026-07-30 |
+| [89](./89-pr614-dispatch-preflight-gate.md) | PR #614 — Dispatch Preflight Capability Gate | [#614](https://github.com/nikhilsoman/synlynk/pull/614) | 2026-07-31 |
+| [90](./90-pr587-capability-drift-regression-classification.md) | PR #587 — Harness Capability Drift & Regression Classification | [#587](https://github.com/nikhilsoman/synlynk/pull/587) | 2026-08-01 |
 
 
 ## Per-PR Post Template

@@ -435,10 +435,10 @@ class TestDispatchFlagsForLocalAgent(unittest.TestCase):
     @patch("synlynk.dispatch._pkg")
     def test_other_agents_unaffected(self, mock_pkg):
         mock_pkg.return_value = {
-            "codex": {"dispatch_flags": {"required_flags": ["--approval-policy"]}},
+            "codex": {"dispatch_flags": {"required_flags": ["--ask-for-approval"]}},
         }
         flags = dispatch_mod._dispatch_flags_for_agent("codex")
-        self.assertEqual(flags, ["--approval-policy"])
+        self.assertEqual(flags, ["--ask-for-approval"])
 
 
 if __name__ == "__main__":
@@ -1088,6 +1088,481 @@ git commit -m "feat(local-agent): fold local into role-split surface post-ship (
 
 ---
 
+## Task Group 6: Doctor — Aider-presence check (post-ship gap fix, added 2026-08-02)
+
+**Branch:** `fix/local-doctor-aider-check`
+
+**Why this task group exists:** discovered during the "Local Agents with Synlynk"
+follow-on brainstorm, while verifying this plan's rollout was actually complete —
+Task Groups 1-4 had already shipped, but `cmd_local_doctor()` never checked whether
+`aider` itself is installed, only oMLX reachability and the model roster. See the
+Addendum section (2026-08-02) in
+`docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md` for full context.
+No existing test covers `cmd_local_doctor()`, so this task group adds the first one.
+
+**Files:**
+- Modify: `synlynk/local_agent.py`
+- Test: `tests/test_local_agent.py`
+
+### Step 1: Write the failing test
+
+Append to `tests/test_local_agent.py` (new test class, following the existing
+`unittest.TestCase` + `unittest.mock.patch` style already used in that file):
+
+```python
+class TestCmdLocalDoctorAiderCheck(unittest.TestCase):
+    def test_reports_missing_aider_even_when_omlx_healthy(self):
+        healthy_response = {
+            "reachable": True,
+            "available_models": ["ornith-1.0-9b", "qwen-coder", "gemma-coder"],
+        }
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value=None), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8080",
+                        "models": [
+                            {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
+                            {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
+                            {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
+                        ],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                result = local_agent.cmd_local_doctor(path)
+        self.assertEqual(result, 1)
+
+    def test_healthy_when_aider_and_omlx_both_present(self):
+        healthy_response = {
+            "reachable": True,
+            "available_models": ["ornith-1.0-9b", "qwen-coder", "gemma-coder"],
+        }
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8080",
+                        "models": [
+                            {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
+                            {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
+                            {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
+                        ],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                result = local_agent.cmd_local_doctor(path)
+        self.assertEqual(result, 0)
+```
+
+### Step 2: Run tests to verify they fail
+
+Run: `python3 -m pytest tests/test_local_agent.py -k CmdLocalDoctorAiderCheck -v`
+Expected: both FAIL — `shutil` isn't imported/patchable in `local_agent.py` yet, and the
+missing-aider case doesn't return 1 for that reason (it currently returns 0, since aider
+absence is never checked).
+
+### Step 3: Add the `shutil` import and the Aider-presence check
+
+Modify `synlynk/local_agent.py` — add `shutil` to the import block (`local_agent.py:8-11`):
+
+```python
+import json
+import os
+import shutil
+import urllib.error
+import urllib.request
+```
+
+Then modify `cmd_local_doctor()` (`local_agent.py:77-114`) — insert the Aider-presence
+check after the model-roster loop, so it reports alongside every other check in one pass
+rather than short-circuiting the function early:
+
+```python
+    roster_ids = [model["id"] for model in config["models"]]
+    available = set(result["available_models"])
+    missing = [model_id for model_id in roster_ids if model_id not in available]
+    for model_id in roster_ids:
+        mark = "✓" if model_id not in missing else "✗"
+        print(f"  {mark} {model_id}")
+    if missing:
+        print(f"    Missing models: {', '.join(missing)} — download via oMLX admin panel or CLI")
+    aider_missing = shutil.which("aider") is None
+    if aider_missing:
+        print("  ✗ aider not found on PATH")
+        print("    Install it with: pipx install aider-chat")
+    else:
+        print("  ✓ aider installed")
+    if missing or aider_missing:
+        return 1
+    return 0
+```
+
+This replaces the existing `if missing: ... return 1` / `return 0` tail of the function —
+the `missing`-models return path now falls through to the shared `aider_missing` check
+instead of returning early, so both gaps are always reported in the same run.
+
+### Step 4: Run tests to verify they pass
+
+Run: `python3 -m pytest tests/test_local_agent.py -k CmdLocalDoctorAiderCheck -v`
+Expected: both PASS.
+
+### Step 5: Run the full local-agent test suite for regressions
+
+Run: `python3 -m pytest tests/test_local_agent.py tests/test_dispatch_local_agent.py tests/test_local_agent_concurrency.py tests/test_local_agent_seed.py tests/test_local_agent_hardware.py -v`
+Expected: all PASS — this task group only touches `cmd_local_doctor()`'s tail, not the
+config-loading, dispatch-flag, seeding, or concurrency-guard code paths any of these
+other test files cover.
+
+### Step 6: Commit
+
+```bash
+git add synlynk/local_agent.py tests/test_local_agent.py
+git commit -m "fix(local-agent): doctor now checks for aider on PATH
+
+Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+```
+
+---
+
+## Task Group 7: oMLX API-key auth (post-ship gap fix, added 2026-08-02)
+
+**Branch:** `fix/omlx-api-key`
+
+**Why this task group exists:** discovered immediately after PR #665 corrected the
+oMLX endpoint's port literal (8080 → 8000). With the port fixed and oMLX actually
+reachable, `synlynk local doctor` still failed — oMLX requires
+`Authorization: Bearer <api_key>` on every request, and nothing in this codebase ever
+sent one. See the second Addendum (2026-08-02) in
+`docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md` for full context.
+`.agents/local.json`'s roster ID (`ornith-1.0-9b` → `Ornith-1.0-9B-4bit`) has already
+been corrected on this branch as a config-only change — this task group covers only the
+code changes.
+
+**Files:**
+- Modify: `synlynk/local_agent.py`
+- Modify: `synlynk/_constants.py`
+- Test: `tests/test_local_agent.py`
+
+### Step 1: Write the failing tests
+
+Append to `tests/test_local_agent.py`:
+
+```python
+class TestHealthCheckApiKey(unittest.TestCase):
+    def test_sends_authorization_header_when_api_key_provided(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"data": [{"id": "Ornith-1.0-9B-4bit"}]}'
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return FakeResponse()
+
+        with patch("synlynk.local_agent.urllib.request.urlopen", side_effect=fake_urlopen):
+            result = local_agent._health_check("http://127.0.0.1:8000", api_key="sk-test-123")
+        self.assertTrue(result["reachable"])
+        self.assertEqual(captured["headers"].get("Authorization"), "Bearer sk-test-123")
+
+    def test_no_authorization_header_when_api_key_absent(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"data": []}'
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return FakeResponse()
+
+        with patch("synlynk.local_agent.urllib.request.urlopen", side_effect=fake_urlopen):
+            local_agent._health_check("http://127.0.0.1:8000")
+        self.assertNotIn("Authorization", captured["headers"])
+
+
+class TestCmdLocalDoctorApiKey(unittest.TestCase):
+    def test_reads_openai_api_key_env_and_passes_to_health_check(self):
+        healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response) as mock_check, \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"), \
+             patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                local_agent.cmd_local_doctor(path)
+        mock_check.assert_called_once_with("http://127.0.0.1:8000", api_key="sk-env-key")
+
+    def test_401_reports_auth_hint_not_unreachable_hint(self):
+        unauthorized_response = {"reachable": False, "error": "HTTP Error 401: Unauthorized"}
+        with patch("synlynk.local_agent._health_check", return_value=unauthorized_response), \
+             patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENAI_API_KEY", None)
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 1)
+        self.assertIn("401", printed)
+        self.assertIn("OPENAI_API_KEY", printed)
+        self.assertNotIn("Start it with: omlx serve", printed)
+```
+
+### Step 2: Run tests to verify they fail
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ApiKey" -v`
+Expected: all FAIL — `_health_check()` doesn't accept `api_key` yet, and
+`cmd_local_doctor()` doesn't read `OPENAI_API_KEY` or differentiate 401 from other
+unreachable errors.
+
+### Step 3: Add `api_key` support to `_health_check()`
+
+Modify `synlynk/local_agent.py` — replace the existing `_health_check()`:
+
+```python
+def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
+    """GETs {endpoint}/v1/models and reports reachability plus model ids."""
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(f"{endpoint}/v1/models", method="GET", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        return {"reachable": False, "error": str(exc)}
+    available = [m.get("id") for m in payload.get("data", [])]
+    return {"reachable": True, "available_models": available}
+```
+
+### Step 4: Read `OPENAI_API_KEY` in `cmd_local_doctor()` and differentiate 401
+
+Modify `cmd_local_doctor()`'s reachability block:
+
+```python
+    endpoint = config["endpoint"]
+    api_key = os.environ.get("OPENAI_API_KEY")
+    result = _health_check(endpoint, api_key=api_key)
+    if not result["reachable"]:
+        print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
+        if "401" in result["error"]:
+            print("    oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry")
+        else:
+            print("    Start it with: omlx serve")
+        return 1
+```
+
+This replaces the two existing lines (`result = _health_check(endpoint)` and the
+`Start it with: omlx serve` print) — everything else in the function is unchanged.
+
+### Step 5: Add `OPENAI_API_KEY` to local's `env_passthrough`
+
+Modify `synlynk/_constants.py:197` area — in `AGENT_CAPABILITY_BASELINES["local"]`,
+change:
+
+```python
+        "env_passthrough": [],
+```
+
+to:
+
+```python
+        "env_passthrough": ["OPENAI_API_KEY"],
+```
+
+This is the only change needed for real dispatch: `_build_subprocess_env()`
+(`synlynk/dispatch.py:269`) already passes through any var listed in an agent's
+`env_passthrough` from the operator's shell into the subprocess environment — no new
+plumbing, just widening the existing allowlist for `local`. Aider itself already reads
+`OPENAI_API_KEY` natively for OpenAI-compatible backends.
+
+### Step 6: Run tests to verify they pass
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ApiKey" -v`
+Expected: all PASS.
+
+### Step 7: Run the full local-agent test suite for regressions
+
+Run: `python3 -m pytest tests/test_local_agent.py tests/test_dispatch_local_agent.py tests/test_local_agent_concurrency.py tests/test_local_agent_seed.py tests/test_local_agent_hardware.py tests/test_agent_quota_tracking.py -v`
+Expected: all PASS.
+
+### Step 8: Run the full project suite
+
+Run: `python3 -m pytest`
+Expected: all PASS, no regressions outside the local-agent surface.
+
+### Step 9: Commit
+
+```bash
+git add synlynk/local_agent.py synlynk/_constants.py tests/test_local_agent.py
+git commit -m "fix(local-agent): send OPENAI_API_KEY to oMLX for doctor and dispatch
+
+Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+```
+
+---
+
+## Task Group 8: litellm provider prefix for real dispatch (post-ship gap fix, added 2026-08-03)
+
+**Branch:** `fix/omlx-litellm-provider-prefix`
+
+**Why this task group exists:** the first real end-to-end test dispatch after Task
+Group 7 shipped (PR #672) — `synlynk dispatch local --task "..."` — reported
+`OK (exit 0)` but the captured log showed Aider's request never reached oMLX:
+`litellm.BadRequestError: LLM Provider NOT provided. Pass in the LLM provider you
+are trying to call. You passed model=Ornith-1.0-9B-4bit`. See the third Addendum
+(2026-08-03) in `docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md`
+for full root-cause detail. litellm needs an explicit `openai/` provider prefix on
+the model name when the endpoint is a custom `--openai-api-base` rather than a
+recognized OpenAI model — this has been broken since the `local` agent's original
+ship (PR #204/205/207); it was masked until now because no real dispatch had been
+run against a live oMLX instance before.
+
+**Files:**
+- Modify: `synlynk/local_agent.py`
+- Test: `tests/test_local_agent.py`
+
+### Step 1: Write the failing test
+
+Append to `tests/test_local_agent.py`:
+
+```python
+class TestLocalDispatchModelFlagsProviderPrefix(unittest.TestCase):
+    def test_model_flag_has_openai_provider_prefix(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        self.assertIn("--model", flags)
+        model_index = flags.index("--model")
+        self.assertEqual(flags[model_index + 1], "openai/Ornith-1.0-9B-4bit")
+
+    def test_doctor_roster_matching_unaffected_by_prefix(self):
+        healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 0)
+        self.assertIn("Ornith-1.0-9B-4bit", printed)
+        self.assertNotIn("Missing models", printed)
+```
+
+### Step 2: Run tests to verify they fail
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ProviderPrefix" -v`
+Expected: `test_model_flag_has_openai_provider_prefix` FAILS (flags currently have
+`"Ornith-1.0-9B-4bit"`, not `"openai/Ornith-1.0-9B-4bit"`);
+`test_doctor_roster_matching_unaffected_by_prefix` PASSES already (doctor doesn't
+touch `--model` flags at all — this test documents that it must keep passing after
+the fix, not that it's currently broken).
+
+### Step 3: Add the provider prefix
+
+Modify `_local_dispatch_model_flags()` in `synlynk/local_agent.py` — change:
+
+```python
+    return [
+        "--openai-api-base", f"{endpoint}/v1",
+        "--model", model_id,
+        "--edit-format", edit_format,
+    ]
+```
+
+to:
+
+```python
+    return [
+        "--openai-api-base", f"{endpoint}/v1",
+        "--model", f"openai/{model_id}",
+        "--edit-format", edit_format,
+    ]
+```
+
+`_pinned_model()`, `cmd_local_doctor()`'s roster comparison, and `.agents/local.json`
+itself are unchanged — the prefix is added only where the Aider CLI flags are
+constructed, not to the roster ID's stored form.
+
+### Step 4: Run tests to verify they pass
+
+Run: `python3 -m pytest tests/test_local_agent.py -k "ProviderPrefix" -v`
+Expected: both PASS.
+
+### Step 5: Run the full local-agent test suite for regressions
+
+Run: `python3 -m pytest tests/test_local_agent.py tests/test_dispatch_local_agent.py tests/test_local_agent_concurrency.py tests/test_local_agent_seed.py tests/test_local_agent_hardware.py tests/test_agent_quota_tracking.py -v`
+Expected: all PASS.
+
+### Step 6: Run the full project suite
+
+Run: `python3 -m pytest`
+Expected: all PASS, no regressions outside the local-agent surface.
+
+### Step 7: Commit
+
+```bash
+git add synlynk/local_agent.py tests/test_local_agent.py
+git commit -m "fix(local-agent): prefix aider --model with openai/ for litellm routing
+
+Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review Notes (for whoever executes this plan)
 
 - **Spec coverage:** Task Group 1 covers Architecture + Model Roster + `.agents/local.json`;
@@ -1098,6 +1573,12 @@ git commit -m "feat(local-agent): fold local into role-split surface post-ship (
   Group 5 (role-split integration into `.synlynk/config.json`/wizard/CLAUDE.md) is
   explicitly out of the original spec's scope by user decision (2026-07-12) — added as a
   gated follow-up task, not to be dispatched until `local` has shipped and proven itself.
+- **Note (2026-08-02, post-ship gap fix):** Task Group 6 was added after Task Groups 1-4
+  had already shipped and been verified live on a real machine, during the "Local Agents
+  with Synlynk" follow-on brainstorm. It fixes a narrow gap in Task Group 1's own
+  `cmd_local_doctor()` deliverable (never checked for Aider's presence) rather than
+  changing anything about the shipped architecture — see the Addendum in the design spec
+  and Task Group 6 above for full detail.
 - **Note (2026-07-13, consolidated rewrite):** Task Group 1 and Task Group 3 have been
   rewritten to match the Aider-over-oMLX architecture (Architecture section above,
   unchanged since the 2026-07-12 Fable-review revision). The rewrite was deliberately

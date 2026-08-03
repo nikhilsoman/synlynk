@@ -1,6 +1,7 @@
 """synlynk doctor: installation health checks and TC-1..TC-5 compliance suite."""
 
 import json
+import difflib
 import os
 import shutil
 import tempfile
@@ -14,10 +15,18 @@ import stat
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION
+from synlynk._constants import AGENT_CAPABILITY_BASELINES, CORE_FLEET, CORE_INSTRUCTION_FILES, VERSION
+from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
+from synlynk.fleet import (
+    check_core_instruction_files,
+    doctor_hard_fail,
+    find_nested_product_state_dbs,
+    repo_has_any_core_instruction_file,
+)
 from synlynk.probe import (
     _compute_capability_hash,
+    _run_tc0,
     _run_tc1,
     _run_tc2,
     _run_tc3,
@@ -46,6 +55,17 @@ class HealthCheck:
     status: str
     message: str
     fix: str = ""
+
+
+@_dataclass
+class FixPlan:
+    agent: str
+    target_file: str
+    current_content: str
+    desired_content: str
+    diff: str
+    needs_write: bool
+    message: str
 
 
 def _hc_python_version() -> HealthCheck:
@@ -242,6 +262,119 @@ def _hc_version_current() -> HealthCheck:
     except Exception:
         return HealthCheck("version_current", "warn", "Version check failed (unexpected error)")
 
+
+def _agy_settings_path() -> str:
+    return os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
+
+
+def _load_json_file(path: str) -> dict:
+    if not os.path.exists(path):
+        return {}
+    with open(path) as fh:
+        content = fh.read().strip()
+    if not content:
+        return {}
+    return json.loads(content)
+
+
+def _dump_json(data: dict) -> str:
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
+def _build_agy_fix_plan() -> FixPlan:
+    target_file = _agy_settings_path()
+    current = _load_json_file(target_file)
+    permissions = current.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+    allow_rules = permissions.get("allow")
+    if not isinstance(allow_rules, list):
+        allow_rules = []
+
+    required_rules = [
+        "command(gh pr review)",
+        "command(gh pr comment)",
+        "command(gh pr merge)",
+    ]
+    desired_rules = list(allow_rules)
+    for rule in required_rules:
+        if rule not in desired_rules:
+            desired_rules.append(rule)
+
+    desired = dict(current)
+    desired_permissions = dict(permissions)
+    desired_permissions["allow"] = desired_rules
+    desired["permissions"] = desired_permissions
+
+    current_content = _dump_json(current)
+    desired_content = _dump_json(desired)
+    diff = "".join(
+        difflib.unified_diff(
+            current_content.splitlines(keepends=True),
+            desired_content.splitlines(keepends=True),
+            fromfile=target_file,
+            tofile=target_file,
+        )
+    )
+    needs_write = current_content != desired_content
+    message = (
+        "Agy settings.json is missing required GitHub write allow-rules."
+        if needs_write
+        else "Agy settings.json already contains required GitHub write allow-rules."
+    )
+    return FixPlan(
+        agent="agy",
+        target_file=target_file,
+        current_content=current_content,
+        desired_content=desired_content,
+        diff=diff,
+        needs_write=needs_write,
+        message=message,
+    )
+
+
+def _confirm_fix(prompt: str, args=None) -> bool:
+    if getattr(args, "yes", False):
+        return True
+    if not sys.stdin.isatty():
+        return False
+    response = input(f"{prompt} [y/N] ").strip().lower()
+    return response in {"y", "yes"}
+
+
+def _apply_fix_plan(plan: FixPlan, operator: str) -> None:
+    os.makedirs(os.path.dirname(plan.target_file), exist_ok=True)
+    with open(plan.target_file, "w") as fh:
+        fh.write(plan.desired_content)
+    cmd_remediation_log(
+        agent=plan.agent,
+        target_file=plan.target_file,
+        exact_diff=plan.diff,
+        operator=operator,
+    )
+
+
+def cmd_doctor_fix(agent: str, args=None) -> int:
+    if agent != "agy":
+        raise ValueError("synlynk doctor --fix currently supports only agy")
+
+    plan = _build_agy_fix_plan()
+    print(plan.diff or f"No diff for {plan.target_file} (already compliant).")
+    if not plan.needs_write:
+        print(f"  {plan.message}")
+        return 0
+
+    should_write = _confirm_fix(f"Apply remediation to {plan.target_file}?", args=args)
+    if not should_write:
+        print("  Aborted. No files written.")
+        return 1
+
+    operator = "non-interactive --yes" if getattr(args, "yes", False) else "interactive confirm"
+    _apply_fix_plan(plan, operator=operator)
+    print(f"  Wrote {plan.target_file}")
+    return 0
+
+
 def _hc_model_rates() -> HealthCheck:
     from synlynk.costs import _load_model_rates
     rates = _load_model_rates()
@@ -343,6 +476,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
 
     Returns exit code: 0 if all checks ok/warn, 1 if any check fails.
     """
+    if args is not None and getattr(args, "fix", None):
+        return cmd_doctor_fix(getattr(args, "fix"), args=args)
     if checks is not None:
         return 1 if _print_health_check_report(checks) else 0
 
@@ -353,11 +488,30 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     baselines = AGENT_CAPABILITY_BASELINES
     agents = [agent_filter] if agent_filter else list(baselines.keys())
     any_failed = False
+    # Once per doctor run: nested product state.db under worktrees is a hard fail.
+    nested_state_dbs = find_nested_product_state_dbs(".")
+    # Only enforce missing-instruction FAIL when the repo already looks like a
+    # multi-agent project (has ≥1 instruction file). Bare test sandboxes skip.
+    enforce_instructions = repo_has_any_core_instruction_file(".")
+    missing_core_instructions = (
+        check_core_instruction_files(".", agents=agents) if enforce_instructions else []
+    )
     try:
+        if nested_state_dbs:
+            any_failed = True
+            for path in nested_state_dbs:
+                print(f"  ✗  nested product state.db: {path}")
+        for agent in missing_core_instructions:
+            fname = CORE_INSTRUCTION_FILES.get(agent, f"{agent}.md")
+            print(f"  ✗  core instruction missing [{agent}]: {fname}")
+        if missing_core_instructions:
+            any_failed = True
+
         for agent in agents:
             print(f"\n  doctor [{agent}]")
             baseline = baselines.get(agent, {})
 
+            tc0 = _pkg("_run_tc0")(agent, baseline)
             tc1 = _pkg("_run_tc1")(agent)
             tc2 = _pkg("_run_tc2")(agent, baseline.get("dispatch_flags", {}))
             endpoints = []
@@ -366,18 +520,32 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 endpoints.append((host, int(port_s) if port_s.isdigit() else 443))
             tc3 = _pkg("_run_tc3")(endpoints)
             tc4 = _pkg("_run_tc4")(agent, db_conn)
-            tc5_files = {
-                "claude": "CLAUDE.md",
-                "agy": "GEMINI.md",
-                "codex": "AGENTS.md",
-                "grok": "GROK.md",
-            }
-            tc5 = _pkg("_run_tc5")({a: tc5_files[a] for a in agents if a in tc5_files and os.path.exists(tc5_files[a])})
+            tc5_files = dict(CORE_INSTRUCTION_FILES)
+            tc5_targets = {a: tc5_files[a] for a in agents if a in tc5_files and os.path.exists(tc5_files[a])}
+            tc5_skips = []
+            if "local" in agents:
+                tc5_skips.append("local has no directive file configured; TC-5 intentionally skipped")
+            tc5 = _pkg("_run_tc5")(tc5_targets)
 
-            all_passed = tc1["passed"] and tc2["passed"] and tc3["passed"] and tc4["passed"] and tc5["passed"]
-            if not all_passed:
+            # TC-5 is warn-only for exit code; still surfaces as ⚠ below.
+            hard_tcs_passed = (
+                tc0["passed"] and tc1["passed"] and tc2["passed"]
+                and tc3["passed"] and tc4["passed"]
+            )
+            agent_missing = [agent] if agent in missing_core_instructions else []
+            # Nested DBs already counted once above; avoid re-flagging per agent.
+            hard = doctor_hard_fail(
+                tc_results={
+                    "tc2": tc2["passed"],
+                    "tc3": tc3["passed"],
+                    "tc5": tc5["passed"],
+                },
+                missing_instructions=agent_missing if agent in CORE_FLEET else [],
+                nested_state_dbs=[],
+            )
+            if not hard_tcs_passed or hard:
                 any_failed = True
-            status = "ok" if all_passed else "degraded"
+            status = "ok" if hard_tcs_passed and not hard else "degraded"
             now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             capability_hash = _pkg("_compute_capability_hash")(
                 baseline.get("headless_contract", {}),
@@ -422,10 +590,12 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 pass
             db_conn.commit()
 
+            tc0_status = "✓" if tc0["passed"] else f"✗ schema incomplete: {tc0['schema_issues']}"
             tc1_status = "✓" if tc1["passed"] else f"✗ requires_pty={tc1.get('requires_pty')}"
             tc2_status = "✓" if tc2["passed"] else f"✗ failed={tc2['failed_flags']}"
             tc3_status = "✓" if tc3["passed"] else f"✗ unreachable={tc3['unreachable']}"
             tc4_status = "✓" if tc4["passed"] else f"✗ failed={tc4['failed_verbs']}"
+            print(f"    TC-0 schema:  {tc0_status}")
             print(f"    TC-1 stdout:  {tc1_status}")
             print(f"    TC-2 flags:   {tc2_status}")
             print(f"    TC-3 network: {tc3_status}")
@@ -435,6 +605,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             else:
                 for ag, missing in tc5["missing"].items():
                     print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
+            for skip in tc5_skips:
+                print(f"    TC-5 sops:    ⚪ {skip}")
 
             if not tc1["passed"]:
                 choice = _pkg("_doctor_fix_menu")(agent, "tc1", tc1)

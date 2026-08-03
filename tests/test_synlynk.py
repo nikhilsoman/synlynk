@@ -14,12 +14,25 @@ def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "agy" in synlynk.AGENT_CAPABILITY_BASELINES
     assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
+    assert "local" in synlynk.AGENT_CAPABILITY_BASELINES
     for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
         assert "roles" in caps
         assert "cli" in caps
         assert "non_interactive_flags" in caps
+        assert isinstance(caps.get("dispatch_flags"), dict)
+        assert isinstance(caps.get("headless_contract"), dict)
+        assert isinstance(caps.get("network_deps"), dict)
     assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
+    # Sandbox is enforced via non_interactive_flags (-s workspace-write), not required_flags
+    # (required_flags are bare flags with no values; bare --sandbox breaks codex CLI).
+    assert synlynk.AGENT_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == []
+    assert "-s" in synlynk.AGENT_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
+    assert "workspace-write" in synlynk.AGENT_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
+    assert synlynk.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]["non_interactive_flag"] == "--single"
+    assert synlynk.AGENT_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
 
 
 def test_sop_section_headers_defined():
@@ -175,6 +188,7 @@ def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
             }
         },
     )
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -395,19 +409,19 @@ def test_permissions_to_flags_claude_allowedtools():
     assert "Edit" in tools_str
 
 
-def test_permissions_to_flags_codex_approval_policy():
+def test_permissions_to_flags_codex_ask_for_approval():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("codex", ["read:*"])
-    assert "--approval-policy" in result
+    assert "--ask-for-approval" in result
     assert "untrusted" in result
 
 
-def test_permissions_to_flags_agy_returns_empty_for_read_only():
-    from synlynk.dispatch import _permissions_to_flags
+def test_permissions_to_flags_agy_raises_for_read_only():
+    from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
 
-    result = _permissions_to_flags("agy", ["read:*"])
-    assert result == []
+    with pytest.raises(PermissionEnforcementError, match="agy"):
+        _permissions_to_flags("agy", ["read:*"])
 
 
 def test_permissions_to_flags_agy_returns_empty_for_no_permissions():
@@ -431,19 +445,41 @@ def test_permissions_to_flags_agy_returns_skip_permissions_for_write():
     assert result == ["--dangerously-skip-permissions"]
 
 
-def test_preflight_allows_agy_dangerously_skip_permissions_flag(monkeypatch):
+def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkeypatch):
     import socket
+    import sqlite3
+    import time
 
-    from synlynk import probe as probe_mod
+    import synlynk
     from synlynk import _preflight_dispatch
-
-    monkeypatch.setattr(probe_mod, "_run_tc2", lambda agent, flags_spec, **kw: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
+
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    synlynk._migrate_db(db)
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES["agy"]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "agy",
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
 
     result = _preflight_dispatch(
         agent_name="agy",
         dispatch_flags=["--dangerously-skip-permissions"],
-        db_conn=None,
+        db_conn=db,
     )
     assert result["passed"] is True
 
@@ -607,6 +643,7 @@ def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, mon
     monkeypatch.setattr("synlynk.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr("synlynk._constants.AGENT_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr("synlynk.doctor.AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -654,6 +691,7 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
             }
         },
     )
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(synlynk, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -3511,14 +3549,17 @@ def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     # requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges
     if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    assert "--always-approve" in shell_cmd
-    assert "--yes" not in shell_cmd
+    assert "--permission-mode dontAsk" in shell_cmd
+    assert "--always-approve" not in shell_cmd
+    assert "--allow Read" in shell_cmd
+    assert "Bash(pytest:*)" in shell_cmd
     assert "--output-format json" in shell_cmd
 
 
@@ -3550,6 +3591,7 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"always_approve_unsupported": True})
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
@@ -3587,17 +3629,19 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    # --single must appear after required Grok dispatch flags and directly before "$PROMPT"
+    # --single must appear after the Grok permission flags and directly before "$PROMPT"
+    assert "--permission-mode dontAsk" in shell_cmd
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
     prompt_pos = shell_cmd.index('"$PROMPT"')
     assert single_pos < prompt_pos, "--single must come before $PROMPT"
-    approve_pos = shell_cmd.index("--always-approve")
-    assert approve_pos < single_pos, "--always-approve must come before --single"
-    assert "--yes" not in shell_cmd
+    perm_pos = shell_cmd.index("--permission-mode")
+    assert perm_pos < single_pos, "--permission-mode must come before --single"
+    assert "--always-approve" not in shell_cmd
 
 
 def test_agy_prompt_flag_split_from_non_interactive_flags():
@@ -4422,12 +4466,17 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
         captured["cmd"] = cmd
         return FakeProc()
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"codex": ["review"]}})
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
     assert "workspace-write" in shell_cmd
+    assert "--ask-for-approval" in shell_cmd
+    assert shell_cmd.count("--ask-for-approval") == 1
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
+    # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
+    assert "--sandbox" not in shell_cmd
 
 
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
@@ -4514,36 +4563,90 @@ def test_preflight_blocks_invalid_flag():
     assert "--yes" in result["reason"]
 
 
-def test_preflight_blocks_unreachable_endpoint(monkeypatch):
+def test_preflight_blocks_unreachable_endpoint(tmp_path, monkeypatch):
     import socket
+    import sqlite3
+    import synlynk as sl
 
-    def mock_connect(self, addr):
-        raise ConnectionRefusedError("unreachable")
+    class MockSocket:
+        def __init__(self, *args, **kwargs):
+            pass
 
-    monkeypatch.setattr(socket.socket, "connect", mock_connect)
+        def settimeout(self, *args, **kwargs):
+            pass
 
-    # TC-2 now runs before network check — mock it to pass so we reach the network gate.
-    from synlynk import probe as probe_mod
-    monkeypatch.setattr(probe_mod, "_run_tc2",
-                        lambda agent, flags_spec, **kw: {"passed": True, "failed_flags": []})
+        def connect(self, addr):
+            raise ConnectionRefusedError("unreachable")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(socket, "socket", MockSocket)
+    # TC-2 is now persisted in harness_records; seed the last probe row so this
+    # test can exercise the network gate directly.
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    baseline = sl.AGENT_CAPABILITY_BASELINES["grok"]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "grok",
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
 
     from synlynk import _preflight_dispatch
     result = _preflight_dispatch(
         agent_name="grok",
         dispatch_flags=["--always-approve"],
-        db_conn=None,
+        db_conn=db,
     )
     assert result["passed"] is False
     assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
     assert "cli-chat-proxy.grok.com" in result["reason"]
 
 
-def test_preflight_passes_for_valid_claude_dispatch():
+def test_preflight_passes_for_valid_claude_dispatch(tmp_path):
+    import sqlite3
+    import synlynk as sl
     from synlynk import _preflight_dispatch
+
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    baseline = sl.AGENT_CAPABILITY_BASELINES["claude"]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "claude",
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
     result = _preflight_dispatch(
         agent_name="claude",
         dispatch_flags=["--print", "--dangerously-skip-permissions"],
-        db_conn=None,
+        db_conn=db,
     )
     assert result["passed"] is True
 
@@ -5616,7 +5719,26 @@ def test_dispatch_ready_jobs_respects_max_parallel(project_dir, monkeypatch):
 
 def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
     """Launches a queued job when under max_parallel."""
+    import json as _json
     conn = synlynk._get_db()
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES["claude"]
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "claude",
+            baseline["cli"],
+            "1.0.0",
+            _json.dumps(baseline["headless_contract"]),
+            _json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
         "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
@@ -5754,6 +5876,7 @@ def test_dispatch_ready_jobs_fails_job_with_failed_dep(project_dir, monkeypatch)
 
 def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
     """Each launched job is committed immediately so a crash doesn't leave duplicates."""
+    import json as _json
     commits_after_update = []
     original_commit = None
 
@@ -5780,6 +5903,24 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
             self._real.close()
 
     conn = synlynk._get_db()
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES["claude"]
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "claude",
+            baseline["cli"],
+            "1.0.0",
+            _json.dumps(baseline["headless_contract"]),
+            _json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
     for i in range(2):
         conn.execute(
             "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
@@ -6341,24 +6482,24 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    # --always-approve is the correct required flag (Grok dropped --yes)
+    # Grok now derives permission mode from the resolved permission set.
     assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
-    assert "--always-approve" in grok["dispatch_flags"]["required_flags"]
+    assert grok["dispatch_flags"]["required_flags"] == []
     assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
 
 
-def test_grok_baseline_uses_always_approve():
-    # Grok dropped --yes; --always-approve is now the correct headless flag
+def test_grok_baseline_no_longer_requires_always_approve():
+    # Grok no longer hardcodes always-approve as a required dispatch flag.
     from synlynk import AGENT_CAPABILITY_BASELINES
     grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
     assert "--always-approve" in flags.get("valid_flags", []), \
         "--always-approve must be valid for Grok (--yes was dropped)"
-    assert "--always-approve" in flags.get("required_flags", []), \
-        "--always-approve must be required for Grok"
+    assert flags.get("required_flags", []) == [], \
+        "Grok must not require --always-approve by default"
     assert "--yes" in flags.get("invalid_flags", []), \
         "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 
@@ -6707,6 +6848,72 @@ def test_cmd_doctor_with_warn_only(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "advisory warning" in out
+
+
+def test_doctor_fix_agy_prints_diff_and_writes_on_yes(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings_dir = tmp_path / ".gemini" / "antigravity-cli"
+    settings_dir.mkdir(parents=True)
+    settings_path = settings_dir / "settings.json"
+    settings_path.write_text(json.dumps({"permissions": {"allow": ["command(gh pr review)"]}}, indent=2))
+
+    args = SimpleNamespace(fix="agy", yes=True)
+    exit_code = synlynk.cmd_doctor(args=args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "command(gh pr merge)" in out
+    assert "Wrote" in out
+    saved = json.loads(settings_path.read_text())
+    assert saved["permissions"]["allow"] == [
+        "command(gh pr review)",
+        "command(gh pr comment)",
+        "command(gh pr merge)",
+    ]
+
+    conn = synlynk._get_db()
+    try:
+        row = conn.execute(
+            "SELECT agent, target_file, exact_diff, operator "
+            "FROM remediation_actions ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row[0] == "agy"
+    assert row[1].endswith("settings.json")
+    assert "command(gh pr merge)" in row[2]
+    assert row[3] == "non-interactive --yes"
+
+
+def test_doctor_fix_agy_without_yes_aborts_when_noninteractive(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings_dir = tmp_path / ".gemini" / "antigravity-cli"
+    settings_dir.mkdir(parents=True)
+    settings_path = settings_dir / "settings.json"
+    settings_path.write_text(json.dumps({"permissions": {"allow": []}}, indent=2))
+    monkeypatch.setattr("synlynk.doctor.sys.stdin.isatty", lambda: False)
+
+    args = SimpleNamespace(fix="agy", yes=False)
+    exit_code = synlynk.cmd_doctor(args=args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "command(gh pr merge)" in out
+    assert "Aborted" in out
+    assert json.loads(settings_path.read_text())["permissions"]["allow"] == []
 
 
 def test_health_check_dataclass():

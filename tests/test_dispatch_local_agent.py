@@ -27,14 +27,14 @@ class TestDispatchFlagsForLocalAgent(unittest.TestCase):
         self.assertEqual(flags, [
             "--no-auto-commits", "--yes-always",
             "--openai-api-base", "http://127.0.0.1:8080/v1",
-            "--model", "ornith-1.0-9b",
+            "--model", "openai/ornith-1.0-9b",
             "--edit-format", "whole",
         ])
 
     @patch("synlynk.dispatch._pkg")
     def test_other_agents_unaffected(self, mock_pkg):
         mock_pkg.return_value = {
-            "codex": {"dispatch_flags": {"required_flags": ["--approval-policy"]}},
+            "codex": {"dispatch_flags": {"required_flags": ["--ask-for-approval"]}},
         }
         flags = dispatch_mod._dispatch_flags_for_agent("codex")
-        self.assertEqual(flags, ["--approval-policy"])
+        self.assertEqual(flags, ["--ask-for-approval"])

@@ -40,3 +40,14 @@ def test_backfill_capability_ratings_parser_registered():
     args = parser.parse_args(["backfill-capability-ratings"])
 
     assert args.command == "backfill-capability-ratings"
+
+
+def test_doctor_fix_parser_accepts_agy():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["doctor", "--fix", "agy", "--yes"])
+
+    assert args.command == "doctor"
+    assert args.fix == "agy"
+    assert args.yes is True

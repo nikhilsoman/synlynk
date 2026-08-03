@@ -38,7 +38,7 @@ Role entries in `.synlynk/config.json` now carry a default permission set, defin
 
 Translation to agent CLI flags via `_permissions_to_flags()` in `synlynk/dispatch.py`:
 - Claude: `--allowedTools` list
-- Codex: `--approval-policy` (`none` / `untrusted` / `all`)
+- Codex: `--ask-for-approval` (`untrusted` / `on-request` / `never`)
 - Agy: injected as a `## Permissions` section in the task context header (no CLI flag available)
 
 ### Scope B — Per-Project Harness Config

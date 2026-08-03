@@ -135,6 +135,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 def build_parser() -> argparse.ArgumentParser:
+    from synlynk._constants import CORE_FLEET
     from synlynk import (
         AGENT_CAPABILITY_BASELINES,
         VERSION,
@@ -319,7 +320,11 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser.add_argument("--agent", default=None,
                               help="Probe a single agent instead of all known agents")
 
-    subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+    doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
+    doctor_parser.add_argument("--fix", default=None,
+                               help="Apply a targeted remediation for the named agent (agy only)")
+    doctor_parser.add_argument("--yes", action="store_true",
+                               help="Write the proposed remediation without prompting")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
@@ -450,6 +455,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--live", action="store_true",
         help="Run against a real throwaway git repo, including real paid-agent-CLI invocations, capped at $2 total spend",
     )
+    selftest_parser.add_argument(
+        "--matrix", action="store_true",
+        help="Run fleet operability matrix (dry by default; combine with --live for paid cells)",
+    )
+    selftest_parser.add_argument(
+        "--budget", type=float, default=None,
+        help="Live matrix budget USD (default 10 when --matrix --live)",
+    )
     selftest_parser._synlynk_skip_taxonomy = True
 
     config_parser = subparsers.add_parser("config", help="Manage synlynk config")
@@ -485,6 +498,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Bypass capability routing — dispatch to the exact agent specified")
     dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
         help="Task needs gh pr review/merge - reroute to a capable agent unless --force-agent is set (see #426)")
+    dispatch_parser.add_argument(
+        "--requires",
+        action="append",
+        default=[],
+        help="Declare a required capability for this dispatch (repeatable, e.g. docker, mcp, gh-write)",
+    )
     dispatch_parser.add_argument(
         "--context-mode", choices=["none", "task", "full"], default="task",
         dest="context_mode", help="Context injection mode"
@@ -552,7 +571,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     open_parser = subparsers.add_parser(
         "open", help="Open an agent CLI interactively with pre-loaded context")
-    open_parser.add_argument("agent", help="Agent name: claude, agy, codex, grok")
+    open_parser.add_argument(
+        "agent",
+        choices=sorted(CORE_FLEET),
+        help=(
+            f"Agent name: {', '.join(sorted(CORE_FLEET))} "
+            "(local is experimental — use dispatch, not open)"
+        ),
+    )
     open_parser.add_argument("--story", default=None, dest="story_id",
         help="Story ID for context labelling")
 
@@ -832,6 +858,14 @@ def main() -> None:
     from synlynk.scheduler import cmd_schedule
     from synlynk.db import cmd_credit_grant
     _reconcile_jobs()
+    try:
+        from synlynk.capability_watch import spawn_staleness_check_thread
+        from synlynk import _get_db, load_config
+
+        _watch_conn = _get_db()
+        spawn_staleness_check_thread(_watch_conn, load_config())
+    except Exception:
+        pass  # staleness checks are best-effort; never block a real command on this
     parser = build_parser()
     args = parser.parse_args()
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
@@ -885,7 +919,13 @@ def main() -> None:
     elif args.command == "selftest":
         from synlynk.selftest import cmd_selftest
 
-        sys.exit(cmd_selftest(live=getattr(args, "live", False)))
+        sys.exit(
+            cmd_selftest(
+                live=getattr(args, "live", False),
+                matrix=getattr(args, "matrix", False),
+                budget=getattr(args, "budget", None),
+            )
+        )
     elif args.command == "config":
         if getattr(args, "config_action", None) == "set":
             from synlynk import cmd_config_set
@@ -906,12 +946,19 @@ def main() -> None:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
+                                 requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
                                  issue=getattr(args, "issue", None))
+            if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
+                print(f"Error: {job.get('reason')}")
+                remediation = job.get("remediation")
+                if remediation:
+                    print(f"  {remediation}")
+                sys.exit(1)
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
@@ -1122,7 +1169,7 @@ def main() -> None:
     elif args.command == "probe":
         cmd_probe(agent=getattr(args, "agent", None))
     elif args.command == "doctor":
-        sys.exit(cmd_doctor())
+        sys.exit(cmd_doctor(args))
     elif args.command == "worktree":
         from synlynk.worktree import cmd_worktree_audit, cmd_worktree_clean
         action = getattr(args, "worktree_action", None)

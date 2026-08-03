@@ -7,13 +7,16 @@ Aider or oMLX's chat-completions endpoint directly; Aider does that."""
 
 import json
 import os
+import shutil
 import urllib.error
 import urllib.request
+
+from synlynk import _get_db
 
 _DEFAULT_CONFIG_PATH = os.path.join(".agents", "local.json")
 _DEFAULT_LOCAL_CONFIG = {
     "name": "local",
-    "endpoint": "http://127.0.0.1:8080",
+    "endpoint": "http://127.0.0.1:8000",
     "models": [
         {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
         {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
@@ -43,9 +46,12 @@ def _pinned_model(config: dict) -> str:
     return config["models"][0]["id"]
 
 
-def _health_check(endpoint: str, timeout: int = 5) -> dict:
+def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
     """GETs {endpoint}/v1/models and reports reachability plus model ids."""
-    req = urllib.request.Request(f"{endpoint}/v1/models", method="GET")
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(f"{endpoint}/v1/models", method="GET", headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
@@ -69,7 +75,7 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
     edit_format = model_entry.get("edit_format", "whole")
     return [
         "--openai-api-base", f"{endpoint}/v1",
-        "--model", model_id,
+        "--model", f"openai/{model_id}",
         "--edit-format", edit_format,
     ]
 
@@ -87,13 +93,16 @@ def cmd_local_doctor(config_path: str = None) -> int:
             print(f"  ✗ {exc}")
             return 1
     endpoint = config["endpoint"]
-    result = _health_check(endpoint)
+    api_key = os.environ.get("OPENAI_API_KEY")
+    result = _health_check(endpoint, api_key=api_key)
     if not result["reachable"]:
         print(f"  ✗ oMLX unreachable at {endpoint}: {result['error']}")
-        print("    Start it with: omlx serve")
+        if "401" in result["error"]:
+            print("    oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry")
+        else:
+            print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
-    from synlynk import _get_db
     from synlynk.local_agent_seed import seed_local_capability_envelope
     seed_local_capability_envelope(_get_db())
     print("  ✓ starter capability envelope seeded (docs/testing, execute stage)")
@@ -105,5 +114,12 @@ def cmd_local_doctor(config_path: str = None) -> int:
         print(f"  {mark} {model_id}")
     if missing:
         print(f"    Missing models: {', '.join(missing)} — download via oMLX admin panel or CLI")
+    aider_missing = shutil.which("aider") is None
+    if aider_missing:
+        print("  ✗ aider not found on PATH")
+        print("    Install it with: pipx install aider-chat")
+    else:
+        print("  ✓ aider installed")
+    if missing or aider_missing:
         return 1
     return 0

@@ -1,0 +1,28 @@
+<h2>Block 4/5 — Sequencing: matrix freeze vs GH-write + grants invest</h2>
+<p class="subtitle">You’ve locked <strong>hard freeze</strong> until matrix lands, <em>and</em> invest in full Core 4 GH-write + full grants. Those pull in opposite directions unless ordered.</p>
+
+<div class="options">
+  <div class="option" data-choice="matrix-then-epic" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Matrix first, then GH-write + grants epic (recommended)</h3>
+      <p>1) Ship <code>selftest --matrix</code> dry+live under freeze.<br>
+         2) Then epic: role tokens + GH-write for agy/codex + grants for Core 4.<br>
+         Matrix becomes the acceptance gate for the epic. Matches “prove before claim.”</p>
+    </div>
+  </div>
+  <div class="option" data-choice="exception-parallel" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Exception: GH-write + grants parallel with matrix</h3>
+      <p>Freeze only blocks unrelated fleet-parity scatter. GH-write/grants are authorized as the other P0 track. Faster capability, more WIP risk.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="grants-before-matrix" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>GH-write + grants before matrix</h3>
+      <p>Invert panel order. Risk: more features without truth signal — the failure mode we’re ending.</p>
+    </div>
+  </div>
+</div>

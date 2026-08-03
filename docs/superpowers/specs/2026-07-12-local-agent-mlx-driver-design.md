@@ -223,3 +223,112 @@ one worktree per branch, off `main`).
   dev machine load (browser, IDE, etc.). If real-world testing shows memory pressure,
   the fallback is dropping the default roster to smaller models (e.g. Qwen-Coder at a
   smaller size) — flagged here so it's not a surprise during PR 3's real-hardware testing.
+
+## Addendum (2026-08-02): `synlynk local doctor` doesn't check for Aider itself
+
+**Found during:** brainstorming the follow-on "Local Agents with Synlynk" goal (herdr +
+aider + oMLX), while verifying this spec's rollout was actually complete on a real
+machine. All 4 planned PRs (Rollout / PR Sequence, above) had already shipped — but
+`cmd_local_doctor()` (`synlynk/local_agent.py:77`) only ever checked oMLX reachability
+and the model roster (the Testing section's own description above: "verifies oMLX is
+installed, reachable, and the roster models are present"). It never checked whether
+`aider` — the agentic editor this entire design depends on (see "Two layers" above) — is
+even on `PATH`. Confirmed no existing test covers `cmd_local_doctor()` at all, so this
+gap had no regression coverage either. Net effect: on a machine with oMLX running but
+Aider not installed, doctor reports fully healthy, yet dispatching a `local` job fails
+immediately with a raw "command not found" instead of the actionable guidance every
+other doctor failure path already gives.
+
+**Fix (implementation plan Task Group 6):** add a `shutil.which("aider")` check to
+`cmd_local_doctor()`, printed and scored alongside the existing oMLX/model-roster checks
+rather than short-circuiting before them, so a single doctor run surfaces every gap in
+one pass. See `docs/superpowers/plans/2026-07-12-local-agent-mlx-driver.md`, Task Group 6.
+No architecture change — this is a gap in the already-approved design's own onboarding
+surface, not a new decision.
+
+## Addendum (2026-08-02): oMLX requires an API key, which nothing sends
+
+**Found during:** the same "Local Agents with Synlynk" verification pass, immediately
+after PR #665 (port 8080 → 8000) fixed the endpoint literal itself. With oMLX actually
+reachable on the corrected port and a model loaded, `synlynk local doctor` still failed:
+`oMLX unreachable at http://127.0.0.1:8000: HTTP Error 401: Unauthorized`. Root cause: the
+locally-installed oMLX build requires `Authorization: Bearer <api_key>` on every request
+(`auth.skip_api_key_verification: false` in oMLX's own `~/.omlx/settings.json`), but
+neither `_health_check()` (`synlynk/local_agent.py:48`) nor
+`_local_dispatch_model_flags()` (`synlynk/local_agent.py:60`) send any auth header —
+this design's own "Two layers" section describes Aider talking to oMLX as an
+OpenAI-compatible backend, but never accounted for oMLX requiring auth on that backend.
+A second, independent drift was found in the same pass: the roster ID in
+`.agents/local.json` (`ornith-1.0-9b`) does not match the model ID oMLX actually serves
+(`Ornith-1.0-9B-4bit`, derived from the on-disk HuggingFace repo path) — doctor's roster
+check would report the pinned model "missing" even once auth is fixed. Both were config
+values the design never had a chance to verify against a real running oMLX instance.
+
+**Fix (implementation plan Task Group 7):**
+1. Correct `.agents/local.json`'s roster ID to `Ornith-1.0-9B-4bit` (already applied,
+   config-only, no code involved).
+2. `_health_check()` gains an optional `api_key` parameter; when set, sends
+   `Authorization: Bearer <api_key>` on the `/v1/models` GET.
+3. `cmd_local_doctor()` reads `os.environ.get("OPENAI_API_KEY")` and passes it through —
+   this is the same env var Aider itself already reads natively for OpenAI-compatible
+   backends, so doctor and a real dispatch now agree on one convention rather than
+   inventing an oMLX-specific variable name.
+4. A 401 response is reported distinctly from "not reachable at all" — `oMLX rejected the
+   request (401 Unauthorized) — export OPENAI_API_KEY and retry` rather than the
+   misleading `Start it with: omlx serve` (oMLX *is* running; the problem is auth, not
+   absence).
+5. `AGENT_CAPABILITY_BASELINES["local"]["env_passthrough"]` (`synlynk/_constants.py:197`)
+   gains `"OPENAI_API_KEY"`, so `_build_subprocess_env()`'s existing allowlist mechanism
+   (no new plumbing) passes the operator's exported key through to the real `aider`
+   subprocess on dispatch — the same var doctor now checks.
+
+The actual API key value itself is never stored in the repo or in any synlynk config
+file — it lives in oMLX's own `~/.omlx/settings.json` and must be exported by the
+operator (`export OPENAI_API_KEY=<key from oMLX settings>`) before running doctor or
+dispatching to `local`. No architecture change — this closes a second onboarding gap in
+the same already-approved design, discovered the same way Addendum 1 was: running the
+real thing against a real machine.
+
+## Addendum (2026-08-03): a real dispatch never reaches oMLX — litellm needs a provider prefix
+
+**Found during:** the first real end-to-end test dispatch after Addendum 2 shipped
+(PR #672) — `synlynk dispatch local --task "Scan this repo and give me a summary"`.
+The job reported `OK (exit 0)` and `0 tokens in / 0 tokens out`, which looked like
+success at the job-status level. The captured log told a different story:
+
+```
+litellm.BadRequestError: LLM Provider NOT provided. Pass in the LLM provider you
+are trying to call. You passed model=Ornith-1.0-9B-4bit
+```
+
+Root cause: Aider's underlying request library, litellm, infers which provider's
+request format to use from the `--model` string itself. Known OpenAI model names
+(`gpt-4o`, etc.) resolve automatically; an arbitrary local model name like
+`Ornith-1.0-9B-4bit` does not, even though `--openai-api-base` was also passed.
+litellm requires an explicit provider prefix in that case — `openai/Ornith-1.0-9B-4bit`
+— to route the call through its OpenAI-compatible client rather than erroring before
+sending anything.
+
+`_local_dispatch_model_flags()` (`synlynk/local_agent.py:61`) builds `--model` from
+the bare roster ID (`synlynk/local_agent.py:75`, `"--model", model_id`) with no
+prefix, so every real `local` dispatch has been failing at the litellm layer since
+this feature shipped (PR #204/205/207) — `exit 0` reflects "the Aider subprocess ran
+and terminated," not "Aider talked to the model." This is a second instance of the
+false-positive-completion trap already documented in this project's own memory
+(`feedback.md`: never trust job status alone) — this time inside the tool being
+dispatched, not synlynk's dispatch layer itself.
+
+**Fix (implementation plan Task Group 8):**
+1. `_local_dispatch_model_flags()` prefixes the `--model` value with `openai/` —
+   `f"openai/{model_id}"` — when building the Aider CLI flags. `_pinned_model()` and
+   the roster/doctor logic are untouched; the prefix is added only at the point the
+   flag list is constructed, so `.agents/local.json`'s roster IDs stay in their
+   natural oMLX form (matching what `/v1/models` actually returns, which doctor
+   depends on).
+2. No change needed to `_health_check()` or `cmd_local_doctor()` — those call
+   oMLX's `/v1/models` directly via `urllib`, not through litellm, and were never
+   affected by this bug.
+
+Scope is a single-line change plus regression tests confirming the prefix is applied
+and that doctor's own model-matching logic (which compares against the unprefixed
+roster ID) is unaffected.

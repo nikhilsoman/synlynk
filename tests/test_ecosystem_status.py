@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from contextlib import redirect_stdout
 
 import pytest
@@ -25,6 +26,30 @@ def _write_config(tmp_path, dispatch_mode="daily-grind"):
     (tmp_path / ".synlynk" / "config.json").write_text(
         json.dumps({"budget": {"limit_usd": 10, "limit_requests": 100}, "dispatch_mode": dispatch_mode})
     )
+
+
+def _seed_probe_row(db, agent_name):
+    import synlynk
+
+    baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            agent_name,
+            baseline["cli"],
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
 
 
 def test_harness_status_table_exists(db):
@@ -286,6 +311,7 @@ def test_preflight_blocks_input_overflow(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
     (tmp_path / ".synlynk" / "context.md").write_text("word " * 160_000)
+    _seed_probe_row(db, "codex")
     db.execute(
         "INSERT OR REPLACE INTO harness_status (agent_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
         ("codex", 110_000, 16_000, 128),
@@ -301,6 +327,7 @@ def test_preflight_blocks_output_overflow(db, tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
+    _seed_probe_row(db, "codex")
     db.execute(
         "INSERT OR REPLACE INTO harness_status (agent_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
         ("codex", 110_000, 7_999, 128),
@@ -317,6 +344,7 @@ def test_preflight_warns_tool_pressure(db, tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
+    _seed_probe_row(db, "claude")
     db.execute(
         "INSERT OR REPLACE INTO harness_status (agent_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
         ("claude", 999_999, 999_999, 1),

@@ -1,0 +1,32 @@
+<h2>Block 3 — Completion theater: what about UNKNOWN summaries?</h2>
+<p class="subtitle">#579: jobs show UNKNOWN / exit unknown / 0 files after real success. How strict do we get?</p>
+
+<div class="section">
+  <p class="label">Doctor FAIL-closed (locked)</p>
+  <p>FAIL: missing instruction · nested state.db · TC-2 · TC-3<br>
+     WARN: version skew · TC-5 SOP</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="ban-terminal" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Ban UNKNOWN as terminal display (recommended)</h3>
+      <p>Never show UNKNOWN as a final status in <code>jobs</code> / completion banner. Reconcile or show “reconciling…”; after timeout → FAILED_UNVERIFIED with reason. Matrix live cells require reconciled terminal status.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="label-only" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Keep UNKNOWN but label as untrusted</h3>
+      <p>Display stays; docs/matrix treat UNKNOWN ≠ success. Weaker UX, less code churn.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="defer" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Defer to #579 story later</h3>
+      <p>Out of this design except matrix asserts “not UNKNOWN.” No product-wide display ban yet.</p>
+    </div>
+  </div>
+</div>

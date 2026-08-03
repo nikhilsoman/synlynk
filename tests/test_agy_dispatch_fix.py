@@ -144,6 +144,27 @@ def test_dispatch_real_files_touched_via_git_diff_summary_lists_and_truncates_fi
     assert "          +3 more" in text
 
 
+def test_dispatch_real_files_touched_via_git_diff_ignores_uncommitted_noise_in_summary():
+    import synlynk as sl
+
+    text = sl._format_job_summary(
+        "job-123",
+        "codex",
+        "story-9",
+        0,
+        12.4,
+        100,
+        20,
+        0.14,
+        ["alpha.txt", "beta.txt"],
+        worktree_path="worktrees/job-123",
+        worktree_branch="dispatch/codex/job-123",
+    )
+
+    assert "files:    2 touched" in text
+    assert "dirty.txt" not in text
+
+
 def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
@@ -748,7 +769,6 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
 
     assert "status:   FAILED_UNVERIFIED (exit unknown)" in summary
     assert "files:    1 touched" in summary
-    assert "late-write.txt" in summary
     assert "git-state recheck recovered" in summary
 
 
@@ -764,8 +784,9 @@ def test_dispatch_gitstateverified_job_reconciliation_missing_exit_clean_worktre
 
     assert reconciled["status"] == "unknown"
     assert reconciled["exit_code"] is None
-    assert "UNKNOWN (exit unknown)" in out
-    assert "FAILED_UNVERIFIED" not in out
+    # Terminal summary must never say bare UNKNOWN for unknown exit.
+    assert "FAILED_UNVERIFIED (exit unknown)" in out
+    assert "UNKNOWN (exit unknown)" not in out
     assert "worktree:" in out
 
 

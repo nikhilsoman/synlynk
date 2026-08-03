@@ -42,6 +42,25 @@ def _write_repair_config(tmp_path, config):
     (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
 
 
+def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_at=None):
+    from synlynk import _migrate_db
+
+    _migrate_db(db)
+    last_probe_at = last_probe_at or time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.localtime(time.time())
+    )
+    db.execute(
+        """
+        INSERT INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (agent, agent, "1.0.0", compliance_status, "{}", "{}", "cap-hash", last_probe_at),
+    )
+    db.commit()
+
+
 def test_repair_sops_only_injects_synlynks_own_h_repo_specific_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_repair_config(
@@ -128,6 +147,54 @@ def test_repair_sops_only_injects_synlynks_own_h_default_config_keeps_current_sh
     assert "`feat/<description>`" in content
     assert "| pm / review / deploy | Claude | pm, review, deploy |" in content
     assert "| implement / test / css / templates / content | Agy | implement, test, css, templates, content |" in content
+
+
+def test_repair_sops_only_refreshes_stale_capability_allocation_with_single_blank_line(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_repair_config(
+        tmp_path,
+        {
+            "roles": {
+                "claude": ["pm", "review"],
+                "codex": ["implement", "test"],
+            },
+            "workgroup_agents": ["claude", "codex"],
+        },
+    )
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    (tmp_path / "CLAUDE.md").write_text(
+        "<!-- synlynk:harness v0.1 verified:2026-01-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## Capability-Based Task Allocation\n"
+        "| Role | Agent | Tasks |\n"
+        "| :--- | :--- | :--- |\n"
+        "| stale | data | stale |\n"
+        "Do not start a task outside your role column without explicit approval from Claude.\n\n"
+        "**GitHub write routing (#426):** stale text.\n\n"
+        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
+        "rather than synlynk's default fleet assumptions.\n\n"
+        "## Cost Visibility\n"
+        "1. Log estimated_cost in the job context header before dispatch.\n"
+        "2. Check `synlynk status` for current burn rate.\n"
+        "3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.\n"
+        "4. Append actual cost to `project-docs/costs.md`.\n\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+
+    import synlynk as sl
+
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {"claude": []}})
+
+    sl._repair_sops_only(dry_run=False, agent_name="claude")
+
+    repaired = (tmp_path / "CLAUDE.md").read_text()
+    boundary = (
+        "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
+        "rather than synlynk's default fleet assumptions.\n\n## Cost Visibility"
+    )
+    assert boundary in repaired
+    assert boundary.replace("\n\n## Cost Visibility", "\n\n\n## Cost Visibility") not in repaired
+    assert "\n\n<!-- /synlynk:harness -->" in repaired
 
 
 def test_repair_capability_allocation_sop_uses_committed_capability_roles(tmp_path, monkeypatch):
@@ -260,6 +327,7 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
     finally:
         conn.close()
 
+
     written = sl.refresh_agent_quotas_from_telemetry(now=now)
     assert written > 0
 
@@ -271,7 +339,7 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         assert after["unit"] == "tokens"
         assert after["headroom"] is not None
         assert after["headroom"] > 0
-        # used was 50k on a 100k hourly default → headroom finite and < limit
+        # used was 50k on a 100k hourly default -> headroom finite and < limit
         assert after["headroom"] < 200_000
 
         # Exhausting estimate: 200k needed, headroom should block if lower
@@ -282,6 +350,506 @@ def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
         assert exhausted["degraded"] is False
     finally:
         conn.close()
+
+
+def test_fix_issue_616__maybe_open_worktree_pr_sy_prefers_recorded_base_branch_when_valid(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ]:
+            assert cmd[-1] == "dispatch/claude/some-branch^{commit}"
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/heads/dispatch/claude/some-branch\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-1",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/some-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "dispatch/claude/some-branch"
+
+
+def test_fix_issue_616__maybe_open_worktree_pr_sy_preserves_multisegment_remote_branch_name(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ]:
+            assert cmd[-1] == "dispatch/claude/some-branch^{commit}"
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/dispatch/claude/some-branch\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-1",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/some-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert "--base" in create_call
+    assert create_call[create_call.index("--base") + 1] == "dispatch/claude/some-branch"
+
+
+@pytest.mark.parametrize("job", [{"id": "job-legacy-none", "task": "do the thing", "base_branch": None}, {"id": "job-legacy-missing", "task": "do the thing"}])
+def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_to_default_base_when_missing(
+    tmp_path, monkeypatch, job
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/main\n",
+                stderr="",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(job, str(worktree_path), "feat/example")
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert create_call[create_call.index("--base") + 1] == "main"
+
+
+def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_when_recorded_base_is_stale(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:5] == [
+            "git",
+            "-C",
+            str(worktree_path),
+            "rev-parse",
+            "--symbolic-full-name",
+        ] and cmd[-1] == "dispatch/claude/deleted-branch^{commit}":
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="refs/remotes/origin/master\n",
+                stderr="",
+            )
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            if cmd[5] == "origin/master":
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="https://github.com/octo/repo/pull/42\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-stale",
+            "task": "do the thing",
+            "base_branch": "dispatch/claude/deleted-branch",
+        },
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 42
+    create_call = next(cmd for cmd in calls if cmd[:3] == ["gh", "pr", "create"])
+    assert create_call[create_call.index("--base") + 1] == "master"
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_trust_gate_forces_no_coverage_for_fresh_probe(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db, last_probe_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+
+    result = _dispatch_capability_preflight(
+        "agy",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "degraded"
+    assert result["branch"] == "no-coverage"
+    assert result["probe_trustworthy"] is False
+    assert result["reason"]
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_stale_probe_branch_reprobes_and_blocks_on_timeout(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+    dispatch_globals = _dispatch_capability_preflight.__globals__
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    stale_probe_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 7200))
+    _seed_harness_record(db, last_probe_at=stale_probe_at)
+    original_trust = dispatch_globals["_probe_results_trustworthy"]
+    original_reprobe = dispatch_globals["_reprobe_harness_sync"]
+    dispatch_globals["_probe_results_trustworthy"] = lambda: True
+    dispatch_globals["_reprobe_harness_sync"] = lambda agent, timeout_s=120: {
+        "passed": False,
+        "reason": f"Fresh probe for '{agent}' timed out after {timeout_s}s.",
+    }
+    try:
+        result = _dispatch_capability_preflight(
+            "agy",
+            "ship the fix",
+            db_conn=db,
+            cwd=str(tmp_path),
+            requires=[],
+        )
+
+        assert result["passed"] is False
+        assert result["status"] == "blocked"
+        assert result["branch"] == "stale"
+        assert "timed out" in result["reason"]
+    finally:
+        dispatch_globals["_probe_results_trustworthy"] = original_trust
+        dispatch_globals["_reprobe_harness_sync"] = original_reprobe
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_failing_probe_branch_blocks(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+    dispatch_globals = _dispatch_capability_preflight.__globals__
+    from synlynk import _migrate_db
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+    last_probe_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime(time.time()))
+    db.execute(
+        """
+        INSERT INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("codex", "codex", "1.0.0", "degraded", "{}", "{}", "cap-hash", last_probe_at),
+    )
+    db.commit()
+    original_trust = dispatch_globals["_probe_results_trustworthy"]
+    dispatch_globals["_probe_results_trustworthy"] = lambda: True
+    try:
+        result = _dispatch_capability_preflight(
+            "codex",
+            "ship the fix",
+            db_conn=db,
+            cwd=str(tmp_path),
+            requires=[],
+        )
+
+        assert result["passed"] is False
+        assert result["status"] == "blocked"
+        assert result["branch"] == "failing"
+        assert "compliance_status" in result["reason"]
+    finally:
+        dispatch_globals["_probe_results_trustworthy"] = original_trust
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_no_coverage_required_blocks(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+
+    result = _dispatch_capability_preflight(
+        "agy",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=["docker"],
+    )
+
+    assert result["passed"] is False
+    assert result["status"] == "blocked"
+    assert result["branch"] == "no-coverage"
+    assert "doctor --fix agy" in result["remediation"]
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_no_coverage_optional_degrades(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+
+    result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "degraded"
+    assert result["branch"] == "no-coverage"
+
+
+def test_phase_6_of_docssuperpowersplans20260730h_repo_artifact_presence_vs_declared_split(tmp_path, monkeypatch):
+    from synlynk.dispatch import _dispatch_capability_preflight
+
+    monkeypatch.chdir(tmp_path)
+    db = sqlite3.connect(":memory:")
+    _seed_harness_record(db)
+    (tmp_path / "Dockerfile").write_text("FROM python:3.11\n")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: ci\n")
+
+    soft_result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=[],
+    )
+    hard_result = _dispatch_capability_preflight(
+        "codex",
+        "ship the fix",
+        db_conn=db,
+        cwd=str(tmp_path),
+        requires=["docker"],
+    )
+
+    assert soft_result["passed"] is True
+    assert soft_result["status"] == "degraded"
+    assert "docker" in soft_result["reason"]
+    assert hard_result["passed"] is False
+    assert hard_result["status"] == "blocked"
+    assert hard_result["branch"] == "no-coverage"
+def _flag_values(flags, name):
+    values = []
+    for idx, flag in enumerate(flags):
+        if flag == name and idx + 1 < len(flags):
+            values.append(flags[idx + 1])
+    return values
+
+
+@pytest.mark.parametrize(
+    "role_name, expected_allow, expected_deny",
+    [
+        ("pm", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        ("review", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        ("deploy", {"Read", "Grep", "Glob", "LS"}, {"Edit", "Write", "MultiEdit", "Bash"}),
+        (
+            "implement",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "test",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "refactor",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash(pytest:*)"},
+            set(),
+        ),
+        (
+            "css",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "templates",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "content",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit"},
+            {"Bash"},
+        ),
+        (
+            "canvas",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+        (
+            "js",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+        (
+            "infra",
+            {"Read", "Grep", "Glob", "LS", "Edit", "Write", "MultiEdit", "Bash"},
+            set(),
+        ),
+    ],
+)
+def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(role_name, expected_allow, expected_deny):
+    from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
+
+    permissions = _resolve_dispatch_permissions("grok", role_list=[role_name])
+    flags = _permissions_to_flags("grok", permissions)
+
+    assert flags[:2] == ["--permission-mode", "dontAsk"]
+    assert "--always-approve" not in flags
+    assert set(_flag_values(flags, "--allow")) == expected_allow
+    assert set(_flag_values(flags, "--deny")) == expected_deny
+
+
+def test_phase_2_of_docssuperpowersplans20260730h_grok_regression_no_empty_fallthrough():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("grok", ["read:*"])
+    assert flags
+    assert flags[:2] == ["--permission-mode", "dontAsk"]
+    assert "--always-approve" not in flags
+    assert "Read" in _flag_values(flags, "--allow")
+
+
+def test_phase_7_of_docssuperpowersplans20260730h_panel_timeout_override_respected(monkeypatch):
+    import synlynk.team as team
+
+    calls = []
+
+    class Result:
+        stdout = "panel output\n"
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Result()
+
+    monkeypatch.setattr(team.subprocess, "run", fake_run)
+
+    codex_output = team._run_agent_sync("codex", "review prompt")
+    claude_output = team._run_agent_sync("claude", "review prompt")
+
+    assert codex_output == "panel output"
+    assert claude_output == "panel output"
+    assert calls[0][1]["timeout"] == 300
+    assert calls[1][1]["timeout"] == 120
 
 
 def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):
@@ -504,6 +1072,7 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
             }
         },
     )
+    monkeypatch.setattr(sl, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True})
     monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -518,6 +1087,85 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
     assert "synlynk doctor" in out
     assert "identity_roles" in out
     assert "doctor [agy]" in out
+
+
+def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_incomplete(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"roles": {}}))
+
+    import synlynk as sl
+
+    monkeypatch.setattr(
+        sl,
+        "AGENT_CAPABILITY_BASELINES",
+        {
+            "claude": {
+                "cli": "claude",
+                "dispatch_flags": {},
+                "headless_contract": {},
+                "network_deps": {"required_endpoints": []},
+                "non_interactive_flags": ["--print"],
+            }
+        },
+    )
+    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
+    monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+
+    exit_code = sl.cmd_doctor()
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "TC-0 schema" in out
+    assert "schema incomplete" in out
+
+
+def test_synlynk_doctor_reports_local_tc5_skip(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"roles": {}}))
+
+    import synlynk as sl
+
+    patched_baselines = {
+        "local": {
+            "cli": "aider",
+            "dispatch_flags": {
+                "valid_flags": ["--no-auto-commits", "--yes-always", "--openai-api-base", "--model", "--edit-format"],
+                "invalid_flags": ["--dangerously-skip-permissions", "--non-interactive"],
+                "required_flags": ["--no-auto-commits", "--yes-always"],
+            },
+            "headless_contract": {
+                "requires_pty": False,
+                "stdout_flush_method": "native",
+                "env_vars_required": [],
+                "non_interactive_flag": "--version",
+            },
+            "network_deps": {"required_endpoints": ["127.0.0.1:8080"], "optional_endpoints": []},
+            "non_interactive_flags": [],
+        }
+    }
+    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
+    monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
+    monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+
+    exit_code = sl.cmd_doctor()
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "TC-5 sops" in out
+    assert "intentionally skipped" in out
 
 
 def test_fix_stale_capability_scores_view_missing_discipline_column(tmp_path, monkeypatch):
@@ -636,7 +1284,7 @@ def test_fix_github_issue_378_nikhilsomansynk_terminal_summary_survives_unknown_
         0,
         0.00,
         [],
-        status_label="UNKNOWN (exit unknown)",
+        status_label="FAILED_UNVERIFIED (exit unknown)",
     )
 
     summary_path = project_dir / ".synlynk" / "logs" / "job-race.summary"
@@ -707,6 +1355,272 @@ def test_chore_synlynk_jobs_all_shows_stale_faile_terminal_summary_survives_daem
     assert summary_path.read_text() == terminal
     assert "FAILED (exit -1)" not in summary_path.read_text()
     assert "files:    0 touched" not in summary_path.read_text()
+
+
+def test_harden_preflight_dispatch_check_agent_auth_fails_loudly_on_not_signed_in(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "grok",
+            "grok",
+            "1.0.0",
+            json.dumps(sl.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]),
+            json.dumps(sl.AGENT_CAPABILITY_BASELINES["grok"]["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
+
+    def fake_run(cmd, **kwargs):
+        if cmd == ["grok", "--version"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="grok 1.0.0\n",
+                stderr="Not signed in. Please authenticate.\n",
+            )
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+    class _SuccessSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _SuccessSocket())
+
+    result = _preflight_dispatch("grok", ["--always-approve"], db_conn=db)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "not authenticated" in result["reason"].lower()
+
+
+def _seed_hardened_preflight_record(db, agent_name: str, baseline: dict):
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            agent_name,
+            agent_name,
+            "1.0.0",
+            json.dumps(baseline["headless_contract"]),
+            json.dumps(baseline["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        ),
+    )
+    db.commit()
+
+
+def test_fixdispatch_harden_reporting_and_preflight_allows_agy_dangerously_skip_permissions_flag(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    _seed_hardened_preflight_record(db, "agy", sl.AGENT_CAPABILITY_BASELINES["agy"])
+
+    class _SuccessSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _SuccessSocket())
+
+    result = _preflight_dispatch(
+        "agy",
+        ["--dangerously-skip-permissions"],
+        db_conn=db,
+        permissions=["read:*"],
+    )
+
+    assert result["passed"] is True
+    assert result["reason"] is None
+
+
+def test_fixdispatch_harden_reporting_and_preflight_blocks_invalid_flag(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
+
+    result = _preflight_dispatch("grok", ["--yes"], db_conn=db)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "--yes" in result["reason"]
+
+
+def test_fixdispatch_harden_reporting_and_preflight_blocks_unreachable_endpoint(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+
+    class _FailSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            raise OSError("unreachable")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _FailSocket())
+
+    result = _preflight_dispatch("grok", ["--always-approve"], db_conn=db)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "cli-chat-proxy.grok.com" in result["reason"]
+
+
+def test_harden_preflight_dispatch_check_agent_au_blocks_known_headless_permission_denial(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import socket
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk" / "logs").mkdir(parents=True, exist_ok=True)
+    auth_state = tmp_path / ".gemini" / "antigravity-cli"
+    auth_state.mkdir(parents=True, exist_ok=True)
+    (auth_state / "jetski_state.pbtxt").write_text("session: valid\n")
+    db = sqlite3.connect(str(tmp_path / "state.db"))
+    sl._migrate_db(db)
+
+    db.execute(
+        """
+        INSERT OR REPLACE INTO harness_records (
+            agent_name, harness_name, installed_version, compliance_status,
+            active_contract, active_flags, capability_hash, last_probe_at
+        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        """,
+        (
+            "agy",
+            "agy",
+            "1.0.0",
+            json.dumps(sl.AGENT_CAPABILITY_BASELINES["agy"]["headless_contract"]),
+            json.dumps(sl.AGENT_CAPABILITY_BASELINES["agy"]["dispatch_flags"]),
+            "seeded-probe",
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
+        ),
+    )
+    db.commit()
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-4cb54c47.log"
+    log_path.write_text(
+        "jetski: no output produced - a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied\n"
+        '{"conversation_id":"07557e08-f4d5-4b97-abcc-430e7ed79df6","status":"SUCCESS","response":"","duration_seconds":6.436941,"num_turns":1,"usage":{"input_tokens":0,"output_tokens":0}}\n'
+    )
+    sl._save_jobs([
+        {
+            "id": "job-4cb54c47",
+            "agent": "agy",
+            "story_id": "story-4cb54c47",
+            "task": "review PR 416",
+            "pid": 1,
+            "log_file": str(log_path),
+            "started_at": "2026-07-19T18:00:00",
+            "ended_at": None,
+            "status": "permission_denied",
+            "exit_code": 0,
+        }
+    ])
+
+    def fake_run(cmd, **kwargs):
+        if cmd == ["agy", "--version"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="agy 1.0.0\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(sl.subprocess, "run", fake_run)
+    monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+    class _SuccessSocket:
+        def settimeout(self, timeout):
+            return None
+
+        def connect(self, addr):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: _SuccessSocket())
+
+    result = _preflight_dispatch("agy", [], db_conn=db, permissions=["read:*"])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "auto-denial" in result["reason"].lower()
 
 
 def _load_backfill_script():

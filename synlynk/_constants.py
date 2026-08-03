@@ -46,8 +46,23 @@ AGENT_CAPABILITY_BASELINES = {
         "cli": "claude",
         "can_gh_write": True,
         "non_interactive_flags": ["--print"],
-        "dispatch_flags": ["--dangerously-skip-permissions"],
+        "dispatch_flags": {
+            "valid_flags": ["--dangerously-skip-permissions", "--model", "--output-format"],
+            "invalid_flags": ["--always-approve", "--non-interactive"],
+            "required_flags": ["--dangerously-skip-permissions"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--print",
+        },
+        "network_deps": {
+            "required_endpoints": [],
+            "optional_endpoints": [],
+        },
         "roles": ["architect", "builder"],
+        "env_passthrough": [],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },
     "codex": {
@@ -62,7 +77,35 @@ AGENT_CAPABILITY_BASELINES = {
             "exec", "-",
             "-s", "workspace-write",
         ],
+        "dispatch_flags": {
+            # Codex CLI renamed --approval-policy → --ask-for-approval (values:
+            # untrusted|on-request|never). TC-2 scans `codex --help` for these names.
+            # Keep --sandbox as a valid long form of -s used in non_interactive_flags.
+            "valid_flags": ["--ask-for-approval", "--model", "--sandbox"],
+            "invalid_flags": [
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--dangerously-skip-permissions",
+                "--print",
+                "--approval-policy",  # removed from Codex CLI; must not reappear
+            ],
+            # Sandbox mode is already supplied with its value via non_interactive_flags
+            # (-s workspace-write). Do NOT put --sandbox here: required_flags are appended
+            # as bare flags with no values by _dispatch_flags_for_agent(), and a bare
+            # --sandbox makes codex CLI fail with "a value is required".
+            "required_flags": [],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--version",
+        },
+        "network_deps": {
+            "required_endpoints": [],
+            "optional_endpoints": [],
+        },
         "roles": ["builder"],
+        "env_passthrough": [],
         "strengths": ["code completion", "inline edits", "fast iteration"],
     },
     "agy": {
@@ -86,38 +129,98 @@ AGENT_CAPABILITY_BASELINES = {
             "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
             "optional_endpoints": [],
         },
+        "auth_check": {
+            "probe": ["agy", "--version"],
+            "required_paths": ["~/.gemini/antigravity-cli/jetski_state.pbtxt"],
+            "unauthenticated_markers": [
+                "not signed in",
+                "sign in",
+                "login",
+            ],
+        },
         "roles": ["builder", "verifier"],
+        "env_passthrough": [],
         "strengths": ["multimodal", "large context", "search-augmented"],
     },
     "grok": {
         "cli": "grok",
         "can_gh_write": True,
         "non_interactive_flags": [],
-        "prompt_flag": "--single",  # placed last: grok --always-approve --single "$PROMPT"
+        "prompt_flag": "--single",  # placed last: grok --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
             "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--always-approve"],
+            "required_flags": [],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--single",
         },
         "network_deps": {
             "required_endpoints": ["cli-chat-proxy.grok.com:443"],
             "optional_endpoints": [],
         },
+        "auth_check": {
+            "probe": ["grok", "--version"],
+            "unauthenticated_markers": [
+                "not signed in",
+                "sign in",
+                "login",
+            ],
+        },
         "roles": ["builder", "architect"],
+        "env_passthrough": [],
         "strengths": ["codebase understanding", "inline edits", "composer model", "fast iteration"],
     },
     "local": {
         "cli": "aider",
         "can_gh_write": False,
         "non_interactive_flags": [],
-        "dispatch_flags": ["--no-auto-commits", "--yes-always"],
+        "dispatch_flags": {
+            "valid_flags": [
+                "--no-auto-commits",
+                "--yes-always",
+                "--openai-api-base",
+                "--model",
+                "--edit-format",
+            ],
+            "invalid_flags": ["--dangerously-skip-permissions", "--non-interactive"],
+            "required_flags": ["--no-auto-commits", "--yes-always"],
+        },
         "prompt_file_flag": "--message-file",
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--version",
+        },
         "network_deps": {
-            "required_endpoints": ["127.0.0.1:8080"],
+            "required_endpoints": ["127.0.0.1:8000"],
             "optional_endpoints": [],
         },
         "roles": ["builder"],
+        "env_passthrough": ["OPENAI_API_KEY"],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
+}
+
+# Core fleet = product-supported interactive + dispatch agents.
+# local remains dispatchable via experimental path but is not in CORE_FLEET.
+CORE_FLEET = frozenset({"claude", "agy", "codex", "grok"})
+EXPERIMENTAL_FLEET = frozenset({"local"})
+PROVEN_FRESHNESS_DAYS = 7
+MATRIX_LIVE_BUDGET_USD = 10.0
+AGENT_BUILDER_ONLY = frozenset({"codex"})
+CORE_INSTRUCTION_FILES = {
+    "claude": "CLAUDE.md",
+    "agy": "GEMINI.md",
+    "codex": "AGENTS.md",
+    "grok": "GROK.md",
+}
+
+AGENT_PANEL_QUERY_TIMEOUT_SECONDS = {
+    "codex": 300,
 }

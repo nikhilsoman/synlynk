@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 from dataclasses import asdict
 import select
 import signal
@@ -145,17 +146,81 @@ def _resolve_dispatch_permissions(
     return sorted(effective)
 
 
+_GROK_PERMISSION_RULES = {
+    "read:*": ["Read", "Grep", "Glob", "LS"],
+    "write:src/": ["Edit", "Write", "MultiEdit"],
+    "write:docs/": ["Edit", "Write", "MultiEdit"],
+    "run:tests": ["Bash(pytest:*)"],
+    "run:shell": ["Bash"],
+}
+
+
+def _grok_permission_flags(permissions: list) -> list:
+    """Translate resolved permission strings into Grok CLI permission flags."""
+    permission_set = {perm for perm in (permissions or []) if perm}
+    if not permission_set:
+        return []
+
+    if set(_GROK_PERMISSION_RULES).issubset(permission_set):
+        return ["--always-approve"]
+
+    flags = ["--permission-mode", "dontAsk"]
+    allow_rules = []
+    has_write = "write:src/" in permission_set or "write:docs/" in permission_set
+    has_tests = "run:tests" in permission_set
+    has_shell = "run:shell" in permission_set
+
+    for perm in permissions or []:
+        rules = _GROK_PERMISSION_RULES.get(perm)
+        if not rules:
+            continue
+        allow_rules.extend(rules)
+
+    if not allow_rules:
+        return []
+
+    deny_rules = []
+    if not has_write:
+        deny_rules.extend(["Edit", "Write", "MultiEdit"])
+    if not (has_tests or has_shell):
+        deny_rules.append("Bash")
+
+    seen = set()
+    for rule in allow_rules:
+        if rule not in seen:
+            flags.extend(["--allow", rule])
+            seen.add(rule)
+
+    seen = set()
+    for rule in deny_rules:
+        if rule not in seen:
+            flags.extend(["--deny", rule])
+            seen.add(rule)
+
+    return flags
+
+
+class PermissionEnforcementError(RuntimeError):
+    """Raised when an agent has no real mechanism to enforce requested permissions."""
+
+
 def _permissions_to_flags(agent: str, permissions: list) -> list:
     """Translate permission strings into agent-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
     if agent == "agy":
-        if not permissions or set(permissions) <= {"read:*"}:
+        if not permissions:
             print(
                 "  ⚠ agy dispatched with no write/run permissions granted -- "
                 "headless mode will auto-deny command/write tool calls and may silently no-op"
             )
             return []
+        if set(permissions) <= {"read:*"}:
+            raise PermissionEnforcementError(
+                f"agy has no mechanism to enforce a read-only-only permission set {sorted(permissions)}; "
+                "headless mode cannot reliably block write/command tool calls. Refusing to dispatch "
+                "rather than silently granting more than requested."
+            )
         return ["--dangerously-skip-permissions"]
     if agent == "claude":
         tools = []
@@ -168,9 +233,73 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         if not has_write:
-            return ["--approval-policy", "untrusted"]
+            return ["--ask-for-approval", "untrusted"]
+        return []
+    if agent == "grok":
+        return _grok_permission_flags(permissions)
+    if agent == "local":
+        if permissions:
+            raise PermissionEnforcementError(
+                f"local (aider) has no mechanism to enforce permissions {sorted(permissions)}; "
+                "aider's declared CLI flags include no read-only/file-scope restriction. Refusing "
+                "to dispatch rather than silently granting full read/write access."
+            )
         return []
     return []
+
+
+_ENV_ALLOWLIST_BASE = [
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "TMPDIR",
+    "USER",
+    "SHELL",
+    "SSH_AUTH_SOCK",
+    "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL",
+    "GIT_COMMITTER_NAME",
+    "GIT_COMMITTER_EMAIL",
+    "GIT_SSH_COMMAND",
+]
+
+
+def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str) -> dict:
+    """Build a minimal, allowlisted environment for a dispatched subprocess.
+
+    Replaces copying the full parent environment: only a fixed base set of
+    vars (PATH/HOME/git identity/etc.) plus each agent's declared
+    env_passthrough vars are inherited. Everything else the operator's shell
+    happens to have set (AWS keys, unrelated API tokens, etc.) is excluded by
+    default.
+    """
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
+    proc_env = {k: v for k, v in os.environ.items() if k in allowed}
+    proc_env.update(overrides.get("env", {}))
+
+    for var in baseline.get("headless_contract", {}).get("env_vars_required", []):
+        if "=" in var:
+            k, v = var.split("=", 1)
+            proc_env[k] = v
+
+    if requires_gh_write:
+        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
+        if gh_token:
+            proc_env["GH_TOKEN"] = gh_token
+        else:
+            proc_env.pop("GH_TOKEN", None)
+            proc_env.pop("GITHUB_TOKEN", None)
+            print(
+                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
+                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
+                "silently fall back to a personal credential; GitHub write actions in this "
+                "job will fail until a role App is provisioned (see `synlynk identity init`).",
+                file=sys.stderr,
+            )
+    return proc_env
 
 
 def _spawn_with_pty_fallback(cmd, env, cwd):
@@ -624,8 +753,10 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
     existing_status = _summary_status_label(existing_summary) if existing_summary else None
     existing_files_touched = _summary_files_touched_count(existing_summary) if existing_summary else None
     new_status = _summary_status_label(summary)
-    if existing_status == "OK (exit 0)" and new_status == "UNKNOWN (exit unknown)":
-        return existing_summary
+    # Do not downgrade a verified OK summary with an ambiguous race rewrite.
+    if existing_status == "OK (exit 0)" and new_status:
+        if new_status.startswith("FAILED_UNVERIFIED") or new_status == "UNKNOWN (exit unknown)":
+            return existing_summary
     if (
         existing_summary
         and existing_files_touched
@@ -806,6 +937,177 @@ def _assert_dispatch_worktree_base_is_fresh(worktree_path: str, base_ref: str) -
     print(f"  worktree base verified against {base_ref} @ {ref_commit}")
 
 
+def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
+    """Run a lightweight auth probe and fail when it reports an unauthenticated state."""
+    if not auth_check:
+        return None
+
+    probe_cmd = auth_check.get("probe")
+    if not probe_cmd:
+        return None
+
+    probe_exe = probe_cmd[0] if isinstance(probe_cmd, (list, tuple)) and probe_cmd else None
+    if not probe_exe or shutil.which(probe_exe) is None:
+        return None
+
+    required_paths = [
+        os.path.expanduser(path)
+        for path in auth_check.get("required_paths", [])
+        if path
+    ]
+    missing_paths = [path for path in required_paths if not os.path.exists(path)]
+    if missing_paths:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' auth preflight failed: missing required auth state "
+                f"file(s) {', '.join(missing_paths)}. Re-authenticate before dispatch."
+            ),
+        }
+
+    try:
+        probe_result = subprocess.run(
+            probe_cmd,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except FileNotFoundError:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' auth preflight failed: probe command "
+                f"{' '.join(probe_cmd)!r} is unavailable."
+            ),
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' auth preflight failed: probe command "
+                f"{' '.join(probe_cmd)!r} timed out."
+            ),
+        }
+
+    auth_text = "\n".join(
+        part for part in [probe_result.stdout or "", probe_result.stderr or ""] if part
+    ).lower()
+    markers = [marker.lower() for marker in auth_check.get("unauthenticated_markers", []) if marker]
+    if markers and any(marker in auth_text for marker in markers):
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' is not authenticated: "
+                f"{(probe_result.stderr or probe_result.stdout or 'auth probe failed').strip()}"
+            ),
+        }
+    return None
+
+
+def _known_headless_permission_denial(agent_name: str) -> Optional[dict]:
+    """Return a known matching permission-denial log id when we have one."""
+    get_db = _pkg("_get_db")
+    if get_db:
+        try:
+            conn = get_db()
+        except Exception:
+            conn = None
+        if conn is not None:
+            try:
+                row = conn.execute(
+                    "SELECT job_id, log_path FROM daemon_jobs "
+                    "WHERE agent=? AND status='permission_denied' "
+                    "ORDER BY completed_at DESC LIMIT 1",
+                    (agent_name,),
+                ).fetchone()
+            except Exception:
+                row = None
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            if row:
+                job_id, log_path = row
+                if log_path and os.path.exists(log_path):
+                    try:
+                        with open(log_path) as fh:
+                            log_text = fh.read()
+                    except OSError:
+                        log_text = ""
+                    detector = _pkg("_log_has_permission_denied_signature")
+                    if detector and detector(log_text):
+                        return {
+                            "job_id": job_id,
+                            "log_path": log_path,
+                        }
+
+    load_jobs = _pkg("_load_jobs")
+    if not load_jobs:
+        return None
+    try:
+        jobs = load_jobs() or []
+    except Exception:
+        return None
+    for job in reversed(jobs):
+        if job.get("agent") != agent_name:
+            continue
+        log_path = job.get("log_file") or job.get("log_path")
+        if not log_path or not os.path.exists(log_path):
+            continue
+        try:
+            with open(log_path) as fh:
+                log_text = fh.read()
+        except OSError:
+            continue
+        detector = _pkg("_log_has_permission_denied_signature")
+        if detector and detector(log_text):
+            return {
+                "job_id": job.get("id") or job.get("job_id"),
+                "log_path": log_path,
+            }
+    return None
+
+
+def _preflight_headless_permission_check(agent_name: str, permissions: list, dispatch_flags: list) -> Optional[dict]:
+    """Block known headless permission auto-denials before dispatching."""
+    if agent_name != "agy":
+        return None
+
+    permissions = permissions or []
+    dispatch_flags = dispatch_flags or []
+    has_write_or_run = any(not (perm or "").startswith("read:*") for perm in permissions)
+    bypass_flag = "--dangerously-skip-permissions" in dispatch_flags
+    if has_write_or_run or bypass_flag:
+        return None
+
+    known = _known_headless_permission_denial(agent_name)
+    if known:
+        return {
+            "passed": False,
+            "sentinel": "HARNESS_PREFLIGHT_FAIL",
+            "reason": (
+                f"Agent '{agent_name}' would dispatch headless with read-only permissions, "
+                f"and prior job {known['job_id']} hit the same auto-denial pattern. "
+                "Grant a write/run permission or reroute this work."
+            ),
+        }
+
+    return {
+        "passed": False,
+        "sentinel": "HARNESS_PREFLIGHT_FAIL",
+        "reason": (
+            f"Agent '{agent_name}' would dispatch headless with read-only permissions, "
+            "which is a known auto-denial pattern. Grant a write/run permission or reroute this work."
+        ),
+    }
+
+
 def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) -> dict:
     """Create the isolated git worktree for a dispatched job.
 
@@ -863,27 +1165,245 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
     }
 
 
-def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _task_hint: str = "") -> dict:
-    import socket as _socket
+def _probe_results_trustworthy() -> bool:
+    """Hard gate for TC1-5 trust.
 
-    baseline = {}
-    if db_conn:
+    #578/#580 are still open, so literal probe pass/fail values are not
+    # authoritative yet. Flip this to True only when that fix stack lands.
+    """
+    return False
+
+
+def _parse_probe_timestamp(last_probe_at: Optional[str]) -> Optional[float]:
+    if not last_probe_at:
+        return None
+    try:
+        return time.mktime(time.strptime(last_probe_at, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_dispatch_requires(requires: Optional[list] = None, requires_gh_write: bool = False) -> list:
+    declared = []
+    for requirement in list(requires or []):
+        if requirement and requirement not in declared:
+            declared.append(requirement)
+    del requires_gh_write
+    return declared
+
+
+def _capability_block_remediation(agent: str, declared_requires: list) -> str:
+    if agent == "agy":
+        return "Run `synlynk doctor --fix agy` and review the diff, then rerun dispatch."
+    if declared_requires:
+        declared = ", ".join(f"`{cap}`" for cap in declared_requires)
+        return f"Remove {declared} from `--requires` if the job does not truly need it, or rerun after a fresh probe."
+    return f"Run `synlynk probe {agent}` and rerun dispatch."
+
+
+def _reprobe_harness_sync(agent: str, timeout_s: int = 120) -> dict:
+    """Re-run probe in-process via the CLI when the cached probe is stale."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "synlynk", "probe", agent],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            cwd=os.getcwd(),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "passed": False,
+            "timed_out": True,
+            "reason": f"Fresh probe for '{agent}' timed out after {timeout_s}s.",
+        }
+    except Exception as exc:
+        return {
+            "passed": False,
+            "timed_out": False,
+            "reason": f"Fresh probe for '{agent}' could not run: {exc}",
+        }
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip() or "probe command failed"
+        return {
+            "passed": False,
+            "timed_out": False,
+            "reason": f"Fresh probe for '{agent}' failed: {detail}",
+        }
+
+    return {"passed": True, "timed_out": False, "reason": None}
+
+
+def _dispatch_capability_preflight(
+    agent: str,
+    task: str,
+    *,
+    db_conn=None,
+    cwd: Optional[str] = None,
+    requires: Optional[list] = None,
+) -> dict:
+    """Preflight the capability gate before dispatch spawns a subprocess."""
+    from synlynk.probe import _scan_repo_requirements
+
+    del task
+    cwd = cwd or os.getcwd()
+    declared_requires = _normalize_dispatch_requires(requires=requires)
+    repo_requirements = sorted(_scan_repo_requirements(cwd))
+
+    probe_row = None
+    if db_conn is not None:
         try:
-            row = db_conn.execute(
-                "SELECT active_flags, active_contract FROM harness_records WHERE agent_name=?",
-                (agent_name,),
+            probe_row = db_conn.execute(
+                "SELECT compliance_status, last_probe_at FROM harness_records WHERE agent_name=?",
+                (agent,),
             ).fetchone()
         except Exception:
-            row = None
-        if row:
-            try:
-                baseline["dispatch_flags"] = json.loads(row[0]) if row[0] else {}
-                baseline["headless_contract"] = json.loads(row[1]) if row[1] else {}
-                baseline["network_deps"] = baseline["headless_contract"].get("network_deps", {})
-            except Exception:
-                baseline = {}
-    if not baseline:
-        baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+            probe_row = None
+
+    probe_status = (probe_row[0] if probe_row else None) or "unknown"
+    last_probe_at = probe_row[1] if probe_row else None
+    probe_age_seconds = None
+    probe_state = "no_coverage"
+    trusted = _probe_results_trustworthy()
+    if probe_row:
+        probe_ts = _parse_probe_timestamp(last_probe_at)
+        if probe_ts is not None:
+            probe_age_seconds = max(0.0, time.time() - probe_ts)
+        if trusted:
+            if probe_ts is None:
+                probe_state = "no_coverage"
+            elif probe_age_seconds is not None and probe_age_seconds > 3600:
+                probe_state = "stale"
+            elif probe_status not in {"ok", "passed"}:
+                probe_state = "failing"
+            else:
+                probe_state = "covered"
+        else:
+            probe_state = "no_coverage"
+
+    stale_reprobe = None
+    if probe_state == "stale":
+        stale_reprobe = _reprobe_harness_sync(agent)
+        if not stale_reprobe.get("passed", False):
+            return {
+                "passed": False,
+                "status": "blocked",
+                "decision": "block",
+                "branch": "stale",
+                "reason": stale_reprobe.get("reason") or (
+                    f"Cached probe for '{agent}' is stale and a fresh probe failed."
+                ),
+                "remediation": _capability_block_remediation(agent, declared_requires),
+                "probe_trustworthy": trusted,
+                "probe_status": probe_status,
+                "probe_age_seconds": probe_age_seconds,
+                "repo_requirements": repo_requirements,
+                "declared_requires": declared_requires,
+            }
+        probe_state = "covered"
+
+    if probe_state == "failing":
+        return {
+            "passed": False,
+            "status": "blocked",
+            "decision": "block",
+            "branch": "failing",
+            "reason": f"Latest probe for '{agent}' reports compliance_status={probe_status!r}.",
+            "remediation": _capability_block_remediation(agent, declared_requires),
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": declared_requires,
+        }
+
+    hard_required = list(declared_requires)
+    soft_requirements = [cap for cap in repo_requirements if cap not in hard_required]
+
+    if hard_required and probe_state in {"no_coverage", "stale", "failing"}:
+        return {
+            "passed": False,
+            "status": "blocked",
+            "decision": "block",
+            "branch": "no-coverage",
+            "reason": (
+                f"Dispatch for '{agent}' explicitly requires {', '.join(sorted(hard_required))}, "
+                "but the current probe state is treated as no-coverage."
+            ),
+            "remediation": _capability_block_remediation(agent, hard_required),
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": hard_required,
+        }
+
+    if probe_state == "no_coverage" and (soft_requirements or not hard_required):
+        reason_bits = []
+        if soft_requirements:
+            reason_bits.append(
+                "repo artifacts present for " + ", ".join(sorted(soft_requirements))
+            )
+        if not hard_required:
+            reason_bits.append("no explicit `--requires` declaration")
+        reason = "; ".join(reason_bits) or "no authoritative probe coverage"
+        return {
+            "passed": True,
+            "status": "degraded",
+            "decision": "degrade",
+            "branch": "no-coverage",
+            "reason": reason,
+            "remediation": None,
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": hard_required,
+        }
+
+    if soft_requirements:
+        return {
+            "passed": True,
+            "status": "degraded",
+            "decision": "degrade",
+            "branch": "repo-present",
+            "reason": "repo artifacts present: " + ", ".join(sorted(soft_requirements)),
+            "remediation": None,
+            "probe_trustworthy": trusted,
+            "probe_status": probe_status,
+            "probe_age_seconds": probe_age_seconds,
+            "repo_requirements": repo_requirements,
+            "declared_requires": hard_required,
+        }
+
+    return {
+        "passed": True,
+        "status": "ok",
+        "decision": "allow",
+        "branch": probe_state,
+        "reason": None,
+        "remediation": None,
+        "probe_trustworthy": trusted,
+        "probe_status": probe_status,
+        "probe_age_seconds": probe_age_seconds,
+        "repo_requirements": repo_requirements,
+        "declared_requires": hard_required,
+        "stale_probe": stale_reprobe,
+    }
+
+
+def _preflight_dispatch(
+    agent_name: str,
+    dispatch_flags: list,
+    db_conn=None,
+    _task_hint: str = "",
+    permissions: Optional[list] = None,
+) -> dict:
+    import socket as _socket
+
+    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
 
     if db_conn:
         try:
@@ -935,15 +1455,28 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
     else:
         valid_flags, required_flags = [], []
     if valid_flags or required_flags:
-        from synlynk.probe import _run_tc2
-
-        tc2 = _run_tc2(agent_name, flags_spec)
-        if not tc2.get("passed", True):
+        probe_row = None
+        if db_conn:
+            try:
+                probe_row = db_conn.execute(
+                    "SELECT compliance_status, active_flags FROM harness_records WHERE agent_name=?",
+                    (agent_name,),
+                ).fetchone()
+            except Exception:
+                probe_row = None
+        if not probe_row:
+            return {
+                "passed": False,
+                "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                "reason": f"no probe data for agent; run synlynk probe {agent_name}",
+            }
+        compliance_status, _active_flags_json = probe_row
+        if compliance_status != "ok":
             return {
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": (
-                    f"TC-2 flag check failed for {agent_name}: {tc2.get('failed_flags', [])}. "
+                    f"TC-2 flag check failed for {agent_name}: probe status is {compliance_status!r}. "
                     f"Run synlynk probe {agent_name} to update."
                 ),
             }
@@ -965,6 +1498,15 @@ def _preflight_dispatch(agent_name: str, dispatch_flags: list, db_conn=None, _ta
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
             }
+
+    auth_check = baseline.get("auth_check", {})
+    auth_failure = _preflight_auth_check(agent_name, auth_check)
+    if auth_failure:
+        return auth_failure
+
+    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
+    if headless_failure:
+        return headless_failure
 
     if db_conn and _task_hint:
         try:
@@ -1034,6 +1576,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
                    requires_gh_write: bool = False,
+                   requires: list = None,
                    grants: list = None,
                    revokes: list = None,
                    job_id: str = None,
@@ -1112,14 +1655,71 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "agy" and permissions:
         perm_lines = "\n".join(f"- {p}" for p in permissions)
         task = f"## Permissions\n{perm_lines}\n\n{task}"
+    declared_requires = _normalize_dispatch_requires(requires=requires, requires_gh_write=requires_gh_write)
+    if not skip_preflight:
+        # Core 4: missing instruction file is a hard preflight fail unless --force-agent
+        try:
+            from synlynk.fleet import check_core_instruction_files, preflight_blocks_dispatch
+            from synlynk._constants import CORE_FLEET as _CORE_FLEET
+
+            if agent in _CORE_FLEET:
+                _cwd = os.getcwd()
+                _missing = check_core_instruction_files(_cwd, agents=[agent])
+                if preflight_blocks_dispatch(
+                    agent,
+                    missing_instructions=_missing,
+                    force_agent=force_agent,
+                    root=_cwd,
+                ):
+                    raise RuntimeError(
+                        f"Dispatch blocked — missing instruction file for Core 4 agent "
+                        f"'{agent}' (run from repo root or pass --force-agent)"
+                    )
+                if _missing and force_agent:
+                    print(
+                        f"  ⚠ missing instruction for '{agent}' — proceeding because "
+                        f"--force-agent was set"
+                    )
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
+        capability_gate_fn = _pkg("_dispatch_capability_preflight", _dispatch_capability_preflight)
+        _get_db_fn = _pkg("_get_db")
+        _capability_db = _get_db_fn() if _get_db_fn else None
+        capability_gate = capability_gate_fn(
+            agent,
+            task,
+            db_conn=_capability_db,
+            cwd=os.getcwd(),
+            requires=declared_requires,
+        )
+        if not capability_gate.get("passed", False):
+            return capability_gate
+        if capability_gate.get("status") == "degraded":
+            print(f"  ⚠ capability gate degraded: {capability_gate.get('reason')}")
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
         _get_db_fn = _pkg("_get_db")
         _preflight_db = _get_db_fn() if _get_db_fn else None
         try:
-            preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db, _task_hint=task)
+            preflight = preflight_fn(
+                agent_name=agent,
+                dispatch_flags=flags,
+                db_conn=_preflight_db,
+                _task_hint=task,
+                permissions=permissions,
+            )
         except TypeError:
-            preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
+            try:
+                preflight = preflight_fn(
+                    agent_name=agent,
+                    dispatch_flags=flags,
+                    db_conn=_preflight_db,
+                    _task_hint=task,
+                )
+            except TypeError:
+                preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
         if isinstance(preflight, dict):
             if not preflight.get("passed", False):
                 sentinel_path = os.path.join(".synlynk", "sentinel.md")
@@ -1333,27 +1933,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    contract = baselines.get("headless_contract", {})
-    proc_env = os.environ.copy()
-    proc_env.update(overrides.get("env", {}))
-    if requires_gh_write:
-        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
-        if gh_token:
-            proc_env["GH_TOKEN"] = gh_token
-        else:
-            proc_env.pop("GH_TOKEN", None)
-            proc_env.pop("GITHUB_TOKEN", None)
-            print(
-                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
-                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
-                "silently fall back to a personal credential; GitHub write actions in this "
-                "job will fail until a role App is provisioned (see `synlynk identity init`).",
-                file=sys.stderr,
-            )
-    for var in contract.get("env_vars_required", []):
-        if "=" in var:
-            k, v = var.split("=", 1)
-            proc_env[k] = v
+    proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id)
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],

@@ -10,6 +10,7 @@ from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk.fleet import terminal_status_for_unknown_exit
 
 
 _BOLD = "[1m"
@@ -234,6 +235,46 @@ def _resolve_default_base_branch(worktree_path: Optional[str]) -> Optional[str]:
     return None
 
 
+def _resolve_worktree_pr_base_branch(job: dict, worktree_path: str) -> Optional[str]:
+    """Resolve the PR base branch for a finalized worktree job.
+
+    Prefer the dispatch-recorded base branch when it still exists in the
+    worktree, but normalize the resolved ref to a PR-friendly branch name
+    before handing it to `gh pr create`.
+    """
+    recorded_base = (job or {}).get("base_branch")
+    if recorded_base:
+        try:
+            verify_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    worktree_path,
+                    "rev-parse",
+                    "--symbolic-full-name",
+                    "--verify",
+                    f"{recorded_base}^{{commit}}",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            verify_result = None
+
+        if verify_result and verify_result.returncode == 0:
+            resolved_ref = (verify_result.stdout or "").strip()
+            if resolved_ref.startswith("refs/heads/"):
+                return resolved_ref[len("refs/heads/") :]
+            if resolved_ref.startswith("refs/remotes/"):
+                remote_relative = resolved_ref[len("refs/remotes/") :]
+                return remote_relative.split("/", 1)[-1] if "/" in remote_relative else remote_relative
+            if resolved_ref:
+                return resolved_ref.rsplit("/", 1)[-1]
+
+    return _resolve_default_base_branch(worktree_path) or "main"
+
+
 def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
     """Opens a PR for a finalized worktree if one does not already exist."""
     if not worktree_path or not worktree_branch:
@@ -291,7 +332,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         f"Task: {task_line}\n\n"
         f"This PR was created automatically by synlynk, not hand-written.\n"
     )
-    base_branch = _resolve_default_base_branch(worktree_path) or "main"
+    base_branch = _resolve_worktree_pr_base_branch(job, worktree_path)
     try:
         create_result = subprocess.run(
             [
@@ -360,6 +401,18 @@ def _resolve_finalize_worktree_branch(job: dict, worktree_path: str) -> Optional
 
 def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> None:
     """Best-effort git finalization for a completed job with genuine work."""
+    # Always purge nested product state.db under the job worktree (fleet nested_state).
+    worktree_path = (job or {}).get("worktree_path")
+    if worktree_path and os.path.isdir(worktree_path):
+        try:
+            from synlynk.fleet import purge_nested_product_state_under
+
+            n = purge_nested_product_state_under(worktree_path)
+            if n:
+                print(f"  🧹 purged {n} nested product state file(s) under {worktree_path}")
+        except Exception:
+            pass
+
     if not job or not git_state or not _job_has_real_work_landed(git_state):
         return
 
@@ -1118,7 +1171,7 @@ def _reconcile_jobs() -> None:
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
                 )
             if job.get("status") == "unknown":
-                summary_status = "UNKNOWN (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
                 _finalize_completed_worktree_job(job, git_state)
                 _apply_dispatch_gate(job)
@@ -1284,7 +1337,7 @@ def _reconcile_jobs() -> None:
                     f"job exited ambiguously, but a git-state recheck recovered {details} "
                     f"in the worktree (worktree: {job.get('worktree_path')})"
                 )
-                summary_status = "FAILED_UNVERIFIED (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             elif ambiguous_exit and git_state:
                 commit_count = git_state.get("commits_ahead", 0)
                 dirty = git_state.get("dirty", False)
@@ -1298,9 +1351,9 @@ def _reconcile_jobs() -> None:
                     f"job exited ambiguously but the worktree contains {details} "
                     f"— inspect before discarding (worktree: {job.get('worktree_path')})"
                 )
-                summary_status = "FAILED_UNVERIFIED (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             elif job.get("status") == "unknown":
-                summary_status = "UNKNOWN (exit unknown)"
+                summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
                 _finalize_completed_worktree_job(job, git_state)
                 _apply_dispatch_gate(job)
@@ -1428,7 +1481,7 @@ def _reconcile_daemon_jobs() -> None:
                         "(response empty, num_turns <= 1, or explicit no-output marker)"
                     )
                 elif status == "unknown":
-                    summary_status = "UNKNOWN (exit unknown)"
+                    summary_status = terminal_status_for_unknown_exit()
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
                     out_tokens, cost_usd, [], status_label=summary_status, note=summary_note
