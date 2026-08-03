@@ -127,3 +127,91 @@ def test_get_db_reraise_when_fallback_also_fails(tmp_path, monkeypatch):
 
     with pytest.raises(OSError, match="Read-only file system"):
         synlynk._get_db()
+
+
+def test_get_db_override_env_var_used_verbatim(tmp_path, monkeypatch):
+    """SYNLYNK_STATE_DB_PATH, when set, is used exactly as given."""
+    import synlynk
+
+    override = tmp_path / "custom" / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(override))
+    # A normally-fine DB_PATH must NOT be touched when override is set.
+    monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "unused" / "state.db"))
+
+    conn = synlynk._get_db()
+    try:
+        conn.execute("SELECT 1").fetchone()
+        assert override.exists()
+        assert not (tmp_path / "unused").exists()
+    finally:
+        conn.close()
+
+
+def test_get_db_override_wins_even_when_primary_would_succeed(tmp_path, monkeypatch):
+    """Override takes precedence over a perfectly writable primary path."""
+    import synlynk
+
+    primary = tmp_path / "primary" / "state.db"
+    override = tmp_path / "override" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(override))
+
+    conn = synlynk._get_db()
+    try:
+        conn.execute("SELECT 1").fetchone()
+        assert override.exists()
+        assert not primary.exists()
+    finally:
+        conn.close()
+
+
+def test_get_db_override_failure_propagates_without_fallback(tmp_path, monkeypatch):
+    """An unwritable override path raises directly; no fallback is attempted."""
+    import synlynk
+
+    override = tmp_path / "blocked" / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(override))
+    monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "primary" / "state.db"))
+
+    def always_fail(path, exist_ok=False):
+        raise OSError(errno.EROFS, "Read-only file system", path)
+
+    monkeypatch.setattr(os, "makedirs", always_fail)
+
+    with pytest.raises(OSError, match="Read-only file system"):
+        synlynk._get_db()
+
+    # No fallback DB should have been created anywhere.
+    assert not (tmp_path / "primary").exists()
+
+
+def test_get_db_override_bypasses_nested_worktree_guard(tmp_path, monkeypatch):
+    """Override path under a worktree-like tree succeeds (guard bypassed)."""
+    import synlynk
+
+    override = tmp_path / ".claude" / "worktrees" / "job-1" / ".synlynk" / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(override))
+    monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "primary" / "state.db"))
+
+    conn = synlynk._get_db()
+    try:
+        conn.execute("SELECT 1").fetchone()
+        assert override.exists()
+    finally:
+        conn.close()
+
+
+def test_get_db_unset_override_preserves_existing_behavior(tmp_path, monkeypatch):
+    """No SYNLYNK_STATE_DB_PATH means DB_PATH is used exactly as before."""
+    import synlynk
+
+    monkeypatch.delenv("SYNLYNK_STATE_DB_PATH", raising=False)
+    primary = tmp_path / "primary" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+
+    conn = synlynk._get_db()
+    try:
+        conn.execute("SELECT 1").fetchone()
+        assert primary.exists()
+    finally:
+        conn.close()
