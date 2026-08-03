@@ -27,7 +27,7 @@ class TestDispatchFlagsForLocalAgent(unittest.TestCase):
         self.assertEqual(flags, [
             "--no-auto-commits", "--yes-always",
             "--openai-api-base", "http://127.0.0.1:8080/v1",
-            "--model", "ornith-1.0-9b",
+            "--model", "openai/ornith-1.0-9b",
             "--edit-format", "whole",
         ])
 

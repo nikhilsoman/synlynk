@@ -75,7 +75,7 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
     edit_format = model_entry.get("edit_format", "whole")
     return [
         "--openai-api-base", f"{endpoint}/v1",
-        "--model", model_id,
+        "--model", f"openai/{model_id}",
         "--edit-format", edit_format,
     ]
 

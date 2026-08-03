@@ -85,13 +85,52 @@ class TestLocalDispatchModelFlags(unittest.TestCase):
             flags = local_agent._local_dispatch_model_flags(config_path=path)
         self.assertEqual(flags, [
             "--openai-api-base", "http://127.0.0.1:8080/v1",
-            "--model", "ornith-1.0-9b",
+            "--model", "openai/ornith-1.0-9b",
             "--edit-format", "whole",
         ])
 
     def test_returns_empty_list_when_config_missing(self):
         flags = local_agent._local_dispatch_model_flags(config_path="/nonexistent/local.json")
         self.assertEqual(flags, [])
+
+
+class TestLocalDispatchModelFlagsProviderPrefix(unittest.TestCase):
+    def test_model_flag_has_openai_provider_prefix(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        self.assertIn("--model", flags)
+        model_index = flags.index("--model")
+        self.assertEqual(flags[model_index + 1], "openai/Ornith-1.0-9B-4bit")
+
+    def test_doctor_roster_matching_unaffected_by_prefix(self):
+        healthy_response = {"reachable": True, "available_models": ["Ornith-1.0-9B-4bit"]}
+        with patch("synlynk.local_agent._health_check", return_value=healthy_response), \
+             patch("synlynk.local_agent.shutil.which", return_value="/usr/local/bin/aider"), \
+             patch("synlynk.local_agent._get_db"), \
+             patch("synlynk.local_agent_seed.seed_local_capability_envelope"):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "local.json")
+                with open(path, "w") as f:
+                    json.dump({
+                        "name": "local",
+                        "endpoint": "http://127.0.0.1:8000",
+                        "models": [{"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "whole"}],
+                        "hardware_tier": "16gb-default",
+                    }, f)
+                with patch("builtins.print") as mock_print:
+                    result = local_agent.cmd_local_doctor(path)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertEqual(result, 0)
+        self.assertIn("Ornith-1.0-9B-4bit", printed)
+        self.assertNotIn("Missing models", printed)
 
 
 class TestCmdLocalDoctorAiderCheck(unittest.TestCase):
