@@ -9,6 +9,7 @@ from scripts.local_agent_ab_test import (
     _build_temp_config,
     _load_config,
     _write_config,
+    append_result,
     run_ab_case,
 )
 
@@ -46,10 +47,6 @@ class TestBuildTempConfig(unittest.TestCase):
     def test_raises_on_unknown_model_id(self):
         with self.assertRaises(ValueError):
             _build_temp_config(self.base_config, "does-not-exist")
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestConfigReadWrite(unittest.TestCase):
@@ -140,9 +137,6 @@ class TestRunAbCase(unittest.TestCase):
         self.assertEqual(row["git_diff_stat"], "clean")
 
 
-from scripts.local_agent_ab_test import append_result
-
-
 class TestAppendResult(unittest.TestCase):
     def test_appends_jsonl_line_and_creates_parent_dir(self):
         with tempfile.TemporaryDirectory() as d:
@@ -154,3 +148,7 @@ class TestAppendResult(unittest.TestCase):
             self.assertEqual(len(lines), 2)
             self.assertEqual(lines[0]["model_id"], "qwen-coder")
             self.assertEqual(lines[1]["model_id"], "Ornith-1.0-9B-4bit")
+
+
+if __name__ == "__main__":
+    unittest.main()
