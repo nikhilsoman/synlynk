@@ -16,11 +16,16 @@ def old_name_needs_rename(x):
     return x * 2
 
 
-def compute_stats(values):
+def _accumulate_stats(values):
     total = 0
     count = 0
     for v in values:
         total += v
         count += 1
+    return total, count
+
+
+def compute_stats(values):
+    total, count = _accumulate_stats(values)
     average = total / count if count else 0
     return {"total": total, "count": count, "average": average}

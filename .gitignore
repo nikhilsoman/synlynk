@@ -18,3 +18,4 @@ worktrees/
 .claude/
 bin/statusline.py
 project-docs/handoff-note.md
+.aider*
