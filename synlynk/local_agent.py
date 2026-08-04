@@ -61,8 +61,22 @@ def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
     return {"reachable": True, "available_models": available}
 
 
+_STARTER_TIER_GUARDRAIL_FLAGS = [
+    "--no-auto-lint",
+    "--no-auto-test",
+    "--map-tokens", "0",
+]
+
+
 def _local_dispatch_model_flags(config_path: str = None) -> list:
-    """Builds aider model flags from .agents/local.json."""
+    """Builds aider model flags from .agents/local.json.
+
+    Always appends Starter-tier safety guardrails (no autonomous lint/test
+    execution, no repo-map context) - see
+    docs/superpowers/specs/2026-08-03-local-agent-parity-config-design.md.
+    Full-tier flags (--architect, auto-lint/auto-test: true) are a future,
+    separately-gated change and must not be added here.
+    """
     try:
         if config_path is None:
             config_path = _DEFAULT_CONFIG_PATH
@@ -77,7 +91,7 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
         "--openai-api-base", f"{endpoint}/v1",
         "--model", f"openai/{model_id}",
         "--edit-format", edit_format,
-    ]
+    ] + _STARTER_TIER_GUARDRAIL_FLAGS
 
 
 def cmd_local_doctor(config_path: str = None) -> int:

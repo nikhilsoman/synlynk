@@ -29,6 +29,7 @@ class TestDispatchFlagsForLocalAgent(unittest.TestCase):
             "--openai-api-base", "http://127.0.0.1:8080/v1",
             "--model", "openai/ornith-1.0-9b",
             "--edit-format", "whole",
+            "--no-auto-lint", "--no-auto-test", "--map-tokens", "0",
         ])
 
     @patch("synlynk.dispatch._pkg")

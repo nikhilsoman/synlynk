@@ -87,6 +87,7 @@ class TestLocalDispatchModelFlags(unittest.TestCase):
             "--openai-api-base", "http://127.0.0.1:8080/v1",
             "--model", "openai/ornith-1.0-9b",
             "--edit-format", "whole",
+            "--no-auto-lint", "--no-auto-test", "--map-tokens", "0",
         ])
 
     def test_returns_empty_list_when_config_missing(self):
@@ -131,6 +132,69 @@ class TestLocalDispatchModelFlagsProviderPrefix(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertIn("Ornith-1.0-9B-4bit", printed)
         self.assertNotIn("Missing models", printed)
+
+
+class TestLocalDispatchStarterTierGuardrails(unittest.TestCase):
+    def test_includes_no_auto_lint(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [
+                        {"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "diff"},
+                    ],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        self.assertIn("--no-auto-lint", flags)
+
+    def test_includes_no_auto_test(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [
+                        {"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "diff"},
+                    ],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        self.assertIn("--no-auto-test", flags)
+
+    def test_caps_map_tokens_to_zero(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [
+                        {"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "diff"},
+                    ],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        map_tokens_index = flags.index("--map-tokens")
+        self.assertEqual(flags[map_tokens_index + 1], "0")
+
+    def test_never_includes_architect_flag(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "local.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "name": "local",
+                    "endpoint": "http://127.0.0.1:8000",
+                    "models": [
+                        {"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "diff"},
+                    ],
+                    "hardware_tier": "16gb-default",
+                }, f)
+            flags = local_agent._local_dispatch_model_flags(path)
+        self.assertNotIn("--architect", flags)
 
 
 class TestCmdLocalDoctorAiderCheck(unittest.TestCase):
