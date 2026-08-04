@@ -9,6 +9,7 @@ give the A/B harness a safe, low-stakes, reproducible surface to test against.
 
 
 def add(a, b):
+    """Return the sum of a and b."""
     return a + b
 
 
