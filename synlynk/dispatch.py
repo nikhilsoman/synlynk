@@ -1621,9 +1621,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
 
-    if not story_id:
-        resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
-        if resolve_or_create_story_id:
+    resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
+    if resolve_or_create_story_id:
+        if story_id:
+            story_id = resolve_or_create_story_id(
+                task, issue=issue, timestamp=dispatch_time, story_id=story_id
+            )
+        else:
             story_id = resolve_or_create_story_id(task, issue=issue, timestamp=dispatch_time)
 
     if agent == "local":

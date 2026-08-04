@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -1043,17 +1044,26 @@ def _reconcile_jobs() -> None:
             in_tokens, out_tokens = token_counts
             basis = getattr(token_counts, "basis", "none")
             model_version = job.get("model_version") or job.get("model_at_dispatch")
-            _pkg("update_costs")(
-                f"{job.get('agent', '')} job {job.get('id', '')}",
-                in_tokens,
-                out_tokens,
-                duration_s or 0,
-                model_version=model_version,
-                story_id=job.get("story_id"),
-                agent=job.get("agent", ""),
-                basis=basis,
-                job_id=job.get("id"),
-            )
+            try:
+                _pkg("update_costs")(
+                    f"{job.get('agent', '')} job {job.get('id', '')}",
+                    in_tokens,
+                    out_tokens,
+                    duration_s or 0,
+                    model_version=model_version,
+                    story_id=job.get("story_id"),
+                    agent=job.get("agent", ""),
+                    basis=basis,
+                    job_id=job.get("id"),
+                )
+            except sqlite3.IntegrityError:
+                _write_sentinel_alert(
+                    "WARN",
+                    "ORPHANED_STORY_COST",
+                    f"Skipped cost entry for job {job.get('id', '')} with missing story "
+                    f"{job.get('story_id')!r}; reconciliation will continue.",
+                    sentinel_path,
+                )
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,

@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import time
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -177,7 +178,6 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
     synlynk._save_jobs(jobs)
 
     monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
-
     synlynk._reconcile_jobs()
     out = capsys.readouterr().out
 
@@ -185,6 +185,42 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
     assert "status:   OK (exit 0)" in out
     summary_path = tmp_path / ".synlynk" / "logs" / "job-run.summary"
     assert summary_path.exists()
+
+
+def test_reconcile_jobs_orphaned_story_cost_does_not_abort(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-orphan.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("Input tokens: 1\nOutput tokens: 1\n")
+    old = time.time() - 3600
+    os.utime(log_path, (old, old))
+    synlynk._save_jobs([{
+        "id": "job-orphan",
+        "agent": "claude",
+        "story_id": "story-missing",
+        "task": "stalled task",
+        "pid": 99999999,
+        "log_file": str(log_path),
+        "started_at": "2026-07-03T01:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+    }])
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(
+        synlynk,
+        "update_costs",
+        lambda *a, **kw: (_ for _ in ()).throw(sqlite3.IntegrityError("FOREIGN KEY constraint failed")),
+    )
+
+    synlynk._reconcile_jobs()
+
+    job = synlynk._load_jobs()[0]
+    assert job["status"] == "failed"
+    assert "job-orphan" in (tmp_path / ".synlynk" / "sentinel.md").read_text()
+    assert "story-missing" in (tmp_path / ".synlynk" / "sentinel.md").read_text()
 
 
 def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, monkeypatch, capsys):
