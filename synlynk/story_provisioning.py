@@ -103,13 +103,17 @@ def classify_story(issue_number, task_text: str, method: str = "heuristic") -> d
     raise ValueError(f"Unknown story_classification method: {method!r}")
 
 
-def resolve_or_create_story_id(task_text: str, issue=None, timestamp: float = None) -> str:
+def resolve_or_create_story_id(task_text: str, issue=None, timestamp: float = None,
+                               story_id: str = None) -> str:
     """Return an existing or newly-created story_id for a dispatch."""
-    issue_number = _detect_issue_number(task_text, issue=issue)
-    if issue_number is not None:
-        story_id = f"story-issue-{issue_number}"
-    else:
-        story_id = f"story-adhoc-{int(timestamp if timestamp is not None else time.time())}"
+    # Explicit IDs are caller-owned; provision them from the task without
+    # looking up an inferred GitHub issue (which is unnecessary and may block).
+    issue_number = None if story_id else _detect_issue_number(task_text, issue=issue)
+    if not story_id:
+        if issue_number is not None:
+            story_id = f"story-issue-{issue_number}"
+        else:
+            story_id = f"story-adhoc-{int(timestamp if timestamp is not None else time.time())}"
 
     get_db = _pkg("_get_db")
     if get_db is None:

@@ -156,7 +156,7 @@ def test_dispatch_agent_reuses_existing_story_id_for_repeat_issue_dispatch(proje
     assert job1["story_id"] == job2["story_id"] == "story-issue-395"
 
 
-def test_dispatch_agent_explicit_story_id_bypasses_auto_provisioning(project_dir, monkeypatch):
+def test_dispatch_agent_explicit_story_id_provisions_missing_story(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
 
@@ -165,11 +165,16 @@ def test_dispatch_agent_explicit_story_id_bypasses_auto_provisioning(project_dir
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
-    monkeypatch.setattr(sl, "resolve_or_create_story_id", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("resolver should not be called")))
-
     job = sl.dispatch_agent("claude", "task text with #999", story_id="story-manual-1", context_mode="none")
 
     assert job["story_id"] == "story-manual-1"
+    conn = sl._get_db()
+    try:
+        assert conn.execute(
+            "SELECT 1 FROM stories WHERE story_id=?", ("story-manual-1",)
+        ).fetchone() is not None
+    finally:
+        conn.close()
 
 
 def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch):
