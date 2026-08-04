@@ -26,7 +26,7 @@ SOP_SECTION_HEADERS = [
 _PR_REVIEW_SOP = """\
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
-2. The reviewer must run `synlynk pr check <pr#>`.
+2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
@@ -847,7 +847,7 @@ def _repair_pr_review_sop(cfg: dict) -> str:
     return (
         "## PR Review Discipline\n"
         "1. Assign a non-authoring agent to review the PR.\n"
-        "2. The reviewer must run `synlynk pr check <pr#>`.\n"
+        "2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.\n"
         "3. The reviewer alone must merge the PR.\n"
         f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
         "**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* "
@@ -971,11 +971,24 @@ def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = 
         fill_headers = list(missing_headers)
 
         if has_harness_fence and existing_body:
-            stale_candidates = ["## Capability-Based Task Allocation"]
+            stale_candidates = [
+                "## PR Review Discipline",
+                "## Capability-Based Task Allocation",
+            ]
             for header in stale_candidates:
                 canonical = _build_repair_sop_block(header, cfg).rstrip("\n")
                 current = _extract_sop_section(existing_body, header)
-                if current and current != canonical:
+                # Only replace a PR-review section when it contains the known
+                # incompatible command shape; preserve repo-specific wording.
+                pr_review_is_stale = (
+                    header == "## PR Review Discipline"
+                    and "synlynk pr check <pr#>" in current
+                )
+                if current and (
+                    pr_review_is_stale
+                    if header == "## PR Review Discipline"
+                    else current != canonical
+                ):
                     stale_headers.append(header)
                     if header in fill_headers:
                         fill_headers.remove(header)
