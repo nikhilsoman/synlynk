@@ -12,7 +12,7 @@ def add(a, b):
     return a + b
 
 
-def old_name_needs_rename(x):
+def double_value(x):
     return x * 2
 
 
