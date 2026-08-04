@@ -107,3 +107,31 @@ def run_ab_case(model_id: str, label: str, prompt: str, dispatch_runner=None) ->
     finally:
         with open(_CONFIG_PATH, "w") as f:
             f.write(original_text)
+
+
+def append_result(row: dict, results_path: str = _RESULTS_PATH) -> None:
+    parent = os.path.dirname(results_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(results_path, "a") as f:
+        f.write(json.dumps(row) + "\n")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run one A/B comparison dispatch for a local-agent model."
+    )
+    parser.add_argument("--model-id", required=True,
+                         help="Roster id from .agents/local.json, e.g. qwen-coder")
+    parser.add_argument("--label", required=True,
+                         help="quality-<name>, safety-<name>, or cost-<name>")
+    parser.add_argument("--prompt", required=True)
+    args = parser.parse_args(argv)
+    row = run_ab_case(args.model_id, args.label, args.prompt)
+    append_result(row)
+    print(json.dumps(row, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

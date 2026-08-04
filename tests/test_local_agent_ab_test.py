@@ -138,3 +138,19 @@ class TestRunAbCase(unittest.TestCase):
         self.assertEqual(row["label"], "quality-docstring")
         self.assertEqual(row["exit_code"], 0)
         self.assertEqual(row["git_diff_stat"], "clean")
+
+
+from scripts.local_agent_ab_test import append_result
+
+
+class TestAppendResult(unittest.TestCase):
+    def test_appends_jsonl_line_and_creates_parent_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            results_path = os.path.join(d, "nested", "results.jsonl")
+            append_result({"model_id": "qwen-coder", "exit_code": 0}, results_path)
+            append_result({"model_id": "Ornith-1.0-9B-4bit", "exit_code": 0}, results_path)
+            with open(results_path) as f:
+                lines = [json.loads(line) for line in f]
+            self.assertEqual(len(lines), 2)
+            self.assertEqual(lines[0]["model_id"], "qwen-coder")
+            self.assertEqual(lines[1]["model_id"], "Ornith-1.0-9B-4bit")
