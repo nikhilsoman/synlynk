@@ -61,6 +61,22 @@ def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_
     db.commit()
 
 
+def test_pr_review_discipline_instructions_say_synlynk_pr_check_without_pr_number():
+    """Documented PR check usage must match the zero-argument CLI parser."""
+    from synlynk.cli import build_parser
+    from synlynk.probe import _PR_REVIEW_SOP, _repair_pr_review_sop
+
+    parser = build_parser()
+    parser.parse_args(["pr", "check"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["pr", "check", "711"])
+
+    for sop in (_PR_REVIEW_SOP, _repair_pr_review_sop({"roles": {}})):
+        assert "synlynk pr check <pr#>" not in sop
+        assert "synlynk pr check`" in sop
+        assert "From within the PR's own checked-out worktree/branch" in sop
+
+
 def test_repair_sops_only_injects_synlynks_own_h_repo_specific_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_repair_config(
