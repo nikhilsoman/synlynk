@@ -71,3 +71,39 @@ def _build_result_row(model_id, label, prompt, wall_time_s, peak_rss_kb,
         "git_diff_stat": diff_stat,
         "stdout_tail": stdout[-500:],
     }
+
+
+def _default_dispatch_runner(prompt: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["python3", "-m", "synlynk", "dispatch", "local",
+         "--task", prompt, "--force-agent"],
+        capture_output=True, text=True, check=False,
+    )
+
+
+def run_ab_case(model_id: str, label: str, prompt: str, dispatch_runner=None) -> dict:
+    """Re-pins model_id, runs one dispatch, restores config, returns a result row.
+
+    Always restores .agents/local.json, even if the dispatch raises.
+    """
+    dispatch_runner = dispatch_runner or _default_dispatch_runner
+    with open(_CONFIG_PATH) as f:
+        original_text = f.read()
+    original_config = json.loads(original_text)
+    try:
+        temp_config = _build_temp_config(original_config, model_id)
+        _write_config(temp_config, _CONFIG_PATH)
+        rss_before = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        start = time.monotonic()
+        completed = dispatch_runner(prompt)
+        wall_time_s = time.monotonic() - start
+        rss_after = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        peak_rss_kb = max(rss_after - rss_before, 0)
+        diff_stat = _git_diff_stat()
+        return _build_result_row(
+            model_id, label, prompt, wall_time_s, peak_rss_kb,
+            completed.returncode, diff_stat, completed.stdout,
+        )
+    finally:
+        with open(_CONFIG_PATH, "w") as f:
+            f.write(original_text)

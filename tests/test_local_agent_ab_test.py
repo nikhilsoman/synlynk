@@ -1,12 +1,15 @@
+import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from scripts.local_agent_ab_test import (
     _build_result_row,
     _build_temp_config,
     _load_config,
     _write_config,
+    run_ab_case,
 )
 
 
@@ -78,3 +81,60 @@ class TestBuildResultRow(unittest.TestCase):
         self.assertEqual(row["exit_code"], 0)
         self.assertEqual(row["git_diff_stat"], " 1 file changed, 3 insertions(+)")
         self.assertEqual(len(row["stdout_tail"]), 500)
+
+
+class _FakeCompletedProcess:
+    def __init__(self, returncode=0, stdout="ok"):
+        self.returncode = returncode
+        self.stdout = stdout
+
+
+class TestRunAbCase(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.config_path = os.path.join(self.tmpdir.name, "local.json")
+        self.original_config = {
+            "name": "local",
+            "endpoint": "http://127.0.0.1:8000",
+            "models": [
+                {"id": "Ornith-1.0-9B-4bit", "pinned": True, "edit_format": "diff"},
+                {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
+            ],
+            "hardware_tier": "16gb-default",
+        }
+        with open(self.config_path, "w") as f:
+            json.dump(self.original_config, f)
+
+    def test_restores_original_config_after_success(self):
+        fake_runner = lambda prompt: _FakeCompletedProcess()
+        with patch("scripts.local_agent_ab_test._CONFIG_PATH", self.config_path):
+            with patch("scripts.local_agent_ab_test._git_diff_stat", return_value=""):
+                run_ab_case("qwen-coder", "quality-docstring", "add a docstring",
+                            dispatch_runner=fake_runner)
+        with open(self.config_path) as f:
+            restored = json.load(f)
+        self.assertEqual(restored, self.original_config)
+
+    def test_restores_original_config_after_dispatch_raises(self):
+        def failing_runner(prompt):
+            raise RuntimeError("simulated dispatch failure")
+
+        with patch("scripts.local_agent_ab_test._CONFIG_PATH", self.config_path):
+            with self.assertRaises(RuntimeError):
+                run_ab_case("qwen-coder", "quality-docstring", "add a docstring",
+                            dispatch_runner=failing_runner)
+        with open(self.config_path) as f:
+            restored = json.load(f)
+        self.assertEqual(restored, self.original_config)
+
+    def test_returns_result_row_with_requested_model(self):
+        fake_runner = lambda prompt: _FakeCompletedProcess(returncode=0, stdout="done")
+        with patch("scripts.local_agent_ab_test._CONFIG_PATH", self.config_path):
+            with patch("scripts.local_agent_ab_test._git_diff_stat", return_value="clean"):
+                row = run_ab_case("qwen-coder", "quality-docstring", "add a docstring",
+                                   dispatch_runner=fake_runner)
+        self.assertEqual(row["model_id"], "qwen-coder")
+        self.assertEqual(row["label"], "quality-docstring")
+        self.assertEqual(row["exit_code"], 0)
+        self.assertEqual(row["git_diff_stat"], "clean")
