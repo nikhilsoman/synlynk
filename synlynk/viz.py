@@ -4398,7 +4398,7 @@ def _write_cache(data: dict, port: int) -> None:
 
 
 class VizorHandler(http.server.SimpleHTTPRequestHandler):
-    """Serves viz-cache/ and handles POST /note, /dispatch, /architect-map/view-pref."""
+    """Serves viz-cache/ and handles Vizor POST routes."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=os.path.abspath(VIZ_CACHE_DIR), **kwargs)
@@ -4421,7 +4421,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/architect-map/view-pref"):
+        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -4433,6 +4433,10 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_note_request()
         elif self.path == "/dispatch":
             self._handle_dispatch_request()
+        elif self.path == "/approve":
+            self._handle_approve_request()
+        elif self.path == "/kill":
+            self._handle_kill_request()
         elif self.path == "/architect-map/view-pref":
             self._handle_view_pref_request()
         else:
@@ -4466,11 +4470,12 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self._send_json_ok({"ok": True})
 
     def _handle_dispatch(self, payload: dict) -> dict:
-        from synlynk.dispatch import dispatch_agent
+        from synlynk import uxcore
 
         agent = payload.get("agent", "codex")
         task = payload.get("task", "")
-        return dispatch_agent(agent, task, force_agent=True, context_mode="full")
+        result = uxcore.dispatch(agent=agent, task=task)
+        return {"ok": result.ok, "message": result.message, "job_id": result.job_id}
 
     def _handle_dispatch_request(self):
         try:
@@ -4483,6 +4488,50 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             result = self._handle_dispatch(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_approve(self, payload: dict) -> dict:
+        from synlynk import uxcore
+
+        result = uxcore.approve_pr(pr_number=payload["pr_number"])
+        return {"ok": result.ok, "message": result.message, "job_id": result.job_id}
+
+    def _handle_approve_request(self):
+        try:
+            payload = self._read_json_body()
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON")
+            return
+        if not payload.get("pr_number"):
+            self.send_error(400, "Missing pr_number")
+            return
+        try:
+            result = self._handle_approve(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_kill(self, payload: dict) -> dict:
+        from synlynk import uxcore
+
+        result = uxcore.kill_job(job_id=payload["job_id"])
+        return {"ok": result.ok, "message": result.message, "job_id": result.job_id}
+
+    def _handle_kill_request(self):
+        try:
+            payload = self._read_json_body()
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON")
+            return
+        if not payload.get("job_id"):
+            self.send_error(400, "Missing job_id")
+            return
+        try:
+            result = self._handle_kill(payload)
         except Exception as exc:
             self.send_error(500, str(exc))
             return
