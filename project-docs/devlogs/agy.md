@@ -29,3 +29,13 @@
   - Supports zoom-in and zoom-out operations on the SVG canvas.
 - Added comprehensive unit tests in `tests/test_viz.py` for both setup-prompt and configured states.
 - Verified successful cache generation with `python3 bin/synlynk.py viz --generate`.
+
+## 2026-08-05 — Stale PR #624 Audit & Closure (story-issue-624)
+
+### Audited & Closed
+- Verified PR #624 (`dispatch/codex/job-3e696d1a`) diff against `origin/main`.
+- Confirmed all substantive content (harness capability drift and regression classification stack, including Task 3 selftest scaffolding, capability watch, and doctor logic) was already merged into `origin/main` via PR #587 (commit `761b08a`).
+- Commented on PR #624 detailing how it was superseded by PR #587.
+- Closed PR #624 on GitHub and deleted remote branch `origin/dispatch/codex/job-3e696d1a`.
+- Ran test suite verification (`pytest tests/test_agent_quota_tracking.py -v`) — all 55 tests passed.
+
