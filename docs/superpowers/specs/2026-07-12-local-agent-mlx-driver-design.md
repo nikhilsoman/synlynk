@@ -332,3 +332,52 @@ dispatched, not synlynk's dispatch layer itself.
 Scope is a single-line change plus regression tests confirming the prefix is applied
 and that doctor's own model-matching logic (which compares against the unprefixed
 roster ID) is unaffected.
+
+## Addendum (2026-08-03): `whole` edit-format causes destructive hallucinated edits on non-coding prompts
+
+**Found during:** the re-run of the same test dispatch after Addendum 3 shipped
+(PR #678) — `synlynk dispatch local --task "Scan this repo and give me a summary"`.
+This time the request reached Ornith-1.0-9B-4bit successfully (confirming the
+litellm fix worked), but the model never produced a summary. Instead it entered a
+`THINKING` → `ANSWER` loop that kept proposing whole-file rewrites of unrelated
+test files — starting with `tests/test_agent_quota_tracking.py`, replaced with a
+near-empty stub (`@@ -1,1804 +1 @@` collapsing to one line) — repeating across many
+files for 44 minutes and 94,000+ log lines with no coherent response. The process
+was killed manually; because Aider was also run with `--no-auto-commits`, none of
+the hallucinated edits actually landed on disk (`git status` in the job worktree
+showed only Aider's own harmless `.aider*` line auto-added to `.gitignore`), so no
+data was lost — but the dispatch produced nothing useful and would not have
+converged on its own.
+
+Root cause: `edit_format` is **not** hardcoded — `_local_dispatch_model_flags()`
+(`synlynk/local_agent.py:75`) correctly reads it per-model from config
+(`model_entry.get("edit_format", "whole")`). The bug is in the data, not the code:
+`.agents/local.json`'s entry for the pinned model — `Ornith-1.0-9B-4bit` — declares
+`"edit_format": "whole"`, which tells Aider (and therefore the model) that any
+response must be expressed as a complete replacement file. A capable model can
+recognize a pure question and just answer in prose despite that constraint; a 9B
+local model apparently cannot reliably distinguish "answer with prose" from "must
+emit a whole-file block," so a Q&A-shaped prompt gets forced through the file-edit
+code path and degenerates into near-empty file rewrites. `diff` edit-format doesn't
+carry the same "you must reproduce the entire file" pressure — a no-op response is
+a valid (near-empty) diff hunk rather than a full-file replacement — and is Aider's
+own recommended default for models at this capability tier, making it the safer
+choice for the pinned model generally, not just for this failure mode.
+
+**Fix (implementation plan Task Group 9):**
+1. `.agents/local.json` changes the pinned `Ornith-1.0-9B-4bit` entry's
+   `"edit_format"` from `"whole"` to `"diff"`. No other roster entries change —
+   `qwen-coder` and `gemma-coder` aren't actually downloaded into oMLX yet (a
+   separate, already-flagged gap) and are out of scope here.
+2. `_local_dispatch_model_flags()` itself is untouched — the per-model config
+   read-path already does the right thing; this is purely a data correction.
+3. This does not make `local` dispatch a general-purpose Q&A agent — it remains
+   scoped to coding tasks with file-edit deliverables, same as the other four
+   agents. `diff` format reduces the blast radius of a confused response; it does
+   not guarantee a coherent one. True Q&A/read-only support for `local` (e.g. an
+   `ask`-mode dispatch path) is an explicit non-goal here and is not being designed
+   in this addendum — flagged as a known future gap, not solved.
+
+Scope is a single-line change plus regression tests confirming the new flag value
+and that doctor's roster-matching logic (unaffected — it doesn't touch Aider flags
+at all) still passes.

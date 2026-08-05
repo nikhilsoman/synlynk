@@ -2,9 +2,20 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from synlynk import local_agent
+
+
+class TestLocalAgentConfigEditFormat(unittest.TestCase):
+    def test_pinned_ornith_model_uses_diff_edit_format(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        with open(repo_root / ".agents" / "local.json") as f:
+            config = json.load(f)
+        pinned = next(m for m in config["models"] if m.get("pinned"))
+        self.assertEqual(pinned["id"], "Ornith-1.0-9B-4bit")
+        self.assertEqual(pinned["edit_format"], "diff")
 
 
 class TestLoadLocalConfig(unittest.TestCase):
