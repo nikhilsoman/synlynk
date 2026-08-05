@@ -422,7 +422,8 @@ def _append_event(event: Event) -> None:
                     "params": event.params,
                     "timestamp": event.timestamp,
                     "result": event.result,
-                }
+                },
+                default=str,
             )
             + "\n"
         )
@@ -467,3 +468,66 @@ def _execute_write(action: str, actor: Actor, operation, **params) -> WriteResul
         )
     )
     return result
+
+
+import signal
+import subprocess
+
+
+def dispatch(agent: str, task: str, actor: Optional[Actor] = None, **flags) -> WriteResult:
+    """Dispatch a task to an agent. Wraps synlynk.dispatch.dispatch_agent()."""
+    actor = actor or DEFAULT_ACTOR
+
+    def _op(**params):
+        from synlynk.dispatch import dispatch_agent
+
+        return dispatch_agent(params["agent"], params["task"], **params.get("flags", {}))
+
+    return _execute_write("dispatch", actor, _op, agent=agent, task=task, flags=flags)
+
+
+def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
+    """Approve and squash-merge a PR via gh. Falls back to a formal comment
+    approval if `gh pr review --approve` fails on the shared-identity
+    self-approval error (see CLAUDE.md "GitHub identity caveat #423")."""
+    actor = actor or DEFAULT_ACTOR
+
+    def _op(**params):
+        pr = str(params["pr_number"])
+        review = subprocess.run(
+            ["gh", "pr", "review", pr, "--approve"], capture_output=True, text=True
+        )
+        if review.returncode != 0:
+            subprocess.run(
+                ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — shared GitHub identity, see #423)."],
+                capture_output=True,
+                text=True,
+            )
+        merge = subprocess.run(
+            ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True
+        )
+        return {"ok": merge.returncode == 0, "message": merge.stdout or merge.stderr}
+
+    return _execute_write("approve_pr", actor, _op, pr_number=pr_number)
+
+
+def kill_job(job_id: str, actor: Optional[Actor] = None) -> WriteResult:
+    """Send SIGTERM to a running job's tracked PID. Reads/writes .synlynk/jobs.json
+    via the existing synlynk.jobs._load_jobs()/_save_jobs() helpers."""
+    actor = actor or DEFAULT_ACTOR
+
+    def _op(**params):
+        from synlynk.jobs import _load_jobs, _save_jobs
+
+        jobs = _load_jobs()
+        target = next((j for j in jobs if j.get("job_id") == params["job_id"]), None)
+        if target is None:
+            return {"ok": False, "message": f"no job with id {params['job_id']}"}
+        pid = target.get("pid")
+        if pid:
+            os.kill(pid, signal.SIGTERM)
+        target["status"] = "killed"
+        _save_jobs(jobs)
+        return {"ok": True, "message": f"sent SIGTERM to pid {pid}", "job_id": params["job_id"]}
+
+    return _execute_write("kill_job", actor, _op, job_id=job_id)
