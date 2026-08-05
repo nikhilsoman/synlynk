@@ -35,6 +35,24 @@ def make_test_db(path: str):
     conn.commit()
     return conn
 
+def test_generate_viz_data_costs_and_dreams_match_uxcore(tmp_path, monkeypatch):
+    """Regression guard for the Task 4 refactor: generate_viz_data()'s costs/
+    dreams keys must stay identical before and after uxcore extraction."""
+    monkeypatch.chdir(tmp_path)
+    db_path = tmp_path / ".synlynk" / "state.db"
+    db_path.parent.mkdir(parents=True)
+    make_test_db(str(db_path))
+    with patch("synlynk._get_db", side_effect=lambda: sqlite3.connect(str(db_path))), \
+         patch("synlynk.viz._get_db", side_effect=lambda: sqlite3.connect(str(db_path))), \
+         patch("synlynk.uxcore._get_db", side_effect=lambda: sqlite3.connect(str(db_path))):
+        from synlynk.viz import generate_viz_data
+        data = generate_viz_data()
+    assert data["costs"]["total_usd"] == 1.20
+    assert data["costs"]["by_agent"]["agy"]["actual"] == 1.20
+    assert len(data["dreams"]) == 1
+    assert data["dreams"][0]["id"] == "v0.11.0"
+    assert data["dreams"][0]["stages"][0]["key"] == "Plan"
+
 def test_load_workspace_repos_missing_returns_empty(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     from synlynk.viz import _load_workspace_repos

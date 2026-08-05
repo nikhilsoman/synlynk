@@ -366,6 +366,8 @@ def generate_viz_data() -> dict:
         except Exception:
             return 0
 
+    from synlynk import uxcore
+
     config = _load_config()
     workspace_repos = [
         {**repo, "github_url": _repo_github_url(repo["path"])}
@@ -375,6 +377,16 @@ def generate_viz_data() -> dict:
 
     try:
         conn = _get_db()
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+        db_path = None
+        try:
+            row = conn.execute("PRAGMA database_list").fetchone()
+            db_path = row[2] if row else None
+        except Exception:
+            pass
     except Exception:
         return _minimal_data()
 
@@ -386,20 +398,6 @@ def generate_viz_data() -> dict:
         except Exception:
             active_story_count = 0
 
-    try:
-        tables = {
-            row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
-    except Exception:
-        try:
-            conn.close()
-        except Exception:
-            pass
-        return _minimal_data()
-
     required_tables = {"roadmap_arcs", "roadmap_phases", "stories", "cost_entries"}
     if not required_tables.issubset(tables):
         try:
@@ -407,162 +405,85 @@ def generate_viz_data() -> dict:
         except Exception:
             pass
         return _minimal_data()
-
     data = _read_support_files()
-    by_agent = {name: {"actual": 0.0, "estimated": 0.0} for name in ("claude", "agy", "codex", "grok")}
-    by_stage = {name: {"actual": 0.0, "estimated": 0.0} for name in ("goal", "open", "visualize", "execute", "release", "notify", "sustain")}
-    agents = {}
-    agent_runs = {}
 
     try:
-        arc_rows = conn.execute(
-            "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id"
-        ).fetchall()
-        phase_rows = conn.execute(
-            "SELECT id, arc_version, phase_title, status, priority, story_id, notes "
-            "FROM roadmap_phases ORDER BY arc_version, id"
-        ).fetchall()
-        story_rows = conn.execute(
-            "SELECT story_id, title, status, phase, estimated_tokens FROM stories ORDER BY id"
-        ).fetchall()
-        cost_rows = conn.execute(
-            "SELECT session_date, agent, total_cost_usd, notes, cost_source FROM cost_entries ORDER BY id"
-        ).fetchall()
+        conn.close()
     except Exception:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        pass
+
+    original_uxcore_get_db = uxcore._get_db
+    if db_path:
+        import sqlite3
+        uxcore._get_db = lambda: sqlite3.connect(db_path)
+    else:
+        uxcore._get_db = _get_db
+    try:
+        costs = uxcore.get_costs()
+        dreams_typed = uxcore.get_gantt_data()
+        fleet = uxcore.get_fleet_state()
+    except uxcore.UxCoreError:
         return _minimal_data()
+    finally:
+        uxcore._get_db = original_uxcore_get_db
 
-    stories_by_id = {}
-    stories_by_phase = {}
-    for story_id, title, status, phase, estimated_tokens in story_rows:
-        story = {
-            "id": story_id,
-            "name": title or "",
-            "agent": phase or "",
-            "status": status or "open",
-            "cost_est": _story_cost_est(estimated_tokens),
-            "cost_actual": 0.0,
-            "cost_prov_estimated": 0.0,
-            "note": data["notes"].get(story_id) if isinstance(data["notes"], dict) else None,
+    data["costs"] = {
+        "total_usd": costs.total_usd,
+        "total_usd_estimated": costs.total_usd_estimated,
+        "by_agent": costs.by_agent,
+        "by_stage": costs.by_stage,
+    }
+    data["agents"] = {
+        agent: {
+            "tasks_done": bucket.tasks_done,
+            "tasks_active": bucket.tasks_active,
+            "total_usd": bucket.total_usd,
+            "success_rate": bucket.success_rate,
+            "alert_count": bucket.alert_count,
         }
-        stories_by_id[story_id] = story
-        stories_by_phase.setdefault((phase or "").strip().lower(), []).append(story)
-
-    for row in cost_rows:
-        agent = row[1] or ""
-        amount = float(row[2] or 0.0)
-        notes = row[3] or ""
-        cost_source = row[4] or ""
-        bucket_key = "actual" if cost_source == "actual" else "estimated"
-        if agent:
-            by_agent.setdefault(agent, {"actual": 0.0, "estimated": 0.0})
-            by_agent[agent][bucket_key] += amount
-            agents.setdefault(agent, _empty_agent_bucket())
-        for story_id, story in stories_by_id.items():
-            if story_id and story_id in notes:
-                story["cost_actual"] += amount
-                if cost_source != "actual":
-                    story["cost_prov_estimated"] += amount
-
-    for agent in list(by_agent):
-        agents.setdefault(agent, _empty_agent_bucket())
-        bucket = by_agent.get(agent) or {"actual": 0.0, "estimated": 0.0}
-        agents[agent]["total_usd"] = float(bucket.get("actual", 0.0)) + float(bucket.get("estimated", 0.0))
-
-    for row in data["telemetry"]["recent"]:
-        agent = row.get("agent") or ""
-        if not agent:
-            continue
-        agent_runs.setdefault(agent, {"ok": 0, "total": 0})
-        agent_runs[agent]["total"] += 1
-        if int(row.get("exit_code") or 0) == 0:
-            agent_runs[agent]["ok"] += 1
-        agents.setdefault(agent, _empty_agent_bucket())
-
-    for alert in data["telemetry"]["sentinel_alerts"]:
-        alert_line = ""
-        if isinstance(alert, dict):
-            alert_line = f"{alert.get('pattern', '')} {alert.get('ts', '')}"
-        for agent in list(agents):
-            if agent and agent.lower() in alert_line.lower():
-                agents[agent]["alert_count"] += 1
-
-    for story in stories_by_id.values():
-        agent = story["agent"] or _get_latest_capability_agent(conn, story["id"])
-        if agent and not _looks_like_stage_label(agent):
-            agents.setdefault(agent, _empty_agent_bucket())
-            if story["status"] == "done":
-                agents[agent]["tasks_done"] += 1
-            elif story["status"] in ("active", "open"):
-                agents[agent]["tasks_active"] += 1
-
-    for agent, run_stats in agent_runs.items():
-        agents.setdefault(agent, _empty_agent_bucket())
-        total = run_stats["total"]
-        agents[agent]["success_rate"] = (run_stats["ok"] / total) if total else 0.0
-
-    dreams = []
-    for arc in arc_rows:
-        dream_id, dream_name, dream_status, _target_date, _notes = arc
-        stage_rows = [row for row in phase_rows if row[1] == dream_id]
-        stage_count = len(stage_rows)
-        dream_stages = []
-        dream_tasks_cost_actual = 0.0
-        dream_tasks_cost_est = 0.0
-        for index, phase_row in enumerate(stage_rows):
-            _phase_id, _arc_version, phase_title, phase_status, _priority, story_id, notes = phase_row
-            agent_list = []
-            for match in re.findall(r"\bagent:([a-z,]+)\b", notes or ""):
-                agent_list.extend([agent for agent in match.split(",") if agent])
-            phase_key = (phase_title or "").strip()
-            matched_tasks = []
-            if story_id and story_id in stories_by_id:
-                matched_tasks.append(stories_by_id[story_id])
-            matched_tasks.extend(stories_by_phase.get(phase_key.lower(), []))
-            deduped_tasks = []
-            seen_task_ids = set()
-            for task in matched_tasks:
-                if task["id"] in seen_task_ids:
-                    continue
-                seen_task_ids.add(task["id"])
-                deduped_tasks.append(task)
-            stage_cost_actual = sum(float(task["cost_actual"] or 0.0) for task in deduped_tasks)
-            stage_cost_prov_estimated = sum(float(task["cost_prov_estimated"] or 0.0) for task in deduped_tasks)
-            stage_cost_est = sum(float(task["cost_est"] or 0.0) for task in deduped_tasks) or None
-            dream_tasks_cost_actual += stage_cost_actual
-            if stage_cost_est is not None:
-                dream_tasks_cost_est += stage_cost_est
-            for task in deduped_tasks:
-                if task["agent"] and not _looks_like_stage_label(task["agent"]):
-                    agent_list.append(task["agent"])
-            dream_stages.append({
-                "key": phase_key,
-                "status": phase_status or "planned",
-                "agents": sorted(dict.fromkeys(agent_list)),
-                "start_frac": (index / stage_count) if stage_count else 0.0,
-                "width_frac": (1.0 / stage_count) if stage_count else 1.0,
-                "cost_actual": stage_cost_actual or None,
-                "cost_est": stage_cost_est,
-                "tasks": deduped_tasks,
-            })
-            if phase_key.lower() in by_stage:
-                by_stage[phase_key.lower()]["estimated"] += stage_cost_prov_estimated
-                by_stage[phase_key.lower()]["actual"] += (stage_cost_actual - stage_cost_prov_estimated)
-        dream_cost_total, dream_cost_prov_estimated = _dream_cost_breakdown(conn, dream_id)
-        dreams.append({
-            "id": dream_id,
-            "name": dream_name or "",
-            "status": dream_status or "planned",
-            "cost_total": float(dream_cost_total),
-            "cost_total_estimated": float(dream_cost_prov_estimated),
-            "cost_est": dream_tasks_cost_est or None,
-            "stages": dream_stages,
-        })
+        for agent, bucket in fleet.items()
+    }
+    data["dreams"] = [
+        {
+            "id": dream.id,
+            "name": dream.name,
+            "status": dream.status,
+            "cost_total": dream.cost_total,
+            "cost_total_estimated": dream.cost_total_estimated,
+            "cost_est": dream.cost_est,
+            "stages": [
+                {
+                    "key": stage.key,
+                    "status": stage.status,
+                    "agents": stage.agents,
+                    "start_frac": stage.start_frac,
+                    "width_frac": stage.width_frac,
+                    "cost_actual": stage.cost_actual,
+                    "cost_est": stage.cost_est,
+                    "tasks": [
+                        {
+                            "id": task.id,
+                            "name": task.name,
+                            "agent": task.agent,
+                            "status": task.status,
+                            "cost_est": task.cost_est,
+                            "cost_actual": task.cost_actual,
+                            "cost_prov_estimated": task.cost_prov_estimated,
+                            "note": data["notes"].get(task.id)
+                            if isinstance(data["notes"], dict)
+                            else None,
+                        }
+                        for task in stage.tasks
+                    ],
+                }
+                for stage in dream.stages
+            ],
+        }
+        for dream in dreams_typed
+    ]
 
     try:
+        conn = _get_db()
         goal_rows = conn.execute(
             "SELECT goal_id, outcome, criterion, deadline, status FROM goals WHERE status='active' "
             "ORDER BY created_at DESC"
@@ -571,31 +492,22 @@ def generate_viz_data() -> dict:
             {"id": r[0], "outcome": r[1], "criterion": r[2], "deadline": r[3], "status": r[4]}
             for r in goal_rows
         ]
+        conn.close()
     except Exception:
         goals = []
     data["goals"] = goals
-    data["dreams"] = dreams
-    data["costs"] = {
-        "total_usd": float(sum(float(row[2] or 0.0) for row in cost_rows)),
-        "total_usd_estimated": float(
-            sum(float(row[2] or 0.0) for row in cost_rows if (row[4] or "") != "actual")
-        ),
-        "by_agent": by_agent,
-        "by_stage": by_stage,
-    }
-    data["agents"] = agents
 
-    # Fetch ecosystem data via subprocess
     ecosystem = {}
     try:
         import subprocess
         import sys
+
         python_bin = sys.executable or "python3"
         res = subprocess.run(
             [python_bin, "-m", "synlynk.cli", "status", "--json"],
             capture_output=True,
             text=True,
-            timeout=5.0
+            timeout=5.0,
         )
         if res.returncode == 0:
             ecosystem = json.loads(res.stdout)
