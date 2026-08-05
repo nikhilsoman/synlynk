@@ -361,3 +361,109 @@ def get_fleet_state() -> dict:
             alert_count=0,
         )
     return fleet
+
+
+EVENTS_PATH = ".synlynk/events.jsonl"
+
+_WRITE_CAPABILITIES_BY_ROLE = {
+    Role.OWNER: {"dispatch", "approve_pr", "kill_job"},
+    Role.MEMBER: {"dispatch"},
+    Role.VIEWER: set(),
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class Capability:
+    name: str
+    enabled: bool
+
+
+class FeatureFlags:
+    """Tiered feature flags, orthogonal to RBAC. Reads a static `features` block
+    from .synlynk/config.json: {"features": {"<flag>": ["individual", "team", ...]}}.
+    A missing config, missing key, or missing flag is treated as disabled
+    (fail-closed) rather than an error.
+    """
+
+    @staticmethod
+    def is_enabled(flag: str, tier: str) -> bool:
+        try:
+            with open(".synlynk/config.json") as f:
+                config = json.load(f)
+        except Exception:
+            return False
+        tiers_for_flag = config.get("features", {}).get(flag, [])
+        return tier in tiers_for_flag
+
+
+def list_capabilities(actor: Optional[Actor] = None) -> list:
+    """Compute the capability manifest for an actor. Every consumer (TUI, Vizor,
+    BYOUX) calls this once and renders/hides menu items from the result, rather
+    than hardcoding per-surface permission checks."""
+    actor = actor or DEFAULT_ACTOR
+    allowed = _WRITE_CAPABILITIES_BY_ROLE.get(actor.role, set())
+    all_writes = {"dispatch", "approve_pr", "kill_job"}
+    return [Capability(name=name, enabled=name in allowed) for name in sorted(all_writes)]
+
+
+def _has_capability(actor: Actor, action: str) -> bool:
+    caps = {c.name: c.enabled for c in list_capabilities(actor)}
+    return caps.get(action, False)
+
+
+def _append_event(event: Event) -> None:
+    os.makedirs(os.path.dirname(EVENTS_PATH), exist_ok=True)
+    with open(EVENTS_PATH, "a") as f:
+        f.write(
+            json.dumps(
+                {
+                    "actor_id": event.actor_id,
+                    "action": event.action,
+                    "params": event.params,
+                    "timestamp": event.timestamp,
+                    "result": event.result,
+                }
+            )
+            + "\n"
+        )
+
+
+def _execute_write(action: str, actor: Actor, operation, **params) -> WriteResult:
+    """The single chokepoint every uxcore write funnels through: checks
+    list_capabilities(actor), runs `operation(**params)` if permitted, appends
+    a structured event to .synlynk/events.jsonl, and returns a WriteResult.
+    This is where policy checks and notification hooks attach in later phases —
+    one interception point, not one per surface per write type."""
+    if not _has_capability(actor, action):
+        result = WriteResult(ok=False, message="not permitted")
+        _append_event(
+            Event(
+                actor_id=actor.id,
+                action=action,
+                params=params,
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                result={"ok": False, "message": "not permitted"},
+            )
+        )
+        return result
+
+    try:
+        op_result = operation(**params)
+    except Exception as exc:
+        raise UxCoreError(f"{action} failed: {exc}") from exc
+
+    result = WriteResult(
+        ok=bool(op_result.get("ok", True)),
+        message=op_result.get("message", ""),
+        job_id=op_result.get("job_id"),
+    )
+    _append_event(
+        Event(
+            actor_id=actor.id,
+            action=action,
+            params=params,
+            timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            result={"ok": result.ok, "message": result.message, "job_id": result.job_id},
+        )
+    )
+    return result
