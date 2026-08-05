@@ -35,6 +35,7 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
         "telemetry_anomaly": _collect_telemetry_anomaly,
         "capability_drop": _collect_capability_drop,
         "github_issues": _collect_github_issues,
+        "platform_ops": _collect_platform_ops,
     }
     ci_skip = {"sentinel_alerts", "telemetry_anomaly"}
 
@@ -185,6 +186,34 @@ def _collect_test_suite(signal_cfg: dict) -> list:
         "detail": output[:3000],
         "signal_hash": signal_hash,
     }]
+
+
+def _collect_platform_ops(signal_cfg: dict) -> list:
+    """Cross-repo platform ops rollup → findings for Support Engineer."""
+    try:
+        from synlynk.platform_ops import collect_platform_report
+    except Exception as e:
+        return [{
+            "type": "platform_ops",
+            "severity": "medium",
+            "summary": f"platform_ops collector import failed: {e}",
+            "detail": str(e),
+            "signal_hash": "ops-import-fail",
+        }]
+    hours = int(signal_cfg.get("hours", 24))
+    report = collect_platform_report(hours=hours)
+    # Prefer structured findings; if ops RED with no findings, synthesize one
+    findings = list(report.findings or [])
+    if report.scoreboard.get("ops") == "RED" and not findings:
+        findings.append({
+            "type": "platform_ops",
+            "severity": "high",
+            "summary": report.scoreboard.get("summary", "platform ops RED"),
+            "detail": json.dumps(report.scoreboard.get("ops_red_reasons", []))[:1500],
+            "signal_hash": f"ops-scoreboard-red-{hours}h",
+        })
+    return findings
+
 
 def _collect_sentinel_alerts(signal_cfg: dict) -> list:
     """Read sentinel.md, return a finding per ⚠ alert line."""
