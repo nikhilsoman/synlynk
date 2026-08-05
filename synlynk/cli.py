@@ -354,6 +354,17 @@ def build_parser() -> argparse.ArgumentParser:
         func=lambda args: __import__("synlynk.tui", fromlist=["main"]).main()
     )
 
+    notify_parser = subparsers.add_parser("notify", help="Run a BYOUX notifier")
+    notify_sub = notify_parser.add_subparsers(dest="notify_command")
+    slack_parser = notify_sub.add_parser("slack", help="Post uxcore events to a Slack Incoming Webhook")
+    slack_parser._synlynk_skip_taxonomy = True
+    slack_parser.add_argument("--webhook-url", required=True, help="Slack Incoming Webhook URL")
+    slack_parser.set_defaults(
+        func=lambda args: __import__(
+            "synlynk.notifiers.slack", fromlist=["main"]
+        ).main(args.webhook_url)
+    )
+
     exit_parser = subparsers.add_parser(
         "exit", help="Remove synlynk from this repository (reversible via repair)")
     exit_parser.add_argument(
@@ -1184,6 +1195,11 @@ def main() -> None:
             cmd_worktree_clean(apply=args.apply, json_output=args.json_output)
         else:
             help_parsers.get("worktree", parser).print_help()
+    elif args.command == "notify":
+        if getattr(args, "notify_command", None) == "slack":
+            args.func(args)
+        else:
+            notify_parser.print_help()
     elif args.command == "roles":
         cmd_roles(fix=getattr(args, "fix", False))
     elif args.command == "release":
