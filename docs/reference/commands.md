@@ -45,6 +45,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `schedule` (primary) — execute
 - `release` (primary) — release
 - `pr check` (primary) — release
+- `ops report` (primary) — sustain
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain
 - `worktree audit` (secondary) — sustain
