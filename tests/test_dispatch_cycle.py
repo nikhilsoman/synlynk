@@ -52,7 +52,7 @@ def test_dispatch_agent_attaches_fence_estimate(monkeypatch, tmp_path):
             "CREATE TABLE stories (story_id TEXT PRIMARY KEY, discipline TEXT, phase TEXT, estimated_tokens INTEGER)"
         )
         conn.execute(
-            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT)"
+            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT, dispatch_context TEXT)"
         )
         conn.commit()
         return conn
@@ -99,7 +99,7 @@ def test_dispatch_agent_fence_uses_prompt_estimate_with_context(monkeypatch, tmp
             "CREATE TABLE stories (story_id TEXT PRIMARY KEY, discipline TEXT, phase TEXT, estimated_tokens INTEGER)"
         )
         conn.execute(
-            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT)"
+            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT, dispatch_context TEXT)"
         )
         conn.commit()
         return conn
@@ -144,7 +144,7 @@ def test_dispatch_agent_fence_uses_fallback_without_context(monkeypatch, tmp_pat
             "CREATE TABLE stories (story_id TEXT PRIMARY KEY, discipline TEXT, phase TEXT, estimated_tokens INTEGER)"
         )
         conn.execute(
-            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT)"
+            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, log_path TEXT, dispatch_context TEXT)"
         )
         conn.commit()
         return conn
