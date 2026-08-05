@@ -349,6 +349,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output machine-readable JSON"
     )
 
+    tui_parser = subparsers.add_parser("tui", help="Launch the curses terminal UI")
+    tui_parser.set_defaults(
+        func=lambda args: __import__("synlynk.tui", fromlist=["main"]).main()
+    )
+
     exit_parser = subparsers.add_parser(
         "exit", help="Remove synlynk from this repository (reversible via repair)")
     exit_parser.add_argument(
