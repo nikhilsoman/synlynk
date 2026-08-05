@@ -214,6 +214,7 @@ def _collect_platform_ops(signal_cfg: dict) -> list:
         })
     return findings
 
+
 def _collect_sentinel_alerts(signal_cfg: dict) -> list:
     """Read sentinel.md, return a finding per ⚠ alert line."""
     import hashlib as _hashlib

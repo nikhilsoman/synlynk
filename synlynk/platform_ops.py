@@ -431,18 +431,9 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         "pass": len(live_issues) == 0 and sentinel_crit < 5,
     }
 
-    # L5 worktrees
+    # L5 worktrees — directory walk under ~/dev (no unused git porcelain call)
     try:
-        r = subprocess.run(
-            ["git", "worktree", "list", "--porcelain"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            cwd=str(Path.home() / "dev" / "synlynk") if (Path.home() / "dev" / "synlynk").is_dir() else None,
-        )
-        # global-ish: count worktrees under ~/dev/synlynk only for porcelain; also count dirs
         wt_dirs = 0
-        stale_hint = 0
         for root in roots:
             for base in (".worktrees", "worktrees"):
                 d = root / base

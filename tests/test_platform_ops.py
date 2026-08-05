@@ -1,6 +1,13 @@
 """Platform ops cross-repo report smoke tests."""
 
-from synlynk.platform_ops import collect_platform_report, format_platform_report
+from unittest.mock import patch
+
+from synlynk.platform_ops import (
+    PlatformReport,
+    cmd_ops_report,
+    collect_platform_report,
+    format_platform_report,
+)
 
 
 def test_collect_platform_report_shape():
@@ -30,3 +37,36 @@ def test_ops_cli_parser():
     assert args.command == "ops"
     assert args.ops_action == "report"
     assert args.hours == 48
+
+
+def test_cmd_ops_report_exit_1_when_ops_red():
+    """Contract: ops=RED must exit 1 even if hygiene is GREEN."""
+    red = PlatformReport(
+        hours=24,
+        generated_at="2026-08-05T00:00:00+00:00",
+        scoreboard={
+            "hygiene": "GREEN",
+            "ops": "RED",
+            "ops_red_reasons": ["open LIVE issues=1"],
+            "summary": "hygiene GREEN / ops RED: open LIVE issues=1",
+        },
+    )
+    with patch("synlynk.platform_ops.collect_platform_report", return_value=red):
+        with patch("synlynk.platform_ops.format_platform_report", return_value="stub"):
+            assert cmd_ops_report(hours=24, json_output=False) == 1
+
+
+def test_cmd_ops_report_exit_0_when_ops_green():
+    green = PlatformReport(
+        hours=24,
+        generated_at="2026-08-05T00:00:00+00:00",
+        scoreboard={
+            "hygiene": "GREEN",
+            "ops": "GREEN",
+            "ops_red_reasons": [],
+            "summary": "hygiene GREEN / ops GREEN — quiet",
+        },
+    )
+    with patch("synlynk.platform_ops.collect_platform_report", return_value=green):
+        with patch("synlynk.platform_ops.format_platform_report", return_value="stub"):
+            assert cmd_ops_report(hours=24, json_output=False) == 0
