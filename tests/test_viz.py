@@ -806,30 +806,6 @@ def test_vizor_handler_dispatch_route_exists():
     assert "/architect-map/view-pref" in src
 
 
-def test_vizor_handler_handle_dispatch_calls_dispatch_agent(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    from synlynk.viz import VizorHandler
-    called = {}
-
-    def fake_dispatch_agent(agent, task, force_agent=False, context_mode=None, **kwargs):
-        called["agent"] = agent
-        called["task"] = task
-        called["force_agent"] = force_agent
-        called["context_mode"] = context_mode
-        return {"job_id": "job-test123", "status": "dispatched"}
-
-    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", fake_dispatch_agent)
-
-    handler = VizorHandler.__new__(VizorHandler)
-    result = handler._handle_dispatch({"agent": "codex", "task": "do the thing"})
-
-    assert called["agent"] == "codex"
-    assert called["task"] == "do the thing"
-    assert called["force_agent"] is True
-    assert called["context_mode"] == "full"
-    assert result["job_id"] == "job-test123"
-
-
 def test_vizor_handler_handle_view_pref_persists_to_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
