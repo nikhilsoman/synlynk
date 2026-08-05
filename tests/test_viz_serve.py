@@ -4,6 +4,7 @@ import os
 import threading
 import time as real_time
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import synlynk.viz
 from synlynk.viz import VizorHandler
@@ -167,3 +168,37 @@ def test_cmd_viz_serve_keeps_server_alive_and_shuts_down_cleanly(tmp_path, monke
     assert captured["server"].shutdown_called
     assert captured["server"].server_close_called
     assert not errors
+
+
+def test_handle_dispatch_routes_through_uxcore():
+    from synlynk.viz import VizorHandler
+
+    handler = VizorHandler.__new__(VizorHandler)
+    with patch("synlynk.uxcore.dispatch") as mock_dispatch:
+        mock_dispatch.return_value = MagicMock(ok=True, message="", job_id="job-1")
+        result = handler._handle_dispatch({"agent": "codex", "task": "fix bug"})
+    mock_dispatch.assert_called_once_with(agent="codex", task="fix bug")
+    assert result["ok"] is True
+    assert result["job_id"] == "job-1"
+
+
+def test_handle_approve_routes_through_uxcore():
+    from synlynk.viz import VizorHandler
+
+    handler = VizorHandler.__new__(VizorHandler)
+    with patch("synlynk.uxcore.approve_pr") as mock_approve:
+        mock_approve.return_value = MagicMock(ok=True, message="merged", job_id=None)
+        result = handler._handle_approve({"pr_number": 715})
+    mock_approve.assert_called_once_with(pr_number=715)
+    assert result["ok"] is True
+
+
+def test_handle_kill_routes_through_uxcore():
+    from synlynk.viz import VizorHandler
+
+    handler = VizorHandler.__new__(VizorHandler)
+    with patch("synlynk.uxcore.kill_job") as mock_kill:
+        mock_kill.return_value = MagicMock(ok=True, message="killed", job_id="job-1")
+        result = handler._handle_kill({"job_id": "job-1"})
+    mock_kill.assert_called_once_with(job_id="job-1")
+    assert result["ok"] is True
