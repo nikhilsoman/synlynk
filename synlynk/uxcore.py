@@ -531,3 +531,30 @@ def kill_job(job_id: str, actor: Optional[Actor] = None) -> WriteResult:
         return {"ok": True, "message": f"sent SIGTERM to pid {pid}", "job_id": params["job_id"]}
 
     return _execute_write("kill_job", actor, _op, job_id=job_id)
+
+
+def subscribe(event_types: Optional[list] = None) -> Iterator[Event]:
+    """Read all events currently in .synlynk/events.jsonl, optionally filtered
+    to `event_types`. This is a one-shot read of existing events, not a live
+    tail — callers that want live updates poll subscribe() on an interval
+    (see synlynk/notifiers/slack.py for the reference consumer)."""
+    if not os.path.exists(EVENTS_PATH):
+        return
+    with open(EVENTS_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event_types is not None and raw.get("action") not in event_types:
+                continue
+            yield Event(
+                actor_id=raw.get("actor_id", ""),
+                action=raw.get("action", ""),
+                params=raw.get("params", {}),
+                timestamp=raw.get("timestamp", ""),
+                result=raw.get("result", {}),
+            )

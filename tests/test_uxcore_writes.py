@@ -108,3 +108,37 @@ def test_kill_job_unknown_id_returns_not_ok(tmp_path, monkeypatch):
         json.dump([], f)
     result = uxcore.kill_job(job_id="job-does-not-exist")
     assert result.ok is False
+
+
+def test_subscribe_yields_existing_events_filtered_by_type(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/events.jsonl", "w") as f:
+        f.write(json.dumps({
+            "actor_id": "local", "action": "dispatch", "params": {}, "timestamp": "t1",
+            "result": {"ok": True},
+        }) + "\n")
+        f.write(json.dumps({
+            "actor_id": "local", "action": "approve_pr", "params": {}, "timestamp": "t2",
+            "result": {"ok": True},
+        }) + "\n")
+    events = list(uxcore.subscribe(event_types=["approve_pr"]))
+    assert len(events) == 1
+    assert events[0].action == "approve_pr"
+
+
+def test_subscribe_no_filter_returns_all(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/events.jsonl", "w") as f:
+        f.write(json.dumps({
+            "actor_id": "local", "action": "dispatch", "params": {}, "timestamp": "t1",
+            "result": {"ok": True},
+        }) + "\n")
+    events = list(uxcore.subscribe())
+    assert len(events) == 1
+
+
+def test_subscribe_missing_file_yields_nothing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert list(uxcore.subscribe()) == []
