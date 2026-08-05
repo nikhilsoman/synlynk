@@ -633,7 +633,8 @@ def _resolve_cost_tier(agent: str, basis: str) -> tuple:
 def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
                  epic_id=None, phase_id=None, agent=None, basis="none",
-                 job_id=None, discipline=None, phase=None) -> None:
+                 job_id=None, discipline=None, phase=None,
+                 dispatch_context=None) -> None:
     """Resolves a provenance tier and writes exactly one cost_entries row via
     the _insert_cost_row chokepoint.
 
@@ -703,6 +704,7 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             api_equivalent_usd=payment_value.api_equivalent_usd,
             actual_usd=actual_usd,
             payment_mode=payment_value.mode,
+            dispatch_context=dispatch_context,
         )
         _pkg("_generate_costs_md")()
         _pkg("_dr_sync")("costs.md")

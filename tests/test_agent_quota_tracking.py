@@ -1818,3 +1818,51 @@ def test_live_selftest_scenario_coverage_gap_init(tmp_path):
 
     assert result.status == "pass"
     assert "without clobbering existing files" in result.detail
+
+
+def test_daemon_jobs_cost_entries_has_dispatch_context_column(project_dir, monkeypatch):
+    """Test issue #740: daemon_jobs and cost_entries have dispatch_context column
+    and dispatch/cost-log paths populate it (defaults to 'unknown').
+    """
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    conn = synlynk._get_db()
+
+    daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+
+    assert "dispatch_context" in daemon_cols, "daemon_jobs missing dispatch_context column"
+    assert "dispatch_context" in cost_cols, "cost_entries missing dispatch_context column"
+
+    # Verify cost entry insert populates dispatch_context (defaults to 'unknown')
+    synlynk._insert_cost_row(
+        session_date="2026-08-06 00:00",
+        agent="claude",
+        model="claude-3-5-sonnet",
+        input_tokens=100,
+        output_tokens=50,
+        cache_read_tokens=0,
+        cost_source="actual",
+        total_cost_usd=0.01,
+        job_id="job-test-ctx-740",
+    )
+    cost_row = conn.execute(
+        "SELECT dispatch_context FROM cost_entries WHERE job_id='job-test-ctx-740'"
+    ).fetchone()
+    assert cost_row is not None
+    assert cost_row[0] == "unknown"
+
+    # Verify daemon_jobs insert via scheduler/dispatch populates dispatch_context
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at, dispatch_context) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("djob-test-740", "codex", "test task", "story-740", "queued", "2026-08-06T00:00:00", "unknown"),
+    )
+    daemon_row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id='djob-test-740'"
+    ).fetchone()
+    assert daemon_row is not None
+    assert daemon_row[0] == "unknown"
+
+    conn.close()

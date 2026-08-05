@@ -296,6 +296,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN previous_agents TEXT")
         except sqlite3.OperationalError:
             pass
+    if "dispatch_context" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN dispatch_context TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("DROP VIEW IF EXISTS capability_scores")
     conn.executescript(_DB_SCORES_VIEW)
     conn.executescript("""
@@ -494,7 +499,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             cost_source       TEXT NOT NULL,
             estimate_basis    TEXT,
             job_id            TEXT,
-            recorded_at       TEXT DEFAULT (datetime('now'))
+            recorded_at       TEXT DEFAULT (datetime('now')),
+            dispatch_context  TEXT
         );
         CREATE TABLE IF NOT EXISTS remediation_actions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -581,7 +587,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 cost_source       TEXT NOT NULL,
                 estimate_basis    TEXT,
                 job_id            TEXT,
-                recorded_at       TEXT DEFAULT (datetime('now'))
+                recorded_at       TEXT DEFAULT (datetime('now')),
+                dispatch_context  TEXT
             )
         """)
         old_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries_pre_provenance)")}
@@ -614,6 +621,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     if "job_id" not in cost_cols:
         try:
             conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "dispatch_context" not in cost_cols:
+        try:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN dispatch_context TEXT")
         except sqlite3.OperationalError:
             pass
     conn.execute(
@@ -865,6 +877,7 @@ def _insert_cost_row(
     api_equivalent_usd: float = None,
     actual_usd: float = None,
     payment_mode: str = None,
+    dispatch_context: str = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -873,6 +886,10 @@ def _insert_cost_row(
         raise ValueError(
             f"Invalid cost_source: {cost_source!r}, must be one of {_VALID_COST_SOURCES}"
         )
+
+    # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
+    if dispatch_context is None:
+        dispatch_context = "unknown"
 
     conn = _get_db()
     try:
@@ -899,7 +916,8 @@ def _insert_cost_row(
                         notes=?,
                         story_id=?,
                         epic_id=?,
-                        phase_id=?
+                        phase_id=?,
+                        dispatch_context=COALESCE(?, dispatch_context)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -918,6 +936,7 @@ def _insert_cost_row(
                         story_id,
                         epic_id,
                         phase_id,
+                        dispatch_context,
                         job_id,
                     ),
                 )
@@ -926,8 +945,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent,
@@ -946,6 +965,7 @@ def _insert_cost_row(
                 epic_id,
                 phase_id,
                 job_id,
+                dispatch_context,
             ),
         )
         conn.commit()

@@ -562,7 +562,8 @@ def _scenario_jobs(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             exit_code INTEGER,
             log_path TEXT,
             handoff_count INTEGER NOT NULL DEFAULT 0,
-            previous_agents TEXT
+            previous_agents TEXT,
+            dispatch_context TEXT
         )
         """
     )
