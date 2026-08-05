@@ -1,0 +1,407 @@
+diff --git a/synlynk/__init__.py b/synlynk/__init__.py
+index 0cc067b..4849991 100644
+--- a/synlynk/__init__.py
++++ b/synlynk/__init__.py
+@@ -54,10 +54,9 @@ from synlynk.probe import (
+     _run_tc2,
+     _run_tc3,
+     _run_tc4,
+-    _run_tc5,
++    _run_tc5 as _probe_run_tc5,
+     SOP_BLOCKS,
+     SOP_SECTION_HEADERS,
+-    _split_sop_body_sections as _split_sop_sections,
+     cmd_probe,
+     _fence_exists,
+     _probe_model_version,
+@@ -1785,22 +1784,6 @@ def _read_harness_fence_body(file_path: str) -> str:
+     return match.group(1)
+ 
+ 
+-def _has_harness_fence(file_path: str) -> bool:
+-    """Return True when the file already contains a synlynk harness fence."""
+-    try:
+-        with open(file_path, encoding="utf-8") as f:
+-            content = f.read()
+-    except OSError:
+-        return False
+-    return bool(
+-        re.search(
+-            r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n.*?\n<!-- /synlynk:harness -->",
+-            content,
+-            re.DOTALL,
+-        )
+-    )
+-
+-
+ def _repair_config_agents(cfg: dict) -> list:
+     """Return the directive-backed agents that should be considered for SOP repair."""
+     cfg_roles = cfg.get("roles") or {}
+@@ -1958,6 +1941,38 @@ def _build_repair_sop_block(header: str, cfg: dict) -> str:
+     return SOP_BLOCKS[idx]
+ 
+ 
++def _run_tc5(directive_files: dict) -> dict:
++    """TC-5 wrapper that resolves current repair canonical blocks from config."""
++    cfg = load_config()
++    return _probe_run_tc5(
++        directive_files,
++        repair_block_builder=lambda header, agent, _cfg=cfg: (
++            _repair_repo_hygiene_sop(_cfg, agent) if header == "## Repo Hygiene" else _build_repair_sop_block(header, _cfg)
++        ),
++    )
++
++
++def _split_sop_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
++    prefix_lines = []
++    sections = []
++    current_header = None
++    current_lines = []
++    for line in body.splitlines(keepends=True):
++        stripped = line.rstrip("\r\n")
++        if stripped in SOP_SECTION_HEADERS:
++            if current_header is not None:
++                sections.append((current_header, "".join(current_lines)))
++            current_header = stripped
++            current_lines = [line]
++        elif current_header is not None:
++            current_lines.append(line)
++        else:
++            prefix_lines.append(line)
++    if current_header is not None:
++        sections.append((current_header, "".join(current_lines)))
++    return "".join(prefix_lines), sections
++
++
+ def _repair_sop_block_for_agent(header: str, cfg: dict, agent: str) -> str:
+     if header == "## Repo Hygiene":
+         return _repair_repo_hygiene_sop(cfg, agent)
+@@ -1966,8 +1981,6 @@ def _repair_sop_block_for_agent(header: str, cfg: dict, agent: str) -> str:
+ 
+ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
+     """Repair missing SOP sections without rewriting unrelated sync artifacts."""
+-    from synlynk.probe import SOP_SECTION_HEADERS as _SOP_HEADERS, _run_tc5 as _run_tc5_local
+-
+     directive_files = {
+         "claude": "CLAUDE.md",
+         "agy": "GEMINI.md",
+@@ -1981,57 +1994,52 @@ def _repair_sops_only(agent_name: str = None, dry_run: bool = False) -> None:
+         fpath = directive_files.get(agent)
+         if not fpath or not os.path.exists(fpath):
+             continue
+-        tc5 = _run_tc5_local({agent: fpath})
++        tc5 = _run_tc5({agent: fpath})
+         missing_headers = tc5.get("missing", {}).get(agent, [])
+         stale_headers = tc5.get("stale", {}).get(agent, [])
+-        if not missing_headers:
+-            if not stale_headers:
+-                continue
++        if not missing_headers and not stale_headers:
++            continue
+         if dry_run:
+             for missing_header in missing_headers:
+-                print(f"    → repair SOP '{missing_header}' in {fpath}")
++                print(f"    → will fill missing SOP '{missing_header}' in {fpath}")
+             for stale_header in stale_headers:
+-                print(f"    → refresh stale SOP '{stale_header}' in {fpath}")
++                print(
++                    f"    → will refresh stale SOP '{stale_header}' in {fpath} "
++                    "(current text differs from canonical)"
++                )
+             continue
+-        if not _has_harness_fence(fpath):
+-            blocks = []
+-            for missing_header in missing_headers:
+-                if missing_header == "## Repo Hygiene":
+-                    blocks.append(_repair_repo_hygiene_sop(cfg, agent))
+-                else:
+-                    blocks.append(_build_repair_sop_block(missing_header, cfg))
+-            missing_body = "\n".join(blocks)
+-            body = missing_body
+-        else:
+-            existing_body = _read_harness_fence_body(fpath)
+-            prefix, sections = _split_sop_sections(existing_body)
+-            target_headers = set(missing_headers) | set(stale_headers)
+-            rebuilt_sections = []
+-            seen_headers = set()
+-            for header, section_text in sections:
+-                if header in target_headers:
+-                    canonical = _repair_sop_block_for_agent(header, cfg, agent)
+-                    trailing_ws = section_text[len(section_text.rstrip("\n")):]
+-                    rebuilt_sections.append(canonical.rstrip("\n") + trailing_ws)
+-                    seen_headers.add(header)
+-                else:
+-                    rebuilt_sections.append(section_text)
+-            for missing_header in missing_headers:
+-                if missing_header in seen_headers:
+-                    continue
+-                rebuilt_sections.append(_repair_sop_block_for_agent(missing_header, cfg, agent))
+-                seen_headers.add(missing_header)
+-            for stale_header in stale_headers:
+-                if stale_header in seen_headers:
+-                    continue
+-                rebuilt_sections.append(_repair_sop_block_for_agent(stale_header, cfg, agent))
+-                seen_headers.add(stale_header)
+-            body = prefix + "".join(rebuilt_sections)
++        existing_body = _read_harness_fence_body(fpath)
++        prefix, sections = _split_sop_sections(existing_body)
++        target_headers = set(missing_headers) | set(stale_headers)
++        rebuilt_sections = []
++        seen_headers = set()
++        for header, section_text in sections:
++            if header in target_headers:
++                canonical = _repair_sop_block_for_agent(header, cfg, agent)
++                trailing_ws = section_text[len(section_text.rstrip("\n")):]
++                rebuilt_sections.append(canonical.rstrip("\n") + trailing_ws)
++                seen_headers.add(header)
++            else:
++                rebuilt_sections.append(section_text)
++        for missing_header in missing_headers:
++            if missing_header in seen_headers:
++                continue
++            rebuilt_sections.append(_repair_sop_block_for_agent(missing_header, cfg, agent))
++            seen_headers.add(missing_header)
++        for stale_header in stale_headers:
++            if stale_header in seen_headers:
++                continue
++            rebuilt_sections.append(_repair_sop_block_for_agent(stale_header, cfg, agent))
++            seen_headers.add(stale_header)
++        body = prefix + "".join(rebuilt_sections)
+         _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
+         for missing_header in missing_headers:
+-            print(f"    ✓ repair SOP '{missing_header}' in {fpath}")
++            print(f"    ✓ will fill missing SOP '{missing_header}' in {fpath}")
+         for stale_header in stale_headers:
+-            print(f"    ✓ refresh stale SOP '{stale_header}' in {fpath}")
++            print(
++                f"    ✓ will refresh stale SOP '{stale_header}' in {fpath} "
++                "(current text differs from canonical)"
++            )
+ 
+ 
+ 
+diff --git a/synlynk/doctor.py b/synlynk/doctor.py
+index be591f5..9d655ba 100644
+--- a/synlynk/doctor.py
++++ b/synlynk/doctor.py
+@@ -435,6 +435,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
+             else:
+                 for ag, missing in tc5["missing"].items():
+                     print(f"    TC-5 sops:    ⚠ {ag}: missing {len(missing)} section(s): {', '.join(missing)}")
++                for ag, stale in tc5.get("stale", {}).items():
++                    print(f"    TC-5 sops:    ⚠ {ag}: stale {len(stale)} section(s): {', '.join(stale)}")
+ 
+             if not tc1["passed"]:
+                 choice = _pkg("_doctor_fix_menu")(agent, "tc1", tc1)
+@@ -469,7 +471,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
+                     )
+                 elif choice == "escalate":
+                     _pkg("_doctor_maybe_escalate")(agent, {"tc4": tc4})
+-            if tc5["missing"].get(agent):
++            if tc5["missing"].get(agent) or tc5.get("stale", {}).get(agent):
+                 choice = _pkg("_doctor_fix_menu")(agent, "tc5", tc5)
+                 if choice == "1":
+                     _pkg("_repair_sops_only")(agent_name=agent)
+@@ -512,7 +514,8 @@ _DOCTOR_FIX_MENUS = {
+         f"Run: synlynk configure agent {agent} (adds missing verbs: {tc.get('failed_verbs', [])})",
+     ],
+     "tc5": lambda agent, tc: [
+-        f"Run: synlynk sync --repair-sops (re-inject {len(tc.get('missing', {}).get(agent, []))} missing sections)",
++        f"Run: synlynk sync --repair-sops (re-inject {len(tc.get('missing', {}).get(agent, []))} missing sections"
++        f" and refresh {len(tc.get('stale', {}).get(agent, []))} stale sections)",
+     ],
+ }
+ 
+diff --git a/synlynk/probe.py b/synlynk/probe.py
+index 44a87b8..ee28de1 100644
+--- a/synlynk/probe.py
++++ b/synlynk/probe.py
+@@ -21,12 +21,6 @@ SOP_SECTION_HEADERS = [
+     "## Repo Hygiene",
+ ]
+ 
+-# Only the live config-driven routing section participates in stale detection.
+-# The other SOP sections are repaired only when missing.
+-STALE_REPAIR_HEADERS = {
+-    "## Capability-Based Task Allocation",
+-}
+-
+ _PR_REVIEW_SOP = """\
+ ## PR Review Discipline
+ 1. Assign a non-authoring agent to review the PR.
+@@ -662,13 +656,8 @@ def _split_sop_body_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
+     return prefix, sections
+ 
+ 
+-def _run_tc5(directive_files: dict) -> dict:
+-    """TC-5: SOP section presence validation.
+-
+-    Stale detection is intentionally narrow: only the live capability-allocation
+-    block is compared against the canonical generator, and only when a harness
+-    fence already exists.
+-    """
++def _run_tc5(directive_files: dict, repair_block_builder=None) -> dict:
++    """TC-5: SOP section presence and drift validation."""
+     missing = {}
+     stale = {}
+     for agent, path in (directive_files or {}).items():
+@@ -676,21 +665,19 @@ def _run_tc5(directive_files: dict) -> dict:
+             content = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+         except OSError:
+             content = ""
+-        has_harness_fence = bool(_FENCE_OPEN_PATTERN.search(content))
+         body = _extract_harness_body(content)
+-        _, sections = _split_sop_body_sections(body)
+-        section_map = {header: section for header, section in sections}
+-
+         absent = []
+         stale_headers = []
++        _, sections = _split_sop_body_sections(body)
++        section_map = {header: section for header, section in sections}
+         for idx, header in enumerate(SOP_SECTION_HEADERS):
+             current = section_map.get(header)
+             if current is None:
+                 absent.append(header)
+                 continue
+-            if not has_harness_fence or header not in STALE_REPAIR_HEADERS:
+-                continue
+-            canonical = SOP_BLOCKS[idx]
++            canonical = repair_block_builder(header, agent) if callable(repair_block_builder) else None
++            if canonical is None:
++                canonical = SOP_BLOCKS[idx]
+             if current.rstrip("\n") != canonical.rstrip("\n"):
+                 stale_headers.append(header)
+         if absent:
+diff --git a/tests/test_agent_quota_tracking.py b/tests/test_agent_quota_tracking.py
+index f5b0f3a..1e4001d 100644
+--- a/tests/test_agent_quota_tracking.py
++++ b/tests/test_agent_quota_tracking.py
+@@ -155,6 +155,36 @@ def test_repair_capability_allocation_sop_uses_committed_capability_roles(tmp_pa
+     assert "**GitHub write routing (#426):**" in sop
+ 
+ 
++def test_sync_repairsops_only_fills_missing_sop_h_and_refreshes_stale_sections(project_dir):
++    import synlynk as sl
++
++    stale_header = "## Capability-Based Task Allocation"
++    canonical = sl._build_repair_sop_block(stale_header, sl.load_config())
++    assert "Grok by default" in canonical
++    stale = canonical.replace("Grok by default", "Grok only", 1)
++
++    blocks = []
++    for header in sl.SOP_SECTION_HEADERS:
++        block = sl._build_repair_sop_block(header, sl.load_config())
++        if header == stale_header:
++            block = stale
++        blocks.append(block)
++    body = "\n".join(blocks)
++
++    (project_dir / "CLAUDE.md").write_text(
++        "<!-- synlynk:harness vsop-repair verified:2026-07-29T00:00:00Z -->\n"
++        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
++        f"{body}\n"
++        "<!-- /synlynk:harness -->\n"
++    )
++
++    sl._repair_sops_only(dry_run=False)
++
++    content = (project_dir / "CLAUDE.md").read_text()
++    assert canonical in content
++    assert "Grok only" not in content
++
++
+ def test_refresh_populates_agent_quotas_from_telemetry(project_dir):
+     import synlynk as sl
+ 
+diff --git a/tests/test_synlynk.py b/tests/test_synlynk.py
+index ec85a58..9d54151 100644
+--- a/tests/test_synlynk.py
++++ b/tests/test_synlynk.py
+@@ -48,13 +48,15 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
+ 
+ 
+ def test_run_tc5_passes_when_all_headers_present(tmp_path):
+-    from synlynk.probe import SOP_SECTION_HEADERS, _run_tc5
++    from synlynk.probe import SOP_SECTION_HEADERS
+ 
+     fpath = tmp_path / "CLAUDE.md"
+-    fpath.write_text("\n".join(SOP_SECTION_HEADERS) + "\nother content")
+-    result = _run_tc5({"claude": str(fpath)})
++    blocks = [synlynk._build_repair_sop_block(header, synlynk.load_config()) for header in SOP_SECTION_HEADERS]
++    fpath.write_text("\n".join(blocks) + "\n")
++    result = synlynk._run_tc5({"claude": str(fpath)})
+     assert result["passed"] is True
+     assert result["missing"] == {}
++    assert result["stale"] == {}
+ 
+ 
+ def test_run_tc5_reports_missing_sections(tmp_path):
+@@ -77,6 +79,34 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
+     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
+ 
+ 
++def test_run_tc5_reports_stale_sections(tmp_path):
++    stale_header = "## Capability-Based Task Allocation"
++    canonical = synlynk._build_repair_sop_block(stale_header, synlynk.load_config())
++    assert "Grok by default" in canonical
++    stale = canonical.replace("Grok by default", "Grok only", 1)
++
++    blocks = []
++    for header in synlynk.SOP_SECTION_HEADERS:
++        block = synlynk._build_repair_sop_block(header, synlynk.load_config())
++        if header == stale_header:
++            block = stale
++        blocks.append(block)
++
++    body = "\n".join(blocks)
++    fpath = tmp_path / "CLAUDE.md"
++    fpath.write_text(
++        "<!-- synlynk:harness vsop-repair verified:2026-07-29T00:00:00Z -->\n"
++        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
++        f"{body}\n"
++        "<!-- /synlynk:harness -->\n"
++    )
++
++    result = synlynk._run_tc5({"claude": str(fpath)})
++    assert result["passed"] is False
++    assert result["missing"] == {}
++    assert result["stale"]["claude"] == [stale_header]
++
++
+ def test_run_tc4_skips_flag_only_command_templates(monkeypatch):
+     """dispatch.model/dispatch.tools store a bare flag ("--model {model}"), not a
+     full invocation. TC-4 must not try to exec the flag itself as a binary."""
+@@ -6870,6 +6900,33 @@ def test_cmd_sync_dry_run(tmp_path, monkeypatch, capsys):
+     assert "dry run" in out.lower()
+ 
+ 
++def test_cmd_sync_dry_run_reports_missing_and_stale_sops(tmp_path, monkeypatch, capsys):
++    """Sync repair dry-run distinguishes missing from stale SOP sections."""
++    monkeypatch.chdir(tmp_path)
++    _setup_exit_project(tmp_path)
++
++    canonical = synlynk._build_repair_sop_block("## Capability-Based Task Allocation", synlynk.load_config())
++    assert "Grok by default" in canonical
++    stale = canonical.replace("Grok by default", "Grok only", 1)
++    body = "\n".join(
++        stale if header == "## Capability-Based Task Allocation" else synlynk._build_repair_sop_block(header, synlynk.load_config())
++        for header in synlynk.SOP_SECTION_HEADERS
++        if header != "## Cost Visibility"
++    )
++    (tmp_path / "CLAUDE.md").write_text(
++        "<!-- synlynk:harness vsop-repair verified:2026-07-29T00:00:00Z -->\n"
++        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
++        f"{body}\n"
++        "<!-- /synlynk:harness -->\n"
++    )
++
++    rc = synlynk.cmd_sync(dry_run=True, repair_sops=True)
++    out = capsys.readouterr().out
++    assert rc == 0
++    assert "will fill missing SOP '## Cost Visibility'" in out
++    assert "will refresh stale SOP '## Capability-Based Task Allocation'" in out
++
++
+ def test_cmd_sync_confirm_updates_instruction_files(tmp_path, monkeypatch, capsys):
+     """Sync --confirm re-writes synlynk sections in tracked instruction files."""
+     monkeypatch.chdir(tmp_path)
