@@ -51,6 +51,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `worktree audit` (secondary) — sustain
 - `worktree clean` (secondary) — sustain
 - `exec` (secondary) — execute
+- `tui` (secondary) — execute
 - `logs` (secondary) — execute
 - `shell` (secondary) — execute
 - `sentinel list` (secondary) — execute
