@@ -39,3 +39,16 @@ def test_render_review_panel_writes_capability_denied_message():
     tui.render_review_panel(pad, caps)
     line = pad.instr(0, 0, 79).decode("utf-8")
     assert "approve_pr" in line
+
+
+from unittest.mock import patch
+
+
+def test_cli_tui_subcommand_invokes_tui_main():
+    from synlynk import cli
+
+    parser = cli.build_parser()
+    args = parser.parse_args(["tui"])
+    with patch("synlynk.tui.main") as mock_main:
+        args.func(args)
+    mock_main.assert_called_once()
