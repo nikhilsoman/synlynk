@@ -447,6 +447,28 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--platform", action="store_true", dest="platform",
                                help="Show legacy project dashboard instead of ecosystem status")
 
+    ops_parser = subparsers.add_parser(
+        "ops",
+        help="Cross-repo platform operations report (jobs, costs, LIVE, hygiene)",
+    )
+    ops_sub = ops_parser.add_subparsers(dest="ops_action")
+    ops_report = ops_sub.add_parser(
+        "report",
+        help="Full-environment ops report for this machine (not single-repo fleet hygiene)",
+    )
+    ops_report.add_argument(
+        "--hours",
+        type=int,
+        default=24,
+        help="Lookback window in hours (default 24)",
+    )
+    ops_report.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Machine-readable JSON",
+    )
+
     selftest_parser = subparsers.add_parser(
         "selftest",
         help="Exercise every synlynk command (dry by default; --live runs against a real scratch repo)",
@@ -1112,6 +1134,18 @@ def main() -> None:
             cmd_agent_list()
         else:
             help_parsers.get("agent", parser).print_help()
+    elif args.command == "ops":
+        from synlynk.platform_ops import cmd_ops_report
+
+        action = getattr(args, "ops_action", None)
+        if action == "report" or action is None:
+            code = cmd_ops_report(
+                hours=getattr(args, "hours", 24) or 24,
+                json_output=getattr(args, "json_output", False),
+            )
+            sys.exit(code)
+        else:
+            help_parsers.get("ops", parser).print_help()
     elif args.command == "join":
         cmd_join()
     elif args.command == "team":
