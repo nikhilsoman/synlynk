@@ -1,5 +1,6 @@
 from synlynk import uxcore
 import sqlite3
+import json
 from unittest.mock import patch
 
 from tests.test_viz import make_test_db
@@ -33,3 +34,32 @@ def test_get_gantt_data_returns_dreams_with_stages(tmp_path, monkeypatch):
     assert len(dreams) == 1
     assert dreams[0].id == "v0.11.0"
     assert dreams[0].stages[0].key == "Plan"
+
+
+def test_get_jobs_reads_telemetry(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "telemetry.json").write_text(json.dumps([
+        {"ts": "2026-08-05T00:00:00Z", "agent": "codex", "duration_s": 12.5,
+         "exit_code": 0, "cost_usd": 0.05},
+    ]))
+    jobs = uxcore.get_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].agent == "codex"
+    assert jobs[0].exit_code == 0
+
+
+def test_get_jobs_missing_telemetry_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert uxcore.get_jobs() == []
+
+
+def test_get_fleet_state_counts_agent_runs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "telemetry.json").write_text(json.dumps([
+        {"agent": "codex", "exit_code": 0},
+        {"agent": "codex", "exit_code": 1},
+    ]))
+    fleet = uxcore.get_fleet_state()
+    assert fleet["codex"].success_rate == 0.5

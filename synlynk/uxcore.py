@@ -293,3 +293,71 @@ def get_gantt_data() -> list:
             conn.close()
         except Exception:
             pass
+
+
+@dataclasses.dataclass(frozen=True)
+class JobRun:
+    ts: str
+    agent: str
+    duration_s: float
+    exit_code: int
+    cost_usd: float
+
+
+@dataclasses.dataclass(frozen=True)
+class AgentBucket:
+    tasks_done: int
+    tasks_active: int
+    total_usd: float
+    success_rate: float
+    alert_count: int
+
+
+def get_jobs() -> list:
+    """Return the last 20 telemetry rows as typed JobRun entries, newest last."""
+    try:
+        with open(".synlynk/telemetry.json") as f:
+            rows = json.load(f)
+    except Exception:
+        return []
+    if not isinstance(rows, list):
+        return []
+    jobs = []
+    for row in rows[-20:]:
+        if not isinstance(row, dict):
+            continue
+        jobs.append(
+            JobRun(
+                ts=row.get("ts") or row.get("timestamp") or "",
+                agent=row.get("agent") or "",
+                duration_s=float(row.get("duration_s") or 0.0),
+                exit_code=int(row.get("exit_code") or 0),
+                cost_usd=float(row.get("cost_usd") or 0.0),
+            )
+        )
+    return jobs
+
+
+def get_fleet_state() -> dict:
+    """Return a dict of agent name -> AgentBucket, derived from recent telemetry."""
+    jobs = get_jobs()
+    agent_runs = {}
+    for job in jobs:
+        if not job.agent:
+            continue
+        agent_runs.setdefault(job.agent, {"ok": 0, "total": 0, "cost": 0.0})
+        agent_runs[job.agent]["total"] += 1
+        agent_runs[job.agent]["cost"] += job.cost_usd
+        if job.exit_code == 0:
+            agent_runs[job.agent]["ok"] += 1
+    fleet = {}
+    for agent, stats in agent_runs.items():
+        total = stats["total"]
+        fleet[agent] = AgentBucket(
+            tasks_done=stats["ok"],
+            tasks_active=0,
+            total_usd=stats["cost"],
+            success_rate=(stats["ok"] / total) if total else 0.0,
+            alert_count=0,
+        )
+    return fleet
