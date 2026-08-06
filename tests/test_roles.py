@@ -124,7 +124,7 @@ def test_fence_exists_true_when_fence_present(tmp_path, monkeypatch):
     assert synlynk._fence_exists(str(f))
 
 
-def test_cmd_roles_prints_only_workgroup_agents(tmp_path, monkeypatch, capsys):
+def test_cmd_roles_prints_all_configured_roles(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path, workgroup_agents=["claude", "codex"])
     (tmp_path / "CLAUDE.md").write_text(
@@ -137,8 +137,8 @@ def test_cmd_roles_prints_only_workgroup_agents(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "claude" in out
     assert "codex" in out
-    assert "agy" not in out
-    assert "grok" not in out
+    assert "agy" in out
+    assert "grok" in out
 
 
 def test_cmd_roles_fix_writes_fence(tmp_path, monkeypatch, capsys):

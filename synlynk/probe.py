@@ -961,14 +961,17 @@ def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = 
         fpath = directive_files.get(agent)
         if not fpath or not os.path.exists(fpath):
             continue
-        tc5 = _run_tc5({agent: fpath})
-        missing_headers = tc5.get("missing", {}).get(agent, [])
         has_harness_fence = _fence_exists(fpath)
-        if not missing_headers and not has_harness_fence:
-            continue
         existing_body = _read_harness_fence_body(fpath)
+        try:
+            full_content = open(fpath, encoding="utf-8").read()
+        except OSError:
+            full_content = ""
+        # Check presence across the whole file, not just inside an existing fence —
+        # pre-existing unfenced content (e.g. a raw "## PR Review Discipline" section
+        # predating the fence mechanism) must not be duplicated (issue #718).
+        fill_headers = [header for header in SOP_SECTION_HEADERS if header not in full_content]
         stale_headers = []
-        fill_headers = list(missing_headers)
 
         if has_harness_fence and existing_body:
             stale_candidates = [

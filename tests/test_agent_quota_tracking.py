@@ -1875,3 +1875,48 @@ def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
     result = _redact_secret_patterns(text)
     assert text not in result
     assert result == "[REDACTED]"
+
+
+def test_roles_fix_and_sync_repairsops_write_uncoordinated_harness_content(tmp_path, monkeypatch):
+    """Test #718: roles --fix handles agents in cfg['roles'] not in workgroup_agents (without adding to workgroup_agents),
+    and _repair_sops_only wraps output in <!-- synlynk:harness --> markers.
+    """
+    import synlynk
+
+    monkeypatch.chdir(tmp_path)
+    config = {
+        "schema_version": 1,
+        "workgroup_agents": ["claude"],
+        "roles": {
+            "claude": ["lead"],
+            "agy": ["implementer"],
+        },
+    }
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    cfg_file = tmp_path / ".synlynk" / "config.json"
+    cfg_file.write_text(json.dumps(config))
+
+    gemini_md = tmp_path / "GEMINI.md"
+    gemini_md.write_text("# Gemini Directive\nUnfenced content\n")
+
+    # (1) Test roles --fix processes agy (in roles, not in workgroup_agents)
+    synlynk.cmd_roles(fix=True)
+    content = gemini_md.read_text()
+    assert "<!-- synlynk:harness" in content
+    assert synlynk._fence_exists(str(gemini_md))
+
+    # Verify workgroup_agents was NOT modified as a side effect
+    saved_cfg = json.loads(cfg_file.read_text())
+    assert saved_cfg.get("workgroup_agents") == ["claude"]
+
+    # (2) Test _repair_sops_only wraps output in <!-- synlynk:harness --> markers
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text("# Claude Directive\nRaw unfenced text\n")
+    assert not synlynk._fence_exists(str(claude_md))
+
+    synlynk._repair_sops_only(cfg=saved_cfg, agent_name="claude")
+    claude_content = claude_md.read_text()
+    assert "<!-- synlynk:harness" in claude_content
+    assert synlynk._fence_exists(str(claude_md))
+    assert "## PR Review Discipline" in claude_content
+

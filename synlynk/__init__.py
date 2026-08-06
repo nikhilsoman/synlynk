@@ -1209,15 +1209,19 @@ def cmd_roles(fix: bool = False) -> None:
     """
     cfg = load_config()
     roles = cfg.get("roles", {})
-    workgroup_agents = cfg.get("workgroup_agents", []) or []
-    visible_agents = [agent for agent in workgroup_agents if agent]
+    if isinstance(roles, dict):
+        visible_agents = [agent for agent in roles if agent]
+    elif isinstance(roles, (list, tuple)):
+        visible_agents = [agent for agent in roles if agent]
+    else:
+        visible_agents = []
 
     print(f"\n  {_BOLD}synlynk roles{_RESET}\n")
     print(f"  {'agent':<10}  {'roles':<40}  {'directive file':<12}  fence")
     print(f"  {'─' * 10}  {'─' * 40}  {'─' * 12}  {'─' * 10}")
 
     for agent in visible_agents:
-        role_list = roles.get(agent, [])
+        role_list = roles.get(agent, []) if isinstance(roles, dict) else []
         fname = _directive_file_for_agent(agent)
         roles_str = ", ".join(role_list) if isinstance(role_list, list) else str(role_list)
         file_exists = os.path.exists(fname)
@@ -1255,7 +1259,7 @@ def cmd_roles(fix: bool = False) -> None:
         if missing:
             print(f"  {_DIM}Run `synlynk roles --fix` to write missing role fences{_RESET}\n")
     if not visible_agents:
-        print(f"  {_DIM}No agents in workgroup_agents to display{_RESET}\n")
+        print(f"  {_DIM}No agents in roles to display{_RESET}\n")
 
 
 
