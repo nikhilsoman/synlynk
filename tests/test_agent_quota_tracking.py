@@ -1920,3 +1920,25 @@ def test_roles_fix_and_sync_repairsops_write_uncoordinated_harness_content(tmp_p
     assert synlynk._fence_exists(str(claude_md))
     assert "## PR Review Discipline" in claude_content
 
+
+def test_flaky_test_tui_panelspy_curses_tests_failing_intermittently_in_ci(monkeypatch):
+    """Test #745: ensure conftest sets TERM to xterm when unset so curses.initscr() succeeds."""
+    import curses
+    import importlib.util
+    import os
+
+    monkeypatch.delenv("TERM", raising=False)
+    assert os.environ.get("TERM") is None
+
+    spec = importlib.util.spec_from_file_location("root_conftest", "conftest.py")
+    root_conftest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(root_conftest)
+
+    root_conftest.ensure_curses_initialized()
+    assert os.environ.get("TERM") == "xterm"
+
+    pad = curses.newpad(5, 5)
+    assert pad is not None
+
+
+
