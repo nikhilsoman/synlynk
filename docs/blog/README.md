@@ -98,6 +98,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [88](./88-prTBD-doctor-fix-agy.md) | PR #TBD — Phase 4: synlynk doctor --fix agy | TBD | 2026-07-30 |
 | [89](./89-pr614-dispatch-preflight-gate.md) | PR #614 — Dispatch Preflight Capability Gate | [#614](https://github.com/nikhilsoman/synlynk/pull/614) | 2026-07-31 |
 | [90](./90-pr587-capability-drift-regression-classification.md) | PR #587 — Harness Capability Drift & Regression Classification | [#587](https://github.com/nikhilsoman/synlynk/pull/587) | 2026-08-01 |
+| [97](./97-pr697-local-agent-parity-config.md) | PR #697 — Starter-tier Guardrails & Local Agent A/B Test Harness | [#697](https://github.com/nikhilsoman/synlynk/pull/697) | 2026-08-03 |
+| [98](./98-pr715-local-agent-ab-results.md) | PR #715 — Local Agent A/B Test Results | [#715](https://github.com/nikhilsoman/synlynk/pull/715) | 2026-08-03 |
+| [99](./99-pr731-synlynk-ux-1.0-tui-vizor-uxcore.md) | PR #731 — Synlynk UX 1.0: TUI + Vizor on Shared uxcore | [#731](https://github.com/nikhilsoman/synlynk/pull/731) | 2026-08-05 |
 
 
 ## Per-PR Post Template
