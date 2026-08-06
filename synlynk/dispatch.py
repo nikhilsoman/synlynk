@@ -1998,9 +1998,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
             if existing:
                 # Preserve priority/depends_on/enqueued_at from the queue row.
+                # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
+                dispatch_context = "unknown"
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, agent=?, task=?, story_id=? WHERE job_id=?",
+                    "log_path=?, agent=?, task=?, story_id=?, "
+                    "dispatch_context=COALESCE(dispatch_context, ?) WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2008,14 +2011,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         agent,
                         task,
                         story_id,
+                        dispatch_context,
                         job_id,
                     ),
                 )
             else:
+                # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
+                dispatch_context = "unknown"
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2028,6 +2034,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         job["started_at"],
                         log_file,
+                        dispatch_context,
                     ),
                 )
             dconn.commit()

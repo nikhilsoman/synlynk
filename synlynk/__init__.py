@@ -931,7 +931,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     exit_code    INTEGER,
     log_path     TEXT,
     handoff_count INTEGER NOT NULL DEFAULT 0,
-    previous_agents TEXT
+    previous_agents TEXT,
+    dispatch_context TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 

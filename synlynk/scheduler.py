@@ -176,12 +176,14 @@ def _enqueue_plan(plan: list) -> list:
             job_id = "djob-" + hashlib.md5(
                 f"{agent}{task}{time.time()}".encode()
             ).hexdigest()[:8]
+            # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
+            dispatch_context = "unknown"
             conn.execute(
                 "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                "priority, depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?,?)",
+                "priority, depends_on, enqueued_at, dispatch_context) VALUES (?,?,?,?,?,?,?,?,?)",
                 (job_id, agent, task, story_id, "queued",
                  item.get("priority", 5), "[]",
-                 time.strftime("%Y-%m-%dT%H:%M:%S")),
+                 time.strftime("%Y-%m-%dT%H:%M:%S"), dispatch_context),
             )
             job_ids.append(job_id)
         conn.commit()

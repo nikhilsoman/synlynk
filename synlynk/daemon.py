@@ -317,13 +317,15 @@ def _make_daemon_handler(daemon_instance):
             ).hexdigest()[:8]
             conn = _pkg("_get_db")()
             try:
+                # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
+                dispatch_context = "unknown"
                 conn.execute(
                     "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                    "priority, depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?,?)",
+                    "priority, depends_on, enqueued_at, dispatch_context) VALUES (?,?,?,?,?,?,?,?,?)",
                     (job_id, agent, task, payload.get("story_id"),
                      "queued", payload.get("priority", 5),
                      _json.dumps(payload.get("depends_on", [])),
-                     time.strftime("%Y-%m-%dT%H:%M:%S"))
+                     time.strftime("%Y-%m-%dT%H:%M:%S"), dispatch_context)
                 )
                 conn.commit()
             finally:
