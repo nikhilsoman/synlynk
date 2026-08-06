@@ -44,7 +44,7 @@ PR #731 shipped the core foundation of Synlynk UX 1.0 across 18 modified files (
 - **`docs/api/uxcore.md` (BYOUX Public Library Interface):**
   - Published public API documentation for external tools integrating with `uxcore`.
 - **Command Taxonomy & Plumbing:**
-  - Added `tui` and `notify` to `synlynk/taxonomy.py` and regenerated CLI reference docs.
+  - Added `tui` to `synlynk/taxonomy.py` and regenerated CLI reference docs. `notify slack` is registered as a CLI subcommand but deliberately excluded from the taxonomy (it's a hook-triggered BYOUX consumer, not an orientation-gateway command).
 
 ### Lesson from the Final Regression Pass
 
