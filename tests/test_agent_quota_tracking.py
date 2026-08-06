@@ -1866,3 +1866,12 @@ def test_daemon_jobs_cost_entries_has_dispatch_context_column(project_dir, monke
     assert daemon_row[0] == "unknown"
 
     conn.close()
+
+
+def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
+    from synlynk import _redact_secret_patterns
+
+    text = "ghs_16u5S23058PzAALpPpBVo3243.eyJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE2-abcdef_1234567890"
+    result = _redact_secret_patterns(text)
+    assert text not in result
+    assert result == "[REDACTED]"
