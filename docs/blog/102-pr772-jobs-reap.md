@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — jobs reap: Kill Zombie `running` Rows for Real"
+title: "PR #772 — jobs reap: Kill Zombie `running` Rows for Real"
 date: 2026-08-07
 series: "Building the OS for Multi-Agent Development"
 post: 102
