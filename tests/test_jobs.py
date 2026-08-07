@@ -324,6 +324,47 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     assert "OK (exit 0)" not in out
 
 
+def test_reconcile_jobs_waitpid_ignores_denial_shape_when_log_shows_earlier_tool_use(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-waitpid-corroborated.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit",'
+        '"input":{"file_path":"a.py"}}]}}\n'
+        '{"conversation_id":"job-waitpid-corroborated","status":"SUCCESS","response":"",'
+        '"duration_seconds":1,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":0}}\n'
+    )
+
+    synlynk._save_jobs([
+        {
+            "id": "job-waitpid-corroborated",
+            "agent": "agy",
+            "story_id": "story-waitpid-corroborated",
+            "task": "review the PR",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    def fake_waitpid(pid, opts):
+        return (pid, 0)
+
+    monkeypatch.setattr(synlynk.os, "waitpid", fake_waitpid)
+
+    synlynk._reconcile_jobs()
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-waitpid-corroborated")
+
+    assert reconciled["status"] != "permission_denied"
+
+
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
     import synlynk
     import synlynk.jobs as jobs_mod
