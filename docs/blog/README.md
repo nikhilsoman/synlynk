@@ -103,6 +103,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [98](./98-pr715-local-agent-ab-results.md) | PR #715 — Local Agent A/B Test Results | [#715](https://github.com/nikhilsoman/synlynk/pull/715) | 2026-08-03 |
 | [99](./99-pr731-synlynk-ux-1.0-tui-vizor-uxcore.md) | PR #731 — Synlynk UX 1.0: TUI + Vizor on Shared uxcore | [#731](https://github.com/nikhilsoman/synlynk/pull/731) | 2026-08-05 |
 | [100](./100-prTBD-receipt-protocol.md) | The Receipt Protocol — Detection-Only Delivery Confirmation for Dispatched Tasks | TBD | 2026-08-07 |
+| [101](./101-pr762-windowed-sentinel-crit.md) | Windowed sentinel_crit — stop lifetime logs from keeping ops RED | [#762](https://github.com/nikhilsoman/synlynk/pull/762) | 2026-08-07 |
 
 
 ## Per-PR Post Template
