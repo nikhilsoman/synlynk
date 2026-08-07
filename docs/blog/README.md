@@ -62,6 +62,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [56](./56-pr244-measurement-ledger-phase2-codex-adapter.md) | PR #244 — Measurement Ledger Phase 2: The Codex Structured-Output Adapter | [#244](https://github.com/nikhilsoman/synlynk/pull/244) | 2026-07-14 |
 | [59](./59-pr252-measurement-ledger-phase2-claude-adapter.md) | PR #252 — Measurement Ledger Phase 2: The Claude Structured-Output Adapter | [#252](https://github.com/nikhilsoman/synlynk/pull/252) | 2026-07-15 |
 | [60](./60-pr256-measurement-ledger-phase2-agy-adapter.md) | Measurement Ledger Phase 2: The Agy (Gemini) Structured-Output Adapter | [#256](https://github.com/nikhilsoman/synlynk/pull/256) | 2026-07-15 |
+| [100](./100-pr770-classifier-corroboration.md) | PR #770 — Teaching the Classifier to Check Its Work First | [#770](https://github.com/nikhilsoman/synlynk/pull/770) | 2026-08-07 |
 | [61](./61-pr257-measurement-ledger-phase2-grok-adapter.md) | Measurement Ledger Phase 2: The Grok Structured-Output Adapter (and Closing Epic #210) | [#257](https://github.com/nikhilsoman/synlynk/pull/257) | 2026-07-15 |
 | [62](./62-pr258-vizor-cost-flagging.md) | Closing Epic #210: Flagging Estimated vs. Actual Cost in the Vizor Effort & Cost Tab | [#258](https://github.com/nikhilsoman/synlynk/pull/258) | 2026-07-15 |
 | [63](./63-pr259-status-rates-updated-at.md) | Closing v0.12.0: Surfacing rates_updated_at in synlynk status | [#259](https://github.com/nikhilsoman/synlynk/pull/259) | 2026-07-15 |
