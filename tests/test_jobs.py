@@ -42,6 +42,34 @@ def test_check_task_receipt_returns_none_for_empty_log_or_digest():
     assert jobs_mod._check_task_receipt("some log", None) is None
 
 
+def test_classify_task_delivery_hard_fail_when_no_marker_and_no_activity():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("absent", has_corroborating_activity=False)
+    assert result == {"hard_fail": True, "warn": False}
+
+
+def test_classify_task_delivery_warn_when_no_marker_but_activity_present():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("mismatch", has_corroborating_activity=True)
+    assert result == {"hard_fail": False, "warn": True}
+
+
+def test_classify_task_delivery_clean_when_receipt_ok():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("ok", has_corroborating_activity=False)
+    assert result == {"hard_fail": False, "warn": False}
+
+
+def test_classify_task_delivery_clean_when_receipt_status_none():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery(None, has_corroborating_activity=False)
+    assert result == {"hard_fail": False, "warn": False}
+
+
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
     from synlynk.jobs import _task_sha256_and_preview
 

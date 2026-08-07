@@ -112,6 +112,22 @@ def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[s
     return "absent"
 
 
+def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_activity: bool) -> dict:
+    """Combines a receipt-check result with git-activity evidence.
+
+    'hard_fail' means no real work is visible to corroborate a bad/missing
+    receipt marker — safe to mark the job task_delivery_failed and skip
+    auto-finalize. 'warn' means the receipt check failed but real work
+    landed anyway — do not block the job, just annotate it (see the
+    job-b88e0f92 false-positive this guard was designed to avoid).
+    """
+    if receipt_status not in ("late", "mismatch", "absent"):
+        return {"hard_fail": False, "warn": False}
+    if has_corroborating_activity:
+        return {"hard_fail": False, "warn": True}
+    return {"hard_fail": True, "warn": False}
+
+
 def _normalize_worktree_relative_path(path: str) -> str:
     normalized = (path or "").replace("\\", "/").strip()
     if normalized.startswith("./"):
