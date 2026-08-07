@@ -1,5 +1,6 @@
 """synlynk dispatch: preflight gates, agent dispatch, exec wrapper."""
 
+import hashlib
 import json
 import os
 import re
@@ -620,6 +621,32 @@ def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None)
     return current_tip == base_sha
 
 
+def _render_dispatch_preview(agent: str, task: str, context_mode: str) -> dict:
+    """Compute task/context digest data for dispatch inspection."""
+    task_sha256 = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    context_digest = None
+    context_bytes = None
+    if context_mode != "none":
+        context_path = os.path.join(".synlynk", "context.md")
+        if os.path.exists(context_path):
+            try:
+                with open(context_path, "rb") as f:
+                    content = f.read()
+                context_digest = hashlib.sha256(content).hexdigest()
+                context_bytes = len(content)
+            except OSError:
+                pass
+    return {
+        "agent": agent,
+        "task": task,
+        "task_len": len(task),
+        "task_sha256": task_sha256,
+        "context_mode": context_mode,
+        "context_digest": context_digest,
+        "context_bytes": context_bytes,
+    }
+
+
 def _job_summary_path(job_id: str) -> str:
     return os.path.join(".synlynk/logs", f"{job_id}.summary")
 
@@ -651,7 +678,9 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         note: Optional[str] = None,
                         base_branch: Optional[str] = None,
                         base_sha: Optional[str] = None,
-                        suite_result: Optional[dict] = None) -> str:
+                        suite_result: Optional[dict] = None,
+                        task_sha256: Optional[str] = None,
+                        task_preview: Optional[str] = None) -> str:
     """Formats the structured completion summary for a finished job."""
     files_touched = sorted(set(files_touched or []))
     story_label = story_id or "-"
@@ -660,6 +689,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
     worktree_line = ""
     note_line = f"note:     {note}\n" if note else ""
+    task_line = f"task:     {task_preview}\n" if task_preview else ""
+    task_sha_line = f"task_sha256: {task_sha256}\n" if task_sha256 else ""
     base_line = ""
     if base_branch:
         sha_label = f" @ {base_sha[:8]}" if base_sha else ""
@@ -706,6 +737,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
             f"{render_task_fence(fence)}"
             f"{worktree_line}"
             f"{files_line}"
+            f"{task_line}"
+            f"{task_sha_line}"
             f"---------------------------------\n"
         )
     return (
@@ -719,6 +752,8 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
         f"tokens:   in {in_tokens:,}  out {out_tokens:,}  (~${cost_usd:.2f})\n"
         f"{worktree_line}"
         f"{files_line}"
+        f"{task_line}"
+        f"{task_sha_line}"
         f"---------------------------------\n"
     )
 
@@ -733,14 +768,16 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
                        note: Optional[str] = None,
                        base_branch: Optional[str] = None,
                        base_sha: Optional[str] = None,
-                       suite_result: Optional[dict] = None) -> str:
+                       suite_result: Optional[dict] = None,
+                       task_sha256: Optional[str] = None,
+                       task_preview: Optional[str] = None) -> str:
     """Writes a structured completion summary for a job and returns the text."""
     os.makedirs(".synlynk/logs", exist_ok=True)
     summary = _format_job_summary(
         job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
         cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch,
         status_label=status_label, note=note, base_branch=base_branch, base_sha=base_sha,
-        suite_result=suite_result
+        suite_result=suite_result, task_sha256=task_sha256, task_preview=task_preview
     )
     summary_path = _job_summary_path(job_id)
     existing_summary = None
@@ -1582,6 +1619,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    job_id: str = None,
                    issue: int = None,
                    base: str = None) -> dict:
+    if not task or not task.strip():
+        raise ValueError(
+            "--task is empty or whitespace-only; refusing to dispatch (see #720)"
+        )
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     dispatch_time = None
     if not story_id:

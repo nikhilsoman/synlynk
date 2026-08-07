@@ -7,6 +7,25 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_task_sha256_and_preview_returns_none_for_falsy_task():
+    from synlynk.jobs import _task_sha256_and_preview
+
+    assert _task_sha256_and_preview(None) == (None, None)
+    assert _task_sha256_and_preview("") == (None, None)
+
+
+def test_task_sha256_and_preview_computes_digest_and_collapses_whitespace():
+    from synlynk.jobs import _task_sha256_and_preview
+    import hashlib
+
+    task = "line one\n  line two   with   spaces\nline three"
+    task_sha256, task_preview = _task_sha256_and_preview(task)
+
+    assert task_sha256 == hashlib.sha256(task.encode("utf-8")).hexdigest()
+    assert task_preview == "line one line two with spaces line three"
+    assert "\n" not in task_preview
+
+
 def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch, capsys):
     from synlynk.fencing import FenceData
     from synlynk.jobs import _dispatch_ready_jobs
@@ -185,6 +204,46 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
     assert "status:   OK (exit 0)" in out
     summary_path = tmp_path / ".synlynk" / "logs" / "job-run.summary"
     assert summary_path.exists()
+
+
+def test_reconcile_jobs_summary_includes_task_sha256_matching_local_computation(tmp_path, monkeypatch, capsys):
+    import hashlib
+
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    task_text = "Fix issue #720 fail-closed on empty tasks"
+    expected_digest = hashlib.sha256(task_text.encode("utf-8")).hexdigest()
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-720test.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("Input tokens: 42\nOutput tokens: 3200\n")
+    (log_path.parent / "job-720test.log.exit").write_text("0")
+
+    jobs = [{
+        "id": "job-720test",
+        "agent": "codex",
+        "story_id": "story-720",
+        "task": task_text,
+        "pid": 99999999,
+        "log_file": str(log_path),
+        "started_at": "2026-08-07T01:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+    }]
+    synlynk._save_jobs(jobs)
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    synlynk._reconcile_jobs()
+    capsys.readouterr()
+
+    summary_path = tmp_path / ".synlynk" / "logs" / "job-720test.summary"
+    with open(summary_path) as f:
+        summary_text = f.read()
+
+    assert f"task_sha256: {expected_digest}" in summary_text
+    assert "task:     Fix issue #720 fail-closed on empty tasks" in summary_text
 
 
 def test_reconcile_jobs_orphaned_story_cost_does_not_abort(tmp_path, monkeypatch):

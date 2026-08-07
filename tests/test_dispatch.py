@@ -3,6 +3,95 @@ import pytest
 from synlynk.dispatch import _format_job_summary
 
 
+def test_cli_dispatch_dry_run_prints_preview_and_creates_no_job(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    called = {"dispatch_agent": False}
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: called.__setitem__("dispatch_agent", True))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "claude", "--task", "Fix issue #720", "--dry-run"],
+    )
+
+    cli_mod.main()
+
+    captured = capsys.readouterr()
+    assert called["dispatch_agent"] is False
+    assert "agent:" in captured.out
+    assert "claude" in captured.out
+    assert "task_sha256:" in captured.out
+    assert "no job, worktree, or cost entry created" in captured.out
+
+
+def test_cli_dispatch_dry_run_empty_task_fails_closed_before_preview(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    called = {"dispatch_agent": False}
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: called.__setitem__("dispatch_agent", True))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "claude", "--task", "   ", "--dry-run"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_mod.main()
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "empty or whitespace-only" in captured.out
+    assert "task_sha256:" not in captured.out
+    assert called["dispatch_agent"] is False
+
+
+def test_render_dispatch_preview_includes_task_digest_and_no_context_file(tmp_path, monkeypatch):
+    from synlynk.dispatch import _render_dispatch_preview
+    import hashlib
+
+    monkeypatch.chdir(tmp_path)
+    task = "Fix issue #720 fail-closed on empty tasks"
+
+    preview = _render_dispatch_preview("claude", task, "task")
+
+    expected_digest = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    assert preview["agent"] == "claude"
+    assert preview["task"] == task
+    assert preview["task_len"] == len(task)
+    assert preview["task_sha256"] == expected_digest
+    assert preview["context_mode"] == "task"
+    assert preview["context_digest"] is None
+    assert preview["context_bytes"] is None
+
+
+def test_render_dispatch_preview_includes_context_digest_when_context_md_exists(tmp_path, monkeypatch):
+    from synlynk.dispatch import _render_dispatch_preview
+    import hashlib
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    context_bytes = b"# Context\nactive tasks here\n"
+    (tmp_path / ".synlynk" / "context.md").write_bytes(context_bytes)
+
+    preview = _render_dispatch_preview("claude", "some task", "full")
+
+    assert preview["context_digest"] == hashlib.sha256(context_bytes).hexdigest()
+    assert preview["context_bytes"] == len(context_bytes)
+
+
+def test_render_dispatch_preview_skips_context_when_mode_none(tmp_path, monkeypatch):
+    from synlynk.dispatch import _render_dispatch_preview
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "context.md").write_bytes(b"unused")
+
+    preview = _render_dispatch_preview("claude", "some task", "none")
+
+    assert preview["context_digest"] is None
+    assert preview["context_bytes"] is None
+
+
 def test_format_job_summary_includes_watch_reminder():
     summary = _format_job_summary(
         "job-d63c4cf4",
@@ -39,6 +128,42 @@ def test_format_job_summary_includes_base_and_suite_result_when_present():
 
     assert "base:     feat/example @ deadbeef" in summary
     assert "suite:    5 passed, 0 failed, 1 skipped" in summary
+
+
+def test_format_job_summary_includes_task_sha256_and_preview_when_present():
+    summary = _format_job_summary(
+        "job-abc",
+        "codex",
+        "story-1",
+        0,
+        12.5,
+        100,
+        200,
+        0.01,
+        files_touched=["a.py"],
+        task_sha256="a3f9c2e1b8d4",
+        task_preview="Fix issue #720 fail-closed on empty tasks",
+    )
+
+    assert "task_sha256: a3f9c2e1b8d4" in summary
+    assert "task:     Fix issue #720 fail-closed on empty tasks" in summary
+
+
+def test_format_job_summary_omits_task_fields_when_absent():
+    summary = _format_job_summary(
+        "job-abc",
+        "codex",
+        "story-1",
+        0,
+        12.5,
+        100,
+        200,
+        0.01,
+        files_touched=["a.py"],
+    )
+
+    assert "task_sha256:" not in summary
+    assert "task:     " not in summary
 
 
 def test_format_job_summary_falls_back_when_jobs_not_allowlisted(monkeypatch):
@@ -190,6 +315,29 @@ def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch
     job = sl.dispatch_agent("agy", "write docs", story_id="story-manual-1", context_mode="none")
 
     assert job["agent"] == "agy"
+
+
+def test_dispatch_agent_rejects_empty_task(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    called = {"worktree": False}
+    monkeypatch.setattr(
+        dispatch_mod, "_create_job_worktree",
+        lambda *a, **kw: called.__setitem__("worktree", True) or {"path": "/tmp/x", "base_branch": "main", "base_sha": "abc"}
+    )
+
+    with pytest.raises(ValueError, match=r"empty or whitespace-only"):
+        sl.dispatch_agent("claude", "", context_mode="none")
+
+    assert called["worktree"] is False
+
+
+def test_dispatch_agent_rejects_whitespace_only_task(project_dir, monkeypatch):
+    import synlynk as sl
+
+    with pytest.raises(ValueError, match=r"empty or whitespace-only"):
+        sl.dispatch_agent("claude", "   \n\t  ", context_mode="none")
 
 
 def test_cli_dispatch_passes_requires_gh_write_flag(project_dir, monkeypatch):

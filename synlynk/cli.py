@@ -555,6 +555,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit base branch/ref to anchor the job worktree to (overrides auto-stacking)"
     )
     dispatch_parser.add_argument(
+        "--dry-run", action="store_true", dest="dry_run",
+        help="Print what would be dispatched (task digest, context digest) without creating a job, worktree, or cost entry (see #720)"
+    )
+    dispatch_parser.add_argument(
         "--grant", action="append", default=[],
         help="Add a permission for this dispatch (repeatable)"
     )
@@ -981,6 +985,32 @@ def main() -> None:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
         try:
+            if getattr(args, "dry_run", False):
+                if not args.task or not args.task.strip():
+                    raise ValueError(
+                        "--task is empty or whitespace-only; refusing to dispatch (see #720)"
+                    )
+                from synlynk.dispatch import _render_dispatch_preview
+
+                context_mode = getattr(args, "context_mode", "task")
+                preview = _render_dispatch_preview(args.agent, args.task, context_mode)
+                print()
+                print(f"agent:        {preview['agent']}")
+                print(f"task ({preview['task_len']} chars):")
+                print(f"  {preview['task']}")
+                print(f"task_sha256:  {preview['task_sha256']}")
+                print(f"context_mode: {preview['context_mode']}")
+                if preview["context_digest"] is not None:
+                    print(
+                        f"context.md:   sha256={preview['context_digest']}  "
+                        f"({preview['context_bytes']:,} bytes)"
+                    )
+                requires_gh_write = getattr(args, "requires_gh_write", False)
+                print(f"capabilities: requires_gh_write={'true' if requires_gh_write else 'false'}")
+                print()
+                print("(dry run — no job, worktree, or cost entry created)")
+                return
+
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
