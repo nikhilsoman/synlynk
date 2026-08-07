@@ -193,10 +193,12 @@ So a compliant design-only job is pushed and reported `completed`, but no PR is 
 - A job with no `scope_paths` declared behaves identically to current behavior (regression
   guard — this is the most important test given how much of the reconciliation path is shared).
 
-**`selftest --matrix` cell** (`synlynk/fleet.py`, same location PR #768 added its
-receipt-compliance cell): dispatches a minimal fixture task declaring `--scope-paths` that
-attempts an out-of-scope edit, and asserts the resulting job status is `SCOPE_VIOLATION` and no
-PR was created.
+**No `selftest --matrix` cell for this fix.** `run_matrix_dry()` (`synlynk/fleet.py:168`) checks
+per-agent-home capability signals (`instruction`, `nested_state`, `dispatch_dry`, `gh_write`,
+`live_self:<home>`) — it has no cell type for a specific dispatch-outcome scenario like
+scope-compliance, and PR #768 did not add one (verified against the current `fleet.py`: no
+receipt/compliance cell exists there). Coverage for this fix lives entirely in the unit and
+reconciliation-level tests below.
 
 ## Documentation
 
