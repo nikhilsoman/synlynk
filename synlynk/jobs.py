@@ -1,5 +1,6 @@
 """synlynk jobs: job store, reconciliation (CLI-dispatch and daemon paths), fleet routing."""
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -81,6 +82,19 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     if not git_state:
         return False
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
+
+
+def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
+    """True if every changed file matches at least one declared scope glob.
+
+    An empty scope_paths list means no scope was declared -- always compliant (no-op).
+    """
+    if not scope_paths:
+        return True
+    for path in changed_files or []:
+        if not any(fnmatch.fnmatch(path, pattern) for pattern in scope_paths):
+            return False
+    return True
 
 
 def _log_has_permission_denied_signature(log_text: str) -> bool:

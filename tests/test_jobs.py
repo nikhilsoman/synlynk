@@ -7,6 +7,40 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_check_scope_compliance_all_files_match_single_glob():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(
+        ["docs/superpowers/specs/foo.md", "docs/superpowers/specs/bar.md"],
+        ["docs/superpowers/specs/*"],
+    ) is True
+
+
+def test_check_scope_compliance_files_match_any_of_several_globs():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(
+        ["docs/superpowers/specs/foo.md", "docs/blog/README.md"],
+        ["docs/superpowers/specs/*", "docs/blog/*"],
+    ) is True
+
+
+def test_check_scope_compliance_file_matching_no_glob_is_violation():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(
+        ["docs/superpowers/specs/foo.md", "synlynk/jobs.py"],
+        ["docs/superpowers/specs/*"],
+    ) is False
+
+
+def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(["synlynk/jobs.py"], []) is True
+    assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
+
+
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
     from synlynk.jobs import _task_sha256_and_preview
 
