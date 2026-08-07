@@ -401,6 +401,39 @@ def test_log_has_permission_denied_signature_detects_genuine_denial():
     assert _log_has_permission_denied_signature(fixture) is True
 
 
+def test_log_has_permission_denied_signature_ignores_denial_when_earlier_response_nonempty():
+    fixture = (
+        '{"conversation_id":"job-1","status":"SUCCESS","response":"did the work",'
+        '"duration_seconds":80,"num_turns":4,"usage":{"input_tokens":10,"output_tokens":5}}\n'
+        '{"conversation_id":"job-1","status":"SUCCESS","response":"",'
+        '"duration_seconds":1,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":0}}\n'
+    )
+
+    assert _log_has_permission_denied_signature(fixture) is False
+
+
+def test_log_has_permission_denied_signature_ignores_denial_when_earlier_tool_use_block():
+    fixture = (
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit",'
+        '"input":{"file_path":"a.py"}}]}}\n'
+        '{"conversation_id":"job-1","status":"SUCCESS","response":"",'
+        '"duration_seconds":1,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":0}}\n'
+    )
+
+    assert _log_has_permission_denied_signature(fixture) is False
+
+
+def test_log_has_permission_denied_signature_still_detects_denial_with_only_noise_before_it():
+    fixture = (
+        "starting up...\n"
+        "some unrelated non-JSON status line\n"
+        '{"conversation_id":"job-1","status":"SUCCESS","response":"",'
+        '"duration_seconds":1,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":0}}\n'
+    )
+
+    assert _log_has_permission_denied_signature(fixture) is True
+
+
 def test_extract_codex_structured_single_turn():
     from synlynk.costs import _extract_codex_structured
 
