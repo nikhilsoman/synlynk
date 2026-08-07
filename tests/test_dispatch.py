@@ -192,6 +192,29 @@ def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch
     assert job["agent"] == "agy"
 
 
+def test_dispatch_agent_rejects_empty_task(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    called = {"worktree": False}
+    monkeypatch.setattr(
+        dispatch_mod, "_create_job_worktree",
+        lambda *a, **kw: called.__setitem__("worktree", True) or {"path": "/tmp/x", "base_branch": "main", "base_sha": "abc"}
+    )
+
+    with pytest.raises(ValueError, match=r"empty or whitespace-only"):
+        sl.dispatch_agent("claude", "", context_mode="none")
+
+    assert called["worktree"] is False
+
+
+def test_dispatch_agent_rejects_whitespace_only_task(project_dir, monkeypatch):
+    import synlynk as sl
+
+    with pytest.raises(ValueError, match=r"empty or whitespace-only"):
+        sl.dispatch_agent("claude", "   \n\t  ", context_mode="none")
+
+
 def test_cli_dispatch_passes_requires_gh_write_flag(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.cli as cli_mod

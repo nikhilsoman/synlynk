@@ -1582,6 +1582,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    job_id: str = None,
                    issue: int = None,
                    base: str = None) -> dict:
+    if not task or not task.strip():
+        raise ValueError(
+            "--task is empty or whitespace-only; refusing to dispatch (see #720)"
+        )
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     dispatch_time = None
     if not story_id:
