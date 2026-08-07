@@ -184,6 +184,7 @@ from synlynk.jobs import (
     _write_capability_rating,
     cmd_jobs,
     cmd_jobs_handoff,
+    cmd_jobs_reap,
 )
 from synlynk.story_provisioning import (
     _classify_heuristic,

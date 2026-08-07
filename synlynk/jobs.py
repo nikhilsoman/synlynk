@@ -1526,6 +1526,268 @@ def _reconcile_jobs() -> None:
     if changed:
         _save_jobs(jobs)
 
+def _pid_is_alive(pid) -> bool:
+    """True if *pid* refers to a live process we can observe.
+
+    ``PermissionError`` is treated as alive (process exists; we lack rights).
+    ``None`` / invalid PIDs are dead.
+    """
+    if pid is None:
+        return False
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (TypeError, ValueError, OSError):
+        return False
+
+
+def mark_daemon_job_terminal(
+    conn: sqlite3.Connection,
+    job_id: str,
+    *,
+    status: str = "timed_out",
+    exit_code: int = -9,
+    completed_at: Optional[str] = None,
+) -> bool:
+    """Mark a *running* daemon_jobs row terminal. Returns True if a row changed.
+
+    Used by ``jobs reap``, STALL/TIMEOUT auto-reap (#753), and hardened reconcile.
+    Default status is ``timed_out`` (exit -9 = SIGKILL-ish) so platform ops can
+    distinguish harness kills from ordinary task failures.
+    """
+    if not job_id:
+        return False
+    now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
+    cur = conn.execute(
+        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+        "WHERE job_id=? AND status='running'",
+        (status, exit_code, now, job_id),
+    )
+    return (cur.rowcount or 0) > 0
+
+
+def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
+    """When STALL_NO_OUTPUT / HARNESS_INTERNAL_TIMEOUT fires, flip daemon_jobs.
+
+    Parses ``job-<hex>`` from *message*, marks the row ``timed_out`` if still
+    ``running``. No-op if the job is already terminal or not in this project DB.
+    Returns the job_id when a row was updated, else None.
+    """
+    if code not in ("STALL_NO_OUTPUT", "HARNESS_INTERNAL_TIMEOUT"):
+        return None
+    m = re.search(r"(job-[a-f0-9]+)", message or "", re.I)
+    if not m:
+        return None
+    job_id = m.group(1)
+    get_db = _pkg("_get_db")
+    if get_db is None:
+        return None
+    try:
+        conn = get_db()
+    except Exception:
+        return None
+    try:
+        if mark_daemon_job_terminal(conn, job_id, status="timed_out", exit_code=-9):
+            conn.commit()
+            return job_id
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _iter_project_state_dbs(*, all_projects: bool = False) -> list:
+    """Return state.db paths to scan for reap.
+
+    Default: current project DB only. ``all_projects=True`` walks
+    ``~/.synlynk/projects/*/state.db``.
+    """
+    if all_projects:
+        root = os.path.expanduser("~/.synlynk/projects")
+        if not os.path.isdir(root):
+            return []
+        out = []
+        for name in sorted(os.listdir(root)):
+            db = os.path.join(root, name, "state.db")
+            if os.path.isfile(db):
+                out.append(db)
+        return out
+    resolve = _pkg("_resolve_db_path")
+    if resolve is not None:
+        try:
+            path = resolve()
+            if path and os.path.isfile(path):
+                return [path]
+        except Exception:
+            pass
+    # Fallback: open current project via _get_db and read its path
+    get_db = _pkg("_get_db")
+    if get_db is None:
+        return []
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute("PRAGMA database_list").fetchone()
+            # (seq, name, file)
+            if row and row[2]:
+                return [row[2]]
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return []
+
+
+def scan_zombie_running_jobs(db_path: str) -> list:
+    """List ``status=running`` rows in *db_path* whose PID is dead or null.
+
+    Each item: ``{job_id, agent, pid, started_at, project, action}`` where
+    action is ``reap`` (dead/null) or ``keep`` (alive).
+    """
+    project = os.path.basename(os.path.dirname(db_path))
+    out = []
+    try:
+        conn = sqlite3.connect(db_path)
+    except Exception:
+        return out
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, pid, started_at FROM daemon_jobs "
+                "WHERE status='running'"
+            ).fetchall()
+        except sqlite3.Error:
+            return out
+        for job_id, agent, pid, started_at in rows:
+            alive = _pid_is_alive(pid)
+            out.append({
+                "job_id": job_id,
+                "agent": agent or "?",
+                "pid": pid,
+                "started_at": started_at,
+                "project": project,
+                "db_path": db_path,
+                "action": "keep" if alive else "reap",
+            })
+    finally:
+        conn.close()
+    return out
+
+
+def apply_reap_zombies(
+    candidates: list,
+    *,
+    status: str = "timed_out",
+    exit_code: int = -9,
+) -> list:
+    """Apply terminal status to candidates with action=='reap'. Mutates DB.
+
+    Returns the list of successfully reaped items (with ``reaped_at`` set).
+    """
+    by_db: dict = {}
+    for c in candidates:
+        if c.get("action") != "reap":
+            continue
+        by_db.setdefault(c["db_path"], []).append(c)
+
+    reaped = []
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    for db_path, items in by_db.items():
+        try:
+            conn = sqlite3.connect(db_path)
+        except Exception:
+            continue
+        try:
+            for c in items:
+                if mark_daemon_job_terminal(
+                    conn, c["job_id"], status=status, exit_code=exit_code, completed_at=now
+                ):
+                    c = dict(c)
+                    c["reaped_at"] = now
+                    c["status"] = status
+                    c["exit_code"] = exit_code
+                    reaped.append(c)
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            conn.close()
+    return reaped
+
+
+def cmd_jobs_reap(apply: bool = False, all_projects: bool = False) -> int:
+    """Dry-run (default) or apply reaping of dead-PID ``running`` daemon jobs.
+
+    Returns process exit code: 0 always on success (including "nothing to reap");
+    1 on hard failure to scan.
+    """
+    dbs = _iter_project_state_dbs(all_projects=all_projects)
+    if not dbs:
+        print("  No project state.db found to scan.")
+        return 1
+
+    candidates = []
+    for db in dbs:
+        candidates.extend(scan_zombie_running_jobs(db))
+
+    to_reap = [c for c in candidates if c["action"] == "reap"]
+    to_keep = [c for c in candidates if c["action"] == "keep"]
+
+    mode = "APPLY" if apply else "DRY-RUN"
+    scope = "all projects" if all_projects else "current project"
+    print(f"\n  {_BOLD}synlynk jobs reap{_RESET}  [{mode}]  scope={scope}")
+    print(f"  dbs={len(dbs)}  running={len(candidates)}  "
+          f"dead/null={len(to_reap)}  alive={len(to_keep)}\n")
+
+    if to_reap:
+        print(f"  {'JOB ID':14}  {'AGENT':8}  {'PID':8}  {'STARTED':20}  PROJECT")
+        print("  " + "─" * 72)
+        for c in to_reap:
+            pid_s = str(c["pid"]) if c["pid"] is not None else "null"
+            started = (c.get("started_at") or "—")[:20]
+            print(
+                f"  {c['job_id']:14}  {c['agent']:8}  {pid_s:8}  "
+                f"{started:20}  {c['project']}"
+            )
+    else:
+        print("  No dead-PID running jobs.")
+
+    if to_keep and all_projects:
+        print(f"\n  {_DIM}Kept alive ({len(to_keep)}):{_RESET}")
+        for c in to_keep[:20]:
+            print(f"    {c['job_id']} pid={c['pid']} agent={c['agent']} @ {c['project']}")
+        if len(to_keep) > 20:
+            print(f"    … +{len(to_keep) - 20} more")
+
+    if not apply:
+        if to_reap:
+            print(
+                f"\n  Dry-run only — re-run with {_BOLD}--apply{_RESET} to mark "
+                f"{len(to_reap)} job(s) timed_out (exit_code=-9).\n"
+            )
+        else:
+            print()
+        return 0
+
+    reaped = apply_reap_zombies(to_reap)
+    print(
+        f"\n  {_GREEN}Reaped {len(reaped)}{_RESET} → status=timed_out exit_code=-9"
+        f"  (kept alive: {len(to_keep)})\n"
+    )
+    return 0
+
+
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
     conn = _pkg("_get_db")()
@@ -1536,20 +1798,27 @@ def _reconcile_daemon_jobs() -> None:
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
         for job_id, agent, story_id, task, pid, started_at, completed_at, log_path in rows:
-            if pid is None:
-                continue
             exited = False
             raw_exit_status = None
-            try:
-                wpid, wstatus = os.waitpid(pid, os.WNOHANG)
-                if wpid != 0:
-                    exited = True
-                    raw_exit_status = wstatus
-            except ChildProcessError:
-                # Process was adopted by init (daemon restart) — fall back to kill(0)
+            if pid is None:
+                # Null PID while "running" is always a zombie (#753).
+                exited = True
+            else:
                 try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
+                    wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                    if wpid != 0:
+                        exited = True
+                        raw_exit_status = wstatus
+                except ChildProcessError:
+                    # Not our child (daemon restart / external spawn) — probe liveness.
+                    if not _pid_is_alive(pid):
+                        exited = True
+                except Exception:
+                    if not _pid_is_alive(pid):
+                        exited = True
+                # Double-check: waitpid can return 0 for non-children on some paths;
+                # if still not exited, trust kill(0).
+                if not exited and not _pid_is_alive(pid):
                     exited = True
 
             if exited:
@@ -1568,7 +1837,10 @@ def _reconcile_daemon_jobs() -> None:
                 if exit_code == 0:
                     status = "done"
                 elif exit_code is None:
-                    status = "unknown"
+                    # Dead / null PID with no recorded exit → timed_out (#753),
+                    # not open-ended "unknown", so scoreboards stop counting zombies.
+                    status = "timed_out"
+                    exit_code = -9
                 else:
                     status = "failed"
                 log_text = ""

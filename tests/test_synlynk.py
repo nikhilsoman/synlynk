@@ -4502,15 +4502,17 @@ def test_cmd_jobs_empty_output_when_no_jobs(project_dir, capsys):
     assert "No jobs" in out or out.strip() == "" or "no jobs" in out.lower()
 
 
-def test_cmd_jobs_reads_from_daemon_jobs_table(project_dir, capsys):
+def test_cmd_jobs_reads_from_daemon_jobs_table(project_dir, capsys, monkeypatch):
     """cmd_jobs shows rows from daemon_jobs SQLite table."""
     import synlynk as sl
+    # Use a live PID so #753 reconcile does not immediately timed_out the row.
+    monkeypatch.setattr(sl.os, "kill", lambda pid, sig: None)
     conn = sl._get_db()
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
-        "depends_on, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "depends_on, pid, enqueued_at, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         ("job-abc123", "claude", "fix auth", "story-001", "running", 5, "[]",
-         "2026-06-24T08:00:00")
+         os.getpid(), "2026-06-24T08:00:00", "2026-06-24T08:00:00")
     )
     conn.commit(); conn.close()
     sl.cmd_jobs()
@@ -5586,8 +5588,8 @@ def test_daemon_jobs_insert_and_query(project_dir):
     assert json.loads(row[4]) == []
 
 
-def test_reconcile_daemon_jobs_marks_dead_pid_unknown(project_dir):
-    """A running job whose PID no longer exists gets marked unknown without an exit signal."""
+def test_reconcile_daemon_jobs_marks_dead_pid_timed_out(project_dir):
+    """A running job whose PID no longer exists is marked timed_out (#753), not unknown."""
     conn = synlynk._get_db()
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
@@ -5605,8 +5607,8 @@ def test_reconcile_daemon_jobs_marks_dead_pid_unknown(project_dir):
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", ("djob-dead",)
     ).fetchone()
     conn2.close()
-    assert row[0] == "unknown"
-    assert row[1] is None
+    assert row[0] == "timed_out"
+    assert row[1] == -9
 
 
 def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
