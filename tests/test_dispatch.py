@@ -3,6 +3,48 @@ import pytest
 from synlynk.dispatch import _format_job_summary
 
 
+def test_cli_dispatch_dry_run_prints_preview_and_creates_no_job(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    called = {"dispatch_agent": False}
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: called.__setitem__("dispatch_agent", True))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "claude", "--task", "Fix issue #720", "--dry-run"],
+    )
+
+    cli_mod.main()
+
+    captured = capsys.readouterr()
+    assert called["dispatch_agent"] is False
+    assert "agent:" in captured.out
+    assert "claude" in captured.out
+    assert "task_sha256:" in captured.out
+    assert "no job, worktree, or cost entry created" in captured.out
+
+
+def test_cli_dispatch_dry_run_empty_task_fails_closed_before_preview(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    called = {"dispatch_agent": False}
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: called.__setitem__("dispatch_agent", True))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "claude", "--task", "   ", "--dry-run"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_mod.main()
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "empty or whitespace-only" in captured.out
+    assert "task_sha256:" not in captured.out
+    assert called["dispatch_agent"] is False
+
+
 def test_render_dispatch_preview_includes_task_digest_and_no_context_file(tmp_path, monkeypatch):
     from synlynk.dispatch import _render_dispatch_preview
     import hashlib
