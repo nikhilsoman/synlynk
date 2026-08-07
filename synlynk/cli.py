@@ -566,6 +566,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--revoke", action="append", default=[],
         help="Remove a permission for this dispatch (repeatable)"
     )
+    dispatch_parser.add_argument(
+        "--scope-paths", action="append", default=[],
+        dest="scope_paths",
+        help="Restrict this dispatch to only touching files matching this glob (repeatable, "
+             "e.g. --scope-paths 'docs/superpowers/specs/**'). Declaring this denies automatic "
+             "PR creation by default unless --requires-gh-write is also set. See #769.",
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -1020,7 +1027,8 @@ def main() -> None:
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
-                                 issue=getattr(args, "issue", None))
+                                 issue=getattr(args, "issue", None),
+                                 scope_paths=getattr(args, "scope_paths", []))
             if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
                 print(f"Error: {job.get('reason')}")
                 remediation = job.get("remediation")
