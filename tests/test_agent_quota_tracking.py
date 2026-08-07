@@ -988,9 +988,15 @@ def test_fix_synlynk_jobs_all_permanently_shows_unknown_shared_exit_marker_race(
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
+    import hashlib
+
+    task_text = "shared exit marker test"
+    task_sha256 = hashlib.sha256(task_text.encode("utf-8")).hexdigest()
     log_path = project_dir / ".synlynk" / "logs" / "job-shared.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text("Input tokens: 12\nOutput tokens: 34\n")
+    log_path.write_text(
+        f"SYNLYNK_TASK_RECEIVED: {task_sha256}\nInput tokens: 12\nOutput tokens: 34\n"
+    )
     exit_path = str(log_path) + ".exit"
     with open(exit_path, "w") as f:
         f.write("0")

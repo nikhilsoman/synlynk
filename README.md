@@ -81,6 +81,17 @@ Get up and running in 60 seconds:
    synlynk dispatch claude --task "$TASK_VAR" --dry-run
    ```
 
+   Every dispatched agent is also asked to echo a receipt marker
+   (`SYNLYNK_TASK_RECEIVED: <task_sha256>`) as its literal first line of
+   output, confirming it received the exact task text before doing any
+   work. If a job's log is missing this marker (or prints it late, or with
+   the wrong digest) and no corroborating git activity shows up in its
+   worktree, Synlynk marks the job `task_delivery_failed` and skips
+   auto-finalize/push for that worktree — the files stay in place for
+   audit. If real work *did* land despite a missing/late marker, the job
+   is not blocked; it's flagged with a non-blocking WARN note instead
+   (see #720).
+
 6. **Check running jobs:**
    ```bash
    synlynk jobs

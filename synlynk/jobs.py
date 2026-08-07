@@ -88,6 +88,46 @@ def _log_has_permission_denied_signature(log_text: str) -> bool:
     return bool(detector(log_text)) if detector else False
 
 
+_TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
+
+
+def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[str]:
+    """Classifies task-receipt marker compliance in a job's log.
+
+    Returns one of 'ok', 'late', 'mismatch', 'absent', or None when the
+    check does not apply (empty log or no digest to check against).
+    """
+    if not log_text or not task_sha256:
+        return None
+    lines = [ln.strip() for ln in log_text.splitlines() if ln.strip()]
+    if not lines:
+        return "absent"
+    expected = f"{_TASK_RECEIPT_MARKER_PREFIX} {task_sha256}"
+    if lines[0] == expected:
+        return "ok"
+    if expected in lines[1:]:
+        return "late"
+    if lines[0].startswith(_TASK_RECEIPT_MARKER_PREFIX):
+        return "mismatch"
+    return "absent"
+
+
+def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_activity: bool) -> dict:
+    """Combines a receipt-check result with git-activity evidence.
+
+    'hard_fail' means no real work is visible to corroborate a bad/missing
+    receipt marker — safe to mark the job task_delivery_failed and skip
+    auto-finalize. 'warn' means the receipt check failed but real work
+    landed anyway — do not block the job, just annotate it (see the
+    job-b88e0f92 false-positive this guard was designed to avoid).
+    """
+    if receipt_status not in ("late", "mismatch", "absent"):
+        return {"hard_fail": False, "warn": False}
+    if has_corroborating_activity:
+        return {"hard_fail": False, "warn": True}
+    return {"hard_fail": True, "warn": False}
+
+
 def _normalize_worktree_relative_path(path: str) -> str:
     normalized = (path or "").replace("\\", "/").strip()
     if normalized.startswith("./"):
@@ -1151,6 +1191,21 @@ def _reconcile_jobs() -> None:
                 permission_denied = _log_has_permission_denied_signature(log_text)
                 if permission_denied:
                     job["status"] = "permission_denied"
+            is_harness_timeout_log = bool(log_text) and any(
+                phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
+            )
+            task_delivery = {"hard_fail": False, "warn": False}
+            if log_text and not permission_denied and not is_harness_timeout_log:
+                task_sha256_for_receipt = None
+                if job.get("task"):
+                    task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
+                receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                has_corroborating_activity = bool(
+                    git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
+                )
+                task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
+                if task_delivery["hard_fail"]:
+                    job["status"] = "task_delivery_failed"
             if job.get("status") != "completed" and log_text:
                 log_text_lower = log_text.lower()
                 for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1193,6 +1248,25 @@ def _reconcile_jobs() -> None:
                 summary_note = (
                     "headless permission auto-denial detected from log contents "
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
+            elif task_delivery["hard_fail"]:
+                summary_status = "TASK_DELIVERY_FAILED"
+                summary_note = (
+                    f"task receipt check failed ({receipt_status}); no corroborating "
+                    "git activity found in worktree (see #720 receipt protocol)"
+                )
+            elif task_delivery["warn"]:
+                summary_note = (
+                    f"⚠ task-receipt: {receipt_status}, but real work detected in "
+                    "the worktree — not blocking (see #720 receipt protocol)"
+                )
+                _write_sentinel_alert(
+                    "WARN",
+                    "TASK_RECEIPT_WARN",
+                    f"Job {job.get('id')} on agent '{job.get('agent')}' skipped/mismatched the "
+                    f"task receipt marker ({receipt_status}) but real work landed in its worktree — "
+                    "not blocking, flagging for review.",
+                    sentinel_path,
                 )
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
@@ -1289,6 +1363,8 @@ def _reconcile_jobs() -> None:
                     job.get("started_at"),
                 )
             permission_denied = False
+            task_delivery = {"hard_fail": False, "warn": False}
+            receipt_status = None
             job["ended_at"] = now
             changed = True
 
@@ -1298,6 +1374,20 @@ def _reconcile_jobs() -> None:
                 permission_denied = _log_has_permission_denied_signature(log_text)
                 if permission_denied:
                     job["status"] = "permission_denied"
+                is_harness_timeout_log = bool(log_text) and any(
+                    phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
+                )
+                if not permission_denied and not is_harness_timeout_log:
+                    task_sha256_for_receipt = None
+                    if job.get("task"):
+                        task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
+                    receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                    has_corroborating_activity = bool(
+                        git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
+                    )
+                    task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
+                    if task_delivery["hard_fail"]:
+                        job["status"] = "task_delivery_failed"
                 if job.get("status") != "completed":
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1342,6 +1432,25 @@ def _reconcile_jobs() -> None:
                 summary_note = (
                     "headless permission auto-denial detected from log contents "
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
+            elif task_delivery["hard_fail"]:
+                summary_status = "TASK_DELIVERY_FAILED"
+                summary_note = (
+                    f"task receipt check failed ({receipt_status}); no corroborating "
+                    "git activity found in worktree (see #720 receipt protocol)"
+                )
+            elif task_delivery["warn"]:
+                summary_note = (
+                    f"⚠ task-receipt: {receipt_status}, but real work detected in "
+                    "the worktree — not blocking (see #720 receipt protocol)"
+                )
+                _write_sentinel_alert(
+                    "WARN",
+                    "TASK_RECEIPT_WARN",
+                    f"Job {job.get('id')} on agent '{job.get('agent')}' skipped/mismatched the "
+                    f"task receipt marker ({receipt_status}) but real work landed in its worktree — "
+                    "not blocking, flagging for review.",
+                    sentinel_path,
                 )
             if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
                 summary_files_touched = git_state.get("remote_files_touched", [])

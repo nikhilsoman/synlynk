@@ -7,6 +7,69 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_check_task_receipt_ok_when_marker_is_first_line():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nsome work happened\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "ok"
+
+
+def test_check_task_receipt_late_when_marker_present_but_not_first():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "starting work\nSYNLYNK_TASK_RECEIVED: abc123\nmore work\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "late"
+
+
+def test_check_task_receipt_mismatch_when_first_line_wrong_digest():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: wrongdigest\nsome work\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "mismatch"
+
+
+def test_check_task_receipt_absent_when_no_marker_anywhere():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "just did the work with no marker at all\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "absent"
+
+
+def test_check_task_receipt_returns_none_for_empty_log_or_digest():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._check_task_receipt("", "abc123") is None
+    assert jobs_mod._check_task_receipt("some log", None) is None
+
+
+def test_classify_task_delivery_hard_fail_when_no_marker_and_no_activity():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("absent", has_corroborating_activity=False)
+    assert result == {"hard_fail": True, "warn": False}
+
+
+def test_classify_task_delivery_warn_when_no_marker_but_activity_present():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("mismatch", has_corroborating_activity=True)
+    assert result == {"hard_fail": False, "warn": True}
+
+
+def test_classify_task_delivery_clean_when_receipt_ok():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("ok", has_corroborating_activity=False)
+    assert result == {"hard_fail": False, "warn": False}
+
+
+def test_classify_task_delivery_clean_when_receipt_status_none():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery(None, has_corroborating_activity=False)
+    assert result == {"hard_fail": False, "warn": False}
+
+
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
     from synlynk.jobs import _task_sha256_and_preview
 
@@ -186,7 +249,7 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
         "id": "job-run",
         "agent": "claude",
         "story_id": "story-7",
-        "task": "task",
+        "task": None,
         "pid": 99999999,
         "log_file": str(log_path),
         "started_at": "2026-07-03T01:00:00",
@@ -244,6 +307,42 @@ def test_reconcile_jobs_summary_includes_task_sha256_matching_local_computation(
 
     assert f"task_sha256: {expected_digest}" in summary_text
     assert "task:     Fix issue #720 fail-closed on empty tasks" in summary_text
+
+
+def test_reconcile_jobs_marks_task_delivery_failed_when_marker_absent_and_no_activity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-noreceipt.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("did some stuff without printing the receipt marker\n")
+    (log_path.parent / "job-noreceipt.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-noreceipt",
+            "agent": "claude",
+            "story_id": "story-noreceipt",
+            "task": "implement the thing",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "waitpid", lambda pid, opts: (pid, 0))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-noreceipt")
+
+    assert reconciled["status"] == "task_delivery_failed"
+    assert "TASK_DELIVERY_FAILED" in out
 
 
 def test_reconcile_jobs_orphaned_story_cost_does_not_abort(tmp_path, monkeypatch):
@@ -322,6 +421,94 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     assert reconciled["status"] == "permission_denied"
     assert "PERMISSION_DENIED" in out
     assert "OK (exit 0)" not in out
+
+
+def test_reconcile_jobs_dead_pid_marks_task_delivery_failed_when_marker_absent(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-noreceipt.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("worked on it, no receipt marker anywhere\n")
+    (log_path.parent / "job-deadpid-noreceipt.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-noreceipt",
+            "agent": "grok",
+            "story_id": "story-deadpid",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T19:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-noreceipt")
+
+    assert reconciled["status"] == "task_delivery_failed"
+    assert "TASK_DELIVERY_FAILED" in out
+
+
+def test_reconcile_jobs_dead_pid_warns_but_does_not_fail_when_activity_present(tmp_path, monkeypatch, capsys, git_worktree_repo):
+    monkeypatch.chdir(tmp_path)
+    import subprocess
+    import synlynk
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "t@t.com"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "t"], check=True)
+    (worktree / "README.md").write_text("hello")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "checkout", "-q", "-b", "work"], check=True)
+    (worktree / "feature.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "real work"], check=True)
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-warn.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("did real work but forgot the receipt marker\n")
+    (log_path.parent / "job-deadpid-warn.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-warn",
+            "agent": "grok",
+            "story_id": "story-warn",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": str(worktree),
+            "worktree_branch": "dispatch/grok/job-deadpid-warn",
+            "started_at": "2026-08-07T19:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-warn")
+
+    assert reconciled["status"] != "task_delivery_failed"
+    assert "task-receipt" in out
 
 
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
