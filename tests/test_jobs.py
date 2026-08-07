@@ -7,6 +7,25 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_task_sha256_and_preview_returns_none_for_falsy_task():
+    from synlynk.jobs import _task_sha256_and_preview
+
+    assert _task_sha256_and_preview(None) == (None, None)
+    assert _task_sha256_and_preview("") == (None, None)
+
+
+def test_task_sha256_and_preview_computes_digest_and_collapses_whitespace():
+    from synlynk.jobs import _task_sha256_and_preview
+    import hashlib
+
+    task = "line one\n  line two   with   spaces\nline three"
+    task_sha256, task_preview = _task_sha256_and_preview(task)
+
+    assert task_sha256 == hashlib.sha256(task.encode("utf-8")).hexdigest()
+    assert task_preview == "line one line two with spaces line three"
+    assert "\n" not in task_preview
+
+
 def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch, capsys):
     from synlynk.fencing import FenceData
     from synlynk.jobs import _dispatch_ready_jobs

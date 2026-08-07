@@ -1,5 +1,6 @@
 """synlynk jobs: job store, reconciliation (CLI-dispatch and daemon paths), fleet routing."""
 
+import hashlib
 import json
 import os
 import re
@@ -570,6 +571,16 @@ def _job_cost_usd(agent: str, in_tokens: int, out_tokens: int, model_version: Op
     )
 
 
+def _task_sha256_and_preview(task: Optional[str]) -> tuple:
+    """Returns (task_sha256, task_preview) for a task string, or (None, None) if task is falsy."""
+    if not task:
+        return None, None
+    task_sha256 = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    collapsed = " ".join(task.split())
+    task_preview = collapsed[:200]
+    return task_sha256, task_preview
+
+
 def _retry_internal_timeout_job(job: dict, jobs: list, git_state: Optional[dict]) -> bool:
     """Re-dispatches a clean internal-timeout job when it is still retryable."""
     if not git_state:
@@ -1070,6 +1081,7 @@ def _reconcile_jobs() -> None:
                 out_tokens,
                 model_version,
             )
+            task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1085,6 +1097,8 @@ def _reconcile_jobs() -> None:
                 base_branch=job.get("base_branch"),
                 base_sha=job.get("base_sha"),
                 suite_result=job.get("suite_result"),
+                task_sha256=task_sha256,
+                task_preview=task_preview,
             )
             print(summary, end="")
             changed = True
@@ -1185,6 +1199,7 @@ def _reconcile_jobs() -> None:
             if job.get("status") == "completed":
                 _finalize_completed_worktree_job(job, git_state)
                 _apply_dispatch_gate(job)
+            task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1202,6 +1217,8 @@ def _reconcile_jobs() -> None:
                 base_branch=job.get("base_branch"),
                 base_sha=job.get("base_sha"),
                 suite_result=job.get("suite_result"),
+                task_sha256=task_sha256,
+                task_preview=task_preview,
             )
             print(summary, end="")
             changed = True
@@ -1367,6 +1384,7 @@ def _reconcile_jobs() -> None:
             if job.get("status") == "completed":
                 _finalize_completed_worktree_job(job, git_state)
                 _apply_dispatch_gate(job)
+            task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
                 job.get("agent", ""),
@@ -1384,6 +1402,8 @@ def _reconcile_jobs() -> None:
                 base_branch=job.get("base_branch"),
                 base_sha=job.get("base_sha"),
                 suite_result=job.get("suite_result"),
+                task_sha256=task_sha256,
+                task_preview=task_preview,
             )
             print(summary, end="")
 
@@ -1397,12 +1417,12 @@ def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
     conn = _pkg("_get_db")()
     rows = conn.execute(
-        "SELECT job_id, agent, story_id, pid, started_at, completed_at, log_path "
+        "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        for job_id, agent, story_id, pid, started_at, completed_at, log_path in rows:
+        for job_id, agent, story_id, task, pid, started_at, completed_at, log_path in rows:
             if pid is None:
                 continue
             exited = False
@@ -1492,9 +1512,11 @@ def _reconcile_daemon_jobs() -> None:
                     )
                 elif status == "unknown":
                     summary_status = terminal_status_for_unknown_exit()
+                task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
-                    out_tokens, cost_usd, [], status_label=summary_status, note=summary_note
+                    out_tokens, cost_usd, [], status_label=summary_status, note=summary_note,
+                    task_sha256=task_sha256, task_preview=task_preview
                 )
         conn.commit()
     finally:
