@@ -1788,6 +1788,41 @@ def cmd_jobs_reap(apply: bool = False, all_projects: bool = False) -> int:
     return 0
 
 
+def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
+    """If a high-confidence terminal job summary already exists, prefer it.
+
+    Returns ``(db_status, exit_code)`` or None. Prevents #753 dead-PID reconcile
+    from clobbering a real completion that already wrote its summary while the
+    daemon_jobs row was still stuck at ``running`` (race covered by
+    test_chore_synlynk_jobs_all_shows_stale_faile_terminal_summary_survives_daemon_reconcile).
+    """
+    path_fn = _pkg("_job_summary_path")
+    label_fn = _pkg("_summary_status_label")
+    if path_fn is None:
+        return None
+    try:
+        path = path_fn(job_id)
+    except Exception:
+        return None
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            text = f.read()
+    except OSError:
+        return None
+    label = label_fn(text) if label_fn else None
+    if not label:
+        return None
+    m = re.match(r"^OK \(exit (\d+)\)$", label)
+    if m:
+        return ("done", int(m.group(1)))
+    m = re.match(r"^FAILED \(exit (-?\d+)\)$", label)
+    if m:
+        return ("failed", int(m.group(1)))
+    return None
+
+
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
     conn = _pkg("_get_db")()
@@ -1834,6 +1869,23 @@ def _reconcile_daemon_jobs() -> None:
                             exit_code = int(f.read().strip())
                     except Exception:
                         pass
+
+                # Prefer an already-written terminal summary over inventing timed_out.
+                preferred = None
+                if exit_code is None and raw_exit_status is None:
+                    preferred = _existing_terminal_summary_truth(job_id)
+
+                if preferred is not None:
+                    status, exit_code = preferred
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+                        "WHERE job_id=? AND status='running'",
+                        (status, exit_code, now, job_id),
+                    )
+                    conn.commit()
+                    # Do not rewrite summary / re-bill costs — truth already on disk.
+                    continue
+
                 if exit_code == 0:
                     status = "done"
                 elif exit_code is None:
@@ -1897,6 +1949,9 @@ def _reconcile_daemon_jobs() -> None:
                     )
                 elif status == "unknown":
                     summary_status = terminal_status_for_unknown_exit()
+                elif status == "timed_out":
+                    summary_status = f"FAILED (exit {exit_code})"
+                    summary_note = "reaped dead/null PID (no exit signal); see synlynk jobs reap"
                 task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,

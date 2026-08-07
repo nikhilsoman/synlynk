@@ -790,15 +790,21 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
     existing_status = _summary_status_label(existing_summary) if existing_summary else None
     existing_files_touched = _summary_files_touched_count(existing_summary) if existing_summary else None
     new_status = _summary_status_label(summary)
-    # Do not downgrade a verified OK summary with an ambiguous race rewrite.
+    # Do not downgrade a verified OK summary with an ambiguous race rewrite
+    # (FAILED_UNVERIFIED / UNKNOWN / fabricated timed_out exit -9 from #753 reconcile).
     if existing_status == "OK (exit 0)" and new_status:
-        if new_status.startswith("FAILED_UNVERIFIED") or new_status == "UNKNOWN (exit unknown)":
+        if (
+            new_status.startswith("FAILED")
+            or new_status.startswith("FAILED_UNVERIFIED")
+            or new_status == "UNKNOWN (exit unknown)"
+            or "timed_out" in new_status.lower()
+        ):
             return existing_summary
     if (
         existing_summary
         and existing_files_touched
         and not (files_touched or [])
-        and exit_code in (None, -1)
+        and exit_code in (None, -1, -9)
         and existing_status
         and re.match(r"^(?:OK|FAILED)\s+\(exit\s+-?\d+\)$", existing_status)
     ):

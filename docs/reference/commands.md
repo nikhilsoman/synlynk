@@ -42,7 +42,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `backfill-capability-ratings` (secondary) — execute
 - `jobs` (primary) — execute
 - `jobs handoff` (secondary) — execute
-- `jobs reap` (secondary) — execute (dry-run default; `--apply` writes; `--all-projects` scans all DBs)
+- `jobs reap` (secondary) — execute
 - `schedule` (primary) — execute
 - `release` (primary) — release
 - `pr check` (primary) — release
