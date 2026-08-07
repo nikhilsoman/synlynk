@@ -7,6 +7,41 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_check_task_receipt_ok_when_marker_is_first_line():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nsome work happened\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "ok"
+
+
+def test_check_task_receipt_late_when_marker_present_but_not_first():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "starting work\nSYNLYNK_TASK_RECEIVED: abc123\nmore work\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "late"
+
+
+def test_check_task_receipt_mismatch_when_first_line_wrong_digest():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: wrongdigest\nsome work\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "mismatch"
+
+
+def test_check_task_receipt_absent_when_no_marker_anywhere():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "just did the work with no marker at all\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "absent"
+
+
+def test_check_task_receipt_returns_none_for_empty_log_or_digest():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._check_task_receipt("", "abc123") is None
+    assert jobs_mod._check_task_receipt("some log", None) is None
+
+
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
     from synlynk.jobs import _task_sha256_and_preview
 
