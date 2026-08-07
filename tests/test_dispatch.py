@@ -130,6 +130,42 @@ def test_format_job_summary_includes_base_and_suite_result_when_present():
     assert "suite:    5 passed, 0 failed, 1 skipped" in summary
 
 
+def test_format_job_summary_includes_task_sha256_and_preview_when_present():
+    summary = _format_job_summary(
+        "job-abc",
+        "codex",
+        "story-1",
+        0,
+        12.5,
+        100,
+        200,
+        0.01,
+        files_touched=["a.py"],
+        task_sha256="a3f9c2e1b8d4",
+        task_preview="Fix issue #720 fail-closed on empty tasks",
+    )
+
+    assert "task_sha256: a3f9c2e1b8d4" in summary
+    assert "task:     Fix issue #720 fail-closed on empty tasks" in summary
+
+
+def test_format_job_summary_omits_task_fields_when_absent():
+    summary = _format_job_summary(
+        "job-abc",
+        "codex",
+        "story-1",
+        0,
+        12.5,
+        100,
+        200,
+        0.01,
+        files_touched=["a.py"],
+    )
+
+    assert "task_sha256:" not in summary
+    assert "task:     " not in summary
+
+
 def test_format_job_summary_falls_back_when_jobs_not_allowlisted(monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
