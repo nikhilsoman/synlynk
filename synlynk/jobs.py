@@ -1369,6 +1369,19 @@ def _reconcile_jobs() -> None:
                 permission_denied = _log_has_permission_denied_signature(log_text)
                 if permission_denied:
                     job["status"] = "permission_denied"
+                task_delivery = {"hard_fail": False, "warn": False}
+                receipt_status = None
+                if not permission_denied:
+                    task_sha256_for_receipt = None
+                    if job.get("task"):
+                        task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
+                    receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                    has_corroborating_activity = bool(
+                        git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
+                    )
+                    task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
+                    if task_delivery["hard_fail"]:
+                        job["status"] = "task_delivery_failed"
                 if job.get("status") != "completed":
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1413,6 +1426,25 @@ def _reconcile_jobs() -> None:
                 summary_note = (
                     "headless permission auto-denial detected from log contents "
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
+            elif task_delivery["hard_fail"]:
+                summary_status = "TASK_DELIVERY_FAILED"
+                summary_note = (
+                    f"task receipt check failed ({receipt_status}); no corroborating "
+                    "git activity found in worktree (see #720 receipt protocol)"
+                )
+            elif task_delivery["warn"]:
+                summary_note = (
+                    f"⚠ task-receipt: {receipt_status}, but real work detected in "
+                    "the worktree — not blocking (see #720 receipt protocol)"
+                )
+                _write_sentinel_alert(
+                    "WARN",
+                    "TASK_RECEIPT_WARN",
+                    f"Job {job.get('id')} on agent '{job.get('agent')}' skipped/mismatched the "
+                    f"task receipt marker ({receipt_status}) but real work landed in its worktree — "
+                    "not blocking, flagging for review.",
+                    sentinel_path,
                 )
             if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
                 summary_files_touched = git_state.get("remote_files_touched", [])

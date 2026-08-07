@@ -249,7 +249,7 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
         "id": "job-run",
         "agent": "claude",
         "story_id": "story-7",
-        "task": "task",
+        "task": None,
         "pid": 99999999,
         "log_file": str(log_path),
         "started_at": "2026-07-03T01:00:00",
@@ -421,6 +421,94 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     assert reconciled["status"] == "permission_denied"
     assert "PERMISSION_DENIED" in out
     assert "OK (exit 0)" not in out
+
+
+def test_reconcile_jobs_dead_pid_marks_task_delivery_failed_when_marker_absent(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-noreceipt.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("worked on it, no receipt marker anywhere\n")
+    (log_path.parent / "job-deadpid-noreceipt.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-noreceipt",
+            "agent": "grok",
+            "story_id": "story-deadpid",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T19:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-noreceipt")
+
+    assert reconciled["status"] == "task_delivery_failed"
+    assert "TASK_DELIVERY_FAILED" in out
+
+
+def test_reconcile_jobs_dead_pid_warns_but_does_not_fail_when_activity_present(tmp_path, monkeypatch, capsys, git_worktree_repo):
+    monkeypatch.chdir(tmp_path)
+    import subprocess
+    import synlynk
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "t@t.com"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "t"], check=True)
+    (worktree / "README.md").write_text("hello")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "checkout", "-q", "-b", "work"], check=True)
+    (worktree / "feature.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "real work"], check=True)
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-warn.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("did real work but forgot the receipt marker\n")
+    (log_path.parent / "job-deadpid-warn.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-warn",
+            "agent": "grok",
+            "story_id": "story-warn",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": str(worktree),
+            "worktree_branch": "dispatch/grok/job-deadpid-warn",
+            "started_at": "2026-08-07T19:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-warn")
+
+    assert reconciled["status"] != "task_delivery_failed"
+    assert "task-receipt" in out
 
 
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
