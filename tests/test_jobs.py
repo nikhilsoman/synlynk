@@ -26,6 +26,37 @@ def test_task_sha256_and_preview_computes_digest_and_collapses_whitespace():
     assert "\n" not in task_preview
 
 
+def test_inspect_worktree_git_state_includes_changed_files_from_diff_and_status(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    prefix = ["git", "-C", str(worktree_path)]
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        if cmd == prefix + ["status", "--short"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=" M synlynk/jobs.py\n", stderr="")
+        if cmd == prefix + ["rev-list", "--count", "deadbeef..HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd == prefix + ["diff", "--name-only", "deadbeef..HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="docs/superpowers/specs/foo.md\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: (
+            lambda wt: {"base_commit": "deadbeef", "base_ref": "origin/main"}
+        ) if name == "_resolve_worktree_base_commit" else default,
+    )
+
+    git_state = jobs_mod._inspect_worktree_git_state(str(worktree_path), "feat/x", "2026-08-07T00:00:00")
+
+    assert git_state["changed_files"] == ["docs/superpowers/specs/foo.md", "synlynk/jobs.py"]
+
+
 def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch, capsys):
     from synlynk.fencing import FenceData
     from synlynk.jobs import _dispatch_ready_jobs

@@ -665,6 +665,22 @@ def _inspect_worktree_git_state(
             remote_branch_commit_count = remote_state["remote_commit_count"]
             remote_branch_files_touched = remote_state["remote_files_touched"]
 
+    changed_files = []
+    if base_commit:
+        try:
+            diff_result = subprocess.run(
+                ["git", "-C", worktree_path, "diff", "--name-only", f"{base_commit}..HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            diff_result = None
+        if diff_result is not None and diff_result.returncode == 0:
+            changed_files.extend(p for p in (diff_result.stdout or "").splitlines() if p)
+    if dirty:
+        changed_files.extend(_collect_worktree_status_paths(worktree_path))
+
     return {
         "worktree_path": worktree_path,
         "dirty": dirty,
@@ -676,6 +692,7 @@ def _inspect_worktree_git_state(
         "remote_commit_count": remote_branch_commit_count,
         "remote_files_touched": remote_branch_files_touched,
         "remote_has_activity": remote_branch_has_activity,
+        "changed_files": sorted(set(changed_files)),
     }
 
 
