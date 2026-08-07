@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — Windowed sentinel_crit: Stop Lifetime Logs from Keeping Ops RED"
+title: "PR #762 — Windowed sentinel_crit: Stop Lifetime Logs from Keeping Ops RED"
 date: 2026-08-07
 series: "Building the OS for Multi-Agent Development"
 post: 100
