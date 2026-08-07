@@ -88,6 +88,30 @@ def _log_has_permission_denied_signature(log_text: str) -> bool:
     return bool(detector(log_text)) if detector else False
 
 
+_TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
+
+
+def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[str]:
+    """Classifies task-receipt marker compliance in a job's log.
+
+    Returns one of 'ok', 'late', 'mismatch', 'absent', or None when the
+    check does not apply (empty log or no digest to check against).
+    """
+    if not log_text or not task_sha256:
+        return None
+    lines = [ln.strip() for ln in log_text.splitlines() if ln.strip()]
+    if not lines:
+        return "absent"
+    expected = f"{_TASK_RECEIPT_MARKER_PREFIX} {task_sha256}"
+    if lines[0] == expected:
+        return "ok"
+    if expected in lines[1:]:
+        return "late"
+    if lines[0].startswith(_TASK_RECEIPT_MARKER_PREFIX):
+        return "mismatch"
+    return "absent"
+
+
 def _normalize_worktree_relative_path(path: str) -> str:
     normalized = (path or "").replace("\\", "/").strip()
     if normalized.startswith("./"):
