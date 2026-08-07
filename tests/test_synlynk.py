@@ -3109,6 +3109,101 @@ def test_reconcile_auto_finalize_logs_gh_failure_without_crashing(project_dir, m
     assert sl._load_jobs()[0]["status"] == "completed"
 
 
+def test_finalize_skips_pr_creation_for_scope_declared_job_without_requires_gh_write(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "worktrees" / "job-scope-nopr"
+    worktree_path.mkdir(parents=True)
+    branch = "dispatch/codex/job-scope-nopr"
+    job = {
+        "id": "job-scope-nopr",
+        "agent": "codex",
+        "task": "write only the design doc",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": branch,
+        "scope_paths": ["docs/superpowers/specs/**"],
+        "requires_gh_write": False,
+    }
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{branch}\n", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+
+    jobs_mod._finalize_completed_worktree_job(
+        job,
+        {"has_activity": True, "remote_has_activity": False, "dirty": False, "commits_ahead": 1},
+    )
+
+    push_cmd = next(cmd for cmd in calls if cmd[:4] == ["git", "-C", str(worktree_path), "push"])
+    assert branch in push_cmd
+    assert not any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
+    assert not any(cmd[:3] == ["gh", "pr", "list"] for cmd in calls)
+
+
+def test_finalize_still_opens_pr_for_scope_declared_job_with_requires_gh_write(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "worktrees" / "job-scope-withpr"
+    worktree_path.mkdir(parents=True)
+    branch = "dispatch/codex/job-scope-withpr"
+    job = {
+        "id": "job-scope-withpr",
+        "agent": "codex",
+        "task": "write the design doc and open the PR",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": branch,
+        "scope_paths": ["docs/superpowers/specs/**"],
+        "requires_gh_write": True,
+    }
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        calls.append(cmd)
+        prefix = ["git", "-C", str(worktree_path)]
+        if cmd[:5] == prefix + ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{branch}\n", stderr="")
+        if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["rev-list", "--count"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd[:4] == prefix + ["push"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pushed\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/test/repo/pull/11\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sl, "detect_remote_owner_repo", lambda: ("test-org", "test-repo"))
+
+    jobs_mod._finalize_completed_worktree_job(
+        job,
+        {"has_activity": True, "remote_has_activity": False, "dirty": False, "commits_ahead": 1},
+    )
+
+    assert any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
+
+
 def test_finalize_uses_default_dispatch_branch_when_unchanged(tmp_path, monkeypatch):
     """(a) Worktree still on dispatch/<agent>/<job_id> — finalize/PR use that name (no regression)."""
     import subprocess

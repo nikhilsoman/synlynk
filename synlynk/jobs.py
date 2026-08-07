@@ -530,15 +530,21 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
             git_state,
             force_push=created_commit or git_state.get("commits_ahead", 0) > 0,
         )
-        pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
-        if pr_number is not None:
-            conn = _pkg("_get_db")()
-            conn.execute(
-                "UPDATE capability_ratings SET pr_number=? WHERE story_id=?",
-                (pr_number, job.get("story_id", "")),
+        if job.get("scope_paths") and not job.get("requires_gh_write"):
+            print(
+                f"  ⚠ scope-declared job {job.get('id', '')}: skipping automatic PR creation "
+                f"(pass --requires-gh-write to allow)"
             )
-            conn.commit()
-            conn.close()
+        else:
+            pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
+            if pr_number is not None:
+                conn = _pkg("_get_db")()
+                conn.execute(
+                    "UPDATE capability_ratings SET pr_number=? WHERE story_id=?",
+                    (pr_number, job.get("story_id", "")),
+                )
+                conn.commit()
+                conn.close()
 
 
 def _apply_dispatch_gate(job: dict) -> None:
