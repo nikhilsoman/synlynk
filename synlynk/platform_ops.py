@@ -8,7 +8,7 @@ Layers (maps to the nine gaps from the fleet EOD postmortem):
   L1 jobs        — daemon_jobs + jobs.json outcomes (status mix, unknown rate)
   L2 cost        — cost_entries rollup + orphan costs (no job_id)
   L3 side-effect — GH-write capable agents vs recent job text mentioning gh/pr fail
-  L4 signals     — sentinel CRITICAL lines + open LIVE issues (gh, if available)
+  L4 signals     — recent (report-window) sentinel CRITICAL lines + open LIVE issues
   L5 worktrees   — local git worktree count / stale
   L6 live smoke  — optional: last live matrix cells (per-repo if recorded)
   L7 attach      — harness attach/completion rates when present
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 from collections import Counter, defaultdict
@@ -26,6 +27,14 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+
+# Sentinel severity tokens that contribute to ops RED when recent.
+_SENTINEL_CRIT_KEYS = ("CRITICAL", "FLATLINE", "QUOTA_EXHAUSTED")
+# Bracket timestamps as written by _write_sentinel_alert: [YYYY-MM-DD HH:MM]
+_SENTINEL_TS_RE = re.compile(
+    r"\[(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)\]"
+)
 
 
 def _utc_now() -> datetime:
@@ -49,6 +58,82 @@ def _parse_ts(s: Optional[str]) -> Optional[datetime]:
             except Exception:
                 continue
     return None
+
+
+def _parse_sentinel_line_ts(line: str) -> Optional[datetime]:
+    """Parse the first bracket timestamp in a sentinel.md alert line.
+
+    Matches both ``[YYYY-MM-DD HH:MM]`` (canonical write format) and
+    ISO-like ``[YYYY-MM-DDTHH:MM:SS]``. Returned datetimes are timezone-aware
+    UTC; naive local wall-clock stamps are treated as UTC for windowing
+    (acceptable for multi-hour ops windows).
+    """
+    m = _SENTINEL_TS_RE.search(line or "")
+    if not m:
+        return None
+    date_s, time_s = m.group(1), m.group(2)
+    if len(time_s) == 5:
+        time_s = time_s + ":00"
+    try:
+        dt = datetime.strptime(f"{date_s} {time_s}", "%Y-%m-%d %H:%M:%S")
+        return dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _is_sentinel_critical_line(line: str) -> bool:
+    """True for alert bullets that carry CRITICAL / FLATLINE / QUOTA_EXHAUSTED.
+
+    Requires a ``- [`` prefix so triage notes / markdown headers mentioning
+    the word CRITICAL are not counted.
+    """
+    s = (line or "").strip()
+    if not s.startswith("- ["):
+        return False
+    upper = s.upper()
+    return any(k in upper for k in _SENTINEL_CRIT_KEYS)
+
+
+def count_sentinel_critical_lines(
+    text: str,
+    *,
+    cutoff: datetime,
+    now: Optional[datetime] = None,
+) -> Tuple[int, int, int]:
+    """Count severity-critical sentinel lines with a time window.
+
+    Returns ``(windowed, lifetime, untimestamped)``:
+    - **windowed** — critical lines with a parseable timestamp ``>= cutoff``
+      and ``<= now`` (if ``now`` given; default no upper bound beyond now)
+    - **lifetime** — all critical alert lines regardless of age
+    - **untimestamped** — critical lines with no parseable timestamp (excluded
+      from windowed so append-only historical noise without stamps cannot
+      flip ops RED)
+
+    Lines outside the window still appear in ``lifetime`` for diagnostics.
+    """
+    if now is None:
+        now = _utc_now()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    if cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
+
+    windowed = 0
+    lifetime = 0
+    untimestamped = 0
+    for line in (text or "").splitlines():
+        if not _is_sentinel_critical_line(line):
+            continue
+        lifetime += 1
+        ts = _parse_sentinel_line_ts(line)
+        if ts is None:
+            untimestamped += 1
+            continue
+        if cutoff <= ts <= now + timedelta(minutes=5):
+            # +5m slack for clock skew / same-minute writes
+            windowed += 1
+    return windowed, lifetime, untimestamped
 
 
 def _dev_roots() -> List[Path]:
@@ -368,8 +453,18 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         "pass": gh_fail_hints < max(3, n_jobs // 5) if n_jobs else True,
     }
 
-    # L4 signals — sentinels across ~/dev + LIVE issues via gh
+    # L4 signals — sentinels across ~/dev (windowed) + LIVE issues via gh
+    # Window matches the report's --hours so STALE historical CRITICAL lines
+    # in append-only sentinel.md cannot keep ops RED forever (#751).
+    sentinel_hours = hours
+    env_hours = os.environ.get("SYNLYNK_OPS_SENTINEL_HOURS", "").strip()
+    if env_hours.isdigit():
+        sentinel_hours = max(1, int(env_hours))
+    sentinel_cutoff = now - timedelta(hours=sentinel_hours)
+
     sentinel_crit = 0
+    sentinel_crit_lifetime = 0
+    sentinel_untimestamped = 0
     sentinel_files = 0
     for root in roots:
         sp = root / ".synlynk" / "sentinel.md"
@@ -378,10 +473,12 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         sentinel_files += 1
         try:
             text = sp.read_text(errors="replace")
-            for line in text.splitlines():
-                if "⚠" in line or "CRITICAL" in line.upper() or "FLATLINE" in line.upper():
-                    if any(k in line.upper() for k in ("CRITICAL", "FLATLINE", "QUOTA_EXHAUSTED")):
-                        sentinel_crit += 1
+            w, life, unts = count_sentinel_critical_lines(
+                text, cutoff=sentinel_cutoff, now=now
+            )
+            sentinel_crit += w
+            sentinel_crit_lifetime += life
+            sentinel_untimestamped += unts
         except Exception:
             pass
 
@@ -422,6 +519,9 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
     report.signals = {
         "sentinel_files_scanned": sentinel_files,
         "sentinel_critical_lines": sentinel_crit,
+        "sentinel_critical_lines_lifetime": sentinel_crit_lifetime,
+        "sentinel_critical_untimestamped": sentinel_untimestamped,
+        "sentinel_window_hours": sentinel_hours,
         "open_live_issues": len(live_issues),
         "live_issue_samples": [
             {"number": i.get("number"), "title": (i.get("title") or "")[:80],
@@ -553,9 +653,16 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         findings.append({
             "type": "platform_ops",
             "severity": "medium",
-            "summary": f"{sentinel_crit} CRITICAL/FLATLINE sentinel lines across repos",
-            "detail": f"files={sentinel_files}",
-            "signal_hash": f"ops-sentinel-{sentinel_crit}",
+            "summary": (
+                f"{sentinel_crit} CRITICAL/FLATLINE sentinel lines in last "
+                f"{sentinel_hours}h across repos"
+            ),
+            "detail": (
+                f"files={sentinel_files} windowed={sentinel_crit} "
+                f"lifetime={sentinel_crit_lifetime} "
+                f"untimestamped={sentinel_untimestamped}"
+            ),
+            "signal_hash": f"ops-sentinel-{sentinel_hours}h-{sentinel_crit}",
         })
     report.findings = findings
     return report
@@ -594,7 +701,9 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  {report.side_effects}",
         "",
         "L4 SIGNALS",
-        f"  sentinel_crit={report.signals.get('sentinel_critical_lines')}  "
+        f"  sentinel_crit={report.signals.get('sentinel_critical_lines')} "
+        f"(last {report.signals.get('sentinel_window_hours')}h; "
+        f"lifetime={report.signals.get('sentinel_critical_lines_lifetime')})  "
         f"open_LIVE={report.signals.get('open_live_issues')}",
         f"  live_samples={report.signals.get('live_issue_samples')}",
         "",
