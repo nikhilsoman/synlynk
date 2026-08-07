@@ -127,6 +127,37 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
 
 
+def _event_shows_real_activity(event) -> bool:
+    """True if a parsed log event is direct evidence the job did real work."""
+    if not isinstance(event, dict):
+        return False
+    if event.get("status") == "SUCCESS" and event.get("response", None) not in (None, ""):
+        return True
+    if event.get("type") == "assistant":
+        message = event.get("message")
+        content = message.get("content", []) if isinstance(message, dict) else []
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    return True
+    return False
+
+
+def _log_has_prior_activity_evidence(lines) -> bool:
+    """True if any line in `lines`, parsed as JSON, shows real activity."""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            event = json.loads(stripped)
+        except (ValueError, TypeError):
+            continue
+        if _event_shows_real_activity(event):
+            return True
+    return False
+
+
 def _log_has_permission_denied_signature(output_text: str) -> bool:
     """Detect the headless permission auto-denial signature in agent output."""
     text = output_text or ""
@@ -149,7 +180,9 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
     # Some logs append a short trailer after the structured result. Scan the
     # tail backwards so the signal stays deterministic when the JSON line is
     # not literally the final non-empty line.
-    for line in reversed(signature_window):
+    offset = len(lines) - len(signature_window)
+    for window_index in range(len(signature_window) - 1, -1, -1):
+        line = signature_window[window_index]
         try:
             event = json.loads(line.strip())
         except (ValueError, TypeError):
@@ -164,6 +197,9 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
         except (TypeError, ValueError):
             continue
         if num_turns <= 1:
+            absolute_index = offset + window_index
+            if _log_has_prior_activity_evidence(lines[:absolute_index]):
+                return False
             return True
 
     return False
