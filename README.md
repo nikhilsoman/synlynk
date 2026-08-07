@@ -74,6 +74,12 @@ Get up and running in 60 seconds:
    ```bash
    synlynk dispatch claude --task "refactor auth module"
    ```
+   `--task` must be a non-empty string — `dispatch_agent()` fails closed on an empty or whitespace-only task before creating any job, worktree, or cost entry (see [#720](https://github.com/nikhilsoman/synlynk/issues/720))
+   If `--task` is built from a shell variable in automation, don't interpolate it unchecked — an unset variable silently expands to an empty string
+   Sanity-check what a dispatch would actually send with `--dry-run` first:
+   ```bash
+   synlynk dispatch claude --task "$TASK_VAR" --dry-run
+   ```
 
 6. **Check running jobs:**
    ```bash
