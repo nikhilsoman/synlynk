@@ -1,5 +1,6 @@
 """synlynk dispatch: preflight gates, agent dispatch, exec wrapper."""
 
+import hashlib
 import json
 import os
 import re
@@ -618,6 +619,32 @@ def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None)
         return True
 
     return current_tip == base_sha
+
+
+def _render_dispatch_preview(agent: str, task: str, context_mode: str) -> dict:
+    """Compute task/context digest data for dispatch inspection."""
+    task_sha256 = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    context_digest = None
+    context_bytes = None
+    if context_mode != "none":
+        context_path = os.path.join(".synlynk", "context.md")
+        if os.path.exists(context_path):
+            try:
+                with open(context_path, "rb") as f:
+                    content = f.read()
+                context_digest = hashlib.sha256(content).hexdigest()
+                context_bytes = len(content)
+            except OSError:
+                pass
+    return {
+        "agent": agent,
+        "task": task,
+        "task_len": len(task),
+        "task_sha256": task_sha256,
+        "context_mode": context_mode,
+        "context_digest": context_digest,
+        "context_bytes": context_bytes,
+    }
 
 
 def _job_summary_path(job_id: str) -> str:

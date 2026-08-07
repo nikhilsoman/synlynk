@@ -3,6 +3,53 @@ import pytest
 from synlynk.dispatch import _format_job_summary
 
 
+def test_render_dispatch_preview_includes_task_digest_and_no_context_file(tmp_path, monkeypatch):
+    from synlynk.dispatch import _render_dispatch_preview
+    import hashlib
+
+    monkeypatch.chdir(tmp_path)
+    task = "Fix issue #720 fail-closed on empty tasks"
+
+    preview = _render_dispatch_preview("claude", task, "task")
+
+    expected_digest = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    assert preview["agent"] == "claude"
+    assert preview["task"] == task
+    assert preview["task_len"] == len(task)
+    assert preview["task_sha256"] == expected_digest
+    assert preview["context_mode"] == "task"
+    assert preview["context_digest"] is None
+    assert preview["context_bytes"] is None
+
+
+def test_render_dispatch_preview_includes_context_digest_when_context_md_exists(tmp_path, monkeypatch):
+    from synlynk.dispatch import _render_dispatch_preview
+    import hashlib
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    context_bytes = b"# Context\nactive tasks here\n"
+    (tmp_path / ".synlynk" / "context.md").write_bytes(context_bytes)
+
+    preview = _render_dispatch_preview("claude", "some task", "full")
+
+    assert preview["context_digest"] == hashlib.sha256(context_bytes).hexdigest()
+    assert preview["context_bytes"] == len(context_bytes)
+
+
+def test_render_dispatch_preview_skips_context_when_mode_none(tmp_path, monkeypatch):
+    from synlynk.dispatch import _render_dispatch_preview
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "context.md").write_bytes(b"unused")
+
+    preview = _render_dispatch_preview("claude", "some task", "none")
+
+    assert preview["context_digest"] is None
+    assert preview["context_bytes"] is None
+
+
 def test_format_job_summary_includes_watch_reminder():
     summary = _format_job_summary(
         "job-d63c4cf4",
