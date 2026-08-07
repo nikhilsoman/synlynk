@@ -309,6 +309,42 @@ def test_reconcile_jobs_summary_includes_task_sha256_matching_local_computation(
     assert "task:     Fix issue #720 fail-closed on empty tasks" in summary_text
 
 
+def test_reconcile_jobs_marks_task_delivery_failed_when_marker_absent_and_no_activity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-noreceipt.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("did some stuff without printing the receipt marker\n")
+    (log_path.parent / "job-noreceipt.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-noreceipt",
+            "agent": "claude",
+            "story_id": "story-noreceipt",
+            "task": "implement the thing",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "waitpid", lambda pid, opts: (pid, 0))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-noreceipt")
+
+    assert reconciled["status"] == "task_delivery_failed"
+    assert "TASK_DELIVERY_FAILED" in out
+
+
 def test_reconcile_jobs_orphaned_story_cost_does_not_abort(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     import synlynk
