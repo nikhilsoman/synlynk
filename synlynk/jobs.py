@@ -1149,6 +1149,8 @@ def _reconcile_jobs() -> None:
                 job["exit_code"] = 0
             if log_text:
                 permission_denied = _log_has_permission_denied_signature(log_text)
+                if permission_denied and _job_has_real_work_landed(git_state):
+                    permission_denied = False
                 if permission_denied:
                     job["status"] = "permission_denied"
             if job.get("status") != "completed" and log_text:

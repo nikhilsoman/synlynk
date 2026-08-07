@@ -365,6 +365,65 @@ def test_reconcile_jobs_waitpid_ignores_denial_shape_when_log_shows_earlier_tool
     assert reconciled["status"] != "permission_denied"
 
 
+def test_reconcile_jobs_waitpid_ignores_denial_shape_when_git_state_shows_activity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import subprocess
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+
+    worktree = tmp_path / "wt-waitpid"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "t@t.com"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "t"], check=True)
+    (worktree / "README.md").write_text("hello")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "checkout", "-q", "-b", "work"], check=True)
+    (worktree / "feature.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "real work"], check=True)
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-waitpid-git-corroborated.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        "jetski: no output produced - a tool required the \"command\" permission that "
+        "headless mode cannot prompt for, so it was auto-denied\n"
+    )
+
+    synlynk._save_jobs([
+        {
+            "id": "job-waitpid-git-corroborated",
+            "agent": "grok",
+            "story_id": "story-waitpid-git-corroborated",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": str(worktree),
+            "worktree_branch": "dispatch/grok/job-waitpid-git-corroborated",
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    def fake_waitpid(pid, opts):
+        return (pid, 0)
+
+    monkeypatch.setattr(synlynk.os, "waitpid", fake_waitpid)
+
+    synlynk._reconcile_jobs()
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-waitpid-git-corroborated")
+
+    assert reconciled["status"] != "permission_denied"
+    assert reconciled["status"] == "completed"
+
+
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
     import synlynk
     import synlynk.jobs as jobs_mod
