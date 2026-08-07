@@ -1228,8 +1228,24 @@ def _reconcile_jobs() -> None:
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
-                _apply_dispatch_gate(job)
+                scope_paths = job.get("scope_paths") or []
+                if scope_paths and git_state and not _check_scope_compliance(
+                    git_state.get("changed_files", []), scope_paths
+                ):
+                    job["status"] = "SCOPE_VIOLATION"
+                    job["scope_violation_files"] = [
+                        p for p in git_state.get("changed_files", [])
+                        if not any(fnmatch.fnmatch(p, pat) for pat in scope_paths)
+                    ]
+                    summary_status = "SCOPE_VIOLATION"
+                    summary_note = (
+                        f"declared scope {scope_paths} but changed files outside it: "
+                        f"{job['scope_violation_files']} — finalize/push/PR skipped, "
+                        f"worktree left intact for inspection"
+                    )
+                else:
+                    _finalize_completed_worktree_job(job, git_state)
+                    _apply_dispatch_gate(job)
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -1413,8 +1429,24 @@ def _reconcile_jobs() -> None:
             elif job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
-                _apply_dispatch_gate(job)
+                scope_paths = job.get("scope_paths") or []
+                if scope_paths and git_state and not _check_scope_compliance(
+                    git_state.get("changed_files", []), scope_paths
+                ):
+                    job["status"] = "SCOPE_VIOLATION"
+                    job["scope_violation_files"] = [
+                        p for p in git_state.get("changed_files", [])
+                        if not any(fnmatch.fnmatch(p, pat) for pat in scope_paths)
+                    ]
+                    summary_status = "SCOPE_VIOLATION"
+                    summary_note = (
+                        f"declared scope {scope_paths} but changed files outside it: "
+                        f"{job['scope_violation_files']} — finalize/push/PR skipped, "
+                        f"worktree left intact for inspection"
+                    )
+                else:
+                    _finalize_completed_worktree_job(job, git_state)
+                    _apply_dispatch_gate(job)
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -1719,7 +1751,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             return
         visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
         if not visible:
-            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified", "permission_denied")])
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified", "permission_denied", "SCOPE_VIOLATION")])
             unknown = len([j for j in jobs if j["status"] == "unknown"])
             suffix = f"{completed} completed/failed"
             if unknown:

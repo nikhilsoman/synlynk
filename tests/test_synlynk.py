@@ -2799,6 +2799,112 @@ def test_reconcile_auto_finalizes_dirty_worktree_excluding_generated_files(proje
     assert "gh pr create" in out or any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
 
 
+def test_reconcile_marks_scope_violation_when_change_outside_declared_scope(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    log_path = ".synlynk/logs/job-scope-bad.log"
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write("Input tokens: 10\nOutput tokens: 5\n")
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    worktree_path = os.path.join(os.getcwd(), "worktrees", "job-scope-bad")
+    os.makedirs(worktree_path, exist_ok=True)
+
+    sl._save_jobs([{
+        "id": "job-scope-bad",
+        "agent": "codex",
+        "story_id": "story-scope",
+        "task": "write only the design doc",
+        "pid": 99999999,
+        "log_file": log_path,
+        "worktree_path": worktree_path,
+        "worktree_branch": "dispatch/codex/job-scope-bad",
+        "started_at": "2026-08-07T01:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "scope_paths": ["docs/superpowers/specs/**"],
+        "requires_gh_write": False,
+    }])
+
+    monkeypatch.setattr(sl.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {
+        "has_activity": True,
+        "remote_has_activity": False,
+        "dirty": True,
+        "commits_ahead": 0,
+        "changed_files": ["synlynk/jobs.py"],
+    })
+
+    finalize_calls = []
+    monkeypatch.setattr(jobs_mod, "_finalize_completed_worktree_job", lambda *a, **kw: finalize_calls.append(a))
+
+    sl._reconcile_jobs()
+
+    job = sl._load_jobs()[0]
+    assert job["status"] == "SCOPE_VIOLATION"
+    assert job["scope_violation_files"] == ["synlynk/jobs.py"]
+    assert finalize_calls == []
+
+    captured = capsys.readouterr()
+    assert "SCOPE_VIOLATION" in captured.out
+    assert "synlynk/jobs.py" in captured.out
+
+
+def test_reconcile_finalizes_normally_when_change_is_within_declared_scope(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    log_path = ".synlynk/logs/job-scope-good.log"
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write("Input tokens: 10\nOutput tokens: 5\n")
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    worktree_path = os.path.join(os.getcwd(), "worktrees", "job-scope-good")
+    os.makedirs(worktree_path, exist_ok=True)
+
+    sl._save_jobs([{
+        "id": "job-scope-good",
+        "agent": "codex",
+        "story_id": "story-scope-good",
+        "task": "write only the design doc",
+        "pid": 99999999,
+        "log_file": log_path,
+        "worktree_path": worktree_path,
+        "worktree_branch": "dispatch/codex/job-scope-good",
+        "started_at": "2026-08-07T01:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "scope_paths": ["docs/superpowers/specs/**"],
+        "requires_gh_write": False,
+    }])
+
+    monkeypatch.setattr(sl.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {
+        "has_activity": True,
+        "remote_has_activity": False,
+        "dirty": True,
+        "commits_ahead": 0,
+        "changed_files": ["docs/superpowers/specs/2026-08-07-foo-design.md"],
+    })
+
+    finalize_calls = []
+    monkeypatch.setattr(jobs_mod, "_finalize_completed_worktree_job", lambda *a, **kw: finalize_calls.append(a))
+    monkeypatch.setattr(jobs_mod, "_apply_dispatch_gate", lambda *a, **kw: None)
+
+    sl._reconcile_jobs()
+
+    job = sl._load_jobs()[0]
+    assert job["status"] == "completed"
+    assert len(finalize_calls) == 1
+
+
 def test_reconcile_auto_finalizes_clean_worktree_with_local_commits(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
