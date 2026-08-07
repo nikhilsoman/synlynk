@@ -314,9 +314,67 @@ def test_live_matrix_mock_zero_cost():
     from synlynk.fleet import run_matrix_live
 
     results = run_matrix_live(".", budget_usd=10.0, mock=True)
-    assert len(results) == len(CORE_FLEET)
+    assert len(results) == len(CORE_FLEET) * 2
     assert all(r.status == "green" for r in results)
     assert all(r.cost_usd == 0.0 for r in results)
+
+
+def test_live_agent_receipt_check_green_when_marker_is_first_line(monkeypatch):
+    import synlynk.fleet as fleet_mod
+
+    class FakeProc:
+        returncode = 0
+        stdout = "SYNLYNK_TASK_RECEIVED: abc123\nok done\n"
+        stderr = ""
+
+    monkeypatch.setattr(fleet_mod.shutil, "which", lambda cli: "/usr/bin/fake-cli")
+    monkeypatch.setattr(fleet_mod.subprocess, "run", lambda *a, **kw: FakeProc())
+
+    result = fleet_mod.live_agent_receipt_check("claude", task_sha256="abc123")
+
+    assert result.status == "green"
+
+
+def test_live_agent_receipt_check_red_when_marker_missing(monkeypatch):
+    import synlynk.fleet as fleet_mod
+
+    class FakeProc:
+        returncode = 0
+        stdout = "did some stuff, no marker\n"
+        stderr = ""
+
+    monkeypatch.setattr(fleet_mod.shutil, "which", lambda cli: "/usr/bin/fake-cli")
+    monkeypatch.setattr(fleet_mod.subprocess, "run", lambda *a, **kw: FakeProc())
+
+    result = fleet_mod.live_agent_receipt_check("claude", task_sha256="abc123")
+
+    assert result.status == "red"
+
+
+def test_live_agent_receipt_check_red_when_marker_not_first_line(monkeypatch):
+    import synlynk.fleet as fleet_mod
+
+    class FakeProc:
+        returncode = 0
+        stdout = "starting up\nSYNLYNK_TASK_RECEIVED: abc123\n"
+        stderr = ""
+
+    monkeypatch.setattr(fleet_mod.shutil, "which", lambda cli: "/usr/bin/fake-cli")
+    monkeypatch.setattr(fleet_mod.subprocess, "run", lambda *a, **kw: FakeProc())
+
+    result = fleet_mod.live_agent_receipt_check("claude", task_sha256="abc123")
+
+    assert result.status == "red"
+
+
+def test_run_matrix_live_includes_receipt_cell_per_agent_in_mock_mode():
+    import synlynk.fleet as fleet_mod
+
+    results = fleet_mod.run_matrix_live(mock=True)
+
+    receipt_cells = [r for r in results if r.cell.startswith("live_receipt:")]
+    assert len(receipt_cells) == 4
+    assert all(r.status == "green" for r in receipt_cells)
 
 
 def test_sandbox_fallback_avoids_worktree_cwd(tmp_path):

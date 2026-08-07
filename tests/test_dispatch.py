@@ -92,6 +92,63 @@ def test_render_dispatch_preview_skips_context_when_mode_none(tmp_path, monkeypa
     assert preview["context_bytes"] is None
 
 
+def test_render_task_receipt_instruction_contains_marker_and_digest():
+    import synlynk.dispatch as dispatch_mod
+
+    instruction = dispatch_mod._render_task_receipt_instruction("abc123")
+
+    assert "SYNLYNK_TASK_RECEIVED: abc123" in instruction
+    assert "very first output" in instruction
+
+
+def test_format_prompt_for_agent_prepends_receipt_instruction_for_all_agents():
+    import synlynk.dispatch as dispatch_mod
+
+    for agent in ("claude", "codex", "agy", "grok"):
+        prompt = dispatch_mod._format_prompt_for_agent(
+            agent, "context", "story-1", "do the thing", "", "",
+            task_sha256="deadbeef",
+        )
+        assert prompt.startswith("## Task Receipt (required)")
+        assert "SYNLYNK_TASK_RECEIVED: deadbeef" in prompt
+        assert "do the thing" in prompt
+
+
+def test_dispatch_agent_writes_receipt_instruction_to_prompt_file(tmp_path, monkeypatch):
+    import hashlib
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda *a, **kw: {
+            "path": str(tmp_path),
+            "branch": "dispatch/test/job-x",
+            "base_branch": "main",
+            "base_sha": "deadbeef",
+        },
+    )
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: "context")
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *a, **kw: type("P", (), {"pid": 99999999})(),
+    )
+
+    task = "implement the receipt protocol"
+    expected_digest = hashlib.sha256(task.encode("utf-8")).hexdigest()
+
+    dispatch_mod.dispatch_agent("claude", task, force_agent=True, skip_preflight=True)
+
+    prompt_files = list(tmp_path.glob(".synlynk/prompts/*"))
+    assert prompt_files, "expected a prompt file to be written"
+    prompt_text = prompt_files[0].read_text()
+    assert f"SYNLYNK_TASK_RECEIVED: {expected_digest}" in prompt_text
+
+
 def test_format_job_summary_includes_watch_reminder():
     summary = _format_job_summary(
         "job-d63c4cf4",

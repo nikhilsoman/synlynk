@@ -442,6 +442,61 @@ def live_agent_smoke(home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> Ma
     )
 
 
+def live_agent_receipt_check(home: str, task_sha256: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> MatrixCellResult:
+    """Runs one real headless CLI turn for *home* and checks receipt-marker
+    compliance: the CLI must echo SYNLYNK_TASK_RECEIVED: <digest> as its
+    literal first output line (see #720 receipt protocol)."""
+    from synlynk.jobs import _check_task_receipt
+    from synlynk.dispatch import _render_task_receipt_instruction
+
+    baseline = AGENT_CAPABILITY_BASELINES.get(home) or {}
+    cli = baseline.get("cli", home)
+    cell = f"live_receipt:{home}"
+    if shutil.which(cli) is None:
+        return MatrixCellResult(
+            home=home, cell=cell, tier=2, status="red",
+            detail=f"{cli} not on PATH", cost_usd=0.0,
+        )
+
+    prompt = _render_task_receipt_instruction(task_sha256) + _LIVE_SMOKE_PROMPT
+    ni = list(baseline.get("non_interactive_flags") or [])
+    prompt_via_arg = baseline.get("prompt_via_arg", False)
+    prompt_flag = baseline.get("prompt_flag")
+
+    try:
+        if home == "claude":
+            cmd = [cli, "--print", prompt]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+        elif home == "codex":
+            cmd = [cli, "exec", "-", "-s", "workspace-write"]
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout_s)
+        elif prompt_via_arg and prompt_flag:
+            cmd = [cli] + ni + [prompt_flag, prompt]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+        else:
+            cmd = [cli] + ni
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        return MatrixCellResult(
+            home=home, cell=cell, tier=2, status="red",
+            detail=f"timeout after {timeout_s}s", cost_usd=_LIVE_SMOKE_COST_USD,
+        )
+    except OSError as exc:
+        return MatrixCellResult(
+            home=home, cell=cell, tier=2, status="red",
+            detail=f"spawn failed: {exc}", cost_usd=0.0,
+        )
+
+    receipt_status = _check_task_receipt(proc.stdout or "", task_sha256)
+    ok = proc.returncode == 0 and receipt_status == "ok"
+    return MatrixCellResult(
+        home=home, cell=cell, tier=2,
+        status="green" if ok else "red",
+        detail=f"exit={proc.returncode} receipt={receipt_status}",
+        cost_usd=_LIVE_SMOKE_COST_USD if proc.returncode == 0 else 0.05,
+    )
+
+
 def run_matrix_live(
     root: str = ".",
     budget_usd: float = MATRIX_LIVE_BUDGET_USD,
@@ -513,6 +568,68 @@ def run_matrix_live(
             break
         if next_spent > budget_usd and spent == 0:
             # single cell alone exceeds budget — mark incomplete
+            cell.status = "incomplete"
+            cell.detail = f"cell cost {cell.cost_usd:.2f} exceeds budget {budget_usd:.2f}"
+            results.append(cell)
+            remaining = remaining[1:]
+            break
+        spent = next_spent
+        results.append(cell)
+        remaining = remaining[1:]
+
+    import hashlib
+
+    receipt_task_sha256 = hashlib.sha256(b"synlynk matrix receipt check").hexdigest()
+
+    def _mock_receipt_check(home: str) -> MatrixCellResult:
+        return MatrixCellResult(
+            home=home,
+            cell=f"live_receipt:{home}",
+            tier=2,
+            status="green",
+            detail="zero_cost_mock",
+            cost_usd=0.0,
+        )
+
+    if dispatch_fn is not None:
+        receipt_fn = dispatch_fn
+    elif mock:
+        receipt_fn = _mock_receipt_check
+    else:
+        receipt_fn = lambda home: live_agent_receipt_check(home, receipt_task_sha256)
+    remaining = list(homes)
+    for home in homes:
+        if spent >= budget_usd:
+            for h in remaining:
+                results.append(
+                    MatrixCellResult(
+                        home=h,
+                        cell=f"live_receipt:{h}",
+                        tier=2,
+                        status="incomplete",
+                        detail=f"budget exhausted (spent={spent:.2f} cap={budget_usd:.2f})",
+                    )
+                )
+            break
+        cell = receipt_fn(home)
+        cell.tier = 2
+        if cell.home != home:
+            cell.home = home
+        cell.cell = f"live_receipt:{home}"
+        next_spent = spent + float(cell.cost_usd or 0.0)
+        if next_spent > budget_usd and spent > 0:
+            for h in remaining:
+                results.append(
+                    MatrixCellResult(
+                        home=h,
+                        cell=f"live_receipt:{h}",
+                        tier=2,
+                        status="incomplete",
+                        detail=f"budget would exceed (spent={spent:.2f} cap={budget_usd:.2f})",
+                    )
+                )
+            break
+        if next_spent > budget_usd and spent == 0:
             cell.status = "incomplete"
             cell.detail = f"cell cost {cell.cost_usd:.2f} exceeds budget {budget_usd:.2f}"
             results.append(cell)
