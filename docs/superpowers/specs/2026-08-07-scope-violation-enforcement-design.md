@@ -21,7 +21,7 @@ reported completed.
 
 ## Fix
 
-### 1. Scope declaration (`synlynk/cli.py`, `synlynk/dispatch.py`)
+### 1. Scope declaration (`synlynk/cli.py`, `synlynk/dispatch.py`, `synlynk/jobs.py`)
 
 A new repeatable CLI flag on `synlynk dispatch`, parallel to the existing `--requires`/`--grant`:
 
@@ -30,35 +30,41 @@ dispatch_parser.add_argument(
     "--scope-paths", action="append", default=[],
     dest="scope_paths",
     help="Restrict this dispatch to only touching files matching this glob (repeatable, "
-         "e.g. --scope-paths 'docs/superpowers/specs/**'). Declaring this denies gh-write "
-         "capability by default unless --grant gh-write or --requires-gh-write is also set. "
-         "See #769.",
+         "e.g. --scope-paths 'docs/superpowers/specs/**'). Declaring this denies automatic "
+         "PR creation by default unless --requires-gh-write is also set. See #769.",
 )
 ```
 
-`scope_paths` (a JSON array, empty by default) is threaded through `dispatch_agent()` into the
-job record (new `scope_paths` column on the `jobs` table, same pattern as the existing
-`task_sha256`/`task_preview` columns from #720 sub-project 1) and into `_resolve_dispatch_permissions()`:
+Jobs are not stored in a SQL table — `_load_jobs()`/`_save_jobs()` (`synlynk/jobs.py:43-59`)
+persist the full job list as a plain JSON array in `.synlynk/jobs.json`, and job dicts already
+carry ad-hoc fields (`base_branch`, `base_sha`, etc.) with no schema migration needed. `task_sha256`/
+`task_preview` are *not* stored columns either — they're computed on the fly from `job.get("task")`
+at each reconciliation call site (`_task_sha256_and_preview()`, `jobs.py:574`). `scope_paths`
+follows the same pattern: `dispatch_agent()` (`synlynk/dispatch.py:1610`) gains a `scope_paths: list
+= None` parameter, stores it as `job["scope_paths"] = scope_paths or []` in the job dict it builds,
+and `_save_jobs()` persists it for free as part of the existing job dict.
 
-```python
-def _resolve_dispatch_permissions(agent, role, grants, revokes, requires_gh_write, scope_paths):
-    effective = set(_ROLE_PERMISSION_DEFAULTS.get(role, []))
-    if scope_paths and not requires_gh_write and "gh-write" not in grants:
-        effective.discard("gh-write")
-    effective.update(grants)
-    effective.difference_update(revokes)
-    return sorted(effective)
-```
+There is also no `"gh-write"` permission string anywhere in the codebase.
+`_resolve_dispatch_permissions()` (`dispatch.py:132`) resolves agent-side tool permissions like
+`"write:src/"`/`"run:tests"` for the *dispatched agent's own* CLI flags — it has nothing to do with
+synlynk's own post-hoc PR creation. That PR creation happens in `_maybe_open_worktree_pr()`
+(`jobs.py:280`), called from `_finalize_completed_worktree_job()` (`jobs.py:404`), and today it
+runs **unconditionally** whenever a completed job has real work. GitHub-write capability for the
+*agent itself* is a separate, pre-existing mechanism: `dispatch_agent()`'s `requires_gh_write: bool`
+param reroutes to an agent with `can_gh_write: True` in `AGENT_CAPABILITY_BASELINES`
+(`dispatch.py:1637-1660`); it does not gate synlynk's own PR-creation call either.
 
-This reuses the existing permission → CLI-tool-flag plumbing (`_permissions_to_flags`,
-`_grok_permission_flags`) that already gates `gh` CLI/MCP tool availability per agent — no new
-enforcement mechanism, just a new default input to an existing one. A job dispatched without
-`--scope-paths` is entirely unaffected: `scope_paths` is empty, the `if scope_paths and ...`
-guard never fires, and permission resolution behaves exactly as it does today.
+So the correct, minimal enforcement point is `_finalize_completed_worktree_job()` itself: before
+calling `_maybe_open_worktree_pr()`, skip the call when `job.get("scope_paths")` is truthy and
+`job.get("requires_gh_write")` is falsy (the job's dispatch-time `--requires-gh-write` flag,
+already stored on the job dict by existing code). This reuses the existing `--requires-gh-write`
+flag as the override — no new `--grant gh-write` flag is introduced. A job dispatched without
+`--scope-paths` is entirely unaffected: `scope_paths` is empty/absent, the guard never fires, and
+`_maybe_open_worktree_pr()` runs exactly as it does today.
 
-`git push` of the job's own branch is deliberately **not** gated by this permission — it stays
-on the unconditional auto-finalize path described below. Only GitHub API writes (PR creation,
-review, merge) are denied by default for scope-declared jobs.
+`git push` of the job's own branch is deliberately **not** gated by this — it stays on the
+unconditional auto-finalize path in `_finalize_completed_worktree_job()`. Only the PR-creation
+call is skipped by default for scope-declared jobs.
 
 ### 2. Post-completion enforcement (`synlynk/jobs.py`)
 
@@ -118,14 +124,15 @@ if scope_paths and git_state and not _check_scope_compliance(
         p for p in git_state.get("changed_files", [])
         if not any(fnmatch.fnmatch(p, pat) for pat in scope_paths)
     ]
-    _pkg("_get_db")().execute(
-        "UPDATE jobs SET status=?, scope_violation_files=? WHERE id=?",
-        (job["status"], json.dumps(job["scope_violation_files"]), job["id"]),
-    ).connection.commit()
 else:
     _finalize_completed_worktree_job(job, git_state)
     _apply_dispatch_gate(job)
 ```
+
+(`job["status"]`/`job["scope_violation_files"]` are plain dict assignments — persisted the same
+way every other in-place job mutation in this loop already is, via the single `_save_jobs(jobs)`
+call at the end of the reconciliation function, e.g. `jobs.py:1414`. No database write is
+involved.)
 
 A `SCOPE_VIOLATION` job skips `_finalize_completed_worktree_job` entirely — no git add, no
 commit, no push, no PR. `_maybe_open_worktree_pr` is never reached. The worktree is left intact
@@ -137,10 +144,22 @@ posture for anything not yet confirmed safe to discard.
 used to scope its Layer 2 (git-state corroboration) to the `jobs` table only.
 
 A compliant scope-declared job proceeds through `_finalize_completed_worktree_job` normally:
-commit and push happen unconditionally (git push isn't gated), but `_maybe_open_worktree_pr`
-still respects whatever gh-write permission was resolved in Section 1 — so a compliant
-design-only job is pushed and reported `completed`, but no PR is opened unless gh-write was
-explicitly granted.
+commit and push happen unconditionally (git push isn't gated). Inside that function, immediately
+before its existing call to `_maybe_open_worktree_pr(job, worktree_path, worktree_branch)`, add:
+
+```python
+if job.get("scope_paths") and not job.get("requires_gh_write"):
+    print(
+        f"  ⚠ scope-declared job {job.get('id', '')}: skipping automatic PR creation "
+        f"(pass --requires-gh-write to allow)"
+    )
+else:
+    pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
+    ...  # existing capability_ratings.pr_number update, unchanged
+```
+
+So a compliant design-only job is pushed and reported `completed`, but no PR is opened unless
+`--requires-gh-write` was passed at dispatch time.
 
 ### 3. Status value
 
@@ -167,10 +186,10 @@ explicitly granted.
   not called).
 - A job with the same `scope_paths` whose worktree only touched a file under
   `docs/superpowers/specs/` reconciles to `completed`; the branch is pushed; no PR is opened
-  (gh-write not granted).
-- A job with `scope_paths` declared, `--grant gh-write` also passed, and only in-scope changes
-  → `completed`, pushed, and `_maybe_open_worktree_pr` is called (permission resolution
-  confirmed not permanently blocking gh-write when explicitly granted).
+  (`requires_gh_write` not set).
+- A job with `scope_paths` declared, `requires_gh_write=True` also set, and only in-scope changes
+  → `completed`, pushed, and `_maybe_open_worktree_pr` is called (confirms the skip guard isn't
+  permanently blocking PR creation when `--requires-gh-write` is explicitly passed).
 - A job with no `scope_paths` declared behaves identically to current behavior (regression
   guard — this is the most important test given how much of the reconciliation path is shared).
 
