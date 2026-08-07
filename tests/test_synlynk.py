@@ -5639,6 +5639,41 @@ def test_reconcile_daemon_jobs_reads_exit_file(project_dir, tmp_path):
     assert os.path.exists(exit_path), ".exit file should remain readable for the other reconciler"
 
 
+def test_reconcile_daemon_jobs_ignores_denial_shape_when_log_shows_earlier_tool_use(project_dir, tmp_path):
+    """daemon_jobs has no worktree_path/git_state, so it relies solely on the
+    log-level corroboration fix in _log_has_permission_denied_signature()."""
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-corroborated.log")
+    exit_path = log_path + ".exit"
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit",'
+            '"input":{"file_path":"a.py"}}]}}\n'
+            '{"conversation_id":"djob-corroborated","status":"SUCCESS","response":"",'
+            '"duration_seconds":1,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":0}}\n'
+        )
+    open(exit_path, "w").write("0")
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("djob-corroborated", "claude", "task", "running", 5, "[]", 99999999,
+         "2026-08-07T10:00:00", "2026-08-07T10:00:01", log_path)
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", ("djob-corroborated",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] != "permission_denied"
+
+
 def test_reconcile_jobs_uses_model_rate_table_for_completed_job_cost(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
