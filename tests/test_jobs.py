@@ -837,3 +837,205 @@ def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch)
     create_call = next(cmd for cmd in captured if cmd[:3] == ["gh", "pr", "create"])
     assert "--base" in create_call
     assert create_call[create_call.index("--base") + 1] == "master"
+
+
+# --- #753 jobs reap -----------------------------------------------------------
+
+def _seed_daemon_job(conn, job_id, agent="agy", status="running", pid=None, started_at="2026-08-07T07:00:00"):
+    conn.execute(
+        "INSERT OR REPLACE INTO daemon_jobs "
+        "(job_id, agent, task, story_id, status, priority, depends_on, pid, enqueued_at, started_at, "
+        " completed_at, exit_code, log_path, handoff_count) "
+        "VALUES (?, ?, 'task', NULL, ?, 5, '[]', ?, ?, ?, NULL, NULL, NULL, 0)",
+        (job_id, agent, status, pid, started_at, started_at),
+    )
+    conn.commit()
+
+
+def test_pid_is_alive_null_and_dead(monkeypatch):
+    from synlynk.jobs import _pid_is_alive
+
+    assert _pid_is_alive(None) is False
+    assert _pid_is_alive("not-a-pid") is False
+
+    def boom(pid, sig):
+        raise ProcessLookupError()
+
+    monkeypatch.setattr("os.kill", boom)
+    assert _pid_is_alive(12345) is False
+
+
+def test_pid_is_alive_permission_treated_alive(monkeypatch):
+    from synlynk.jobs import _pid_is_alive
+
+    def denied(pid, sig):
+        raise PermissionError()
+
+    monkeypatch.setattr("os.kill", denied)
+    assert _pid_is_alive(999) is True
+
+
+def test_mark_daemon_job_terminal_only_running(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import mark_daemon_job_terminal
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-dead0001", pid=1)
+    _seed_daemon_job(conn, "job-done0001", status="done", pid=2)
+    assert mark_daemon_job_terminal(conn, "job-dead0001") is True
+    assert mark_daemon_job_terminal(conn, "job-done0001") is False
+    conn.commit()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-dead0001'"
+    ).fetchone()
+    assert row[0] == "timed_out"
+    assert row[1] == -9
+    conn.close()
+
+
+def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):
+    from synlynk.jobs import scan_zombie_running_jobs, apply_reap_zombies
+    import sqlite3
+
+    db = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, "
+        "priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, "
+        "completed_at TEXT, exit_code INTEGER, log_path TEXT, handoff_count INTEGER DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-z1','agy','t',NULL,'running',5,'[]',111,'2026-08-01T00:00:00','2026-08-01T00:00:00',NULL,NULL,NULL,0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-z2','claude','t',NULL,'running',5,'[]',222,'2026-08-01T00:00:00','2026-08-01T00:00:00',NULL,NULL,NULL,0)"
+    )
+    conn.commit()
+    conn.close()
+
+    def fake_kill(pid, sig):
+        if int(pid) == 111:
+            raise ProcessLookupError()
+        # 222 alive
+
+    monkeypatch.setattr("os.kill", fake_kill)
+    cands = scan_zombie_running_jobs(str(db))
+    by_id = {c["job_id"]: c for c in cands}
+    assert by_id["job-z1"]["action"] == "reap"
+    assert by_id["job-z2"]["action"] == "keep"
+
+    reaped = apply_reap_zombies(cands)
+    assert len(reaped) == 1
+    assert reaped[0]["job_id"] == "job-z1"
+    conn = sqlite3.connect(str(db))
+    rows = {
+        r[0]: (r[1], r[2])
+        for r in conn.execute("SELECT job_id, status, exit_code FROM daemon_jobs")
+    }
+    assert rows["job-z1"] == ("timed_out", -9)
+    assert rows["job-z2"][0] == "running"
+    conn.close()
+
+
+def test_cmd_jobs_reap_dry_run_and_apply(tmp_path, monkeypatch, capsys):
+    from synlynk.jobs import cmd_jobs_reap
+    import sqlite3
+
+    db = tmp_path / "proj" / "state.db"
+    db.parent.mkdir()
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, "
+        "priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, "
+        "completed_at TEXT, exit_code INTEGER, log_path TEXT, handoff_count INTEGER DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-dry1','agy','t',NULL,'running',5,'[]',333,'2026-08-01T00:00:00','2026-08-01T00:00:00',NULL,NULL,NULL,0)"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr("os.kill", lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(
+        "synlynk.jobs._iter_project_state_dbs",
+        lambda all_projects=False: [str(db)],
+    )
+
+    assert cmd_jobs_reap(apply=False) == 0
+    out = capsys.readouterr().out
+    assert "DRY-RUN" in out
+    assert "job-dry1" in out
+    conn = sqlite3.connect(str(db))
+    assert conn.execute("SELECT status FROM daemon_jobs WHERE job_id='job-dry1'").fetchone()[0] == "running"
+    conn.close()
+
+    assert cmd_jobs_reap(apply=True) == 0
+    out = capsys.readouterr().out
+    assert "APPLY" in out
+    assert "Reaped 1" in out
+    conn = sqlite3.connect(str(db))
+    assert conn.execute("SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-dry1'").fetchone() == (
+        "timed_out",
+        -9,
+    )
+    conn.close()
+
+
+def test_auto_reap_job_from_sentinel(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import auto_reap_job_from_sentinel
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-ad59d3ea", agent="agy", pid=99999)
+    conn.close()
+
+    # Pretend PID is dead
+    import synlynk.jobs as jobs_mod
+    # auto_reap does not check PID — it marks running → timed_out on sentinel code
+    updated = auto_reap_job_from_sentinel(
+        "HARNESS_INTERNAL_TIMEOUT",
+        "Job job-ad59d3ea on agent 'agy' died from an internal harness timeout",
+    )
+    assert updated == "job-ad59d3ea"
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-ad59d3ea'"
+    ).fetchone()
+    conn.close()
+    assert row == ("timed_out", -9)
+
+
+def test_write_sentinel_stall_auto_reaps(project_dir, monkeypatch):
+    """_write_sentinel_alert(STALL_NO_OUTPUT) flips daemon_jobs running → timed_out."""
+    from synlynk import _get_db, _write_sentinel_alert
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-bd8ff601", agent="claude", pid=1)
+    conn.close()
+
+    _write_sentinel_alert(
+        "CRITICAL",
+        "STALL_NO_OUTPUT",
+        "Job job-bd8ff601 on agent 'claude' stalled with zero output after 30min. Process killed.",
+    )
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-bd8ff601'"
+    ).fetchone()
+    conn.close()
+    assert row[0] == "timed_out"
+
+
+def test_jobs_reap_cli_parser():
+    from synlynk.cli import build_parser
+
+    args = build_parser().parse_args(["jobs", "reap", "--apply", "--all-projects"])
+    assert args.command == "jobs"
+    assert args.jobs_cmd == "reap"
+    assert args.apply is True
+    assert args.all_projects is True
