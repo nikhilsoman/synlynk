@@ -1191,8 +1191,11 @@ def _reconcile_jobs() -> None:
                 permission_denied = _log_has_permission_denied_signature(log_text)
                 if permission_denied:
                     job["status"] = "permission_denied"
+            is_harness_timeout_log = bool(log_text) and any(
+                phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
+            )
             task_delivery = {"hard_fail": False, "warn": False}
-            if log_text and not permission_denied:
+            if log_text and not permission_denied and not is_harness_timeout_log:
                 task_sha256_for_receipt = None
                 if job.get("task"):
                     task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
@@ -1360,6 +1363,8 @@ def _reconcile_jobs() -> None:
                     job.get("started_at"),
                 )
             permission_denied = False
+            task_delivery = {"hard_fail": False, "warn": False}
+            receipt_status = None
             job["ended_at"] = now
             changed = True
 
@@ -1369,9 +1374,10 @@ def _reconcile_jobs() -> None:
                 permission_denied = _log_has_permission_denied_signature(log_text)
                 if permission_denied:
                     job["status"] = "permission_denied"
-                task_delivery = {"hard_fail": False, "warn": False}
-                receipt_status = None
-                if not permission_denied:
+                is_harness_timeout_log = bool(log_text) and any(
+                    phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
+                )
+                if not permission_denied and not is_harness_timeout_log:
                     task_sha256_for_receipt = None
                     if job.get("task"):
                         task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
