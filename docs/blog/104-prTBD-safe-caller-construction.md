@@ -3,7 +3,7 @@ title: "Safe Caller Construction: Documenting the Path That Already Existed"
 date: 2026-08-08
 series: "Building the OS for Multi-Agent Development"
 post: 104
-pr: "TBD"
+pr: "#783"
 merged: status: open
 ---
 
