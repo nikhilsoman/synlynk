@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — Scope Violation Enforcement: Making --scope-paths Mean Something"
+title: "PR #778 — Scope Violation Enforcement: Making --scope-paths Mean Something"
 date: 2026-08-08
 series: "Building the OS for Multi-Agent Development"
 post: 103
-pr: "#TBD"
+pr: "#778"
 merged: status: open
 ---
 
