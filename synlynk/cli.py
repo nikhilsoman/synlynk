@@ -509,6 +509,10 @@ def build_parser() -> argparse.ArgumentParser:
     config_set_parser = config_sub.add_parser("set", help="Set a config key")
     config_set_parser.add_argument("key")
     config_set_parser.add_argument("value")
+    nudges_parser = config_sub.add_parser(
+        "nudges", help="Control workspace-agent nudges"
+    )
+    nudges_parser.add_argument("state", choices=["on", "off", "reset"])
 
     sentinel_parser = subparsers.add_parser("sentinel",
                                              help="View and manage sentinel alerts")
@@ -999,6 +1003,21 @@ def main() -> None:
         if getattr(args, "config_action", None) == "set":
             from synlynk import cmd_config_set
             cmd_config_set(args.key, args.value)
+        elif getattr(args, "config_action", None) == "nudges":
+            from synlynk import _update_config, load_config
+
+            cfg = load_config()
+            nudges_cfg = cfg.get(
+                "nudges", {"enabled": True, "dismissed_ids": [], "last_shown": {}}
+            )
+            if args.state == "on":
+                nudges_cfg["enabled"] = True
+            elif args.state == "off":
+                nudges_cfg["enabled"] = False
+            elif args.state == "reset":
+                nudges_cfg = {"enabled": True, "dismissed_ids": [], "last_shown": {}}
+            _update_config({"nudges": nudges_cfg})
+            print(f"  ✓ nudges {args.state}")
         else:
             config_parser.print_help()
     elif args.command == "sentinel":

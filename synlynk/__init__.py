@@ -1507,6 +1507,7 @@ def load_config() -> dict:
         "auto_launch_after_wizard": True,
         "dispatch_mode": "daily-grind",
         "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
+        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
         "org": None,
         "owner": None,
         "repo": None,
@@ -1544,6 +1545,9 @@ def load_config() -> dict:
         for key, val in defaults["dispatch"].items():
             if key not in config.get("dispatch", {}):
                 config.setdefault("dispatch", {})[key] = val
+        for key, val in defaults["nudges"].items():
+            if key not in config.get("nudges", {}):
+                config.setdefault("nudges", {})[key] = val
         return config
     except (json.JSONDecodeError, IOError):
         return defaults

@@ -16,6 +16,14 @@ class FenceData:
     label: Optional[str] = None
 
 
+@dataclass
+class NudgeData:
+    nudge_id: str
+    title: str
+    message: str
+    follow_up: Optional[str] = None
+
+
 def render_task_fence(data: FenceData) -> str:
     """Render a bordered fence block for a FenceData instance."""
     label = data.label or data.command
@@ -28,6 +36,16 @@ def render_task_fence(data: FenceData) -> str:
     ]
     for hint in data.hints:
         lines.append(f"tip:    {hint}")
+    lines.append("-" * 36)
+    return "\n".join(lines) + "\n"
+
+
+def render_nudge_fence(data: NudgeData) -> str:
+    """Render a bordered workspace-agent nudge block."""
+    header = f"-- {data.title} " + "-" * max(1, 32 - len(data.title))
+    lines = [header, data.message]
+    if data.follow_up:
+        lines.append(f"next: {data.follow_up}")
     lines.append("-" * 36)
     return "\n".join(lines) + "\n"
 
