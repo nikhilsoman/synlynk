@@ -396,6 +396,39 @@ def test_enqueue_plan_writes_one_queued_daemon_job_per_assignment(scheduler_db):
     ]
 
 
+def test_enqueue_plan_opens_reservations(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _enqueue_plan
+
+    plan = [
+        {
+            "story_id": "story-sched1",
+            "title": "Sched test",
+            "agent": "codex",
+            "score": 1.0,
+            "model": "unknown",
+            "priority": 5,
+            "estimated_tokens": 7_000,
+            "headroom_before": 100_000,
+            "headroom_after": 93_000,
+        },
+    ]
+
+    job_ids = _enqueue_plan(plan)
+    assert len(job_ids) == 1
+
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT harness, tokens, scope, job_id, status FROM agent_reservations "
+        "WHERE job_id=?",
+        (job_ids[0],),
+    ).fetchall()
+    conn.close()
+    assert len(rows) == 1
+    assert rows[0][:3] == ("codex", 7_000, "plan")
+    assert rows[0][4] == "open"
+
+
 def test_enqueue_plan_on_empty_plan_writes_nothing(scheduler_db):
     from synlynk import _get_db
     from synlynk.scheduler import _enqueue_plan

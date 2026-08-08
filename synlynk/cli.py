@@ -180,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_scan,
         cmd_cost_log,
         cmd_quota,
+        cmd_quota_tpm_view,
         cmd_roadmap_add,
         cmd_score_add,
         cmd_score_attest,
@@ -758,6 +759,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Emit machine-readable JSON",
     )
+    quota_parser.add_argument(
+        "--tpm-view",
+        action="store_true",
+        dest="tpm_view",
+        help="Show open reservations across all harnesses (read-only TPM hook view)",
+    )
 
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
@@ -905,6 +912,7 @@ def main() -> None:
         cmd_run_trio,
         cmd_scan,
         cmd_cost_log,
+        cmd_quota_tpm_view,
         cmd_score_add,
         cmd_score_attest,
         cmd_score_list,
@@ -1196,10 +1204,13 @@ def main() -> None:
                 note=args.note,
             )
     elif args.command == "quota":
-        cmd_quota(
-            agent=getattr(args, "agent", None),
-            json_output=getattr(args, "json_output", False),
-        )
+        if getattr(args, "tpm_view", False):
+            cmd_quota_tpm_view()
+        else:
+            cmd_quota(
+                agent=getattr(args, "agent", None),
+                json_output=getattr(args, "json_output", False),
+            )
     elif args.command == "schedule":
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":

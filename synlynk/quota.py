@@ -402,6 +402,39 @@ def cmd_quota(agent: Optional[str] = None, json_output: bool = False) -> None:
     print("  window; limits are config defaults, not live provider plan meters.")
 
 
+def cmd_quota_tpm_view() -> None:
+    """Read-only CLI wrapper around tpm_observe_reservations()."""
+    from synlynk.tpm_hooks import tpm_observe_reservations
+
+    conn = _pkg("_get_db")()
+    try:
+        reservations = tpm_observe_reservations(conn)
+    finally:
+        conn.close()
+
+    if not reservations:
+        print("  No open reservations")
+        return
+
+    print(
+        f"\n  {'Harness':<10} {'Tokens':>10} {'Scope':<10} "
+        f"{'Scope ID':<14} {'Job ID':<14} {'Headroom':>10}"
+    )
+    print("  " + "-" * 72)
+    for reservation in reservations:
+        headroom = (
+            "unknown"
+            if reservation["current_headroom"] is None
+            else f"{reservation['current_headroom']:,}"
+        )
+        print(
+            f"  {reservation['harness']:<10} {reservation['tokens']:>10,} "
+            f"{reservation['scope']:<10} "
+            f"{(reservation['scope_id'] or '-'):<14} "
+            f"{(reservation['job_id'] or '-'):<14} {headroom:>10}"
+        )
+
+
 def _upsert_agent_quota(
     agent: str,
     quota_type: str,
@@ -448,11 +481,92 @@ def _upsert_agent_quota(
                 reset_at,
             ),
         )
-        if own_conn:
-            conn.commit()
+        conn.commit()
     finally:
         if own_conn:
             conn.close()
+
+
+_RESERVATION_EXPIRY_SECONDS = 24 * 3600  # comfortably > longest QUOTA_TYPES window (5h)
+
+
+def _open_reservation(
+    conn,
+    harness: str,
+    tokens: int,
+    scope: str,
+    scope_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+) -> int:
+    """Opens an agent_reservations row. Returns the new reservation id.
+
+    scope is one of 'plan' | 'session' | 'adhoc' (not validated here -- callers
+    are internal and already constrained by the design's dispatch-time flow).
+    """
+    cur = conn.execute(
+        "INSERT INTO agent_reservations (harness, tokens, scope, scope_id, job_id, status) "
+        "VALUES (?, ?, ?, ?, ?, 'open')",
+        (harness, int(tokens), scope, scope_id, job_id),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def _release_reservation(conn, reservation_id: int) -> None:
+    """Marks a reservation released. Idempotent -- releasing twice is a no-op
+    on the second call since the WHERE clause only matches status='open'."""
+    conn.execute(
+        "UPDATE agent_reservations SET status='released', released_at=CURRENT_TIMESTAMP "
+        "WHERE id=? AND status='open'",
+        (reservation_id,),
+    )
+    conn.commit()
+
+
+def _open_reservations_sum(conn, harness: str) -> int:
+    """Sums tokens from open, non-expired reservations for one harness.
+
+    Lazy expiry: a reservation older than _RESERVATION_EXPIRY_SECONDS is
+    excluded from the sum on read, not physically mutated -- avoids an extra
+    write on every dispatch just to sweep abandoned reservations.
+    """
+    cutoff = datetime.now(UTC).timestamp() - _RESERVATION_EXPIRY_SECONDS
+    cutoff_iso = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
+    row = conn.execute(
+        "SELECT COALESCE(SUM(tokens), 0) FROM agent_reservations "
+        "WHERE harness=? AND status='open' AND created_at >= ?",
+        (harness, cutoff_iso),
+    ).fetchone()
+    return int(row[0] or 0)
+
+
+def _force_exhaust_quota(conn, harness: str, window: str) -> None:
+    """Reactive correction: zeroes `harness`'s headroom for `window` immediately,
+    from a real observed rejection signal (see sentinel.py QUOTA_EXHAUSTED).
+
+    Never touches daemon_jobs -- running jobs keep running (wait/resume policy).
+    If no agent_quotas row exists yet for this harness/window, creates a
+    zero-headroom placeholder row so the next _quota_status_for_agent() call
+    sees it as exhausted rather than "unknown" (degraded, non-blocking).
+    """
+    if window not in QUOTA_TYPES:
+        window = "5h"
+    rows = conn.execute(
+        "SELECT model, unit, limit_tokens FROM agent_quotas WHERE agent=? AND quota_type=?",
+        (harness, window),
+    ).fetchall()
+    if not rows:
+        _upsert_agent_quota(
+            harness, window, limit_tokens=0, used_tokens=0, unit="tokens", conn=conn
+        )
+        return
+    for model, unit, limit_tokens in rows:
+        conn.execute(
+            "UPDATE agent_quotas SET used_tokens=?, updated_at=CURRENT_TIMESTAMP "
+            "WHERE agent=? AND model=? AND quota_type=? AND unit=?",
+            (int(limit_tokens), harness, model, window, unit),
+        )
+    conn.commit()
 
 
 def _project_request_quota_from_config() -> Optional[dict]:
@@ -596,6 +710,7 @@ def _quota_status_for_agent(
 
     need_tokens = int(estimated_tokens) if estimated_tokens else 0
     need_requests = max(1, int(estimated_requests or 1))
+    reserved = _pkg("_open_reservations_sum")(conn, agent)
     min_token_headroom = None
     min_request_headroom = None
 
@@ -603,6 +718,7 @@ def _quota_status_for_agent(
         unit = row["unit"]
         headroom = row["headroom"]
         if unit == "tokens":
+            headroom = max(0, headroom - reserved)
             min_token_headroom = (
                 headroom if min_token_headroom is None
                 else min(min_token_headroom, headroom)

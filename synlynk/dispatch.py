@@ -1702,6 +1702,89 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
 
+    import hashlib as _hashlib_early
+    if not job_id:
+        _job_seed = dispatch_time if dispatch_time is not None else time.time()
+        job_id = "job-" + _hashlib_early.md5(f"{agent}{task}{_job_seed}".encode()).hexdigest()[:8]
+
+    get_db_fn = _pkg("_get_db")
+    if get_db_fn:
+        _quota_conn = get_db_fn()
+        if _quota_conn is not None:
+            resolve_story_fn = _pkg("resolve_or_create_story_id")
+            _est_tokens = None
+            if story_id and resolve_story_fn:
+                _row = _quota_conn.execute(
+                    "SELECT estimated_tokens FROM stories WHERE story_id=?", (story_id,)
+                ).fetchone()
+                if _row and _row[0]:
+                    _est_tokens = int(_row[0])
+            if _est_tokens is None:
+                # Ad-hoc call with no story estimate: rough heuristic, ~4 chars/token.
+                _est_tokens = max(1000, len(task) // 4)
+
+            quota_status_fn = _pkg("_quota_status_for_agent")
+            qstatus = (
+                quota_status_fn(_quota_conn, agent, estimated_tokens=_est_tokens)
+                if quota_status_fn
+                else {"status": "unknown", "degraded": True}
+            )
+
+            if qstatus.get("status") == "exhausted":
+                reset_at = None
+                rows_fn = _pkg("_read_agent_quota_rows")
+                if rows_fn:
+                    for _r in rows_fn(_quota_conn, agent) or []:
+                        if _r.get("reset_at"):
+                            reset_at = _r["reset_at"]
+                            break
+                now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+                existing_job = _quota_conn.execute(
+                    "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
+                ).fetchone()
+                if existing_job:
+                    _quota_conn.execute(
+                        "UPDATE daemon_jobs SET status='queued', "
+                        "blocked_reason='quota_exhausted' WHERE job_id=?",
+                        (job_id,),
+                    )
+                else:
+                    _quota_conn.execute(
+                        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
+                        "priority, depends_on, enqueued_at, blocked_reason) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
+                         "quota_exhausted"),
+                    )
+                _quota_conn.commit()
+                return {
+                    "deferred": True,
+                    "reason": qstatus.get("reason", "quota_exhausted"),
+                    "retry_after": reset_at,
+                    "job_id": job_id,
+                }
+
+            open_reservation_fn = _pkg("_open_reservation")
+            has_reservations_table = _quota_conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_reservations'"
+            ).fetchone()
+            if open_reservation_fn and has_reservations_table:
+                _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
+                existing_reservation = _quota_conn.execute(
+                    "SELECT 1 FROM agent_reservations "
+                    "WHERE status='open' AND job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if not existing_reservation:
+                    open_reservation_fn(
+                        _quota_conn,
+                        agent,
+                        _est_tokens,
+                        scope=_scope,
+                        scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                        job_id=job_id,
+                    )
+
     resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
     if resolve_or_create_story_id:
         if story_id:
@@ -1853,11 +1936,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     hint = _context_mode_hint(context_mode, task)
     if hint:
         print(f"    {hint}")
-
-    import hashlib as _hashlib
-    if not job_id:
-        job_seed = dispatch_time if dispatch_time is not None else time.time()
-        job_id = "job-" + _hashlib.md5(f"{agent}{task}{job_seed}".encode()).hexdigest()[:8]
 
     _unused_path, worktree_branch = _job_worktree_details(job_id, agent)
     worktree_info = _create_job_worktree(job_id, agent, base=base)
