@@ -162,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_instructions_update,
         cmd_jobs,
         cmd_jobs_handoff,
+        cmd_jobs_reap,
         cmd_backfill_capability_ratings,
         cmd_join,
         cmd_launch,
@@ -586,6 +587,21 @@ def build_parser() -> argparse.ArgumentParser:
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another agent")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to", dest="to_agent", default=None)
+    reap_p = jobs_sub.add_parser(
+        "reap",
+        help="Reap dead-PID daemon_jobs stuck in status=running (dry-run default; --apply writes)",
+    )
+    reap_p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually mark zombies timed_out (default is dry-run)",
+    )
+    reap_p.add_argument(
+        "--all-projects",
+        action="store_true",
+        dest="all_projects",
+        help="Scan every ~/.synlynk/projects/*/state.db (default: current project only)",
+    )
 
     relay_parser = subparsers.add_parser("relay", help="Relay event broker commands")
     relay_sub = relay_parser.add_subparsers(dest="relay_action")
@@ -864,6 +880,7 @@ def main() -> None:
         cmd_instructions_update,
         cmd_jobs,
         cmd_jobs_handoff,
+        cmd_jobs_reap,
         cmd_backfill_capability_ratings,
         cmd_join,
         cmd_launch,
@@ -1049,6 +1066,13 @@ def main() -> None:
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))
+        elif getattr(args, "jobs_cmd", None) == "reap":
+            raise SystemExit(
+                cmd_jobs_reap(
+                    apply=getattr(args, "apply", False),
+                    all_projects=getattr(args, "all_projects", False),
+                )
+            )
         else:
             cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                      watch=getattr(args, "watch", False),

@@ -790,15 +790,21 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
     existing_status = _summary_status_label(existing_summary) if existing_summary else None
     existing_files_touched = _summary_files_touched_count(existing_summary) if existing_summary else None
     new_status = _summary_status_label(summary)
-    # Do not downgrade a verified OK summary with an ambiguous race rewrite.
+    # Do not downgrade a verified OK summary with an ambiguous race rewrite
+    # (FAILED_UNVERIFIED / UNKNOWN / fabricated timed_out exit -9 from #753 reconcile).
     if existing_status == "OK (exit 0)" and new_status:
-        if new_status.startswith("FAILED_UNVERIFIED") or new_status == "UNKNOWN (exit unknown)":
+        if (
+            new_status.startswith("FAILED")
+            or new_status.startswith("FAILED_UNVERIFIED")
+            or new_status == "UNKNOWN (exit unknown)"
+            or "timed_out" in new_status.lower()
+        ):
             return existing_summary
     if (
         existing_summary
         and existing_files_touched
         and not (files_touched or [])
-        and exit_code in (None, -1)
+        and exit_code in (None, -1, -9)
         and existing_status
         and re.match(r"^(?:OK|FAILED)\s+\(exit\s+-?\d+\)$", existing_status)
     ):
@@ -808,15 +814,32 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
     return summary
 
 
+def _render_task_receipt_instruction(task_sha256: Optional[str]) -> str:
+    """Returns a prompt-prepend block instructing the agent to echo the
+    task digest as its literal first output line (see #720 receipt protocol)."""
+    if not task_sha256:
+        return ""
+    return (
+        "## Task Receipt (required)\n"
+        "Before doing anything else, print this exact line as your very "
+        "first output:\n"
+        f"SYNLYNK_TASK_RECEIVED: {task_sha256}\n"
+        "Then proceed with the task below.\n\n"
+    )
+
+
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
-                              cwd_hint: Optional[str] = None) -> str:
+                              cwd_hint: Optional[str] = None,
+                              task_sha256: Optional[str] = None) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
+    receipt_instruction = _render_task_receipt_instruction(task_sha256)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
         return (
+            f"{receipt_instruction}"
             f"## Task Criteria\n{criteria}\n"
             f"{file_section}\n"
             f"{verify_section}\n"
@@ -826,6 +849,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     if agent == "agy":
         working_dir = cwd_hint or os.getcwd()
         return (
+            f"{receipt_instruction}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
@@ -835,6 +859,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"Context summary:\n{context_text}"
         )
     return (
+        f"{receipt_instruction}"
         f"{context_text}"
         f"{story_ref}"
         f"{file_section}"
@@ -1872,6 +1897,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     verify_contract = _pkg("_verify_contract_for_story")
     verify_section = verify_contract(story_id, task) if (story_id and verify_contract) else ""
 
+    task_sha256_for_receipt = hashlib.sha256(task.encode("utf-8")).hexdigest()
     format_prompt = _pkg("_format_prompt_for_agent", _format_prompt_for_agent)
     try:
         prompt = format_prompt(
@@ -1882,6 +1908,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             file_section,
             verify_section,
             cwd_hint=worktree_path,
+            task_sha256=task_sha256_for_receipt,
         )
     except TypeError:
         prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)

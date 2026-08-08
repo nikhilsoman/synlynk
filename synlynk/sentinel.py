@@ -79,6 +79,14 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             os.makedirs(parent, exist_ok=True)
     with open(sentinel_file, "w") as f:
         f.write(existing + line)
+    # #753: STALL / internal-timeout alerts must flip daemon_jobs off "running"
+    # immediately — do not wait for the next manual `jobs reap` pass.
+    if code in ("STALL_NO_OUTPUT", "HARNESS_INTERNAL_TIMEOUT"):
+        try:
+            from synlynk.jobs import auto_reap_job_from_sentinel
+            auto_reap_job_from_sentinel(code, message)
+        except Exception:
+            pass
 
 
 def _read_sentinel_alerts(severity: Optional[str] = None) -> list:

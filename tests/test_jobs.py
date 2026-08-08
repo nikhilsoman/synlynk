@@ -41,6 +41,69 @@ def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
     assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
 
 
+def test_check_task_receipt_ok_when_marker_is_first_line():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nsome work happened\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "ok"
+
+
+def test_check_task_receipt_late_when_marker_present_but_not_first():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "starting work\nSYNLYNK_TASK_RECEIVED: abc123\nmore work\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "late"
+
+
+def test_check_task_receipt_mismatch_when_first_line_wrong_digest():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: wrongdigest\nsome work\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "mismatch"
+
+
+def test_check_task_receipt_absent_when_no_marker_anywhere():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "just did the work with no marker at all\n"
+    assert jobs_mod._check_task_receipt(log_text, "abc123") == "absent"
+
+
+def test_check_task_receipt_returns_none_for_empty_log_or_digest():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._check_task_receipt("", "abc123") is None
+    assert jobs_mod._check_task_receipt("some log", None) is None
+
+
+def test_classify_task_delivery_hard_fail_when_no_marker_and_no_activity():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("absent", has_corroborating_activity=False)
+    assert result == {"hard_fail": True, "warn": False}
+
+
+def test_classify_task_delivery_warn_when_no_marker_but_activity_present():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("mismatch", has_corroborating_activity=True)
+    assert result == {"hard_fail": False, "warn": True}
+
+
+def test_classify_task_delivery_clean_when_receipt_ok():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery("ok", has_corroborating_activity=False)
+    assert result == {"hard_fail": False, "warn": False}
+
+
+def test_classify_task_delivery_clean_when_receipt_status_none():
+    import synlynk.jobs as jobs_mod
+
+    result = jobs_mod._classify_task_delivery(None, has_corroborating_activity=False)
+    assert result == {"hard_fail": False, "warn": False}
+
+
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
     from synlynk.jobs import _task_sha256_and_preview
 
@@ -251,7 +314,7 @@ def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys)
         "id": "job-run",
         "agent": "claude",
         "story_id": "story-7",
-        "task": "task",
+        "task": None,
         "pid": 99999999,
         "log_file": str(log_path),
         "started_at": "2026-07-03T01:00:00",
@@ -309,6 +372,42 @@ def test_reconcile_jobs_summary_includes_task_sha256_matching_local_computation(
 
     assert f"task_sha256: {expected_digest}" in summary_text
     assert "task:     Fix issue #720 fail-closed on empty tasks" in summary_text
+
+
+def test_reconcile_jobs_marks_task_delivery_failed_when_marker_absent_and_no_activity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-noreceipt.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("did some stuff without printing the receipt marker\n")
+    (log_path.parent / "job-noreceipt.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-noreceipt",
+            "agent": "claude",
+            "story_id": "story-noreceipt",
+            "task": "implement the thing",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "waitpid", lambda pid, opts: (pid, 0))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-noreceipt")
+
+    assert reconciled["status"] == "task_delivery_failed"
+    assert "TASK_DELIVERY_FAILED" in out
 
 
 def test_reconcile_jobs_orphaned_story_cost_does_not_abort(tmp_path, monkeypatch):
@@ -387,6 +486,250 @@ def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, m
     assert reconciled["status"] == "permission_denied"
     assert "PERMISSION_DENIED" in out
     assert "OK (exit 0)" not in out
+
+
+def test_reconcile_jobs_waitpid_ignores_denial_shape_when_log_shows_earlier_tool_use(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-waitpid-corroborated.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit",'
+        '"input":{"file_path":"a.py"}}]}}\n'
+        '{"conversation_id":"job-waitpid-corroborated","status":"SUCCESS","response":"",'
+        '"duration_seconds":1,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":0}}\n'
+    )
+
+    synlynk._save_jobs([
+        {
+            "id": "job-waitpid-corroborated",
+            "agent": "agy",
+            "story_id": "story-waitpid-corroborated",
+            "task": "review the PR",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    def fake_waitpid(pid, opts):
+        return (pid, 0)
+
+    monkeypatch.setattr(synlynk.os, "waitpid", fake_waitpid)
+
+    synlynk._reconcile_jobs()
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-waitpid-corroborated")
+
+    assert reconciled["status"] != "permission_denied"
+
+
+def test_reconcile_jobs_waitpid_ignores_denial_shape_when_git_state_shows_activity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import subprocess
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+
+    worktree = tmp_path / "wt-waitpid"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "t@t.com"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "t"], check=True)
+    (worktree / "README.md").write_text("hello")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "checkout", "-q", "-b", "work"], check=True)
+    (worktree / "feature.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "real work"], check=True)
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-waitpid-git-corroborated.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        "jetski: no output produced - a tool required the \"command\" permission that "
+        "headless mode cannot prompt for, so it was auto-denied\n"
+    )
+
+    synlynk._save_jobs([
+        {
+            "id": "job-waitpid-git-corroborated",
+            "agent": "grok",
+            "story_id": "story-waitpid-git-corroborated",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": str(worktree),
+            "worktree_branch": "dispatch/grok/job-waitpid-git-corroborated",
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    def fake_waitpid(pid, opts):
+        return (pid, 0)
+
+    monkeypatch.setattr(synlynk.os, "waitpid", fake_waitpid)
+
+    synlynk._reconcile_jobs()
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-waitpid-git-corroborated")
+
+    assert reconciled["status"] != "permission_denied"
+    assert reconciled["status"] == "completed"
+
+
+def test_reconcile_jobs_dead_pid_ignores_denial_shape_when_git_state_shows_activity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import subprocess
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+
+    worktree = tmp_path / "wt-deadpid"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "t@t.com"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "t"], check=True)
+    (worktree / "README.md").write_text("hello")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "checkout", "-q", "-b", "work"], check=True)
+    (worktree / "feature.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "real work"], check=True)
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-git-corroborated.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        "jetski: no output produced - a tool required the \"command\" permission that "
+        "headless mode cannot prompt for, so it was auto-denied\n"
+    )
+    (log_path.parent / "job-deadpid-git-corroborated.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-git-corroborated",
+            "agent": "grok",
+            "story_id": "story-deadpid-git-corroborated",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": str(worktree),
+            "worktree_branch": "dispatch/grok/job-deadpid-git-corroborated",
+            "started_at": "2026-08-07T18:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-git-corroborated")
+
+    assert reconciled["status"] != "permission_denied"
+
+
+def test_reconcile_jobs_dead_pid_marks_task_delivery_failed_when_marker_absent(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-noreceipt.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("worked on it, no receipt marker anywhere\n")
+    (log_path.parent / "job-deadpid-noreceipt.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-noreceipt",
+            "agent": "grok",
+            "story_id": "story-deadpid",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "started_at": "2026-08-07T19:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-noreceipt")
+
+    assert reconciled["status"] == "task_delivery_failed"
+    assert "TASK_DELIVERY_FAILED" in out
+
+
+def test_reconcile_jobs_dead_pid_warns_but_does_not_fail_when_activity_present(tmp_path, monkeypatch, capsys, git_worktree_repo):
+    monkeypatch.chdir(tmp_path)
+    import subprocess
+    import synlynk
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "t@t.com"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "t"], check=True)
+    (worktree / "README.md").write_text("hello")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "checkout", "-q", "-b", "work"], check=True)
+    (worktree / "feature.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(worktree), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-q", "-m", "real work"], check=True)
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-deadpid-warn.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("did real work but forgot the receipt marker\n")
+    (log_path.parent / "job-deadpid-warn.log.exit").write_text("0")
+
+    synlynk._save_jobs([
+        {
+            "id": "job-deadpid-warn",
+            "agent": "grok",
+            "story_id": "story-warn",
+            "task": "wire the canvas renderer",
+            "pid": 99999999,
+            "log_file": str(log_path),
+            "worktree_path": str(worktree),
+            "worktree_branch": "dispatch/grok/job-deadpid-warn",
+            "started_at": "2026-08-07T19:00:00",
+            "ended_at": None,
+            "status": "running",
+            "exit_code": None,
+        }
+    ])
+
+    monkeypatch.setattr(synlynk.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+
+    synlynk._reconcile_jobs()
+    out = capsys.readouterr().out
+
+    jobs = synlynk._load_jobs()
+    reconciled = next(job for job in jobs if job["id"] == "job-deadpid-warn")
+
+    assert reconciled["status"] != "task_delivery_failed"
+    assert "task-receipt" in out
 
 
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
@@ -559,3 +902,205 @@ def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch)
     create_call = next(cmd for cmd in captured if cmd[:3] == ["gh", "pr", "create"])
     assert "--base" in create_call
     assert create_call[create_call.index("--base") + 1] == "master"
+
+
+# --- #753 jobs reap -----------------------------------------------------------
+
+def _seed_daemon_job(conn, job_id, agent="agy", status="running", pid=None, started_at="2026-08-07T07:00:00"):
+    conn.execute(
+        "INSERT OR REPLACE INTO daemon_jobs "
+        "(job_id, agent, task, story_id, status, priority, depends_on, pid, enqueued_at, started_at, "
+        " completed_at, exit_code, log_path, handoff_count) "
+        "VALUES (?, ?, 'task', NULL, ?, 5, '[]', ?, ?, ?, NULL, NULL, NULL, 0)",
+        (job_id, agent, status, pid, started_at, started_at),
+    )
+    conn.commit()
+
+
+def test_pid_is_alive_null_and_dead(monkeypatch):
+    from synlynk.jobs import _pid_is_alive
+
+    assert _pid_is_alive(None) is False
+    assert _pid_is_alive("not-a-pid") is False
+
+    def boom(pid, sig):
+        raise ProcessLookupError()
+
+    monkeypatch.setattr("os.kill", boom)
+    assert _pid_is_alive(12345) is False
+
+
+def test_pid_is_alive_permission_treated_alive(monkeypatch):
+    from synlynk.jobs import _pid_is_alive
+
+    def denied(pid, sig):
+        raise PermissionError()
+
+    monkeypatch.setattr("os.kill", denied)
+    assert _pid_is_alive(999) is True
+
+
+def test_mark_daemon_job_terminal_only_running(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import mark_daemon_job_terminal
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-dead0001", pid=1)
+    _seed_daemon_job(conn, "job-done0001", status="done", pid=2)
+    assert mark_daemon_job_terminal(conn, "job-dead0001") is True
+    assert mark_daemon_job_terminal(conn, "job-done0001") is False
+    conn.commit()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-dead0001'"
+    ).fetchone()
+    assert row[0] == "timed_out"
+    assert row[1] == -9
+    conn.close()
+
+
+def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):
+    from synlynk.jobs import scan_zombie_running_jobs, apply_reap_zombies
+    import sqlite3
+
+    db = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, "
+        "priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, "
+        "completed_at TEXT, exit_code INTEGER, log_path TEXT, handoff_count INTEGER DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-z1','agy','t',NULL,'running',5,'[]',111,'2026-08-01T00:00:00','2026-08-01T00:00:00',NULL,NULL,NULL,0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-z2','claude','t',NULL,'running',5,'[]',222,'2026-08-01T00:00:00','2026-08-01T00:00:00',NULL,NULL,NULL,0)"
+    )
+    conn.commit()
+    conn.close()
+
+    def fake_kill(pid, sig):
+        if int(pid) == 111:
+            raise ProcessLookupError()
+        # 222 alive
+
+    monkeypatch.setattr("os.kill", fake_kill)
+    cands = scan_zombie_running_jobs(str(db))
+    by_id = {c["job_id"]: c for c in cands}
+    assert by_id["job-z1"]["action"] == "reap"
+    assert by_id["job-z2"]["action"] == "keep"
+
+    reaped = apply_reap_zombies(cands)
+    assert len(reaped) == 1
+    assert reaped[0]["job_id"] == "job-z1"
+    conn = sqlite3.connect(str(db))
+    rows = {
+        r[0]: (r[1], r[2])
+        for r in conn.execute("SELECT job_id, status, exit_code FROM daemon_jobs")
+    }
+    assert rows["job-z1"] == ("timed_out", -9)
+    assert rows["job-z2"][0] == "running"
+    conn.close()
+
+
+def test_cmd_jobs_reap_dry_run_and_apply(tmp_path, monkeypatch, capsys):
+    from synlynk.jobs import cmd_jobs_reap
+    import sqlite3
+
+    db = tmp_path / "proj" / "state.db"
+    db.parent.mkdir()
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, "
+        "priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, "
+        "completed_at TEXT, exit_code INTEGER, log_path TEXT, handoff_count INTEGER DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-dry1','agy','t',NULL,'running',5,'[]',333,'2026-08-01T00:00:00','2026-08-01T00:00:00',NULL,NULL,NULL,0)"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr("os.kill", lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(
+        "synlynk.jobs._iter_project_state_dbs",
+        lambda all_projects=False: [str(db)],
+    )
+
+    assert cmd_jobs_reap(apply=False) == 0
+    out = capsys.readouterr().out
+    assert "DRY-RUN" in out
+    assert "job-dry1" in out
+    conn = sqlite3.connect(str(db))
+    assert conn.execute("SELECT status FROM daemon_jobs WHERE job_id='job-dry1'").fetchone()[0] == "running"
+    conn.close()
+
+    assert cmd_jobs_reap(apply=True) == 0
+    out = capsys.readouterr().out
+    assert "APPLY" in out
+    assert "Reaped 1" in out
+    conn = sqlite3.connect(str(db))
+    assert conn.execute("SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-dry1'").fetchone() == (
+        "timed_out",
+        -9,
+    )
+    conn.close()
+
+
+def test_auto_reap_job_from_sentinel(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import auto_reap_job_from_sentinel
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-ad59d3ea", agent="agy", pid=99999)
+    conn.close()
+
+    # Pretend PID is dead
+    import synlynk.jobs as jobs_mod
+    # auto_reap does not check PID — it marks running → timed_out on sentinel code
+    updated = auto_reap_job_from_sentinel(
+        "HARNESS_INTERNAL_TIMEOUT",
+        "Job job-ad59d3ea on agent 'agy' died from an internal harness timeout",
+    )
+    assert updated == "job-ad59d3ea"
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-ad59d3ea'"
+    ).fetchone()
+    conn.close()
+    assert row == ("timed_out", -9)
+
+
+def test_write_sentinel_stall_auto_reaps(project_dir, monkeypatch):
+    """_write_sentinel_alert(STALL_NO_OUTPUT) flips daemon_jobs running → timed_out."""
+    from synlynk import _get_db, _write_sentinel_alert
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-bd8ff601", agent="claude", pid=1)
+    conn.close()
+
+    _write_sentinel_alert(
+        "CRITICAL",
+        "STALL_NO_OUTPUT",
+        "Job job-bd8ff601 on agent 'claude' stalled with zero output after 30min. Process killed.",
+    )
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-bd8ff601'"
+    ).fetchone()
+    conn.close()
+    assert row[0] == "timed_out"
+
+
+def test_jobs_reap_cli_parser():
+    from synlynk.cli import build_parser
+
+    args = build_parser().parse_args(["jobs", "reap", "--apply", "--all-projects"])
+    assert args.command == "jobs"
+    assert args.jobs_cmd == "reap"
+    assert args.apply is True
+    assert args.all_projects is True

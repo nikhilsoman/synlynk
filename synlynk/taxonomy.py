@@ -114,6 +114,13 @@ COMMAND_TAXONOMY = [
     {"command": "jobs handoff", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["hand this stalled job to another agent"], "hook_event": None},
+    {"command": "jobs reap", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": [
+         "reap zombie jobs",
+         "clear dead running jobs",
+         "jobs stuck running with dead pid",
+     ], "hook_event": None},
     {"command": "schedule", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["batch these up", "run this fleet-wide"], "hook_event": None},

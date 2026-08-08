@@ -102,6 +102,46 @@ def _log_has_permission_denied_signature(log_text: str) -> bool:
     return bool(detector(log_text)) if detector else False
 
 
+_TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
+
+
+def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[str]:
+    """Classifies task-receipt marker compliance in a job's log.
+
+    Returns one of 'ok', 'late', 'mismatch', 'absent', or None when the
+    check does not apply (empty log or no digest to check against).
+    """
+    if not log_text or not task_sha256:
+        return None
+    lines = [ln.strip() for ln in log_text.splitlines() if ln.strip()]
+    if not lines:
+        return "absent"
+    expected = f"{_TASK_RECEIPT_MARKER_PREFIX} {task_sha256}"
+    if lines[0] == expected:
+        return "ok"
+    if expected in lines[1:]:
+        return "late"
+    if lines[0].startswith(_TASK_RECEIPT_MARKER_PREFIX):
+        return "mismatch"
+    return "absent"
+
+
+def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_activity: bool) -> dict:
+    """Combines a receipt-check result with git-activity evidence.
+
+    'hard_fail' means no real work is visible to corroborate a bad/missing
+    receipt marker — safe to mark the job task_delivery_failed and skip
+    auto-finalize. 'warn' means the receipt check failed but real work
+    landed anyway — do not block the job, just annotate it (see the
+    job-b88e0f92 false-positive this guard was designed to avoid).
+    """
+    if receipt_status not in ("late", "mismatch", "absent"):
+        return {"hard_fail": False, "warn": False}
+    if has_corroborating_activity:
+        return {"hard_fail": False, "warn": True}
+    return {"hard_fail": True, "warn": False}
+
+
 def _normalize_worktree_relative_path(path: str) -> str:
     normalized = (path or "").replace("\\", "/").strip()
     if normalized.startswith("./"):
@@ -1186,8 +1226,25 @@ def _reconcile_jobs() -> None:
                 job["exit_code"] = 0
             if log_text:
                 permission_denied = _log_has_permission_denied_signature(log_text)
+                if permission_denied and _job_has_real_work_landed(git_state):
+                    permission_denied = False
                 if permission_denied:
                     job["status"] = "permission_denied"
+            is_harness_timeout_log = bool(log_text) and any(
+                phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
+            )
+            task_delivery = {"hard_fail": False, "warn": False}
+            if log_text and not permission_denied and not is_harness_timeout_log:
+                task_sha256_for_receipt = None
+                if job.get("task"):
+                    task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
+                receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                has_corroborating_activity = bool(
+                    git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
+                )
+                task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
+                if task_delivery["hard_fail"]:
+                    job["status"] = "task_delivery_failed"
             if job.get("status") != "completed" and log_text:
                 log_text_lower = log_text.lower()
                 for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1230,6 +1287,25 @@ def _reconcile_jobs() -> None:
                 summary_note = (
                     "headless permission auto-denial detected from log contents "
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
+            elif task_delivery["hard_fail"]:
+                summary_status = "TASK_DELIVERY_FAILED"
+                summary_note = (
+                    f"task receipt check failed ({receipt_status}); no corroborating "
+                    "git activity found in worktree (see #720 receipt protocol)"
+                )
+            elif task_delivery["warn"]:
+                summary_note = (
+                    f"⚠ task-receipt: {receipt_status}, but real work detected in "
+                    "the worktree — not blocking (see #720 receipt protocol)"
+                )
+                _write_sentinel_alert(
+                    "WARN",
+                    "TASK_RECEIPT_WARN",
+                    f"Job {job.get('id')} on agent '{job.get('agent')}' skipped/mismatched the "
+                    f"task receipt marker ({receipt_status}) but real work landed in its worktree — "
+                    "not blocking, flagging for review.",
+                    sentinel_path,
                 )
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
@@ -1342,6 +1418,8 @@ def _reconcile_jobs() -> None:
                     job.get("started_at"),
                 )
             permission_denied = False
+            task_delivery = {"hard_fail": False, "warn": False}
+            receipt_status = None
             job["ended_at"] = now
             changed = True
 
@@ -1349,8 +1427,24 @@ def _reconcile_jobs() -> None:
                 with open(log_file) as f:
                     log_text = f.read()
                 permission_denied = _log_has_permission_denied_signature(log_text)
+                if permission_denied and _job_has_real_work_landed(git_state):
+                    permission_denied = False
                 if permission_denied:
                     job["status"] = "permission_denied"
+                is_harness_timeout_log = bool(log_text) and any(
+                    phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
+                )
+                if not permission_denied and not is_harness_timeout_log:
+                    task_sha256_for_receipt = None
+                    if job.get("task"):
+                        task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
+                    receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
+                    has_corroborating_activity = bool(
+                        git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
+                    )
+                    task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
+                    if task_delivery["hard_fail"]:
+                        job["status"] = "task_delivery_failed"
                 if job.get("status") != "completed":
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1395,6 +1489,25 @@ def _reconcile_jobs() -> None:
                 summary_note = (
                     "headless permission auto-denial detected from log contents "
                     "(response empty, num_turns <= 1, or explicit no-output marker)"
+                )
+            elif task_delivery["hard_fail"]:
+                summary_status = "TASK_DELIVERY_FAILED"
+                summary_note = (
+                    f"task receipt check failed ({receipt_status}); no corroborating "
+                    "git activity found in worktree (see #720 receipt protocol)"
+                )
+            elif task_delivery["warn"]:
+                summary_note = (
+                    f"⚠ task-receipt: {receipt_status}, but real work detected in "
+                    "the worktree — not blocking (see #720 receipt protocol)"
+                )
+                _write_sentinel_alert(
+                    "WARN",
+                    "TASK_RECEIPT_WARN",
+                    f"Job {job.get('id')} on agent '{job.get('agent')}' skipped/mismatched the "
+                    f"task receipt marker ({receipt_status}) but real work landed in its worktree — "
+                    "not blocking, flagging for review.",
+                    sentinel_path,
                 )
             if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
                 summary_files_touched = git_state.get("remote_files_touched", [])
@@ -1482,6 +1595,303 @@ def _reconcile_jobs() -> None:
     if changed:
         _save_jobs(jobs)
 
+def _pid_is_alive(pid) -> bool:
+    """True if *pid* refers to a live process we can observe.
+
+    ``PermissionError`` is treated as alive (process exists; we lack rights).
+    ``None`` / invalid PIDs are dead.
+    """
+    if pid is None:
+        return False
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (TypeError, ValueError, OSError):
+        return False
+
+
+def mark_daemon_job_terminal(
+    conn: sqlite3.Connection,
+    job_id: str,
+    *,
+    status: str = "timed_out",
+    exit_code: int = -9,
+    completed_at: Optional[str] = None,
+) -> bool:
+    """Mark a *running* daemon_jobs row terminal. Returns True if a row changed.
+
+    Used by ``jobs reap``, STALL/TIMEOUT auto-reap (#753), and hardened reconcile.
+    Default status is ``timed_out`` (exit -9 = SIGKILL-ish) so platform ops can
+    distinguish harness kills from ordinary task failures.
+    """
+    if not job_id:
+        return False
+    now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
+    cur = conn.execute(
+        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+        "WHERE job_id=? AND status='running'",
+        (status, exit_code, now, job_id),
+    )
+    return (cur.rowcount or 0) > 0
+
+
+def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
+    """When STALL_NO_OUTPUT / HARNESS_INTERNAL_TIMEOUT fires, flip daemon_jobs.
+
+    Parses ``job-<hex>`` from *message*, marks the row ``timed_out`` if still
+    ``running``. No-op if the job is already terminal or not in this project DB.
+    Returns the job_id when a row was updated, else None.
+    """
+    if code not in ("STALL_NO_OUTPUT", "HARNESS_INTERNAL_TIMEOUT"):
+        return None
+    m = re.search(r"(job-[a-f0-9]+)", message or "", re.I)
+    if not m:
+        return None
+    job_id = m.group(1)
+    get_db = _pkg("_get_db")
+    if get_db is None:
+        return None
+    try:
+        conn = get_db()
+    except Exception:
+        return None
+    try:
+        if mark_daemon_job_terminal(conn, job_id, status="timed_out", exit_code=-9):
+            conn.commit()
+            return job_id
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _iter_project_state_dbs(*, all_projects: bool = False) -> list:
+    """Return state.db paths to scan for reap.
+
+    Default: current project DB only. ``all_projects=True`` walks
+    ``~/.synlynk/projects/*/state.db``.
+    """
+    if all_projects:
+        root = os.path.expanduser("~/.synlynk/projects")
+        if not os.path.isdir(root):
+            return []
+        out = []
+        for name in sorted(os.listdir(root)):
+            db = os.path.join(root, name, "state.db")
+            if os.path.isfile(db):
+                out.append(db)
+        return out
+    resolve = _pkg("_resolve_db_path")
+    if resolve is not None:
+        try:
+            path = resolve()
+            if path and os.path.isfile(path):
+                return [path]
+        except Exception:
+            pass
+    # Fallback: open current project via _get_db and read its path
+    get_db = _pkg("_get_db")
+    if get_db is None:
+        return []
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute("PRAGMA database_list").fetchone()
+            # (seq, name, file)
+            if row and row[2]:
+                return [row[2]]
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return []
+
+
+def scan_zombie_running_jobs(db_path: str) -> list:
+    """List ``status=running`` rows in *db_path* whose PID is dead or null.
+
+    Each item: ``{job_id, agent, pid, started_at, project, action}`` where
+    action is ``reap`` (dead/null) or ``keep`` (alive).
+    """
+    project = os.path.basename(os.path.dirname(db_path))
+    out = []
+    try:
+        conn = sqlite3.connect(db_path)
+    except Exception:
+        return out
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, pid, started_at FROM daemon_jobs "
+                "WHERE status='running'"
+            ).fetchall()
+        except sqlite3.Error:
+            return out
+        for job_id, agent, pid, started_at in rows:
+            alive = _pid_is_alive(pid)
+            out.append({
+                "job_id": job_id,
+                "agent": agent or "?",
+                "pid": pid,
+                "started_at": started_at,
+                "project": project,
+                "db_path": db_path,
+                "action": "keep" if alive else "reap",
+            })
+    finally:
+        conn.close()
+    return out
+
+
+def apply_reap_zombies(
+    candidates: list,
+    *,
+    status: str = "timed_out",
+    exit_code: int = -9,
+) -> list:
+    """Apply terminal status to candidates with action=='reap'. Mutates DB.
+
+    Returns the list of successfully reaped items (with ``reaped_at`` set).
+    """
+    by_db: dict = {}
+    for c in candidates:
+        if c.get("action") != "reap":
+            continue
+        by_db.setdefault(c["db_path"], []).append(c)
+
+    reaped = []
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    for db_path, items in by_db.items():
+        try:
+            conn = sqlite3.connect(db_path)
+        except Exception:
+            continue
+        try:
+            for c in items:
+                if mark_daemon_job_terminal(
+                    conn, c["job_id"], status=status, exit_code=exit_code, completed_at=now
+                ):
+                    c = dict(c)
+                    c["reaped_at"] = now
+                    c["status"] = status
+                    c["exit_code"] = exit_code
+                    reaped.append(c)
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            conn.close()
+    return reaped
+
+
+def cmd_jobs_reap(apply: bool = False, all_projects: bool = False) -> int:
+    """Dry-run (default) or apply reaping of dead-PID ``running`` daemon jobs.
+
+    Returns process exit code: 0 always on success (including "nothing to reap");
+    1 on hard failure to scan.
+    """
+    dbs = _iter_project_state_dbs(all_projects=all_projects)
+    if not dbs:
+        print("  No project state.db found to scan.")
+        return 1
+
+    candidates = []
+    for db in dbs:
+        candidates.extend(scan_zombie_running_jobs(db))
+
+    to_reap = [c for c in candidates if c["action"] == "reap"]
+    to_keep = [c for c in candidates if c["action"] == "keep"]
+
+    mode = "APPLY" if apply else "DRY-RUN"
+    scope = "all projects" if all_projects else "current project"
+    print(f"\n  {_BOLD}synlynk jobs reap{_RESET}  [{mode}]  scope={scope}")
+    print(f"  dbs={len(dbs)}  running={len(candidates)}  "
+          f"dead/null={len(to_reap)}  alive={len(to_keep)}\n")
+
+    if to_reap:
+        print(f"  {'JOB ID':14}  {'AGENT':8}  {'PID':8}  {'STARTED':20}  PROJECT")
+        print("  " + "─" * 72)
+        for c in to_reap:
+            pid_s = str(c["pid"]) if c["pid"] is not None else "null"
+            started = (c.get("started_at") or "—")[:20]
+            print(
+                f"  {c['job_id']:14}  {c['agent']:8}  {pid_s:8}  "
+                f"{started:20}  {c['project']}"
+            )
+    else:
+        print("  No dead-PID running jobs.")
+
+    if to_keep and all_projects:
+        print(f"\n  {_DIM}Kept alive ({len(to_keep)}):{_RESET}")
+        for c in to_keep[:20]:
+            print(f"    {c['job_id']} pid={c['pid']} agent={c['agent']} @ {c['project']}")
+        if len(to_keep) > 20:
+            print(f"    … +{len(to_keep) - 20} more")
+
+    if not apply:
+        if to_reap:
+            print(
+                f"\n  Dry-run only — re-run with {_BOLD}--apply{_RESET} to mark "
+                f"{len(to_reap)} job(s) timed_out (exit_code=-9).\n"
+            )
+        else:
+            print()
+        return 0
+
+    reaped = apply_reap_zombies(to_reap)
+    print(
+        f"\n  {_GREEN}Reaped {len(reaped)}{_RESET} → status=timed_out exit_code=-9"
+        f"  (kept alive: {len(to_keep)})\n"
+    )
+    return 0
+
+
+def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
+    """If a high-confidence terminal job summary already exists, prefer it.
+
+    Returns ``(db_status, exit_code)`` or None. Prevents #753 dead-PID reconcile
+    from clobbering a real completion that already wrote its summary while the
+    daemon_jobs row was still stuck at ``running`` (race covered by
+    test_chore_synlynk_jobs_all_shows_stale_faile_terminal_summary_survives_daemon_reconcile).
+    """
+    path_fn = _pkg("_job_summary_path")
+    label_fn = _pkg("_summary_status_label")
+    if path_fn is None:
+        return None
+    try:
+        path = path_fn(job_id)
+    except Exception:
+        return None
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            text = f.read()
+    except OSError:
+        return None
+    label = label_fn(text) if label_fn else None
+    if not label:
+        return None
+    m = re.match(r"^OK \(exit (\d+)\)$", label)
+    if m:
+        return ("done", int(m.group(1)))
+    m = re.match(r"^FAILED \(exit (-?\d+)\)$", label)
+    if m:
+        return ("failed", int(m.group(1)))
+    return None
+
+
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
     conn = _pkg("_get_db")()
@@ -1492,20 +1902,27 @@ def _reconcile_daemon_jobs() -> None:
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
         for job_id, agent, story_id, task, pid, started_at, completed_at, log_path in rows:
-            if pid is None:
-                continue
             exited = False
             raw_exit_status = None
-            try:
-                wpid, wstatus = os.waitpid(pid, os.WNOHANG)
-                if wpid != 0:
-                    exited = True
-                    raw_exit_status = wstatus
-            except ChildProcessError:
-                # Process was adopted by init (daemon restart) — fall back to kill(0)
+            if pid is None:
+                # Null PID while "running" is always a zombie (#753).
+                exited = True
+            else:
                 try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
+                    wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                    if wpid != 0:
+                        exited = True
+                        raw_exit_status = wstatus
+                except ChildProcessError:
+                    # Not our child (daemon restart / external spawn) — probe liveness.
+                    if not _pid_is_alive(pid):
+                        exited = True
+                except Exception:
+                    if not _pid_is_alive(pid):
+                        exited = True
+                # Double-check: waitpid can return 0 for non-children on some paths;
+                # if still not exited, trust kill(0).
+                if not exited and not _pid_is_alive(pid):
                     exited = True
 
             if exited:
@@ -1521,10 +1938,30 @@ def _reconcile_daemon_jobs() -> None:
                             exit_code = int(f.read().strip())
                     except Exception:
                         pass
+
+                # Prefer an already-written terminal summary over inventing timed_out.
+                preferred = None
+                if exit_code is None and raw_exit_status is None:
+                    preferred = _existing_terminal_summary_truth(job_id)
+
+                if preferred is not None:
+                    status, exit_code = preferred
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+                        "WHERE job_id=? AND status='running'",
+                        (status, exit_code, now, job_id),
+                    )
+                    conn.commit()
+                    # Do not rewrite summary / re-bill costs — truth already on disk.
+                    continue
+
                 if exit_code == 0:
                     status = "done"
                 elif exit_code is None:
-                    status = "unknown"
+                    # Dead / null PID with no recorded exit → timed_out (#753),
+                    # not open-ended "unknown", so scoreboards stop counting zombies.
+                    status = "timed_out"
+                    exit_code = -9
                 else:
                     status = "failed"
                 log_text = ""
@@ -1581,6 +2018,9 @@ def _reconcile_daemon_jobs() -> None:
                     )
                 elif status == "unknown":
                     summary_status = terminal_status_for_unknown_exit()
+                elif status == "timed_out":
+                    summary_status = f"FAILED (exit {exit_code})"
+                    summary_note = "reaped dead/null PID (no exit signal); see synlynk jobs reap"
                 task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
