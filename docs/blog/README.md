@@ -106,6 +106,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [101](./101-pr762-windowed-sentinel-crit.md) | Windowed sentinel_crit — stop lifetime logs from keeping ops RED | [#762](https://github.com/nikhilsoman/synlynk/pull/762) | 2026-08-07 |
 | [102](./102-pr772-jobs-reap.md) | jobs reap — kill zombie running rows | [#772](https://github.com/nikhilsoman/synlynk/pull/772) | 2026-08-07 |
 | [103](./103-pr778-scope-violation-enforcement.md) | Scope Violation Enforcement — Making --scope-paths Mean Something | [#778](https://github.com/nikhilsoman/synlynk/pull/778) | 2026-08-08 |
+| [104](./104-prTBD-safe-caller-construction.md) | Safe Caller Construction — Documenting the Path That Already Existed | [#783](https://github.com/nikhilsoman/synlynk/pull/783) | 2026-08-08 |
 
 
 ## Per-PR Post Template

@@ -26,7 +26,9 @@ README_END = "<!-- commands:end -->"
 def render_reference_doc() -> str:
     lines = ["# Command Reference", "",
              "Generated from `synlynk/taxonomy.py`. Do not edit by hand — run "
-             "`python3 scripts/generate_command_docs.py`.", ""]
+             "`python3 scripts/generate_command_docs.py`.", "",
+             "See [safe-caller-construction.md](safe-caller-construction.md) for guidance on "
+             "building dispatch task text programmatically.", ""]
     gateway = [e for e in COMMAND_TAXONOMY if e["orientation_gateway"]]
     lines.append("## Orientation gateway (always available)")
     lines.append("")
