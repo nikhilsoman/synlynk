@@ -209,6 +209,39 @@ def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch,
     assert "$0.01" in out
 
 
+def test_dispatch_ready_jobs_stays_queued_when_all_exhausted(project_dir, monkeypatch):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=1_000, used_tokens=1_000, unit="tokens", conn=conn
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, "
+        "phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("story-exh1", "Exhaustion test", "backend", "platform", "ott", "build", 5_000),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-exh1", "codex", "task", "story-exh1", "queued", 5, "[]", "2026-08-08T00:00:00"),
+    )
+    conn.commit()
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("dispatch_agent must not be called when all candidates exhausted")
+
+    monkeypatch.setattr(sl, "dispatch_agent", fail_if_called)
+
+    launched = sl._dispatch_ready_jobs(max_parallel=4)
+
+    assert launched == 0
+    status = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-exh1'"
+    ).fetchone()[0]
+    assert status == "queued"
+
+
 def test_write_job_summary_creates_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     import synlynk
@@ -956,6 +989,35 @@ def test_mark_daemon_job_terminal_only_running(project_dir):
     assert row[0] == "timed_out"
     assert row[1] == -9
     conn.close()
+
+
+def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-settle1"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at) "
+        "VALUES ('job-settle1', 'codex', 'task', 'running', 999999, "
+        "'2026-08-08T00:00:00', '2026-08-08T00:00:00')"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(sl, "extract_tokens", lambda log_text, agent=None: (0, 0))
+    monkeypatch.setattr(sl, "extract_model_version", lambda log_text, agent=None: "unknown")
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "_write_job_summary", lambda *a, **k: None)
+
+    sl._reconcile_daemon_jobs()
+
+    status = conn.execute(
+        "SELECT status FROM agent_reservations WHERE id=?", (rid,)
+    ).fetchone()[0]
+    assert status == "released"
 
 
 def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):

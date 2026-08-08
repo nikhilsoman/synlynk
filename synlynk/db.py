@@ -285,6 +285,19 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         "UPDATE stories SET engg_domain = COALESCE(NULLIF(engg_domain, ''), discipline, 'backend') "
         "WHERE engg_domain IS NULL OR engg_domain = ''"
     )
+    gc_cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+    if "link_status" not in gc_cols:
+        try:
+            conn.execute(
+                "ALTER TABLE goal_contributions ADD COLUMN link_status TEXT NOT NULL DEFAULT 'linked'"
+            )
+        except sqlite3.OperationalError:
+            pass
+    if "skip_reason" not in gc_cols:
+        try:
+            conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
+        except sqlite3.OperationalError:
+            pass
     daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     if "handoff_count" not in daemon_job_cols:
         try:
@@ -299,6 +312,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     if "dispatch_context" not in daemon_job_cols:
         try:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN dispatch_context TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "blocked_reason" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
         except sqlite3.OperationalError:
             pass
     conn.execute("DROP VIEW IF EXISTS capability_scores")
@@ -743,6 +761,25 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     """)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
+    )
+    # Quota-aware dispatch reservation: agent_reservations base table
+    # (also in _DB_SCHEMA; re-assert for older DBs)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS agent_reservations (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            harness        TEXT NOT NULL,
+            tokens         INTEGER NOT NULL,
+            scope          TEXT NOT NULL,
+            scope_id       TEXT,
+            job_id         TEXT,
+            status         TEXT NOT NULL DEFAULT 'open',
+            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            released_at    TIMESTAMP
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness "
+        "ON agent_reservations(harness, status)"
     )
     quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
     if quota_cols and "unit" not in quota_cols:
@@ -1929,12 +1966,24 @@ def cmd_story_list() -> None:
 
 def cmd_story_ready(story_id, all_stories: bool = False) -> None:
     """Marks one story (or every draft story, with all_stories=True) as ready
-    for scheduling. Only 'ready' stories are candidates for synlynk schedule."""
+    for scheduling. Only 'ready' stories are candidates for synlynk schedule.
+
+    Also records the story's current GOVERNS goal-link status at the plan
+    approval checkpoint.
+    """
     from synlynk import _GREEN, _RESET, _get_db
     conn = _get_db()
     if all_stories:
+        ready_ids = [
+            row[0]
+            for row in conn.execute(
+                "SELECT story_id FROM stories WHERE readiness='draft'"
+            ).fetchall()
+        ]
         cur = conn.execute("UPDATE stories SET readiness='ready' WHERE readiness='draft'")
         conn.commit()
+        for sid in ready_ids:
+            _record_goal_link_status(conn, sid)
         conn.close()
         print(f"  {_GREEN}✓{_RESET} Marked {cur.rowcount} draft stories ready")
         return
@@ -1944,8 +1993,49 @@ def cmd_story_ready(story_id, all_stories: bool = False) -> None:
         return
     conn.execute("UPDATE stories SET readiness='ready' WHERE story_id=?", (story_id,))
     conn.commit()
+    _record_goal_link_status(conn, story_id)
     conn.close()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked ready")
+
+
+def _record_goal_link_status(conn, story_id: str) -> None:
+    """Records the story's current primary goal-link status."""
+    story = conn.execute(
+        "SELECT goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    if not story:
+        return
+
+    primary_goal_id = story[0]
+    secondary = conn.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchall()
+    if primary_goal_id:
+        conn.execute(
+            "INSERT OR IGNORE INTO goal_contributions "
+            "(goal_id, story_id, link_status) VALUES (?, ?, 'linked')",
+            (primary_goal_id, story_id),
+        )
+        conn.commit()
+        return
+    if secondary:
+        return
+
+    # The historical schema has a foreign-key reference, while the GOVERNS
+    # checkpoint intentionally uses the literal 'none' sentinel.  Connections
+    # opened by current synlynk enable FK enforcement, so briefly disable it
+    # for this deliberate audit row and restore the connection setting after.
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO goal_contributions "
+            "(goal_id, story_id, link_status, skip_reason) "
+            "VALUES ('none', ?, 'skipped', ?)",
+            (story_id, "no active goal specified at plan-approval time"),
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
 
 
 def cmd_story_draft(story_id: str) -> None:
@@ -1956,6 +2046,35 @@ def cmd_story_draft(story_id: str) -> None:
     conn.commit()
     conn.close()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} reverted to draft")
+
+def cmd_story_done(story_id: str) -> None:
+    """Marks a story done and emits a story_done event carrying its linked goal ids."""
+    from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.events import emit_event
+    conn = _get_db()
+    story = conn.execute(
+        "SELECT story_id, goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    if not story:
+        conn.close()
+        print(f"  Story '{story_id}' not found.")
+        return
+    conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (story_id,))
+    conn.commit()
+    goal_ids = []
+    if story[1]:
+        goal_ids.append(story[1])
+    secondary = conn.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchall()
+    conn.close()
+    goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
+    emit_event(
+        "story_done",
+        {"story_id": story_id, "goal_ids": goal_ids},
+        emitted_by="cmd_story_done",
+    )
+    print(f"  {_GREEN}✓{_RESET} Story {story_id} marked done")
 
 def cmd_goal_create(outcome: str, criterion: str, deadline: str = None) -> str:
     """Creates a Business Goal record in state.db. Returns the generated goal_id."""
@@ -2264,6 +2383,21 @@ def cmd_pr_check() -> None:
             print(f"    story: {story_id}  agent: {agent}")
         print("\n  Fix with: synlynk score attest <story-id> --model <version>")
         raise SystemExit(1)
+    conn2 = _get_db()
+    unlinked_story_ids = conn2.execute(
+        "SELECT DISTINCT cr.story_id FROM capability_ratings cr "
+        "LEFT JOIN stories s ON s.story_id = cr.story_id "
+        "WHERE s.goal_id IS NULL "
+        "AND cr.story_id NOT IN ("
+        "  SELECT story_id FROM goal_contributions WHERE link_status='linked'"
+        ")"
+    ).fetchall()
+    conn2.close()
+    if unlinked_story_ids:
+        print("\n  ⚠ [PR CHECK] Stories with no linked GOVERNS goal (soft-warn, not blocking):")
+        for (story_id,) in unlinked_story_ids:
+            print(f"    {story_id}")
+        print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:

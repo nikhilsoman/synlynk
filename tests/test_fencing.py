@@ -1,4 +1,31 @@
-from synlynk.fencing import FenceData, render_task_fence, is_fenced_command
+from synlynk.fencing import (
+    FenceData,
+    NudgeData,
+    is_fenced_command,
+    render_nudge_fence,
+    render_task_fence,
+)
+
+
+def test_render_nudge_fence_includes_message_and_id():
+    data = NudgeData(
+        nudge_id="goal-closed-goal-90e73dfd",
+        title="Goal closed",
+        message="All stories linked to goal-90e73dfd are done - ",
+        follow_up="synlynk goal status",
+    )
+    output = render_nudge_fence(data)
+    assert "Goal closed" in output
+    assert "All stories linked to goal-90e73dfd are done - " in output
+    assert "synlynk goal status" in output
+
+
+def test_render_nudge_fence_has_bordered_box_shape():
+    data = NudgeData(nudge_id="x", title="T", message="M")
+    output = render_nudge_fence(data)
+    lines = output.rstrip("\n").split("\n")
+    assert lines[0].startswith("--")
+    assert lines[-1] == "-" * 36
 
 
 def test_render_task_fence_estimate():

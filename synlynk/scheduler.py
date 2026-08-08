@@ -164,10 +164,11 @@ def _enqueue_plan(plan: list) -> list:
     import hashlib
     import time
 
-    from synlynk import _get_db
+    from synlynk import _get_db, _open_reservation
 
     conn = _get_db()
     job_ids = []
+    run_id = "sched-" + hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
     try:
         for item in plan:
             story_id = item["story_id"]
@@ -184,6 +185,10 @@ def _enqueue_plan(plan: list) -> list:
                 (job_id, agent, task, story_id, "queued",
                  item.get("priority", 5), "[]",
                  time.strftime("%Y-%m-%dT%H:%M:%S"), dispatch_context),
+            )
+            _open_reservation(
+                conn, agent, int(item.get("estimated_tokens") or 0),
+                scope="plan", scope_id=run_id, job_id=job_id,
             )
             job_ids.append(job_id)
         conn.commit()

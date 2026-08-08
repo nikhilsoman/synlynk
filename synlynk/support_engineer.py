@@ -26,6 +26,12 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
         _install_cron_entry(name)
         return
 
+    if "subscriptions" in cfg:
+        from synlynk.workspace_agent import cmd_workspace_agent_run
+
+        cmd_workspace_agent_run()
+        return
+
     is_ci = os.environ.get("GITHUB_ACTIONS") == "true"
     print(f"  [agent:{name}] {'DRY RUN — ' if dry_run else ''}collecting signals{' (CI mode)' if is_ci else ''}")
 

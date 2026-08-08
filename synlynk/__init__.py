@@ -84,13 +84,18 @@ from synlynk.dispatch import (
 )
 from synlynk.quota import (
     _estimate_story_cost_usd,
+    _force_exhaust_quota,
+    _open_reservation,
+    _open_reservations_sum,
     _project_request_quota_from_config,
     _quota_headroom,
     _quota_status_for_agent,
     _read_agent_quota_rows,
     _refresh_agent_quotas_from_telemetry,
+    _release_reservation,
     _upsert_agent_quota,
     cmd_quota,
+    cmd_quota_tpm_view,
     refresh_agent_quotas_from_telemetry,
 )
 from synlynk.costs import (
@@ -933,7 +938,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     log_path     TEXT,
     handoff_count INTEGER NOT NULL DEFAULT 0,
     previous_agents TEXT,
-    dispatch_context TEXT
+    dispatch_context TEXT,
+    blocked_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 
@@ -954,6 +960,25 @@ CREATE TABLE IF NOT EXISTS goal_contributions (
     UNIQUE(goal_id, story_id)
 );
 
+CREATE TABLE IF NOT EXISTS events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type      TEXT NOT NULL,
+    payload_json    TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    emitted_by      TEXT NOT NULL,
+    parent_event_id INTEGER,
+    authority_scope TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, id);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name         TEXT NOT NULL,
+    event_type         TEXT NOT NULL,
+    last_seen_event_id INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(agent_name, event_type)
+);
+
 -- Per-agent plan quotas (tokens or requests). quota_type is plan-driven:
 -- different harnesses reset on different windows (5h Claude plan, hourly,
 -- daily, weekly, monthly). headroom is computed as limit_tokens - used_tokens
@@ -971,6 +996,25 @@ CREATE TABLE IF NOT EXISTS agent_quotas (
     UNIQUE(agent, model, quota_type, unit)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
+
+-- Reservation ledger: an open row represents tokens committed against a
+-- harness before real usage lands in agent_quotas via telemetry (#XXX
+-- quota-aware dispatch reservation). Released once the matching daemon_jobs
+-- row settles (done/failed/timed_out) and real usage has been recorded.
+-- Reservations older than 24h are treated as expired at READ time (lazy
+-- expiry, see _open_reservations_sum) rather than physically deleted.
+CREATE TABLE IF NOT EXISTS agent_reservations (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness        TEXT NOT NULL,
+    tokens         INTEGER NOT NULL,
+    scope          TEXT NOT NULL,
+    scope_id       TEXT,
+    job_id         TEXT,
+    status         TEXT NOT NULL DEFAULT 'open',
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    released_at    TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness ON agent_reservations(harness, status);
 
 CREATE TABLE IF NOT EXISTS credit_grants (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1488,6 +1532,7 @@ def load_config() -> dict:
         "auto_launch_after_wizard": True,
         "dispatch_mode": "daily-grind",
         "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
+        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
         "org": None,
         "owner": None,
         "repo": None,
@@ -1525,6 +1570,9 @@ def load_config() -> dict:
         for key, val in defaults["dispatch"].items():
             if key not in config.get("dispatch", {}):
                 config.setdefault("dispatch", {})[key] = val
+        for key, val in defaults["nudges"].items():
+            if key not in config.get("nudges", {}):
+                config.setdefault("nudges", {})[key] = val
         return config
     except (json.JSONDecodeError, IOError):
         return defaults

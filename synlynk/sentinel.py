@@ -483,6 +483,15 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                     "Check plan limits or switch agent CLI."
                 )
                 print(f"\n  \U0001f6a8 [QUOTA_EXHAUSTED] Matched \"{phrase}\" in output.")
+                try:
+                    from synlynk import _get_db, _force_exhaust_quota
+                    _quota_conn = _get_db()
+                    try:
+                        _force_exhaust_quota(_quota_conn, cli, "5h")
+                    finally:
+                        _quota_conn.close()
+                except Exception:
+                    pass
                 break
 
     if output_text and exit_code == 0:

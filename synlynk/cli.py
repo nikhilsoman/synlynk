@@ -180,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_scan,
         cmd_cost_log,
         cmd_quota,
+        cmd_quota_tpm_view,
         cmd_roadmap_add,
         cmd_score_add,
         cmd_score_attest,
@@ -509,6 +510,10 @@ def build_parser() -> argparse.ArgumentParser:
     config_set_parser = config_sub.add_parser("set", help="Set a config key")
     config_set_parser.add_argument("key")
     config_set_parser.add_argument("value")
+    nudges_parser = config_sub.add_parser(
+        "nudges", help="Control workspace-agent nudges"
+    )
+    nudges_parser.add_argument("state", choices=["on", "off", "reset"])
 
     sentinel_parser = subparsers.add_parser("sentinel",
                                              help="View and manage sentinel alerts")
@@ -692,6 +697,8 @@ def build_parser() -> argparse.ArgumentParser:
                                      help="Mark every draft story ready")
     story_draft_parser = story_sub.add_parser("draft", help="Revert a story to draft")
     story_draft_parser.add_argument("story_id")
+    story_done_parser = story_sub.add_parser("done", help="Mark a story done")
+    story_done_parser.add_argument("story_id")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -751,6 +758,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="json_output",
         help="Emit machine-readable JSON",
+    )
+    quota_parser.add_argument(
+        "--tpm-view",
+        action="store_true",
+        dest="tpm_view",
+        help="Show open reservations across all harnesses (read-only TPM hook view)",
     )
 
     schedule_parser = subparsers.add_parser(
@@ -850,6 +863,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
+    from synlynk.db import cmd_story_done
 
     from synlynk import (
         AGENT_CAPABILITY_BASELINES,
@@ -898,6 +912,7 @@ def main() -> None:
         cmd_run_trio,
         cmd_scan,
         cmd_cost_log,
+        cmd_quota_tpm_view,
         cmd_score_add,
         cmd_score_attest,
         cmd_score_list,
@@ -996,6 +1011,21 @@ def main() -> None:
         if getattr(args, "config_action", None) == "set":
             from synlynk import cmd_config_set
             cmd_config_set(args.key, args.value)
+        elif getattr(args, "config_action", None) == "nudges":
+            from synlynk import _update_config, load_config
+
+            cfg = load_config()
+            nudges_cfg = cfg.get(
+                "nudges", {"enabled": True, "dismissed_ids": [], "last_shown": {}}
+            )
+            if args.state == "on":
+                nudges_cfg["enabled"] = True
+            elif args.state == "off":
+                nudges_cfg["enabled"] = False
+            elif args.state == "reset":
+                nudges_cfg = {"enabled": True, "dismissed_ids": [], "last_shown": {}}
+            _update_config({"nudges": nudges_cfg})
+            print(f"  ✓ nudges {args.state}")
         else:
             config_parser.print_help()
     elif args.command == "sentinel":
@@ -1131,6 +1161,8 @@ def main() -> None:
             cmd_story_ready(args.story_id, all_stories=getattr(args, "all_stories", False))
         elif args.story_action == "draft":
             cmd_story_draft(args.story_id)
+        elif args.story_action == "done":
+            cmd_story_done(args.story_id)
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
@@ -1172,10 +1204,13 @@ def main() -> None:
                 note=args.note,
             )
     elif args.command == "quota":
-        cmd_quota(
-            agent=getattr(args, "agent", None),
-            json_output=getattr(args, "json_output", False),
-        )
+        if getattr(args, "tpm_view", False):
+            cmd_quota_tpm_view()
+        else:
+            cmd_quota(
+                agent=getattr(args, "agent", None),
+                json_output=getattr(args, "json_output", False),
+            )
     elif args.command == "schedule":
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
