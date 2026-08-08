@@ -59,3 +59,71 @@ def advance_checkpoint(agent_name: str, event_type: str, event_id: int) -> None:
     )
     conn.commit()
     conn.close()
+
+
+def scan_local_events(agent_name: str) -> None:
+    """Detect and emit local lifecycle events for this run.
+
+    The pilot intentionally scans the latest merged PRs and recent relevant git
+    paths on every run. Consumers use their own checkpoints to deduplicate the
+    resulting events.
+    """
+    import subprocess
+
+    heartbeat_id = emit_event("cron_heartbeat", {}, emitted_by="scan_local_events")
+    advance_checkpoint(agent_name, "cron_heartbeat", heartbeat_id)
+
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "list", "--state", "merged", "--limit", "20", "--json", "number,title,mergedAt"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        merged_prs = json.loads(result.stdout) if result.returncode == 0 else []
+    except (FileNotFoundError, json.JSONDecodeError):
+        merged_prs = []
+
+    last_event_id = None
+    for pr in merged_prs:
+        last_event_id = emit_event(
+            "pr_merged",
+            {
+                "pr_number": pr["number"],
+                "title": pr.get("title"),
+                "merged_at": pr.get("mergedAt"),
+            },
+            emitted_by="scan_local_events",
+        )
+    if last_event_id is not None:
+        advance_checkpoint(agent_name, "pr_merged", last_event_id)
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "log",
+                "--name-only",
+                "--pretty=format:",
+                "-20",
+                "--",
+                "docs/superpowers/specs",
+                "docs/superpowers/plans",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        changed_paths = sorted({line.strip() for line in result.stdout.splitlines() if line.strip()})
+    except FileNotFoundError:
+        changed_paths = []
+
+    last_event_id = None
+    for path in changed_paths:
+        last_event_id = emit_event(
+            "spec_or_plan_committed",
+            {"path": path},
+            emitted_by="scan_local_events",
+        )
+    if last_event_id is not None:
+        advance_checkpoint(agent_name, "spec_or_plan_committed", last_event_id)

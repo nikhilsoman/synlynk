@@ -1,7 +1,7 @@
 import json
 import sqlite3
 import pytest
-from synlynk.events import emit_event, pending_events, advance_checkpoint
+from synlynk.events import emit_event, pending_events, advance_checkpoint, scan_local_events
 
 
 def test_emit_event_writes_row_and_returns_id(project_dir):
@@ -63,3 +63,35 @@ def test_migration_adds_link_status_and_skip_reason_columns(project_dir):
     conn.close()
     assert "link_status" in cols
     assert "skip_reason" in cols
+
+
+def test_scan_local_events_always_emits_cron_heartbeat(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]")
+        scan_local_events("workspace-lifecycle-nudge")
+    pending = pending_events("test-observer", "cron_heartbeat")
+    assert len(pending) == 1
+
+
+def test_scan_local_events_emits_pr_merged_from_gh_output(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    gh_stdout = json.dumps([{"number": 99, "title": "Test PR", "mergedAt": "2026-08-08T00:00:00Z"}])
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout=gh_stdout)
+        scan_local_events("workspace-lifecycle-nudge")
+    pending = pending_events("test-observer", "pr_merged")
+    assert len(pending) == 1
+    assert pending[0]["payload"]["pr_number"] == 99
+
+
+def test_scan_local_events_advances_own_checkpoint(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]")
+        scan_local_events("workspace-lifecycle-nudge")
+        first_pending = pending_events("workspace-lifecycle-nudge", "cron_heartbeat")
+        assert first_pending == []
