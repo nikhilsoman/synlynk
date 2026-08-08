@@ -991,6 +991,35 @@ def test_mark_daemon_job_terminal_only_running(project_dir):
     conn.close()
 
 
+def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "codex", 4_000, scope="adhoc", job_id="job-settle1"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at) "
+        "VALUES ('job-settle1', 'codex', 'task', 'running', 999999, "
+        "'2026-08-08T00:00:00', '2026-08-08T00:00:00')"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(sl, "extract_tokens", lambda log_text, agent=None: (0, 0))
+    monkeypatch.setattr(sl, "extract_model_version", lambda log_text, agent=None: "unknown")
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "_write_job_summary", lambda *a, **k: None)
+
+    sl._reconcile_daemon_jobs()
+
+    status = conn.execute(
+        "SELECT status FROM agent_reservations WHERE id=?", (rid,)
+    ).fetchone()[0]
+    assert status == "released"
+
+
 def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):
     from synlynk.jobs import scan_zombie_running_jobs, apply_reap_zombies
     import sqlite3

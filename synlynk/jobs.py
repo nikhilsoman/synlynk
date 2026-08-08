@@ -1952,6 +1952,14 @@ def _reconcile_daemon_jobs() -> None:
                         (status, exit_code, now, job_id),
                     )
                     conn.commit()
+                    release_fn = _pkg("_release_reservation")
+                    if release_fn:
+                        _res_row = conn.execute(
+                            "SELECT id FROM agent_reservations WHERE job_id=? AND status='open'",
+                            (job_id,),
+                        ).fetchone()
+                        if _res_row:
+                            release_fn(conn, _res_row[0])
                     # Do not rewrite summary / re-bill costs — truth already on disk.
                     continue
 
@@ -1971,6 +1979,14 @@ def _reconcile_daemon_jobs() -> None:
                     (status, exit_code, now, job_id)
                 )
                 conn.commit()
+                release_fn = _pkg("_release_reservation")
+                if release_fn:
+                    _res_row = conn.execute(
+                        "SELECT id FROM agent_reservations WHERE job_id=? AND status='open'",
+                        (job_id,),
+                    ).fetchone()
+                    if _res_row:
+                        release_fn(conn, _res_row[0])
                 duration_s = None
                 try:
                     end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))
