@@ -19,6 +19,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `agent configure` (secondary) — open
 - `agent list` (secondary) — open
 - `config set` (secondary) — open
+- `config nudges` (secondary) — open
 
 ## Tier 1 — Goal
 
@@ -31,6 +32,7 @@ Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scrip
 - `story list` (primary) — goal
 - `story ready` (secondary) — goal
 - `story draft` (secondary) — goal
+- `story done` (secondary) — goal
 - `roadmap add` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
