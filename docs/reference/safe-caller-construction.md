@@ -75,5 +75,4 @@ Today's safe paths above cover Python callers (direct function call) and shell c
 non-Python CLI callers — if you need one, none exists yet. This is expected to become necessary
 once Team/Enterprise editions introduce external, non-Python callers (webhooks, API gateway,
 other services) invoking dispatch programmatically. It's tracked as a deferred follow-up, not
-scheduled: see the "Structured task-file/stdin interface for `synlynk dispatch` (Team/Enterprise
-prerequisite)" issue.
+scheduled: see [issue #782](https://github.com/nikhilsoman/synlynk/issues/782).
