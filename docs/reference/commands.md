@@ -2,6 +2,8 @@
 
 Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scripts/generate_command_docs.py`.
 
+See [safe-caller-construction.md](safe-caller-construction.md) for guidance on building dispatch task text programmatically.
+
 ## Orientation gateway (always available)
 
 - `status` — visualize
