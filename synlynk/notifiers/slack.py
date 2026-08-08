@@ -17,7 +17,7 @@ def format_message(event: uxcore.Event) -> str:
     if event.action in ("job_completed", "job_failed"):
         job_id = event.result.get("job_id") or event.params.get("job_id")
         if job_id:
-            message += f"\n<https://localhost:8420/#job-{job_id}|View live in Vizor> · "
+            message += f"\n<https://localhost:8420/#job-{job_id}|View live in Vizor>"
     return message
 
 
