@@ -21,6 +21,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `agent configure` (secondary) — open
 - `agent list` (secondary) — open
 - `config set` (secondary) — open
+- `config nudges` (secondary) — open
 
 ## Tier 1 — Goal
 
@@ -33,6 +34,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `story list` (primary) — goal
 - `story ready` (secondary) — goal
 - `story draft` (secondary) — goal
+- `story done` (secondary) — goal
 - `roadmap add` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open

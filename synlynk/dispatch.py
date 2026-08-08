@@ -27,6 +27,20 @@ def _pkg(name: str, default=None):
     return getattr(package, name, default)
 
 
+def _print_pending_nudges() -> None:
+    """Print any queued workspace-agent nudges when enabled by config."""
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
+    if not config.get("nudges", {}).get("enabled", True):
+        return
+    try:
+        from synlynk.workspace_agent import cmd_workspace_agent_run
+
+        cmd_workspace_agent_run()
+    except Exception:
+        pass
+
+
 def _dispatch_flags_for_agent(agent: str) -> list:
     """Return the executable dispatch flags for an agent baseline."""
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
@@ -2283,6 +2297,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     refresh_quotas()
                 except Exception:
                     pass
+        _print_pending_nudges()
         if check_sentinels:
             check_sentinels(output_text=output_text, exit_code=exit_code, cmd=" ".join(cmd_args))
         if check_drift:
