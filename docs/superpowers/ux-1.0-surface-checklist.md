@@ -25,7 +25,7 @@ Phase 1 sign-off on its own (see Follow-up section).
 | Item | Pass/Fail | Evidence | Project |
 |---|---|---|---|
 | `/` index route renders | Pass | `curl -s -o /dev/null -w "%{http_code}" http://localhost:8731/` -> 200; `manifest.json` -> 200 | synlynk |
-| `/` index route renders | Fail | `EOFError` crash on `viz --serve` — no `.synlynk/config.json` `vizor.ftue_done` yet, `_ftue_prompts()` calls `input()` unconditionally with no TTY guard. Filed as [#822](https://github.com/nikhilsoman/synlynk/issues/822), dispatched as job-b41bbca7 (story-c822fd03) | rxcc, cc-videoreframing |
+| `/` index route renders | Pass | Re-verified post-fix: `synlynk viz --serve < /dev/null` — no crash, `curl -s -o /dev/null -w "%{http_code}" http://localhost:<port>/` -> 200. Was `EOFError` on unconfigured `.synlynk/config.json` (`_ftue_prompts()` called `input()` unconditionally); fixed by [#822](https://github.com/nikhilsoman/synlynk/issues/822) / [PR #824](https://github.com/nikhilsoman/synlynk/pull/824), merged to main | rxcc, cc-videoreframing |
 | `/` index route renders | N/A | project has no `.synlynk/` directory — not yet onboarded to synlynk | playblazer-ng |
 | `/dispatch` POST creates a job | Not yet verified | requires a safe test dispatch against a live project; deferred to avoid polluting real job history mid-trial | — |
 | Job list/detail views render live data | Not yet verified | route surface is manifest.json + static gantt/tube/journeys/observatory/effort/efficiency views, not a REST job-list API as originally assumed — re-scope this checklist row in a follow-up edit | synlynk |
