@@ -1725,13 +1725,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                             reset_at = _r["reset_at"]
                             break
                 now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
-                _quota_conn.execute(
-                    "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                    "priority, depends_on, enqueued_at, blocked_reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                     "quota_exhausted"),
-                )
+                existing_job = _quota_conn.execute(
+                    "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
+                ).fetchone()
+                if existing_job:
+                    _quota_conn.execute(
+                        "UPDATE daemon_jobs SET status='queued', "
+                        "blocked_reason='quota_exhausted' WHERE job_id=?",
+                        (job_id,),
+                    )
+                else:
+                    _quota_conn.execute(
+                        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
+                        "priority, depends_on, enqueued_at, blocked_reason) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
+                         "quota_exhausted"),
+                    )
                 _quota_conn.commit()
                 return {
                     "deferred": True,
@@ -1746,14 +1756,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
             if open_reservation_fn and has_reservations_table:
                 _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
-                open_reservation_fn(
-                    _quota_conn,
-                    agent,
-                    _est_tokens,
-                    scope=_scope,
-                    scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
-                    job_id=job_id,
-                )
+                existing_reservation = _quota_conn.execute(
+                    "SELECT 1 FROM agent_reservations "
+                    "WHERE status='open' AND job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if not existing_reservation:
+                    open_reservation_fn(
+                        _quota_conn,
+                        agent,
+                        _est_tokens,
+                        scope=_scope,
+                        scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                        job_id=job_id,
+                    )
 
     resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
     if resolve_or_create_story_id:

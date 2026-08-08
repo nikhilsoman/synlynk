@@ -345,6 +345,60 @@ def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
     conn.close()
 
 
+def test_dispatch_agent_existing_job_quota_exhaustion_updates_row(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    job_id = "job-existing-quota-exhausted"
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) "
+        "VALUES (?, ?, ?, 'running', ?)",
+        (job_id, "codex", "queued task", "2026-08-08T00:00:00"),
+    )
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=1_000, used_tokens=1_000, unit="tokens", conn=conn
+    )
+
+    result = sl.dispatch_agent(
+        "codex", "retry queued task", job_id=job_id, force_agent=True, skip_preflight=True
+    )
+
+    assert result["deferred"] is True
+    row = conn.execute(
+        "SELECT status, blocked_reason FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    assert row == ("queued", "quota_exhausted")
+    assert conn.execute("SELECT COUNT(*) FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()[0] == 1
+    conn.close()
+
+
+def test_dispatch_agent_reuses_existing_open_reservation(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=100_000, used_tokens=0, unit="tokens", conn=conn
+    )
+    job_id = "job-existing-reservation"
+    sl._open_reservation(conn, "codex", 2_000, scope="plan", scope_id="run-1", job_id=job_id)
+    before = conn.execute(
+        "SELECT COUNT(*) FROM agent_reservations WHERE job_id=? AND status='open'", (job_id,)
+    ).fetchone()[0]
+
+    class _P:
+        pid = 12345
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *args, **kwargs: _P())
+    sl.dispatch_agent("codex", "dispatch reserved task", job_id=job_id, force_agent=True, skip_preflight=True)
+
+    after = conn.execute(
+        "SELECT COUNT(*) FROM agent_reservations WHERE job_id=? AND status='open'", (job_id,)
+    ).fetchone()[0]
+    assert after == before == 1
+    conn.close()
+
+
 def test_dispatch_agent_opens_reservation_when_headroom_exists(project_dir, monkeypatch):
     import synlynk as sl
 
