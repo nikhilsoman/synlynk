@@ -119,6 +119,8 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
+<!-- commands:end -->
+
 ### Dispatch flags
 
 - `--scope-paths <glob>` (repeatable): restrict this dispatch to only touching files matching
@@ -133,8 +135,6 @@ Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
 The summary for a `SCOPE_VIOLATION` job includes a `scope_violation_files` field listing the
 out-of-scope paths that triggered the violation.
-
-<!-- commands:end -->
 
 > **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux. `synlynk dispatch` works on all platforms.
 
