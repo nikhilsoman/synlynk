@@ -160,6 +160,12 @@ If you installed synlynk before 2026-07, here's what's new:
 
 Run `synlynk upgrade` to get the latest, then `synlynk doctor` to verify.
 
+## Quota-aware dispatch
+
+`synlynk quota` headroom now accounts for open reservations, not just telemetry-recorded usage. Every dispatch path (ad-hoc, `--force-agent`, daemon-queued, and batch-scheduled via `synlynk schedule --execute`) reserves estimated tokens against a harness before it fires and releases the reservation once real usage lands.
+
+When headroom is insufficient, dispatch defers (stays `queued` with `blocked_reason=quota_exhausted`) rather than failing. It resumes automatically once the harness's quota window resets, picked up by the next `synlynk watch` daemon poll. Use `synlynk quota --tpm-view` to see all open reservations across harnesses.
+
 ## synlynk init flags
 
 | Flag | Default | Description |
