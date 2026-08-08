@@ -455,6 +455,59 @@ def _upsert_agent_quota(
             conn.close()
 
 
+_RESERVATION_EXPIRY_SECONDS = 24 * 3600  # comfortably > longest QUOTA_TYPES window (5h)
+
+
+def _open_reservation(
+    conn,
+    harness: str,
+    tokens: int,
+    scope: str,
+    scope_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+) -> int:
+    """Opens an agent_reservations row. Returns the new reservation id.
+
+    scope is one of 'plan' | 'session' | 'adhoc' (not validated here -- callers
+    are internal and already constrained by the design's dispatch-time flow).
+    """
+    cur = conn.execute(
+        "INSERT INTO agent_reservations (harness, tokens, scope, scope_id, job_id, status) "
+        "VALUES (?, ?, ?, ?, ?, 'open')",
+        (harness, int(tokens), scope, scope_id, job_id),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def _release_reservation(conn, reservation_id: int) -> None:
+    """Marks a reservation released. Idempotent -- releasing twice is a no-op
+    on the second call since the WHERE clause only matches status='open'."""
+    conn.execute(
+        "UPDATE agent_reservations SET status='released', released_at=CURRENT_TIMESTAMP "
+        "WHERE id=? AND status='open'",
+        (reservation_id,),
+    )
+    conn.commit()
+
+
+def _open_reservations_sum(conn, harness: str) -> int:
+    """Sums tokens from open, non-expired reservations for one harness.
+
+    Lazy expiry: a reservation older than _RESERVATION_EXPIRY_SECONDS is
+    excluded from the sum on read, not physically mutated -- avoids an extra
+    write on every dispatch just to sweep abandoned reservations.
+    """
+    cutoff = datetime.now(UTC).timestamp() - _RESERVATION_EXPIRY_SECONDS
+    cutoff_iso = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
+    row = conn.execute(
+        "SELECT COALESCE(SUM(tokens), 0) FROM agent_reservations "
+        "WHERE harness=? AND status='open' AND created_at >= ?",
+        (harness, cutoff_iso),
+    ).fetchone()
+    return int(row[0] or 0)
+
+
 def _project_request_quota_from_config() -> Optional[dict]:
     """Unify project-level budget.limit_requests with agent_quotas request unit.
 

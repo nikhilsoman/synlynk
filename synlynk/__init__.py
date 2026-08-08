@@ -84,11 +84,14 @@ from synlynk.dispatch import (
 )
 from synlynk.quota import (
     _estimate_story_cost_usd,
+    _open_reservation,
+    _open_reservations_sum,
     _project_request_quota_from_config,
     _quota_headroom,
     _quota_status_for_agent,
     _read_agent_quota_rows,
     _refresh_agent_quotas_from_telemetry,
+    _release_reservation,
     _upsert_agent_quota,
     cmd_quota,
     refresh_agent_quotas_from_telemetry,

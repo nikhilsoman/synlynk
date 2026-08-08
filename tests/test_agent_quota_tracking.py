@@ -73,6 +73,66 @@ def test_agent_reservations_table_exists(project_dir):
     assert "blocked_reason" in daemon_cols
 
 
+def test_open_release_reservation_lifecycle(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(conn, "claude", 5000, scope="adhoc")
+    assert isinstance(rid, int)
+
+    row = conn.execute(
+        "SELECT harness, tokens, scope, scope_id, job_id, status FROM agent_reservations WHERE id=?",
+        (rid,),
+    ).fetchone()
+    assert row == ("claude", 5000, "adhoc", None, None, "open")
+
+    assert sl._open_reservations_sum(conn, "claude") == 5000
+    assert sl._open_reservations_sum(conn, "codex") == 0
+
+    sl._release_reservation(conn, rid)
+    status, released_at = conn.execute(
+        "SELECT status, released_at FROM agent_reservations WHERE id=?", (rid,)
+    ).fetchone()
+    assert status == "released"
+    assert released_at is not None
+    assert sl._open_reservations_sum(conn, "claude") == 0
+
+
+def test_open_reservations_sum_ignores_expired(project_dir):
+    import synlynk as sl
+    import time
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(conn, "claude", 3000, scope="adhoc")
+    # Simulate a reservation opened >24h ago (lazy expiry, not physical delete)
+    stale = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 25 * 3600)
+    )
+    conn.execute(
+        "UPDATE agent_reservations SET created_at=? WHERE id=?", (stale, rid)
+    )
+    conn.commit()
+    assert sl._open_reservations_sum(conn, "claude") == 0
+    # Row itself is untouched (status still 'open') -- lazy, not physical
+    status = conn.execute(
+        "SELECT status FROM agent_reservations WHERE id=?", (rid,)
+    ).fetchone()[0]
+    assert status == "open"
+
+
+def test_open_reservation_with_scope_id_and_job_id(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(
+        conn, "agy", 2000, scope="plan", scope_id="run-abc123", job_id="job-xyz"
+    )
+    row = conn.execute(
+        "SELECT scope, scope_id, job_id FROM agent_reservations WHERE id=?", (rid,)
+    ).fetchone()
+    assert row == ("plan", "run-abc123", "job-xyz")
+
+
 def test_pr_review_discipline_instructions_say_synlynk_pr_check_without_pr_number():
     """Documented PR check usage must match the zero-argument CLI parser."""
     from synlynk.cli import build_parser
