@@ -54,3 +54,12 @@ def test_advance_checkpoint_never_moves_backward(project_dir):
     pending = pending_events("workspace-lifecycle-nudge", "story_done")
 
     assert pending == []
+
+
+def test_migration_adds_link_status_and_skip_reason_columns(project_dir):
+    import synlynk
+    conn = synlynk._get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+    conn.close()
+    assert "link_status" in cols
+    assert "skip_reason" in cols
