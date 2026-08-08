@@ -133,6 +133,31 @@ def test_open_reservation_with_scope_id_and_job_id(project_dir):
     assert row == ("plan", "run-abc123", "job-xyz")
 
 
+def test_quota_status_subtracts_open_reservations(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "claude", "5h", limit_tokens=10_000, used_tokens=0, unit="tokens", conn=conn
+    )
+    # No reservations yet: full headroom, small ask fits
+    status = sl._quota_status_for_agent(conn, "claude", estimated_tokens=9_000)
+    assert status["status"] == "ok"
+    assert status["headroom"] == 10_000
+
+    # Reserve 6,000 -- headroom should now read as 4,000
+    sl._open_reservation(conn, "claude", 6_000, scope="adhoc")
+    status = sl._quota_status_for_agent(conn, "claude", estimated_tokens=3_000)
+    assert status["status"] == "ok"
+    assert status["headroom"] == 4_000
+
+    # A further ask that only fits telemetry-headroom but not reservation-adjusted
+    # headroom must be rejected
+    status = sl._quota_status_for_agent(conn, "claude", estimated_tokens=5_000)
+    assert status["status"] == "exhausted"
+    assert status["headroom"] == 4_000
+
+
 def test_pr_review_discipline_instructions_say_synlynk_pr_check_without_pr_number():
     """Documented PR check usage must match the zero-argument CLI parser."""
     from synlynk.cli import build_parser
@@ -2017,5 +2042,4 @@ def test_flaky_test_tui_panelspy_curses_tests_failing_intermittently_in_ci(monke
 
     pad = curses.newpad(5, 5)
     assert pad is not None
-
 

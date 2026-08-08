@@ -649,6 +649,7 @@ def _quota_status_for_agent(
 
     need_tokens = int(estimated_tokens) if estimated_tokens else 0
     need_requests = max(1, int(estimated_requests or 1))
+    reserved = _pkg("_open_reservations_sum")(conn, agent)
     min_token_headroom = None
     min_request_headroom = None
 
@@ -656,6 +657,7 @@ def _quota_status_for_agent(
         unit = row["unit"]
         headroom = row["headroom"]
         if unit == "tokens":
+            headroom = max(0, headroom - reserved)
             min_token_headroom = (
                 headroom if min_token_headroom is None
                 else min(min_token_headroom, headroom)
