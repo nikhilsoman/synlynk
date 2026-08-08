@@ -59,6 +59,9 @@ COMMAND_TAXONOMY = [
     {"command": "config set", "governs_stage": "open", "maturity_tier": 0, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["set this config key"], "hook_event": None},
+    {"command": "config nudges", "governs_stage": "open", "maturity_tier": 0, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["control workspace-agent nudges"], "hook_event": None},
 
     # --- Tier 1: Goal ---
     {"command": "decide", "governs_stage": "goal", "maturity_tier": 1, "prominence": "primary",
@@ -88,6 +91,9 @@ COMMAND_TAXONOMY = [
     {"command": "story draft", "governs_stage": "goal", "maturity_tier": 1, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["revert this story to draft"], "hook_event": None},
+    {"command": "story done", "governs_stage": "goal", "maturity_tier": 1, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["mark this story done"], "hook_event": None},
     {"command": "roadmap add", "governs_stage": "sustain", "maturity_tier": 1, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["add a roadmap arc", "add a roadmap phase"], "hook_event": None},
