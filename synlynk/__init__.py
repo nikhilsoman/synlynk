@@ -95,6 +95,7 @@ from synlynk.quota import (
     _release_reservation,
     _upsert_agent_quota,
     cmd_quota,
+    cmd_quota_tpm_view,
     refresh_agent_quotas_from_telemetry,
 )
 from synlynk.costs import (

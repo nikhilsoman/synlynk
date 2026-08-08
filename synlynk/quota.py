@@ -402,6 +402,39 @@ def cmd_quota(agent: Optional[str] = None, json_output: bool = False) -> None:
     print("  window; limits are config defaults, not live provider plan meters.")
 
 
+def cmd_quota_tpm_view() -> None:
+    """Read-only CLI wrapper around tpm_observe_reservations()."""
+    from synlynk.tpm_hooks import tpm_observe_reservations
+
+    conn = _pkg("_get_db")()
+    try:
+        reservations = tpm_observe_reservations(conn)
+    finally:
+        conn.close()
+
+    if not reservations:
+        print("  No open reservations")
+        return
+
+    print(
+        f"\n  {'Harness':<10} {'Tokens':>10} {'Scope':<10} "
+        f"{'Scope ID':<14} {'Job ID':<14} {'Headroom':>10}"
+    )
+    print("  " + "-" * 72)
+    for reservation in reservations:
+        headroom = (
+            "unknown"
+            if reservation["current_headroom"] is None
+            else f"{reservation['current_headroom']:,}"
+        )
+        print(
+            f"  {reservation['harness']:<10} {reservation['tokens']:>10,} "
+            f"{reservation['scope']:<10} "
+            f"{(reservation['scope_id'] or '-'):<14} "
+            f"{(reservation['job_id'] or '-'):<14} {headroom:>10}"
+        )
+
+
 def _upsert_agent_quota(
     agent: str,
     quota_type: str,

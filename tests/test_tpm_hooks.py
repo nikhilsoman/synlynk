@@ -85,3 +85,18 @@ def test_tpm_reallocate_raises_when_not_queued(project_dir):
 
     with pytest.raises(ValueError):
         tpm_reallocate(conn, "job-running2", "agy")
+
+
+def test_cli_quota_tpm_view_prints_reservations(project_dir, capsys, monkeypatch):
+    import synlynk as sl
+    from synlynk.cli import main
+
+    conn = sl._get_db()
+    sl._open_reservation(conn, "claude", 4_500, scope="session")
+
+    monkeypatch.setattr("sys.argv", ["synlynk", "quota", "--tpm-view"])
+    main()
+
+    out = capsys.readouterr().out
+    assert "claude" in out
+    assert "4,500" in out or "4500" in out
