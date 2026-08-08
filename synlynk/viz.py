@@ -139,6 +139,21 @@ def generate_viz_data() -> dict:
             config = {}
         return config.get("project_name") or os.path.basename(os.getcwd()) or "workspace"
 
+    def _load_action_history() -> list:
+        actions = []
+        try:
+            with open(".synlynk/events.jsonl") as f:
+                for line in f:
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(event, dict):
+                        actions.append(event)
+        except (OSError, TypeError):
+            pass
+        return actions
+
     def _base_data() -> dict:
         observatory = build_job_observatory_snapshot()
         try:
@@ -161,6 +176,8 @@ def generate_viz_data() -> dict:
             "workspace_map": _load_workspace_map(),
             "file_tree": file_tree,
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
+            "jobs": observatory.get("jobs", []),
+            "actions": _load_action_history(),
             "ecosystem": {},
             "observatory": observatory,
         }
@@ -522,6 +539,31 @@ def generate_viz_data() -> dict:
     return data
 
 
+def _compute_underused_feature_banner(data: dict) -> Optional[str]:
+    jobs = data.get("jobs", [])
+    if not isinstance(jobs, list) or len(jobs) < 10:
+        return None
+
+    approve_kill_used = any(
+        isinstance(job, dict)
+        and str(job.get("status") or "").strip().lower() in {"approved", "killed"}
+        for job in jobs
+    )
+    if not approve_kill_used:
+        for action in data.get("actions", []):
+            if not isinstance(action, dict):
+                continue
+            if action.get("action") not in {"approve_pr", "kill_job"}:
+                continue
+            result = action.get("result")
+            if not isinstance(result, dict) or result.get("ok", True):
+                approve_kill_used = True
+                break
+    if approve_kill_used:
+        return None
+    return f"You've dispatched {len(jobs)} jobs but never used approve/kill -- try it"
+
+
 def generate_index_html(data: dict, port: int) -> str:
     workspace = data.get("workspace") or {}
     workspace_name = str(workspace.get("name") or "workspace")
@@ -617,6 +659,10 @@ def generate_index_html(data: dict, port: int) -> str:
     }
 
     * { box-sizing:border-box; margin:0; padding:0; }
+    @keyframes vizor-banner-slide-in {
+      from { opacity:0; transform:translate(-50%, -12px); }
+      to { opacity:1; transform:translate(-50%, 0); }
+    }
     html, body { height:100%; }
     body {
       display:flex;
@@ -813,6 +859,13 @@ def generate_index_html(data: dict, port: int) -> str:
     avatar_label = (workspace_name[:1] or "S").upper()
     if workspace_name.lower().startswith("synlynk"):
         avatar_label = "S"
+    banner_message = _compute_underused_feature_banner(data)
+    banner_html = ""
+    if banner_message:
+        banner_html = f'''<div id="vizor-first-visit-banner" style="position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9998;display:flex;align-items:center;gap:16px;padding:12px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-bg);color:var(--text);box-shadow:var(--shadow);animation:vizor-banner-slide-in .3s ease-out;">
+  <span>{html.escape(banner_message)}</span>
+  <button type="button" onclick="this.parentElement.remove()" style="border:1px solid var(--accent);border-radius:4px;background:transparent;color:inherit;padding:4px 9px;cursor:pointer;">Close</button>
+</div>'''
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -822,6 +875,7 @@ def generate_index_html(data: dict, port: int) -> str:
 <style>{style_content}</style>
 </head>
 <body>
+{banner_html}
 <div class="shell">
   <aside class="sidenav">
     <div class="nav-header">
