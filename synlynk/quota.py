@@ -448,8 +448,7 @@ def _upsert_agent_quota(
                 reset_at,
             ),
         )
-        if own_conn:
-            conn.commit()
+        conn.commit()
     finally:
         if own_conn:
             conn.close()
@@ -506,6 +505,35 @@ def _open_reservations_sum(conn, harness: str) -> int:
         (harness, cutoff_iso),
     ).fetchone()
     return int(row[0] or 0)
+
+
+def _force_exhaust_quota(conn, harness: str, window: str) -> None:
+    """Reactive correction: zeroes `harness`'s headroom for `window` immediately,
+    from a real observed rejection signal (see sentinel.py QUOTA_EXHAUSTED).
+
+    Never touches daemon_jobs -- running jobs keep running (wait/resume policy).
+    If no agent_quotas row exists yet for this harness/window, creates a
+    zero-headroom placeholder row so the next _quota_status_for_agent() call
+    sees it as exhausted rather than "unknown" (degraded, non-blocking).
+    """
+    if window not in QUOTA_TYPES:
+        window = "5h"
+    rows = conn.execute(
+        "SELECT model, unit, limit_tokens FROM agent_quotas WHERE agent=? AND quota_type=?",
+        (harness, window),
+    ).fetchall()
+    if not rows:
+        _upsert_agent_quota(
+            harness, window, limit_tokens=0, used_tokens=0, unit="tokens", conn=conn
+        )
+        return
+    for model, unit, limit_tokens in rows:
+        conn.execute(
+            "UPDATE agent_quotas SET used_tokens=?, updated_at=CURRENT_TIMESTAMP "
+            "WHERE agent=? AND model=? AND quota_type=? AND unit=?",
+            (int(limit_tokens), harness, model, window, unit),
+        )
+    conn.commit()
 
 
 def _project_request_quota_from_config() -> Optional[dict]:

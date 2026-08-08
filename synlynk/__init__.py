@@ -84,6 +84,7 @@ from synlynk.dispatch import (
 )
 from synlynk.quota import (
     _estimate_story_cost_usd,
+    _force_exhaust_quota,
     _open_reservation,
     _open_reservations_sum,
     _project_request_quota_from_config,

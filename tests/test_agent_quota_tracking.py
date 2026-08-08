@@ -158,6 +158,49 @@ def test_quota_status_subtracts_open_reservations(project_dir):
     assert status["headroom"] == 4_000
 
 
+def test_force_exhaust_quota_zeroes_headroom_not_running_jobs(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=50_000, used_tokens=1_000, unit="tokens", conn=conn
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, started_at) "
+        "VALUES ('job-running-1', 'codex', 'do work', 'running', '2026-08-08T00:00:00', '2026-08-08T00:00:00')"
+    )
+    conn.commit()
+
+    sl._force_exhaust_quota(conn, "codex", "5h")
+
+    row = conn.execute(
+        "SELECT limit_tokens, used_tokens FROM agent_quotas WHERE agent='codex' AND quota_type='5h'"
+    ).fetchone()
+    assert row[1] == row[0]  # used == limit -> headroom 0
+
+    status = sl._quota_status_for_agent(conn, "codex", estimated_tokens=1)
+    assert status["status"] == "exhausted"
+
+    # running job must be untouched
+    job_status = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-running-1'"
+    ).fetchone()[0]
+    assert job_status == "running"
+
+
+def test_force_exhaust_quota_creates_row_when_none_exists(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._force_exhaust_quota(conn, "grok", "hourly")
+    row = conn.execute(
+        "SELECT limit_tokens, used_tokens FROM agent_quotas WHERE agent='grok' AND quota_type='hourly'"
+    ).fetchone()
+    assert row == (0, 0)
+    status = sl._quota_status_for_agent(conn, "grok", estimated_tokens=0)
+    assert status["status"] == "exhausted"
+
+
 def test_pr_review_discipline_instructions_say_synlynk_pr_check_without_pr_number():
     """Documented PR check usage must match the zero-argument CLI parser."""
     from synlynk.cli import build_parser
@@ -2042,4 +2085,3 @@ def test_flaky_test_tui_panelspy_curses_tests_failing_intermittently_in_ci(monke
 
     pad = curses.newpad(5, 5)
     assert pad is not None
-
