@@ -76,9 +76,13 @@ Root-level, human-readable and human-editable Markdown. Not generated for brand-
 
 Reconstructed from git/PR/decision history — a *historical* timeline of how the repo reached its current state (major merges, named releases, architectural pivots visible in commit/PR/decision metadata), not a future roadmap. This is distinct from and does not replace `project-docs/roadmap.md` (which stays forward-looking).
 
+**Release tags as a primary timeline source:** when the repo has git tags, `git tag` (with annotated-tag dates via `git for-each-ref --sort=creatordate`) is scanned as a first-class signal alongside PR/decision history, not just commit messages. Tag *pattern* is auto-detected rather than assumed: semver (`vX.Y.Z` / `X.Y.Z`), CalVer, monorepo per-package tags (`<pkg>@X.Y.Z`), and untagged/no-release repos are all distinguished, since the shape of that pattern (or its absence) is itself part of "how this repo ships" and belongs in the retrospective narrative. GitHub Releases (`gh release list`, when the `gh` CLI is authenticated) are cross-referenced opportunistically to pull release notes onto the timeline; their absence is not an error — tags alone are sufficient.
+
 ### Section: Current State (active code only)
 
-**Active** = reachable from known entrypoints (mirroring `_scan_full_repo()`'s existing symbol graph) **OR** touched in the last 50 non-merge commits. Code matching neither condition is not dropped from the canon — it is listed in a separate `Dormant` subsection, so nothing silently disappears, but the primary "what does this repo do today" narrative only describes the active set.
+**Active** = reachable from known entrypoints (mirroring `_scan_full_repo()`'s existing symbol graph) **OR** touched in the last 50 non-merge commits. This reachable-OR-recent-50-commits rule remains the baseline definition and the only one used for untagged repos.
+
+**When release tags exist, they sharpen this definition rather than replace it:** code shipped at or before the latest tag is the *released baseline*; commits since the latest tag are *in-flight* and flagged as such in the active-code narrative (e.g. "N commits ahead of vX.Y.Z, not yet released") rather than silently folded into "current state" as if already shipped. This distinction is additive metadata on top of the existing active/dormant split, not a third bucket — tagged-and-active code is still active, it is simply also labeled with its release status. Code matching neither the reachability nor recency condition is not dropped from the canon — it is listed in a separate `Dormant` subsection, so nothing silently disappears, but the primary "what does this repo do today" narrative only describes the active set.
 
 ### Sections: Functional map (HLD), Data map (LLD), Infra view, Operational view, UX/UI view
 
@@ -131,6 +135,7 @@ Accepting a goal is the actual success state of a cold-start run — not "the us
 
 - Unit tests for detection heuristics (confident-new / confident-existing / ambiguous) against synthetic repo fixtures (varying commit counts, manifest presence, empty dirs).
 - Unit tests for the active-code classifier (reachable-OR-recent-50-commits) against a fixture repo with known reachable, known dormant, and known recently-touched-but-unreachable files.
+- Unit tests for tag-pattern detection (semver, CalVer, monorepo `<pkg>@X.Y.Z`, untagged) and for in-flight-vs-released labeling against a fixture repo with tagged commits followed by unreleased commits.
 - Integration tests for `canon assess --section X` idempotency: run twice, confirm hand-edited `## Human notes` subsections survive, confirm `assessed_at`/HEAD SHA update correctly.
 - Integration tests for the consent boundary: confirm zero prompts on pure local generation paths, confirm exactly one prompt on deep-scan-first-run / clone / edge-promotion paths.
 - No live harness calls in tests — unit + integration against tmp git repos / tmp sqlite only, consistent with existing test conventions in this codebase.
