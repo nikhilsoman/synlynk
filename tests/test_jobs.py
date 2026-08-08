@@ -209,6 +209,39 @@ def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch,
     assert "$0.01" in out
 
 
+def test_dispatch_ready_jobs_stays_queued_when_all_exhausted(project_dir, monkeypatch):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=1_000, used_tokens=1_000, unit="tokens", conn=conn
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, "
+        "phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("story-exh1", "Exhaustion test", "backend", "platform", "ott", "build", 5_000),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, "
+        "depends_on, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-exh1", "codex", "task", "story-exh1", "queued", 5, "[]", "2026-08-08T00:00:00"),
+    )
+    conn.commit()
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("dispatch_agent must not be called when all candidates exhausted")
+
+    monkeypatch.setattr(sl, "dispatch_agent", fail_if_called)
+
+    launched = sl._dispatch_ready_jobs(max_parallel=4)
+
+    assert launched == 0
+    status = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-exh1'"
+    ).fetchone()[0]
+    assert status == "queued"
+
+
 def test_write_job_summary_creates_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     import synlynk

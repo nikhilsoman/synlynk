@@ -2082,6 +2082,27 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             dispatch_fn = _pkg("dispatch_agent")
             if dispatch_fn is None:
                 continue
+
+            # Keep the queue path aligned with dispatch_agent's quota gate.  In
+            # particular, do not invoke dispatch_agent for a candidate that is
+            # already exhausted: its deferred return is normally useful for a
+            # race, but callers may also replace the dispatch function (and an
+            # exhausted job should remain queued regardless).
+            quota_status_fn = _pkg("_quota_status_for_agent")
+            if quota_status_fn:
+                estimated_tokens = None
+                if story_id:
+                    story_row = conn.execute(
+                        "SELECT estimated_tokens FROM stories WHERE story_id=?",
+                        (story_id,),
+                    ).fetchone()
+                    if story_row:
+                        estimated_tokens = story_row[0]
+                qstatus = quota_status_fn(
+                    conn, agent, estimated_tokens=estimated_tokens
+                )
+                if qstatus.get("status") == "exhausted":
+                    continue
             try:
                 job = dispatch_fn(
                     agent,
@@ -2098,6 +2119,11 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     (now, job_id),
                 )
                 conn.commit()
+                continue
+
+            if isinstance(job, dict) and job.get("deferred"):
+                # dispatch_agent has already recorded the queued/deferred
+                # state.  Do not overwrite it as running or count it launched.
                 continue
 
             if job.get("fence"):
