@@ -1643,7 +1643,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    revokes: list = None,
                    job_id: str = None,
                    issue: int = None,
-                   base: str = None) -> dict:
+                   base: str = None,
+                   scope_paths: list = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2041,6 +2042,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "retry_count": 0,
         "model_at_dispatch": model_at_dispatch,
         "fence": fence_data,
+        "scope_paths": scope_paths or [],
+        "requires_gh_write": requires_gh_write,
     }
 
     load_jobs = _pkg("_load_jobs")

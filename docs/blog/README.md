@@ -105,6 +105,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [100](./100-prTBD-receipt-protocol.md) | The Receipt Protocol — Detection-Only Delivery Confirmation for Dispatched Tasks | TBD | 2026-08-07 |
 | [101](./101-pr762-windowed-sentinel-crit.md) | Windowed sentinel_crit — stop lifetime logs from keeping ops RED | [#762](https://github.com/nikhilsoman/synlynk/pull/762) | 2026-08-07 |
 | [102](./102-pr772-jobs-reap.md) | jobs reap — kill zombie running rows | [#772](https://github.com/nikhilsoman/synlynk/pull/772) | 2026-08-07 |
+| [103](./103-pr778-scope-violation-enforcement.md) | Scope Violation Enforcement — Making --scope-paths Mean Something | [#778](https://github.com/nikhilsoman/synlynk/pull/778) | 2026-08-08 |
 
 
 ## Per-PR Post Template

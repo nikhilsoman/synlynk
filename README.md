@@ -132,6 +132,21 @@ Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
 <!-- commands:end -->
 
+### Dispatch flags
+
+- `--scope-paths <glob>` (repeatable): restrict this dispatch to only touching files matching
+  the given glob (e.g. `--scope-paths 'docs/superpowers/specs/**'`). At reconciliation, if the
+  job's actual changed files don't all match a declared glob, the job is marked
+  `SCOPE_VIOLATION` instead of being finalized, pushed, or turned into a PR — the worktree is
+  left untouched for inspection. Declaring `--scope-paths` also skips automatic PR creation for
+  a compliant job unless `--requires-gh-write` is also passed; `git push` of the job's own
+  branch is not affected either way. See #769.
+
+### `jobs --summary <id>` output
+
+The summary for a `SCOPE_VIOLATION` job includes a `scope_violation_files` field listing the
+out-of-scope paths that triggered the violation.
+
 > **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux. `synlynk dispatch` works on all platforms.
 
 ## Upgrading?

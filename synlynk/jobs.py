@@ -1,5 +1,6 @@
 """synlynk jobs: job store, reconciliation (CLI-dispatch and daemon paths), fleet routing."""
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -81,6 +82,19 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     if not git_state:
         return False
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
+
+
+def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
+    """True if every changed file matches at least one declared scope glob.
+
+    An empty scope_paths list means no scope was declared -- always compliant (no-op).
+    """
+    if not scope_paths:
+        return True
+    for path in changed_files or []:
+        if not any(fnmatch.fnmatch(path, pattern) for pattern in scope_paths):
+            return False
+    return True
 
 
 def _log_has_permission_denied_signature(log_text: str) -> bool:
@@ -556,15 +570,21 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
             git_state,
             force_push=created_commit or git_state.get("commits_ahead", 0) > 0,
         )
-        pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
-        if pr_number is not None:
-            conn = _pkg("_get_db")()
-            conn.execute(
-                "UPDATE capability_ratings SET pr_number=? WHERE story_id=?",
-                (pr_number, job.get("story_id", "")),
+        if job.get("scope_paths") and not job.get("requires_gh_write"):
+            print(
+                f"  ⚠ scope-declared job {job.get('id', '')}: skipping automatic PR creation "
+                f"(pass --requires-gh-write to allow)"
             )
-            conn.commit()
-            conn.close()
+        else:
+            pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
+            if pr_number is not None:
+                conn = _pkg("_get_db")()
+                conn.execute(
+                    "UPDATE capability_ratings SET pr_number=? WHERE story_id=?",
+                    (pr_number, job.get("story_id", "")),
+                )
+                conn.commit()
+                conn.close()
 
 
 def _apply_dispatch_gate(job: dict) -> None:
@@ -705,6 +725,22 @@ def _inspect_worktree_git_state(
             remote_branch_commit_count = remote_state["remote_commit_count"]
             remote_branch_files_touched = remote_state["remote_files_touched"]
 
+    changed_files = []
+    if base_commit:
+        try:
+            diff_result = subprocess.run(
+                ["git", "-C", worktree_path, "diff", "--name-only", f"{base_commit}..HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            diff_result = None
+        if diff_result is not None and diff_result.returncode == 0:
+            changed_files.extend(p for p in (diff_result.stdout or "").splitlines() if p)
+    if dirty:
+        changed_files.extend(_collect_worktree_status_paths(worktree_path))
+
     return {
         "worktree_path": worktree_path,
         "dirty": dirty,
@@ -716,6 +752,7 @@ def _inspect_worktree_git_state(
         "remote_commit_count": remote_branch_commit_count,
         "remote_files_touched": remote_branch_files_touched,
         "remote_has_activity": remote_branch_has_activity,
+        "changed_files": sorted(set(changed_files)),
     }
 
 
@@ -1273,8 +1310,24 @@ def _reconcile_jobs() -> None:
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
-                _apply_dispatch_gate(job)
+                scope_paths = job.get("scope_paths") or []
+                if scope_paths and git_state and not _check_scope_compliance(
+                    git_state.get("changed_files", []), scope_paths
+                ):
+                    job["status"] = "SCOPE_VIOLATION"
+                    job["scope_violation_files"] = [
+                        p for p in git_state.get("changed_files", [])
+                        if not any(fnmatch.fnmatch(p, pat) for pat in scope_paths)
+                    ]
+                    summary_status = "SCOPE_VIOLATION"
+                    summary_note = (
+                        f"declared scope {scope_paths} but changed files outside it: "
+                        f"{job['scope_violation_files']} — finalize/push/PR skipped, "
+                        f"worktree left intact for inspection"
+                    )
+                else:
+                    _finalize_completed_worktree_job(job, git_state)
+                    _apply_dispatch_gate(job)
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -1495,8 +1548,24 @@ def _reconcile_jobs() -> None:
             elif job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
-                _finalize_completed_worktree_job(job, git_state)
-                _apply_dispatch_gate(job)
+                scope_paths = job.get("scope_paths") or []
+                if scope_paths and git_state and not _check_scope_compliance(
+                    git_state.get("changed_files", []), scope_paths
+                ):
+                    job["status"] = "SCOPE_VIOLATION"
+                    job["scope_violation_files"] = [
+                        p for p in git_state.get("changed_files", [])
+                        if not any(fnmatch.fnmatch(p, pat) for pat in scope_paths)
+                    ]
+                    summary_status = "SCOPE_VIOLATION"
+                    summary_note = (
+                        f"declared scope {scope_paths} but changed files outside it: "
+                        f"{job['scope_violation_files']} — finalize/push/PR skipped, "
+                        f"worktree left intact for inspection"
+                    )
+                else:
+                    _finalize_completed_worktree_job(job, git_state)
+                    _apply_dispatch_gate(job)
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2128,7 +2197,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             return
         visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
         if not visible:
-            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified", "permission_denied")])
+            completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified", "permission_denied", "SCOPE_VIOLATION")])
             unknown = len([j for j in jobs if j["status"] == "unknown"])
             suffix = f"{completed} completed/failed"
             if unknown:

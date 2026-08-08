@@ -7,6 +7,40 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+def test_check_scope_compliance_all_files_match_single_glob():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(
+        ["docs/superpowers/specs/foo.md", "docs/superpowers/specs/bar.md"],
+        ["docs/superpowers/specs/*"],
+    ) is True
+
+
+def test_check_scope_compliance_files_match_any_of_several_globs():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(
+        ["docs/superpowers/specs/foo.md", "docs/blog/README.md"],
+        ["docs/superpowers/specs/*", "docs/blog/*"],
+    ) is True
+
+
+def test_check_scope_compliance_file_matching_no_glob_is_violation():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(
+        ["docs/superpowers/specs/foo.md", "synlynk/jobs.py"],
+        ["docs/superpowers/specs/*"],
+    ) is False
+
+
+def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
+    from synlynk.jobs import _check_scope_compliance
+
+    assert _check_scope_compliance(["synlynk/jobs.py"], []) is True
+    assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
+
+
 def test_check_task_receipt_ok_when_marker_is_first_line():
     import synlynk.jobs as jobs_mod
 
@@ -87,6 +121,37 @@ def test_task_sha256_and_preview_computes_digest_and_collapses_whitespace():
     assert task_sha256 == hashlib.sha256(task.encode("utf-8")).hexdigest()
     assert task_preview == "line one line two with spaces line three"
     assert "\n" not in task_preview
+
+
+def test_inspect_worktree_git_state_includes_changed_files_from_diff_and_status(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    prefix = ["git", "-C", str(worktree_path)]
+
+    def fake_run(cmd, **kwargs):
+        cmd = list(cmd)
+        if cmd == prefix + ["status", "--short"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=" M synlynk/jobs.py\n", stderr="")
+        if cmd == prefix + ["rev-list", "--count", "deadbeef..HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="1\n", stderr="")
+        if cmd == prefix + ["diff", "--name-only", "deadbeef..HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="docs/superpowers/specs/foo.md\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod, "_pkg",
+        lambda name, default=None: (
+            lambda wt: {"base_commit": "deadbeef", "base_ref": "origin/main"}
+        ) if name == "_resolve_worktree_base_commit" else default,
+    )
+
+    git_state = jobs_mod._inspect_worktree_git_state(str(worktree_path), "feat/x", "2026-08-07T00:00:00")
+
+    assert git_state["changed_files"] == ["docs/superpowers/specs/foo.md", "synlynk/jobs.py"]
 
 
 def test_dispatch_ready_jobs_prints_fence_when_schedule_allowlisted(monkeypatch, capsys):

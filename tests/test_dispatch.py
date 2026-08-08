@@ -374,6 +374,38 @@ def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch
     assert job["agent"] == "agy"
 
 
+def test_dispatch_agent_stores_scope_paths_and_requires_gh_write_on_job(project_dir, monkeypatch):
+    monkeypatch.chdir(project_dir)
+    import synlynk.dispatch as dispatch_mod
+
+    saved = {}
+
+    def fake_save_jobs(jobs):
+        saved["jobs"] = jobs
+
+    monkeypatch.setattr(dispatch_mod, "_pkg", lambda name, default=None: {
+        "_load_jobs": lambda: [],
+        "_save_jobs": fake_save_jobs,
+    }.get(name, default))
+
+    class FakeProc:
+        pid = 12345
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", lambda agent, perms: [])
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_permissions", lambda *a, **kw: [])
+
+    job = dispatch_mod.dispatch_agent(
+        "codex", "write a spec only",
+        scope_paths=["docs/superpowers/specs/**"],
+        requires_gh_write=False,
+        skip_preflight=True,
+    )
+
+    assert job["scope_paths"] == ["docs/superpowers/specs/**"]
+    assert job["requires_gh_write"] is False
+
+
 def test_dispatch_agent_rejects_empty_task(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod

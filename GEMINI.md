@@ -139,7 +139,7 @@ rather than resolving it silently. This project tracks those conflicts as resear
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.0.0 verified:2026-08-06T03:38:53Z -->
+<!-- synlynk:harness v2.0.0 verified:2026-08-08T03:59:26Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
