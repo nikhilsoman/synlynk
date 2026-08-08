@@ -954,6 +954,25 @@ CREATE TABLE IF NOT EXISTS goal_contributions (
     UNIQUE(goal_id, story_id)
 );
 
+CREATE TABLE IF NOT EXISTS events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type      TEXT NOT NULL,
+    payload_json    TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    emitted_by      TEXT NOT NULL,
+    parent_event_id INTEGER,
+    authority_scope TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, id);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name         TEXT NOT NULL,
+    event_type         TEXT NOT NULL,
+    last_seen_event_id INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(agent_name, event_type)
+);
+
 -- Per-agent plan quotas (tokens or requests). quota_type is plan-driven:
 -- different harnesses reset on different windows (5h Claude plan, hourly,
 -- daily, weekly, monthly). headroom is computed as limit_tokens - used_tokens
