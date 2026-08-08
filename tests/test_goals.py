@@ -12,7 +12,7 @@ def test_goals_table_created():
 def test_goal_contributions_table_created():
     conn = _get_db()
     cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
-    assert cols == {"id", "goal_id", "story_id"}
+    assert cols == {"id", "goal_id", "story_id", "link_status", "skip_reason"}
     conn.close()
 
 
