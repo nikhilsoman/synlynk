@@ -13,7 +13,12 @@ NOTIFY_EVENT_TYPES = ["dispatch_complete", "pr_approved", "job_failed"]
 
 
 def format_message(event: uxcore.Event) -> str:
-    return f"[{event.action}] {json.dumps(event.params)} -> {json.dumps(event.result)}"
+    message = f"[{event.action}] {json.dumps(event.params)} -> {json.dumps(event.result)}"
+    if event.action in ("job_completed", "job_failed"):
+        job_id = event.result.get("job_id") or event.params.get("job_id")
+        if job_id:
+            message += f"\n<https://localhost:8420/#job-{job_id}|View live in Vizor>"
+    return message
 
 
 def post_to_webhook(webhook_url: str, event: uxcore.Event) -> None:
