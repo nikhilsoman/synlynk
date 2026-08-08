@@ -1957,6 +1957,35 @@ def cmd_story_draft(story_id: str) -> None:
     conn.close()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} reverted to draft")
 
+def cmd_story_done(story_id: str) -> None:
+    """Marks a story done and emits a story_done event carrying its linked goal ids."""
+    from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.events import emit_event
+    conn = _get_db()
+    story = conn.execute(
+        "SELECT story_id, goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    if not story:
+        conn.close()
+        print(f"  Story '{story_id}' not found.")
+        return
+    conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (story_id,))
+    conn.commit()
+    goal_ids = []
+    if story[1]:
+        goal_ids.append(story[1])
+    secondary = conn.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchall()
+    conn.close()
+    goal_ids.extend(g[0] for g in secondary if g[0] not in goal_ids)
+    emit_event(
+        "story_done",
+        {"story_id": story_id, "goal_ids": goal_ids},
+        emitted_by="cmd_story_done",
+    )
+    print(f"  {_GREEN}✓{_RESET} Story {story_id} marked done")
+
 def cmd_goal_create(outcome: str, criterion: str, deadline: str = None) -> str:
     """Creates a Business Goal record in state.db. Returns the generated goal_id."""
     from synlynk import _GREEN, _RESET, _get_db

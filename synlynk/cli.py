@@ -692,6 +692,8 @@ def build_parser() -> argparse.ArgumentParser:
                                      help="Mark every draft story ready")
     story_draft_parser = story_sub.add_parser("draft", help="Revert a story to draft")
     story_draft_parser.add_argument("story_id")
+    story_done_parser = story_sub.add_parser("done", help="Mark a story done")
+    story_done_parser.add_argument("story_id")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -850,6 +852,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
+    from synlynk.db import cmd_story_done
 
     from synlynk import (
         AGENT_CAPABILITY_BASELINES,
@@ -1131,6 +1134,8 @@ def main() -> None:
             cmd_story_ready(args.story_id, all_stories=getattr(args, "all_stories", False))
         elif args.story_action == "draft":
             cmd_story_draft(args.story_id)
+        elif args.story_action == "done":
+            cmd_story_done(args.story_id)
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
