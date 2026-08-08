@@ -285,6 +285,19 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         "UPDATE stories SET engg_domain = COALESCE(NULLIF(engg_domain, ''), discipline, 'backend') "
         "WHERE engg_domain IS NULL OR engg_domain = ''"
     )
+    gc_cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+    if "link_status" not in gc_cols:
+        try:
+            conn.execute(
+                "ALTER TABLE goal_contributions ADD COLUMN link_status TEXT NOT NULL DEFAULT 'linked'"
+            )
+        except sqlite3.OperationalError:
+            pass
+    if "skip_reason" not in gc_cols:
+        try:
+            conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
+        except sqlite3.OperationalError:
+            pass
     daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     if "handoff_count" not in daemon_job_cols:
         try:
