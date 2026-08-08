@@ -320,6 +320,54 @@ def test_dispatch_agent_auto_provisions_story_id_when_not_given(project_dir, mon
     assert row is not None
 
 
+def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
+    """Even with --force-agent, dispatch_agent must not bypass the quota gate."""
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=1_000, used_tokens=1_000, unit="tokens", conn=conn
+    )
+
+    result = sl.dispatch_agent(
+        "codex", "do a small task", force_agent=True, skip_preflight=True
+    )
+
+    assert result.get("deferred") is True
+    assert result["reason"]
+    assert "retry_after" in result
+
+    row = conn.execute(
+        "SELECT status, blocked_reason FROM daemon_jobs WHERE agent='codex' "
+        "ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    assert row == ("queued", "quota_exhausted")
+    conn.close()
+
+
+def test_dispatch_agent_opens_reservation_when_headroom_exists(project_dir, monkeypatch):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    sl._upsert_agent_quota(
+        "codex", "5h", limit_tokens=100_000, used_tokens=0, unit="tokens", conn=conn
+    )
+
+    class _P:
+        pid = 12345
+
+    monkeypatch.setattr(sl.subprocess, "Popen", lambda *args, **kwargs: _P())
+
+    sl.dispatch_agent("codex", "do a small task", force_agent=True, skip_preflight=True)
+
+    reservations = conn.execute(
+        "SELECT harness, status FROM agent_reservations WHERE harness='codex'"
+    ).fetchall()
+    assert len(reservations) == 1
+    assert reservations[0] == ("codex", "open")
+    conn.close()
+
+
 def test_dispatch_agent_reuses_existing_story_id_for_repeat_issue_dispatch(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
