@@ -1942,12 +1942,24 @@ def cmd_story_list() -> None:
 
 def cmd_story_ready(story_id, all_stories: bool = False) -> None:
     """Marks one story (or every draft story, with all_stories=True) as ready
-    for scheduling. Only 'ready' stories are candidates for synlynk schedule."""
+    for scheduling. Only 'ready' stories are candidates for synlynk schedule.
+
+    Also records the story's current GOVERNS goal-link status at the plan
+    approval checkpoint.
+    """
     from synlynk import _GREEN, _RESET, _get_db
     conn = _get_db()
     if all_stories:
+        ready_ids = [
+            row[0]
+            for row in conn.execute(
+                "SELECT story_id FROM stories WHERE readiness='draft'"
+            ).fetchall()
+        ]
         cur = conn.execute("UPDATE stories SET readiness='ready' WHERE readiness='draft'")
         conn.commit()
+        for sid in ready_ids:
+            _record_goal_link_status(conn, sid)
         conn.close()
         print(f"  {_GREEN}✓{_RESET} Marked {cur.rowcount} draft stories ready")
         return
@@ -1957,8 +1969,49 @@ def cmd_story_ready(story_id, all_stories: bool = False) -> None:
         return
     conn.execute("UPDATE stories SET readiness='ready' WHERE story_id=?", (story_id,))
     conn.commit()
+    _record_goal_link_status(conn, story_id)
     conn.close()
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked ready")
+
+
+def _record_goal_link_status(conn, story_id: str) -> None:
+    """Records the story's current primary goal-link status."""
+    story = conn.execute(
+        "SELECT goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    if not story:
+        return
+
+    primary_goal_id = story[0]
+    secondary = conn.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchall()
+    if primary_goal_id:
+        conn.execute(
+            "INSERT OR IGNORE INTO goal_contributions "
+            "(goal_id, story_id, link_status) VALUES (?, ?, 'linked')",
+            (primary_goal_id, story_id),
+        )
+        conn.commit()
+        return
+    if secondary:
+        return
+
+    # The historical schema has a foreign-key reference, while the GOVERNS
+    # checkpoint intentionally uses the literal 'none' sentinel.  Connections
+    # opened by current synlynk enable FK enforcement, so briefly disable it
+    # for this deliberate audit row and restore the connection setting after.
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO goal_contributions "
+            "(goal_id, story_id, link_status, skip_reason) "
+            "VALUES ('none', ?, 'skipped', ?)",
+            (story_id, "no active goal specified at plan-approval time"),
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
 
 
 def cmd_story_draft(story_id: str) -> None:
