@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk UX 1.0 — Journey Map Simulator Overview</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Space Grotesk"', 'sans-serif'],
+            body: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"Fira Code"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Space Grotesk (Display) + Plus Jakarta Sans (Body) + Fira Code (Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #080c14;
+      color: #cbd5e1;
+    }
+    h1, h2, h3, h4, .font-display {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .font-mono {
+      font-family: 'Fira Code', monospace;
+    }
+
+    .journey-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .journey-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(56, 203, 210, 0.5);
+      box-shadow: 0 20px 25px -5px rgba(14, 143, 150, 0.15), 0 8px 10px -6px rgba(14, 143, 150, 0.1);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased bg-slate-950 text-slate-200">
+
+  <!-- Header Banner -->
+  <header class="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="index.html" class="flex items-center gap-2.5 text-slate-100">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 via-teal-500 to-emerald-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-cyan-500/20">
+            ⚡
+          </div>
+          <div>
+            <div class="font-display font-bold text-base leading-tight tracking-tight">synlynk <span class="text-cyan-400 font-normal">UX 1.0</span></div>
+            <div class="text-[11px] text-slate-400 font-mono leading-none">Journey Map Matrix</div>
+          </div>
+        </a>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <a href="journey-map.html" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-white font-semibold text-xs rounded-xl shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-1.5">
+          Launch Interactive Simulator →
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Hero & Journey Grid -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+
+    <!-- Hero Banner -->
+    <div class="bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl relative overflow-hidden">
+      <div class="absolute -top-24 -right-24 w-96 h-96 bg-cyan-500/10 rounded-full filter blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-emerald-500/10 rounded-full filter blur-3xl pointer-events-none"></div>
+
+      <div class="max-w-3xl space-y-4 relative z-10">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-semibold">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          UX 1.0 Phase 2 Simulator
+        </div>
+
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-100 tracking-tight font-display leading-tight">
+          End-to-End User Journey Simulation Across TUI, Vizor & Slack
+        </h1>
+
+        <p class="text-sm sm:text-base text-slate-400 leading-relaxed">
+          Explore the 7 foundational user journeys powering synlynk's polyglot agent orchestration framework. Each journey simulates live step-by-step rendering across terminal curses panels, Vizor web dashboards, and BYOUX Slack notifier payloads.
+        </p>
+
+        <div class="pt-2 flex flex-wrap gap-4 items-center">
+          <a href="journey-map.html" class="px-6 py-3 bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-white font-bold text-sm rounded-xl shadow-xl shadow-cyan-500/25 transition-all flex items-center gap-2">
+            🚀 Launch Journey Simulator
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal Nudge Callout Fence -->
+    <div class="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-5 font-mono text-xs text-slate-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+      <div class="flex items-center gap-3">
+        <span class="px-3.5 py-1.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-semibold flex items-center gap-2 shrink-0">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> 💡 TERMINAL-TIP ADVISORY
+        </span>
+        <span class="text-slate-300">-- UX Journey Map Matrix complete -- cost: $0.00 (7 journeys / 21 surface renderings)</span>
+      </div>
+      <span class="text-slate-400">tip: Click any journey card below to launch that exact journey in the simulator.</span>
+    </div>
+
+    <!-- 7 Journeys Grid -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 font-mono">The 7 User Journeys</h2>
+        <span class="text-xs text-slate-500 font-mono">Select to Simulate</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Journey 1 -->
+        <a href="journey-map.html?journey=install-upgrade-migrate" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-400 font-mono text-xs font-bold border border-cyan-500/20">JOURNEY #01</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (1) Install / upgrade / migrate
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Bootstrap synlynk environment, run database migrations (state.db), and upgrade agent harness contracts across worktrees.
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-cyan-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+        <!-- Journey 2 -->
+        <a href="journey-map.html?journey=synlynk-concepts" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-400 font-mono text-xs font-bold border border-cyan-500/20">JOURNEY #02</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (2) synlynk concepts
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Polyglot agent orchestration across Gemini, Codex, Grok, and Claude with zero-copy context bridging.
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-cyan-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+        <!-- Journey 3 -->
+        <a href="journey-map.html?journey=repo-onboarding" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-400 font-mono text-xs font-bold border border-amber-500/20">JOURNEY #03</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (3) Repo onboarding
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Onboard repositories into single monorepo or isolated multi-worktree topologies (.synlynk/config.json).
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-amber-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+        <!-- Journey 4 -->
+        <a href="journey-map.html?journey=sdlc-stage-governance" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-purple-500/10 text-purple-400 font-mono text-xs font-bold border border-purple-500/20">JOURNEY #04</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (4) SDLC-stage governance
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Enforce multi-stage pipeline gates: Brainstorm/Spec ➔ Plan ➔ Build/Dispatch ➔ Review ➔ Deploy across surfaces.
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-purple-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+        <!-- Journey 5 -->
+        <a href="journey-map.html?journey=dispatch-task" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-400 font-mono text-xs font-bold border border-blue-500/20">JOURNEY #05</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (5) Dispatch a task
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Queue and spawn autonomous subagent jobs via synlynk dispatch &lt;agent&gt; "&lt;prompt&gt;" with quota & cost fences.
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-blue-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+        <!-- Journey 6 -->
+        <a href="journey-map.html?journey=approve-kill-job" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-rose-500/10 text-rose-400 font-mono text-xs font-bold border border-rose-500/20">JOURNEY #06</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (6) Approve / kill a running job
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Monitor live agent execution, review cost/output, and execute job approval or immediate kill commands.
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-rose-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+        <!-- Journey 7 -->
+        <a href="journey-map.html?journey=get-notified-react" class="journey-card bg-slate-900/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl md:col-span-2 lg:col-span-1">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 font-mono text-xs font-bold border border-emerald-500/20">JOURNEY #07</span>
+              <span class="text-xs text-slate-500 font-mono">3 Surfaces</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-100 font-display">
+              (7) Get notified & react
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Receive real-time multi-channel alerts (Slack, TUI status bell, Vizor toast) and execute one-click reactions/hot-fixes.
+            </p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-emerald-400 font-semibold font-mono">
+            <span>Simulate Surface Views →</span>
+            <span>TUI · Vizor · Slack</span>
+          </div>
+        </a>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-800/80 py-8 text-center text-xs text-slate-500 font-mono">
+    synlynk UX 1.0 Phase 2 Journey Map Simulator · Generated for story-e8c5d15f
+  </footer>
+
+</body>
+</html>
