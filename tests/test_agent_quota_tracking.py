@@ -2085,3 +2085,16 @@ def test_flaky_test_tui_panelspy_curses_tests_failing_intermittently_in_ci(monke
 
     pad = curses.newpad(5, 5)
     assert pad is not None
+
+
+def test_review_pr_816_quotaaware_dispatch_reserv(project_dir):
+    """Verification test for PR #816 review: quota-aware dispatch reservation."""
+    import synlynk as sl
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(conn, "claude", 5000, scope="adhoc")
+    assert isinstance(rid, int)
+    assert sl._open_reservations_sum(conn, "claude") == 5000
+    sl._release_reservation(conn, rid)
+    assert sl._open_reservations_sum(conn, "claude") == 0
+
