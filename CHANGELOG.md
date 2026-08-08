@@ -11,6 +11,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**Quota-Aware Dispatch Reservation (design 2026-08-08, plan 2026-08-08)**
+- `agent_reservations` ledger tracks estimated-token reservations per harness from the moment a job is queued/dispatched until it settles, closing the gap where `--force-agent` and daemon-queued dispatches could bypass quota checks entirely.
+- `dispatch_agent()` now consults quota unconditionally (including `--force-agent` calls) and defers (`queued`, `blocked_reason=quota_exhausted`) instead of raising when a harness has no headroom; deferred jobs resume automatically once the harness's quota window resets — no manual re-dispatch needed.
+- `_dispatch_ready_jobs()` no longer falls through to an exhausted harness when a job is blocked; it stays queued for the next poll.
+- `synlynk schedule --execute` opens real reservations for the whole batch at commit time via `_enqueue_plan()`.
+- `_force_exhaust_quota()` wires sentinel's existing `QUOTA_EXHAUSTED` detection into the reservation ledger without ever touching already-running jobs.
+- `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
+
 **Init/Migrate/Upgrade Rollback Mechanism (design 2026-07-22, plan 2026-07-22)**
 - `rollback_checkpoint` (Leg 1) wraps `init()` and `cmd_migrate()` in a git-checkpoint + untracked-state backup, auto-restoring on any mid-operation failure.
 - `rollback_checkpoint_upgrade` (Leg 2) wraps `_run_upgrade()` in a global install snapshot (pipx reinstall-by-tag / script bin+lib backup), auto-restoring on upgrade failure.
