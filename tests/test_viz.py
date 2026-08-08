@@ -1,5 +1,29 @@
-import json, os, sqlite3, tempfile, pytest
+import json, os, sqlite3, sys, tempfile, pytest
 from unittest.mock import patch, MagicMock
+
+
+def test_ftue_prompts_non_tty_uses_defaults_without_input(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    config = {}
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+
+    from synlynk.viz import _ftue_prompts
+    with patch("builtins.input") as mock_input:
+        result = _ftue_prompts(config)
+
+    mock_input.assert_not_called()
+    assert result["vizor"] == {
+        "second_view": "tube",
+        "notify_on_refresh": False,
+        "refresh_interval_minutes": 0,
+        "port": 8721,
+        "theme": "system",
+        "timeline_weeks": 10,
+        "ftue_done": True,
+    }
+    with open(tmp_path / ".synlynk" / "config.json") as f:
+        assert json.load(f) == result
 
 def make_test_db(path: str):
     conn = sqlite3.connect(path)

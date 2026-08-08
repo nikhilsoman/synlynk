@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -4612,12 +4613,17 @@ def _ftue_prompts(config: dict) -> dict:
     if vizor.get("ftue_done"):
         return config
     print("\n✦ synlynk viz — first setup\n")
-    has_ux = input("  Does this project have user-facing UX? (y/n) ").strip().lower() == "y"
-    vizor["second_view"] = "journeys" if has_ux else "tube"
-    notify = input("  Enable browser notifications? (y/n) ").strip().lower() == "y"
-    vizor["notify_on_refresh"] = notify
-    interval_raw = input("  Auto-refresh interval? (15 / 30 / off) [off] ").strip() or "off"
-    vizor["refresh_interval_minutes"] = 0 if interval_raw == "off" else int(interval_raw)
+    if sys.stdin.isatty():
+        has_ux = input("  Does this project have user-facing UX? (y/n) ").strip().lower() == "y"
+        vizor["second_view"] = "journeys" if has_ux else "tube"
+        notify = input("  Enable browser notifications? (y/n) ").strip().lower() == "y"
+        vizor["notify_on_refresh"] = notify
+        interval_raw = input("  Auto-refresh interval? (15 / 30 / off) [off] ").strip() or "off"
+        vizor["refresh_interval_minutes"] = 0 if interval_raw == "off" else int(interval_raw)
+    else:
+        vizor["second_view"] = "tube"
+        vizor["notify_on_refresh"] = False
+        vizor["refresh_interval_minutes"] = 0
     vizor["port"] = DEFAULT_PORT
     vizor["theme"] = "system"
     vizor["timeline_weeks"] = 10
