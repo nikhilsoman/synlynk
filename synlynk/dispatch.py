@@ -39,6 +39,15 @@ def _print_pending_nudges() -> None:
         cmd_workspace_agent_run()
     except Exception:
         pass
+    try:
+        from synlynk.fencing import render_nudge_fence
+        from synlynk.ux_nudges import pending_ux_tip
+
+        tip = pending_ux_tip()
+        if tip:
+            print(render_nudge_fence(tip))
+    except Exception:
+        pass
 
 
 def _dispatch_flags_for_agent(agent: str) -> list:
