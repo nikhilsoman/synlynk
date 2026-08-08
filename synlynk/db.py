@@ -301,6 +301,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN dispatch_context TEXT")
         except sqlite3.OperationalError:
             pass
+    if "blocked_reason" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("DROP VIEW IF EXISTS capability_scores")
     conn.executescript(_DB_SCORES_VIEW)
     conn.executescript("""
@@ -743,6 +748,25 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     """)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
+    )
+    # Quota-aware dispatch reservation: agent_reservations base table
+    # (also in _DB_SCHEMA; re-assert for older DBs)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS agent_reservations (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            harness        TEXT NOT NULL,
+            tokens         INTEGER NOT NULL,
+            scope          TEXT NOT NULL,
+            scope_id       TEXT,
+            job_id         TEXT,
+            status         TEXT NOT NULL DEFAULT 'open',
+            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            released_at    TIMESTAMP
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness "
+        "ON agent_reservations(harness, status)"
     )
     quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
     if quota_cols and "unit" not in quota_cols:

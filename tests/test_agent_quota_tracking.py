@@ -61,6 +61,18 @@ def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_
     db.commit()
 
 
+def test_agent_reservations_table_exists(project_dir):
+    import synlynk as sl
+    conn = sl._get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_reservations)")}
+    assert cols == {
+        "id", "harness", "tokens", "scope", "scope_id", "job_id",
+        "status", "created_at", "released_at",
+    }
+    daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "blocked_reason" in daemon_cols
+
+
 def test_pr_review_discipline_instructions_say_synlynk_pr_check_without_pr_number():
     """Documented PR check usage must match the zero-argument CLI parser."""
     from synlynk.cli import build_parser
@@ -1945,6 +1957,5 @@ def test_flaky_test_tui_panelspy_curses_tests_failing_intermittently_in_ci(monke
 
     pad = curses.newpad(5, 5)
     assert pad is not None
-
 
 

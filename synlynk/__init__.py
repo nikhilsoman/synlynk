@@ -933,7 +933,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     log_path     TEXT,
     handoff_count INTEGER NOT NULL DEFAULT 0,
     previous_agents TEXT,
-    dispatch_context TEXT
+    dispatch_context TEXT,
+    blocked_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 
@@ -971,6 +972,25 @@ CREATE TABLE IF NOT EXISTS agent_quotas (
     UNIQUE(agent, model, quota_type, unit)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
+
+-- Reservation ledger: an open row represents tokens committed against a
+-- harness before real usage lands in agent_quotas via telemetry (#XXX
+-- quota-aware dispatch reservation). Released once the matching daemon_jobs
+-- row settles (done/failed/timed_out) and real usage has been recorded.
+-- Reservations older than 24h are treated as expired at READ time (lazy
+-- expiry, see _open_reservations_sum) rather than physically deleted.
+CREATE TABLE IF NOT EXISTS agent_reservations (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness        TEXT NOT NULL,
+    tokens         INTEGER NOT NULL,
+    scope          TEXT NOT NULL,
+    scope_id       TEXT,
+    job_id         TEXT,
+    status         TEXT NOT NULL DEFAULT 'open',
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    released_at    TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness ON agent_reservations(harness, status);
 
 CREATE TABLE IF NOT EXISTS credit_grants (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
