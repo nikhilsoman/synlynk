@@ -2359,6 +2359,21 @@ def cmd_pr_check() -> None:
             print(f"    story: {story_id}  agent: {agent}")
         print("\n  Fix with: synlynk score attest <story-id> --model <version>")
         raise SystemExit(1)
+    conn2 = _get_db()
+    unlinked_story_ids = conn2.execute(
+        "SELECT DISTINCT cr.story_id FROM capability_ratings cr "
+        "LEFT JOIN stories s ON s.story_id = cr.story_id "
+        "WHERE s.goal_id IS NULL "
+        "AND cr.story_id NOT IN ("
+        "  SELECT story_id FROM goal_contributions WHERE link_status='linked'"
+        ")"
+    ).fetchall()
+    conn2.close()
+    if unlinked_story_ids:
+        print("\n  ⚠ [PR CHECK] Stories with no linked GOVERNS goal (soft-warn, not blocking):")
+        for (story_id,) in unlinked_story_ids:
+            print(f"    {story_id}")
+        print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:
