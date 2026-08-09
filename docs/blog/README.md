@@ -114,6 +114,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 | [108](./108-pr854-fresh-base-ref.md) | Fresh --base — stop dispatching against stale main | [#854](https://github.com/nikhilsoman/synlynk/pull/854) | 2026-08-09 |
 | [109](./109-pr857-gh-write-fail-closed.md) | GH-write fail-closed — no silent personal keyring | [#857](https://github.com/nikhilsoman/synlynk/pull/857) | 2026-08-09 |
+| [110](./110-prTBD-daemon-jobs-gtv.md) | Daemon jobs GTV — Epic A1 status truth | TBD (#331/#579) | 2026-08-09 |
 
 ## Per-PR Post Template
 

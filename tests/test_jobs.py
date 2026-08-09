@@ -1166,3 +1166,158 @@ def test_jobs_reap_cli_parser():
     assert args.jobs_cmd == "reap"
     assert args.apply is True
     assert args.all_projects is True
+
+
+# --- Epic A1: daemon_jobs GTV -------------------------------------------------
+
+def test_gtv_status_dead_pid_with_git_activity_is_failed_unverified():
+    from synlynk.jobs import _gtv_status_for_daemon_exit
+
+    git_state = {
+        "has_activity": True,
+        "remote_has_activity": False,
+        "changed_files": ["src/foo.py"],
+        "commits_ahead": 1,
+        "dirty": False,
+    }
+    status, exit_code, label, note = _gtv_status_for_daemon_exit(None, git_state)
+    assert status == "failed_unverified"
+    assert exit_code is None
+    assert "FAILED_UNVERIFIED" in (label or "")
+    assert note and "GTV" in note
+
+
+def test_gtv_status_remote_only_activity_is_done():
+    from synlynk.jobs import _gtv_status_for_daemon_exit
+
+    git_state = {
+        "has_activity": False,
+        "remote_has_activity": True,
+        "remote_ref": "origin/dispatch/grok/job-x",
+        "changed_files": [],
+        "remote_files_touched": ["docs/a.md"],
+    }
+    status, exit_code, label, note = _gtv_status_for_daemon_exit(None, git_state)
+    assert status == "done"
+    assert exit_code == 0
+
+
+def test_gtv_status_no_exit_no_git_is_timed_out():
+    from synlynk.jobs import _gtv_status_for_daemon_exit
+
+    status, exit_code, label, note = _gtv_status_for_daemon_exit(None, None)
+    assert status == "timed_out"
+    assert exit_code == -9
+
+
+def test_daemon_job_worktree_path_from_log(tmp_path):
+    from synlynk.jobs import _daemon_job_worktree_path
+
+    wt = tmp_path / "worktrees" / "job-abc"
+    log = wt / ".synlynk" / "logs" / "job-abc.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("x")
+    assert _daemon_job_worktree_path("job-abc", str(log)) == str(wt)
+
+
+def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, monkeypatch):
+    """Dead PID + git activity → failed_unverified with files in summary (#579)."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-gtv1"
+    wt = project_dir / "worktrees" / job_id
+    log = wt / ".synlynk" / "logs" / f"{job_id}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("agent did work\n")
+    # no .exit file
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, depends_on, "
+        "pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            job_id, "grok", "do thing", "story-gtv", "running", 5, "[]",
+            99999999, "2026-08-09T10:00:00", "2026-08-09T10:00:01", str(log),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_inspect_worktree_git_state",
+        lambda path, branch=None, started_at=None: {
+            "has_activity": True,
+            "remote_has_activity": False,
+            "changed_files": ["src/fixed.py"],
+            "commits_ahead": 1,
+            "dirty": False,
+        },
+    )
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {
+        "_get_db": sl._get_db,
+        "extract_tokens": lambda log_text, agent="": type("T", (), {"basis": "none"})() if False else __import__("synlynk").extract_tokens(log_text, agent=agent) if hasattr(__import__("synlynk"), "extract_tokens") else (0, 0),
+        "extract_model_version": lambda *a, **k: "test",
+        "update_costs": lambda *a, **k: None,
+        "_write_job_summary": sl._write_job_summary,
+        "_release_reservation": None,
+        "_inspect_worktree_git_state": lambda *a, **k: {
+            "has_activity": True,
+            "remote_has_activity": False,
+            "changed_files": ["src/fixed.py"],
+            "commits_ahead": 1,
+            "dirty": False,
+        },
+        "_worktree_files_touched": lambda p: ["src/fixed.py"],
+    }.get(name, getattr(sl, name, default)))
+
+    # Simpler: only override what we need via module attributes used by _reconcile
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+
+    def fake_pkg(name, default=None):
+        if name == "_get_db":
+            return sl._get_db
+        if name == "extract_tokens":
+            def _tok(log_text, agent=""):
+                class TC(tuple):
+                    basis = "none"
+                return TC((10, 5))
+            return _tok
+        if name == "extract_model_version":
+            return lambda *a, **k: "m"
+        if name == "update_costs":
+            return lambda *a, **k: None
+        if name == "_write_job_summary":
+            return sl._write_job_summary
+        if name == "_release_reservation":
+            return None
+        if name == "_inspect_worktree_git_state":
+            return lambda *a, **k: {
+                "has_activity": True,
+                "remote_has_activity": False,
+                "changed_files": ["src/fixed.py"],
+                "commits_ahead": 1,
+                "dirty": False,
+            }
+        if name == "_worktree_files_touched":
+            return lambda p: ["src/fixed.py"]
+        return getattr(sl, name, default)
+
+    monkeypatch.setattr(jobs_mod, "_pkg", fake_pkg)
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": []})
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "failed_unverified"
+    assert row[1] is None
+
+    summary = (project_dir / ".synlynk" / "logs" / f"{job_id}.summary").read_text()
+    assert "FAILED_UNVERIFIED" in summary or "failed_unverified" in summary.lower() or "exit unknown" in summary
+    assert "src/fixed.py" in summary or "1 touched" in summary

@@ -1892,8 +1892,88 @@ def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
     return None
 
 
+def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Optional[str]:
+    """Best-effort worktree directory for a daemon job (for GTV)."""
+    candidates = []
+    if log_path:
+        norm = os.path.abspath(log_path).replace("\\", "/")
+        marker = "/worktrees/"
+        if marker in norm:
+            # .../worktrees/<job_id>/.synlynk/logs/...
+            after = norm.split(marker, 1)[1]
+            job_dir = after.split("/", 1)[0]
+            prefix = norm.split(marker, 1)[0]
+            candidates.append(f"{prefix}/worktrees/{job_dir}")
+    candidates.append(os.path.join("worktrees", job_id))
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return None
+
+def _gtv_status_for_daemon_exit(
+    exit_code: Optional[int],
+    git_state: Optional[dict],
+) -> tuple:
+    """Ground-truth status for a reaped daemon job (#331 / #579 / Epic A1).
+
+    Returns ``(status, exit_code, summary_status, summary_note)``.
+    Never leaves successful work as open-ended ``unknown`` with 0 files.
+    """
+    work_landed = _job_has_real_work_landed(git_state)
+    files = []
+    if git_state:
+        files = list(git_state.get("changed_files") or [])
+        if not files and git_state.get("remote_files_touched"):
+            files = list(git_state.get("remote_files_touched") or [])
+
+    if exit_code == 0:
+        return ("done", 0, None, None)
+
+    if exit_code is None:
+        # No exit signal. Prefer git evidence over inventing timed_out.
+        if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
+            # Borrowed worktree / pushed elsewhere — treat as successful completion.
+            note = (
+                f"borrowed/remote work detected"
+                f"{(' on ' + git_state['remote_ref']) if git_state.get('remote_ref') else ''}; "
+                "exit code missing but git shows activity (#331 GTV)"
+            )
+            return ("done", 0, "OK (exit 0)", note)
+        if work_landed or files:
+            note = (
+                "process died without exit code, but worktree/origin has git activity "
+                "(#579/#331 GTV) — inspect before discarding"
+            )
+            return (
+                "failed_unverified",
+                None,
+                terminal_status_for_unknown_exit(),
+                note,
+            )
+        # True zombie: dead PID, no exit, no git evidence.
+        return (
+            "timed_out",
+            -9,
+            "FAILED (exit -9)",
+            "reaped dead/null PID (no exit signal, no git activity); see synlynk jobs reap",
+        )
+
+    # Non-zero exit
+    if work_landed or files:
+        note = (
+            f"exit {exit_code}, but worktree/origin has git activity "
+            "(#331 GTV) — outcome may still be usable"
+        )
+        return ("failed", exit_code, f"FAILED (exit {exit_code})", note)
+    return ("failed", exit_code, None, None)
+
+
 def _reconcile_daemon_jobs() -> None:
-    """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
+    """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db.
+
+    Epic A1 / #331: applies ground-truth verification (git worktree evidence)
+    so jobs that landed real work are not summarized as unknown/0-files.
+    """
     conn = _pkg("_get_db")()
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path "
@@ -1963,15 +2043,34 @@ def _reconcile_daemon_jobs() -> None:
                     # Do not rewrite summary / re-bill costs — truth already on disk.
                     continue
 
-                if exit_code == 0:
-                    status = "done"
-                elif exit_code is None:
-                    # Dead / null PID with no recorded exit → timed_out (#753),
-                    # not open-ended "unknown", so scoreboards stop counting zombies.
-                    status = "timed_out"
-                    exit_code = -9
-                else:
-                    status = "failed"
+                # --- Ground-truth verification (#331 / #579) ---
+                worktree_path = _daemon_job_worktree_path(job_id, log_path)
+                worktree_branch = f"dispatch/{agent}/{job_id}" if agent else None
+                git_state = None
+                if worktree_path:
+                    inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+                    try:
+                        git_state = inspect_fn(worktree_path, worktree_branch, started_at)
+                    except Exception:
+                        git_state = None
+
+                status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
+                    exit_code, git_state
+                )
+
+                files_touched = []
+                if git_state:
+                    files_touched = list(git_state.get("changed_files") or [])
+                    if not files_touched and git_state.get("remote_files_touched"):
+                        files_touched = list(git_state.get("remote_files_touched") or [])
+                if not files_touched and worktree_path:
+                    files_fn = _pkg("_worktree_files_touched")
+                    if files_fn:
+                        try:
+                            files_touched = list(files_fn(worktree_path) or [])
+                        except Exception:
+                            files_touched = []
+
                 log_text = ""
                 conn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
@@ -2008,6 +2107,11 @@ def _reconcile_daemon_jobs() -> None:
                         (status, job_id),
                     )
                     conn.commit()
+                    summary_status = "PERMISSION_DENIED (headless auto-denied)"
+                    summary_note = (
+                        "headless permission auto-denial detected from log contents "
+                        "(response empty, num_turns <= 1, or explicit no-output marker)"
+                    )
                 token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
                 basis = getattr(token_counts, "basis", "none")
@@ -2024,23 +2128,15 @@ def _reconcile_daemon_jobs() -> None:
                     job_id=job_id,
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
-                summary_status = None
-                summary_note = None
-                if status == "permission_denied":
-                    summary_status = "PERMISSION_DENIED (headless auto-denied)"
-                    summary_note = (
-                        "headless permission auto-denial detected from log contents "
-                        "(response empty, num_turns <= 1, or explicit no-output marker)"
-                    )
-                elif status == "unknown":
+                if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
-                elif status == "timed_out":
-                    summary_status = f"FAILED (exit {exit_code})"
-                    summary_note = "reaped dead/null PID (no exit signal); see synlynk jobs reap"
                 task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
-                    out_tokens, cost_usd, [], status_label=summary_status, note=summary_note,
+                    out_tokens, cost_usd, files_touched,
+                    worktree_path=worktree_path,
+                    worktree_branch=worktree_branch,
+                    status_label=summary_status, note=summary_note,
                     task_sha256=task_sha256, task_preview=task_preview
                 )
         conn.commit()
