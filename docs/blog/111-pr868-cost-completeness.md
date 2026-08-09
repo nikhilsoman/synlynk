@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — Cost Completeness: No More Jobs Without cost_entries (Epic A2)"
+title: "PR #868 — Cost Completeness: No More Jobs Without cost_entries (Epic A2)"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 111
