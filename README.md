@@ -122,6 +122,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 **Start here:**
 
 - `synlynk init`
+- `synlynk start`
 - `synlynk scan`
 - `synlynk join`
 - `synlynk status`
