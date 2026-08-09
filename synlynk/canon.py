@@ -60,3 +60,38 @@ def _build_documentation_index(root: str) -> str:
         lines.append("_No project-docs/ or docs/ markdown files found._")
         lines.append("")
     return "\n".join(lines)
+
+
+def _build_claim_receipt(scan: dict) -> list:
+    """Up to 3 claims sourced directly from shallow-scan data. A claim is
+    skipped outright — never fabricated — if its backing field is missing."""
+    claims = []
+    repos = scan.get("repos") or []
+    repo = repos[0] if repos else None
+
+    if repo and repo.get("stack_labels"):
+        stack = ", ".join(repo["stack_labels"])
+        claims.append({
+            "claim": f"Detected stack: {stack}",
+            "confidence": "found",
+            "verify": f"ls {repo.get('path', '.')}",
+        })
+
+    if repo and repo.get("path"):
+        claims.append({
+            "claim": f"This is a git repository at {repo['path']}",
+            "confidence": "found",
+            "verify": f"git -C {repo['path']} rev-parse --show-toplevel",
+        })
+
+    harnesses = scan.get("harnesses") or []
+    if harnesses:
+        names = ", ".join(h["name"] for h in harnesses)
+        first = harnesses[0]["name"]
+        claims.append({
+            "claim": f"Harness available on PATH: {names}",
+            "confidence": "found",
+            "verify": f"which {first}",
+        })
+
+    return claims[:3]
