@@ -23,14 +23,18 @@
 
 - #753 `jobs reap` + auto-reap STALL/TIMEOUT  
 - #751 windowed `sentinel_crit`  
-- #835 context_mode/bytes (if merged)
+- #835 context_mode/bytes  
+- #832 fresh `--base`  
+- #857 / #569 GH-write fail-closed + role Apps (#859)  
+- **A1.1 + A1.2** — daemon_jobs GTV on reconcile (#331/#579): git evidence → `failed_unverified`/`done` with files; ops `zombie_running` finding  
+- **A2.1 + A2.2** — ops `jobs_missing_cost` / `cost_missing_rate` (#752); reconcile ensures `cost_entries` even on preferred-summary path  
 
 ### Sequence
 
-1. **A1.1** — On STALL/TIMEOUT/exit: always write terminal status + summary (harden remaining paths #579/#331 GTV).  
-2. **A1.2** — Ops finding: `running` + dead PID (should be 0 if #753 healthy).  
-3. **A2.1** — Ops finding: jobs in window with no `cost_entries` (#752).  
-4. **A2.2** — Close write gaps (which agents/paths skip `update_costs`).  
+1. ~~**A1.1**~~ shipped — GTV in `_reconcile_daemon_jobs`  
+2. ~~**A1.2**~~ shipped — ops `zombie_running`  
+3. ~~**A2.1**~~ shipped — ops finding for jobs without cost_entries  
+4. ~~**A2.2**~~ shipped — `_ensure_daemon_job_cost_entry` on reconcile  
 5. **A3** — Set `dispatch_context` to `home`|`headless` at enqueue/dispatch (#740).
 
 ### Exit criteria
@@ -63,10 +67,9 @@
 
 ### Sequence
 
-1. **B1 design** — `synlynk identity` / App installation: per-role token, env for child only.  
-2. **B1 implement** — When token present, set `GH_TOKEN` for job; when absent, **fail preflight** for GH-write (no strip-and-hope).  
-3. **B2** — Codex: document permanent no-GH-write + route, or fix sandbox.  
-4. **B3** — MCP review reliability with real identity.
+1. **B0/B1 (shipped in this arc)** — Fail-closed without App token; inject token + `GH_CONFIG_DIR` isolation when present; escape hatch `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH`. Spec: `docs/superpowers/specs/2026-08-09-gh-write-identity-fail-closed-design.md`. App minting remains `synlynk identity init --role` (prior work).  
+2. **B2** — Codex: document permanent no-GH-write + route, or fix sandbox.  
+3. **B3** — MCP review reliability with real identity.
 
 ### Exit criteria
 
@@ -76,8 +79,7 @@
 
 ### PR sizing
 
-- PR B0: design doc + preflight fail-closed without token.  
-- PR B1: App token provisioning + injection.  
+- PR B0/B1: fail-closed + token inject isolation (this work).  
 - PR B2/B3: children.
 
 ---

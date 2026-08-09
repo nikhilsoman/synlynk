@@ -260,3 +260,23 @@ def test_collect_only_stale_sentinel_is_ops_green_for_signals(tmp_path, monkeypa
     assert not any(
         "sentinel" in (f.get("summary") or "").lower() for f in report.findings
     )
+
+
+def test_format_platform_report_includes_jobs_missing_cost():
+    from synlynk.platform_ops import PlatformReport, format_platform_report
+    report = PlatformReport(
+        hours=24,
+        generated_at="2026-08-09T00:00:00+00:00",
+        scoreboard={"hygiene": "GREEN", "ops": "RED", "summary": "cost gap"},
+        jobs={"count": 5, "done": 5, "failed": 0, "unknownish": 0,
+              "unknown_rate": 0, "fail_rate": 0, "by_status": {}, "by_agent": {},
+              "dbs_scanned": 1, "zombie_running": 0},
+        costs={
+            "entries": 0, "total_usd": 0, "input_tokens": 0, "output_tokens": 0,
+            "orphan_entries": 0, "orphan_rate": 0,
+            "jobs_missing_cost": 5, "terminal_jobs": 5, "cost_missing_rate": 1.0,
+            "by_agent": {}, "by_context_mode": {},
+        },
+    )
+    text = format_platform_report(report)
+    assert "jobs_missing_cost=5/5" in text

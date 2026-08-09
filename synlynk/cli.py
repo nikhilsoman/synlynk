@@ -544,7 +544,9 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
     dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
-        help="Task needs gh pr review/merge - reroute to a capable agent unless --force-agent is set (see #426)")
+        help="Task needs gh write (PR review/merge/comment). Requires a role GitHub App token "
+             "(synlynk identity init --role); fails closed if none (#569). "
+             "Also hints routing to a GH-capable agent unless --force-agent (#426).")
     dispatch_parser.add_argument(
         "--requires",
         action="append",
