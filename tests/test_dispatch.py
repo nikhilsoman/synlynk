@@ -687,6 +687,8 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    # #569 fail-closed: tests without Apps must mock a minted token
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
         "grok", "review and merge PR #500", story_id="story-manual-1",
@@ -705,6 +707,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
         "agy", "review and merge PR #500", story_id="story-manual-1",
@@ -727,6 +730,7 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
         "codex", "review and merge PR #500", story_id="story-manual-1",
