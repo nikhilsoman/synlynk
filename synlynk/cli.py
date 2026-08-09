@@ -241,6 +241,9 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Preview what would be upgraded without installing")
 
     subparsers.add_parser("join", help="Onboard as a new member to an existing project")
+    subparsers.add_parser(
+        "start", help="Cold-start entry point: detect new vs existing project and guide setup"
+    )
 
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
@@ -1259,6 +1262,9 @@ def main() -> None:
             sys.exit(code)
         else:
             help_parsers.get("ops", parser).print_help()
+    elif args.command == "start":
+        from synlynk.coldstart import cmd_start
+        cmd_start()
     elif args.command == "join":
         cmd_join()
     elif args.command == "team":
