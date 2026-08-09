@@ -125,7 +125,7 @@ def test_run_new_project_flow_writes_config_and_roadmap_row(tmp_path, monkeypatc
     }
     _run_new_project_flow(answers)
 
-    assert os.path.exists("synlynk/config.json")
+    assert os.path.exists(".synlynk/config.json")
     assert os.path.exists("project-docs/roadmap.md")
     roadmap_text = open("project-docs/roadmap.md").read()
     assert "Build a recipe-sharing CLI" in roadmap_text
