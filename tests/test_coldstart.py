@@ -11,6 +11,7 @@ from synlynk.coldstart import (
     _run_new_project_flow,
     _run_existing_project_flow,
 )
+from synlynk.coldstart import cmd_start
 
 
 def _git_init(root, commits=0, files=None):
@@ -182,3 +183,39 @@ def test_run_existing_project_flow_warns_on_zero_functional_harnesses(tmp_path, 
 
     captured = capsys.readouterr()
     assert "no working harnesses" in captured.out.lower()
+
+
+def test_cmd_start_runs_new_flow_for_empty_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    answers = iter(["Build a thing", "CLI", "solo", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    cmd_start()
+    assert os.path.exists(".synlynk/config.json")
+
+
+def test_cmd_start_runs_existing_flow_for_populated_repo(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _git_init(tmp_path, commits=2, files={"README.md": "# repo\n"})
+    os.makedirs(".synlynk", exist_ok=True)  # pre-existing synlynk project, skip re-run prompt path
+    fake_scan = {
+        "repos": [{"name": tmp_path.name, "path": str(tmp_path), "stack_labels": [],
+                    "readme_excerpt": "", "context_sections": {}}],
+        "harnesses": [], "agents": [], "skills": [], "topology": "single",
+        "workspace_name": tmp_path.name, "home_harness": None, "scanned_at": "",
+    }
+    answers = iter(["y", "look around"])  # y = confirm refresh, then the intent question
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan):
+        cmd_start()
+    captured = capsys.readouterr()
+    assert "found" in captured.out.lower()
+
+
+def test_cmd_start_rerun_declined_leaves_project_untouched(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _git_init(tmp_path, commits=2, files={"README.md": "# repo\n"})
+    os.makedirs(".synlynk", exist_ok=True)
+    monkeypatch.setattr("builtins.input", lambda prompt: "N")
+    cmd_start()
+    captured = capsys.readouterr()
+    assert "unchanged" in captured.out.lower() or "skipped" in captured.out.lower()

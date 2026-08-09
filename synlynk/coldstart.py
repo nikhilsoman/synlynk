@@ -6,6 +6,7 @@ docs/superpowers/specs/2026-08-09-cold-start-design.md for the full design.
 """
 import os
 import subprocess
+from unittest.mock import patch
 
 _MANIFEST_FILES = (
     "package.json", "pyproject.toml", "setup.py", "requirements.txt",
@@ -180,3 +181,26 @@ def _run_existing_project_flow(root: str = ".") -> None:
     else:
         print("\nNo task captured -- run `synlynk start` again anytime, "
               "or `synlynk scan --deep` for a fuller picture.")
+
+
+def cmd_start() -> None:
+    """Entry point for `synlynk start` -- see spec's "synlynk start EXACT FLOW"."""
+    already_initialized = os.path.exists(".synlynk/config.json") or os.path.isdir(".synlynk")
+    if already_initialized:
+        answer = input(
+            ".synlynk/config.json already exists -- refresh cold-start detection "
+            "and re-run the relevant flow? [y/N] "
+        ).strip().lower()
+        if answer != "y":
+            print("Left project unchanged.")
+            return
+
+    mode = _resolve_cold_start_mode(".")
+    if mode == "new":
+        answers = _prompt_new_project_questions()
+        # init() has legacy optional prompts; start's four-question contract
+        # deliberately keeps those prompts non-interactive.
+        with patch("builtins.input", lambda prompt: ""):
+            _run_new_project_flow(answers)
+    else:
+        _run_existing_project_flow(".")
