@@ -1910,6 +1910,80 @@ def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Op
             return path
     return None
 
+def _ensure_daemon_job_cost_entry(
+    job_id: str,
+    agent: str,
+    story_id: Optional[str],
+    log_text: str = "",
+    conn=None,
+) -> bool:
+    """Write a cost_entries row for *job_id* if none exists yet (Epic A2 / #752).
+
+    Returns True when a new row was written. Uses update_costs (t-shirt estimate
+    if tokens extract as zero) so terminal jobs never leave the ledger blank.
+    """
+    owns_conn = conn is None
+    get_db = _pkg("_get_db")
+    if owns_conn:
+        if not get_db:
+            return False
+        try:
+            conn = get_db()
+        except Exception:
+            return False
+    try:
+        try:
+            existing = conn.execute(
+                "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
+            ).fetchone()
+        except Exception:
+            return False
+        if existing:
+            return False
+        update_fn = _pkg("update_costs")
+        if not update_fn:
+            return False
+        extract = _pkg("extract_tokens")
+        in_tokens, out_tokens = 0, 0
+        basis = "none"
+        if extract and log_text:
+            try:
+                token_counts = extract(log_text, agent=agent or "")
+                in_tokens, out_tokens = token_counts[0], token_counts[1]
+                basis = getattr(token_counts, "basis", "none")
+            except Exception:
+                in_tokens, out_tokens = 0, 0
+        model_version = None
+        extract_mv = _pkg("extract_model_version")
+        if extract_mv and log_text:
+            try:
+                model_version = extract_mv(log_text, agent=agent or "")
+            except Exception:
+                model_version = None
+        try:
+            update_fn(
+                f"{agent or '?'} job {job_id}",
+                in_tokens,
+                out_tokens,
+                0,
+                model_version=model_version,
+                story_id=story_id,
+                agent=agent or "",
+                basis=basis,
+                job_id=job_id,
+            )
+            return True
+        except Exception as exc:
+            print(f"  ⚠ cost capture failed for {job_id}: {exc}")
+            return False
+    finally:
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def _gtv_status_for_daemon_exit(
     exit_code: Optional[int],
     git_state: Optional[dict],
@@ -2040,7 +2114,17 @@ def _reconcile_daemon_jobs() -> None:
                         ).fetchone()
                         if _res_row:
                             release_fn(conn, _res_row[0])
-                    # Do not rewrite summary / re-bill costs — truth already on disk.
+                    # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
+                    log_text_pref = ""
+                    if log_path and os.path.exists(log_path):
+                        try:
+                            with open(log_path) as f:
+                                log_text_pref = f.read()
+                        except Exception:
+                            log_text_pref = ""
+                    _ensure_daemon_job_cost_entry(
+                        job_id, agent, story_id, log_text_pref, conn=conn
+                    )
                     continue
 
                 # --- Ground-truth verification (#331 / #579) ---
@@ -2116,16 +2200,26 @@ def _reconcile_daemon_jobs() -> None:
                 in_tokens, out_tokens = token_counts
                 basis = getattr(token_counts, "basis", "none")
                 model_version = _pkg("extract_model_version")(log_text, agent=agent)
-                _pkg("update_costs")(
-                    f"{agent} job {job_id}",
-                    in_tokens,
-                    out_tokens,
-                    duration_s or 0,
-                    model_version=model_version,
-                    story_id=story_id,
-                    agent=agent,
-                    basis=basis,
-                    job_id=job_id,
+                try:
+                    _pkg("update_costs")(
+                        f"{agent} job {job_id}",
+                        in_tokens,
+                        out_tokens,
+                        duration_s or 0,
+                        model_version=model_version,
+                        story_id=story_id,
+                        agent=agent,
+                        basis=basis,
+                        job_id=job_id,
+                    )
+                except Exception as exc:
+                    print(f"  ⚠ update_costs failed for {job_id}: {exc}")
+                    _ensure_daemon_job_cost_entry(
+                        job_id, agent, story_id, log_text, conn=conn
+                    )
+                # Guarantee a row even if update_costs no-op'd (unmigrated flat-file path).
+                _ensure_daemon_job_cost_entry(
+                    job_id, agent, story_id, log_text, conn=conn
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
                 if status == "failed_unverified" and not summary_status:

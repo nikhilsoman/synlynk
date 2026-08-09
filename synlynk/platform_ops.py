@@ -511,6 +511,33 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         if not c.get("job_id") or c.get("job_id") not in job_ids:
             orphans += 1
     orphan_rate = (orphans / len(costs)) if costs else 0.0
+
+    # A2 / #752: terminal jobs with no matching cost_entries row
+    _TERMINAL_STATUSES = {
+        "done", "completed", "failed", "failed_unverified", "timed_out",
+        "permission_denied", "task_delivery_failed", "scope_violation",
+    }
+    costed_job_ids = {c.get("job_id") for c in costs if c.get("job_id")}
+    terminal_jobs = [
+        j for j in jobs
+        if (j.get("status") or "").lower() in _TERMINAL_STATUSES
+        or "fail" in (j.get("status") or "").lower()
+    ]
+    jobs_missing_cost = [
+        j for j in terminal_jobs
+        if j.get("job_id") and j["job_id"] not in costed_job_ids
+    ]
+    n_terminal = len(terminal_jobs)
+    cost_missing_rate = (len(jobs_missing_cost) / n_terminal) if n_terminal else 0.0
+    # Pass when: no terminal jobs, or low missing rate, and never "many jobs / $0 entries"
+    cost_complete_ok = True
+    if n_terminal >= 3 and cost_missing_rate >= 0.5:
+        cost_complete_ok = False
+    if n_terminal >= 5 and len(costs) == 0:
+        cost_complete_ok = False
+    if n_terminal >= 1 and len(costs) == 0 and n_terminal >= 3:
+        cost_complete_ok = False
+
     report.costs = {
         "entries": len(costs),
         "total_usd": round(tot_cost, 4),
@@ -524,7 +551,19 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         },
         "orphan_entries": orphans,
         "orphan_rate": round(orphan_rate, 3),
-        "pass": orphan_rate < 0.35 or len(costs) == 0,
+        "jobs_missing_cost": len(jobs_missing_cost),
+        "terminal_jobs": n_terminal,
+        "cost_missing_rate": round(cost_missing_rate, 3),
+        "cost_missing_samples": [
+            {
+                "job_id": j.get("job_id"),
+                "agent": j.get("agent"),
+                "status": j.get("status"),
+                "db": j.get("db"),
+            }
+            for j in jobs_missing_cost[:10]
+        ],
+        "pass": (orphan_rate < 0.35 or len(costs) == 0) and cost_complete_ok,
     }
 
     # L3 side-effects (lightweight text heuristics on recent tasks)
@@ -682,7 +721,13 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             parts.append(f"zombie_running={report.jobs.get('zombie_running')}")
         ops_red_reasons.append("job " + " ".join(parts))
     if not costs_ok:
-        ops_red_reasons.append(f"cost orphan_rate={report.costs.get('orphan_rate')}")
+        cost_bits = [f"orphan_rate={report.costs.get('orphan_rate')}"]
+        if int(report.costs.get("jobs_missing_cost") or 0) > 0:
+            cost_bits.append(
+                f"jobs_missing_cost={report.costs.get('jobs_missing_cost')}"
+                f"/{report.costs.get('terminal_jobs')}"
+            )
+        ops_red_reasons.append("cost " + " ".join(cost_bits))
     if not signals_ok:
         ops_red_reasons.append(
             f"open LIVE issues={report.signals.get('open_live_issues')} "
@@ -741,6 +786,22 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             "summary": f"Cost orphan rate {report.costs['orphan_rate']:.0%} ({orphans}/{len(costs)} entries lack job_id match)",
             "detail": f"total_usd={tot_cost:.2f}",
             "signal_hash": f"ops-cost-orphan-{hours}h",
+        })
+    miss = int(report.costs.get("jobs_missing_cost") or 0)
+    n_term = int(report.costs.get("terminal_jobs") or 0)
+    if miss > 0 and (
+        (n_term >= 3 and report.costs.get("cost_missing_rate", 0) >= 0.5)
+        or (n_term >= 3 and len(costs) == 0)
+    ):
+        findings.append({
+            "type": "platform_ops",
+            "severity": "high" if len(costs) == 0 and n_term >= 5 else "medium",
+            "summary": (
+                f"{miss}/{n_term} terminal jobs lack cost_entries "
+                f"(cost_missing_rate={report.costs.get('cost_missing_rate')}) — #752"
+            ),
+            "detail": json.dumps(report.costs.get("cost_missing_samples") or [])[:500],
+            "signal_hash": f"ops-cost-missing-{hours}h-{miss}",
         })
     if live_issues:
         findings.append({
@@ -810,6 +871,9 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  tokens in={report.costs.get('input_tokens'):,}  out={report.costs.get('output_tokens'):,}",
         f"  orphan_entries={report.costs.get('orphan_entries')}  "
         f"orphan_rate={report.costs.get('orphan_rate')}",
+        f"  jobs_missing_cost={report.costs.get('jobs_missing_cost')}/"
+        f"{report.costs.get('terminal_jobs')}  "
+        f"cost_missing_rate={report.costs.get('cost_missing_rate')}",
         f"  by_agent={report.costs.get('by_agent')}",
         f"  by_context_mode={report.costs.get('by_context_mode')}",
         "",

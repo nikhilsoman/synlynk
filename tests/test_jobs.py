@@ -1321,3 +1321,75 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
     summary = (project_dir / ".synlynk" / "logs" / f"{job_id}.summary").read_text()
     assert "FAILED_UNVERIFIED" in summary or "failed_unverified" in summary.lower() or "exit unknown" in summary
     assert "src/fixed.py" in summary or "1 touched" in summary
+
+
+# --- Epic A2: cost completeness (#752) ---------------------------------------
+
+def test_ensure_daemon_job_cost_entry_writes_when_missing(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-cost-a2"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, enqueued_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (job_id, "claude", "t", "done", 5, "[]", "2026-08-09T12:00:00"),
+    )
+    conn.commit()
+
+    wrote = []
+
+    def fake_update(*a, **kw):
+        wrote.append(kw.get("job_id") or (a[0] if a else None))
+        from synlynk.db import _insert_cost_row
+        _insert_cost_row(
+            session_date="2026-08-09",
+            agent="claude",
+            model="test",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_tshirt",
+            total_cost_usd=0.01,
+            job_id=job_id,
+        )
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {
+        "_get_db": sl._get_db,
+        "update_costs": fake_update,
+        "extract_tokens": lambda *a, **k: (0, 0),
+        "extract_model_version": lambda *a, **k: "m",
+    }.get(name, getattr(sl, name, default)))
+
+    assert jobs_mod._ensure_daemon_job_cost_entry(job_id, "claude", None, "", conn=conn) is True
+    assert wrote
+    # second call no-ops
+    assert jobs_mod._ensure_daemon_job_cost_entry(job_id, "claude", None, "", conn=conn) is False
+    n = conn.execute("SELECT COUNT(*) FROM cost_entries WHERE job_id=?", (job_id,)).fetchone()[0]
+    conn.close()
+    assert n == 1
+
+
+def test_ensure_daemon_job_cost_entry_skips_when_present(project_dir):
+    import synlynk as sl
+    from synlynk.db import _insert_cost_row
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-cost-a2b"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, enqueued_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (job_id, "claude", "t", "done", 5, "[]", "2026-08-09T12:00:00"),
+    )
+    conn.commit()
+    conn.close()
+    _insert_cost_row(
+        session_date="2026-08-09", agent="claude", model="t",
+        input_tokens=5, output_tokens=1, cache_read_tokens=0,
+        cost_source="actual", total_cost_usd=0.1, job_id=job_id,
+    )
+    conn = sl._get_db()
+    assert jobs_mod._ensure_daemon_job_cost_entry(job_id, "claude", None, "", conn=conn) is False
+    conn.close()

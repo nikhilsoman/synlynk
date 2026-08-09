@@ -27,13 +27,14 @@
 - #832 fresh `--base`  
 - #857 / #569 GH-write fail-closed + role Apps (#859)  
 - **A1.1 + A1.2** — daemon_jobs GTV on reconcile (#331/#579): git evidence → `failed_unverified`/`done` with files; ops `zombie_running` finding  
+- **A2.1 + A2.2** — ops `jobs_missing_cost` / `cost_missing_rate` (#752); reconcile ensures `cost_entries` even on preferred-summary path  
 
 ### Sequence
 
 1. ~~**A1.1**~~ shipped — GTV in `_reconcile_daemon_jobs`  
 2. ~~**A1.2**~~ shipped — ops `zombie_running`  
-3. **A2.1** — Ops finding: jobs in window with no `cost_entries` (#752).  
-4. **A2.2** — Close write gaps (which agents/paths skip `update_costs`).  
+3. ~~**A2.1**~~ shipped — ops finding for jobs without cost_entries  
+4. ~~**A2.2**~~ shipped — `_ensure_daemon_job_cost_entry` on reconcile  
 5. **A3** — Set `dispatch_context` to `home`|`headless` at enqueue/dispatch (#740).
 
 ### Exit criteria
