@@ -111,6 +111,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [106](./106-pr824-829-ux1.0-field-trial-readiness.md) | PRs #824–#830 — UX 1.0 Field Trial Readiness: From Shipped to Trusted | [#824](https://github.com/nikhilsoman/synlynk/pull/824), [#825](https://github.com/nikhilsoman/synlynk/pull/825), [#826](https://github.com/nikhilsoman/synlynk/pull/826), [#827](https://github.com/nikhilsoman/synlynk/pull/827), [#829](https://github.com/nikhilsoman/synlynk/pull/829), [#830](https://github.com/nikhilsoman/synlynk/pull/830) | 2026-08-08 |
 
 
+| [108](./108-prTBD-fresh-base-ref.md) | Fresh --base — stop dispatching against stale main | TBD (#832) | 2026-08-09 |
+
 ## Per-PR Post Template
 
 From here forward, each PR gets a post following this structure:
