@@ -23,12 +23,15 @@
 
 - #753 `jobs reap` + auto-reap STALL/TIMEOUT  
 - #751 windowed `sentinel_crit`  
-- #835 context_mode/bytes (if merged)
+- #835 context_mode/bytes  
+- #832 fresh `--base`  
+- #857 / #569 GH-write fail-closed + role Apps (#859)  
+- **A1.1 + A1.2** — daemon_jobs GTV on reconcile (#331/#579): git evidence → `failed_unverified`/`done` with files; ops `zombie_running` finding  
 
 ### Sequence
 
-1. **A1.1** — On STALL/TIMEOUT/exit: always write terminal status + summary (harden remaining paths #579/#331 GTV).  
-2. **A1.2** — Ops finding: `running` + dead PID (should be 0 if #753 healthy).  
+1. ~~**A1.1**~~ shipped — GTV in `_reconcile_daemon_jobs`  
+2. ~~**A1.2**~~ shipped — ops `zombie_running`  
 3. **A2.1** — Ops finding: jobs in window with no `cost_entries` (#752).  
 4. **A2.2** — Close write gaps (which agents/paths skip `update_costs`).  
 5. **A3** — Set `dispatch_context` to `home`|`headless` at enqueue/dispatch (#740).

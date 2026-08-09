@@ -441,6 +441,27 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             "max": ctx_sorted[-1],
             "mean": int(sum(ctx_sorted) / len(ctx_sorted)),
         })
+    # A1.2: count status=running rows whose PID is already dead (zombie ledger).
+    zombie_running = 0
+    try:
+        from synlynk.jobs import _pid_is_alive
+    except Exception:
+        _pid_is_alive = None  # type: ignore
+    if _pid_is_alive is not None:
+        for db in dbs:
+            try:
+                conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+                try:
+                    for pid, in conn.execute(
+                        "SELECT pid FROM daemon_jobs WHERE status='running'"
+                    ).fetchall():
+                        if pid is None or not _pid_is_alive(pid):
+                            zombie_running += 1
+                finally:
+                    conn.close()
+            except Exception:
+                continue
+
     report.jobs = {
         "count": n_jobs,
         "by_status": dict(status_counts),
@@ -448,13 +469,14 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         "by_context_mode": dict(by_context_mode),
         "by_context_mode_pct": by_context_mode_pct,
         "context_bytes": context_bytes_summary,
+        "zombie_running": zombie_running,
         "unknown_rate": round(unknown_rate, 3),
         "fail_rate": round(fail_rate, 3),
         "done": done,
         "failed": failed,
         "unknownish": unknownish,
         "dbs_scanned": len(dbs),
-        "pass": n_jobs == 0 or (unknown_rate < 0.25 and fail_rate < 0.40),
+        "pass": n_jobs == 0 or (unknown_rate < 0.25 and fail_rate < 0.40 and zombie_running == 0),
     }
     report.job_samples = sorted(
         jobs,
@@ -652,9 +674,13 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
 
     ops_red_reasons = []
     if not jobs_ok:
-        ops_red_reasons.append(
-            f"job unknown_rate={report.jobs.get('unknown_rate')} fail_rate={report.jobs.get('fail_rate')}"
-        )
+        parts = [
+            f"unknown_rate={report.jobs.get('unknown_rate')}",
+            f"fail_rate={report.jobs.get('fail_rate')}",
+        ]
+        if int(report.jobs.get("zombie_running") or 0) > 0:
+            parts.append(f"zombie_running={report.jobs.get('zombie_running')}")
+        ops_red_reasons.append("job " + " ".join(parts))
     if not costs_ok:
         ops_red_reasons.append(f"cost orphan_rate={report.costs.get('orphan_rate')}")
     if not signals_ok:
@@ -695,6 +721,18 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             "summary": f"High job unknown rate {report.jobs['unknown_rate']:.0%} over {hours}h ({unknownish}/{n_jobs})",
             "detail": json.dumps(report.jobs.get("by_status"), indent=0)[:500],
             "signal_hash": f"ops-unknown-{hours}h",
+        })
+    zomb = int(report.jobs.get("zombie_running") or 0)
+    if zomb > 0:
+        findings.append({
+            "type": "platform_ops",
+            "severity": "medium",
+            "summary": (
+                f"{zomb} daemon_jobs still status=running with dead/null PID "
+                "(run synlynk jobs reap --all-projects --apply; Epic A1)"
+            ),
+            "detail": "zombie_running",
+            "signal_hash": f"ops-zombie-running-{zomb}",
         })
     if report.costs.get("orphan_rate", 0) >= 0.35 and len(costs) >= 5:
         findings.append({
@@ -764,6 +802,7 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  by_context_mode={report.jobs.get('by_context_mode')}  "
         f"pct={report.jobs.get('by_context_mode_pct')}",
         f"  context_bytes={report.jobs.get('context_bytes')}",
+        f"  zombie_running={report.jobs.get('zombie_running')}",
         f"  dbs_scanned={report.jobs.get('dbs_scanned')}",
         "",
         "L2 COSTS",
