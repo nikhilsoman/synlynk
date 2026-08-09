@@ -1,6 +1,6 @@
 # synlynk AI Instructions
 
-Apply these instructions to your AI agent (Global System Prompt, Gemini Custom Instructions, or Claude Project Instructions).
+Apply these instructions to your AI harness (Global System Prompt, Gemini Custom Instructions, or Claude Project Instructions).
 
 ---
 
