@@ -116,6 +116,7 @@ def test_prompt_new_project_questions_implementer_optional(monkeypatch):
 
 def test_run_new_project_flow_writes_config_and_roadmap_row(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
     answers = {
         "goal": "Build a recipe-sharing CLI",
         "deliverable_shape": "a Python CLI package",
