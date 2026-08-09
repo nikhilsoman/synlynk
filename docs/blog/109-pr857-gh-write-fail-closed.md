@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — GH-Write Fail-Closed: No More Silent Personal Keyring"
+title: "PR #857 — GH-Write Fail-Closed: No More Silent Personal Keyring"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 109
