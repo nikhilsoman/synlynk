@@ -54,3 +54,36 @@ def test_claim_receipt_partial_scan_yields_partial_claims():
     claims = _build_claim_receipt(scan)
     assert len(claims) == 1
     assert "/tmp/x" in claims[0]["claim"]
+
+
+from synlynk.canon import _render_canon, _write_canon, _CANON_FILENAME
+
+
+def test_render_canon_includes_provenance_and_both_real_sections(tmp_path):
+    scan = {"repos": [{"path": str(tmp_path), "stack_labels": ["python"]}], "harnesses": []}
+    content = _render_canon(str(tmp_path), scan, head_sha="a" * 40)
+    assert f"canon:section=baseline sha={'a' * 40}" in content
+    assert "## Documentation Index" in content
+    assert "## 3-Claim Receipt" in content
+    assert "Detected stack: python" in content
+
+
+def test_render_canon_includes_skeleton_sections_without_provenance(tmp_path):
+    scan = {"repos": [], "harnesses": []}
+    content = _render_canon(str(tmp_path), scan, head_sha="a" * 40)
+    assert "## Current State (active code only)" in content
+    assert "Not yet assessed" in content
+    # Only one provenance comment total — skeleton sections carry none.
+    assert content.count("<!-- canon:section=") == 1
+
+
+def test_render_canon_defaults_to_unknown_sha_when_none(tmp_path):
+    content = _render_canon(str(tmp_path), {"repos": [], "harnesses": []}, head_sha=None)
+    assert "sha=unknown" in content
+
+
+def test_write_canon_writes_file(tmp_path):
+    path = _write_canon(str(tmp_path), "hello")
+    assert os.path.exists(path)
+    assert os.path.basename(path) == _CANON_FILENAME
+    assert open(path).read() == "hello"

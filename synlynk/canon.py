@@ -95,3 +95,43 @@ def _build_claim_receipt(scan: dict) -> list:
         })
 
     return claims[:3]
+
+
+def _render_canon(root: str, scan: dict, head_sha: Optional[str] = None) -> str:
+    sha = head_sha or "unknown"
+    assessed_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    provenance = f"<!-- canon:section=baseline sha={sha} assessed_at={assessed_at} -->"
+
+    claims = _build_claim_receipt(scan)
+
+    lines = [
+        "# Workspace Canon",
+        "",
+        provenance,
+        "",
+        _build_documentation_index(root),
+        "## 3-Claim Receipt",
+        "",
+    ]
+    if claims:
+        for i, c in enumerate(claims, start=1):
+            lines.append(f"{i}. **{c['claim']}** ({c['confidence']})")
+            lines.append(f"   Verify: `{c['verify']}`")
+    else:
+        lines.append("_No claims could be derived from the current scan data._")
+    lines.append("")
+
+    for section in _SKELETON_SECTIONS:
+        lines.append(f"## {section}")
+        lines.append("")
+        lines.append(_SKELETON_NOTE)
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _write_canon(root: str, content: str) -> str:
+    path = os.path.join(root, _CANON_FILENAME)
+    with open(path, "w") as fh:
+        fh.write(content)
+    return path
