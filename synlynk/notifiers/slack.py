@@ -8,16 +8,26 @@ import json
 import urllib.request
 
 from synlynk import uxcore
+from synlynk.viz import DEFAULT_PORT
 
-NOTIFY_EVENT_TYPES = ["dispatch_complete", "pr_approved", "job_failed"]
+NOTIFY_EVENT_TYPES = ["dispatch", "approve_pr", "kill_job"]
+
+
+def _vizor_port() -> int:
+    try:
+        with open(".synlynk/config.json") as config_file:
+            config = json.load(config_file)
+        return (config.get("vizor") or {}).get("port", DEFAULT_PORT)
+    except (AttributeError, OSError, TypeError, ValueError):
+        return DEFAULT_PORT
 
 
 def format_message(event: uxcore.Event) -> str:
     message = f"[{event.action}] {json.dumps(event.params)} -> {json.dumps(event.result)}"
-    if event.action in ("job_completed", "job_failed"):
+    if event.action in NOTIFY_EVENT_TYPES:
         job_id = event.result.get("job_id") or event.params.get("job_id")
         if job_id:
-            message += f"\n<https://localhost:8420/#job-{job_id}|View live in Vizor>"
+            message += f"\n<https://localhost:{_vizor_port()}/#job-{job_id}|View live in Vizor>"
     return message
 
 
