@@ -113,6 +113,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 
 | [108](./108-pr854-fresh-base-ref.md) | Fresh --base — stop dispatching against stale main | [#854](https://github.com/nikhilsoman/synlynk/pull/854) | 2026-08-09 |
+| [109](./109-prTBD-gh-write-fail-closed.md) | GH-write fail-closed — no silent personal keyring | TBD (#569) | 2026-08-09 |
 
 ## Per-PR Post Template
 

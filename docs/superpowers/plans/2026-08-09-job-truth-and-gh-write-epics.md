@@ -63,10 +63,9 @@
 
 ### Sequence
 
-1. **B1 design** — `synlynk identity` / App installation: per-role token, env for child only.  
-2. **B1 implement** — When token present, set `GH_TOKEN` for job; when absent, **fail preflight** for GH-write (no strip-and-hope).  
-3. **B2** — Codex: document permanent no-GH-write + route, or fix sandbox.  
-4. **B3** — MCP review reliability with real identity.
+1. **B0/B1 (shipped in this arc)** — Fail-closed without App token; inject token + `GH_CONFIG_DIR` isolation when present; escape hatch `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH`. Spec: `docs/superpowers/specs/2026-08-09-gh-write-identity-fail-closed-design.md`. App minting remains `synlynk identity init --role` (prior work).  
+2. **B2** — Codex: document permanent no-GH-write + route, or fix sandbox.  
+3. **B3** — MCP review reliability with real identity.
 
 ### Exit criteria
 
@@ -76,8 +75,7 @@
 
 ### PR sizing
 
-- PR B0: design doc + preflight fail-closed without token.  
-- PR B1: App token provisioning + injection.  
+- PR B0/B1: fail-closed + token inject isolation (this work).  
 - PR B2/B3: children.
 
 ---

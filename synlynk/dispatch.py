@@ -314,6 +314,24 @@ _ENV_ALLOWLIST_BASE = [
 ]
 
 
+def _gh_write_allow_host_auth() -> bool:
+    """Operator opt-in to use host `gh` keyring when no App token is available (#569)."""
+    raw = (os.environ.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _isolated_gh_config_dir() -> str:
+    """Return a directory for GH_CONFIG_DIR so `gh` cannot use the host keyring session.
+
+    `gh` prefers GH_TOKEN when set, but still consults config under HOME. Pointing
+    GH_CONFIG_DIR at an empty synlynk-managed dir isolates host `gh auth login`
+    state from the dispatched child (#569).
+    """
+    path = os.path.join(os.path.expanduser("~/.synlynk"), "gh-config", "dispatch")
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    return path
+
+
 def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str) -> dict:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
@@ -322,6 +340,11 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
     env_passthrough vars are inherited. Everything else the operator's shell
     happens to have set (AWS keys, unrelated API tokens, etc.) is excluded by
     default.
+
+    When ``requires_gh_write`` is set (#569 / Epic B0-B1):
+    - Role App token present → inject GH_TOKEN + isolate GH_CONFIG_DIR.
+    - Token missing → **fail closed** (raise RuntimeError) unless
+      SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is truthy.
     """
     baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
     allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
@@ -334,18 +357,31 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
             proc_env[k] = v
 
     if requires_gh_write:
-        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
+        role = _role_for_story(story_id) or "dev"
+        gh_token = _resolve_dispatch_gh_token(role)
+        # Never inherit ambient tokens from the parent shell for GH-write jobs.
+        proc_env.pop("GH_TOKEN", None)
+        proc_env.pop("GITHUB_TOKEN", None)
         if gh_token:
             proc_env["GH_TOKEN"] = gh_token
-        else:
-            proc_env.pop("GH_TOKEN", None)
-            proc_env.pop("GITHUB_TOKEN", None)
+            proc_env["GITHUB_TOKEN"] = gh_token
+            proc_env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+        elif _gh_write_allow_host_auth():
             print(
-                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
-                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
-                "silently fall back to a personal credential; GitHub write actions in this "
-                "job will fail until a role App is provisioned (see `synlynk identity init`).",
+                "  ⚠ --requires-gh-write: no role-scoped GitHub App token; "
+                "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is set — child may use host `gh` "
+                f"keyring under shared personal identity (role={role!r}). "
+                "Provision a role App: synlynk identity init --role " + role,
                 file=sys.stderr,
+            )
+        else:
+            raise RuntimeError(
+                "Dispatch refused: --requires-gh-write requires a role-scoped GitHub App "
+                f"token, but none is available for role {role!r} "
+                f"(checked .synlynk/github_apps/{role}.json and synlynk-bot.json). "
+                f"Run: synlynk identity init --role {role}  "
+                "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
+                "(uses personal keyring — not recommended; see #569)."
             )
     return proc_env
 

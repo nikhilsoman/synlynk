@@ -165,9 +165,48 @@ def test_dispatch_agent_injects_gh_token_when_requires_gh_write(tmp_path, monkey
     assert captured_env.get("GH_TOKEN") == "minted-token-abc"
 
 
-def test_dispatch_agent_strips_inherited_gh_tokens_when_requires_gh_write_token_missing(tmp_path, monkeypatch, capsys):
+def test_dispatch_agent_injects_gh_token_and_isolates_config_dir(tmp_path, monkeypatch):
+    """#569: role token path also sets GH_CONFIG_DIR so host keyring is unused."""
+    dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        agent="grok",
+        requires_gh_write=True,
+        token_resolver=lambda role: "minted-token-abc",
+        role_for_story="qa",
+    )
+
+    assert captured_env.get("GH_TOKEN") == "minted-token-abc"
+    assert captured_env.get("GITHUB_TOKEN") == "minted-token-abc"
+    assert "GH_CONFIG_DIR" in captured_env
+    assert "gh-config" in captured_env["GH_CONFIG_DIR"].replace("\\", "/")
+
+
+def test_dispatch_agent_fail_closed_when_requires_gh_write_token_missing(
+    tmp_path, monkeypatch, capsys
+):
+    """#569 Epic B0: no App token → refuse dispatch (do not strip-and-proceed)."""
     monkeypatch.setenv("GH_TOKEN", "fake-personal-token-should-not-leak")
     monkeypatch.setenv("GITHUB_TOKEN", "fake-personal-token-should-not-leak-2")
+    monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
+
+    with pytest.raises(RuntimeError, match="requires a role-scoped GitHub App"):
+        _dispatch_with_fake_popen(
+            tmp_path,
+            monkeypatch,
+            agent="grok",
+            requires_gh_write=True,
+            token_resolver=lambda role: None,
+            role_for_story="qa",
+        )
+
+
+def test_dispatch_agent_host_auth_escape_hatch_when_token_missing(
+    tmp_path, monkeypatch, capsys
+):
+    """SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 opts into host gh (warned)."""
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+    monkeypatch.setenv("GH_TOKEN", "fake-personal-token-should-not-leak")
 
     dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
         tmp_path,
@@ -179,11 +218,23 @@ def test_dispatch_agent_strips_inherited_gh_tokens_when_requires_gh_write_token_
     )
 
     stderr = capsys.readouterr().err
-
     assert job["agent"] == "grok"
-    assert "GH_TOKEN" not in captured_env
-    assert "GITHUB_TOKEN" not in captured_env
-    assert "no role-scoped GitHub token available" in stderr
+    # Ambient tokens still not injected into allowlisted env (host keyring via HOME).
+    assert captured_env.get("GH_TOKEN") != "fake-personal-token-should-not-leak"
+    assert "GH_TOKEN" not in captured_env or captured_env.get("GH_TOKEN") is None
+    assert "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH" in stderr or "host" in stderr.lower()
+
+
+def test_build_subprocess_env_fail_closed_unit(tmp_path, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: None)
+    monkeypatch.setattr(dispatch_mod, "_role_for_story", lambda sid: "dev")
+
+    with pytest.raises(RuntimeError, match="identity init"):
+        dispatch_mod._build_subprocess_env("grok", {}, requires_gh_write=True, story_id="s1")
 
 
 def test_dispatch_agent_does_not_inject_gh_token_by_default(tmp_path, monkeypatch):
