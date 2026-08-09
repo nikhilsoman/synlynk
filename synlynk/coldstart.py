@@ -101,3 +101,71 @@ def _resolve_cold_start_mode(root: str = ".") -> str:
     if answer in ("new", "n"):
         return "new"
     return "existing"
+
+
+def _prompt_new_project_questions() -> dict:
+    """Exactly 4 questions per spec: goal, deliverable shape, solo/team, implementer."""
+    goal = input("In one sentence, what are you trying to build? ").strip()
+    deliverable_shape = input(
+        "What shape is the deliverable (CLI, web app, library, etc.)? "
+    ).strip()
+    team_mode = input("Solo or team [solo] ").strip().lower() or "solo"
+    preferred_implementer = input(
+        "Preferred implementer, if you already know (claude/agy/codex/grok, or blank): "
+    ).strip().lower() or None
+    return {
+        "goal": goal,
+        "deliverable_shape": deliverable_shape,
+        "team_mode": team_mode,
+        "preferred_implementer": preferred_implementer,
+    }
+
+
+def _run_new_project_flow(answers: dict) -> None:
+    """Bootstrap a new project and seed its captured intent as its first roadmap arc."""
+    import builtins
+    import shutil
+
+    from synlynk import init
+    from synlynk.db import cmd_roadmap_add
+
+    mode = "team" if answers["team_mode"].startswith("team") else "solo"
+    # The existing initializer has optional follow-up prompts. A new-project
+    # flow has already collected its complete four-question intent, so leave
+    # those optional answers blank while reusing the initializer unchanged.
+    original_input = builtins.input
+    builtins.input = lambda prompt: ""
+    try:
+        init(mode=mode)
+    finally:
+        builtins.input = original_input
+
+    # This checkout's initializer stores the canonical config under
+    # `.synlynk/config.json`; retain the task's legacy `synlynk/config.json`
+    # path as a compatibility copy for new-project consumers.
+    config_path = os.path.join(".synlynk", "config.json")
+    legacy_config_path = os.path.join("synlynk", "config.json")
+    if os.path.exists(config_path):
+        os.makedirs(os.path.dirname(legacy_config_path), exist_ok=True)
+        shutil.copyfile(config_path, legacy_config_path)
+
+    version = "v0.1.0"
+    cmd_roadmap_add(
+        version=version,
+        title=answers["goal"],
+        status="planned",
+        notes=(
+            f"Deliverable shape: {answers['deliverable_shape']}."
+            + (
+                f" Preferred implementer: {answers['preferred_implementer']}."
+                if answers["preferred_implementer"]
+                else ""
+            )
+        ),
+    )
+
+    print(
+        f"\nSetup complete. Next: run `synlynk dispatch "
+        f"{answers['preferred_implementer'] or '<agent>'} --task \"{answers['goal']}\"` "
+        f"to start building against {version}."
+    )

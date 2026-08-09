@@ -3,7 +3,12 @@ import subprocess
 
 import pytest
 
-from synlynk.coldstart import _detect_cold_start_mode, _resolve_cold_start_mode
+from synlynk.coldstart import (
+    _detect_cold_start_mode,
+    _prompt_new_project_questions,
+    _resolve_cold_start_mode,
+    _run_new_project_flow,
+)
 
 
 def _git_init(root, commits=0, files=None):
@@ -82,3 +87,47 @@ def test_resolve_ambiguous_mode_defaults_to_existing_on_empty_answer(tmp_path, m
     monkeypatch.setattr("builtins.input", lambda prompt: "")
     result = _resolve_cold_start_mode(str(tmp_path))
     assert result == "existing"
+
+
+def test_prompt_new_project_questions_collects_four_answers(monkeypatch):
+    answers = iter([
+        "Build a recipe-sharing CLI",
+        "a Python CLI package",
+        "solo",
+        "codex",
+    ])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    result = _prompt_new_project_questions()
+    assert result == {
+        "goal": "Build a recipe-sharing CLI",
+        "deliverable_shape": "a Python CLI package",
+        "team_mode": "solo",
+        "preferred_implementer": "codex",
+    }
+
+
+def test_prompt_new_project_questions_implementer_optional(monkeypatch):
+    answers = iter(["Goal", "Shape", "team", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    result = _prompt_new_project_questions()
+    assert result["preferred_implementer"] is None
+    assert result["team_mode"] == "team"
+
+
+def test_run_new_project_flow_writes_config_and_roadmap_row(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    answers = {
+        "goal": "Build a recipe-sharing CLI",
+        "deliverable_shape": "a Python CLI package",
+        "team_mode": "solo",
+        "preferred_implementer": None,
+    }
+    _run_new_project_flow(answers)
+
+    assert os.path.exists("synlynk/config.json")
+    assert os.path.exists("project-docs/roadmap.md")
+    roadmap_text = open("project-docs/roadmap.md").read()
+    assert "Build a recipe-sharing CLI" in roadmap_text
+
+    captured = capsys.readouterr()
+    assert "next" in captured.out.lower()
