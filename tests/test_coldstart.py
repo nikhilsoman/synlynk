@@ -203,7 +203,7 @@ def test_cmd_start_runs_existing_flow_for_populated_repo(tmp_path, monkeypatch, 
         "harnesses": [], "agents": [], "skills": [], "topology": "single",
         "workspace_name": tmp_path.name, "home_harness": None, "scanned_at": "",
     }
-    answers = iter(["y", "look around"])  # y = confirm refresh, then the intent question
+    answers = iter(["y", "n", "look around"])  # refresh, decline canon deep scan, intent
     monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
     with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan):
         cmd_start()
@@ -219,3 +219,27 @@ def test_cmd_start_rerun_declined_leaves_project_untouched(tmp_path, monkeypatch
     cmd_start()
     captured = capsys.readouterr()
     assert "unchanged" in captured.out.lower() or "skipped" in captured.out.lower()
+
+
+def test_run_existing_project_flow_invokes_canon_baseline(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    fake_scan = {
+        "repos": [{"name": "myrepo", "path": str(tmp_path), "stack_labels": ["python"],
+                    "readme_excerpt": "", "context_sections": {}}],
+        "harnesses": [{"name": "claude"}],
+        "agents": [{"name": "claude", "functional": True}],
+        "skills": [],
+        "topology": "single",
+        "workspace_name": "myrepo",
+        "home_harness": "claude",
+        "scanned_at": "",
+    }
+    answers = iter(["n", "fix the flaky CI job"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+
+    with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan):
+        _run_existing_project_flow(str(tmp_path))
+
+    assert os.path.exists(tmp_path / "workspace-canon.md")
+    captured = capsys.readouterr()
+    assert "workspace-canon.md" in captured.out

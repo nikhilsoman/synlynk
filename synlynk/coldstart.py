@@ -149,10 +149,11 @@ def _run_new_project_flow(answers: dict) -> None:
 
 def _run_existing_project_flow(root: str = ".") -> None:
     """Baseline warm-start for an existing repo: env-probe + shallow scan summary
-    + one question, routed into a seeded story. Does NOT generate
-    workspace-canon.md -- that lands in cold-start Phase 2.
+    + workspace-canon.md baseline (Documentation Index + 3-claim receipt, see
+    cold-start Phase 2) + one question, routed into a seeded story.
     """
     import synlynk.scan as scan_mod
+    from synlynk import canon
     from synlynk.db import cmd_story_create
 
     scan = scan_mod.run_workspace_scan(roots=[root], deep=False)
@@ -171,6 +172,8 @@ def _run_existing_project_flow(root: str = ".") -> None:
         checked = ", ".join(a["name"] for a in scan.get("agents", [])) or "none found on PATH"
         print(f"No working harnesses detected (checked: {checked})  "
               "You can still browse the scan output; install/auth a harness to dispatch work.")
+
+    canon.run_canon_baseline(root, scan)
 
     intent = input("\nWhat are you trying to do right now? ").strip()
     if intent:
