@@ -87,3 +87,71 @@ def test_write_canon_writes_file(tmp_path):
     assert os.path.exists(path)
     assert os.path.basename(path) == _CANON_FILENAME
     assert open(path).read() == "hello"
+
+
+import subprocess
+
+from synlynk.canon import _parse_canon_provenance, _check_canon_staleness
+
+
+def _git_init_simple(root):
+    subprocess.run(["git", "init"], cwd=root, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, capture_output=True, check=True)
+    (root / "seed.txt").write_text("seed")
+    subprocess.run(["git", "add", "."], cwd=root, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed"], cwd=root, capture_output=True, check=True)
+
+
+def _current_sha(root):
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    )
+    return result.stdout.strip()
+
+
+def test_parse_canon_provenance_round_trips(tmp_path):
+    content = _render_canon(str(tmp_path), {"repos": [], "harnesses": []}, head_sha="b" * 40)
+    _write_canon(str(tmp_path), content)
+    provenance = _parse_canon_provenance(str(tmp_path))
+    assert provenance["sha"] == "b" * 40
+
+
+def test_parse_canon_provenance_missing_file_returns_none(tmp_path):
+    assert _parse_canon_provenance(str(tmp_path)) is None
+
+
+def test_parse_canon_provenance_malformed_comment_returns_none(tmp_path):
+    (tmp_path / _CANON_FILENAME).write_text("# Workspace Canon\nno provenance comment here\n")
+    assert _parse_canon_provenance(str(tmp_path)) is None
+
+
+def test_check_canon_staleness_same_sha_not_stale(tmp_path):
+    _git_init_simple(tmp_path)
+    sha = _current_sha(tmp_path)
+    content = _render_canon(str(tmp_path), {"repos": [], "harnesses": []}, head_sha=sha)
+    _write_canon(str(tmp_path), content)
+    assert _check_canon_staleness(str(tmp_path)) == []
+
+
+def test_check_canon_staleness_different_sha_is_stale(tmp_path):
+    _git_init_simple(tmp_path)
+    old_sha = _current_sha(tmp_path)
+    content = _render_canon(str(tmp_path), {"repos": [], "harnesses": []}, head_sha=old_sha)
+    _write_canon(str(tmp_path), content)
+    (tmp_path / "new.txt").write_text("x")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "second"], cwd=tmp_path, capture_output=True, check=True)
+    assert _check_canon_staleness(str(tmp_path)) == ["baseline"]
+
+
+def test_check_canon_staleness_unknown_sha_never_stale(tmp_path):
+    _git_init_simple(tmp_path)
+    content = _render_canon(str(tmp_path), {"repos": [], "harnesses": []}, head_sha=None)
+    _write_canon(str(tmp_path), content)
+    assert _check_canon_staleness(str(tmp_path)) == []
+
+
+def test_check_canon_staleness_missing_canon_is_stale(tmp_path):
+    assert _check_canon_staleness(str(tmp_path)) == ["baseline"]

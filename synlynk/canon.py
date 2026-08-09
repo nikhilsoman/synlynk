@@ -135,3 +135,55 @@ def _write_canon(root: str, content: str) -> str:
     with open(path, "w") as fh:
         fh.write(content)
     return path
+
+
+def _head_sha(root: str) -> Optional[str]:
+    """Full HEAD SHA for `root`, or None if not a git repo / no commits.
+
+    Uses `git -C <root>` rather than relying on process cwd, since `root`
+    may differ from the caller's current working directory.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", root, "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode == 0:
+            sha = result.stdout.strip()
+            return sha if len(sha) == 40 else None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _parse_canon_provenance(root: str) -> Optional[dict]:
+    path = os.path.join(root, _CANON_FILENAME)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as fh:
+            content = fh.read()
+    except OSError:
+        return None
+    match = _PROVENANCE_RE.search(content)
+    if not match:
+        return None
+    return {"sha": match.group("sha"), "assessed_at": match.group("assessed_at")}
+
+
+def _check_canon_staleness(root: str) -> list:
+    """Returns ["baseline"] if the stamped baseline section is stale, else [].
+
+    A missing/malformed provenance comment counts as stale. A stamped
+    sha of "unknown" (no git repo at generation time) is never reported
+    stale — there is nothing to compare it against.
+    """
+    provenance = _parse_canon_provenance(root)
+    if provenance is None:
+        return ["baseline"]
+    if provenance["sha"] == "unknown":
+        return []
+    current_sha = _head_sha(root)
+    if current_sha is None or current_sha == provenance["sha"]:
+        return []
+    return ["baseline"]
