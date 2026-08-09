@@ -2,7 +2,7 @@
 title: "PR #874 — cold-start Phase 2: The Canon Baseline"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
-post: 109
+post: 112
 pr: "#874"
 ---
 
