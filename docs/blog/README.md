@@ -109,7 +109,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [104](./104-prTBD-safe-caller-construction.md) | Safe Caller Construction — Documenting the Path That Already Existed | [#783](https://github.com/nikhilsoman/synlynk/pull/783) | 2026-08-08 |
 | [105](./105-pr816-quota-aware-dispatch-reservation.md) | PR #816 — Quota-Aware Dispatch Reservation | [#816](https://github.com/nikhilsoman/synlynk/pull/816) | 2026-08-08 |
 | [106](./106-pr824-829-ux1.0-field-trial-readiness.md) | PRs #824–#830 — UX 1.0 Field Trial Readiness: From Shipped to Trusted | [#824](https://github.com/nikhilsoman/synlynk/pull/824), [#825](https://github.com/nikhilsoman/synlynk/pull/825), [#826](https://github.com/nikhilsoman/synlynk/pull/826), [#827](https://github.com/nikhilsoman/synlynk/pull/827), [#829](https://github.com/nikhilsoman/synlynk/pull/829), [#830](https://github.com/nikhilsoman/synlynk/pull/830) | 2026-08-08 |
-| [107](./107-prTBD-context-mode-telemetry.md) | Context-mode telemetry — measuring right-sized context | TBD | 2026-08-09 |
+| [107](./107-pr835-context-mode-telemetry.md) | Context-mode telemetry — measuring right-sized context | [#835](https://github.com/nikhilsoman/synlynk/pull/835) | 2026-08-09 |
 
 
 ## Per-PR Post Template

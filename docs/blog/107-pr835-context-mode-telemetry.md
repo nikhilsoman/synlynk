@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — Context-Mode Telemetry: Measuring Right-Sized Context"
+title: "PR #835 — Context-Mode Telemetry: Measuring Right-Sized Context"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 107
