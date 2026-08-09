@@ -188,7 +188,7 @@ def test_run_existing_project_flow_warns_on_zero_functional_harnesses(tmp_path, 
 def test_cmd_start_runs_new_flow_for_empty_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     answers = iter(["Build a thing", "CLI", "solo", ""])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers, ""))
     cmd_start()
     assert os.path.exists(".synlynk/config.json")
 

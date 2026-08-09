@@ -6,7 +6,6 @@ docs/superpowers/specs/2026-08-09-cold-start-design.md for the full design.
 """
 import os
 import subprocess
-from unittest.mock import patch
 
 _MANIFEST_FILES = (
     "package.json", "pyproject.toml", "setup.py", "requirements.txt",
@@ -198,9 +197,6 @@ def cmd_start() -> None:
     mode = _resolve_cold_start_mode(".")
     if mode == "new":
         answers = _prompt_new_project_questions()
-        # init() has legacy optional prompts; start's four-question contract
-        # deliberately keeps those prompts non-interactive.
-        with patch("builtins.input", lambda prompt: ""):
-            _run_new_project_flow(answers)
+        _run_new_project_flow(answers)
     else:
         _run_existing_project_flow(".")
