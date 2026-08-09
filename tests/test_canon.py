@@ -31,16 +31,17 @@ def test_documentation_index_ignores_non_markdown_files(tmp_path):
 from synlynk.canon import _build_claim_receipt
 
 
-def test_claim_receipt_full_scan_yields_three_claims():
+def test_claim_receipt_full_scan_yields_three_claims(tmp_path):
+    (tmp_path / ".git").mkdir()
     scan = {
-        "repos": [{"path": "/tmp/x", "stack_labels": ["python"]}],
+        "repos": [{"path": str(tmp_path), "stack_labels": ["python"]}],
         "harnesses": [{"name": "claude"}],
     }
     claims = _build_claim_receipt(scan)
     assert len(claims) == 3
     assert all(c["confidence"] == "found" for c in claims)
     assert "python" in claims[0]["claim"]
-    assert "/tmp/x" in claims[1]["claim"]
+    assert str(tmp_path) in claims[1]["claim"]
     assert "claude" in claims[2]["claim"]
 
 
@@ -50,11 +51,29 @@ def test_claim_receipt_skips_missing_fields():
     assert claims == []
 
 
-def test_claim_receipt_partial_scan_yields_partial_claims():
-    scan = {"repos": [{"path": "/tmp/x", "stack_labels": []}], "harnesses": []}
+def test_claim_receipt_partial_scan_yields_partial_claims(tmp_path):
+    (tmp_path / ".git").mkdir()
+    scan = {"repos": [{"path": str(tmp_path), "stack_labels": []}], "harnesses": []}
     claims = _build_claim_receipt(scan)
     assert len(claims) == 1
-    assert "/tmp/x" in claims[0]["claim"]
+    assert str(tmp_path) in claims[0]["claim"]
+
+
+def test_claim_receipt_skips_git_claim_when_no_git_dir(tmp_path):
+    scan = {"repos": [{"path": str(tmp_path), "stack_labels": []}], "harnesses": []}
+
+    claims = _build_claim_receipt(scan)
+
+    assert not any("git repository" in claim["claim"] for claim in claims)
+
+
+def test_claim_receipt_includes_git_claim_when_git_dir_present(tmp_path):
+    (tmp_path / ".git").mkdir()
+    scan = {"repos": [{"path": str(tmp_path), "stack_labels": []}], "harnesses": []}
+
+    claims = _build_claim_receipt(scan)
+
+    assert any("git repository" in claim["claim"] for claim in claims)
 
 
 from synlynk.canon import _render_canon, _write_canon, _CANON_FILENAME

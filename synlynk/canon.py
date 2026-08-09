@@ -77,7 +77,11 @@ def _build_claim_receipt(scan: dict) -> list:
             "verify": f"ls {repo.get('path', '.')}",
         })
 
-    if repo and repo.get("path"):
+    if (
+        repo
+        and repo.get("path")
+        and os.path.isdir(os.path.join(repo["path"], ".git"))
+    ):
         claims.append({
             "claim": f"This is a git repository at {repo['path']}",
             "confidence": "found",
