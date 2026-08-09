@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from synlynk.coldstart import _detect_cold_start_mode
+from synlynk.coldstart import _detect_cold_start_mode, _resolve_cold_start_mode
 
 
 def _git_init(root, commits=0, files=None):
@@ -53,3 +53,32 @@ def test_detect_ambiguous_no_git_but_project_files_present(tmp_path):
     (tmp_path / "package.json").write_text("{}")
     result = _detect_cold_start_mode(str(tmp_path))
     assert result["mode"] == "ambiguous"
+
+
+def test_resolve_confident_mode_does_not_prompt(tmp_path, monkeypatch):
+    def _fail_input(prompt):
+        raise AssertionError("should not prompt when detection is confident")
+    monkeypatch.setattr("builtins.input", _fail_input)
+    result = _resolve_cold_start_mode(str(tmp_path))
+    assert result == "new"
+
+
+def test_resolve_ambiguous_mode_prompts_and_honors_existing_answer(tmp_path, monkeypatch):
+    _git_init(tmp_path, commits=0, files={"README.md": "# stray\n"})
+    monkeypatch.setattr("builtins.input", lambda prompt: "existing")
+    result = _resolve_cold_start_mode(str(tmp_path))
+    assert result == "existing"
+
+
+def test_resolve_ambiguous_mode_prompts_and_honors_new_answer(tmp_path, monkeypatch):
+    _git_init(tmp_path, commits=0, files={"README.md": "# stray\n"})
+    monkeypatch.setattr("builtins.input", lambda prompt: "new")
+    result = _resolve_cold_start_mode(str(tmp_path))
+    assert result == "new"
+
+
+def test_resolve_ambiguous_mode_defaults_to_existing_on_empty_answer(tmp_path, monkeypatch):
+    _git_init(tmp_path, commits=0, files={"README.md": "# stray\n"})
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
+    result = _resolve_cold_start_mode(str(tmp_path))
+    assert result == "existing"

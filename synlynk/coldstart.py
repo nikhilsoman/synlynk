@@ -81,3 +81,23 @@ def _detect_cold_start_mode(root: str = ".") -> dict:
     return {"mode": "ambiguous",
             "reason": f"{commit_count} commit(s) but no recognizable project files",
             "signals": signals}
+
+
+def _resolve_cold_start_mode(root: str = ".") -> str:
+    """Runs detection; prompts a single one-line confirm only if ambiguous.
+
+    Returns "new" or "existing" (never "ambiguous" -- the prompt collapses it).
+    Empty/unrecognized answers default to "existing" (the safer assumption --
+    treating an existing project as new would risk overwriting content).
+    """
+    detected = _detect_cold_start_mode(root)
+    if detected["mode"] != "ambiguous":
+        return detected["mode"]
+
+    answer = input(
+        f"Looks like an existing project ({detected['reason']}) -- "
+        "is that right, or are we starting fresh [existing/new] "
+    ).strip().lower()
+    if answer in ("new", "n"):
+        return "new"
+    return "existing"
