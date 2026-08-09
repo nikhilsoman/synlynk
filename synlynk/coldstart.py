@@ -122,50 +122,26 @@ def _prompt_new_project_questions() -> dict:
 
 
 def _run_new_project_flow(answers: dict) -> None:
-    """Bootstrap a new project and seed its captured intent as its first roadmap arc."""
-    import builtins
-    import shutil
-
+    """Bootstraps a brand-new project: config + docs via init(), then seeds the
+    captured intent as the first roadmap arc. No workspace-canon.md -- round 1-2
+    of the cold-start design explicitly excludes canon generation for new projects
+    (nothing to document yet).
+    """
     from synlynk import init
     from synlynk.db import cmd_roadmap_add
 
     mode = "team" if answers["team_mode"].startswith("team") else "solo"
-    # The existing initializer has optional follow-up prompts. A new-project
-    # flow has already collected its complete four-question intent, so leave
-    # those optional answers blank while reusing the initializer unchanged.
-    original_input = builtins.input
-    builtins.input = lambda prompt: ""
-    try:
-        init(mode=mode)
-    finally:
-        builtins.input = original_input
-
-    # This checkout's initializer stores the canonical config under
-    # `.synlynk/config.json`; retain the task's legacy `synlynk/config.json`
-    # path as a compatibility copy for new-project consumers.
-    config_path = os.path.join(".synlynk", "config.json")
-    legacy_config_path = os.path.join("synlynk", "config.json")
-    if os.path.exists(config_path):
-        os.makedirs(os.path.dirname(legacy_config_path), exist_ok=True)
-        shutil.copyfile(config_path, legacy_config_path)
+    init(mode=mode)
 
     version = "v0.1.0"
     cmd_roadmap_add(
         version=version,
         title=answers["goal"],
         status="planned",
-        notes=(
-            f"Deliverable shape: {answers['deliverable_shape']}."
-            + (
-                f" Preferred implementer: {answers['preferred_implementer']}."
-                if answers["preferred_implementer"]
-                else ""
-            )
-        ),
+        notes=f"Deliverable shape: {answers['deliverable_shape']}."
+        + (f" Preferred implementer: {answers['preferred_implementer']}."
+           if answers["preferred_implementer"] else ""),
     )
 
-    print(
-        f"\nSetup complete. Next: run `synlynk dispatch "
-        f"{answers['preferred_implementer'] or '<agent>'} --task \"{answers['goal']}\"` "
-        f"to start building against {version}."
-    )
+    print(f"\nSetup complete. Next: run `synlynk dispatch {answers['preferred_implementer'] or '<agent>'} "
+          f"--task \"{answers['goal']}\"` to start building against {version}.")
