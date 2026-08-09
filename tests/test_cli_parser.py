@@ -51,3 +51,10 @@ def test_doctor_fix_parser_accepts_agy():
     assert args.command == "doctor"
     assert args.fix == "agy"
     assert args.yes is True
+
+
+def test_start_command_parses():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(["start"])
+
+    assert args.command == "start"
