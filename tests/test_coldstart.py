@@ -243,3 +243,35 @@ def test_run_existing_project_flow_invokes_canon_baseline(tmp_path, monkeypatch,
     assert os.path.exists(tmp_path / "workspace-canon.md")
     captured = capsys.readouterr()
     assert "workspace-canon.md" in captured.out
+
+
+def test_cmd_start_generates_canon_then_flags_staleness_on_rerun(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _git_init(tmp_path, commits=1, files={"README.md": "# repo\n"})
+    fake_scan = {
+        "repos": [{"name": tmp_path.name, "path": str(tmp_path), "stack_labels": [],
+                    "readme_excerpt": "", "context_sections": {}}],
+        "harnesses": [], "agents": [], "skills": [], "topology": "single",
+        "workspace_name": tmp_path.name, "home_harness": None, "scanned_at": "",
+    }
+
+    with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan):
+        first_answers = iter(["n", "look at ci"])
+        monkeypatch.setattr("builtins.input", lambda prompt: next(first_answers))
+        cmd_start()
+
+    assert os.path.exists(tmp_path / "workspace-canon.md")
+    first_output = capsys.readouterr().out
+    assert "Wrote workspace-canon.md" in first_output
+
+    (tmp_path / "new.txt").write_text("x")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "second"], cwd=tmp_path, capture_output=True, check=True)
+
+    with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan):
+        second_answers = iter(["look again"])  # no consent prompt expected on rerun
+        monkeypatch.setattr("builtins.input", lambda prompt: next(second_answers))
+        cmd_start()
+
+    second_output = capsys.readouterr().out
+    assert "may be stale" in second_output.lower()
