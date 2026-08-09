@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — Daemon Jobs Ground-Truth Verification (Epic A1)"
+title: "PR #867 — Daemon Jobs Ground-Truth Verification (Epic A1)"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 110
