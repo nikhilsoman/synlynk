@@ -909,6 +909,105 @@ def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     return worktree_path, worktree_branch
 
 
+def _git_ref_exists(repo_path: str, ref: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0 and bool((result.stdout or "").strip())
+
+
+def _fetch_origin_branch(repo_path: str, branch: str) -> bool:
+    """Best-effort `git fetch origin <branch>`. Returns True if fetch exit 0."""
+    try:
+        result = subprocess.run(
+            ["git", "fetch", "origin", branch],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=repo_path,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
+def _resolve_explicit_base_ref(repo_path: Optional[str], explicit_base: str) -> str:
+    """Resolve ``--base`` to a fresh tip (#832).
+
+    Bare branch names (e.g. ``main``) previously returned as-is and were
+    ``rev-parse``'d against the **local** ref, which can lag ``origin/main``.
+    Prefer ``origin/<branch>`` after a fetch when available.
+    """
+    base = (explicit_base or "").strip()
+    if not base:
+        return "HEAD"
+    # Full commit SHA — use as-is.
+    if re.fullmatch(r"[0-9a-fA-F]{7,40}", base):
+        return base
+
+    path = repo_path if repo_path and os.path.isdir(repo_path) else os.getcwd()
+
+    # Already a remote-tracking ref: freshen then use.
+    if base.startswith("origin/"):
+        branch = base[len("origin/") :]
+        if branch:
+            _fetch_origin_branch(path, branch)
+        return base
+
+    # Other remote forms (upstream/foo) — leave alone after optional fetch of suffix.
+    if "/" in base and not base.startswith("."):
+        return base
+
+    # Bare branch name: fetch origin/<name> and prefer it.
+    fetched = _fetch_origin_branch(path, base)
+    remote_ref = f"origin/{base}"
+    if _git_ref_exists(path, remote_ref):
+        if _git_ref_exists(path, base):
+            try:
+                local_sha = subprocess.run(
+                    ["git", "-C", path, "rev-parse", base],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                remote_sha = subprocess.run(
+                    ["git", "-C", path, "rev-parse", remote_ref],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                l = (local_sha.stdout or "").strip()
+                r = (remote_sha.stdout or "").strip()
+                if l and r and l != r:
+                    print(
+                        f"  ⚠ worktree base: local '{base}' ({l[:8]}) differs from "
+                        f"{remote_ref} ({r[:8]}) — using remote tip (#832)"
+                    )
+            except Exception:
+                pass
+        if not fetched:
+            print(
+                f"  ⚠ worktree base: fetch origin {base} failed; using existing {remote_ref}"
+            )
+        return remote_ref
+
+    if _git_ref_exists(path, base):
+        print(
+            f"  ⚠ worktree base: origin/{base} unavailable — using local '{base}' "
+            f"(may be stale if remotes exist)"
+        )
+        return base
+
+    # Unknown ref — return as given so rev-parse / worktree add fails loudly.
+    return base
+
+
 def _resolve_dispatch_worktree_base_ref(
     repo_path: Optional[str],
     stacking_mode: str = "auto",
@@ -919,9 +1018,12 @@ def _resolve_dispatch_worktree_base_ref(
     stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
     "always" (stack on current branch, error on mainline/detached HEAD),
     "never" (always mainline — legacy behavior)
+
+    ``explicit_base`` (``--base``) is freshened via :func:`_resolve_explicit_base_ref`
+    so ``--base main`` tracks ``origin/main`` after fetch (#832).
     """
     if explicit_base:
-        return explicit_base
+        return _resolve_explicit_base_ref(repo_path, explicit_base)
 
     if not repo_path or not os.path.isdir(repo_path):
         return "HEAD"
@@ -950,31 +1052,13 @@ def _resolve_dispatch_worktree_base_ref(
             )
 
     for candidate in ("main", "master"):
-        try:
-            fetch_result = subprocess.run(
-                ["git", "fetch", "origin", candidate],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=repo_path,
-            )
-        except Exception:
-            fetch_result = None
-        if fetch_result and fetch_result.returncode == 0:
+        if _fetch_origin_branch(repo_path, candidate) and _git_ref_exists(
+            repo_path, f"origin/{candidate}"
+        ):
             return f"origin/{candidate}"
 
     for candidate in ("origin/main", "origin/master", "main", "master"):
-        try:
-            verify_result = subprocess.run(
-                ["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=repo_path,
-            )
-        except Exception:
-            continue
-        if verify_result.returncode == 0 and (verify_result.stdout or "").strip():
+        if _git_ref_exists(repo_path, candidate):
             return candidate
 
     return "HEAD"
@@ -1219,6 +1303,11 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
         )
         if sha_result.returncode == 0:
             base_sha = (sha_result.stdout or "").strip()
+    # Always log resolved base before worktree create (#832 diagnosability).
+    if base_sha:
+        print(f"  worktree base resolving against {base_ref} @ {base_sha}")
+    else:
+        print(f"  worktree base resolving against {base_ref}")
 
     worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
     if base_sha:

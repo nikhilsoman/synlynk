@@ -860,16 +860,110 @@ def test_resolve_dispatch_base_ref_stacking_always_errors_on_mainline(git_worktr
 
 
 def test_resolve_dispatch_base_ref_explicit_base_wins(git_worktree_repo):
+    """Without origin, --base main falls back to local main."""
     import synlynk.dispatch as dispatch_mod
     import subprocess
 
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
     subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
 
     base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
         str(git_worktree_repo), stacking_mode="auto", explicit_base="main"
     )
 
+    # No remote → local main (still honors explicit base over stacking).
     assert base_ref == "main"
+
+
+def test_explicit_base_main_uses_origin_tip_when_local_main_stale(
+    git_worktree_repo, tmp_path, monkeypatch
+):
+    """#832: --base main must follow origin/main after fetch, not stale local main."""
+    import subprocess
+    from pathlib import Path
+    import synlynk.dispatch as dispatch_mod
+
+    repo = Path(git_worktree_repo)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, capture_output=True, check=True)
+
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(bare)],
+        cwd=repo, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    old = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    (repo / "advance.txt").write_text("ahead of local main\n")
+    subprocess.run(["git", "add", "advance.txt"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "advance origin tip"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    new = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "push", "origin", "main"], cwd=repo, capture_output=True, check=True,
+    )
+    # Leave local main behind origin/main
+    subprocess.run(
+        ["git", "reset", "--hard", old], cwd=repo, capture_output=True, check=True,
+    )
+    local_now = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert local_now == old
+    assert local_now != new
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(repo), stacking_mode="auto", explicit_base="main"
+    )
+    assert base_ref == "origin/main"
+    tip = subprocess.run(
+        ["git", "rev-parse", base_ref], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert tip == new
+
+    # Worktree created from --base main must land on the fresh tip
+    wt = dispatch_mod._create_job_worktree("job-fresh-base", "codex", base="main")
+    assert wt["base_branch"] == "origin/main"
+    assert wt["base_sha"] == new
+    head = subprocess.run(
+        ["git", "-C", wt["path"], "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert head == new
+
+
+def test_explicit_base_origin_main_still_works(git_worktree_repo, tmp_path, monkeypatch):
+    import subprocess
+    from pathlib import Path
+    import synlynk.dispatch as dispatch_mod
+
+    repo = Path(git_worktree_repo)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, capture_output=True, check=True)
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(bare)], cwd=repo, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main"], cwd=repo, capture_output=True, check=True,
+    )
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(repo), stacking_mode="auto", explicit_base="origin/main"
+    )
+    assert base_ref == "origin/main"
 
 
 def test_run_dispatch_gate_parses_pytest_summary_and_flags_failures(tmp_path, monkeypatch):
