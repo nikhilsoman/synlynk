@@ -134,8 +134,27 @@ Every item raised during this design that isn't resolved above is tracked here, 
 | Manifest callback 404 (`synlynk.com/github-apps/<project>/<role>/webhook`) | Filed as **#864** | Pre-existing GitHub App provisioning-flow UX gap, not introduced by this design |
 | Codex sandbox `api.github.com` egress block | Filed as **#865** | Distinct security boundary from identity attribution; needs its own security/runtime design review, not a blocking dependency of §3.2 |
 
-## 9. Out of Scope for This Spec
+## 10. Roadmap: Agent vs Harness
 
-- Implementing the dispatch-policy code changes (§3), the GOVERNS↔tpm consumer (§4), or the holdback calibration mechanism (§3.3) — this document defines the design; implementation is a separate plan per the Design → Plan → Build sequence.
+§2–§9 designed the *role* layer. They did not yet formalize a distinct **Agent** concept (persistent identity+role+charter+memory+access) separate from **Harness** (execution backend: Claude/Agy/Grok/Codex/local — swappable *how*, per §3.1), nor address agent memory/learning, workspace-owner-facing agent config, per-agent tool/access grants, a runtime capability registry, or agent portability. These are real gaps, not deferred as unimportant — they're sequenced here as a phased roadmap rather than built all at once, because Tokq (synlynk's planned cross-workspace agent marketplace/portability product, ~3–6 months out) depends on this stack existing first rather than being a parallel rebuild.
+
+Confirmed via `synlynk decide` panel (claude, codex — agy returned no output this round), recorded at `project-docs/decisions/2026-08-09-what-is-the-complete-phased-architecture.md`.
+
+| Phase | Scope | Tokq relationship |
+|---|---|---|
+| **0 — Terminology** | Formalize Agent (identity+role+charter+memory+access) vs Harness (execution backend) across code, docs, `roles.yaml`, and CLAUDE.md's capability table. No new infrastructure. | Prerequisite for every later phase being unambiguous. Immediate, no dependencies. |
+| **1 — Agent manifest + CLI config** | Per-agent `.synlynk/agents/<id>.yaml` (role, charter, memory namespace, approval policy, capability requirements), distinct from workspace-level `config.json`. CLI (`agent init/list/show/edit/disable`) is the onboarding surface; web UI is explicitly deferred, not blocking. | General synlynk maturity; also a Tokq prerequisite (nothing is portable that isn't first well-defined). |
+| **2 — Memory + gated learning** | Durable memory keyed to agent identity, wired into the *existing* capability ledger/SFIA/holdback design (§3.3, §7) rather than a new store. Agents may propose changes (e.g. routing preference); humans always approve anything touching charter, access, budget, or policy — mirrors §2's pm "never commits the human to something they haven't seen" rule. | Tokq prerequisite — an agent with no memory has nothing to be portable. |
+| **3 — Capability registry + scoped access grants** | Runtime-queryable registry replacing the static CLAUDE.md capability table. Generalizes #859's GitHub App identity model to arbitrary MCP/API/credential grants, with least-privilege, expiry, and audit. Runs partly in parallel with late Phase 2. | Tokq prerequisite — this is the mechanism SFIA-driven tool/service inference (§8) eventually plugs into, once it exists. |
+| **4 — Portability / "implants"** | Stable Agent API, signed identity, encrypted portable memory, harness adapters — an agent's identity+memory+config surviving a move off synlynk's own dispatch loop, including standalone VPS deployment. | This *is* Tokq's foundation, not a separate build. Only becomes buildable once identity+memory+access (Phases 1–3) are real and exportable. |
+
+**Governance rule carried from §2/§3.3**: only calibration/routing-preference adjustments are agent-self-adjustable; charter, access, budget, and policy changes always require human approval — this applies uniformly across Phases 2–4, not just §3.3's holdback mechanism.
+
+This roadmap supersedes nothing already designed in §1–§9; it is additive scaffolding those sections were missing. The SFIA-driven items deferred in §8 (workspace role scoping, tool/service inference, cross-workspace/Tokq portability) now have a home: role scoping and tool/service inference become concrete once Phase 3's registry exists, and Tokq portability is Phase 4 itself.
+
+## 11. Out of Scope for This Spec
+
+- Implementing the dispatch-policy code changes (§3), the GOVERNS↔tpm consumer (§4), the holdback calibration mechanism (§3.3), or any phase of §10's roadmap — this document defines the design; implementation is a separate plan per the Design → Plan → Build sequence.
 - Updating CLAUDE.md's Capability-Based Task Allocation table to reflect §3's corrected policy — a follow-up docs task once this spec is approved.
 - Fixing any of the three deferred issues in §8.
+- Detailed technical design of any individual §10 phase (e.g. the exact `.synlynk/agents/<id>.yaml` schema, the memory substrate's storage engine, the registry's query API) — each phase gets its own spec when its turn comes, per the phased-not-all-at-once approach the user explicitly requested.
