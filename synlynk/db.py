@@ -319,6 +319,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
         except sqlite3.OperationalError:
             pass
+    if "context_mode" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "context_bytes" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("DROP VIEW IF EXISTS capability_scores")
     conn.executescript(_DB_SCORES_VIEW)
     conn.executescript("""
@@ -518,7 +528,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             estimate_basis    TEXT,
             job_id            TEXT,
             recorded_at       TEXT DEFAULT (datetime('now')),
-            dispatch_context  TEXT
+            dispatch_context  TEXT,
+            context_mode      TEXT
         );
         CREATE TABLE IF NOT EXISTS remediation_actions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -644,6 +655,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     if "dispatch_context" not in cost_cols:
         try:
             conn.execute("ALTER TABLE cost_entries ADD COLUMN dispatch_context TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "context_mode" not in cost_cols:
+        try:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN context_mode TEXT")
         except sqlite3.OperationalError:
             pass
     conn.execute(
@@ -915,6 +931,7 @@ def _insert_cost_row(
     actual_usd: float = None,
     payment_mode: str = None,
     dispatch_context: str = None,
+    context_mode: str = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -930,6 +947,18 @@ def _insert_cost_row(
 
     conn = _get_db()
     try:
+        # Inherit context_mode from the job row when the caller did not pass one
+        # so cost rollups can segment by task/full/none without plumbing every path.
+        if context_mode is None and job_id is not None:
+            try:
+                row = conn.execute(
+                    "SELECT context_mode FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if row and row[0]:
+                    context_mode = row[0]
+            except sqlite3.Error:
+                pass
         if job_id is not None:
             existing = conn.execute(
                 "SELECT id FROM cost_entries WHERE job_id=?",
@@ -954,7 +983,8 @@ def _insert_cost_row(
                         story_id=?,
                         epic_id=?,
                         phase_id=?,
-                        dispatch_context=COALESCE(?, dispatch_context)
+                        dispatch_context=COALESCE(?, dispatch_context),
+                        context_mode=COALESCE(?, context_mode)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -974,6 +1004,7 @@ def _insert_cost_row(
                         epic_id,
                         phase_id,
                         dispatch_context,
+                        context_mode,
                         job_id,
                     ),
                 )
@@ -982,8 +1013,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent,
@@ -1003,6 +1034,7 @@ def _insert_cost_row(
                 phase_id,
                 job_id,
                 dispatch_context,
+                context_mode,
             ),
         )
         conn.commit()

@@ -939,7 +939,9 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     handoff_count INTEGER NOT NULL DEFAULT 0,
     previous_agents TEXT,
     dispatch_context TEXT,
-    blocked_reason TEXT
+    blocked_reason TEXT,
+    context_mode TEXT,
+    context_bytes INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 

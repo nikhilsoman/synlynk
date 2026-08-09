@@ -248,12 +248,25 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
             try:
-                rows = conn.execute(
-                    "SELECT job_id, agent, task, story_id, status, exit_code, "
-                    "enqueued_at, started_at, completed_at, log_path "
-                    "FROM daemon_jobs WHERE COALESCE(completed_at, started_at, enqueued_at) >= ?",
-                    (cutoff_s[:19],),
-                ).fetchall()
+                # Prefer schema with context_mode/context_bytes (#context-mode telemetry);
+                # fall back when older DBs lack the columns.
+                try:
+                    rows = conn.execute(
+                        "SELECT job_id, agent, task, story_id, status, exit_code, "
+                        "enqueued_at, started_at, completed_at, log_path, "
+                        "context_mode, context_bytes "
+                        "FROM daemon_jobs WHERE COALESCE(completed_at, started_at, enqueued_at) >= ?",
+                        (cutoff_s[:19],),
+                    ).fetchall()
+                    has_ctx_cols = True
+                except sqlite3.Error:
+                    rows = conn.execute(
+                        "SELECT job_id, agent, task, story_id, status, exit_code, "
+                        "enqueued_at, started_at, completed_at, log_path "
+                        "FROM daemon_jobs WHERE COALESCE(completed_at, started_at, enqueued_at) >= ?",
+                        (cutoff_s[:19],),
+                    ).fetchall()
+                    has_ctx_cols = False
                 for r in rows:
                     for col in ("completed_at", "started_at", "enqueued_at"):
                         dt = _parse_ts(r[col])
@@ -268,17 +281,34 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                                 "task": (r["task"] or "")[:100],
                                 "db": db.parent.name,
                                 "source": "daemon_jobs",
+                                "context_mode": (
+                                    (r["context_mode"] if has_ctx_cols else None) or "unknown"
+                                ),
+                                "context_bytes": (
+                                    r["context_bytes"] if has_ctx_cols else None
+                                ),
                             })
                             break
             except sqlite3.Error:
                 pass
             try:
-                rows = conn.execute(
-                    "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
-                    "total_cost_usd, job_id, story_id, notes, recorded_at, session_date "
-                    "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
-                    (cutoff_s[:10],),
-                ).fetchall()
+                try:
+                    rows = conn.execute(
+                        "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
+                        "total_cost_usd, job_id, story_id, notes, recorded_at, session_date, "
+                        "context_mode "
+                        "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
+                        (cutoff_s[:10],),
+                    ).fetchall()
+                    cost_has_ctx = True
+                except sqlite3.Error:
+                    rows = conn.execute(
+                        "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
+                        "total_cost_usd, job_id, story_id, notes, recorded_at, session_date "
+                        "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
+                        (cutoff_s[:10],),
+                    ).fetchall()
+                    cost_has_ctx = False
                 for r in rows:
                     dt = _parse_ts(r["recorded_at"]) or _parse_ts(
                         (r["session_date"] or "") + "T12:00:00+00:00"
@@ -295,6 +325,9 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                             "recorded_at": r["recorded_at"] or r["session_date"],
                             "notes": (r["notes"] or "")[:80],
                             "db": db.parent.name,
+                            "context_mode": (
+                                (r["context_mode"] if cost_has_ctx else None) or "unknown"
+                            ),
                         })
             except sqlite3.Error:
                 pass
@@ -361,6 +394,8 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                             "task": (j.get("task") or "")[:100],
                             "db": root.name,
                             "source": "jobs.json",
+                            "context_mode": j.get("context_mode") or "unknown",
+                            "context_bytes": j.get("context_bytes"),
                         })
                         break
         except Exception:
@@ -387,10 +422,32 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
     fail_rate = (failed / n_jobs) if n_jobs else 0.0
 
     by_agent_jobs = Counter(j.get("agent") or "?" for j in jobs)
+    by_context_mode = Counter((j.get("context_mode") or "unknown") for j in jobs)
+    by_context_mode_pct = {
+        k: round(100.0 * v / n_jobs, 1) for k, v in by_context_mode.items()
+    } if n_jobs else {}
+    ctx_bytes = [
+        int(j["context_bytes"])
+        for j in jobs
+        if j.get("context_bytes") is not None
+    ]
+    context_bytes_summary: Dict[str, Any] = {"n": len(ctx_bytes)}
+    if ctx_bytes:
+        ctx_sorted = sorted(ctx_bytes)
+        context_bytes_summary.update({
+            "min": ctx_sorted[0],
+            "p50": ctx_sorted[len(ctx_sorted) // 2],
+            "p90": ctx_sorted[min(len(ctx_sorted) - 1, int(len(ctx_sorted) * 0.9))],
+            "max": ctx_sorted[-1],
+            "mean": int(sum(ctx_sorted) / len(ctx_sorted)),
+        })
     report.jobs = {
         "count": n_jobs,
         "by_status": dict(status_counts),
         "by_agent": dict(by_agent_jobs),
+        "by_context_mode": dict(by_context_mode),
+        "by_context_mode_pct": by_context_mode_pct,
+        "context_bytes": context_bytes_summary,
         "unknown_rate": round(unknown_rate, 3),
         "fail_rate": round(fail_rate, 3),
         "done": done,
@@ -410,6 +467,9 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
     tot_in = sum(c["in_tok"] for c in costs)
     tot_out = sum(c["out_tok"] for c in costs)
     by_agent_cost: Dict[str, dict] = defaultdict(lambda: {"cost": 0.0, "in": 0, "out": 0, "n": 0})
+    by_context_mode_cost: Dict[str, dict] = defaultdict(
+        lambda: {"cost": 0.0, "in": 0, "out": 0, "n": 0}
+    )
     orphans = 0
     job_ids = set(by_id.keys())
     for c in costs:
@@ -418,6 +478,14 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         by_agent_cost[a]["in"] += c["in_tok"]
         by_agent_cost[a]["out"] += c["out_tok"]
         by_agent_cost[a]["n"] += 1
+        cm = c.get("context_mode") or "unknown"
+        # Prefer job-row mode when cost row is unknown (legacy) but job was tracked.
+        if cm == "unknown" and c.get("job_id") and c["job_id"] in by_id:
+            cm = by_id[c["job_id"]].get("context_mode") or "unknown"
+        by_context_mode_cost[cm]["cost"] += c["cost"]
+        by_context_mode_cost[cm]["in"] += c["in_tok"]
+        by_context_mode_cost[cm]["out"] += c["out_tok"]
+        by_context_mode_cost[cm]["n"] += 1
         if not c.get("job_id") or c.get("job_id") not in job_ids:
             orphans += 1
     orphan_rate = (orphans / len(costs)) if costs else 0.0
@@ -427,6 +495,11 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         "input_tokens": tot_in,
         "output_tokens": tot_out,
         "by_agent": {k: dict(v) for k, v in sorted(by_agent_cost.items(), key=lambda x: -x[1]["cost"])},
+        "by_context_mode": {
+            k: dict(v) for k, v in sorted(
+                by_context_mode_cost.items(), key=lambda x: -x[1]["cost"]
+            )
+        },
         "orphan_entries": orphans,
         "orphan_rate": round(orphan_rate, 3),
         "pass": orphan_rate < 0.35 or len(costs) == 0,
@@ -688,6 +761,9 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  unknown_rate={report.jobs.get('unknown_rate')}  fail_rate={report.jobs.get('fail_rate')}",
         f"  by_status={report.jobs.get('by_status')}",
         f"  by_agent={report.jobs.get('by_agent')}",
+        f"  by_context_mode={report.jobs.get('by_context_mode')}  "
+        f"pct={report.jobs.get('by_context_mode_pct')}",
+        f"  context_bytes={report.jobs.get('context_bytes')}",
         f"  dbs_scanned={report.jobs.get('dbs_scanned')}",
         "",
         "L2 COSTS",
@@ -696,6 +772,7 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  orphan_entries={report.costs.get('orphan_entries')}  "
         f"orphan_rate={report.costs.get('orphan_rate')}",
         f"  by_agent={report.costs.get('by_agent')}",
+        f"  by_context_mode={report.costs.get('by_context_mode')}",
         "",
         "L3 SIDE-EFFECTS",
         f"  {report.side_effects}",

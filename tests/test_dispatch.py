@@ -1090,3 +1090,99 @@ def test_check_dispatch_base_still_fresh_true_when_no_base_recorded():
 
     job = {"base_branch": None, "base_sha": None}
     assert dispatch_mod._check_dispatch_base_still_fresh(job) is True
+
+
+def test_dispatch_persists_context_mode_and_bytes(project_dir, monkeypatch):
+    """dispatch_agent writes context_mode + context_bytes onto daemon_jobs."""
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from unittest.mock import MagicMock
+
+    # Minimal stubs so dispatch reaches the DB write without spawning.
+    monkeypatch.setattr(dispatch_mod, "_create_job_worktree", lambda *a, **k: {
+        "path": str(project_dir / "wt"),
+        "base_branch": "main",
+        "base_sha": "abc12345",
+    })
+    monkeypatch.setattr(dispatch_mod, "_job_worktree_details", lambda *a, **k: ("wt", "branch"))
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "# ctx\n" + ("x" * 100))
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **k: "test-model")
+    monkeypatch.setattr(sl, "_warn_context_size", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "_load_jobs", lambda: [])
+    monkeypatch.setattr(sl, "_save_jobs", lambda jobs: None)
+    monkeypatch.setattr(sl, "log_telemetry_event", lambda *a, **k: None)
+
+    # Fake Popen
+    proc = MagicMock()
+    proc.pid = 424242
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: proc)
+
+    # Avoid heavy preflight
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_preflight_dispatch",
+        lambda *a, **k: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(sl, "_quota_status_for_agent", lambda *a, **k: {"status": "ok"})
+
+    # ensure worktree dirs
+    (project_dir / "wt").mkdir(exist_ok=True)
+
+    job = dispatch_mod.dispatch_agent(
+        "codex",
+        "do a small thing",
+        force_agent=True,
+        context_mode="task",
+        job_id="job-ctxmode1",
+        skip_preflight=True,
+    )
+    assert job.get("context_mode") == "task"
+    assert job.get("context_bytes", 0) > 0
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT context_mode, context_bytes FROM daemon_jobs WHERE job_id=?",
+        ("job-ctxmode1",),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "task"
+    assert int(row[1]) > 0
+
+
+def test_cost_entry_inherits_context_mode_from_job(project_dir):
+    import synlynk as sl
+    from synlynk.db import _insert_cost_row
+
+    conn = sl._get_db()
+    # migration should add columns
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "context_mode" in cols
+    assert "context_bytes" in cols
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at, context_mode, context_bytes) VALUES (?,?,?,?,?,?,?,?,?)",
+        ("job-cm-cost", "claude", "t", "done", 5, "[]", "2026-08-09T00:00:00", "full", 50000),
+    )
+    conn.commit()
+    conn.close()
+
+    _insert_cost_row(
+        session_date="2026-08-09",
+        agent="claude",
+        model="test",
+        input_tokens=100,
+        output_tokens=10,
+        cache_read_tokens=0,
+        cost_source="actual",
+        total_cost_usd=0.01,
+        job_id="job-cm-cost",
+    )
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT context_mode FROM cost_entries WHERE job_id=?",
+        ("job-cm-cost",),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "full"

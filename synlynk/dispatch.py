@@ -69,6 +69,30 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return flags
 
 
+def _ensure_daemon_job_context_columns(conn) -> None:
+    """Add context_mode / context_bytes if missing (legacy schemas + unit fixtures).
+
+    Safe to call on every dispatch write path. No-ops when columns already exist
+    or when the connection has no daemon_jobs table.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    if "context_mode" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
+        except Exception:
+            pass
+    if "context_bytes" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
+        except Exception:
+            pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -2077,6 +2101,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if len(encoded_context) > context_max_bytes:
             context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
             print(f"  context truncated to {context_max_bytes}B (agent profile limit)")
+    # Bytes after truncation — the payload the agent actually received.
+    context_bytes = len(context_text.encode("utf-8")) if context_text else 0
 
     relevant_files = _pkg("_relevant_files_for_story")
     file_list = relevant_files(story_id) if (story_id and relevant_files) else []
@@ -2217,6 +2243,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
+        "context_mode": context_mode,
+        "context_bytes": context_bytes,
         "worktree_path": worktree_path,
         "worktree_branch": worktree_branch,
         "base_branch": base_branch,
@@ -2254,6 +2282,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     try:
         dconn = get_db() if get_db else None
         if dconn is not None:
+            # Tests and older DBs may create daemon_jobs without these columns;
+            # ensure before INSERT so dispatch never hard-fails on schema lag.
+            _ensure_daemon_job_context_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -2264,7 +2295,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, agent=?, task=?, story_id=?, "
-                    "dispatch_context=COALESCE(dispatch_context, ?) WHERE job_id=?",
+                    "dispatch_context=COALESCE(dispatch_context, ?), "
+                    "context_mode=?, context_bytes=? WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2273,6 +2305,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         task,
                         story_id,
                         dispatch_context,
+                        context_mode,
+                        context_bytes,
                         job_id,
                     ),
                 )
@@ -2282,7 +2316,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2296,6 +2331,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         log_file,
                         dispatch_context,
+                        context_mode,
+                        context_bytes,
                     ),
                 )
             dconn.commit()
@@ -2308,7 +2345,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     log_telemetry = _pkg("log_telemetry_event")
     if log_telemetry:
-        log_telemetry({"type": "dispatch", "agent": agent, "story_id": story_id, "job_id": job_id})
+        log_telemetry({
+            "type": "dispatch",
+            "agent": agent,
+            "story_id": story_id,
+            "job_id": job_id,
+            "context_mode": context_mode,
+            "context_bytes": context_bytes,
+        })
     return job
 
 
