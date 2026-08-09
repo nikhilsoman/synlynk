@@ -131,7 +131,7 @@ def _run_new_project_flow(answers: dict) -> None:
     from synlynk.db import cmd_roadmap_add
 
     mode = "team" if answers["team_mode"].startswith("team") else "solo"
-    init(mode=mode)
+    init(mode=mode, quiet=True)
 
     version = "v0.1.0"
     cmd_roadmap_add(
@@ -184,10 +184,13 @@ def _run_existing_project_flow(root: str = ".") -> None:
 
 def cmd_start() -> None:
     """Entry point for `synlynk start` -- see spec's "synlynk start EXACT FLOW"."""
-    already_initialized = os.path.exists(".synlynk/config.json") or os.path.isdir(".synlynk")
+    config_exists = os.path.exists(".synlynk/config.json")
+    dir_exists = os.path.isdir(".synlynk")
+    already_initialized = config_exists or dir_exists
     if already_initialized:
+        what_exists = ".synlynk/config.json" if config_exists else ".synlynk/"
         answer = input(
-            ".synlynk/config.json already exists -- refresh cold-start detection "
+            f"{what_exists} already exists -- refresh cold-start detection "
             "and re-run the relevant flow? [y/N] "
         ).strip().lower()
         if answer != "y":
