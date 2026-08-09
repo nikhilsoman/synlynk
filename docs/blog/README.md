@@ -113,6 +113,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 
 | [108](./108-pr854-fresh-base-ref.md) | Fresh --base — stop dispatching against stale main | [#854](https://github.com/nikhilsoman/synlynk/pull/854) | 2026-08-09 |
+| [109](./109-pr874-cold-start-phase2-canon-baseline.md) | cold-start Phase 2 — The Canon Baseline | [#874](https://github.com/nikhilsoman/synlynk/pull/874) | 2026-08-09 |
 
 ## Per-PR Post Template
 
