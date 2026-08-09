@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watching Synlynk @Work — vNEXT</title>
+<!--
+  MAINTENANCE: Update this document after each release.
+  Official Reference: update version tag, add features page, update changelog + commands + comparison matrix.
+  Command Reference: update commands section for any new/changed commands.
+  Quick Start Guide: update version tag only unless UX flow changed.
+  Watching Synlynk @Work: update version tag and surface keybindings/flags when TUI, Vizor, or Notifiers change.
+  Last updated: vNEXT (2026-08-09)
+-->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --white:    #ffffff;
+    --bg:       #f5f5f7;
+    --bg2:      #e8e8ed;
+    --card:     #f5f5f7;
+    --border:   #d2d2d7;
+    --border-xs:#e8e8ed;
+    --text:     #1d1d1f;
+    --secondary:#3a3a3c;
+    --dim:      #6e6e73;
+    --muted:    #86868b;
+    --blue:     #0071e3;
+    --blue-bg:  #e8f2ff;
+    --purple:   #8944ab;
+    --purple-bg:#f5eeff;
+    --green:    #1a7f3c;
+    --green-bg: #e8f8ee;
+    --orange:   #bf5000;
+    --orange-bg:#fff3e6;
+    --red:      #cc2200;
+    --yellow:   #a05a00;
+    --term-bg:  #1c1c1e;
+    --term-b2:  #2c2c2e;
+    --term-bd:  #3a3a3c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #e0e0e0;
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+    width: 210mm;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── STRICT A4 PAGE ── */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    position: relative;
+    background: var(--white);
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  @page { size: A4 portrait; margin: 0; }
+  @media print {
+    body { background: none; }
+    .page { page-break-after: always; height: 297mm; overflow: hidden; }
+    .page:last-child { page-break-after: auto; }
+  }
+
+  /* ══ COVER ══ */
+  .cover {
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 297mm;
+    text-align: center;
+    padding: 0 18mm;
+    position: relative;
+  }
+
+  .cover-accent {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0071e3 0%, #8944ab 50%, #0071e3 100%);
+  }
+
+  .cover-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--blue-bg);
+    border: 1px solid rgba(0,113,227,0.2);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 28px;
+  }
+
+  .cover-logo {
+    font-family: 'Inter', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .cover-logo span { color: var(--blue); }
+
+  .cover-tagline {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--dim);
+    letter-spacing: -0.2px;
+    margin-bottom: 6px;
+  }
+
+  .cover-version {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 40px;
+  }
+
+  .cover-command {
+    background: var(--term-bg);
+    border-radius: 12px;
+    padding: 18px 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: left;
+    min-width: 360px;
+    margin-bottom: 36px;
+    line-height: 1.9;
+  }
+
+  .cover-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 40px;
+  }
+
+  .cover-pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--secondary);
+  }
+
+  .cover-footer {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* ══ CONTENT PAGES ══ */
+  .cp {
+    background: var(--white);
+    padding: 11mm 13mm 9mm;
+    height: 297mm;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .ph-title {
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .ph-logo {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .ph-logo span { color: var(--blue); }
+
+  .ph-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5px;
+    color: var(--muted);
+  }
+
+  .sec-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 3px;
+  }
+
+  h1.ch {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.8px;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  h2.sec {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 5px;
+    margin-top: 11px;
+    letter-spacing: -0.2px;
+  }
+
+  h3.sub {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 4px;
+    margin-top: 8px;
+  }
+
+  p {
+    color: var(--dim);
+    font-size: 11px;
+    line-height: 1.6;
+    margin-bottom: 7px;
+  }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    background: var(--bg);
+    color: var(--blue);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── TERMINAL MOCKUP ── */
+  .term {
+    background: var(--term-bg);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 6px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .term-bar {
+    background: var(--term-b2);
+    padding: 6px 11px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-bottom: 1px solid var(--term-bd);
+  }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dr { background: #ff5f57; }
+  .dy { background: #febc2e; }
+  .dg { background: #28c840; }
+
+  .t-lbl {
+    font-size: 8.5px;
+    color: #5a5a5e;
+    margin-left: auto;
+    letter-spacing: 0.08em;
+  }
+
+  .tb {
+    padding: 8px 12px;
+    line-height: 1.75;
+    color: #c8c8ca;
+  }
+
+  .t-p  { color: #636366; }
+  .t-c  { color: #64d2ff; font-weight: 500; }
+  .t-a  { color: #ffd60a; }
+  .t-f  { color: #bf5af2; }
+  .t-o  { color: #636366; }
+  .t-s  { color: #30d158; }
+  .t-w  { color: #ff9f0a; }
+  .t-cm { color: #3a3a3c; }
+
+  /* ── BROWSER MOCKUP ── */
+  .browser-window {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 6px 0;
+    font-family: 'Inter', sans-serif;
+    flex-shrink: 0;
+  }
+  .browser-bar {
+    background: var(--bg2);
+    padding: 6px 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .browser-url {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5px;
+    color: var(--dim);
+    margin-left: 6px;
+    flex: 1;
+  }
+  .browser-tabs {
+    display: flex;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .b-tab {
+    padding: 5px 10px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--dim);
+    border-bottom: 2px solid transparent;
+  }
+  .b-tab.active {
+    color: var(--blue);
+    border-bottom-color: var(--blue);
+    background: var(--white);
+  }
+  .browser-body {
+    padding: 10px 12px;
+    background: var(--white);
+  }
+
+  /* ── SLACK MOCKUP ── */
+  .slack-window {
+    background: #1a1d21;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 6px 0;
+    font-family: 'Inter', sans-serif;
+    color: #d1d2d3;
+    border: 1px solid #383b40;
+    flex-shrink: 0;
+  }
+  .slack-header {
+    background: #111417;
+    padding: 6px 12px;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #ababad;
+    border-bottom: 1px solid #2c2f33;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .slack-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .slack-msg {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .slack-avatar {
+    width: 24px; height: 24px; border-radius: 4px;
+    background: #1164a3; color: white; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; flex-shrink: 0;
+  }
+  .slack-msg-content { flex: 1; font-size: 10px; line-height: 1.45; }
+  .slack-author { font-weight: 700; color: #f8f8f8; margin-right: 6px; font-size: 10px; }
+  .slack-time { font-size: 8px; color: #ababad; }
+  .slack-text { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #d1d2d3; margin-top: 2px; }
+  .slack-link { color: #1d9bd1; text-decoration: underline; font-size: 9px; }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    border-radius: 10px;
+    padding: 9px 13px;
+    margin: 7px 0;
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    flex-shrink: 0;
+  }
+
+  .ci { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .cb { flex: 1; }
+  .ct { font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px; }
+  .cx { font-size: 10.5px; line-height: 1.5; }
+
+  .c-tip  { background: var(--blue-bg); border: 1px solid rgba(0,113,227,0.18); }
+  .c-tip  .ct { color: var(--blue); }
+  .c-tip  .cx { color: var(--secondary); }
+
+  .c-pow  { background: var(--green-bg); border: 1px solid rgba(26,127,60,0.2); }
+  .c-pow  .ct { color: var(--green); }
+  .c-pow  .cx { color: var(--secondary); }
+
+  .c-warn { background: var(--orange-bg); border: 1px solid rgba(191,80,0,0.18); }
+  .c-warn .ct { color: var(--orange); }
+  .c-warn .cx { color: var(--secondary); }
+
+  .c-new  { background: var(--purple-bg); border: 1px solid rgba(137,68,171,0.2); }
+  .c-new  .ct { color: var(--purple); }
+  .c-new  .cx { color: var(--secondary); }
+
+  .c-info { background: var(--bg); border: 1px solid var(--border); }
+  .c-info .ct { color: var(--secondary); }
+  .c-info .cx { color: var(--dim); }
+
+  /* ── ACHIEVEMENT ── */
+  .ach {
+    background: linear-gradient(135deg, #fffbeb 0%, #fff8f0 100%);
+    border: 1px solid rgba(160,90,0,0.18);
+    border-radius: 10px;
+    padding: 9px 13px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin: 6px 0;
+    flex-shrink: 0;
+  }
+  .ach-ico { font-size: 22px; }
+  .ach-eye { font-size: 7.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--yellow); margin-bottom: 1px; }
+  .ach-ttl { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 1px; }
+  .ach-dsc { font-size: 9.5px; color: var(--muted); }
+
+  /* ── BENEFIT CARDS ── */
+  .bg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 7px 0; }
+
+  .bc {
+    background: var(--card);
+    border: 1px solid var(--border-xs);
+    border-radius: 10px;
+    padding: 10px 12px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bc::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .bc-blue::before   { background: linear-gradient(90deg, var(--blue), transparent); }
+  .bc-green::before  { background: linear-gradient(90deg, var(--green), transparent); }
+  .bc-purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+  .bc-orange::before { background: linear-gradient(90deg, var(--orange), transparent); }
+  .bc-red::before    { background: linear-gradient(90deg, var(--red), transparent); }
+  .bc-yellow::before { background: linear-gradient(90deg, var(--yellow), transparent); }
+
+  .b-ico { font-size: 18px; margin-bottom: 5px; display: block; }
+  .b-ttl { font-size: 10.5px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .b-dsc { font-size: 9.5px; color: var(--dim); line-height: 1.45; }
+
+  /* ── STEP FLOW ── */
+  .steps { display: flex; flex-direction: column; gap: 5px; margin: 7px 0; }
+  .step-row { display: flex; align-items: flex-start; gap: 10px; }
+  .step-n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 700; color: white;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .step-b { flex: 1; }
+  .step-t { font-size: 10.5px; font-weight: 700; color: var(--text); margin-bottom: 1px; }
+  .step-d { font-size: 10px; color: var(--dim); line-height: 1.45; }
+  .step-ln { width: 1px; height: 7px; background: var(--border); margin-left: 10px; }
+
+  /* ── CMD TABLE ── */
+  .ctbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 5px 0;
+    font-size: 10px;
+  }
+
+  .ctbl th {
+    background: var(--bg);
+    color: var(--blue);
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 9px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ctbl td {
+    padding: 5px 9px;
+    border-bottom: 1px solid var(--border-xs);
+    vertical-align: top;
+    color: var(--dim);
+    line-height: 1.4;
+  }
+
+  .ctbl tr:last-child td { border-bottom: none; }
+
+  .ctbl td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--blue);
+    white-space: nowrap;
+    width: 36%;
+  }
+
+  /* ── FEATURE TABLE ── */
+  .ftbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5px;
+    margin: 5px 0;
+  }
+  .ftbl th {
+    background: var(--bg);
+    color: var(--blue);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 7px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .ftbl td {
+    padding: 4px 7px;
+    border-bottom: 1px solid var(--border-xs);
+    color: var(--dim);
+    line-height: 1.4;
+    vertical-align: top;
+  }
+  .ftbl tr:last-child td { border-bottom: none; }
+  .ftbl td:first-child { color: var(--secondary); font-weight: 500; font-size: 9.5px; }
+  .ftbl td:nth-child(2) { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--muted); white-space: nowrap; }
+  .fgh td { background: var(--purple-bg) !important; color: var(--purple) !important; font-size: 7.5px !important; font-weight: 700 !important; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 7px !important; border-bottom: 1px solid rgba(137,68,171,0.12) !important; }
+  .fc { color: var(--green) !important; font-weight: 600; }
+  .fx { color: var(--border) !important; }
+
+  /* ── STAT ROW ── */
+  .stat-row { display: flex; gap: 7px; margin: 7px 0; }
+  .stat { flex: 1; background: var(--card); border: 1px solid var(--border-xs); border-radius: 9px; padding: 9px 10px; text-align: center; }
+  .stat-n { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1; margin-bottom: 3px; }
+  .stat-l { font-size: 8.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* ── FLOW ── */
+  .flow { display: flex; align-items: center; margin: 8px 0; justify-content: center; flex-wrap: wrap; gap: 0; }
+  .fn { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; text-align: center; min-width: 72px; }
+  .fn.act { border-color: rgba(0,113,227,0.4); background: var(--blue-bg); }
+  .fn-ico { font-size: 15px; display: block; margin-bottom: 2px; }
+  .fn-lbl { font-size: 8.5px; font-weight: 600; color: var(--dim); }
+  .fn.act .fn-lbl { color: var(--blue); }
+  .fn-sub { font-family: 'JetBrains Mono', monospace; font-size: 7.5px; color: var(--muted); }
+  .fa { font-size: 13px; color: var(--border); padding: 0 3px; }
+
+  /* ── COLS ── */
+  .c2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .c3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* ── TAG ── */
+  .tag { display: inline-block; font-size: 8.5px; font-weight: 600; padding: 2px 6px; border-radius: 8px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .tg-new { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(137,68,171,0.2); }
+  .tg-v4  { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(0,113,227,0.2); }
+  .tg-v9  { background: var(--green-bg); color: var(--green); border: 1px solid rgba(26,127,60,0.2); }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 — COVER -->
+<div class="page">
+<div class="cover">
+  <div class="cover-accent"></div>
+
+  <div class="cover-badge">🛰️ &nbsp;Observability Guide</div>
+
+  <div class="cover-logo">SYNL<span>Y</span>NK</div>
+  <div class="cover-tagline">Observing dispatched agent work across TUI, Vizor, and Slack.</div>
+  <div class="cover-version">vNEXT · Telemetry &amp; Fleet Operations</div>
+
+  <div class="cover-command">
+    <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">synlynk tui</span> <span style="color:#636366;"># Terminal curses dashboard</span></div>
+    <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">synlynk viz --serve</span> <span style="color:#636366;"># Web visualizer (port 8721)</span></div>
+    <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">synlynk notify slack --webhook-url &lt;url&gt;</span></div>
+    <div style="color:#3a3a3c; margin: 3px 0;">───────────────────────────────</div>
+    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">Unified uxcore data engine · Zero external DB</span></div>
+  </div>
+
+  <div class="cover-pills">
+    <div class="cover-pill">🖥️ Curses TUI</div>
+    <div class="cover-pill">🌐 Vizor Web Dashboard</div>
+    <div class="cover-pill">💬 Slack Notifier</div>
+    <div class="cover-pill">⚡ Unified uxcore Layer</div>
+  </div>
+
+  <div class="cover-footer">synlynk.com &nbsp;·&nbsp; github.com/nikhilsoman/synlynk &nbsp;·&nbsp; 2026</div>
+</div>
+</div>
+
+
+<!-- PAGE 2 — OVERVIEW & UXCORE ARCHITECTURE -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Overview — Observability Architecture</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">02</div>
+  </div>
+
+  <div class="sec-label">Architecture &amp; Data Flow</div>
+  <h1 class="ch">One engine.<br>Three monitoring surfaces.</h1>
+
+  <p>Synlynk provides a multi-surface observability suite designed for every operational context. Whether you are running interactive sessions in a terminal, operating a multi-repo wallboard in a web browser, or receiving asynchronous event alerts in team channels, all surfaces read from the exact same <code>uxcore</code> data foundation.</p>
+
+  <div class="flow">
+    <div class="fn act">
+      <span class="fn-ico">🤖</span>
+      <div class="fn-lbl">Agent Fleet</div>
+      <div class="fn-sub">Claude · Agy · Codex</div>
+    </div>
+    <span class="fa">➔</span>
+    <div class="fn act">
+      <span class="fn-ico">⚡</span>
+      <div class="fn-lbl">uxcore Engine</div>
+      <div class="fn-sub">state.db &amp; events</div>
+    </div>
+    <span class="fa">➔</span>
+    <div class="fn">
+      <span class="fn-ico">🖥️</span>
+      <div class="fn-lbl">Curses TUI</div>
+      <div class="fn-sub">Keyboard / CLI</div>
+    </div>
+    <span class="fa">·</span>
+    <div class="fn">
+      <span class="fn-ico">🌐</span>
+      <div class="fn-lbl">Vizor Web</div>
+      <div class="fn-sub">HTTP :8721</div>
+    </div>
+    <span class="fa">·</span>
+    <div class="fn">
+      <span class="fn-ico">💬</span>
+      <div class="fn-lbl">Slack Notifier</div>
+      <div class="fn-sub">Webhook Tail</div>
+    </div>
+  </div>
+
+  <h2 class="sec">The Three Surfaces at a Glance</h2>
+  <div class="bg2">
+    <div class="bc bc-blue">
+      <span class="b-ico">🖥️</span>
+      <div class="b-ttl">Curses TUI (Terminal)</div>
+      <div class="b-dsc">Standard-library curses dashboard for developers who stay in the CLI. Zero dependencies, hotkeys for Fleet/Jobs/Costs/Review, and interactive job control.</div>
+    </div>
+    <div class="bc bc-purple">
+      <span class="b-ico">🌐</span>
+      <div class="b-ttl">Vizor Web Dashboard</div>
+      <div class="b-dsc">Local web server on port 8721 serving interactive Gantt timelines, Architect Map repo graphs, cost charts, and web-based write endpoints.</div>
+    </div>
+    <div class="bc bc-green">
+      <span class="b-ico">💬</span>
+      <div class="b-ttl">Slack Notifier</div>
+      <div class="b-dsc">Minimal one-way event tail posting dispatch, approval, and kill events directly into team Slack channels with direct deep-links to Vizor.</div>
+    </div>
+    <div class="bc bc-orange">
+      <span class="b-ico">🗄️</span>
+      <div class="b-ttl">Unified State Model</div>
+      <div class="b-dsc">No database drift or sync issues. All three surfaces query the single SQLite canon (<code>.synlynk/state.db</code>) via <code>uxcore</code>.</div>
+    </div>
+  </div>
+
+  <div class="callout c-tip">
+    <div class="ci">💡</div>
+    <div class="cb">
+      <div class="ct">Shared Data Engine</div>
+      <div class="cx">Vizor and the TUI both read from the same <code>uxcore</code> data layer — anything you can do in one surface (inspecting jobs, approving PRs, killing tasks), you can do in the other.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 3 — TUI LAUNCH & NAVIGATION -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Terminal Surface — TUI Core</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">03</div>
+  </div>
+
+  <div class="sec-label">Curses Terminal UI</div>
+  <h1 class="ch">Terminal-native dashboard.<br>Zero dependencies.</h1>
+
+  <p>Launch the TUI inside any initialized Synlynk project to open a lightweight, curses-based split view. It uses Python's standard <code>curses</code> module with zero third-party packages required.</p>
+
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">synlynk tui</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk tui</span></div>
+      <div><span class="t-o"># Must be run from inside an initialized repository root</span></div>
+    </div>
+  </div>
+
+  <h2 class="sec">Panel Navigation Hotkeys</h2>
+  <p>Switch between the four main observability views with single keypresses:</p>
+
+  <table class="ctbl">
+    <thead>
+      <tr>
+        <th>Key</th>
+        <th>Panel Name</th>
+        <th>Contents &amp; Operational Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>1</code></td>
+        <td>Fleet Panel</td>
+        <td>Displays per-agent breakdown: completed tasks (done), active tasks, success rate (%), and total USD spend per agent.</td>
+      </tr>
+      <tr>
+        <td><code>2</code></td>
+        <td>Jobs Panel</td>
+        <td>Shows real-time execution list with timestamp, agent name, exit code status, duration in seconds, cost, and selection cursor.</td>
+      </tr>
+      <tr>
+        <td><code>3</code></td>
+        <td>Costs Panel</td>
+        <td>Displays aggregate financial telemetry: total spend, estimated spend, and itemized actual vs estimated spend per agent.</td>
+      </tr>
+      <tr>
+        <td><code>4</code></td>
+        <td>Review Panel</td>
+        <td>Lists system capability checklist showing enabled (<code>✓</code>) vs disabled (<code>✗</code>) capability flags for current workspace actor.</td>
+      </tr>
+      <tr>
+        <td><code>q</code></td>
+        <td>Quit</td>
+        <td>Exits the curses TUI session cleanly and returns to shell prompt.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">Visual Mockup — TUI Fleet View (Key 1)</h2>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">TUI — Fleet Panel</div></div>
+    <div class="tb">
+      <div><span class="t-c">FLEET</span> <span class="t-o">agy</span></div>
+      <div><span class="t-a">agy       </span> <span class="t-o">done=14 active=1 success=93% $4.12</span></div>
+      <div><span class="t-a">claude    </span> <span class="t-o">done=28 active=0 success=96% $8.45</span></div>
+      <div><span class="t-a">codex     </span> <span class="t-o">done=9  active=0 success=88% $2.10</span></div>
+      <div><span class="t-a">grok      </span> <span class="t-o">done=4  active=0 success=100% $0.95</span></div>
+      <div style="margin-top:8px;"><span class="t-p">[1]Fleet [2]Jobs [3]Costs [4]Review  [q]uit</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 4 — TUI JOBS PANEL & INTERACTIVE ACTIONS -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Terminal Surface — TUI Actions</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">04</div>
+  </div>
+
+  <div class="sec-label">Job Control &amp; Keybindings</div>
+  <h1 class="ch">Interactive job control.<br>Approve and kill in TUI.</h1>
+
+  <p>The Jobs panel (key <code>2</code>) provides full line selection and interactive job lifecycle management without leaving your terminal.</p>
+
+  <div class="callout c-new">
+    <div class="ci">⬡</div>
+    <div class="cb">
+      <div class="ct">New Capability — Shipped in PR #851</div>
+      <div class="cx">The TUI Jobs panel now supports interactive selection with arrow keys, one-key PR approval (<code>a</code>), and graceful job termination (<code>k</code>) with safety prompts.</div>
+    </div>
+  </div>
+
+  <h2 class="sec">Jobs Panel Keybindings</h2>
+  <div class="steps">
+    <div class="step-row">
+      <div class="step-n">↑↓</div>
+      <div class="step-b">
+        <div class="step-t">Navigate Job List (KEY_UP / KEY_DOWN)</div>
+        <div class="step-d">Moves the selection cursor (<code>&gt;</code>) up and down through historical and currently executing jobs.</div>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-n">a</div>
+      <div class="step-b">
+        <div class="step-t">Approve Pending PR (Approve)</div>
+        <div class="step-d">If the selected job is in a <code>pending_approval</code> state with an attached PR, pressing <code>a</code> calls <code>uxcore.approve_pr()</code>. If ineligible, shows status message: <em>"No pending-approval job selected"</em>.</div>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-n">k</div>
+      <div class="step-b">
+        <div class="step-t">Kill In-Flight Job (Kill)</div>
+        <div class="step-d">If selected job is <code>in_flight</code> (queued/running/active), prompts <code>Kill selected job? [y]es [n]o</code>. Confirming with <code>y</code> invokes <code>uxcore.kill_job()</code>. If ineligible, shows message: <em>"No in-flight job selected"</em>.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">Visual Mockup — TUI Jobs Panel with Interactive Hint</h2>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">TUI — Jobs Panel</div></div>
+    <div class="tb">
+      <div><span class="t-c">JOBS</span> <span class="t-o">claude</span></div>
+      <div><span class="t-s">&gt; 2026-08-09T14:10:00  claude     pending_approval  45.2s  $0.35</span></div>
+      <div><span class="t-o">  2026-08-09T14:02:15  agy        exit=0            12.1s  $0.12</span></div>
+      <div><span class="t-o">  2026-08-09T13:45:30  codex      exit=0            89.4s  $0.80</span></div>
+      <div><span class="t-o">  2026-08-09T13:30:10  grok       exit=1            15.0s  $0.10</span></div>
+      <div style="margin-top:8px;"><span class="t-a">[1]Fleet [2]Jobs [3]Costs [4]Review  [q]uit  [a]pprove [k]ill</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 5 — VIZOR LAUNCH & COMMAND REFERENCE -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Web Dashboard — Vizor Basics</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">05</div>
+  </div>
+
+  <div class="sec-label">Vizor Local Web Server</div>
+  <h1 class="ch">Rich web dashboard.<br>Port 8721 background server.</h1>
+
+  <p>Vizor generates an offline-first HTML/JS dashboard from local workspace telemetry and serves it over a lightweight Python HTTP background server.</p>
+
+  <table class="ctbl">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Description &amp; Operational Behavior</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>synlynk viz --serve</code></td>
+        <td>Starts the Vizor background HTTP server on default port <code>8721</code> and keeps serving workspace updates.</td>
+      </tr>
+      <tr>
+        <td><code>synlynk viz --port 8900</code></td>
+        <td>Overrides the default port, running the HTTP server on custom port <code>8900</code> instead.</td>
+      </tr>
+      <tr>
+        <td><code>synlynk viz --generate</code></td>
+        <td>Regenerates static HTML views in <code>.synlynk/viz-cache/</code> without starting a server or launching a browser.</td>
+      </tr>
+      <tr>
+        <td><code>synlynk viz --open</code></td>
+        <td>Opens the existing cached Vizor dashboard (<code>http://localhost:8721/index.html</code>) in your default browser.</td>
+      </tr>
+      <tr>
+        <td><code>synlynk viz --stop</code></td>
+        <td>Stops the running Vizor background HTTP server process gracefully.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout c-info">
+    <div class="ci">📌</div>
+    <div class="cb">
+      <div class="ct">Default Port Correction — Fixed in PR #850</div>
+      <div class="cx">Vizor defaults to port <strong>8721</strong> (<code>DEFAULT_PORT = 8721</code> in <code>synlynk/viz.py</code>). An earlier legacy document erroneously cited port 8420 — port 8721 is authoritative.</div>
+    </div>
+  </div>
+
+  <h2 class="sec">Server Startup Visual Mockup</h2>
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">synlynk viz --serve</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk viz --serve</span></div>
+      <div><span class="t-o">  Generating Vizor views…</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Views written to .synlynk/viz-cache/</span></div>
+      <div><span class="t-s">  ✓</span> <span class="t-o">Serving at </span><span class="t-c">http://localhost:8721/</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 6 — VIZOR FTUE & DASHBOARD TABS -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Web Dashboard — FTUE &amp; Views</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">06</div>
+  </div>
+
+  <div class="sec-label">Setup &amp; Navigation Tabs</div>
+  <h1 class="ch">Interactive setup.<br>Five visual monitoring views.</h1>
+
+  <h2 class="sec">First-Run FTUE (First-Time User Experience)</h2>
+  <p>On initial interactive launch, Vizor prompts for project preferences and stores them under <code>vizor.*</code> in <code>.synlynk/config.json</code>:</p>
+
+  <div class="steps">
+    <div class="step-row">
+      <div class="step-n">1</div>
+      <div class="step-b">
+        <div class="step-t">User-Facing UX? (y/n)</div>
+        <div class="step-d">Picks second navigation tab view: <code>journeys</code> for user-facing projects, or <code>tube</code> (Architect Map) for internal/library repos.</div>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-n">2</div>
+      <div class="step-b">
+        <div class="step-t">Browser Notifications? (y/n)</div>
+        <div class="step-d">Enables desktop browser notifications (<code>notify_on_refresh</code>) when background data updates land.</div>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-n">3</div>
+      <div class="step-b">
+        <div class="step-t">Auto-Refresh Interval? (15 / 30 / off)</div>
+        <div class="step-d">Sets auto-polling interval in minutes (<code>refresh_interval_minutes</code>). Non-interactive runs default to off / <code>tube</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">Five Navigation Tabs</h2>
+  <div class="c2">
+    <div class="bc bc-blue">
+      <div class="b-ttl">1. Gantt (Default)</div>
+      <div class="b-dsc">Timeline view displaying agent execution overlap, task duration bars, and parallel job concurrency.</div>
+    </div>
+    <div class="bc bc-purple">
+      <div class="b-ttl">2. Journeys / Architect Map</div>
+      <div class="b-dsc">User journey flow diagram or multi-repo tube map based on FTUE project type choice.</div>
+    </div>
+    <div class="bc bc-green">
+      <div class="b-ttl">3. Effort &amp; Cost</div>
+      <div class="b-dsc">Financial graphs, token counters, cost per agent, and estimated vs actual spending trends.</div>
+    </div>
+    <div class="bc bc-orange">
+      <div class="b-ttl">4. Observatory &amp; 5. Efficiency</div>
+      <div class="b-dsc">Live job process inspector (htop style) and agent performance success rate analytics.</div>
+    </div>
+  </div>
+
+  <h2 class="sec">Manifest Polling &amp; Live Reload Banner</h2>
+  <p>Vizor background script polls <code>/manifest.json</code> every 60s. When new data lands, it displays an overlay banner:</p>
+
+  <div class="browser-window">
+    <div class="browser-bar">
+      <div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div>
+      <div class="browser-url">http://localhost:8721/#gantt</div>
+    </div>
+    <div style="background:#0d9e87; color:white; padding:5px 12px; font-family:'JetBrains Mono',monospace; font-size:9px; display:flex; align-items:center; gap:10px;">
+      <span>✦ Vizor updated at 14:22:15</span>
+      <span style="background:rgba(255,255,255,0.2); padding:1px 6px; border-radius:3px;">↺ Reload</span>
+    </div>
+    <div class="browser-tabs">
+      <div class="b-tab active">Gantt</div>
+      <div class="b-tab">Architect Map</div>
+      <div class="b-tab">Effort &amp; Cost</div>
+      <div class="b-tab">Observatory</div>
+      <div class="b-tab">Efficiency</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 7 — VIZOR INTERACTIVE WRITE ACTIONS -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Web Dashboard — Write Actions</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">07</div>
+  </div>
+
+  <div class="sec-label">Interactive Dashboard Control</div>
+  <h1 class="ch">Full web control.<br>Dispatch, approve, kill, note.</h1>
+
+  <p>Vizor is not just a read-only viewer. The web dashboard provides four interactive POST API endpoints that allow users to mutate state and control agents directly from browser components.</p>
+
+  <table class="ctbl">
+    <thead>
+      <tr>
+        <th>Action</th>
+        <th>HTTP Endpoint</th>
+        <th>Web UI Trigger &amp; Backend Behavior</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Dispatch Job</td>
+        <td><code>POST /dispatch</code></td>
+        <td>Triggered via <strong>[+ Dispatch Agent]</strong> modal. Spawns a background agent job with specified task parameters.</td>
+      </tr>
+      <tr>
+        <td>Approve PR</td>
+        <td><code>POST /approve</code></td>
+        <td>Triggered via <strong>[✓ Approve]</strong> button on pending jobs. Calls <code>uxcore.approve_pr()</code> to merge approved code.</td>
+      </tr>
+      <tr>
+        <td>Kill Job</td>
+        <td><code>POST /kill</code></td>
+        <td>Triggered via <strong>[✕ Kill]</strong> button on active jobs. Calls <code>uxcore.kill_job()</code> to stop runaway processes.</td>
+      </tr>
+      <tr>
+        <td>Add Note</td>
+        <td><code>POST /note</code></td>
+        <td>Triggered via <strong>[+ Note]</strong> button. Saves operational annotations directly to <code>.synlynk/viz-notes.json</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">Visual Mockup — Vizor Web Action Panel</h2>
+  <div class="browser-window">
+    <div class="browser-bar">
+      <div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div>
+      <div class="browser-url">http://localhost:8721/#observatory</div>
+    </div>
+    <div class="browser-body">
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button style="background:var(--blue); color:white; border:none; padding:4px 10px; border-radius:5px; font-weight:600; font-size:9.5px;">+ Dispatch Agent</button>
+        <button style="background:var(--green); color:white; border:none; padding:4px 10px; border-radius:5px; font-weight:600; font-size:9.5px;">✓ Approve #848</button>
+        <button style="background:var(--red); color:white; border:none; padding:4px 10px; border-radius:5px; font-weight:600; font-size:9.5px;">✕ Kill job-a3f2</button>
+        <button style="background:var(--purple); color:white; border:none; padding:4px 10px; border-radius:5px; font-weight:600; font-size:9.5px;">+ Add Note</button>
+      </div>
+      <div style="background:var(--bg); border:1px solid var(--border-xs); padding:8px 10px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--dim);">
+        <div>ACTIVE JOB: job-a3f2 · claude · story-issue-848 · status: running</div>
+        <div style="color:var(--muted);">Log tail: Writing docs/synlynk-watching-at-work-guide.html...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout c-pow">
+    <div class="ci">⚡</div>
+    <div class="cb">
+      <div class="ct">Full Feature Parity</div>
+      <div class="cx">Actions taken in Vizor immediately broadcast through <code>uxcore</code> and reflect in the CLI and TUI within the next refresh cycle.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 8 — SLACK NOTIFIER SETUP & BEHAVIOR -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Slack Integration — Setup &amp; Tail</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">08</div>
+  </div>
+
+  <div class="sec-label">Slack Webhook Notifier</div>
+  <h1 class="ch">Asynchronous team alerts.<br>Bring your own webhook.</h1>
+
+  <p>The Slack notifier (<code>synlynk/notifiers/slack.py</code>) acts as a minimal, zero-footprint event tail consumer that posts agent activity into team Slack channels.</p>
+
+  <div class="term">
+    <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">synlynk notify slack</div></div>
+    <div class="tb">
+      <div><span class="t-p">$ </span><span class="t-c">synlynk notify slack</span> <span class="t-f">--webhook-url</span> <span class="t-a">https://hooks.slack.com/services/T00/B00/X00</span></div>
+    </div>
+  </div>
+
+  <div class="callout c-info">
+    <div class="ci">ℹ️</div>
+    <div class="cb">
+      <div class="ct">Bring Your Own Webhook</div>
+      <div class="cx">There is no Slack app registration or OAuth configuration command in Synlynk. Users generate an Incoming Webhook URL directly from Slack's app console and pass it to Synlynk.</div>
+    </div>
+  </div>
+
+  <h2 class="sec">Subscribed Event Types (PR #850)</h2>
+  <p>The notifier performs a one-shot tail of events filtered to three core action types:</p>
+  <ul style="margin-left:18px; color:var(--dim); font-size:10.5px; line-height:1.7;">
+    <td><code>dispatch</code> — Fires when an agent job is dispatched into the background queue.</td><br>
+    <td><code>approve_pr</code> — Fires when a pull request is approved by an agent or operator.</td><br>
+    <td><code>kill_job</code> — Fires when an in-flight job is cancelled or terminated.</td>
+  </ul>
+
+  <div class="callout c-warn">
+    <div class="ci">⚠️</div>
+    <div class="cb">
+      <div class="ct">Read-Only Surface Warning</div>
+      <div class="cx">The Slack integration is strictly a one-way, read-only notifier. It posts alerts but does not support interactive Slack buttons or slash commands. Use TUI or Vizor for write actions.</div>
+    </div>
+  </div>
+
+  <h2 class="sec">Visual Mockup — Slack Message Output with Vizor Deep-Link</h2>
+  <div class="slack-window">
+    <div class="slack-header"># agent-telemetry</div>
+    <div class="slack-body">
+      <div class="slack-msg">
+        <div class="slack-avatar">S</div>
+        <div class="slack-msg-content">
+          <div><span class="slack-author">Synlynk Bot</span><span class="slack-time">14:22 PM</span></div>
+          <div class="slack-text">[dispatch] {"agent": "claude", "story": "848"} -&gt; {"job_id": "job-a3f2"}</div>
+          <a class="slack-link" href="#">View live in Vizor</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- PAGE 9 — SURFACE COMPARISON & PLAYBOOK -->
+<div class="page">
+<div class="cp">
+  <div class="page-header">
+    <div class="ph-title">Summary — Surface Comparison</div>
+    <div class="ph-logo">SYNL<span>Y</span>NK</div>
+    <div class="ph-num">09</div>
+  </div>
+
+  <div class="sec-label">Feature Matrix &amp; Playbook</div>
+  <h1 class="ch">Choosing the right surface.<br>Observability playbook.</h1>
+
+  <table class="ftbl">
+    <thead>
+      <tr>
+        <th>Capability / Feature</th>
+        <th>Curses TUI</th>
+        <th>Vizor Web Dashboard</th>
+        <th>Slack Notifier</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="fgh"><td colspan="4">Interface &amp; Environment</td></tr>
+      <tr><td>Primary Surface</td><td>Terminal (Curses)</td><td>Web Browser (HTML5)</td><td>Slack Channel</td></tr>
+      <tr><td>Execution Mode</td><td>Interactive foreground</td><td>Background HTTP server</td><td>One-shot tail script</td></tr>
+      <tr><td>Default Port / Process</td><td>No network port</td><td>Port <code>8721</code></td><td>Outbound HTTP POST</td></tr>
+
+      <tr class="fgh"><td colspan="4">Telemetry &amp; Capabilities</td></tr>
+      <tr><td>Live Updates</td><td class="fc">Real-time hotkeys</td><td class="fc">60s manifest poll</td><td class="fc">Event push tail</td></tr>
+      <tr><td>Interactive Write Actions</td><td class="fc">Yes (Arrow / a / k)</td><td class="fc">Yes (POST endpoints)</td><td class="fx">No (Read-only)</td></tr>
+      <tr><td>Gantt &amp; Architect Map</td><td class="fx">No</td><td class="fc">Yes (Full visual)</td><td class="fx">No</td></tr>
+      <tr><td>Vizor Deep-Linking</td><td class="fx">N/A</td><td class="fc">Native routes</td><td class="fc">Yes (Embedded links)</td></tr>
+
+      <tr class="fgh"><td colspan="4">Setup &amp; Best Operational Use Case</td></tr>
+      <tr><td>Setup Requirement</td><td>Zero setup</td><td><code>synlynk viz --serve</code></td><td>BYO Webhook URL</td></tr>
+      <tr><td>Recommended Use Case</td><td>Developer active coding</td><td>Team wallboard / PM</td><td>Asynchronous team alerts</td></tr>
+    </tbody>
+  </table>
+
+  <div class="ach" style="margin-top:10px;">
+    <div class="ach-ico">🏆</div>
+    <div>
+      <div class="ach-eye">Observability Complete</div>
+      <div class="ach-ttl">Full Fleet Control Unlocked</div>
+      <div class="ach-dsc">You have complete visibility across terminal hotkeys, interactive web dashboards, and real-time team notifications.</div>
+    </div>
+  </div>
+
+  <div class="callout c-tip" style="margin-top:8px;">
+    <div class="ci">📘</div>
+    <div class="cb">
+      <div class="ct">Related Documentation</div>
+      <div class="cx">For quick onboarding see the <strong>Quick Start Guide</strong>; for CLI syntax see the <strong>Command Reference</strong>; for database schema details see <strong>The Manual</strong>.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:auto; padding-top:10px; text-align:center; font-size:9px; color:var(--muted); letter-spacing:0.08em;">
+    SYNL<span style="color:var(--blue); font-weight:800;">Y</span>NK · Observing Dispatched Agent Work · vNEXT · synlynk.com
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>
