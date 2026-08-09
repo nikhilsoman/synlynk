@@ -145,3 +145,38 @@ def _run_new_project_flow(answers: dict) -> None:
 
     print(f"\nSetup complete. Next: run `synlynk dispatch {answers['preferred_implementer'] or '<agent>'} "
           f"--task \"{answers['goal']}\"` to start building against {version}.")
+
+
+def _run_existing_project_flow(root: str = ".") -> None:
+    """Baseline warm-start for an existing repo: env-probe + shallow scan summary
+    + one question, routed into a seeded story. Does NOT generate
+    workspace-canon.md -- that lands in cold-start Phase 2.
+    """
+    import synlynk.scan as scan_mod
+    from synlynk.db import cmd_story_create
+
+    scan = scan_mod.run_workspace_scan(roots=[root], deep=False)
+
+    repo = scan["repos"][0] if scan["repos"] else {
+        "name": os.path.basename(os.path.abspath(root)),
+        "stack_labels": [],
+    }
+    functional_agents = [a for a in scan.get("agents", []) if a.get("functional")]
+
+    print(f"\nFound: {repo['name']}  ·  stack: {', '.join(repo['stack_labels']) or 'unknown'}  "
+          f"·  topology: {scan.get('topology', 'single')}")
+    if functional_agents:
+        print(f"Harnesses ready: {', '.join(a['name'] for a in functional_agents)}")
+    else:
+        checked = ", ".join(a["name"] for a in scan.get("agents", [])) or "none found on PATH"
+        print(f"No working harnesses detected (checked: {checked})  "
+              "You can still browse the scan output; install/auth a harness to dispatch work.")
+
+    intent = input("\nWhat are you trying to do right now? ").strip()
+    if intent:
+        story_id = cmd_story_create(title=intent)
+        print(f"\nNext: run `synlynk dispatch <agent> --task \"{intent}\"` "
+              f"to work on {story_id}, or `synlynk story list` to see it queued.")
+    else:
+        print("\nNo task captured -- run `synlynk start` again anytime, "
+              "or `synlynk scan --deep` for a fuller picture.")

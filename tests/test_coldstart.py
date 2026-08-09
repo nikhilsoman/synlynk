@@ -1,5 +1,6 @@
 import os
 import subprocess
+from unittest.mock import patch
 
 import pytest
 
@@ -8,6 +9,7 @@ from synlynk.coldstart import (
     _prompt_new_project_questions,
     _resolve_cold_start_mode,
     _run_new_project_flow,
+    _run_existing_project_flow,
 )
 
 
@@ -132,3 +134,51 @@ def test_run_new_project_flow_writes_config_and_roadmap_row(tmp_path, monkeypatc
 
     captured = capsys.readouterr()
     assert "next" in captured.out.lower()
+
+
+def test_run_existing_project_flow_prints_summary_and_seeds_story(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    fake_scan = {
+        "repos": [{"name": "myrepo", "path": str(tmp_path), "stack_labels": ["python"],
+                    "readme_excerpt": "", "context_sections": {}}],
+        "harnesses": [{"name": "claude"}],
+        "agents": [{"name": "claude", "functional": True}],
+        "skills": [],
+        "topology": "single",
+        "workspace_name": "myrepo",
+        "home_harness": "claude",
+        "scanned_at": "",
+    }
+    monkeypatch.setattr("builtins.input", lambda prompt: "fix the flaky CI job")
+
+    with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan) as mock_scan:
+        _run_existing_project_flow(str(tmp_path))
+        mock_scan.assert_called_once_with(roots=[str(tmp_path)], deep=False)
+
+    captured = capsys.readouterr()
+    assert "myrepo" in captured.out
+    assert "python" in captured.out
+
+
+def test_run_existing_project_flow_warns_on_zero_functional_harnesses(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    fake_scan = {
+        "repos": [{"name": "myrepo", "path": str(tmp_path), "stack_labels": [],
+                    "readme_excerpt": "", "context_sections": {}}],
+        "harnesses": [],
+        "agents": [{"name": "claude", "functional": False}],
+        "skills": [],
+        "topology": "single",
+        "workspace_name": "myrepo",
+        "home_harness": None,
+        "scanned_at": "",
+    }
+    monkeypatch.setattr("builtins.input", lambda prompt: "look around")
+
+    with patch("synlynk.scan.run_workspace_scan", return_value=fake_scan):
+        _run_existing_project_flow(str(tmp_path))
+
+    captured = capsys.readouterr()
+    assert "no working harnesses" in captured.out.lower()
