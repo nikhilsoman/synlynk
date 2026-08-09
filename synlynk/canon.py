@@ -187,3 +187,40 @@ def _check_canon_staleness(root: str) -> list:
     if current_sha is None or current_sha == provenance["sha"]:
         return []
     return ["baseline"]
+
+
+def _offer_deep_scan_consent() -> bool:
+    answer = input(
+        "\nWant me to run a deeper scan now (source tree walk, symbols, git history)? "
+        "This may take a bit longer. [y/N] "
+    ).strip().lower()
+    return answer == "y"
+
+
+def run_canon_baseline(root: str, scan: dict) -> None:
+    """Entry point called from cold-start's existing-project flow.
+
+    First run (no workspace-canon.md yet): offers deep-scan consent once,
+    then generates and writes the baseline. Re-run: skips the consent
+    offer entirely and prints a staleness banner if the baseline section's
+    stamped SHA no longer matches HEAD.
+    """
+    path = os.path.join(root, _CANON_FILENAME)
+    if not os.path.exists(path):
+        if _offer_deep_scan_consent():
+            import synlynk.scan as scan_mod
+            scan_mod.cmd_scan(deep=True)
+        head_sha = _head_sha(root)
+        content = _render_canon(root, scan, head_sha)
+        _write_canon(root, content)
+        print(f"\nWrote {_CANON_FILENAME} (baseline: documentation index + 3-claim receipt).")
+        return
+
+    stale_sections = _check_canon_staleness(root)
+    if stale_sections:
+        provenance = _parse_canon_provenance(root) or {}
+        old_sha = (provenance.get("sha") or "unknown")[:7]
+        current_sha = (_head_sha(root) or "unknown")[:7]
+        print(f"\n⚠ {_CANON_FILENAME}'s baseline section may be stale "
+              f"(generated at {old_sha}, HEAD is now {current_sha}).\n"
+              "  Re-run not yet supported in Phase 2 — regenerate manually if needed.")

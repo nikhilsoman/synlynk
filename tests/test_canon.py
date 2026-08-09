@@ -1,4 +1,5 @@
 import os
+from unittest.mock import patch
 
 from synlynk.canon import _build_documentation_index
 
@@ -155,3 +156,61 @@ def test_check_canon_staleness_unknown_sha_never_stale(tmp_path):
 
 def test_check_canon_staleness_missing_canon_is_stale(tmp_path):
     assert _check_canon_staleness(str(tmp_path)) == ["baseline"]
+
+
+from synlynk.canon import _offer_deep_scan_consent, run_canon_baseline
+
+
+def test_offer_deep_scan_consent_yes(monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    assert _offer_deep_scan_consent() is True
+
+
+def test_offer_deep_scan_consent_no(monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
+    assert _offer_deep_scan_consent() is False
+
+
+def test_run_canon_baseline_first_run_writes_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    scan = {"repos": [{"path": str(tmp_path), "stack_labels": []}], "harnesses": []}
+    with patch("synlynk.scan.cmd_scan") as mock_deep_scan:
+        run_canon_baseline(str(tmp_path), scan)
+        mock_deep_scan.assert_not_called()
+    assert os.path.exists(tmp_path / _CANON_FILENAME)
+
+
+def test_run_canon_baseline_first_run_accepts_deep_scan_consent(tmp_path, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    scan = {"repos": [], "harnesses": []}
+    with patch("synlynk.scan.cmd_scan") as mock_deep_scan:
+        run_canon_baseline(str(tmp_path), scan)
+        mock_deep_scan.assert_called_once_with(deep=True)
+
+
+def test_run_canon_baseline_rerun_skips_consent_prompt(tmp_path, monkeypatch):
+    def _fail_input(prompt):
+        raise AssertionError("should not prompt on rerun")
+    scan = {"repos": [], "harnesses": []}
+    _write_canon(str(tmp_path), _render_canon(str(tmp_path), scan, head_sha=None))
+    monkeypatch.setattr("builtins.input", _fail_input)
+    run_canon_baseline(str(tmp_path), scan)  # must not raise
+
+
+def test_run_canon_baseline_rerun_prints_staleness_banner(tmp_path, monkeypatch, capsys):
+    _git_init_simple(tmp_path)
+    old_sha = _current_sha(tmp_path)
+    scan = {"repos": [], "harnesses": []}
+    _write_canon(str(tmp_path), _render_canon(str(tmp_path), scan, head_sha=old_sha))
+    (tmp_path / "new.txt").write_text("x")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "second"], cwd=tmp_path, capture_output=True, check=True)
+
+    def _fail_input(prompt):
+        raise AssertionError("should not prompt on rerun")
+    monkeypatch.setattr("builtins.input", _fail_input)
+
+    run_canon_baseline(str(tmp_path), scan)
+
+    captured = capsys.readouterr()
+    assert "may be stale" in captured.out.lower()
