@@ -15,8 +15,8 @@ Phase 1 sign-off on its own (see Follow-up section).
 |---|---|---|---|
 | Job list panel renders with active jobs | Not yet verified | requires live interactive session | — |
 | Job detail panel renders full job metadata | Not yet verified | requires live interactive session | — |
-| Approve keybinding works on a pending-approval job | Not yet verified | requires live interactive session | — |
-| Kill keybinding works on an in-flight job | Not yet verified | requires live interactive session | — |
+| Approve keybinding works on a pending-approval job | Not yet verified | keybinding implemented, unit-tested; still requires live interactive-session verification against a real pending-approval job | — |
+| Kill keybinding works on an in-flight job | Not yet verified | keybinding implemented, unit-tested; still requires live interactive-session verification against a real in-flight job | — |
 | RBAC-denied state renders correctly for a non-privileged actor | Not yet verified | requires live interactive session | — |
 | Empty state renders when no jobs exist | Not yet verified | requires live interactive session | — |
 
