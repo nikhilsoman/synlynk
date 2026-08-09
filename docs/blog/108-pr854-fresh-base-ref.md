@@ -1,5 +1,5 @@
 ---
-title: "PR TBD — Fresh --base: Stop Dispatching Against Stale main"
+title: "PR #854 — Fresh --base: Stop Dispatching Against Stale main"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 108
