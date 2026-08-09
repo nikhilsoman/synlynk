@@ -69,6 +69,30 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return flags
 
 
+def _ensure_daemon_job_context_columns(conn) -> None:
+    """Add context_mode / context_bytes if missing (legacy schemas + unit fixtures).
+
+    Safe to call on every dispatch write path. No-ops when columns already exist
+    or when the connection has no daemon_jobs table.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    if "context_mode" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
+        except Exception:
+            pass
+    if "context_bytes" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
+        except Exception:
+            pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -2169,6 +2193,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     try:
         dconn = get_db() if get_db else None
         if dconn is not None:
+            # Tests and older DBs may create daemon_jobs without these columns;
+            # ensure before INSERT so dispatch never hard-fails on schema lag.
+            _ensure_daemon_job_context_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
