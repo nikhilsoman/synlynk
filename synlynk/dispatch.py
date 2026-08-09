@@ -1988,6 +1988,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if len(encoded_context) > context_max_bytes:
             context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
             print(f"  context truncated to {context_max_bytes}B (agent profile limit)")
+    # Bytes after truncation — the payload the agent actually received.
+    context_bytes = len(context_text.encode("utf-8")) if context_text else 0
 
     relevant_files = _pkg("_relevant_files_for_story")
     file_list = relevant_files(story_id) if (story_id and relevant_files) else []
@@ -2128,6 +2130,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
+        "context_mode": context_mode,
+        "context_bytes": context_bytes,
         "worktree_path": worktree_path,
         "worktree_branch": worktree_branch,
         "base_branch": base_branch,
@@ -2175,7 +2179,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, agent=?, task=?, story_id=?, "
-                    "dispatch_context=COALESCE(dispatch_context, ?) WHERE job_id=?",
+                    "dispatch_context=COALESCE(dispatch_context, ?), "
+                    "context_mode=?, context_bytes=? WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2184,6 +2189,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         task,
                         story_id,
                         dispatch_context,
+                        context_mode,
+                        context_bytes,
                         job_id,
                     ),
                 )
@@ -2193,7 +2200,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2207,6 +2215,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         log_file,
                         dispatch_context,
+                        context_mode,
+                        context_bytes,
                     ),
                 )
             dconn.commit()
@@ -2219,7 +2229,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     log_telemetry = _pkg("log_telemetry_event")
     if log_telemetry:
-        log_telemetry({"type": "dispatch", "agent": agent, "story_id": story_id, "job_id": job_id})
+        log_telemetry({
+            "type": "dispatch",
+            "agent": agent,
+            "story_id": story_id,
+            "job_id": job_id,
+            "context_mode": context_mode,
+            "context_bytes": context_bytes,
+        })
     return job
 
 
