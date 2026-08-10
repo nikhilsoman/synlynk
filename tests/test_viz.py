@@ -25,6 +25,22 @@ def test_ftue_prompts_non_tty_uses_defaults_without_input(tmp_path, monkeypatch)
     with open(tmp_path / ".synlynk" / "config.json") as f:
         assert json.load(f) == result
 
+
+def test_synlynk_viz_ftue_crashes_with_filenotfou_when_synlynk_directory_missing(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+
+    from synlynk.viz import _ftue_prompts
+
+    result = _ftue_prompts({})
+
+    config_path = tmp_path / ".synlynk" / "config.json"
+    assert config_path.is_file()
+    assert json.loads(config_path.read_text()) == result
+
+
 def make_test_db(path: str):
     conn = sqlite3.connect(path)
     conn.executescript("""
