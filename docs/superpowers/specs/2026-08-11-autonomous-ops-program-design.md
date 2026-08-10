@@ -27,7 +27,7 @@ This is execution and continuity autonomy, not strategic-decision autonomy. Huma
 Every repo synlynk operates in gets its own complete, isolated complement of the 8 defined Agent roles (pm, architect, tpm, dev, designer, qa, marketing, synlynk-bot — per `docs/glossary-agent-vs-harness.md` and `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md` §2), each with its own GitHub App identity. Identities are not shared across repos and not shared across roles.
 
 Status as of this spec:
-- **synlynk**: all 8 identities provisioned and tested working (issue #864's manifest-callback friction is resolved; this was the mechanical blocker for provisioning).
+- **synlynk**: all 8 identities provisioned and tested working. Issue #864 (dead `synlynk.com` manifest `redirect_url` forcing a manual code copy-paste, hit on every role provisioned so far) is fixed via merged PR #900 — the manifest flow now runs a local-loopback HTTP server that auto-captures GitHub's callback code, falling back to manual paste only for headless/remote sessions.
 - **cc-videoreframing** (the pilot repo, see below): identities not yet provisioned. This is the first foundational task of Autonomous Ops Lite.
 
 This directly resolves issue **#423** (the shared-single-GitHub-identity problem that made `gh pr review --approve` fail on every dispatch-authored PR, worked around all session via the sanctioned COMMENT-review fallback) as a side effect, once each repo has real per-role identities to review with — no separate fix is required beyond provisioning.
