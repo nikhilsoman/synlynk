@@ -13,7 +13,7 @@ Fleet EOD (matrix/doctor/TIER) was hygiene-only and single-repo. It could be all
 | # | Gap | Layer |
 |---|-----|--------|
 | 1 | Single-repo only | Cross `~/dev/*` + `~/.synlynk/projects/*` |
-| 2 | No job outcomes | L1 status mix, unknown/fail rates |
+| 2 | No job outcomes | L1 status mix, unknown/fail rates, **context_mode mix** |
 | 3 | Live smoke ≠ real work | L1 jobs separate from L6 smoke cells |
 | 4 | Doctor presence checks | L0 matrix + L1 outcomes (not TC-2 alone) |
 | 5 | No GH-write lane | L3 heuristics + can_gh_write list |

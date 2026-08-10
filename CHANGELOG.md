@@ -11,6 +11,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**Agent vs Harness Terminology — Phase 0 (design 2026-08-09, plan 2026-08-09)**
+- `docs/glossary-agent-vs-harness.md` — canonical definition distinguishing **Agent** (persistent role identity + charter: pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot) from **Harness** (swappable execution backend: Claude/Agy/Grok/Codex/local).
+- Auto-generated `## Capability-Based Task Allocation` table (synced into CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md via `synlynk doctor --fix`) now reads `| Role | Harness | Tasks |` instead of the conflated `| Role | Agent | Tasks |`, with a glossary-link note.
+- Hand-maintained "Terminology: Agent vs Harness" section added to this repo's own `CLAUDE.md`.
+- `.synlynk/roles.yaml`, `README.md`, `SYNLYNK_GUIDE.md` wording fixed to stop conflating Agent and Harness.
+- First phase of a 5-phase roadmap (`docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md` §10) — Phases 1-4 (agent manifests, memory, capability registry, portability) are each future, separately-planned work.
+
+### Added
+
 **Quota-Aware Dispatch Reservation (design 2026-08-08, plan 2026-08-08)**
 - `agent_reservations` ledger tracks estimated-token reservations per harness from the moment a job is queued/dispatched until it settles, closing the gap where `--force-agent` and daemon-queued dispatches could bypass quota checks entirely.
 - `dispatch_agent()` now consults quota unconditionally (including `--force-agent` calls) and defers (`queued`, `blocked_reason=quota_exhausted`) instead of raising when a harness has no headroom; deferred jobs resume automatically once the harness's quota window resets — no manual re-dispatch needed.

@@ -69,6 +69,30 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return flags
 
 
+def _ensure_daemon_job_context_columns(conn) -> None:
+    """Add context_mode / context_bytes if missing (legacy schemas + unit fixtures).
+
+    Safe to call on every dispatch write path. No-ops when columns already exist
+    or when the connection has no daemon_jobs table.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    if "context_mode" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
+        except Exception:
+            pass
+    if "context_bytes" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
+        except Exception:
+            pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -290,6 +314,24 @@ _ENV_ALLOWLIST_BASE = [
 ]
 
 
+def _gh_write_allow_host_auth() -> bool:
+    """Operator opt-in to use host `gh` keyring when no App token is available (#569)."""
+    raw = (os.environ.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _isolated_gh_config_dir() -> str:
+    """Return a directory for GH_CONFIG_DIR so `gh` cannot use the host keyring session.
+
+    `gh` prefers GH_TOKEN when set, but still consults config under HOME. Pointing
+    GH_CONFIG_DIR at an empty synlynk-managed dir isolates host `gh auth login`
+    state from the dispatched child (#569).
+    """
+    path = os.path.join(os.path.expanduser("~/.synlynk"), "gh-config", "dispatch")
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    return path
+
+
 def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str) -> dict:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
@@ -298,6 +340,11 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
     env_passthrough vars are inherited. Everything else the operator's shell
     happens to have set (AWS keys, unrelated API tokens, etc.) is excluded by
     default.
+
+    When ``requires_gh_write`` is set (#569 / Epic B0-B1):
+    - Role App token present → inject GH_TOKEN + isolate GH_CONFIG_DIR.
+    - Token missing → **fail closed** (raise RuntimeError) unless
+      SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is truthy.
     """
     baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
     allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
@@ -310,18 +357,31 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
             proc_env[k] = v
 
     if requires_gh_write:
-        gh_token = _resolve_dispatch_gh_token(_role_for_story(story_id) or "dev")
+        role = _role_for_story(story_id) or "dev"
+        gh_token = _resolve_dispatch_gh_token(role)
+        # Never inherit ambient tokens from the parent shell for GH-write jobs.
+        proc_env.pop("GH_TOKEN", None)
+        proc_env.pop("GITHUB_TOKEN", None)
         if gh_token:
             proc_env["GH_TOKEN"] = gh_token
-        else:
-            proc_env.pop("GH_TOKEN", None)
-            proc_env.pop("GITHUB_TOKEN", None)
+            proc_env["GITHUB_TOKEN"] = gh_token
+            proc_env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+        elif _gh_write_allow_host_auth():
             print(
-                "  ⚠ no role-scoped GitHub token available for this --requires-gh-write "
-                "dispatch — stripping any inherited GH_TOKEN/GITHUB_TOKEN so the job cannot "
-                "silently fall back to a personal credential; GitHub write actions in this "
-                "job will fail until a role App is provisioned (see `synlynk identity init`).",
+                "  ⚠ --requires-gh-write: no role-scoped GitHub App token; "
+                "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is set — child may use host `gh` "
+                f"keyring under shared personal identity (role={role!r}). "
+                "Provision a role App: synlynk identity init --role " + role,
                 file=sys.stderr,
+            )
+        else:
+            raise RuntimeError(
+                "Dispatch refused: --requires-gh-write requires a role-scoped GitHub App "
+                f"token, but none is available for role {role!r} "
+                f"(checked .synlynk/github_apps/{role}.json and synlynk-bot.json). "
+                f"Run: synlynk identity init --role {role}  "
+                "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
+                "(uses personal keyring — not recommended; see #569)."
             )
     return proc_env
 
@@ -909,6 +969,105 @@ def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     return worktree_path, worktree_branch
 
 
+def _git_ref_exists(repo_path: str, ref: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0 and bool((result.stdout or "").strip())
+
+
+def _fetch_origin_branch(repo_path: str, branch: str) -> bool:
+    """Best-effort `git fetch origin <branch>`. Returns True if fetch exit 0."""
+    try:
+        result = subprocess.run(
+            ["git", "fetch", "origin", branch],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=repo_path,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
+def _resolve_explicit_base_ref(repo_path: Optional[str], explicit_base: str) -> str:
+    """Resolve ``--base`` to a fresh tip (#832).
+
+    Bare branch names (e.g. ``main``) previously returned as-is and were
+    ``rev-parse``'d against the **local** ref, which can lag ``origin/main``.
+    Prefer ``origin/<branch>`` after a fetch when available.
+    """
+    base = (explicit_base or "").strip()
+    if not base:
+        return "HEAD"
+    # Full commit SHA — use as-is.
+    if re.fullmatch(r"[0-9a-fA-F]{7,40}", base):
+        return base
+
+    path = repo_path if repo_path and os.path.isdir(repo_path) else os.getcwd()
+
+    # Already a remote-tracking ref: freshen then use.
+    if base.startswith("origin/"):
+        branch = base[len("origin/") :]
+        if branch:
+            _fetch_origin_branch(path, branch)
+        return base
+
+    # Other remote forms (upstream/foo) — leave alone after optional fetch of suffix.
+    if "/" in base and not base.startswith("."):
+        return base
+
+    # Bare branch name: fetch origin/<name> and prefer it.
+    fetched = _fetch_origin_branch(path, base)
+    remote_ref = f"origin/{base}"
+    if _git_ref_exists(path, remote_ref):
+        if _git_ref_exists(path, base):
+            try:
+                local_sha = subprocess.run(
+                    ["git", "-C", path, "rev-parse", base],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                remote_sha = subprocess.run(
+                    ["git", "-C", path, "rev-parse", remote_ref],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                l = (local_sha.stdout or "").strip()
+                r = (remote_sha.stdout or "").strip()
+                if l and r and l != r:
+                    print(
+                        f"  ⚠ worktree base: local '{base}' ({l[:8]}) differs from "
+                        f"{remote_ref} ({r[:8]}) — using remote tip (#832)"
+                    )
+            except Exception:
+                pass
+        if not fetched:
+            print(
+                f"  ⚠ worktree base: fetch origin {base} failed; using existing {remote_ref}"
+            )
+        return remote_ref
+
+    if _git_ref_exists(path, base):
+        print(
+            f"  ⚠ worktree base: origin/{base} unavailable — using local '{base}' "
+            f"(may be stale if remotes exist)"
+        )
+        return base
+
+    # Unknown ref — return as given so rev-parse / worktree add fails loudly.
+    return base
+
+
 def _resolve_dispatch_worktree_base_ref(
     repo_path: Optional[str],
     stacking_mode: str = "auto",
@@ -919,9 +1078,12 @@ def _resolve_dispatch_worktree_base_ref(
     stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
     "always" (stack on current branch, error on mainline/detached HEAD),
     "never" (always mainline — legacy behavior)
+
+    ``explicit_base`` (``--base``) is freshened via :func:`_resolve_explicit_base_ref`
+    so ``--base main`` tracks ``origin/main`` after fetch (#832).
     """
     if explicit_base:
-        return explicit_base
+        return _resolve_explicit_base_ref(repo_path, explicit_base)
 
     if not repo_path or not os.path.isdir(repo_path):
         return "HEAD"
@@ -950,31 +1112,13 @@ def _resolve_dispatch_worktree_base_ref(
             )
 
     for candidate in ("main", "master"):
-        try:
-            fetch_result = subprocess.run(
-                ["git", "fetch", "origin", candidate],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=repo_path,
-            )
-        except Exception:
-            fetch_result = None
-        if fetch_result and fetch_result.returncode == 0:
+        if _fetch_origin_branch(repo_path, candidate) and _git_ref_exists(
+            repo_path, f"origin/{candidate}"
+        ):
             return f"origin/{candidate}"
 
     for candidate in ("origin/main", "origin/master", "main", "master"):
-        try:
-            verify_result = subprocess.run(
-                ["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=repo_path,
-            )
-        except Exception:
-            continue
-        if verify_result.returncode == 0 and (verify_result.stdout or "").strip():
+        if _git_ref_exists(repo_path, candidate):
             return candidate
 
     return "HEAD"
@@ -1219,6 +1363,11 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
         )
         if sha_result.returncode == 0:
             base_sha = (sha_result.stdout or "").strip()
+    # Always log resolved base before worktree create (#832 diagnosability).
+    if base_sha:
+        print(f"  worktree base resolving against {base_ref} @ {base_sha}")
+    else:
+        print(f"  worktree base resolving against {base_ref}")
 
     worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
     if base_sha:
@@ -1988,6 +2137,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if len(encoded_context) > context_max_bytes:
             context_text = encoded_context[:context_max_bytes].decode("utf-8", errors="ignore")
             print(f"  context truncated to {context_max_bytes}B (agent profile limit)")
+    # Bytes after truncation — the payload the agent actually received.
+    context_bytes = len(context_text.encode("utf-8")) if context_text else 0
 
     relevant_files = _pkg("_relevant_files_for_story")
     file_list = relevant_files(story_id) if (story_id and relevant_files) else []
@@ -2128,6 +2279,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
+        "context_mode": context_mode,
+        "context_bytes": context_bytes,
         "worktree_path": worktree_path,
         "worktree_branch": worktree_branch,
         "base_branch": base_branch,
@@ -2165,6 +2318,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     try:
         dconn = get_db() if get_db else None
         if dconn is not None:
+            # Tests and older DBs may create daemon_jobs without these columns;
+            # ensure before INSERT so dispatch never hard-fails on schema lag.
+            _ensure_daemon_job_context_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -2175,7 +2331,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, agent=?, task=?, story_id=?, "
-                    "dispatch_context=COALESCE(dispatch_context, ?) WHERE job_id=?",
+                    "dispatch_context=COALESCE(dispatch_context, ?), "
+                    "context_mode=?, context_bytes=? WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2184,6 +2341,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         task,
                         story_id,
                         dispatch_context,
+                        context_mode,
+                        context_bytes,
                         job_id,
                     ),
                 )
@@ -2193,7 +2352,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2207,6 +2367,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         log_file,
                         dispatch_context,
+                        context_mode,
+                        context_bytes,
                     ),
                 )
             dconn.commit()
@@ -2219,7 +2381,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     log_telemetry = _pkg("log_telemetry_event")
     if log_telemetry:
-        log_telemetry({"type": "dispatch", "agent": agent, "story_id": story_id, "job_id": job_id})
+        log_telemetry({
+            "type": "dispatch",
+            "agent": agent,
+            "story_id": story_id,
+            "job_id": job_id,
+            "context_mode": context_mode,
+            "context_bytes": context_bytes,
+        })
     return job
 
 

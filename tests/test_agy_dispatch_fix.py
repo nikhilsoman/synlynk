@@ -330,7 +330,14 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
     assert job_a["worktree_path"] != job_b["worktree_path"]
     assert spawned == [job_a["worktree_path"], job_b["worktree_path"]]
     assert len({job_a["worktree_branch"], job_b["worktree_branch"]}) == 2
-    assert len(created) == 14
+    # Isolation signal: two distinct worktree adds. Do not hardcode total git call
+    # count — #832 base freshening adds fetch/rev-parse steps that vary by branch.
+    worktree_adds = [
+        cmd for cmd, _kw in created
+        if isinstance(cmd, list) and len(cmd) >= 3 and cmd[0] == "git" and "worktree" in cmd and "add" in cmd
+    ]
+    assert len(worktree_adds) == 2
+    assert len(created) >= 14
 
 
 def test_dispatch_perjob_git_worktree_isolation_fails_loudly_on_worktree_error(git_worktree_repo, monkeypatch):

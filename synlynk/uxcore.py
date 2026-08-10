@@ -302,6 +302,10 @@ class JobRun:
     duration_s: float
     exit_code: int
     cost_usd: float
+    # Action metadata is optional because older telemetry rows do not contain it.
+    job_id: Optional[str] = None
+    pr_number: Optional[int] = None
+    status: Optional[str] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -322,10 +326,32 @@ def get_jobs() -> list:
         return []
     if not isinstance(rows, list):
         return []
+    tracked_jobs = {}
+    try:
+        from synlynk.jobs import _load_jobs
+
+        tracked_jobs = {
+            str(row.get("id") or row.get("job_id")): row
+            for row in _load_jobs()
+            if isinstance(row, dict) and (row.get("id") or row.get("job_id"))
+        }
+    except Exception:
+        pass
+
     jobs = []
+    seen_job_ids = set()
     for row in rows[-20:]:
         if not isinstance(row, dict):
             continue
+        job_id = row.get("job_id") or row.get("id")
+        tracked = tracked_jobs.get(str(job_id), {}) if job_id else {}
+        pr_number = row.get("pr_number") or tracked.get("pr_number")
+        try:
+            pr_number = int(pr_number) if pr_number is not None else None
+        except (TypeError, ValueError):
+            pr_number = None
+        if job_id:
+            seen_job_ids.add(str(job_id))
         jobs.append(
             JobRun(
                 ts=row.get("ts") or row.get("timestamp") or "",
@@ -333,8 +359,25 @@ def get_jobs() -> list:
                 duration_s=float(row.get("duration_s") or 0.0),
                 exit_code=int(row.get("exit_code") or 0),
                 cost_usd=float(row.get("cost_usd") or 0.0),
+                job_id=str(job_id) if job_id else None,
+                pr_number=pr_number,
+                status=row.get("status") or tracked.get("status"),
             )
         )
+    # Running/queued jobs can exist before they have emitted telemetry.
+    for job_id, row in tracked_jobs.items():
+        if job_id in seen_job_ids:
+            continue
+        jobs.append(JobRun(
+            ts=row.get("started_at") or row.get("enqueued_at") or "",
+            agent=row.get("agent") or "",
+            duration_s=0.0,
+            exit_code=0,
+            cost_usd=float(row.get("cost_usd") or 0.0),
+            job_id=job_id,
+            pr_number=row.get("pr_number"),
+            status=row.get("status"),
+        ))
     return jobs
 
 

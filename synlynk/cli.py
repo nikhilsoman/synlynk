@@ -241,6 +241,9 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Preview what would be upgraded without installing")
 
     subparsers.add_parser("join", help="Onboard as a new member to an existing project")
+    subparsers.add_parser(
+        "start", help="Cold-start entry point: detect new vs existing project and guide setup"
+    )
 
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
@@ -541,7 +544,9 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
     dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
-        help="Task needs gh pr review/merge - reroute to a capable agent unless --force-agent is set (see #426)")
+        help="Task needs gh write (PR review/merge/comment). Requires a role GitHub App token "
+             "(synlynk identity init --role); fails closed if none (#569). "
+             "Also hints routing to a GH-capable agent unless --force-agent (#426).")
     dispatch_parser.add_argument(
         "--requires",
         action="append",
@@ -1259,6 +1264,9 @@ def main() -> None:
             sys.exit(code)
         else:
             help_parsers.get("ops", parser).print_help()
+    elif args.command == "start":
+        from synlynk.coldstart import cmd_start
+        cmd_start()
     elif args.command == "join":
         cmd_join()
     elif args.command == "team":

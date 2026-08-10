@@ -939,7 +939,9 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     handoff_count INTEGER NOT NULL DEFAULT 0,
     previous_agents TEXT,
     dispatch_context TEXT,
-    blocked_reason TEXT
+    blocked_reason TEXT,
+    context_mode TEXT,
+    context_bytes INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 
@@ -3680,7 +3682,7 @@ _ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
 
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
-         mode: str = "solo", dry_run: bool = False) -> None:
+         mode: str = "solo", dry_run: bool = False, quiet: bool = False) -> None:
     """Progressive wizard: semantic scan → agent discovery → doc bootstrap → nudge."""
 
     def _print_step(n: int, label: str) -> None:
@@ -3839,40 +3841,43 @@ def init(force: bool = False, agents: list = None,
             print(f"  ✓ Created {rates_path}")
 
     # ── Step 4: LLM enrichment offer ────────────────────────────────────────
-    _print_step(4, "LLM enrichment (optional)")
-    if functional:
-        enricher = functional[0]
-        print(f"  I found {scan['commit_count']} commits and {len(scan['recent_topics'])} "
-              f"recent topics.\n  Want me to ask {enricher['name']} to synthesise a roadmap "
-              f"from this? (costs tokens)")
-        try:
-            answer = input("  [y/N] ").strip().lower()
-        except EOFError:
-            answer = ""
-        if answer == "y":
-            print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
-            ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
-            print(f"{_GREEN}done{_RESET}" if ok else f"{_YELLOW}failed — keeping skeleton{_RESET}")
-    else:
-        print(f"  {_DIM}No functional agent available — skipping enrichment{_RESET}")
+    if not quiet:
+        _print_step(4, "LLM enrichment (optional)")
+        if functional:
+            enricher = functional[0]
+            print(f"  I found {scan['commit_count']} commits and {len(scan['recent_topics'])} "
+                  f"recent topics.\n  Want me to ask {enricher['name']} to synthesise a roadmap "
+                  f"from this? (costs tokens)")
+            try:
+                answer = input("  [y/N] ").strip().lower()
+            except EOFError:
+                answer = ""
+            if answer == "y":
+                print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
+                ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
+                print(f"{_GREEN}done{_RESET}" if ok else f"{_YELLOW}failed — keeping skeleton{_RESET}")
+        else:
+            print(f"  {_DIM}No functional agent available — skipping enrichment{_RESET}")
 
     # ── Step 5: Cloud directory nudge ────────────────────────────────────────
-    _print_step(5, "Team & cloud setup (optional)")
-    print("  Add a collaborator or share this workspace with your team.")
-    print("  Leave blank to skip.")
-    try:
-        email = input("  Email or synlynk ID: ").strip()
-    except EOFError:
-        email = ""
-
-    # Industry vertical
     inferred = _infer_industry()
-    try:
-        industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
-    except EOFError:
+    if quiet:
+        email = ""
         industry = inferred
-    if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
-        industry = "unknown"
+    else:
+        _print_step(5, "Team & cloud setup (optional)")
+        print("  Add a collaborator or share this workspace with your team.")
+        print("  Leave blank to skip.")
+        try:
+            email = input("  Email or synlynk ID: ").strip()
+        except EOFError:
+            email = ""
+        try:
+            industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
+        except EOFError:
+            industry = inferred
+        if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
+            industry = "unknown"
 
     # ── Step 6: Finalise config ──────────────────────────────────────────────
     _print_step(6, "Finalising")

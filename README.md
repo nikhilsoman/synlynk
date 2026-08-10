@@ -12,7 +12,7 @@
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
-synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI agents, shared project state. It injects scoped project context into every agent dispatch, routes tasks to the best available agent using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI harnesses, shared project state. It injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
 **v0.12.0:** Measurement & Reliability — dispatch git-finalization (agents no longer need to remember to commit/push/PR), fleet batch scheduling (`synlynk schedule`), model-aware capability routing with quota headroom gating, and full cost-provenance tracking (every dollar shown is measured or flagged as an estimate). 1140 tests passing.
 
@@ -122,6 +122,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 **Start here:**
 
 - `synlynk init`
+- `synlynk start`
 - `synlynk scan`
 - `synlynk join`
 - `synlynk status`
@@ -256,7 +257,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Roadmap
 
-synlynk's goal is to become the OS for multi-agent development — the substrate that keeps every AI tool, every agent, and every developer in sync across the full project lifecycle.
+synlynk's goal is to become the OS for multi-agent development — the substrate that keeps every AI harness, every Agent role, and every developer in sync across the full project lifecycle.
 
 | Version | Theme | Status | Target |
 |---|---|---|---|

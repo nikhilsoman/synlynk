@@ -687,6 +687,8 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    # #569 fail-closed: tests without Apps must mock a minted token
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
         "grok", "review and merge PR #500", story_id="story-manual-1",
@@ -705,6 +707,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
         "agy", "review and merge PR #500", story_id="story-manual-1",
@@ -727,6 +730,7 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
         "codex", "review and merge PR #500", story_id="story-manual-1",
@@ -860,16 +864,110 @@ def test_resolve_dispatch_base_ref_stacking_always_errors_on_mainline(git_worktr
 
 
 def test_resolve_dispatch_base_ref_explicit_base_wins(git_worktree_repo):
+    """Without origin, --base main falls back to local main."""
     import synlynk.dispatch as dispatch_mod
     import subprocess
 
+    subprocess.run(["git", "branch", "-M", "main"], cwd=git_worktree_repo, capture_output=True, check=True)
     subprocess.run(["git", "checkout", "-b", "feat/example"], cwd=git_worktree_repo, capture_output=True, check=True)
 
     base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
         str(git_worktree_repo), stacking_mode="auto", explicit_base="main"
     )
 
+    # No remote → local main (still honors explicit base over stacking).
     assert base_ref == "main"
+
+
+def test_explicit_base_main_uses_origin_tip_when_local_main_stale(
+    git_worktree_repo, tmp_path, monkeypatch
+):
+    """#832: --base main must follow origin/main after fetch, not stale local main."""
+    import subprocess
+    from pathlib import Path
+    import synlynk.dispatch as dispatch_mod
+
+    repo = Path(git_worktree_repo)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, capture_output=True, check=True)
+
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(bare)],
+        cwd=repo, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    old = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    (repo / "advance.txt").write_text("ahead of local main\n")
+    subprocess.run(["git", "add", "advance.txt"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "advance origin tip"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    new = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "push", "origin", "main"], cwd=repo, capture_output=True, check=True,
+    )
+    # Leave local main behind origin/main
+    subprocess.run(
+        ["git", "reset", "--hard", old], cwd=repo, capture_output=True, check=True,
+    )
+    local_now = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert local_now == old
+    assert local_now != new
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(repo), stacking_mode="auto", explicit_base="main"
+    )
+    assert base_ref == "origin/main"
+    tip = subprocess.run(
+        ["git", "rev-parse", base_ref], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert tip == new
+
+    # Worktree created from --base main must land on the fresh tip
+    wt = dispatch_mod._create_job_worktree("job-fresh-base", "codex", base="main")
+    assert wt["base_branch"] == "origin/main"
+    assert wt["base_sha"] == new
+    head = subprocess.run(
+        ["git", "-C", wt["path"], "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert head == new
+
+
+def test_explicit_base_origin_main_still_works(git_worktree_repo, tmp_path, monkeypatch):
+    import subprocess
+    from pathlib import Path
+    import synlynk.dispatch as dispatch_mod
+
+    repo = Path(git_worktree_repo)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, capture_output=True, check=True)
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(bare)], cwd=repo, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main"], cwd=repo, capture_output=True, check=True,
+    )
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(repo), stacking_mode="auto", explicit_base="origin/main"
+    )
+    assert base_ref == "origin/main"
 
 
 def test_run_dispatch_gate_parses_pytest_summary_and_flags_failures(tmp_path, monkeypatch):
@@ -996,3 +1094,99 @@ def test_check_dispatch_base_still_fresh_true_when_no_base_recorded():
 
     job = {"base_branch": None, "base_sha": None}
     assert dispatch_mod._check_dispatch_base_still_fresh(job) is True
+
+
+def test_dispatch_persists_context_mode_and_bytes(project_dir, monkeypatch):
+    """dispatch_agent writes context_mode + context_bytes onto daemon_jobs."""
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from unittest.mock import MagicMock
+
+    # Minimal stubs so dispatch reaches the DB write without spawning.
+    monkeypatch.setattr(dispatch_mod, "_create_job_worktree", lambda *a, **k: {
+        "path": str(project_dir / "wt"),
+        "base_branch": "main",
+        "base_sha": "abc12345",
+    })
+    monkeypatch.setattr(dispatch_mod, "_job_worktree_details", lambda *a, **k: ("wt", "branch"))
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "# ctx\n" + ("x" * 100))
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **k: "test-model")
+    monkeypatch.setattr(sl, "_warn_context_size", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "_load_jobs", lambda: [])
+    monkeypatch.setattr(sl, "_save_jobs", lambda jobs: None)
+    monkeypatch.setattr(sl, "log_telemetry_event", lambda *a, **k: None)
+
+    # Fake Popen
+    proc = MagicMock()
+    proc.pid = 424242
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **k: proc)
+
+    # Avoid heavy preflight
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_preflight_dispatch",
+        lambda *a, **k: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(sl, "_quota_status_for_agent", lambda *a, **k: {"status": "ok"})
+
+    # ensure worktree dirs
+    (project_dir / "wt").mkdir(exist_ok=True)
+
+    job = dispatch_mod.dispatch_agent(
+        "codex",
+        "do a small thing",
+        force_agent=True,
+        context_mode="task",
+        job_id="job-ctxmode1",
+        skip_preflight=True,
+    )
+    assert job.get("context_mode") == "task"
+    assert job.get("context_bytes", 0) > 0
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT context_mode, context_bytes FROM daemon_jobs WHERE job_id=?",
+        ("job-ctxmode1",),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "task"
+    assert int(row[1]) > 0
+
+
+def test_cost_entry_inherits_context_mode_from_job(project_dir):
+    import synlynk as sl
+    from synlynk.db import _insert_cost_row
+
+    conn = sl._get_db()
+    # migration should add columns
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "context_mode" in cols
+    assert "context_bytes" in cols
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at, context_mode, context_bytes) VALUES (?,?,?,?,?,?,?,?,?)",
+        ("job-cm-cost", "claude", "t", "done", 5, "[]", "2026-08-09T00:00:00", "full", 50000),
+    )
+    conn.commit()
+    conn.close()
+
+    _insert_cost_row(
+        session_date="2026-08-09",
+        agent="claude",
+        model="test",
+        input_tokens=100,
+        output_tokens=10,
+        cache_read_tokens=0,
+        cost_source="actual",
+        total_cost_usd=0.01,
+        job_id="job-cm-cost",
+    )
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT context_mode FROM cost_entries WHERE job_id=?",
+        ("job-cm-cost",),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "full"

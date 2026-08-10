@@ -99,14 +99,15 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness vsop-repair verified:2026-07-30T07:33:24Z -->
+<!-- synlynk:harness vsop-repair verified:2026-08-09T18:03:36Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
 implement, test, canvas, js, infra
+
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
-2. The reviewer must run `synlynk pr check <pr#>`.
+2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
@@ -125,7 +126,12 @@ implement, test, canvas, js, infra
 - Plan not committed = do not dispatch tasks.
 
 ## Capability-Based Task Allocation
-| Role | Agent | Tasks |
+
+**Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a 
+task, not the Agent (role) doing the work
+- See `docs/glossary-agent-vs-harness.md`
+
+| Role | Harness | Tasks |
 | :--- | :--- | :--- |
 | pm / review / deploy / brainstorm | Claude | pm, review, deploy, brainstorm |
 | implement / test / css / templates / content / subpages | Agy | implement, test, css, templates, content, subpages |

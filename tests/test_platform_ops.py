@@ -77,6 +77,45 @@ def test_cmd_ops_report_exit_0_when_ops_green():
             assert cmd_ops_report(hours=24, json_output=False) == 0
 
 
+def test_format_platform_report_includes_context_mode_rollup():
+    report = PlatformReport(
+        hours=24,
+        generated_at="2026-08-09T00:00:00+00:00",
+        scoreboard={"hygiene": "GREEN", "ops": "GREEN", "summary": "ok"},
+        jobs={
+            "count": 10,
+            "done": 8,
+            "failed": 2,
+            "unknownish": 0,
+            "unknown_rate": 0.0,
+            "fail_rate": 0.2,
+            "by_status": {"done": 8, "failed": 2},
+            "by_agent": {"claude": 10},
+            "by_context_mode": {"task": 7, "full": 2, "none": 1},
+            "by_context_mode_pct": {"task": 70.0, "full": 20.0, "none": 10.0},
+            "context_bytes": {"n": 9, "p50": 40000, "mean": 42000},
+            "dbs_scanned": 1,
+        },
+        costs={
+            "entries": 3,
+            "total_usd": 1.5,
+            "input_tokens": 1000,
+            "output_tokens": 100,
+            "orphan_entries": 0,
+            "orphan_rate": 0.0,
+            "by_agent": {"claude": {"cost": 1.5, "in": 1000, "out": 100, "n": 3}},
+            "by_context_mode": {
+                "task": {"cost": 1.0, "in": 700, "out": 70, "n": 2},
+                "full": {"cost": 0.5, "in": 300, "out": 30, "n": 1},
+            },
+        },
+    )
+    text = format_platform_report(report)
+    assert "by_context_mode=" in text
+    assert "pct=" in text
+    assert "context_bytes=" in text
+
+
 # --- #751 windowed sentinel_crit -------------------------------------------------
 
 _MULTI_MONTH_SENTINEL = """# Sentinel Alerts
@@ -221,3 +260,23 @@ def test_collect_only_stale_sentinel_is_ops_green_for_signals(tmp_path, monkeypa
     assert not any(
         "sentinel" in (f.get("summary") or "").lower() for f in report.findings
     )
+
+
+def test_format_platform_report_includes_jobs_missing_cost():
+    from synlynk.platform_ops import PlatformReport, format_platform_report
+    report = PlatformReport(
+        hours=24,
+        generated_at="2026-08-09T00:00:00+00:00",
+        scoreboard={"hygiene": "GREEN", "ops": "RED", "summary": "cost gap"},
+        jobs={"count": 5, "done": 5, "failed": 0, "unknownish": 0,
+              "unknown_rate": 0, "fail_rate": 0, "by_status": {}, "by_agent": {},
+              "dbs_scanned": 1, "zombie_running": 0},
+        costs={
+            "entries": 0, "total_usd": 0, "input_tokens": 0, "output_tokens": 0,
+            "orphan_entries": 0, "orphan_rate": 0,
+            "jobs_missing_cost": 5, "terminal_jobs": 5, "cost_missing_rate": 1.0,
+            "by_agent": {}, "by_context_mode": {},
+        },
+    )
+    text = format_platform_report(report)
+    assert "jobs_missing_cost=5/5" in text

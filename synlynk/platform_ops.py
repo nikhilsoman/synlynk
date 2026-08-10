@@ -248,12 +248,25 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
             try:
-                rows = conn.execute(
-                    "SELECT job_id, agent, task, story_id, status, exit_code, "
-                    "enqueued_at, started_at, completed_at, log_path "
-                    "FROM daemon_jobs WHERE COALESCE(completed_at, started_at, enqueued_at) >= ?",
-                    (cutoff_s[:19],),
-                ).fetchall()
+                # Prefer schema with context_mode/context_bytes (#context-mode telemetry);
+                # fall back when older DBs lack the columns.
+                try:
+                    rows = conn.execute(
+                        "SELECT job_id, agent, task, story_id, status, exit_code, "
+                        "enqueued_at, started_at, completed_at, log_path, "
+                        "context_mode, context_bytes "
+                        "FROM daemon_jobs WHERE COALESCE(completed_at, started_at, enqueued_at) >= ?",
+                        (cutoff_s[:19],),
+                    ).fetchall()
+                    has_ctx_cols = True
+                except sqlite3.Error:
+                    rows = conn.execute(
+                        "SELECT job_id, agent, task, story_id, status, exit_code, "
+                        "enqueued_at, started_at, completed_at, log_path "
+                        "FROM daemon_jobs WHERE COALESCE(completed_at, started_at, enqueued_at) >= ?",
+                        (cutoff_s[:19],),
+                    ).fetchall()
+                    has_ctx_cols = False
                 for r in rows:
                     for col in ("completed_at", "started_at", "enqueued_at"):
                         dt = _parse_ts(r[col])
@@ -268,17 +281,34 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                                 "task": (r["task"] or "")[:100],
                                 "db": db.parent.name,
                                 "source": "daemon_jobs",
+                                "context_mode": (
+                                    (r["context_mode"] if has_ctx_cols else None) or "unknown"
+                                ),
+                                "context_bytes": (
+                                    r["context_bytes"] if has_ctx_cols else None
+                                ),
                             })
                             break
             except sqlite3.Error:
                 pass
             try:
-                rows = conn.execute(
-                    "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
-                    "total_cost_usd, job_id, story_id, notes, recorded_at, session_date "
-                    "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
-                    (cutoff_s[:10],),
-                ).fetchall()
+                try:
+                    rows = conn.execute(
+                        "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
+                        "total_cost_usd, job_id, story_id, notes, recorded_at, session_date, "
+                        "context_mode "
+                        "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
+                        (cutoff_s[:10],),
+                    ).fetchall()
+                    cost_has_ctx = True
+                except sqlite3.Error:
+                    rows = conn.execute(
+                        "SELECT agent, model, input_tokens, output_tokens, cache_read_tokens, "
+                        "total_cost_usd, job_id, story_id, notes, recorded_at, session_date "
+                        "FROM cost_entries WHERE COALESCE(recorded_at, session_date) >= ?",
+                        (cutoff_s[:10],),
+                    ).fetchall()
+                    cost_has_ctx = False
                 for r in rows:
                     dt = _parse_ts(r["recorded_at"]) or _parse_ts(
                         (r["session_date"] or "") + "T12:00:00+00:00"
@@ -295,6 +325,9 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                             "recorded_at": r["recorded_at"] or r["session_date"],
                             "notes": (r["notes"] or "")[:80],
                             "db": db.parent.name,
+                            "context_mode": (
+                                (r["context_mode"] if cost_has_ctx else None) or "unknown"
+                            ),
                         })
             except sqlite3.Error:
                 pass
@@ -361,6 +394,8 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                             "task": (j.get("task") or "")[:100],
                             "db": root.name,
                             "source": "jobs.json",
+                            "context_mode": j.get("context_mode") or "unknown",
+                            "context_bytes": j.get("context_bytes"),
                         })
                         break
         except Exception:
@@ -387,17 +422,61 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
     fail_rate = (failed / n_jobs) if n_jobs else 0.0
 
     by_agent_jobs = Counter(j.get("agent") or "?" for j in jobs)
+    by_context_mode = Counter((j.get("context_mode") or "unknown") for j in jobs)
+    by_context_mode_pct = {
+        k: round(100.0 * v / n_jobs, 1) for k, v in by_context_mode.items()
+    } if n_jobs else {}
+    ctx_bytes = [
+        int(j["context_bytes"])
+        for j in jobs
+        if j.get("context_bytes") is not None
+    ]
+    context_bytes_summary: Dict[str, Any] = {"n": len(ctx_bytes)}
+    if ctx_bytes:
+        ctx_sorted = sorted(ctx_bytes)
+        context_bytes_summary.update({
+            "min": ctx_sorted[0],
+            "p50": ctx_sorted[len(ctx_sorted) // 2],
+            "p90": ctx_sorted[min(len(ctx_sorted) - 1, int(len(ctx_sorted) * 0.9))],
+            "max": ctx_sorted[-1],
+            "mean": int(sum(ctx_sorted) / len(ctx_sorted)),
+        })
+    # A1.2: count status=running rows whose PID is already dead (zombie ledger).
+    zombie_running = 0
+    try:
+        from synlynk.jobs import _pid_is_alive
+    except Exception:
+        _pid_is_alive = None  # type: ignore
+    if _pid_is_alive is not None:
+        for db in dbs:
+            try:
+                conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+                try:
+                    for pid, in conn.execute(
+                        "SELECT pid FROM daemon_jobs WHERE status='running'"
+                    ).fetchall():
+                        if pid is None or not _pid_is_alive(pid):
+                            zombie_running += 1
+                finally:
+                    conn.close()
+            except Exception:
+                continue
+
     report.jobs = {
         "count": n_jobs,
         "by_status": dict(status_counts),
         "by_agent": dict(by_agent_jobs),
+        "by_context_mode": dict(by_context_mode),
+        "by_context_mode_pct": by_context_mode_pct,
+        "context_bytes": context_bytes_summary,
+        "zombie_running": zombie_running,
         "unknown_rate": round(unknown_rate, 3),
         "fail_rate": round(fail_rate, 3),
         "done": done,
         "failed": failed,
         "unknownish": unknownish,
         "dbs_scanned": len(dbs),
-        "pass": n_jobs == 0 or (unknown_rate < 0.25 and fail_rate < 0.40),
+        "pass": n_jobs == 0 or (unknown_rate < 0.25 and fail_rate < 0.40 and zombie_running == 0),
     }
     report.job_samples = sorted(
         jobs,
@@ -410,6 +489,9 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
     tot_in = sum(c["in_tok"] for c in costs)
     tot_out = sum(c["out_tok"] for c in costs)
     by_agent_cost: Dict[str, dict] = defaultdict(lambda: {"cost": 0.0, "in": 0, "out": 0, "n": 0})
+    by_context_mode_cost: Dict[str, dict] = defaultdict(
+        lambda: {"cost": 0.0, "in": 0, "out": 0, "n": 0}
+    )
     orphans = 0
     job_ids = set(by_id.keys())
     for c in costs:
@@ -418,18 +500,70 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         by_agent_cost[a]["in"] += c["in_tok"]
         by_agent_cost[a]["out"] += c["out_tok"]
         by_agent_cost[a]["n"] += 1
+        cm = c.get("context_mode") or "unknown"
+        # Prefer job-row mode when cost row is unknown (legacy) but job was tracked.
+        if cm == "unknown" and c.get("job_id") and c["job_id"] in by_id:
+            cm = by_id[c["job_id"]].get("context_mode") or "unknown"
+        by_context_mode_cost[cm]["cost"] += c["cost"]
+        by_context_mode_cost[cm]["in"] += c["in_tok"]
+        by_context_mode_cost[cm]["out"] += c["out_tok"]
+        by_context_mode_cost[cm]["n"] += 1
         if not c.get("job_id") or c.get("job_id") not in job_ids:
             orphans += 1
     orphan_rate = (orphans / len(costs)) if costs else 0.0
+
+    # A2 / #752: terminal jobs with no matching cost_entries row
+    _TERMINAL_STATUSES = {
+        "done", "completed", "failed", "failed_unverified", "timed_out",
+        "permission_denied", "task_delivery_failed", "scope_violation",
+    }
+    costed_job_ids = {c.get("job_id") for c in costs if c.get("job_id")}
+    terminal_jobs = [
+        j for j in jobs
+        if (j.get("status") or "").lower() in _TERMINAL_STATUSES
+        or "fail" in (j.get("status") or "").lower()
+    ]
+    jobs_missing_cost = [
+        j for j in terminal_jobs
+        if j.get("job_id") and j["job_id"] not in costed_job_ids
+    ]
+    n_terminal = len(terminal_jobs)
+    cost_missing_rate = (len(jobs_missing_cost) / n_terminal) if n_terminal else 0.0
+    # Pass when: no terminal jobs, or low missing rate, and never "many jobs / $0 entries"
+    cost_complete_ok = True
+    if n_terminal >= 3 and cost_missing_rate >= 0.5:
+        cost_complete_ok = False
+    if n_terminal >= 5 and len(costs) == 0:
+        cost_complete_ok = False
+    if n_terminal >= 1 and len(costs) == 0 and n_terminal >= 3:
+        cost_complete_ok = False
+
     report.costs = {
         "entries": len(costs),
         "total_usd": round(tot_cost, 4),
         "input_tokens": tot_in,
         "output_tokens": tot_out,
         "by_agent": {k: dict(v) for k, v in sorted(by_agent_cost.items(), key=lambda x: -x[1]["cost"])},
+        "by_context_mode": {
+            k: dict(v) for k, v in sorted(
+                by_context_mode_cost.items(), key=lambda x: -x[1]["cost"]
+            )
+        },
         "orphan_entries": orphans,
         "orphan_rate": round(orphan_rate, 3),
-        "pass": orphan_rate < 0.35 or len(costs) == 0,
+        "jobs_missing_cost": len(jobs_missing_cost),
+        "terminal_jobs": n_terminal,
+        "cost_missing_rate": round(cost_missing_rate, 3),
+        "cost_missing_samples": [
+            {
+                "job_id": j.get("job_id"),
+                "agent": j.get("agent"),
+                "status": j.get("status"),
+                "db": j.get("db"),
+            }
+            for j in jobs_missing_cost[:10]
+        ],
+        "pass": (orphan_rate < 0.35 or len(costs) == 0) and cost_complete_ok,
     }
 
     # L3 side-effects (lightweight text heuristics on recent tasks)
@@ -579,11 +713,21 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
 
     ops_red_reasons = []
     if not jobs_ok:
-        ops_red_reasons.append(
-            f"job unknown_rate={report.jobs.get('unknown_rate')} fail_rate={report.jobs.get('fail_rate')}"
-        )
+        parts = [
+            f"unknown_rate={report.jobs.get('unknown_rate')}",
+            f"fail_rate={report.jobs.get('fail_rate')}",
+        ]
+        if int(report.jobs.get("zombie_running") or 0) > 0:
+            parts.append(f"zombie_running={report.jobs.get('zombie_running')}")
+        ops_red_reasons.append("job " + " ".join(parts))
     if not costs_ok:
-        ops_red_reasons.append(f"cost orphan_rate={report.costs.get('orphan_rate')}")
+        cost_bits = [f"orphan_rate={report.costs.get('orphan_rate')}"]
+        if int(report.costs.get("jobs_missing_cost") or 0) > 0:
+            cost_bits.append(
+                f"jobs_missing_cost={report.costs.get('jobs_missing_cost')}"
+                f"/{report.costs.get('terminal_jobs')}"
+            )
+        ops_red_reasons.append("cost " + " ".join(cost_bits))
     if not signals_ok:
         ops_red_reasons.append(
             f"open LIVE issues={report.signals.get('open_live_issues')} "
@@ -623,6 +767,18 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             "detail": json.dumps(report.jobs.get("by_status"), indent=0)[:500],
             "signal_hash": f"ops-unknown-{hours}h",
         })
+    zomb = int(report.jobs.get("zombie_running") or 0)
+    if zomb > 0:
+        findings.append({
+            "type": "platform_ops",
+            "severity": "medium",
+            "summary": (
+                f"{zomb} daemon_jobs still status=running with dead/null PID "
+                "(run synlynk jobs reap --all-projects --apply; Epic A1)"
+            ),
+            "detail": "zombie_running",
+            "signal_hash": f"ops-zombie-running-{zomb}",
+        })
     if report.costs.get("orphan_rate", 0) >= 0.35 and len(costs) >= 5:
         findings.append({
             "type": "platform_ops",
@@ -630,6 +786,22 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
             "summary": f"Cost orphan rate {report.costs['orphan_rate']:.0%} ({orphans}/{len(costs)} entries lack job_id match)",
             "detail": f"total_usd={tot_cost:.2f}",
             "signal_hash": f"ops-cost-orphan-{hours}h",
+        })
+    miss = int(report.costs.get("jobs_missing_cost") or 0)
+    n_term = int(report.costs.get("terminal_jobs") or 0)
+    if miss > 0 and (
+        (n_term >= 3 and report.costs.get("cost_missing_rate", 0) >= 0.5)
+        or (n_term >= 3 and len(costs) == 0)
+    ):
+        findings.append({
+            "type": "platform_ops",
+            "severity": "high" if len(costs) == 0 and n_term >= 5 else "medium",
+            "summary": (
+                f"{miss}/{n_term} terminal jobs lack cost_entries "
+                f"(cost_missing_rate={report.costs.get('cost_missing_rate')}) — #752"
+            ),
+            "detail": json.dumps(report.costs.get("cost_missing_samples") or [])[:500],
+            "signal_hash": f"ops-cost-missing-{hours}h-{miss}",
         })
     if live_issues:
         findings.append({
@@ -688,6 +860,10 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  unknown_rate={report.jobs.get('unknown_rate')}  fail_rate={report.jobs.get('fail_rate')}",
         f"  by_status={report.jobs.get('by_status')}",
         f"  by_agent={report.jobs.get('by_agent')}",
+        f"  by_context_mode={report.jobs.get('by_context_mode')}  "
+        f"pct={report.jobs.get('by_context_mode_pct')}",
+        f"  context_bytes={report.jobs.get('context_bytes')}",
+        f"  zombie_running={report.jobs.get('zombie_running')}",
         f"  dbs_scanned={report.jobs.get('dbs_scanned')}",
         "",
         "L2 COSTS",
@@ -695,7 +871,11 @@ def format_platform_report(report: PlatformReport) -> str:
         f"  tokens in={report.costs.get('input_tokens'):,}  out={report.costs.get('output_tokens'):,}",
         f"  orphan_entries={report.costs.get('orphan_entries')}  "
         f"orphan_rate={report.costs.get('orphan_rate')}",
+        f"  jobs_missing_cost={report.costs.get('jobs_missing_cost')}/"
+        f"{report.costs.get('terminal_jobs')}  "
+        f"cost_missing_rate={report.costs.get('cost_missing_rate')}",
         f"  by_agent={report.costs.get('by_agent')}",
+        f"  by_context_mode={report.costs.get('by_context_mode')}",
         "",
         "L3 SIDE-EFFECTS",
         f"  {report.side_effects}",

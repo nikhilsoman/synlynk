@@ -1892,8 +1892,162 @@ def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
     return None
 
 
+def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Optional[str]:
+    """Best-effort worktree directory for a daemon job (for GTV)."""
+    candidates = []
+    if log_path:
+        norm = os.path.abspath(log_path).replace("\\", "/")
+        marker = "/worktrees/"
+        if marker in norm:
+            # .../worktrees/<job_id>/.synlynk/logs/...
+            after = norm.split(marker, 1)[1]
+            job_dir = after.split("/", 1)[0]
+            prefix = norm.split(marker, 1)[0]
+            candidates.append(f"{prefix}/worktrees/{job_dir}")
+    candidates.append(os.path.join("worktrees", job_id))
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return None
+
+def _ensure_daemon_job_cost_entry(
+    job_id: str,
+    agent: str,
+    story_id: Optional[str],
+    log_text: str = "",
+    conn=None,
+) -> bool:
+    """Write a cost_entries row for *job_id* if none exists yet (Epic A2 / #752).
+
+    Returns True when a new row was written. Uses update_costs (t-shirt estimate
+    if tokens extract as zero) so terminal jobs never leave the ledger blank.
+    """
+    owns_conn = conn is None
+    get_db = _pkg("_get_db")
+    if owns_conn:
+        if not get_db:
+            return False
+        try:
+            conn = get_db()
+        except Exception:
+            return False
+    try:
+        try:
+            existing = conn.execute(
+                "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
+            ).fetchone()
+        except Exception:
+            return False
+        if existing:
+            return False
+        update_fn = _pkg("update_costs")
+        if not update_fn:
+            return False
+        extract = _pkg("extract_tokens")
+        in_tokens, out_tokens = 0, 0
+        basis = "none"
+        if extract and log_text:
+            try:
+                token_counts = extract(log_text, agent=agent or "")
+                in_tokens, out_tokens = token_counts[0], token_counts[1]
+                basis = getattr(token_counts, "basis", "none")
+            except Exception:
+                in_tokens, out_tokens = 0, 0
+        model_version = None
+        extract_mv = _pkg("extract_model_version")
+        if extract_mv and log_text:
+            try:
+                model_version = extract_mv(log_text, agent=agent or "")
+            except Exception:
+                model_version = None
+        try:
+            update_fn(
+                f"{agent or '?'} job {job_id}",
+                in_tokens,
+                out_tokens,
+                0,
+                model_version=model_version,
+                story_id=story_id,
+                agent=agent or "",
+                basis=basis,
+                job_id=job_id,
+            )
+            return True
+        except Exception as exc:
+            print(f"  ⚠ cost capture failed for {job_id}: {exc}")
+            return False
+    finally:
+        if owns_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _gtv_status_for_daemon_exit(
+    exit_code: Optional[int],
+    git_state: Optional[dict],
+) -> tuple:
+    """Ground-truth status for a reaped daemon job (#331 / #579 / Epic A1).
+
+    Returns ``(status, exit_code, summary_status, summary_note)``.
+    Never leaves successful work as open-ended ``unknown`` with 0 files.
+    """
+    work_landed = _job_has_real_work_landed(git_state)
+    files = []
+    if git_state:
+        files = list(git_state.get("changed_files") or [])
+        if not files and git_state.get("remote_files_touched"):
+            files = list(git_state.get("remote_files_touched") or [])
+
+    if exit_code == 0:
+        return ("done", 0, None, None)
+
+    if exit_code is None:
+        # No exit signal. Prefer git evidence over inventing timed_out.
+        if git_state and git_state.get("remote_has_activity") and not git_state.get("has_activity"):
+            # Borrowed worktree / pushed elsewhere — treat as successful completion.
+            note = (
+                f"borrowed/remote work detected"
+                f"{(' on ' + git_state['remote_ref']) if git_state.get('remote_ref') else ''}; "
+                "exit code missing but git shows activity (#331 GTV)"
+            )
+            return ("done", 0, "OK (exit 0)", note)
+        if work_landed or files:
+            note = (
+                "process died without exit code, but worktree/origin has git activity "
+                "(#579/#331 GTV) — inspect before discarding"
+            )
+            return (
+                "failed_unverified",
+                None,
+                terminal_status_for_unknown_exit(),
+                note,
+            )
+        # True zombie: dead PID, no exit, no git evidence.
+        return (
+            "timed_out",
+            -9,
+            "FAILED (exit -9)",
+            "reaped dead/null PID (no exit signal, no git activity); see synlynk jobs reap",
+        )
+
+    # Non-zero exit
+    if work_landed or files:
+        note = (
+            f"exit {exit_code}, but worktree/origin has git activity "
+            "(#331 GTV) — outcome may still be usable"
+        )
+        return ("failed", exit_code, f"FAILED (exit {exit_code})", note)
+    return ("failed", exit_code, None, None)
+
+
 def _reconcile_daemon_jobs() -> None:
-    """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db."""
+    """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db.
+
+    Epic A1 / #331: applies ground-truth verification (git worktree evidence)
+    so jobs that landed real work are not summarized as unknown/0-files.
+    """
     conn = _pkg("_get_db")()
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path "
@@ -1960,18 +2114,47 @@ def _reconcile_daemon_jobs() -> None:
                         ).fetchone()
                         if _res_row:
                             release_fn(conn, _res_row[0])
-                    # Do not rewrite summary / re-bill costs — truth already on disk.
+                    # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
+                    log_text_pref = ""
+                    if log_path and os.path.exists(log_path):
+                        try:
+                            with open(log_path) as f:
+                                log_text_pref = f.read()
+                        except Exception:
+                            log_text_pref = ""
+                    _ensure_daemon_job_cost_entry(
+                        job_id, agent, story_id, log_text_pref, conn=conn
+                    )
                     continue
 
-                if exit_code == 0:
-                    status = "done"
-                elif exit_code is None:
-                    # Dead / null PID with no recorded exit → timed_out (#753),
-                    # not open-ended "unknown", so scoreboards stop counting zombies.
-                    status = "timed_out"
-                    exit_code = -9
-                else:
-                    status = "failed"
+                # --- Ground-truth verification (#331 / #579) ---
+                worktree_path = _daemon_job_worktree_path(job_id, log_path)
+                worktree_branch = f"dispatch/{agent}/{job_id}" if agent else None
+                git_state = None
+                if worktree_path:
+                    inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+                    try:
+                        git_state = inspect_fn(worktree_path, worktree_branch, started_at)
+                    except Exception:
+                        git_state = None
+
+                status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
+                    exit_code, git_state
+                )
+
+                files_touched = []
+                if git_state:
+                    files_touched = list(git_state.get("changed_files") or [])
+                    if not files_touched and git_state.get("remote_files_touched"):
+                        files_touched = list(git_state.get("remote_files_touched") or [])
+                if not files_touched and worktree_path:
+                    files_fn = _pkg("_worktree_files_touched")
+                    if files_fn:
+                        try:
+                            files_touched = list(files_fn(worktree_path) or [])
+                        except Exception:
+                            files_touched = []
+
                 log_text = ""
                 conn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
@@ -2008,39 +2191,46 @@ def _reconcile_daemon_jobs() -> None:
                         (status, job_id),
                     )
                     conn.commit()
-                token_counts = _pkg("extract_tokens")(log_text, agent=agent)
-                in_tokens, out_tokens = token_counts
-                basis = getattr(token_counts, "basis", "none")
-                model_version = _pkg("extract_model_version")(log_text, agent=agent)
-                _pkg("update_costs")(
-                    f"{agent} job {job_id}",
-                    in_tokens,
-                    out_tokens,
-                    duration_s or 0,
-                    model_version=model_version,
-                    story_id=story_id,
-                    agent=agent,
-                    basis=basis,
-                    job_id=job_id,
-                )
-                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
-                summary_status = None
-                summary_note = None
-                if status == "permission_denied":
                     summary_status = "PERMISSION_DENIED (headless auto-denied)"
                     summary_note = (
                         "headless permission auto-denial detected from log contents "
                         "(response empty, num_turns <= 1, or explicit no-output marker)"
                     )
-                elif status == "unknown":
+                token_counts = _pkg("extract_tokens")(log_text, agent=agent)
+                in_tokens, out_tokens = token_counts
+                basis = getattr(token_counts, "basis", "none")
+                model_version = _pkg("extract_model_version")(log_text, agent=agent)
+                try:
+                    _pkg("update_costs")(
+                        f"{agent} job {job_id}",
+                        in_tokens,
+                        out_tokens,
+                        duration_s or 0,
+                        model_version=model_version,
+                        story_id=story_id,
+                        agent=agent,
+                        basis=basis,
+                        job_id=job_id,
+                    )
+                except Exception as exc:
+                    print(f"  ⚠ update_costs failed for {job_id}: {exc}")
+                    _ensure_daemon_job_cost_entry(
+                        job_id, agent, story_id, log_text, conn=conn
+                    )
+                # Guarantee a row even if update_costs no-op'd (unmigrated flat-file path).
+                _ensure_daemon_job_cost_entry(
+                    job_id, agent, story_id, log_text, conn=conn
+                )
+                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
+                if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
-                elif status == "timed_out":
-                    summary_status = f"FAILED (exit {exit_code})"
-                    summary_note = "reaped dead/null PID (no exit signal); see synlynk jobs reap"
                 task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
-                    out_tokens, cost_usd, [], status_label=summary_status, note=summary_note,
+                    out_tokens, cost_usd, files_touched,
+                    worktree_path=worktree_path,
+                    worktree_branch=worktree_branch,
+                    status_label=summary_status, note=summary_note,
                     task_sha256=task_sha256, task_preview=task_preview
                 )
         conn.commit()
@@ -2259,10 +2449,17 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
     def _render() -> None:
         _pkg("_reconcile_daemon_jobs")()
         conn = _pkg("_get_db")()
-        rows = conn.execute(
-            "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
-            "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
+                "context_mode "
+                "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+            ).fetchall()
+        except Exception:
+            rows = conn.execute(
+                "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
+                "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+            ).fetchall()
         conn.close()
 
         if not rows:
@@ -2282,17 +2479,27 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 print(f"  No active jobs. ({suffix} — use synlynk jobs --all)")
                 return
 
-        header = f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'AGE':8}  {'EXIT':4}"
+        header = (
+            f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  "
+            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}"
+        )
         print(f"{_BOLD}{header}{_RESET}")
-        print("  " + "─" * 64)
-        for job_id, agent, story_id, status, enqueued_at, exit_code in visible:
+        print("  " + "─" * 72)
+        for row in visible:
+            # Support both 6-col (legacy SELECT) and extended rows with context_mode.
+            if len(row) >= 7:
+                job_id, agent, story_id, status, enqueued_at, exit_code, ctx_mode = row[:7]
+            else:
+                job_id, agent, story_id, status, enqueued_at, exit_code = row[:6]
+                ctx_mode = None
             sid = (story_id or "—")[:12]
             age = _parse_age(enqueued_at)
             color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
             exit_str = str(exit_code) if exit_code is not None else "—"
+            ctx = (ctx_mode or "—")[:6]
             print(
                 f"  {job_id:14}  {agent:8}  {sid:12}  "
-                f"{color}{status:10}{_RESET}  {age:8}  {exit_str:4}"
+                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}"
             )
 
     if watch:
