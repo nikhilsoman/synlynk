@@ -10,8 +10,10 @@ from pathlib import Path
 import subprocess
 import re
 import sys
+import threading
 import time
 import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
@@ -128,7 +130,7 @@ def _truncate_app_name(project_slug: str, role_slug: str, max_len: int = 34) -> 
     return f"{prefix}{trimmed_project}{suffix}"
 
 
-def _build_app_manifest_url(project, role: str) -> str:
+def _build_app_manifest_url(project, role: str, redirect_url: str) -> str:
     project_slug = _role_slug(project) if project else _resolve_project_slug()
     role_slug = _role_slug(role)
     app_name = _truncate_app_name(project_slug, role_slug)
@@ -138,7 +140,7 @@ def _build_app_manifest_url(project, role: str) -> str:
         "hook_attributes": {
             "url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/webhook",
         },
-        "redirect_url": f"https://synlynk.com/github-apps/{project_slug}/{role_slug}/callback",
+        "redirect_url": redirect_url,
         "public": False,
         "default_events": [],
         "default_permissions": {
@@ -163,6 +165,53 @@ def _build_app_manifest_url(project, role: str) -> str:
     form_path = forms_dir / f"{role_slug}.html"
     form_path.write_text(form_html)
     return form_path.resolve().as_uri()
+
+
+def _run_manifest_callback_server(timeout_seconds=180):
+    """Start a loopback server and return its port, waiter, and shutdown callback."""
+    code_ready = threading.Event()
+    captured = []
+
+    class CallbackHandler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 - required by BaseHTTPRequestHandler
+            parsed = urlparse(self.path)
+            if parsed.path != "/callback":
+                self.send_error(404)
+                return
+            code = parse_qs(parsed.query).get("code", [""])[0].strip()
+            if code and not code_ready.is_set():
+                captured.append(code)
+                code_ready.set()
+            body = (
+                "<!doctype html><html><head><meta charset='utf-8'>"
+                "<title>Synlynk GitHub App</title></head><body>"
+                "<p>GitHub App setup complete. You can close this tab and "
+                "return to the terminal.</p></body></html>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format, *args):
+            return
+
+    server = HTTPServer(("127.0.0.1", 0), CallbackHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def wait_for_code():
+        if code_ready.wait(timeout_seconds):
+            return captured[0]
+        return None
+
+    def shutdown():
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+    return server.server_port, wait_for_code, shutdown
 
 
 def _github_auth_token() -> str:
@@ -744,14 +793,21 @@ def cmd_identity_init_role(role: str, project=None) -> None:
             print(f"  role '{role}' already provisioned at {json_path}")
             return
 
-    manifest_url = _build_app_manifest_url(project, role)
-    print(f"  Open this GitHub App manifest form for '{role}':")
-    print(f"  {manifest_url}")
+    port, wait_for_code, shutdown_callback = _run_manifest_callback_server()
     try:
-        webbrowser.open(manifest_url)
-    except Exception:
-        pass
-    code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+        redirect_url = f"http://127.0.0.1:{port}/callback"
+        manifest_url = _build_app_manifest_url(project, role, redirect_url)
+        print(f"  Open this GitHub App manifest form for '{role}':")
+        print(f"  {manifest_url}")
+        try:
+            webbrowser.open(manifest_url)
+        except Exception:
+            pass
+        code = wait_for_code()
+        if not code:
+            code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+    finally:
+        shutdown_callback()
     if not code:
         raise RuntimeError("no manifest code provided")
 
