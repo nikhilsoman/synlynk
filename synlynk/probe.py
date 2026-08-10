@@ -446,6 +446,34 @@ def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
 {endpoints or '- None required'}"""
 
 
+def _merge_fence_body(existing_body: str, capability_body: str) -> str:
+    """Merge capability sections into an existing harness fence body.
+
+    SOP sections and other managed content may share this fence. Replace only
+    sections owned by the capability probe and preserve everything else.
+    """
+    existing_body = (existing_body or "").strip()
+    capability_body = (capability_body or "").strip()
+    if not existing_body:
+        return capability_body
+    if not any(header in existing_body for header in SOP_SECTION_HEADERS):
+        return capability_body
+
+    merged = existing_body
+    sections = re.split(r"(?m)(?=^## )", capability_body)
+    for section in sections:
+        section = section.strip()
+        if not section:
+            continue
+        header = section.splitlines()[0]
+        section_pattern = re.compile(rf"(?ms)^{re.escape(header)}\n.*?(?=^## |\Z)")
+        if section_pattern.search(merged):
+            merged = section_pattern.sub(section + "\n", merged, count=1)
+        else:
+            merged = _repair_sop_body_parts(merged, section)
+    return merged
+
+
 def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fence: bool = True) -> dict:
     import json as _json
     import socket as _sock
@@ -631,7 +659,8 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     }
     instr_file = _INSTRUCTION_FILES.get(agent_name)
     if write_fence and instr_file and os.path.exists(instr_file):
-        body = _build_fence_body_from_record(agent_name, db_conn)
+        capability_body = _build_fence_body_from_record(agent_name, db_conn)
+        body = _merge_fence_body(_read_harness_fence_body(instr_file), capability_body)
         _upsert_harness_fence(instr_file, installed_version, body)
 
     _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
