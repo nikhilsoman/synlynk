@@ -335,6 +335,37 @@ def test_cmd_worktree_clean_apply_partial_failure_continues_batch(tmp_path, monk
     assert "chore/feature-b   wt=removed   branch=deleted" in output
 
 
+def test_cmd_worktree_clean_serializes_all_local_git_ref_operations(tmp_path, monkeypatch):
+    from synlynk import worktree as worktree_mod
+
+    monkeypatch.chdir(tmp_path)
+    verdict = WorktreeVerdict(path="/tmp/stale", branch="chore/stale", verdict="safe", reason="merged")
+    monkeypatch.setattr(worktree_mod, "_get_repo_root", lambda: str(tmp_path))
+    monkeypatch.setattr(worktree_mod, "_collect_verdicts", lambda *a: [verdict])
+    lock_events = []
+    class FakeLock:
+        def __enter__(self):
+            lock_events.append("acquire")
+        def __exit__(self, *exc):
+            lock_events.append("release")
+    monkeypatch.setattr(worktree_mod, "git_ref_operation_lock", lambda *a: FakeLock())
+
+    def fake_run(cmd, **kwargs):
+        is_ref_operation = (
+            cmd[:3] == ["git", "worktree", "remove"]
+            or cmd[:3] == ["git", "worktree", "prune"]
+            or cmd[:3] == ["git", "branch", "-D"]
+        )
+        if is_ref_operation:
+            assert lock_events[-1] == "acquire"
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    monkeypatch.setattr(worktree_mod.subprocess, "run", fake_run)
+
+    worktree_mod.cmd_worktree_clean(apply=True)
+
+    assert lock_events == ["acquire", "release"]
+
+
 def test_cli_registers_worktree_audit_and_clean_subcommands():
     from synlynk.cli import build_parser
 
