@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 from dataclasses import asdict
@@ -17,6 +18,7 @@ from typing import Optional, Tuple
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.github_app_auth import get_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
+from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
 
 
@@ -1374,21 +1376,39 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
         worktree_cmd.append(base_sha)
     elif base_ref and base_ref != "HEAD":
         worktree_cmd.append(base_ref)
-    result = subprocess.run(
-        worktree_cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        cwd=os.getcwd(),
-    )
+    with git_ref_operation_lock(os.getcwd()):
+        for attempt in range(1, 4):
+            result = subprocess.run(
+                worktree_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=os.getcwd(),
+            )
+            if result.returncode == 0:
+                break
+            stderr = (result.stderr or "").lower()
+            contention = any(
+                signature in stderr
+                for signature in (
+                    "eperm",
+                    "operation not permitted",
+                    "file exists",
+                    "cannot lock ref",
+                    "already exists",
+                )
+            ) or ("unable to create" in stderr and "lock" in stderr)
+            if not contention or attempt == 3:
+                break
+            time.sleep(random.uniform(0.01, 0.05))
     if result.returncode != 0:
         details = "\n".join(
             part for part in [result.stdout.strip(), result.stderr.strip()] if part
         )
         raise RuntimeError(
             f"Failed to create worktree for job {job_id} at {worktree_path} "
-            f"on branch {worktree_branch}."
-            + (f"\n{details}" if details else "")
+            f"on branch {worktree_branch} after 3 attempts."
+            + (f" {details}" if details else "")
         )
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
     return {

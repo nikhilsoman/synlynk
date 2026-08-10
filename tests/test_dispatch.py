@@ -574,6 +574,63 @@ def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_wor
     assert _os.path.isdir(result["path"])
 
 
+def test_create_job_worktree_serializes_git_ref_operation_and_retries_contention(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.chdir(git_worktree_repo)
+    monkeypatch.setattr(dispatch_mod, "_job_worktree_details", lambda *a: ("worktrees/wt", "branch"))
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_worktree_base_ref", lambda *a, **k: "HEAD")
+    monkeypatch.setattr(dispatch_mod, "_assert_dispatch_worktree_base_is_fresh", lambda *a: None)
+
+    lock_events = []
+    lock_held = {"value": False}
+    class FakeLock:
+        def __enter__(self):
+            lock_held["value"] = True
+            lock_events.append("acquire")
+        def __exit__(self, *exc):
+            lock_held["value"] = False
+            lock_events.append("release")
+    monkeypatch.setattr(dispatch_mod, "git_ref_operation_lock", lambda *a: FakeLock())
+    monkeypatch.setattr(dispatch_mod.random, "uniform", lambda *a: 0.01)
+    monkeypatch.setattr(dispatch_mod.time, "sleep", lambda delay: lock_events.append(("sleep", delay)))
+
+    add_attempts = []
+    def fake_run(cmd, **kwargs):
+        if cmd[1:3] == ["worktree", "add"]:
+            add_attempts.append(lock_held["value"])
+            if len(add_attempts) < 3:
+                return type("Result", (), {"returncode": 1, "stdout": "", "stderr": "File exists"})()
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", fake_run)
+
+    result = dispatch_mod._create_job_worktree("job-test", "codex")
+
+    assert result["branch"] == "branch"
+    assert len(add_attempts) == 3
+    assert all(add_attempts)
+    assert lock_events[0] == "acquire"
+    assert lock_events[-1] == "release"
+
+
+def test_create_job_worktree_contention_exhaustion_raises_runtime_error(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.chdir(git_worktree_repo)
+    monkeypatch.setattr(dispatch_mod, "_job_worktree_details", lambda *a: ("worktrees/wt", "branch"))
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_worktree_base_ref", lambda *a, **k: "HEAD")
+    monkeypatch.setattr(dispatch_mod, "_assert_dispatch_worktree_base_is_fresh", lambda *a: None)
+    monkeypatch.setattr(dispatch_mod, "git_ref_operation_lock", lambda *a: __import__("contextlib").nullcontext())
+    monkeypatch.setattr(dispatch_mod.time, "sleep", lambda *a: None)
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "run",
+        lambda cmd, **kwargs: type("Result", (), {"returncode": 1, "stdout": "", "stderr": "Operation not permitted"})(),
+    )
+
+    with pytest.raises(RuntimeError, match=r"after 3 attempts\. Operation not permitted"):
+        dispatch_mod._create_job_worktree("job-test", "codex")
+
+
 def test_dispatch_agent_records_base_branch_and_sha_on_job(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
