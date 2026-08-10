@@ -1,0 +1,11 @@
+# This is the Agent roster (persistent role identities), not a Harness list.
+# See docs/glossary-agent-vs-harness.md and docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md §2.
+roles:
+  - dev
+  - qa
+  - pm
+  - architect
+  - synlynk-bot
+  - tpm
+  - designer
+  - marketing

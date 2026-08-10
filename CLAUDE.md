@@ -19,6 +19,17 @@ Use `python3 -m synlynk dispatch <agent> --task "..." --force-agent --context-mo
 
 synlynk is a single-file Python CLI (`bin/synlynk.py`) that acts as a wrapper around AI CLIs (Claude, Gemini, etc.). It injects project context before each invocation, tracks telemetry/costs, and detects hallucination loops. The entire application logic lives in one file — there is no build step.
 
+## Terminology: Agent vs Harness
+
+synlynk distinguishes two concepts that are easy to conflate:
+
+- **Agent** — a persistent role identity with a charter (pm, architect, tpm, dev, designer, qa,
+  marketing, synlynk-bot). Agents are *who* is accountable for work.
+- **Harness** — a swappable execution backend (Claude, Agy, Grok, Codex, local) that runs a
+  dispatched task. Harnesses are *how* work gets executed, selected per-task by capability fit.
+
+Full definitions and rationale: `docs/glossary-agent-vs-harness.md`. Full role design: `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md`.
+
 ## Running the CLI
 
 ```bash
@@ -127,14 +138,15 @@ Enforced by discipline (Claude/PM checks it as part of PR housekeeping), not CI 
 
 Rationale: a July 2026 audit found 30 stale worktrees/branches accumulated because cleanup was only ever done reactively, in large batches, long after the underlying PRs had merged. This protocol front-loads that cost onto the merge step where the context is already loaded, instead of letting it compound into a periodic manual archaeology exercise.
 
-<!-- synlynk:harness vsop-repair verified:2026-07-30T07:33:24Z -->
+<!-- synlynk:harness vsop-repair verified:2026-08-09T18:03:36Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
 pm, review, deploy
+
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
-2. The reviewer must run `synlynk pr check <pr#>`.
+2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
@@ -153,7 +165,12 @@ pm, review, deploy
 - Plan not committed = do not dispatch tasks.
 
 ## Capability-Based Task Allocation
-| Role | Agent | Tasks |
+
+**Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a 
+task, not the Agent (role) doing the work
+- See `docs/glossary-agent-vs-harness.md`
+
+| Role | Harness | Tasks |
 | :--- | :--- | :--- |
 | pm / review / deploy / brainstorm | Claude | pm, review, deploy, brainstorm |
 | implement / test / css / templates / content / subpages | Agy | implement, test, css, templates, content, subpages |

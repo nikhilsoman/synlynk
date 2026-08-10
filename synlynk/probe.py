@@ -51,7 +51,11 @@ _DESIGN_SEQUENCE_SOP = """\
 
 _CAPABILITY_ALLOCATION_SOP = """\
 ## Capability-Based Task Allocation
-| Role | Agent | Tasks |
+
+**Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a task, not the Agent (role) doing the work
+- See `docs/glossary-agent-vs-harness.md`
+
+| Role | Harness | Tasks |
 | :--- | :--- | :--- |
 | Python/CLI/tests | Codex | Python, CLI, tests |
 | HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
@@ -877,13 +881,17 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
         return (
             "## Capability-Based Task Allocation\n"
             "No repo-specific roles are recorded in `.synlynk/config.json`; keep work scoped to the "
-            "agent you were assigned and follow the repo's own routing notes.\n"
+            "harness you were assigned and follow the repo's own routing notes.\n"
         )
 
     escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
     table = "\n".join([
         "## Capability-Based Task Allocation",
-        "| Role | Agent | Tasks |",
+        "",
+        "**Note:** \"Harness\" below means the execution backend (Claude/Agy/Grok/Codex) that runs a ",
+        "task, not the Agent (role) doing the work\n- See `docs/glossary-agent-vs-harness.md`",
+        "",
+        "| Role | Harness | Tasks |",
         "| :--- | :--- | :--- |",
         *rows,
         f"Do not start a task outside your role column without explicit approval from {escalation_target}.",

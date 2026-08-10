@@ -47,6 +47,25 @@ def test_sop_section_headers_defined():
     assert "## Repo Hygiene" in SOP_SECTION_HEADERS
 
 
+def test_capability_allocation_table_uses_harness_not_agent_header():
+    from synlynk.probe import _CAPABILITY_ALLOCATION_SOP, _repair_capability_allocation_sop
+
+    assert "| Role | Harness | Tasks |" in _CAPABILITY_ALLOCATION_SOP
+    assert "| Role | Agent | Tasks |" not in _CAPABILITY_ALLOCATION_SOP
+
+    cfg = {
+        "roles": {
+            "codex": ["implement", "test", "refactor"],
+            "agy": ["css", "templates", "content"],
+        },
+        "workgroup_agents": ["codex", "agy"],
+    }
+    generated = _repair_capability_allocation_sop(cfg)
+    assert "| Role | Harness | Tasks |" in generated
+    assert "| Role | Agent | Tasks |" not in generated
+    assert "docs/glossary-agent-vs-harness.md" in generated
+
+
 def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "n")
