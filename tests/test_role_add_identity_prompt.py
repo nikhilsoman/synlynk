@@ -10,7 +10,8 @@ def test_identity_init_role_registers_new_role_in_roles_yaml(tmp_path, monkeypat
 
     import synlynk.team as team_mod
 
-    monkeypatch.setattr(team_mod, "_build_app_manifest_url", lambda project, role: "http://fake")
+    monkeypatch.setattr(team_mod, "_build_app_manifest_url", lambda project, role, redirect_url=None: "http://fake")
+    monkeypatch.setattr(team_mod, "_run_manifest_callback_server", lambda: (1234, lambda: None, lambda: None))
     monkeypatch.setattr(team_mod, "input", lambda prompt: "fake-code", raising=False)
     monkeypatch.setattr(team_mod, "_exchange_manifest_code", lambda code: {
         "id": 1, "client_id": "c1", "slug": "proj-designer", "pem": "fake-pem",

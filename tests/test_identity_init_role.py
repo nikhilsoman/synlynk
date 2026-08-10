@@ -10,7 +10,8 @@ import synlynk as sl
 
 def test_build_app_manifest_url_encodes_role_and_project(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    url = sl._build_app_manifest_url("alpha-project", "review")
+    redirect_url = "http://127.0.0.1:4321/callback"
+    url = sl._build_app_manifest_url("alpha-project", "review", redirect_url)
 
     assert url.startswith("file://")
     form_path = Path(unquote(urlparse(url).path))
@@ -23,7 +24,29 @@ def test_build_app_manifest_url_encodes_role_and_project(tmp_path, monkeypatch):
     manifest = json.loads(html_lib.unescape(match.group(1)))
     assert manifest["name"] == "synlynk-alpha-project-review"
     assert "alpha-project" in manifest["hook_attributes"]["url"]
-    assert "review" in manifest["redirect_url"]
+    assert manifest["redirect_url"] == redirect_url
+
+
+def test_manifest_callback_server_captures_code():
+    from urllib.request import urlopen
+
+    port, wait_for_code, shutdown = sl._run_manifest_callback_server(timeout_seconds=2)
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/callback?code=test123") as response:
+            assert response.status == 200
+            assert "close this tab" in response.read().decode()
+        assert wait_for_code() == "test123"
+    finally:
+        shutdown()
+
+
+def test_manifest_callback_server_times_out_without_code():
+    port, wait_for_code, shutdown = sl._run_manifest_callback_server(timeout_seconds=1)
+    try:
+        assert port > 0
+        assert wait_for_code() is None
+    finally:
+        shutdown()
 
 
 def test_build_app_manifest_url_resolves_project_from_git_root_and_caps_name_length(tmp_path, monkeypatch):
@@ -32,7 +55,7 @@ def test_build_app_manifest_url_resolves_project_from_git_root_and_caps_name_len
     subprocess.run(["git", "init", "-q"], cwd=long_dir, check=True)
     monkeypatch.chdir(long_dir)
 
-    url = sl._build_app_manifest_url(None, "dev")
+    url = sl._build_app_manifest_url(None, "dev", "http://127.0.0.1:4321/callback")
 
     form_path = Path(unquote(urlparse(url).path))
     form_html = form_path.read_text()

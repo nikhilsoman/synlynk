@@ -130,6 +130,7 @@ from synlynk.doctor import (
 from synlynk.team import (
     _build_team_digest,
     _build_app_manifest_url,
+    _run_manifest_callback_server,
     _ensure_identity_key,
     _exchange_manifest_code,
     _confirm_installation,
