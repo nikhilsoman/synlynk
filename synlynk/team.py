@@ -105,6 +105,11 @@ def _role_app_paths(role: str) -> tuple[Path, Path, Path]:
 
 
 def _resolve_project_slug() -> str:
+    load_config = _pkg("load_config")
+    if load_config is not None:
+        identity_slug = load_config().get("identity_slug")
+        if identity_slug:
+            return _role_slug(identity_slug)
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--git-common-dir"],

@@ -1540,6 +1540,7 @@ def load_config() -> dict:
         "owner": None,
         "repo": None,
         "project_id": None,
+        "identity_slug": None,
         "project_docs_dir": "project-docs",
         "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
         "workgroup_agents": [],
