@@ -199,3 +199,48 @@ def test_cmd_identity_init_role_noops_if_already_provisioned(tmp_path, monkeypat
     sl.cmd_identity_init_role("review")
 
     assert json.loads(json_path.read_text())["installation_id"] == 99
+
+
+def test_cmd_identity_init_role_resumes_at_confirmation_when_app_created_but_not_installed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    app_dir = tmp_path / ".synlynk" / "github_apps"
+    app_dir.mkdir(parents=True)
+    pem_path = app_dir / "review.pem"
+    pem_path.write_text("PRIVATE KEY")
+
+    json_path = app_dir / "review.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "role": "review",
+                "app_id": 42,
+                "client_id": "client-1",
+                "app_slug": "synlynk-review",
+                "installation_id": None,
+                "private_key_path": str(pem_path),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+    confirm_calls = []
+
+    def fake_confirm(app_slug, path):
+        confirm_calls.append((app_slug, path))
+        data = json.loads(path.read_text())
+        data["installation_id"] = 99
+        path.write_text(json.dumps(data, indent=2) + "\n")
+        return data
+
+    monkeypatch.setattr(team_mod, "_confirm_installation", fake_confirm)
+    monkeypatch.setattr(team_mod, "_build_app_manifest_url", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not rebuild manifest")))
+    monkeypatch.setattr(team_mod.webbrowser, "open", lambda url: (_ for _ in ()).throw(AssertionError("should not reopen browser")))
+    monkeypatch.setattr("synlynk.identity_roles.load_declared_roles", lambda: [])
+    monkeypatch.setattr("synlynk.identity_roles.write_declared_roles", lambda roles: None)
+
+    team_mod.cmd_identity_init_role("review")
+
+    assert confirm_calls == [("synlynk-review", json_path.relative_to(tmp_path))]
+    assert json.loads(json_path.read_text())["installation_id"] == 99
