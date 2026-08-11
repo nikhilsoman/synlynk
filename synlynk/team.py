@@ -14,6 +14,7 @@ import threading
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
@@ -130,10 +131,49 @@ def _truncate_app_name(project_slug: str, role_slug: str, max_len: int = 34) -> 
     return f"{prefix}{trimmed_project}{suffix}"
 
 
-def _build_app_manifest_url(project, role: str, redirect_url: str) -> str:
+def _resolve_repo_owner(cwd=None) -> tuple[str, str]:
+    """Resolve the current repository owner, falling back to a user scope."""
+    owner_login = ""
+    try:
+        repo_result = subprocess.run(
+            ["gh", "repo", "view", "--json", "owner", "--jq", ".owner.login"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=cwd,
+        )
+        owner_login = repo_result.stdout.strip()
+        if repo_result.returncode != 0 or not owner_login:
+            raise RuntimeError(repo_result.stderr.strip() or "could not resolve repository owner")
+        type_result = subprocess.run(
+            ["gh", "api", f"users/{owner_login}", "--jq", ".type"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=cwd,
+        )
+        if type_result.returncode != 0:
+            raise RuntimeError(type_result.stderr.strip() or "could not classify repository owner")
+        owner_type = type_result.stdout.strip()
+        if owner_type == "Organization":
+            return "org", owner_login
+        return "user", owner_login
+    except Exception as exc:
+        print(f"  warning: could not resolve repository owner; using personal GitHub App scope ({exc})")
+        return "user", owner_login
+
+
+def _build_app_manifest_url(
+    project,
+    role: str,
+    redirect_url: str,
+    owner_type: str = "user",
+    owner_login: str = "",
+    app_name: str | None = None,
+) -> str:
     project_slug = _role_slug(project) if project else _resolve_project_slug()
     role_slug = _role_slug(role)
-    app_name = _truncate_app_name(project_slug, role_slug)
+    app_name = app_name or _truncate_app_name(project_slug, role_slug)
     manifest = {
         "name": app_name,
         "url": "https://synlynk.com",
@@ -152,9 +192,14 @@ def _build_app_manifest_url(project, role: str, redirect_url: str) -> str:
     }
     manifest_json = json.dumps(manifest)
     escaped_manifest = html.escape(manifest_json, quote=True)
+    form_action = (
+        f"https://github.com/organizations/{owner_login}/settings/apps/new"
+        if owner_type == "org" and owner_login
+        else "https://github.com/settings/apps/new"
+    )
     form_html = (
         "<!doctype html><html><body>"
-        '<form id="ghform" action="https://github.com/settings/apps/new" method="post">'
+        f'<form id="ghform" action="{form_action}" method="post">'
         f'<input type="hidden" name="manifest" value="{escaped_manifest}">'
         "</form>"
         '<script>document.getElementById("ghform").submit();</script>'
@@ -203,7 +248,9 @@ def _run_manifest_callback_server(timeout_seconds=180):
 
     def wait_for_code():
         if code_ready.wait(timeout_seconds):
-            return captured[0]
+            code = captured.pop(0)
+            code_ready.clear()
+            return code
         return None
 
     def shutdown():
@@ -793,25 +840,69 @@ def cmd_identity_init_role(role: str, project=None) -> None:
             print(f"  role '{role}' already provisioned at {json_path}")
             return
 
+    owner_type, owner_login = _resolve_repo_owner()
     port, wait_for_code, shutdown_callback = _run_manifest_callback_server()
+    conversion = None
+    code = ""
+    max_attempts = 3
     try:
         redirect_url = f"http://127.0.0.1:{port}/callback"
-        manifest_url = _build_app_manifest_url(project, role, redirect_url)
-        print(f"  Open this GitHub App manifest form for '{role}':")
-        print(f"  {manifest_url}")
-        try:
-            webbrowser.open(manifest_url)
-        except Exception:
-            pass
-        code = wait_for_code()
-        if not code:
-            code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+        app_name = None
+        for attempt in range(1, max_attempts + 1):
+            manifest_url = _build_app_manifest_url(
+                project, role, redirect_url, owner_type, owner_login, app_name=app_name
+            )
+            print(f"  Open this GitHub App manifest form for '{role}':")
+            print(f"  {manifest_url}")
+            try:
+                webbrowser.open(manifest_url)
+            except Exception:
+                pass
+            code = wait_for_code()
+            if not code:
+                code = _extract_manifest_code(input("Paste the manifest callback URL or code: "))
+            if not code:
+                raise RuntimeError("no manifest code provided")
+            try:
+                conversion = _exchange_manifest_code(code)
+                break
+            except HTTPError as exc:
+                body = ""
+                try:
+                    body = exc.read().decode("utf-8", errors="replace")
+                except Exception:
+                    body = str(exc)
+                if exc.code != 422:
+                    raise
+                try:
+                    details = json.loads(body)
+                    errors = details.get("errors", [])
+                    error_text = "; ".join(
+                        error if isinstance(error, str) else json.dumps(error)
+                        for error in errors
+                    ) or details.get("message", body)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    error_text = body
+                if attempt == max_attempts:
+                    raise RuntimeError(
+                        "GitHub rejected the app name after 3 attempts; "
+                        "pick a different role or project name manually. "
+                        f"GitHub error: {error_text}"
+                    ) from exc
+                suffix = f"-{attempt + 1}"
+                base_name = _truncate_app_name(
+                    _role_slug(project) if project else _resolve_project_slug(), _role_slug(role)
+                )
+                app_name = f"{base_name[:34 - len(suffix)]}{suffix}"
+                print(
+                    "  GitHub says the app name is already taken "
+                    f"({error_text}). Generating a new manifest with suffix '{suffix}'; "
+                    "open and submit the new form."
+                )
     finally:
         shutdown_callback()
-    if not code:
-        raise RuntimeError("no manifest code provided")
-
-    conversion = _exchange_manifest_code(code)
+    if conversion is None:
+        raise RuntimeError("no manifest conversion received")
     conversion.setdefault("slug", conversion.get("name", _role_slug(role)))
     conversion["private_key_path"] = str(pem_path)
     config = _write_role_app_config(role, conversion)
