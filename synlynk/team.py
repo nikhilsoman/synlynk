@@ -844,6 +844,22 @@ def cmd_identity_init_role(role: str, project=None) -> None:
         if existing.get("installation_id") and existing.get("private_key_path") and os.path.exists(existing["private_key_path"]):
             print(f"  role '{role}' already provisioned at {json_path}")
             return
+        if (
+            existing.get("app_id")
+            and existing.get("client_id")
+            and existing.get("app_slug")
+            and existing.get("private_key_path")
+            and os.path.exists(existing["private_key_path"])
+        ):
+            print(f"  role '{role}' has an App already created ({existing['app_slug']}) — resuming at install confirmation")
+            _confirm_installation(existing["app_slug"], json_path)
+            print(f"  role '{role}' provisioned at {json_path}")
+            from synlynk.identity_roles import load_declared_roles, write_declared_roles
+            declared = load_declared_roles()
+            if role not in declared:
+                write_declared_roles(declared + [role])
+                print(f"  ✓ added '{role}' to .synlynk/roles.yaml")
+            return
 
     owner_type, owner_login = _resolve_repo_owner()
     port, wait_for_code, shutdown_callback = _run_manifest_callback_server()
