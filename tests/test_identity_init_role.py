@@ -148,6 +148,26 @@ def test_build_app_manifest_url_resolves_project_from_git_root_and_caps_name_len
     assert manifest["name"] != "synlynk-a-very-long-worktree-directory-name-for-a-feature-branch-dev"
 
 
+def test_resolve_project_slug_uses_identity_slug_override(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_dir = tmp_path / ".synlynk"
+    config_dir.mkdir()
+    (config_dir / "config.json").write_text(
+        json.dumps({"identity_slug": "vdowrx"}) + "\n"
+    )
+
+    assert team_mod._resolve_project_slug() == "vdowrx"
+
+
+def test_resolve_project_slug_falls_back_without_identity_slug(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "cc-videoreframing"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo_dir, check=True)
+    monkeypatch.chdir(repo_dir)
+
+    assert team_mod._resolve_project_slug() == "cc-videoreframing"
+
+
 def test_cmd_identity_init_role_noops_if_already_provisioned(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
