@@ -87,6 +87,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `daemon` — sustain
 - `identity init` — sustain
 - `identity list` — sustain
+- `events tail` — sustain
 - `repair` — sustain
 - `exit` — sustain
 - `agent run` — execute
