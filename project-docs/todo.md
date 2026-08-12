@@ -1,7 +1,10 @@
 # Task Execution Order and Dependencies
 
 ## Active Task
-- [x] Fix inline daemon_jobs schema in tests/test_dispatch_cycle.py (#744)
+- [x] Cold-start Phase 2: workspace-canon.md baseline generation (#874, merged 2026-08-09)
+- [x] Triage open PRs: #880 merged, #845 merged, #877/#878/#879 closed as superseded by #880 (2026-08-10)
 
 ## Next Task
-- [ ] Push commit to branch chore/740-dispatch-context-column and verify PR #744 CI status
+- [ ] Dependabot: 2 high-severity vulnerabilities on main — investigate
+- [ ] Fleet-parity audit (#332/#338/#340/#342/#347/#348/#419/#461)
+- [ ] #573 — Agy+Stitch MCP integration

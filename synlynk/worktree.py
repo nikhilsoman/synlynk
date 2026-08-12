@@ -7,6 +7,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
+from synlynk.git_ref_lock import git_ref_operation_lock
+
 
 @dataclass
 class WorktreeEntry:
@@ -442,45 +444,46 @@ def cmd_worktree_clean(apply: bool = False, json_output: bool = False) -> str:
     safe_verdicts.sort(key=lambda v: _nesting_depth(v, by_path), reverse=True)
 
     result_lines = []
-    for v in safe_verdicts:
-        wt_status = "removed"
-        try:
-            result = subprocess.run(
-                ["git", "worktree", "remove", "--force", v.path],
-                cwd=main_repo_path, capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode != 0:
-                wt_status = f"FAILED({result.stderr.strip()[:80]})"
-        except (subprocess.SubprocessError, OSError) as exc:
-            wt_status = f"FAILED({exc})"
+    with git_ref_operation_lock(main_repo_path):
+        for v in safe_verdicts:
+            wt_status = "removed"
+            try:
+                result = subprocess.run(
+                    ["git", "worktree", "remove", "--force", v.path],
+                    cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+                )
+                if result.returncode != 0:
+                    wt_status = f"FAILED({result.stderr.strip()[:80]})"
+            except (subprocess.SubprocessError, OSError) as exc:
+                wt_status = f"FAILED({exc})"
 
-        branch_status = "deleted"
-        try:
-            result = subprocess.run(
-                ["git", "branch", "-D", v.branch],
-                cwd=main_repo_path, capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode != 0:
-                branch_status = f"FAILED({result.stderr.strip()[:80]})"
-        except (subprocess.SubprocessError, OSError) as exc:
-            branch_status = f"FAILED({exc})"
+            branch_status = "deleted"
+            try:
+                result = subprocess.run(
+                    ["git", "branch", "-D", v.branch],
+                    cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+                )
+                if result.returncode != 0:
+                    branch_status = f"FAILED({result.stderr.strip()[:80]})"
+            except (subprocess.SubprocessError, OSError) as exc:
+                branch_status = f"FAILED({exc})"
 
-        remote_status = "remote-none/skip"
-        try:
-            result = subprocess.run(
-                ["git", "push", "origin", "--delete", v.branch],
-                cwd=main_repo_path, capture_output=True, text=True, timeout=15,
-            )
-            remote_status = "remote-deleted" if result.returncode == 0 else "remote-none/skip"
-        except (subprocess.SubprocessError, OSError):
             remote_status = "remote-none/skip"
+            try:
+                result = subprocess.run(
+                    ["git", "push", "origin", "--delete", v.branch],
+                    cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+                )
+                remote_status = "remote-deleted" if result.returncode == 0 else "remote-none/skip"
+            except (subprocess.SubprocessError, OSError):
+                remote_status = "remote-none/skip"
 
-        result_lines.append(f"{v.branch}   wt={wt_status}   branch={branch_status}   {remote_status}")
+            result_lines.append(f"{v.branch}   wt={wt_status}   branch={branch_status}   {remote_status}")
 
-    subprocess.run(
-        ["git", "worktree", "prune"],
-        cwd=main_repo_path, capture_output=True, text=True, timeout=15,
-    )
+        subprocess.run(
+            ["git", "worktree", "prune"],
+            cwd=main_repo_path, capture_output=True, text=True, timeout=15,
+        )
 
     if json_output:
         output = json.dumps({"applied": True, "results": result_lines}, indent=2)

@@ -4684,6 +4684,7 @@ def _ftue_prompts(config: dict) -> dict:
     vizor["ftue_done"] = True
     config["vizor"] = vizor
     config_path = ".synlynk/config.json"
+    os.makedirs(".synlynk", exist_ok=True)
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
     print("  ✓ Settings saved to .synlynk/config.json\n")

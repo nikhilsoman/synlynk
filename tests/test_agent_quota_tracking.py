@@ -353,6 +353,41 @@ def test_repair_sops_only_refreshes_stale_capability_allocation_with_single_blan
     assert "\n\n<!-- /synlynk:harness -->" in repaired
 
 
+def test_cmd_probewrite_fencetrue_clobbers_sop_harness(tmp_path, monkeypatch):
+    """Capability probe updates must not clobber an existing SOP fence."""
+    monkeypatch.chdir(tmp_path)
+    _write_repair_config(
+        tmp_path,
+        {
+            "roles": {"codex": ["implement", "test"]},
+            "workgroup_agents": ["codex"],
+        },
+    )
+    (tmp_path / "AGENTS.md").write_text("# Codex\n")
+
+    import synlynk as sl
+
+    sl._repair_sops_only(dry_run=False, agent_name="codex")
+
+    class _Result:
+        returncode = 0
+        stdout = "codex 1.2.3"
+        stderr = ""
+
+    monkeypatch.setattr(sl.probe.subprocess, "run", lambda *args, **kwargs: _Result())
+    db = sl._get_db()
+    try:
+        sl._probe_agent("codex", db, fast_path_ok=False, write_fence=True)
+    finally:
+        db.close()
+
+    content = (tmp_path / "AGENTS.md").read_text()
+    assert "## Repo Hygiene" in content
+    assert "## Headless Execution Contract" in content
+    assert "## Active Dispatch Flags" in content
+    assert "## Network Dependencies" in content
+
+
 def test_repair_capability_allocation_sop_uses_committed_capability_roles(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)

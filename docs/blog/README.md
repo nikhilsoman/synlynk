@@ -118,6 +118,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [111](./111-pr868-cost-completeness.md) | Cost completeness — Epic A2 / #752 | [#868](https://github.com/nikhilsoman/synlynk/pull/868) | 2026-08-09 |
 | [112](./112-pr874-cold-start-phase2-canon-baseline.md) | cold-start Phase 2 — The Canon Baseline | [#874](https://github.com/nikhilsoman/synlynk/pull/874) | 2026-08-09 |
 | [113](./113-pr880-agent-vs-harness-terminology.md) | PR #880 — Agent vs Harness: Phase 0 of the Roles & Charters Roadmap | [#880](https://github.com/nikhilsoman/synlynk/pull/880) | 2026-08-10 |
+| [114](./114-chore-identity-slug-override.md) | Untangling Repo Name from Product Name — the `identity_slug` override | TBD | 2026-08-12 |
 
 ## Per-PR Post Template
 
