@@ -205,6 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
         upgrade,
         wizard_init,
     )
+    from synlynk.events import cmd_events_tail
     from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
     from synlynk.scheduler import cmd_schedule
@@ -419,6 +420,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Provision a GitHub App for a specific role",
     )
     identity_sub.add_parser("list", help="List provisioned role identities")
+
+    events_parser = subparsers.add_parser("events", help="Inspect the GOVERNS event bus")
+    events_sub = events_parser.add_subparsers(dest="events_action")
+    events_tail_parser = events_sub.add_parser("tail", help="Print recent GOVERNS events, newest first")
+    events_tail_parser.add_argument(
+        "--type",
+        dest="event_type",
+        default=None,
+        help="Filter to one event type (e.g. job_terminal, review_submitted, pr_merged)",
+    )
+    events_tail_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum number of events to show (default 20)",
+    )
 
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
@@ -832,6 +849,7 @@ def build_parser() -> argparse.ArgumentParser:
         "daemon": daemon_parser,
         "goal": goal_parser,
         "identity": identity_parser,
+        "events": events_parser,
         "instructions": instructions_parser,
         "local": local_parser,
         "relay": relay_parser,
@@ -939,6 +957,7 @@ def main() -> None:
         upgrade,
         wizard_init,
     )
+    from synlynk.events import cmd_events_tail
     from synlynk.status import cmd_status as cmd_ecosystem_status
     from synlynk.viz import cmd_viz
     from synlynk.scheduler import cmd_schedule
@@ -1377,6 +1396,12 @@ def main() -> None:
             cmd_identity_list()
         else:
             help_parsers.get("identity", parser).print_help()
+    elif args.command == "events":
+        action = getattr(args, "events_action", None)
+        if action == "tail":
+            cmd_events_tail(event_type=args.event_type, limit=args.limit)
+        else:
+            help_parsers.get("events", parser).print_help()
     else:
         parser.print_help()
 

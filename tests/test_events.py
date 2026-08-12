@@ -181,3 +181,46 @@ def test_scan_local_events_review_submitted_no_duplicate_on_rescan(project_dir):
 
     pending = pending_events("test-observer2", "review_submitted")
     assert len(pending) == 1
+
+
+def test_cmd_events_tail_filters_by_type(project_dir, capsys):
+    from synlynk.events import cmd_events_tail
+
+    emit_event("pr_merged", {"pr_number": 1}, emitted_by="test")
+    emit_event("job_terminal", {"job_id": "job-a", "status": "done"}, emitted_by="test")
+    emit_event("job_terminal", {"job_id": "job-b", "status": "failed"}, emitted_by="test")
+
+    cmd_events_tail(event_type="job_terminal", limit=20)
+
+    out = capsys.readouterr().out
+    assert "job-a" in out
+    assert "job-b" in out
+    assert "pr_merged" not in out
+
+
+def test_cmd_events_tail_respects_limit_and_orders_newest_first(project_dir, capsys):
+    from synlynk.events import cmd_events_tail
+
+    for i in range(5):
+        emit_event("cron_heartbeat", {"tick": i}, emitted_by="test")
+
+    cmd_events_tail(event_type="cron_heartbeat", limit=2)
+
+    out = capsys.readouterr().out
+    lines = [l for l in out.splitlines() if l.strip()]
+    assert len(lines) == 2
+    # Newest first: tick 4 appears before tick 3.
+    assert out.index('"tick": 4') < out.index('"tick": 3')
+
+
+def test_cmd_events_tail_with_no_type_shows_all_types(project_dir, capsys):
+    from synlynk.events import cmd_events_tail
+
+    emit_event("pr_merged", {"pr_number": 1}, emitted_by="test")
+    emit_event("job_terminal", {"job_id": "job-a", "status": "done"}, emitted_by="test")
+
+    cmd_events_tail(event_type=None, limit=20)
+
+    out = capsys.readouterr().out
+    assert "pr_merged" in out
+    assert "job_terminal" in out

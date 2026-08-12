@@ -243,6 +243,8 @@ COMMAND_TAXONOMY = [
      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
     {"command": "identity list", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
+    {"command": "events tail", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
+     "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
     {"command": "repair", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
     {"command": "exit", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,

@@ -206,3 +206,30 @@ def scan_local_events(agent_name: str) -> None:
         )
     if last_event_id is not None:
         advance_checkpoint(agent_name, "spec_or_plan_committed", last_event_id)
+
+
+def cmd_events_tail(event_type: str = None, limit: int = 20) -> None:
+    """Prints the most recent GOVERNS events, newest first. Read-only diagnostic."""
+    from synlynk import _get_db
+
+    conn = _get_db()
+    if event_type:
+        rows = conn.execute(
+            "SELECT id, created_at, event_type, emitted_by, payload_json "
+            "FROM events WHERE event_type=? ORDER BY id DESC LIMIT ?",
+            (event_type, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, created_at, event_type, emitted_by, payload_json "
+            "FROM events ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    conn.close()
+    for event_id, created_at, etype, emitted_by, payload_json in rows:
+        try:
+            payload = json.loads(payload_json)
+            summary = json.dumps(payload, separators=(", ", ": "))
+        except (TypeError, ValueError):
+            summary = payload_json or ""
+        print(f"{event_id}  {created_at}  {etype}  {emitted_by}  {summary}")
