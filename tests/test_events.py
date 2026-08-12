@@ -80,7 +80,11 @@ def test_scan_local_events_emits_pr_merged_from_gh_output(project_dir):
 
     gh_stdout = json.dumps([{"number": 99, "title": "Test PR", "mergedAt": "2026-08-08T00:00:00Z"}])
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout=gh_stdout)
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=gh_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout=""),
+        ]
         scan_local_events("workspace-lifecycle-nudge")
     pending = pending_events("test-observer", "pr_merged")
     assert len(pending) == 1
@@ -95,3 +99,128 @@ def test_scan_local_events_advances_own_checkpoint(project_dir):
         scan_local_events("workspace-lifecycle-nudge")
         first_pending = pending_events("workspace-lifecycle-nudge", "cron_heartbeat")
         assert first_pending == []
+
+
+def test_scan_local_events_emits_review_submitted_with_role_derived_from_bot_login(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{"number": 919, "title": "Test PR", "mergedAt": "2026-08-12T00:00:00Z"}])
+    reviews_stdout = json.dumps({
+        "reviews": [
+            {"author": {"login": "synlynk-vdowrx-qa[bot]"}, "state": "COMMENTED", "submittedAt": "2026-08-12T01:00:00Z"},
+        ]
+    })
+    git_log_stdout = ""
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=git_log_stdout),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer", "review_submitted")
+    assert len(pending) == 1
+    payload = pending[0]["payload"]
+    assert payload["pr_number"] == 919
+    assert payload["reviewer_login"] == "synlynk-vdowrx-qa[bot]"
+    assert payload["reviewer_role"] == "qa"
+    assert payload["verdict"] == "COMMENTED"
+    assert payload["submitted_at"] == "2026-08-12T01:00:00Z"
+
+
+def test_scan_local_events_review_submitted_role_null_for_non_matching_login(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{"number": 920, "title": "Test PR 2", "mergedAt": "2026-08-12T00:00:00Z"}])
+    reviews_stdout = json.dumps({
+        "reviews": [
+            {"author": {"login": "some-human"}, "state": "APPROVED", "submittedAt": "2026-08-12T02:00:00Z"},
+        ]
+    })
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer", "review_submitted")
+    assert len(pending) == 1
+    assert pending[0]["payload"]["reviewer_role"] is None
+
+
+def test_scan_local_events_review_submitted_no_duplicate_on_rescan(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{"number": 921, "title": "Test PR 3", "mergedAt": "2026-08-12T00:00:00Z"}])
+    reviews_stdout = json.dumps({
+        "reviews": [
+            {"author": {"login": "synlynk-vdowrx-dev[bot]"}, "state": "APPROVED", "submittedAt": "2026-08-12T03:00:00Z"},
+        ]
+    })
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer2", "review_submitted")
+    assert len(pending) == 1
+
+
+def test_cmd_events_tail_filters_by_type(project_dir, capsys):
+    from synlynk.events import cmd_events_tail
+
+    emit_event("pr_merged", {"pr_number": 1}, emitted_by="test")
+    emit_event("job_terminal", {"job_id": "job-a", "status": "done"}, emitted_by="test")
+    emit_event("job_terminal", {"job_id": "job-b", "status": "failed"}, emitted_by="test")
+
+    cmd_events_tail(event_type="job_terminal", limit=20)
+
+    out = capsys.readouterr().out
+    assert "job-a" in out
+    assert "job-b" in out
+    assert "pr_merged" not in out
+
+
+def test_cmd_events_tail_respects_limit_and_orders_newest_first(project_dir, capsys):
+    from synlynk.events import cmd_events_tail
+
+    for i in range(5):
+        emit_event("cron_heartbeat", {"tick": i}, emitted_by="test")
+
+    cmd_events_tail(event_type="cron_heartbeat", limit=2)
+
+    out = capsys.readouterr().out
+    lines = [l for l in out.splitlines() if l.strip()]
+    assert len(lines) == 2
+    # Newest first: tick 4 appears before tick 3.
+    assert out.index('"tick": 4') < out.index('"tick": 3')
+
+
+def test_cmd_events_tail_with_no_type_shows_all_types(project_dir, capsys):
+    from synlynk.events import cmd_events_tail
+
+    emit_event("pr_merged", {"pr_number": 1}, emitted_by="test")
+    emit_event("job_terminal", {"job_id": "job-a", "status": "done"}, emitted_by="test")
+
+    cmd_events_tail(event_type=None, limit=20)
+
+    out = capsys.readouterr().out
+    assert "pr_merged" in out
+    assert "job_terminal" in out
