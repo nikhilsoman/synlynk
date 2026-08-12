@@ -586,7 +586,7 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
 
 
 def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return sorted file paths changed in a worktree since the resolved merge-base."""
+    """Return sorted file paths committed in a worktree since the resolved merge-base."""
     if not worktree_path or not os.path.isdir(worktree_path):
         return []
 
@@ -615,27 +615,6 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
             path = path.strip()
             if path:
                 touched.add(path)
-
-    try:
-        status_result = subprocess.run(
-            ["git", "-C", worktree_path, "status", "--short", "--porcelain"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except Exception:
-        status_result = None
-
-    if status_result and status_result.returncode == 0:
-        for line in (status_result.stdout or "").splitlines():
-            if len(line) < 4:
-                continue
-            path = line[3:].strip()
-            if not path:
-                continue
-            if " -> " in path:
-                path = path.split(" -> ", 1)[1].strip()
-            touched.add(path)
 
     return sorted(touched)
 
