@@ -1393,3 +1393,99 @@ def test_ensure_daemon_job_cost_entry_skips_when_present(project_dir):
     conn = sl._get_db()
     assert jobs_mod._ensure_daemon_job_cost_entry(job_id, "claude", None, "", conn=conn) is False
     conn.close()
+
+
+def test_reconcile_daemon_jobs_emits_job_terminal_cost_recorded_true(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.events import pending_events
+
+    job_id = "job-terminal-true"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, dispatch_context) "
+        "VALUES (?,'codex','t','running',999999,'2026-08-12T00:00:00','2026-08-12T00:00:00','headless')",
+        (job_id,),
+    )
+    conn.commit()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(sl, "extract_tokens", lambda log_text, agent=None: (0, 0))
+    monkeypatch.setattr(sl, "extract_model_version", lambda log_text, agent=None: "unknown")
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "_write_job_summary", lambda *a, **k: None)
+
+    sl._reconcile_daemon_jobs()
+
+    events = pending_events("test-observer", "job_terminal")
+    matching = [e for e in events if e["payload"]["job_id"] == job_id]
+    assert len(matching) == 1
+    payload = matching[0]["payload"]
+    assert payload["status"] in ("done", "failed_unverified", "timed_out", "failed")
+    assert payload["cost_recorded"] is True
+    assert payload["dispatch_context"] == "headless"
+
+
+def test_reconcile_daemon_jobs_emits_job_terminal_cost_recorded_false_when_row_exists(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.db import _insert_cost_row
+    from synlynk.events import pending_events
+
+    job_id = "job-terminal-false"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, dispatch_context) "
+        "VALUES (?,'codex','t','running',999999,'2026-08-12T00:00:00','2026-08-12T00:00:00','home')",
+        (job_id,),
+    )
+    conn.commit()
+    _insert_cost_row(
+        session_date="2026-08-12", agent="codex", model="t",
+        input_tokens=1, output_tokens=1, cache_read_tokens=0,
+        cost_source="actual", total_cost_usd=0.01, job_id=job_id,
+    )
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(sl, "extract_tokens", lambda log_text, agent=None: (0, 0))
+    monkeypatch.setattr(sl, "extract_model_version", lambda log_text, agent=None: "unknown")
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **k: None)
+    monkeypatch.setattr(sl, "_write_job_summary", lambda *a, **k: None)
+
+    sl._reconcile_daemon_jobs()
+
+    events = pending_events("test-observer2", "job_terminal")
+    matching = [e for e in events if e["payload"]["job_id"] == job_id]
+    assert len(matching) == 1
+    payload = matching[0]["payload"]
+    assert payload["cost_recorded"] is False
+    assert payload["dispatch_context"] == "home"
+
+
+def test_reconcile_daemon_jobs_emits_job_terminal_on_preferred_summary_path(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.events import pending_events
+
+    job_id = "job-terminal-preferred"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, dispatch_context) "
+        "VALUES (?,'agy','t','running',NULL,'2026-08-12T00:00:00','2026-08-12T00:00:00','headless')",
+        (job_id,),
+    )
+    conn.commit()
+
+    monkeypatch.setattr(
+        jobs_mod, "_existing_terminal_summary_truth",
+        lambda job_id: ("done", 0),
+    )
+
+    sl._reconcile_daemon_jobs()
+
+    events = pending_events("test-observer3", "job_terminal")
+    matching = [e for e in events if e["payload"]["job_id"] == job_id]
+    assert len(matching) == 1
+    payload = matching[0]["payload"]
+    assert payload["status"] == "done"
+    assert payload["cost_recorded"] is True

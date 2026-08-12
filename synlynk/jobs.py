@@ -14,6 +14,7 @@ from typing import Optional
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
+from synlynk.events import emit_event
 
 
 _BOLD = "[1m"
@@ -2050,12 +2051,12 @@ def _reconcile_daemon_jobs() -> None:
     """
     conn = _pkg("_get_db")()
     rows = conn.execute(
-        "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path "
+        "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, dispatch_context "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        for job_id, agent, story_id, task, pid, started_at, completed_at, log_path in rows:
+        for job_id, agent, story_id, task, pid, started_at, completed_at, log_path, dispatch_context in rows:
             exited = False
             raw_exit_status = None
             if pid is None:
@@ -2122,8 +2123,18 @@ def _reconcile_daemon_jobs() -> None:
                                 log_text_pref = f.read()
                         except Exception:
                             log_text_pref = ""
-                    _ensure_daemon_job_cost_entry(
+                    cost_recorded = _ensure_daemon_job_cost_entry(
                         job_id, agent, story_id, log_text_pref, conn=conn
+                    )
+                    emit_event(
+                        "job_terminal",
+                        {
+                            "job_id": job_id,
+                            "status": status,
+                            "cost_recorded": cost_recorded,
+                            "dispatch_context": dispatch_context,
+                        },
+                        emitted_by="_reconcile_daemon_jobs",
                     )
                     continue
 
@@ -2218,8 +2229,18 @@ def _reconcile_daemon_jobs() -> None:
                         job_id, agent, story_id, log_text, conn=conn
                     )
                 # Guarantee a row even if update_costs no-op'd (unmigrated flat-file path).
-                _ensure_daemon_job_cost_entry(
+                cost_recorded = _ensure_daemon_job_cost_entry(
                     job_id, agent, story_id, log_text, conn=conn
+                )
+                emit_event(
+                    "job_terminal",
+                    {
+                        "job_id": job_id,
+                        "status": status,
+                        "cost_recorded": cost_recorded,
+                        "dispatch_context": dispatch_context,
+                    },
+                    emitted_by="_reconcile_daemon_jobs",
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
                 if status == "failed_unverified" and not summary_status:
