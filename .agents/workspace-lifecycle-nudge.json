@@ -1,7 +1,0 @@
-{
-  "role": "workspace-lifecycle-nudge",
-  "sfia_codes": ["PROB", "PEMT", "BURM"],
-  "subscriptions": ["pr_merged", "story_done", "spec_or_plan_committed", "cron_heartbeat"],
-  "charter_version": null,
-  "schedule": "0 */6 * * *"
-}
