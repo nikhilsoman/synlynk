@@ -80,7 +80,11 @@ def test_scan_local_events_emits_pr_merged_from_gh_output(project_dir):
 
     gh_stdout = json.dumps([{"number": 99, "title": "Test PR", "mergedAt": "2026-08-08T00:00:00Z"}])
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout=gh_stdout)
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=gh_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout=""),
+        ]
         scan_local_events("workspace-lifecycle-nudge")
     pending = pending_events("test-observer", "pr_merged")
     assert len(pending) == 1
@@ -95,3 +99,85 @@ def test_scan_local_events_advances_own_checkpoint(project_dir):
         scan_local_events("workspace-lifecycle-nudge")
         first_pending = pending_events("workspace-lifecycle-nudge", "cron_heartbeat")
         assert first_pending == []
+
+
+def test_scan_local_events_emits_review_submitted_with_role_derived_from_bot_login(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{"number": 919, "title": "Test PR", "mergedAt": "2026-08-12T00:00:00Z"}])
+    reviews_stdout = json.dumps({
+        "reviews": [
+            {"author": {"login": "synlynk-vdowrx-qa[bot]"}, "state": "COMMENTED", "submittedAt": "2026-08-12T01:00:00Z"},
+        ]
+    })
+    git_log_stdout = ""
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=git_log_stdout),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer", "review_submitted")
+    assert len(pending) == 1
+    payload = pending[0]["payload"]
+    assert payload["pr_number"] == 919
+    assert payload["reviewer_login"] == "synlynk-vdowrx-qa[bot]"
+    assert payload["reviewer_role"] == "qa"
+    assert payload["verdict"] == "COMMENTED"
+    assert payload["submitted_at"] == "2026-08-12T01:00:00Z"
+
+
+def test_scan_local_events_review_submitted_role_null_for_non_matching_login(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{"number": 920, "title": "Test PR 2", "mergedAt": "2026-08-12T00:00:00Z"}])
+    reviews_stdout = json.dumps({
+        "reviews": [
+            {"author": {"login": "some-human"}, "state": "APPROVED", "submittedAt": "2026-08-12T02:00:00Z"},
+        ]
+    })
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer", "review_submitted")
+    assert len(pending) == 1
+    assert pending[0]["payload"]["reviewer_role"] is None
+
+
+def test_scan_local_events_review_submitted_no_duplicate_on_rescan(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{"number": 921, "title": "Test PR 3", "mergedAt": "2026-08-12T00:00:00Z"}])
+    reviews_stdout = json.dumps({
+        "reviews": [
+            {"author": {"login": "synlynk-vdowrx-dev[bot]"}, "state": "APPROVED", "submittedAt": "2026-08-12T03:00:00Z"},
+        ]
+    })
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=reviews_stdout),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer2", "review_submitted")
+    assert len(pending) == 1
