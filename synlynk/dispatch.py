@@ -442,6 +442,16 @@ def _is_interactive(cmd_args: list) -> bool:
     return not any(flag in cmd_str for flag in non_interactive)
 
 
+def _dispatch_context() -> str:
+    """Return whether this dispatch was initiated from an operator TTY."""
+    try:
+        return "home" if sys.stdin.isatty() else "headless"
+    except (AttributeError, OSError, ValueError):
+        # stdin may be closed or replaced with an object without a usable fd
+        # when dispatch is invoked from a daemon, CI, or another process.
+        return "headless"
+
+
 def _inject_grok_rules(cmd_args: list) -> list:
     """Adds Grok rules flags when invoking grok and the rule files exist."""
     if not cmd_args or cmd_args[0] != "grok":
@@ -2346,8 +2356,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ).fetchone()
             if existing:
                 # Preserve priority/depends_on/enqueued_at from the queue row.
-                # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
-                dispatch_context = "unknown"
+                dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, agent=?, task=?, story_id=?, "
@@ -2367,8 +2376,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     ),
                 )
             else:
-                # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
-                dispatch_context = "unknown"
+                dispatch_context = _dispatch_context()
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "

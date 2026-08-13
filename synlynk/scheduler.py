@@ -177,8 +177,8 @@ def _enqueue_plan(plan: list) -> list:
             job_id = "djob-" + hashlib.md5(
                 f"{agent}{task}{time.time()}".encode()
             ).hexdigest()[:8]
-            # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
-            dispatch_context = "unknown"
+            # Batch scheduling runs without an interactive operator.
+            dispatch_context = "headless"
             conn.execute(
                 "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
                 "priority, depends_on, enqueued_at, dispatch_context) VALUES (?,?,?,?,?,?,?,?,?)",

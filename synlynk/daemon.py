@@ -317,8 +317,8 @@ def _make_daemon_handler(daemon_instance):
             ).hexdigest()[:8]
             conn = _pkg("_get_db")()
             try:
-                # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
-                dispatch_context = "unknown"
+                # Daemon enqueue runs without an interactive operator.
+                dispatch_context = "headless"
                 conn.execute(
                     "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
                     "priority, depends_on, enqueued_at, dispatch_context) VALUES (?,?,?,?,?,?,?,?,?)",

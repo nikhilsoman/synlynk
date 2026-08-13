@@ -1,5 +1,6 @@
 """#291: agent_quotas populated from telemetry + synlynk quota CLI."""
 
+import io
 import json
 import os
 import sqlite3
@@ -2047,6 +2048,80 @@ def test_daemon_jobs_cost_entries_has_dispatch_context_column(project_dir, monke
     assert daemon_row[0] == "unknown"
 
     conn.close()
+
+
+@pytest.mark.parametrize(
+    ("isatty", "expected"),
+    [(True, "home"), (False, "headless")],
+)
+def test_a3_set_dispatch_context_to_homeheadless_dispatch(project_dir, monkeypatch, isatty, expected):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 74001
+
+    monkeypatch.setattr(dispatch_mod.sys.stdin, "isatty", lambda: isatty)
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *args, **kwargs: FakeProc())
+    monkeypatch.setattr(
+        synlynk,
+        "_preflight_dispatch",
+        lambda *args, **kwargs: {"passed": True, "sentinel": None, "reason": None},
+    )
+
+    synlynk.dispatch_agent(
+        "codex", f"A3 dispatch context {expected}",
+        force_agent=True, skip_preflight=True, context_mode="none",
+    )
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row == (expected,)
+
+
+def test_a3_set_dispatch_context_to_homeheadless_daemon(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.daemon as daemon_mod
+
+    conn = synlynk._get_db()
+    db_path = synlynk.DB_PATH
+    captured = {}
+    handler_cls = daemon_mod._make_daemon_handler(object())
+    handler = handler_cls.__new__(handler_cls)
+    payload = json.dumps({"agent": "codex", "task": "daemon A3"}).encode()
+    handler.headers = {"Content-Length": str(len(payload))}
+    handler.rfile = io.BytesIO(payload)
+    handler._send_json = lambda code, data: captured.update(code=code, data=data)
+    monkeypatch.setattr(synlynk, "_get_db", lambda: conn)
+
+    handler._handle_dispatch()
+
+    conn = sqlite3.connect(db_path)
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id=?",
+        (captured["data"]["job_id"],),
+    ).fetchone()
+    conn.close()
+    assert row == ("headless",)
+
+
+def test_a3_set_dispatch_context_to_homeheadless_scheduler(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.scheduler import _enqueue_plan
+
+    job_ids = _enqueue_plan([
+        {"story_id": "story-a3", "title": "A3", "agent": "codex", "priority": 5},
+    ])
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id=?", (job_ids[0],)
+    ).fetchone()
+    conn.close()
+    assert row == ("headless",)
 
 
 def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
