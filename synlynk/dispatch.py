@@ -732,6 +732,22 @@ def _summary_files_touched_count(summary_text: str) -> Optional[int]:
         return None
 
 
+_GITHUB_MCP_CANCELLATION_MARKERS = (
+    '"message":"user cancelled MCP tool call"',
+    "GitHub review submission was cancelled by the connector again;",
+)
+
+
+def _has_github_mcp_cancellation(log_text: Optional[str]) -> bool:
+    """Return whether a job log records a cancelled GitHub MCP write.
+
+    The connector's JSON error is the primary marker.  The agent-emitted
+    summary phrase is retained as a fallback for logs where the structured
+    MCP event is abbreviated or omitted.
+    """
+    return bool(log_text) and any(marker in log_text for marker in _GITHUB_MCP_CANCELLATION_MARKERS)
+
+
 def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         exit_code: Optional[int], duration_s: Optional[float],
                         in_tokens: int, out_tokens: int, cost_usd: float,
@@ -744,12 +760,15 @@ def _format_job_summary(job_id: str, agent: str, story_id: Optional[str],
                         base_sha: Optional[str] = None,
                         suite_result: Optional[dict] = None,
                         task_sha256: Optional[str] = None,
-                        task_preview: Optional[str] = None) -> str:
+                        task_preview: Optional[str] = None,
+                        log_text: Optional[str] = None) -> str:
     """Formats the structured completion summary for a finished job."""
     files_touched = sorted(set(files_touched or []))
     story_label = story_id or "-"
     exit_code = -1 if exit_code is None else exit_code
     status_label = status_label or ("OK (exit 0)" if exit_code == 0 else f"FAILED (exit {exit_code})")
+    if exit_code == 0 and _has_github_mcp_cancellation(log_text):
+        status_label = f"{status_label} — GH WRITE CANCELLED"
     duration_label = f"{duration_s:.1f}s" if duration_s is not None else "?s"
     worktree_line = ""
     note_line = f"note:     {note}\n" if note else ""
@@ -834,14 +853,16 @@ def _write_job_summary(job_id: str, agent: str, story_id: Optional[str],
                        base_sha: Optional[str] = None,
                        suite_result: Optional[dict] = None,
                        task_sha256: Optional[str] = None,
-                       task_preview: Optional[str] = None) -> str:
+                       task_preview: Optional[str] = None,
+                       log_text: Optional[str] = None) -> str:
     """Writes a structured completion summary for a job and returns the text."""
     os.makedirs(".synlynk/logs", exist_ok=True)
     summary = _format_job_summary(
         job_id, agent, story_id, exit_code, duration_s, in_tokens, out_tokens,
         cost_usd, files_touched, worktree_path=worktree_path, worktree_branch=worktree_branch,
         status_label=status_label, note=note, base_branch=base_branch, base_sha=base_sha,
-        suite_result=suite_result, task_sha256=task_sha256, task_preview=task_preview
+        suite_result=suite_result, task_sha256=task_sha256, task_preview=task_preview,
+        log_text=log_text,
     )
     summary_path = _job_summary_path(job_id)
     existing_summary = None

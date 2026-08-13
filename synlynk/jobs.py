@@ -1177,6 +1177,7 @@ def _reconcile_jobs() -> None:
                 suite_result=job.get("suite_result"),
                 task_sha256=task_sha256,
                 task_preview=task_preview,
+                log_text=log_text,
             )
             print(summary, end="")
             changed = True
@@ -1349,6 +1350,7 @@ def _reconcile_jobs() -> None:
                 suite_result=job.get("suite_result"),
                 task_sha256=task_sha256,
                 task_preview=task_preview,
+                log_text=log_text,
             )
             print(summary, end="")
             changed = True
@@ -1587,6 +1589,7 @@ def _reconcile_jobs() -> None:
                 suite_result=job.get("suite_result"),
                 task_sha256=task_sha256,
                 task_preview=task_preview,
+                log_text=log_text,
             )
             print(summary, end="")
 
@@ -2252,7 +2255,8 @@ def _reconcile_daemon_jobs() -> None:
                     worktree_path=worktree_path,
                     worktree_branch=worktree_branch,
                     status_label=summary_status, note=summary_note,
-                    task_sha256=task_sha256, task_preview=task_preview
+                    task_sha256=task_sha256, task_preview=task_preview,
+                    log_text=log_text,
                 )
         conn.commit()
     finally:

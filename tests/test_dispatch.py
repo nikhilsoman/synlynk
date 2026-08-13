@@ -3,6 +3,35 @@ import pytest
 from synlynk.dispatch import _format_job_summary
 
 
+def test_format_job_summary_flags_cancelled_github_mcp_write():
+    summary = _format_job_summary(
+        "job-gh-cancelled", "codex", None, 0, 1.0, 0, 0, 0.0,
+        log_text='{"error":{"message":"user cancelled MCP tool call"}}',
+    )
+
+    assert "status:   OK (exit 0) — GH WRITE CANCELLED" in summary
+
+
+def test_format_job_summary_does_not_false_positive_on_success():
+    summary = _format_job_summary(
+        "job-success", "codex", None, 0, 1.0, 0, 0, 0.0,
+        log_text="review submitted successfully",
+    )
+
+    assert "status:   OK (exit 0)\n" in summary
+    assert "GH WRITE CANCELLED" not in summary
+
+
+def test_format_job_summary_does_not_double_flag_failed_job():
+    summary = _format_job_summary(
+        "job-gh-failed", "codex", None, 1, 1.0, 0, 0, 0.0,
+        log_text='{"error":{"message":"user cancelled MCP tool call"}}',
+    )
+
+    assert "status:   FAILED (exit 1)" in summary
+    assert "GH WRITE CANCELLED" not in summary
+
+
 def test_cli_dispatch_dry_run_prints_preview_and_creates_no_job(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.cli as cli_mod
