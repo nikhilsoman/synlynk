@@ -95,3 +95,43 @@ def _commits_since(root: str, ref: str) -> int:
         return 0
 
 
+def _release_status(root: str = ".") -> dict:
+    """Merges tag pattern + latest tag + in-flight count into one classification
+    dict, per the spec's "released-baseline vs. in-flight" active-code labeling.
+
+    Returns:
+        {
+            "pattern": "semver"|"calver"|"monorepo"|"mixed"|"none",
+            "latest_tag": str or None,
+            "latest_tag_date": str (ISO 8601) or None,
+            "in_flight_commit_count": int or None (None only when no tags exist),
+            "in_flight_summary": str or None (None when 0 in-flight commits or no tags),
+        }
+    """
+    tags = _git_tags_with_dates(root)
+    pattern = _detect_tag_pattern(tags)
+    latest = tags[-1] if tags else None
+
+    if latest is None:
+        return {
+            "pattern": pattern,
+            "latest_tag": None,
+            "latest_tag_date": None,
+            "in_flight_commit_count": None,
+            "in_flight_summary": None,
+        }
+
+    in_flight = _commits_since(root, latest["tag"])
+    summary = (f"{in_flight} commits ahead of {latest['tag']}, not yet released"
+               if in_flight > 0 else None)
+
+    return {
+        "pattern": pattern,
+        "latest_tag": latest["tag"],
+        "latest_tag_date": latest["date"],
+        "in_flight_commit_count": in_flight,
+        "in_flight_summary": summary,
+    }
+
+
+

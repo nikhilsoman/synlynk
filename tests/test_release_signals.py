@@ -125,3 +125,45 @@ def test_commits_since_zero_when_tag_is_head(tmp_path):
     assert _commits_since(str(tmp_path), "v0.1.0") == 0
 
 
+from synlynk.release_signals import _release_status
+
+
+def test_release_status_no_tags(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+
+    status = _release_status(str(tmp_path))
+    assert status == {
+        "pattern": "none",
+        "latest_tag": None,
+        "latest_tag_date": None,
+        "in_flight_commit_count": None,
+        "in_flight_summary": None,
+    }
+
+
+def test_release_status_with_in_flight_commits(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+    _tag(tmp_path, "v0.1.0")
+    _commit(tmp_path, "b.txt", "b", "second")
+    _commit(tmp_path, "c.txt", "c", "third")
+
+    status = _release_status(str(tmp_path))
+    assert status["pattern"] == "semver"
+    assert status["latest_tag"] == "v0.1.0"
+    assert status["in_flight_commit_count"] == 2
+    assert status["in_flight_summary"] == "2 commits ahead of v0.1.0, not yet released"
+
+
+def test_release_status_at_latest_tag_has_no_in_flight_summary(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+    _tag(tmp_path, "v0.1.0")
+
+    status = _release_status(str(tmp_path))
+    assert status["in_flight_commit_count"] == 0
+    assert status["in_flight_summary"] is None
+
+
+
