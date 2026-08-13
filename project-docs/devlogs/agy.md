@@ -29,3 +29,11 @@
   - Supports zoom-in and zoom-out operations on the SVG canvas.
 - Added comprehensive unit tests in `tests/test_viz.py` for both setup-prompt and configured states.
 - Verified successful cache generation with `python3 bin/synlynk.py viz --generate`.
+
+## 2026-08-13 — Non-authoring PR Review & Merge for PR #926 (A3: Home/Headless Detection, #740)
+
+### Shipped
+- Reviewed PR #926 (`dispatch/codex/job-08ce0867`): verified `dispatch.py` `_dispatch_context()` helper (`sys.stdin.isatty()` with `except -> headless` fallback), `daemon.py` and `scheduler.py` hardcoded `'headless'` annotations, and 4 unit tests in `tests/test_agent_quota_tracking.py`.
+- Ran `synlynk pr check` and confirmed all 71 tests in `tests/test_agent_quota_tracking.py` pass cleanly.
+- Posted formal COMMENT review per PR Review Discipline and #423 identity rule.
+- Merged PR #926 into main via `gh pr merge --squash`.
