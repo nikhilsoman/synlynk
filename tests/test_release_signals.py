@@ -86,3 +86,42 @@ def test_detect_pattern_mixed_when_inconsistent():
     tags = [{"tag": "v1.0.0"}, {"tag": "release-candidate-7"}, {"tag": "checkpoint"}]
     assert _detect_tag_pattern(tags) == "mixed"
 
+
+from synlynk.release_signals import _latest_tag, _commits_since
+
+
+def test_latest_tag_returns_most_recent_by_date(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+    _tag(tmp_path, "v0.1.0")
+    _commit(tmp_path, "b.txt", "b", "second")
+    _tag(tmp_path, "v0.2.0")
+
+    latest = _latest_tag(str(tmp_path))
+    assert latest["tag"] == "v0.2.0"
+
+
+def test_latest_tag_none_when_no_tags(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+    assert _latest_tag(str(tmp_path)) is None
+
+
+def test_commits_since_counts_commits_after_ref(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+    _tag(tmp_path, "v0.1.0")
+    _commit(tmp_path, "b.txt", "b", "second")
+    _commit(tmp_path, "c.txt", "c", "third")
+
+    assert _commits_since(str(tmp_path), "v0.1.0") == 2
+
+
+def test_commits_since_zero_when_tag_is_head(tmp_path):
+    _git_init(tmp_path)
+    _commit(tmp_path, "a.txt", "a", "first")
+    _tag(tmp_path, "v0.1.0")
+
+    assert _commits_since(str(tmp_path), "v0.1.0") == 0
+
+

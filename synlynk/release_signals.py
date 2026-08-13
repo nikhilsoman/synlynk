@@ -71,3 +71,27 @@ def _detect_tag_pattern(tags: list) -> str:
         return "monorepo"
     return "mixed"
 
+
+def _latest_tag(root: str = ".") -> dict:
+    """Returns the most recently created tag dict, or None if no tags exist."""
+    tags = _git_tags_with_dates(root)
+    return tags[-1] if tags else None
+
+
+def _commits_since(root: str, ref: str) -> int:
+    """Returns the count of non-merge-excluding commits on HEAD since `ref`."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", f"{ref}..HEAD"],
+            cwd=root, capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        return 0
+    if result.returncode != 0:
+        return 0
+    try:
+        return int(result.stdout.strip() or "0")
+    except ValueError:
+        return 0
+
+
