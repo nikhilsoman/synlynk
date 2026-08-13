@@ -53,3 +53,36 @@ def test_git_tags_with_dates_handles_lightweight_tags(tmp_path):
 
 def test_git_tags_with_dates_non_git_dir_returns_empty(tmp_path):
     assert _git_tags_with_dates(str(tmp_path)) == []
+
+
+from synlynk.release_signals import _detect_tag_pattern
+
+
+def test_detect_pattern_semver():
+    tags = [{"tag": "v0.1.0"}, {"tag": "v0.2.0"}, {"tag": "v1.0.0"}]
+    assert _detect_tag_pattern(tags) == "semver"
+
+
+def test_detect_pattern_semver_no_v_prefix():
+    tags = [{"tag": "0.1.0"}, {"tag": "0.2.0"}]
+    assert _detect_tag_pattern(tags) == "semver"
+
+
+def test_detect_pattern_calver():
+    tags = [{"tag": "2026.01.15"}, {"tag": "2026.03.02"}]
+    assert _detect_tag_pattern(tags) == "calver"
+
+
+def test_detect_pattern_monorepo():
+    tags = [{"tag": "api@1.0.0"}, {"tag": "web@2.3.1"}, {"tag": "api@1.1.0"}]
+    assert _detect_tag_pattern(tags) == "monorepo"
+
+
+def test_detect_pattern_none_when_no_tags():
+    assert _detect_tag_pattern([]) == "none"
+
+
+def test_detect_pattern_mixed_when_inconsistent():
+    tags = [{"tag": "v1.0.0"}, {"tag": "release-candidate-7"}, {"tag": "checkpoint"}]
+    assert _detect_tag_pattern(tags) == "mixed"
+

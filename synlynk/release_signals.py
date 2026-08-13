@@ -36,3 +36,38 @@ def _git_tags_with_dates(root: str = ".") -> list:
         tag, date, sha = parts
         tags.append({"tag": tag, "date": date, "sha": sha})
     return tags
+
+
+_SEMVER_RE = re.compile(r"^v?\d+\.\d+\.\d+")
+_CALVER_RE = re.compile(r"^v?(19|20)\d{2}[.\-]\d{1,2}([.\-]\d{1,2})?$")
+_MONOREPO_RE = re.compile(r"^[\w\-./]+@v?\d+\.\d+\.\d+")
+
+
+def _classify_single_tag(tag: str) -> str:
+    if _MONOREPO_RE.match(tag):
+        return "monorepo"
+    if _CALVER_RE.match(tag):
+        return "calver"
+    if _SEMVER_RE.match(tag):
+        return "semver"
+    return "other"
+
+
+def _detect_tag_pattern(tags: list) -> str:
+    """Returns "semver" | "calver" | "monorepo" | "none" | "mixed".
+
+    "none" means no tags exist. "mixed" means tags exist but don't share a
+    single recognizable pattern — still meaningful signal (an inconsistently
+    tagged repo), never silently dropped."""
+    if not tags:
+        return "none"
+
+    classifications = {_classify_single_tag(t["tag"]) for t in tags}
+    if classifications == {"semver"}:
+        return "semver"
+    if classifications == {"calver"}:
+        return "calver"
+    if classifications == {"monorepo"}:
+        return "monorepo"
+    return "mixed"
+
