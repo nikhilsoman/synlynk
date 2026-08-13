@@ -57,6 +57,7 @@ from synlynk.probe import (
     _run_tc3,
     _run_tc4,
     _run_tc5,
+    _run_tc6,
     _repair_capability_allocation_sop,
     _repair_sops_only,
     cmd_probe,

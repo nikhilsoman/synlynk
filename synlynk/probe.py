@@ -787,6 +787,50 @@ def _run_tc5(directive_files: dict) -> dict:
     return {"passed": not missing, "missing": missing}
 
 
+def _run_tc6(agent_name: str, env: Optional[dict] = None, timeout: int = 5) -> dict:
+    """TC-6: GitHub CLI authentication in the dispatch environment.
+
+    ``gh auth status`` has historically returned zero for some authentication
+    failures, so both its exit status and human-readable output must be
+    inspected.  Keep the output in the result only for diagnostics; ``gh``
+    does not print the token itself.
+    """
+    auth_env = os.environ.copy() if env is None else dict(env)
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=auth_env,
+        )
+    except FileNotFoundError:
+        return {"passed": False, "error": "gh CLI not found", "output": ""}
+    except subprocess.TimeoutExpired:
+        return {"passed": False, "error": "gh auth status timed out", "output": ""}
+
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    lower = output.lower()
+    invalid_markers = (
+        "token in default is invalid",
+        "token is invalid",
+        "token is expired",
+        "authentication token is required",
+        "not logged in",
+        "no oauth token",
+        "failed to log in",
+    )
+    failures = [marker for marker in invalid_markers if marker in lower]
+    if result.returncode != 0 and not failures:
+        failures.append(f"exit {result.returncode}")
+    return {
+        "passed": not failures,
+        "error": ", ".join(failures),
+        "output": output,
+        "returncode": result.returncode,
+    }
+
+
 def _read_harness_fence_body(file_path: str) -> str:
     """Return the current body inside the synlynk harness fence, if present."""
     try:
