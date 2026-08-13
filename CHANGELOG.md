@@ -16,9 +16,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Auto-generated `## Capability-Based Task Allocation` table (synced into CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md via `synlynk doctor --fix`) now reads `| Role | Harness | Tasks |` instead of the conflated `| Role | Agent | Tasks |`, with a glossary-link note.
 - Hand-maintained "Terminology: Agent vs Harness" section added to this repo's own `CLAUDE.md`.
 - `.synlynk/roles.yaml`, `README.md`, `SYNLYNK_GUIDE.md` wording fixed to stop conflating Agent and Harness.
-- First phase of a 5-phase roadmap (`docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md` §10) — Phases 1-4 (agent manifests, memory, capability registry, portability) are each future, separately-planned work.
-
-### Added
+- **Not yet a shippable milestone:** first phase of a 5-phase roadmap (`docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md` §10) — Phases 1-4 (agent manifests, memory, capability registry, portability) are unbuilt. Held out of 0.13.1; will ship as its own named release once the terminology rollout is actually complete.
 
 **Quota-Aware Dispatch Reservation (design 2026-08-08, plan 2026-08-08)**
 - `agent_reservations` ledger tracks estimated-token reservations per harness from the moment a job is queued/dispatched until it settles, closing the gap where `--force-agent` and daemon-queued dispatches could bypass quota checks entirely.
@@ -27,6 +25,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `synlynk schedule --execute` opens real reservations for the whole batch at commit time via `_enqueue_plan()`.
 - `_force_exhaust_quota()` wires sentinel's existing `QUOTA_EXHAUSTED` detection into the reservation ledger without ever touching already-running jobs.
 - `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
+- **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1; will ship once agents actually consume it.
+
+## [0.13.1] - 2026-08-13
+
+**Release pitch:** synlynk gets safer to operate on — init/migrate/upgrade can now roll back on failure, project docs are DB-canonical instead of hand-parsed markdown, the GOVERNS event bus gains job-terminal and review-submitted events plus a `synlynk events tail` command, and a new doctor check catches invalid GitHub tokens before a dispatch wastes a turn discovering them.
+
+### Added
+
+**GOVERNS Event-Contract Extension (design 2026-08-12, plan 2026-08-12, #922)**
+- `job_terminal` event — emitted synchronously from `_reconcile_daemon_jobs()` for every daemon job reaching a terminal state, payload `{job_id, status, cost_recorded, dispatch_context}`.
+- `review_submitted` event — emitted from `scan_local_events()` for each GitHub PR review not already represented, payload `{pr_number, reviewer_login, reviewer_role, verdict}`, with `reviewer_role` derived from bot-login patterns.
+- `synlynk events tail [--type TYPE] [--limit N]` — read-only CLI command listing recent events newest-first directly from the `events` table.
 
 **Init/Migrate/Upgrade Rollback Mechanism (design 2026-07-22, plan 2026-07-22)**
 - `rollback_checkpoint` (Leg 1) wraps `init()` and `cmd_migrate()` in a git-checkpoint + untracked-state backup, auto-restoring on any mid-operation failure.
@@ -40,12 +50,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `check_budgets()` reads `cost_entries` directly instead of regex-parsing `costs.md`.
 - `synlynk migrate` run on this repo itself — `project-docs/` relocated under `.synlynk/`, `.synlynk_migrated` sentinel committed.
 
+**`synlynk doctor` TC-6 — GitHub CLI auth check (#928, closes #577)**
+- New check across all 4 dispatch harnesses (claude, codex, agy, grok) inspects `gh auth status` output for known invalid-token marker strings even when the command exits 0 — the documented false-green failure mode where a dispatch sandbox has a broken GitHub token but `gh` doesn't report a nonzero exit.
+
 ### Fixed
 
 - Bumped `linkify-it` to 5.0.2 in `website/package-lock.json`, resolving a high-severity quadratic-complexity DoS (CVE-2026-59887, GHSA-v245-v573-v5vm) in its `mailto:` schema validator. Dev-only, transitive via `markdown-it`; fixes GitHub Dependabot alert #6.
 - `synlynk jobs` now resolves the repo's real default base branch before `gh pr create`, avoiding hardcoded `--base main` failures on repos whose default branch is `master` or another tracked branch.
 - `synlynk dispatch agy` now warns when no write/run permissions are granted, so headless dispatches do not fail silently when approval-gated tool calls are auto-denied.
 - Bumped `brace-expansion` to 1.1.16 in `website/package-lock.json`, resolving a high-severity exponential-time DoS (CVE-2026-13149, GHSA-3jxr-9vmj-r5cp) in expansion of consecutive non-expanding `{}` groups. Dev-only, transitive via `minimatch`; fixes GitHub Dependabot alert #7.
+
+### Docs
+
+- `docs/rca/2026-08-13-dispatched-pr-review-cancellation-714.md` (#929, closes #714) — RCA concluding Grok's `cancelled` stopReason on dispatched PR reviews is harness-side, not a synlynk stall/timeout bug; no code change warranted.
 
 ## [0.13.0] - 2026-07-22
 

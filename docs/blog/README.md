@@ -119,6 +119,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [112](./112-pr874-cold-start-phase2-canon-baseline.md) | cold-start Phase 2 — The Canon Baseline | [#874](https://github.com/nikhilsoman/synlynk/pull/874) | 2026-08-09 |
 | [113](./113-pr880-agent-vs-harness-terminology.md) | PR #880 — Agent vs Harness: Phase 0 of the Roles & Charters Roadmap | [#880](https://github.com/nikhilsoman/synlynk/pull/880) | 2026-08-10 |
 | [114](./114-chore-identity-slug-override.md) | Untangling Repo Name from Product Name — the `identity_slug` override | TBD | 2026-08-12 |
+| [115](./115-fix910-identity-init-resume-confirm.md) | Resume identity init at install confirmation instead of restarting | [#912](https://github.com/nikhilsoman/synlynk/pull/912) | 2026-08-12 |
+| [115](./115-chore-governs-event-contract-extension.md) | GOVERNS Event-Contract Extension — Two New Event Types for the Autonomous Ops Release Gates | [#922](https://github.com/nikhilsoman/synlynk/pull/922) | 2026-08-13 |
+| [116](./116-v0.13.1-operational-reliability-patch.md) | v0.13.1 — The Release That Stayed a Patch | TBD | 2026-08-13 |
 
 ## Per-PR Post Template
 
