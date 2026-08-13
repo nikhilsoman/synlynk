@@ -1,4 +1,4 @@
-"""synlynk doctor: installation health checks and TC-1..TC-5 compliance suite."""
+"""synlynk doctor: installation health checks and TC-1..TC-6 compliance suite."""
 
 import json
 import difflib
@@ -32,6 +32,7 @@ from synlynk.probe import (
     _run_tc3,
     _run_tc4,
     _run_tc5,
+    _run_tc6,
 )
 
 
@@ -526,11 +527,22 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             if "local" in agents:
                 tc5_skips.append("local has no directive file configured; TC-5 intentionally skipped")
             tc5 = _pkg("_run_tc5")(tc5_targets)
+            # Run for the four dispatch harnesses.  TC-6 parses gh output
+            # because gh auth status can exit 0 for an invalid token.  The
+            # check helper accepts an explicit child env for callers that
+            # already have one; doctor itself runs headlessly in the dispatch
+            # runner's environment.
+            tc6 = (
+                _pkg("_run_tc6")(agent)
+                if agent in CORE_FLEET
+                else {"passed": True, "skipped": "not a dispatch harness"}
+            )
 
             # TC-5 is warn-only for exit code; still surfaces as ⚠ below.
             hard_tcs_passed = (
                 tc0["passed"] and tc1["passed"] and tc2["passed"]
                 and tc3["passed"] and tc4["passed"]
+                and tc6["passed"]
             )
             agent_missing = [agent] if agent in missing_core_instructions else []
             # Nested DBs already counted once above; avoid re-flagging per agent.
@@ -595,11 +607,14 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             tc2_status = "✓" if tc2["passed"] else f"✗ failed={tc2['failed_flags']}"
             tc3_status = "✓" if tc3["passed"] else f"✗ unreachable={tc3['unreachable']}"
             tc4_status = "✓" if tc4["passed"] else f"✗ failed={tc4['failed_verbs']}"
+            tc6_status = "✓" if tc6["passed"] else f"✗ {tc6.get('error') or 'invalid or missing credentials'}"
             print(f"    TC-0 schema:  {tc0_status}")
             print(f"    TC-1 stdout:  {tc1_status}")
             print(f"    TC-2 flags:   {tc2_status}")
             print(f"    TC-3 network: {tc3_status}")
             print(f"    TC-4 verbs:   {tc4_status}")
+            if agent in CORE_FLEET:
+                print(f"    TC-6 gh-auth: {tc6_status}")
             if tc5["passed"]:
                 print("    TC-5 sops:    ✓")
             else:

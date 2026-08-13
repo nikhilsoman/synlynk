@@ -38,6 +38,28 @@ def _write_telemetry(project_dir, events):
     (project_dir / ".synlynk" / "telemetry.json").write_text(json.dumps(events))
 
 
+def test_diagnose_codex_sandbox_invalid_gh_auth_token_even_when_gh_exits_zero(monkeypatch):
+    """TC-6 catches gh's false-green exit status for an invalid token."""
+    from types import SimpleNamespace
+
+    import synlynk.probe as probe
+
+    monkeypatch.setattr(
+        probe.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="github.com\n",
+            stderr="X The token in default is invalid.\n",
+        ),
+    )
+
+    result = probe._run_tc6("codex", env={"GH_CONFIG_DIR": "/isolated"})
+
+    assert result["passed"] is False
+    assert "token in default is invalid" in result["error"]
+
+
 def _write_repair_config(tmp_path, config):
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
     (tmp_path / ".synlynk" / "config.json").write_text(json.dumps(config))
@@ -1276,6 +1298,7 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
     monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
     monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(sl, "_run_tc6", lambda agent: {"passed": True, "error": ""})
     monkeypatch.setattr(sl, "load_config", lambda: {"roles": {}})
 
     exit_code = sl.cmd_doctor()
@@ -1314,6 +1337,7 @@ def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_inc
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
     monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
     monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(sl, "_run_tc6", lambda agent: {"passed": True, "error": ""})
 
     exit_code = sl.cmd_doctor()
     out = capsys.readouterr().out
@@ -1357,6 +1381,7 @@ def test_synlynk_doctor_reports_local_tc5_skip(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
     monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
     monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
+    monkeypatch.setattr(sl, "_run_tc6", lambda agent: {"passed": True, "error": ""})
 
     exit_code = sl.cmd_doctor()
     out = capsys.readouterr().out
