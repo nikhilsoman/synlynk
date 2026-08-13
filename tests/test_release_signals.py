@@ -166,4 +166,43 @@ def test_release_status_at_latest_tag_has_no_in_flight_summary(tmp_path):
     assert status["in_flight_summary"] is None
 
 
+import json
+from unittest.mock import patch, MagicMock
+
+from synlynk.release_signals import _fetch_github_releases
+
+
+def test_fetch_github_releases_parses_json_output(tmp_path):
+    fake_output = json.dumps([
+        {"tagName": "v0.2.0", "name": "v0.2.0", "publishedAt": "2026-08-01T00:00:00Z"},
+        {"tagName": "v0.1.0", "name": "v0.1.0", "publishedAt": "2026-07-01T00:00:00Z"},
+    ])
+    fake_result = MagicMock(returncode=0, stdout=fake_output)
+    with patch("subprocess.run", return_value=fake_result) as mock_run:
+        releases = _fetch_github_releases(str(tmp_path))
+    assert releases == [
+        {"tag": "v0.2.0", "name": "v0.2.0", "published_at": "2026-08-01T00:00:00Z"},
+        {"tag": "v0.1.0", "name": "v0.1.0", "published_at": "2026-07-01T00:00:00Z"},
+    ]
+    mock_run.assert_called_once()
+
+
+def test_fetch_github_releases_returns_empty_when_gh_not_installed(tmp_path):
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        assert _fetch_github_releases(str(tmp_path)) == []
+
+
+def test_fetch_github_releases_returns_empty_on_nonzero_exit(tmp_path):
+    fake_result = MagicMock(returncode=1, stdout="")
+    with patch("subprocess.run", return_value=fake_result):
+        assert _fetch_github_releases(str(tmp_path)) == []
+
+
+def test_fetch_github_releases_returns_empty_on_malformed_json(tmp_path):
+    fake_result = MagicMock(returncode=0, stdout="not json")
+    with patch("subprocess.run", return_value=fake_result):
+        assert _fetch_github_releases(str(tmp_path)) == []
+
+
+
 

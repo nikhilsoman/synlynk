@@ -134,4 +134,35 @@ def _release_status(root: str = ".") -> dict:
     }
 
 
+def _fetch_github_releases(root: str = ".") -> list:
+    """Best-effort cross-reference of GitHub Releases via the `gh` CLI.
+
+    Absence is not an error per spec: no `gh` installed, not authenticated,
+    no remote, or any other failure all degrade to []. Tags remain the
+    primary signal; this only enriches the timeline with release notes
+    when available."""
+    try:
+        result = subprocess.run(
+            ["gh", "release", "list", "--limit", "50",
+             "--json", "tagName,name,publishedAt"],
+            cwd=root, capture_output=True, text=True, timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+
+    try:
+        raw = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+    return [
+        {"tag": r.get("tagName"), "name": r.get("name"), "published_at": r.get("publishedAt")}
+        for r in raw
+        if isinstance(r, dict)
+    ]
+
+
+
 
