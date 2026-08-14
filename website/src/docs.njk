@@ -24,7 +24,7 @@ title: Documentation
   <div class="doc-card">
     <div class="doc-card-thumb">💻</div>
     <h3 class="doc-card-title">Command Reference</h3>
-    <p class="doc-card-body">Complete syntax for all synlynk commands: exec, dispatch, init, join, status, doctor, sentinel, and profile.</p>
+    <p class="doc-card-body">Complete syntax for all synlynk commands: exec, dispatch, init, rollback, events tail, status, doctor, sentinel, and profile.</p>
     <div class="pdf-card-actions">
       <a href="/assets/docs/synlynk-command-reference.pdf" target="_blank" class="btn-primary">Open PDF</a>
       <a href="/assets/docs/synlynk-command-reference.pdf" download class="pdf-download-link">Download</a>
@@ -35,7 +35,7 @@ title: Documentation
   <div class="doc-card">
     <div class="doc-card-thumb">📖</div>
     <h3 class="doc-card-title">The Manual</h3>
-    <p class="doc-card-body">Deep dive into state.db architecture, agent role config, budget enforcement, relay network, and the Sentinel daemon.</p>
+    <p class="doc-card-body">Deep dive into DB-canonical state.db architecture, write-through project docs, rollback checkpoints, event bus contracts, and Sentinel daemon.</p>
     <div class="pdf-card-actions">
       <a href="/assets/docs/synlynk-official-reference.pdf" target="_blank" class="btn-primary">Open PDF</a>
       <a href="/assets/docs/synlynk-official-reference.pdf" download class="pdf-download-link">Download</a>
@@ -61,7 +61,8 @@ title: Documentation
 
 <div class="docs-quick-ref">
   <h3>Getting Started</h3>
-  <pre><code>synlynk init --wizard
+  <pre><code>synlynk init --dry-run
+synlynk init --wizard
 synlynk doctor
 synlynk exec claude
 synlynk status</code></pre>
@@ -71,6 +72,7 @@ synlynk status</code></pre>
   <h3>Daily Use</h3>
   <pre><code>synlynk dispatch codex --task "..." --force-agent
 synlynk jobs --watch
+synlynk events tail --limit 20
 synlynk logs --job &lt;id&gt;
 synlynk checkpoint</code></pre>
 </div>
@@ -87,12 +89,15 @@ synlynk schedule --execute</code></pre>
   <h3>Advanced / Operate</h3>
   <pre><code>synlynk agent run &lt;name&gt;
 synlynk scan --deep
-synlynk viz --serve</code></pre>
+synlynk viz --serve
+synlynk rollback --last</code></pre>
 </div>
 
 <div class="docs-quick-ref">
   <h3>Upgrading?</h3>
-  <p>If you installed synlynk before 2026-07, here's what's new: <code>synlynk schedule</code> (fleet batch dispatch), <code>synlynk cost log</code> (manual cost entries), a <code>RATES</code> line in <code>synlynk status</code>, and <code>synlynk viz</code> (local web HUD).</p>
-  <pre><code>synlynk upgrade
+  <p>Upgrading to v0.13.1? Here's what's new: automatic mutation checkpointing and auto-restore on failure for <code>synlynk init</code> and <code>synlynk upgrade</code>, <code>synlynk rollback [--last|&lt;op-id&gt;|--clear]</code> for manual rollback, <code>--dry-run</code> preview flags, DB-canonical write-through project docs (State Engine PR1), GOVERNS event bus extensions (<code>job_terminal</code>, <code>review_submitted</code>) via <code>synlynk events tail</code>, and doctor TC-6 GitHub auth verification.</p>
+  <pre><code>synlynk upgrade --dry-run
+synlynk upgrade
+synlynk rollback --last
 synlynk doctor</code></pre>
 </div>
