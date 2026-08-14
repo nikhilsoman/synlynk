@@ -85,3 +85,48 @@ def test_cmd_session_close_rejects_invalid_disposition(tmp_path, monkeypatch):
     cmd_session_open("Explore quota routing options")
     with pytest.raises(ValueError):
         cmd_session_close(disposition="not_a_real_disposition")
+
+
+def test_migrate_db_adds_session_id_to_jobs_and_devlog(tmp_path, monkeypatch):
+    """Existing DBs lack session_id; status/checkpoint query it (PR #940 sequencing gap)."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+
+    import synlynk as sl
+
+    conn = sqlite3.connect(sl.DB_PATH)
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, "
+        "status TEXT, enqueued_at TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE devlog_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "author TEXT NOT NULL, entry_date TEXT NOT NULL, session_title TEXT, "
+        "body TEXT NOT NULL, recorded_at TEXT)"
+    )
+    sl._migrate_db(conn)
+    job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    devlog_cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
+    sl._migrate_db(conn)  # idempotent
+    conn.close()
+    assert "session_id" in job_cols
+    assert "session_id" in devlog_cols
+
+
+def test_cmd_session_status_and_checkpoint_tolerate_unpopulated_session_id(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk.db import cmd_session_open, cmd_session_status, cmd_session_checkpoint
+
+    cmd_session_open("smoke test")
+    cmd_session_status()
+    status_out = capsys.readouterr().out
+    assert "Jobs attributed: 0" in status_out
+    assert "Devlog entries: 0" in status_out
+
+    cmd_session_checkpoint()
+    checkpoint_out = capsys.readouterr().out
+    assert "Jobs attributed to this session: 0" in checkpoint_out
+    assert "Devlog entries linked: 0" in checkpoint_out

@@ -329,6 +329,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
         except sqlite3.OperationalError:
             pass
+    if "session_id" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("DROP VIEW IF EXISTS capability_scores")
     conn.executescript(_DB_SCORES_VIEW)
     conn.executescript("""
@@ -546,12 +551,19 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             author        TEXT NOT NULL,
             entry_date    TEXT NOT NULL,
             session_title TEXT,
+            session_id    TEXT,
             body          TEXT NOT NULL,
             recorded_at   TEXT DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
     """)
+    devlog_cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
+    if "session_id" not in devlog_cols:
+        try:
+            conn.execute("ALTER TABLE devlog_entries ADD COLUMN session_id TEXT")
+        except sqlite3.OperationalError:
+            pass
     arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
     if "goal_id" not in arc_cols:
         try:
