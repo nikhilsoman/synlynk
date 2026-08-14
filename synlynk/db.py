@@ -2143,6 +2143,136 @@ def cmd_goal_list() -> None:
         deadline = r[3] or "ongoing"
         print(f"  {r[0]:<12} {(r[1] or '')[:39]:<40} {deadline:<12}")
 
+
+_VALID_SESSION_DISPOSITIONS = {
+    "goal_progress", "maintenance", "exploration", "parked", "needs_attribution"
+}
+
+
+def cmd_session_open(title: str, goal_id: str = None) -> str:
+    """Opens a new session, writes the active-session marker. Returns session_id."""
+    from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.session import _write_active_session
+    import hashlib as _hashlib
+    session_id = "session-" + _hashlib.md5(
+        f"{title}{time.time()}".encode()
+    ).hexdigest()[:8]
+    opened_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO sessions (session_id, title, goal_id, status, opened_at) "
+        "VALUES (?, ?, ?, 'open', ?)",
+        (session_id, title, goal_id, opened_at),
+    )
+    conn.commit()
+    conn.close()
+    _write_active_session(session_id)
+    print(f"  {_GREEN}✓{_RESET} Session opened: {session_id}  [{title}]")
+    return session_id
+
+
+def cmd_session_status() -> None:
+    """Prints the active session (if any), its goal, and evidence counts."""
+    from synlynk import _get_db
+    from synlynk.session import _read_active_session
+    session_id = _read_active_session()
+    if not session_id:
+        print("  No active session. Run: synlynk session open --title \"...\"")
+        return
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT title, goal_id, opened_at, last_checkpoint_at FROM sessions WHERE session_id=?",
+        (session_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        print(f"  Active session marker points to {session_id}, but no matching row exists.")
+        return
+    title, goal_id, opened_at, last_checkpoint_at = row
+    job_count = conn.execute(
+        "SELECT COUNT(*) FROM daemon_jobs WHERE session_id=?", (session_id,)
+    ).fetchone()[0]
+    devlog_count = conn.execute(
+        "SELECT COUNT(*) FROM devlog_entries WHERE session_id=?", (session_id,)
+    ).fetchone()[0]
+    conn.close()
+    print(f"  Session: {session_id}  [{title}]")
+    print(f"  Goal: {goal_id or '(none linked)'}")
+    print(f"  Opened: {opened_at}   Last checkpoint: {last_checkpoint_at or '(never)'}")
+    print(f"  Jobs attributed: {job_count}   Devlog entries: {devlog_count}")
+
+
+def cmd_session_checkpoint() -> None:
+    """Reports jobs/costs/devlog entries since the last checkpoint. Read-only."""
+    from synlynk import _get_db
+    from synlynk.session import _read_active_session
+    session_id = _read_active_session()
+    if not session_id:
+        print("  No active session to checkpoint.")
+        return
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT last_checkpoint_at, opened_at FROM sessions WHERE session_id=?", (session_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        print(f"  Active session marker points to {session_id}, but no matching row exists.")
+        return
+    since = row[0] or row[1]
+    jobs = conn.execute(
+        "SELECT job_id, agent, status FROM daemon_jobs "
+        "WHERE session_id=? AND enqueued_at>?",
+        (session_id, since),
+    ).fetchall()
+    devlogs = conn.execute(
+        "SELECT id, author, entry_date FROM devlog_entries "
+        "WHERE session_id=? AND recorded_at>?",
+        (session_id, since),
+    ).fetchall()
+    orphaned_jobs = conn.execute(
+        "SELECT COUNT(*) FROM daemon_jobs WHERE session_id IS NULL AND enqueued_at>?",
+        (since,),
+    ).fetchone()[0]
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    conn.execute(
+        "UPDATE sessions SET last_checkpoint_at=? WHERE session_id=?", (now, session_id)
+    )
+    conn.commit()
+    conn.close()
+    print(f"  Checkpoint for {session_id} since {since}:")
+    print(f"  Jobs attributed to this session: {len(jobs)}")
+    for job_id, agent, status in jobs:
+        print(f"    - {job_id}  {agent}  {status}")
+    print(f"  Devlog entries linked: {len(devlogs)}")
+    if orphaned_jobs:
+        print(f"  NUDGE: {orphaned_jobs} job(s) dispatched since {since} have no session_id — "
+              f"likely dispatched with no session open.")
+
+
+def cmd_session_close(disposition: str, summary: str = None) -> None:
+    """Closes the active session with a disposition. Clears the active-session marker."""
+    from synlynk import _GREEN, _RESET, _get_db
+    from synlynk.session import _read_active_session, _clear_active_session
+    if disposition not in _VALID_SESSION_DISPOSITIONS:
+        raise ValueError(
+            f"Invalid disposition: {disposition!r}, must be one of {sorted(_VALID_SESSION_DISPOSITIONS)}"
+        )
+    session_id = _read_active_session()
+    if not session_id:
+        print("  No active session to close.")
+        return
+    closed_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+    conn = _get_db()
+    conn.execute(
+        "UPDATE sessions SET status='closed', disposition=?, closed_at=?, closing_summary=? "
+        "WHERE session_id=?",
+        (disposition, closed_at, summary, session_id),
+    )
+    conn.commit()
+    conn.close()
+    _clear_active_session()
+    print(f"  {_GREEN}✓{_RESET} Session closed: {session_id}  [{disposition}]")
+
 def cmd_goal_link(story_id: str, goal_id: str, secondary: bool = False) -> None:
     """Links a story to a goal. Primary (default) sets stories.goal_id;
     secondary inserts a goal_contributions row for cross-cutting traceability."""

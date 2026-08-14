@@ -32,3 +32,56 @@ def test_clear_active_session_removes_marker(tmp_path, monkeypatch):
     _clear_active_session()
 
     assert _read_active_session() is None
+
+
+import sqlite3
+
+
+def test_cmd_session_open_creates_row_and_marker(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk.db import cmd_session_open
+    from synlynk.session import _read_active_session
+    from synlynk import _get_db
+
+    session_id = cmd_session_open("Investigate flaky Codex GH-write routing")
+
+    assert session_id.startswith("session-")
+    assert _read_active_session() == session_id
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT title, status FROM sessions WHERE session_id=?", (session_id,)
+    ).fetchone()
+    conn.close()
+    assert row == ("Investigate flaky Codex GH-write routing", "open")
+
+
+def test_cmd_session_close_sets_disposition_and_clears_marker(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk.db import cmd_session_open, cmd_session_close
+    from synlynk.session import _read_active_session
+    from synlynk import _get_db
+
+    session_id = cmd_session_open("Ship v0.14.0")
+    cmd_session_close(disposition="goal_progress", summary="Shipped GOVERNS event extension")
+
+    assert _read_active_session() is None
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT status, disposition, closing_summary FROM sessions WHERE session_id=?",
+        (session_id,),
+    ).fetchone()
+    conn.close()
+    assert row == ("closed", "goal_progress", "Shipped GOVERNS event extension")
+
+
+def test_cmd_session_close_rejects_invalid_disposition(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk.db import cmd_session_open, cmd_session_close
+
+    cmd_session_open("Explore quota routing options")
+    with pytest.raises(ValueError):
+        cmd_session_close(disposition="not_a_real_disposition")
