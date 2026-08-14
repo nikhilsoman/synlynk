@@ -6,7 +6,7 @@
 
 **Goal (as stated by the user):** achieve total dependability of every item of context that the workspace requires — from creation, through hand-maintained or generated updates, to rotation/archive/reference/storage/retrieval — across single-repo, Team, and Enterprise deployments.
 
-**Method:** a 6-round `synlynk decide --panel codex,grok --record` sequence, one round per investigation aspect, each grounded in a structured cross-repo evidence survey (3 parallel read-only Explore agents on rxcc/cc-videoreframing/playblazer-ng, plus direct investigation of synlynk itself). All 6 raw decision records are committed at `project-docs/decisions/2026-08-14-round-{1..6}-*.md` (+ companion `.json`) and are the primary source for this synthesis — this document does not restate their full reasoning, only the converged design and the resulting action items.
+**Method:** a 7-round `synlynk decide --panel codex,grok --record` sequence, one round per investigation aspect, each grounded in a structured cross-repo evidence survey (3 parallel read-only Explore agents on rxcc/cc-videoreframing/playblazer-ng, plus direct investigation of synlynk itself). Rounds 1–6 cover repo-scoped, human-facing context docs; Round 7 (added after initial sign-off review) extends the design to a second, orthogonal axis — durable workspace agents' own artifacts (charter, memory, action logs, cost) — grounded in `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md`. All 7 raw decision records are committed at `project-docs/decisions/2026-08-14-round-{1..7}-*.md` (+ companion `.json`) and are the primary source for this synthesis — this document does not restate their full reasoning, only the converged design and the resulting action items.
 
 ---
 
@@ -46,7 +46,19 @@ Converged decisions:
 
 **Highest-leverage v0.13.x action (per the panel):** implement one end-to-end vertical slice — committed manifest identity registry + canonical member-ID devlog paths + alias/fork detection and provenance-preserving reconciliation via `audit-docs --fix` + revision-aware writes + stable machine-readable audit output enforced in CI/`pr check`. This closes the live identity fork while hardening the location, concurrency, Team, and future-Enterprise integration points simultaneously.
 
-## 4. Action items (not yet scoped into a plan)
+## 4. Durable workspace agents' own artifacts (Round 7)
+
+Rounds 1–6 govern repo-scoped, human-facing docs. They say nothing about a second, orthogonal category already committed to the roadmap: **durable workspace agents** (pm, tpm, qa/Support Engineer today; dev/designer/architect/marketing dispatch-triggered) per `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md`. That spec's §10 roadmap names exactly the artifact types this section covers — charter (Phase 1), memory (Phase 2), capability/access grants (Phase 3), portability (Phase 4) — none of which were designed in artifact-storage detail there, and none of which fit the R1–R6 model as-is, because agent identity is explicitly workspace-durable and cross-repo (GitHub App identities per #859; v1.0's "Multi-repo workspace" and gh:#914's cross-repo App scope), not scoped to a single repo checkout the way `project-docs/` is.
+
+Converged decisions:
+
+- **Storage plane is separate from R1's `project-docs/`.** Canonical agent artifacts (charter, memory, curated Statements of Record) live in a workspace-level store — server-side or under `~/.synlynk/workspaces/<workspace_id>/` — keyed by stable `workspace_id` + `agent_id`, not inside any one repo's `.synlynk/` or `project-docs/`. A repo's `.synlynk/` may hold pointers/projections/exports, never canonical agent state. R1's "hardcode a single canonical `project-docs/` location, no free-form config" rule stays correct for repo-scoped human docs; it gets an explicit carve-out (not a contradiction) — agent artifacts are a different axis with a different storage contract.
+- **New mutability tier: `gated` (agent-proposed, human-approved).** Extends R4's CRUD contract beyond generated/hand-maintained/append-only. Matches the roadmap spec's existing governance rule verbatim: agents may propose changes, but charter, access, budget, and policy changes require a recorded human approval — proposal, approval/rejection, actor, timestamp, and revision history all preserved, never silently auto-applied (mirrors the pm role's "never commits the human to something they haven't seen" rule already adopted elsewhere in that spec).
+- **Charter, memory, and Statements of Record are first-class, not derived.** Unlike action logs and cost, these need their own persistent, revisioned, provenance-bearing storage — there is no upstream system to derive them from.
+- **Action logs and cost stay derived — reuse the pattern already established for tpm/GOVERNS.** Per-agent action logs are never a free-standing store; they're a derived read model over the existing GOVERNS event contract (PR #817/#922), the same pattern tpm already uses instead of independent tracking. Per-agent cost is never a second ledger; it's a filtered view over the existing provenance-tagged `cost_entries` table (Measurement Ledger Hardening, v0.12.0), with agent identity added as a query/provenance dimension.
+- **Introduce a stable `agent_id` registry before Phase 1 ships** — the same fix Round 6 designed for human `member_id` identity, applied here before the fork risk becomes live rather than after. Role names, GitHub App slugs, and installation IDs become aliases/external bindings with lifecycle history under one canonical `agent_id`, so a role rename/re-provision/re-scope-across-repos can't silently fork an agent's charter or memory the way `nikhil`/`nikhilsoman` forked a devlog.
+
+## 5. Action items (not yet scoped into a plan)
 
 These require a follow-up `superpowers:writing-plans` pass before any implementation — this spec documents *what* was decided, not task-by-task *how*:
 
@@ -58,10 +70,13 @@ These require a follow-up `superpowers:writing-plans` pass before any implementa
 6. Build `synlynk instructions update` and retire/adapt the redundant instruction files.
 7. Design the manifest identity registry + `member_id` sharding for devlogs, and use it to reconcile the `nikhil`/`nikhilsoman` fork as the first real test case.
 8. Move `sentinel.md` authority into `state.db`.
+9. Design and stand up the workspace-level agent artifact store (`~/.synlynk/workspaces/<workspace_id>/` or server-side) ahead of Phase 1 of the agent-roles roadmap — charter, memory, and Statements of Record storage, keyed by `workspace_id` + `agent_id`.
+10. Introduce the stable `agent_id` identity registry (role/app-slug/installation-ID aliasing with lifecycle history) before Phase 1 ships, so agent artifacts don't inherit the same fork risk devlogs already hit.
+11. Extend the R4 CRUD contract with the `gated` (agent-proposed, human-approved) mutability tier, and wire per-agent action-log and cost views as GOVERNS-derived / `cost_entries`-derived projections rather than new stores.
 
-## 5. Open items carried forward (not part of this brainstorm)
+## 6. Open items carried forward (not part of this brainstorm)
 
-- PR #944 (issue #936-adjacent taxonomy-doc-sync fix) is still blocked — its docs-regen follow-up (job-7b032978) failed with `TASK_DELIVERY_FAILED` and has not yet been re-diagnosed. This is unrelated to the governance design above and should be resolved independently.
+- PR #944 (issue #936-adjacent taxonomy-doc-sync fix) — being handled in a separate session; not tracked further here.
 
 ---
 
@@ -72,3 +87,4 @@ These require a follow-up `superpowers:writing-plans` pass before any implementa
 - `project-docs/decisions/2026-08-14-round-4-6-standardizing-crud-rules-and-t.md`
 - `project-docs/decisions/2026-08-14-round-5-6-other-documents-created-by-syn.md`
 - `project-docs/decisions/2026-08-14-round-6-6-impact-of-team-enterprise-vers.md`
+- `project-docs/decisions/2026-08-14-round-7-7-extending-workspace-context-go.md`
