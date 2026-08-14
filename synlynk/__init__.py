@@ -2923,13 +2923,29 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
         for _, lines in keep:
             f.writelines(lines)
 
+def _resolve_member_id(username: str) -> str:
+    """Looks up username in the member_aliases registry; falls back to username
+    itself when unregistered (matches audit-docs' "unregistered" finding — an
+    unregistered identity is reported, never silently reassigned)."""
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            "SELECT member_id FROM member_aliases WHERE alias = ?", (username,)
+        ).fetchone()
+        conn.close()
+        return row[0] if row else username
+    except Exception:
+        return username
+
+
 def checkpoint() -> None:
     """Archives done tasks, refreshes context, and emits a telemetry event."""
     set_state("active")
     _check_upstream_divergence()
     username = get_username()
+    canonical_id = _resolve_member_id(username)
     todo_path = "project-docs/todo.md"
-    devlog_path = f"project-docs/devlogs/{username}.md"
+    devlog_path = f"project-docs/devlogs/{canonical_id}.md"
 
     # Collect resolved tasks (done/superseded/absorbed) and keep the rest
     completed, active_lines = [], []

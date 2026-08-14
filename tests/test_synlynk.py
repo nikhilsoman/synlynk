@@ -1299,7 +1299,7 @@ def test_checkpoint_appends_to_devlog(project_dir, monkeypatch):
         "- [x] Finished feature <!-- id: 5 -->\n"
     )
     synlynk.checkpoint()
-    devlog = (project_dir / "project-docs" / "devlogs" / "nikhil.md").read_text()
+    devlog = (project_dir / "project-docs" / "devlogs" / "nikhilsoman.md").read_text()
     assert "Finished feature" in devlog
 
 def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
