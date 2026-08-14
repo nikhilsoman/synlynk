@@ -1,0 +1,92 @@
+---
+decision_id: dec-02f9fdb5
+topic: "ROUND 7/7 — Extending workspace context governance to durable workspace agents' own artifacts: charter docs, context docs (Statements of Record), action logs, memory, and cost artifacts.
+
+BACKGROUND — Rounds 1-6 designed governance ONLY for repo-scoped, human-facing docs (project-docs/, docs/superpowers/specs, decisions, blog, archive, etc.) via a manifest-driven CRUD contract with a project-docs/ + project-docs/_generated/ + state.db three-tier model. That design says nothing about a second, orthogonal category that already exists in the roadmap: durable WORKSPACE AGENTS.
+
+EVIDENCE — from docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md (approved spec, pending implementation):
+- 8-role org chart: pm, architect, tpm, dev, designer, qa, marketing, synlynk-bot. Three are DURABLE (always-on, continuous loop, not dispatch-triggered): pm (narrow-scope triage loop, blocks for human on major decisions), tpm (continuous tasking/tracking/reporting, consumes GOVERNS event contract as its data source rather than building independent tracking), qa (the already-shipped Support Engineer, synlynk/support_engineer.py).
+- All 8 roles have provisioned GitHub App identities (issue #859) — e.g. synlynk-synlynk-pm, synlynk-synlynk-tpm — meaning agent identity is ALREADY workspace-durable and cryptographically distinct from any one repo checkout.
+- Section 10's phased roadmap (confirmed via prior decide panel) explicitly names the exact artifact types this round must cover, not yet designed in detail:
+  - Phase 1 (Agent manifest + CLI config): per-agent `.synlynk/agents/<id>.yaml` — role, CHARTER, memory namespace, approval policy, capability requirements. This is the CHARTER doc. Notably `.synlynk/` today is mostly gitignored/ephemeral (per Round 1/5 of this brainstorm) — but a charter is clearly durable, not disposable.
+  - Phase 2 (Memory + gated learning): durable MEMORY keyed to agent identity, wired into the existing capability ledger. Explicit governance rule already adopted: "Agents may propose changes (e.g. routing preference); humans always approve anything touching charter, access, budget, or policy."
+  - Phase 3 (Capability registry + scoped access grants): runtime-queryable registry, least-privilege, expiry, AUDIT — generalizes #859's GitHub App identity model.
+  - Phase 4 (Portability/"implants"): signed identity + encrypted portable MEMORY surviving a move off synlynk's dispatch loop (Tokq).
+- Section 4 of the same spec already established a pattern this round should reuse: tpm's ACTION LOG is NOT a new independent store — it's a derived read model over the existing GOVERNS lifecycle-enforcement event contract (PR #817, extended in PR #922 with job_terminal/review_submitted/events tail). "GOVERNS remains the sole enforcement authority... tpm builds a derived read model on top."
+- COST artifacts already exist as a provenance-tagged `cost_entries` table (Measurement Ledger Hardening epic, v0.12.0, shipped) plus `project-docs/costs.md` — not agent-scoped today, no per-agent slice.
+- The roadmap also targets v1.0.0 "Multi-repo workspace" and gh:#914 "cross-repo App scope (single App installed on multiple repos)" — meaning a durable agent's identity is explicitly NOT meant to be scoped to one repo, unlike everything Rounds 1-6 designed (which hardcoded project-docs/ as a single REPO's canonical namespace).
+- Round 6 of this same brainstorm already solved an analogous problem for HUMAN identity: a stable `member_id` identity registry with aliases, to stop devlogs forking under different git usernames (the live nikhil.md/nikhilsoman.md bug). Agent identities (role app_slugs) carry the same fork risk if e.g. a role is renamed or re-provisioned.
+
+QUESTION: (1) Where should agent charter/context/memory artifacts physically live, given they are workspace-durable and explicitly NOT single-repo-scoped (unlike Rounds 1-6's project-docs/ design) — a new workspace-level store outside any one repo checkout (e.g. under a home-directory or synlynk-server-side workspace root), a dedicated top-level directory inside whichever repo currently hosts the workspace's synlynk state, or something else entirely? How does this interact with Round 1's decision to eliminate free-form `project_docs_dir` config and hardcode a single canonical location — does that decision need an explicit carve-out for agent-scoped artifacts, or does it already not apply to them because they're a different axis? (2) Should the Round 4 manifest-driven CRUD contract be extended with a new mutability tier beyond generated/hand-maintained/append-only — something like "agent-proposed, human-approved" — to correctly express Phase 2's explicit governance rule (agents propose, humans approve for charter/access/budget/policy)? (3) Should agent "context docs / Statements of Record" and "action logs" reuse the SAME single-source-of-truth-plus-derived-read-model pattern §4 already established for tpm/GOVERNS (i.e., action logs are never their own free-standing files, always a GOVERNS-derived view; and cost artifacts are never their own store, always a filtered view over the existing cost_entries table) — or do any of these artifact types genuinely need first-class persistent storage of their own? (4) Does the Round 6 identity-registry/member_id pattern designed for human devlog forking need to extend to agent identities (role app_slugs) now, before Phase 1 ships, to avoid the same class of fork if a role is ever renamed/re-provisioned/re-scoped across repos — or is GitHub App identity (issue #859) already a sufficiently stable anchor that this risk doesn't actually apply to agents the way it applied to human git usernames?"
+date: 2026-08-14
+panel: [codex, grok]
+status: approved
+---
+
+## Topic
+ROUND 7/7 — Extending workspace context governance to durable workspace agents' own artifacts: charter docs, context docs (Statements of Record), action logs, memory, and cost artifacts.
+
+BACKGROUND — Rounds 1-6 designed governance ONLY for repo-scoped, human-facing docs (project-docs/, docs/superpowers/specs, decisions, blog, archive, etc.) via a manifest-driven CRUD contract with a project-docs/ + project-docs/_generated/ + state.db three-tier model. That design says nothing about a second, orthogonal category that already exists in the roadmap: durable WORKSPACE AGENTS.
+
+EVIDENCE — from docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md (approved spec, pending implementation):
+- 8-role org chart: pm, architect, tpm, dev, designer, qa, marketing, synlynk-bot. Three are DURABLE (always-on, continuous loop, not dispatch-triggered): pm (narrow-scope triage loop, blocks for human on major decisions), tpm (continuous tasking/tracking/reporting, consumes GOVERNS event contract as its data source rather than building independent tracking), qa (the already-shipped Support Engineer, synlynk/support_engineer.py).
+- All 8 roles have provisioned GitHub App identities (issue #859) — e.g. synlynk-synlynk-pm, synlynk-synlynk-tpm — meaning agent identity is ALREADY workspace-durable and cryptographically distinct from any one repo checkout.
+- Section 10's phased roadmap (confirmed via prior decide panel) explicitly names the exact artifact types this round must cover, not yet designed in detail:
+  - Phase 1 (Agent manifest + CLI config): per-agent `.synlynk/agents/<id>.yaml` — role, CHARTER, memory namespace, approval policy, capability requirements. This is the CHARTER doc. Notably `.synlynk/` today is mostly gitignored/ephemeral (per Round 1/5 of this brainstorm) — but a charter is clearly durable, not disposable.
+  - Phase 2 (Memory + gated learning): durable MEMORY keyed to agent identity, wired into the existing capability ledger. Explicit governance rule already adopted: "Agents may propose changes (e.g. routing preference); humans always approve anything touching charter, access, budget, or policy."
+  - Phase 3 (Capability registry + scoped access grants): runtime-queryable registry, least-privilege, expiry, AUDIT — generalizes #859's GitHub App identity model.
+  - Phase 4 (Portability/"implants"): signed identity + encrypted portable MEMORY surviving a move off synlynk's dispatch loop (Tokq).
+- Section 4 of the same spec already established a pattern this round should reuse: tpm's ACTION LOG is NOT a new independent store — it's a derived read model over the existing GOVERNS lifecycle-enforcement event contract (PR #817, extended in PR #922 with job_terminal/review_submitted/events tail). "GOVERNS remains the sole enforcement authority... tpm builds a derived read model on top."
+- COST artifacts already exist as a provenance-tagged `cost_entries` table (Measurement Ledger Hardening epic, v0.12.0, shipped) plus `project-docs/costs.md` — not agent-scoped today, no per-agent slice.
+- The roadmap also targets v1.0.0 "Multi-repo workspace" and gh:#914 "cross-repo App scope (single App installed on multiple repos)" — meaning a durable agent's identity is explicitly NOT meant to be scoped to one repo, unlike everything Rounds 1-6 designed (which hardcoded project-docs/ as a single REPO's canonical namespace).
+- Round 6 of this same brainstorm already solved an analogous problem for HUMAN identity: a stable `member_id` identity registry with aliases, to stop devlogs forking under different git usernames (the live nikhil.md/nikhilsoman.md bug). Agent identities (role app_slugs) carry the same fork risk if e.g. a role is renamed or re-provisioned.
+
+QUESTION: (1) Where should agent charter/context/memory artifacts physically live, given they are workspace-durable and explicitly NOT single-repo-scoped (unlike Rounds 1-6's project-docs/ design) — a new workspace-level store outside any one repo checkout (e.g. under a home-directory or synlynk-server-side workspace root), a dedicated top-level directory inside whichever repo currently hosts the workspace's synlynk state, or something else entirely? How does this interact with Round 1's decision to eliminate free-form `project_docs_dir` config and hardcode a single canonical location — does that decision need an explicit carve-out for agent-scoped artifacts, or does it already not apply to them because they're a different axis? (2) Should the Round 4 manifest-driven CRUD contract be extended with a new mutability tier beyond generated/hand-maintained/append-only — something like "agent-proposed, human-approved" — to correctly express Phase 2's explicit governance rule (agents propose, humans approve for charter/access/budget/policy)? (3) Should agent "context docs / Statements of Record" and "action logs" reuse the SAME single-source-of-truth-plus-derived-read-model pattern §4 already established for tpm/GOVERNS (i.e., action logs are never their own free-standing files, always a GOVERNS-derived view; and cost artifacts are never their own store, always a filtered view over the existing cost_entries table) — or do any of these artifact types genuinely need first-class persistent storage of their own? (4) Does the Round 6 identity-registry/member_id pattern designed for human devlog forking need to extend to agent identities (role app_slugs) now, before Phase 1 ships, to avoid the same class of fork if a role is ever renamed/re-provisioned/re-scoped across repos — or is GitHub App identity (issue #859) already a sufficiently stable anchor that this risk doesn't actually apply to agents the way it applied to human git usernames?
+
+## Panel Inputs
+
+### codex
+Agent artifacts should live in a workspace-level, server-side store keyed by stable workspace and agent identity, not inside whichever repository currently hosts Synlynk state. Repositories may contain projections or exportable snapshots, but they should not be canonical. This is necessary for multi-repo workspaces, cross-repo GitHub App scope, portability, and continuity when an agent moves between checkouts. Round 1’s hardcoded `project-docs/` decision remains correct for repo-scoped human-facing documentation; it should receive an explicit conceptual carve-out stating that agent governance uses a separate workspace namespace and storage contract.
+
+The manifest CRUD model should gain an `agent-proposed/human-approved` mutability tier, or equivalently a proposal workflow layered over existing tiers. Charters, access grants, budgets, and policy must be immutable from the agent’s perspective until an authorized human approval is recorded. The system should preserve proposal, approval, rejection, actor, timestamp, and resulting revision as an auditable lifecycle. Ordinary agent-generated operational material can remain generated or append-only where appropriate.
+
+Statements of Record should be first-class durable context artifacts, because they represent curated, identity-scoped assertions that must survive repo changes and agent restarts. They should have explicit revisions and provenance. Action logs should follow the §4 precedent: GOVERNS remains the enforcement source of truth, with agent- or role-specific logs implemented as derived read models. Cost artifacts should likewise remain filtered views over `cost_entries`, adding agent identity as provenance or a queryable dimension rather than creating a second ledger.
+
+Finally, GitHub App identity is necessary but insufficient as the governance anchor. App slugs can be renamed, reprovisioned, or changed in scope. Phase 1 should therefore introduce a stable agent `agent_id` registry, with role/app-slug aliases and lifecycle history, analogous to Round 6’s `member_id`. GitHub installation and application identifiers should be recorded as external identity bindings, not used as the sole canonical key.
+
+My recommendation is to approve a separate workspace-level agent artifact plane: durable charters and Statements of Record in canonical storage, GOVERNS- and ledger-derived action/cost views, an explicit human-approval mutability tier, and stable agent identity mapping before Phase 1 ships.
+
+### grok
+I'll ground this in the approved agent-roles spec and the prior round decisions before taking a position.Prior rounds and the multi-repo/identity specs are the constraints here — I'll read those next so the recommendation doesn't invent a third store.Round 1 solved **repo-scoped, human-facing docs**. Durable agents sit on a different axis: workspace identity, continuous loop, and (by #914 / v1.0) not one checkout. The 2026-06-07 workspace spec already named the store: `~/.synlynk/workspaces/<workspace_id>/`, with per-repo `.synlynk/` as a thin pointer. Phase 1’s `.synlynk/agents/<id>.yaml` would put charters in the same gitignored kitchen-sink Rounds 1/5 just emptied. Do not reopen `project_docs_dir`, and do not stuff agents under `project-docs/`. Add an explicit carve-out: Round 1’s hardcoded path is the *repo-docs* namespace only.
+
+Split artifacts by authority, not by folder taste:
+
+| Artifact | Authority | Persistence |
+|---|---|---|
+| Charter, approval policy, access, budget | Human-gated policy | First-class, workspace store |
+| Memory / gated learning | Agent-keyed ledger (existing capability/SFIA path) | First-class, same store |
+| Action logs / most “Statements of Record” | GOVERNS + state.db | Derived view only |
+| Costs | Existing `cost_entries` | Filtered view by `agent_id` |
+
+Round 4’s `generated` / `hand-maintained` / `append-only` cannot express Phase 2. Add a **`gated` write protocol** (agent proposes, human `member_id` approves) on charter/access/budget/policy. That is authorization, not a second file. Routing/calibration stays agent-adjustable inside holdback; it is not a charter write.
+
+GitHub App identity (#859) is a **credential alias**, not a primary key. Apps are still per-repo (identity-slug-override), slugs come from cwd basename, re-provision and #914 change the App, `synlynk-bot` is shared across durable roles, and Phase 4 leaves GitHub. That is the `nikhil`/`nikhilsoman` bug with a prettier name.
+
+**Position:** Keep agent state in `~/.synlynk/workspaces/<workspace_id>/agents/<agent_id>/` (and workspace `state.db`); Round 1 does not apply—carve it out, do not invent a third docs root. Extend the CRUD contract with `gated` propose/approve. Action logs and costs are derived; only charter and memory are first-class. Mint a stable `agent_id` (with role and `app_slug` aliases) in the Round 6 registry **before** Phase 1, or the first rename will fork the fleet.
+
+## Synthesis
+The panel converges on a separate workspace-level agent artifact plane.
+
+- Canonical storage should be server-side or under `~/.synlynk/workspaces/<workspace_id>/`, keyed by stable `workspace_id` and `agent_id`. Repository `.synlynk/` may contain pointers, projections, or exports, but never canonical agent state.
+- Round 1’s hardcoded `project-docs/` rule remains correct for repo-scoped human documentation. It needs an explicit carve-out clarifying that agent artifacts use a separate workspace namespace and storage contract.
+- Extend the CRUD model with a `gated` mutability protocol: agents may propose changes, but charter, access, budget, and policy changes require recorded human approval. Preserve proposal, approval/rejection, actor, timestamp, and revision history.
+- Charters, durable memory, and curated Statements of Record should be first-class, revisioned, provenance-bearing artifacts. Event-derived context views may remain projections.
+- Action logs must remain derived read models over GOVERNS, and cost artifacts must remain filtered views over `cost_entries`, with agent identity added as a provenance/query dimension—not a second ledger.
+- Introduce a stable canonical `agent_id` registry before Phase 1. Role names, GitHub App slugs, installation IDs, and other credentials become aliases or external bindings with lifecycle history.
+
+Decision: approve a workspace-level agent artifact plane with first-class charters, memory, and curated Statements of Record; GOVERNS-derived action logs; `cost_entries`-derived cost views; a human-gated mutability tier; and stable `agent_id` identity mapping before Phase 1 ships.
+
+## Decision
+Decision: approve a workspace-level agent artifact plane with first-class charters, memory, and curated Statements of Record; GOVERNS-derived action logs; `cost_entries`-derived cost views; a human-gated mutability tier; and stable `agent_id` identity mapping before Phase 1 ships.
+
+> Signatures: see 2026-08-14-round-7-7-extending-workspace-context-go.json
