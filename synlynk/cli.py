@@ -437,6 +437,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of events to show (default 20)",
     )
 
+    session_parser = subparsers.add_parser("session", help="Manage work-envelope sessions")
+    session_sub = session_parser.add_subparsers(dest="session_action")
+    session_open_parser = session_sub.add_parser("open", help="Open a new session")
+    session_open_parser.add_argument("--title", required=True, help="Short description of this session's work")
+    session_open_parser.add_argument("--goal", dest="goal_id", default=None, help="Link to an existing goal_id")
+    session_sub.add_parser("status", help="Show the active session and its evidence")
+    session_sub.add_parser("checkpoint", help="Reconcile jobs/devlog entries since the last checkpoint")
+    session_close_parser = session_sub.add_parser("close", help="Close the active session")
+    session_close_parser.add_argument(
+        "--disposition", required=True,
+        choices=["goal_progress", "maintenance", "exploration", "parked", "needs_attribution"],
+        help="What this session's work amounted to",
+    )
+    session_close_parser.add_argument("--summary", default=None, help="One-line closing summary")
+
     agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
     agent_add_parser = agent_sub.add_parser("add", help="Retrofit an on-PATH agent into this project")
@@ -852,6 +867,7 @@ def build_parser() -> argparse.ArgumentParser:
         "goal": goal_parser,
         "identity": identity_parser,
         "events": events_parser,
+        "session": session_parser,
         "instructions": instructions_parser,
         "local": local_parser,
         "relay": relay_parser,
@@ -1405,6 +1421,21 @@ def main() -> None:
             cmd_events_tail(event_type=args.event_type, limit=args.limit)
         else:
             help_parsers.get("events", parser).print_help()
+    elif args.command == "session":
+        action = getattr(args, "session_action", None)
+        from synlynk.db import (
+            cmd_session_open, cmd_session_status, cmd_session_checkpoint, cmd_session_close,
+        )
+        if action == "open":
+            cmd_session_open(args.title, goal_id=args.goal_id)
+        elif action == "status":
+            cmd_session_status()
+        elif action == "checkpoint":
+            cmd_session_checkpoint()
+        elif action == "close":
+            cmd_session_close(disposition=args.disposition, summary=args.summary)
+        else:
+            help_parsers.get("session", parser).print_help()
     else:
         parser.print_help()
 
