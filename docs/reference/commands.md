@@ -60,6 +60,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `probe` (secondary) — sustain
 - `worktree audit` (secondary) — sustain
 - `worktree clean` (secondary) — sustain
+- `audit-docs` (secondary) — sustain
 - `exec` (secondary) — execute
 - `tui` (secondary) — execute
 - `logs` (secondary) — execute
