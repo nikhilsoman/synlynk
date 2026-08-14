@@ -86,6 +86,51 @@ def test_audit_docs_report_json_output(project_dir, capsys):
     assert isinstance(payload, list)
 
 
+def test_audit_docs_fix_merges_fork(project_dir):
+    import os
+
+    from synlynk import _get_db
+    from synlynk.db import cmd_audit_docs
+
+    devlogs_dir = os.path.join("project-docs", "devlogs")
+    with open(os.path.join(devlogs_dir, "nikhil.md"), "w") as f:
+        f.write("# nikhil devlog\n\n## 2026-05-16\n- did old thing\n")
+    with open(os.path.join(devlogs_dir, "nikhilsoman.md"), "w") as f:
+        f.write("# nikhilsoman devlog\n\n## 2026-06-29\n- did new thing\n")
+
+    conn = _get_db()
+    conn.executemany(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        [
+            ("nikhil", "2026-05-16", "did old thing"),
+            ("nikhilsoman", "2026-06-29", "did new thing"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    findings = cmd_audit_docs(fix=True)
+    assert any(f["kind"] == "fork" for f in findings)
+
+    canonical_path = os.path.join(devlogs_dir, "nikhilsoman.md")
+    assert os.path.exists(canonical_path)
+    merged = open(canonical_path).read()
+    assert "did old thing" in merged
+    assert "did new thing" in merged
+    assert "migrated from" in merged
+
+    assert not os.path.exists(os.path.join(devlogs_dir, "nikhil.md"))
+    archived = os.path.join(devlogs_dir, "archive")
+    assert any("nikhil" in fn for fn in os.listdir(archived))
+
+    conn = _get_db()
+    member_ids = {
+        row[0] for row in conn.execute("SELECT DISTINCT member_id FROM devlog_entries")
+    }
+    assert member_ids == {"nikhilsoman"}
+    conn.close()
+
+
 def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
     conn.execute(
         "INSERT INTO roadmap_arcs (version, title, status) VALUES (?, ?, ?)",

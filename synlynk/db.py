@@ -2544,6 +2544,53 @@ def cmd_credit_grant(
     print(f"  {_GREEN}✓{_RESET} Credit grant recorded for {agent}: ${amount:.2f}{suffix}")
 
 
+def _fix_devlog_fork(conn, member_id: str, aliases: list) -> None:
+    """Merges non-canonical alias devlog .md files into the canonical one and
+    backfills devlog_entries.member_id for every row under any of the aliases.
+
+    Canonical alias = the alias equal to member_id (the seed always registers
+    member_id itself as one of its own aliases - see Task 1's seed insert).
+    Non-canonical files are archived (not deleted from history) under
+    project-docs/devlogs/archive/.
+    """
+    import datetime
+
+    from synlynk import _docs_dir
+
+    devlogs_dir = os.path.join(_docs_dir(), "devlogs")
+    canonical_alias = member_id if member_id in aliases else sorted(aliases)[0]
+    canonical_path = os.path.join(devlogs_dir, f"{canonical_alias}.md")
+    today = datetime.date.today().isoformat()
+
+    for alias in sorted(aliases):
+        if alias == canonical_alias:
+            continue
+        alias_path = os.path.join(devlogs_dir, f"{alias}.md")
+        if not os.path.exists(alias_path):
+            continue
+        with open(alias_path) as f:
+            content = f.read()
+
+        archive_dir = os.path.join(devlogs_dir, "archive")
+        os.makedirs(archive_dir, exist_ok=True)
+        archive_path = os.path.join(archive_dir, f"{alias}-merged-{today}.md")
+        with open(archive_path, "w") as f:
+            f.write(content)
+
+        with open(canonical_path, "a") as f:
+            f.write(f"\n<!-- migrated from project-docs/devlogs/{alias}.md on {today} -->\n")
+            f.write(content)
+
+        os.remove(alias_path)
+
+    placeholders = ",".join("?" * len(aliases))
+    conn.execute(
+        f"UPDATE devlog_entries SET member_id = ? WHERE author IN ({placeholders})",
+        (member_id, *aliases),
+    )
+    conn.commit()
+
+
 def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
     """Reports (and optionally fixes) devlog author-identity drift.
 
