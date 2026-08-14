@@ -10,6 +10,28 @@ from synlynk.db import (
 )
 
 
+def test_member_registry_tables_and_seed(project_dir):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    members = conn.execute("SELECT member_id, canonical_name FROM members").fetchall()
+    assert ("nikhilsoman", "Nikhil Soman") in members
+
+    aliases = dict(conn.execute("SELECT alias, member_id FROM member_aliases").fetchall())
+    assert aliases["nikhil"] == "nikhilsoman"
+    assert aliases["nikhilsoman"] == "nikhilsoman"
+    conn.close()
+
+
+def test_devlog_entries_has_member_id_column(project_dir):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
+    assert "member_id" in cols
+    conn.close()
+
+
 def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
     conn.execute(
         "INSERT INTO roadmap_arcs (version, title, status) VALUES (?, ?, ?)",

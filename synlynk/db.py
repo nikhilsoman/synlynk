@@ -552,11 +552,23 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             entry_date    TEXT NOT NULL,
             session_title TEXT,
             session_id    TEXT,
+            member_id     TEXT,
             body          TEXT NOT NULL,
             recorded_at   TEXT DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
+        CREATE TABLE IF NOT EXISTS members (
+            member_id      TEXT PRIMARY KEY,
+            canonical_name TEXT NOT NULL,
+            created_at     TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS member_aliases (
+            alias      TEXT PRIMARY KEY,
+            member_id  TEXT NOT NULL REFERENCES members(member_id),
+            alias_type TEXT NOT NULL DEFAULT 'manual',
+            added_at   TEXT DEFAULT (datetime('now'))
+        );
     """)
     devlog_cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
     if "session_id" not in devlog_cols:
@@ -564,6 +576,17 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE devlog_entries ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError:
             pass
+    if "member_id" not in devlog_cols:
+        conn.execute("ALTER TABLE devlog_entries ADD COLUMN member_id TEXT")
+
+    conn.execute(
+        "INSERT OR IGNORE INTO members (member_id, canonical_name) VALUES (?, ?)",
+        ("nikhilsoman", "Nikhil Soman"),
+    )
+    conn.executemany(
+        "INSERT OR IGNORE INTO member_aliases (alias, member_id, alias_type) VALUES (?, ?, 'seed')",
+        [("nikhil", "nikhilsoman"), ("nikhilsoman", "nikhilsoman")],
+    )
     arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
     if "goal_id" not in arc_cols:
         try:
