@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3 stdlib, sqlite3 (existing `_get_db()` connection helper, WAL mode, `_migrate_db()` migration pattern), argparse (`synlynk/cli.py`), pytest with the existing `project_dir` fixture (`tests/conftest.py`) and `SYNLYNK_STATE_DB_PATH` env-var override pattern.
 
+**Note on line numbers:** every line number cited below (e.g. `db.py:549`, `__init__.py:2926`) was accurate at plan-writing time but is not a stable identifier — the codebase moves. Locate each anchor by function/table name first (`grep -n "def checkpoint"`, `grep -n "devlog_entries"`, etc.) and treat the cited line as a hint, not ground truth.
+
 ---
 
 ## Explicitly out of scope
@@ -207,7 +209,7 @@ def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
     """
     import glob
 
-    from synlynk import _get_db
+    from synlynk import _docs_dir, _get_db
 
     conn = _get_db()
     db_authors = {row[0] for row in conn.execute("SELECT DISTINCT author FROM devlog_entries")}
@@ -347,6 +349,8 @@ def _fix_devlog_fork(conn, member_id: str, aliases: list) -> None:
     project-docs/devlogs/archive/.
     """
     import datetime
+
+    from synlynk import _docs_dir
 
     devlogs_dir = os.path.join(_docs_dir(), "devlogs")
     canonical_alias = member_id if member_id in aliases else sorted(aliases)[0]
@@ -613,13 +617,7 @@ Expected: FAIL — no mention of "devlog identity drift" in output
 
 - [ ] **Step 3: Add the soft-warn**
 
-In `synlynk/db.py`, inside `cmd_pr_check()`, directly before the final `print(f"  {_GREEN}✓{_RESET} PR check passed...")` line, add:
-
-```python
-    devlog_findings = cmd_audit_docs(json_output=False) if False else None  # placeholder removed below
-```
-
-Do not leave that placeholder — instead insert this block (call `cmd_audit_docs` in silent-report mode by temporarily redirecting nothing; it already prints its own report, which is fine to surface here too, but we want a distinct summary line). Replace the block above with:
+In `synlynk/db.py`, inside `cmd_pr_check()`, directly before the final `print(f"  {_GREEN}✓{_RESET} PR check passed...")` line, add this block. `cmd_audit_docs` already prints its own per-finding report (FORK/UNREGISTERED lines from Task 2); this adds a `pr check`-specific summary line on top of that, matching the existing `goal_contributions` soft-warn style immediately above it in the same function (non-blocking, printed, no `SystemExit`):
 
 ```python
     devlog_findings = cmd_audit_docs(json_output=False)
@@ -632,8 +630,6 @@ Do not leave that placeholder — instead insert this block (call `cmd_audit_doc
         )
         print("  Fix with: synlynk audit-docs --fix\n")
 ```
-
-This runs `cmd_audit_docs`'s own per-finding report print too (FORK/UNREGISTERED lines), then adds the PR-check-specific summary — matching the existing `goal_contributions` soft-warn style immediately above it in the same function (non-blocking, printed, no `SystemExit`).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -663,13 +659,13 @@ Expected: all tests pass (current baseline before this plan: 1916 passed, 2 skip
 
 - [ ] **Step 2: If anything regressed, fix before proceeding**
 
-Likely regression risk: any existing test that calls `checkpoint()` with `username` mocked/monkeypatched to `"nikhil"` or `"nikhilsoman"` and asserts on the raw `project-docs/devlogs/nikhil.md` path will now see `nikhilsoman.md` instead (Task 4's canonicalization). Search for these before running:
+Likely regression risk: any existing test that calls `checkpoint()` with `username` mocked/monkeypatched to `"nikhil"` or `"nikhilsoman"` and asserts on the raw `project-docs/devlogs/nikhil.md` path will now see `nikhilsoman.md` instead (Task 4's canonicalization). A known instance: `tests/test_synlynk.py:1296-1303` mocks `get_username()` to `"nikhil"` and asserts on `project-docs/devlogs/nikhil.md` directly — this must be updated to expect `nikhilsoman.md`. Search for all such matches before running (the existing tests build the path via `os.path.join`/f-strings, not a literal `"devlogs/nikhil"` substring, so grep for the filename fragment instead):
 
 ```bash
-grep -rln "devlogs/nikhil" tests/
+grep -rln '"nikhil\.md"\|devlogs.*nikhil\b\|nikhil.*devlogs' tests/
 ```
 
-Update any matches to expect the canonical `nikhilsoman.md` path, or to use a username that has no registry entry (e.g. `"someone-else"`) if the test's intent is unrelated to identity canonicalization.
+Read each match and confirm whether it's asserting on the raw per-alias devlog path (needs updating to `nikhilsoman.md`) or using a username that has no registry entry (e.g. some other test fixture username) — those are unaffected and should be left as-is. Update `tests/test_synlynk.py:1296-1303` specifically as part of this step.
 
 - [ ] **Step 3: Commit any fixes**
 
@@ -682,12 +678,12 @@ git commit -m "test: fix devlog path assertions after member_id canonicalization
 
 ## Self-Review
 
-**Spec coverage** (against `docs/superpowers/specs/2026-08-14-workspace-context-governance-design.md` §5 items 1, 2, 7):
-- Item 1 (doc-lifecycle manifest with stable `member_id` registry) → Task 1
-- Item 2 (report-mode audit, this segment only — devlog category) → Task 2
-- Item 7 (revision-aware manifest writes + machine-readable audit wired into CI/pr check, this category only) → Tasks 3, 5, 6 (`--json`, `--fix` with archive-not-delete provenance, `pr check` integration)
+**Spec coverage** (against `docs/superpowers/specs/2026-08-14-workspace-context-governance-design.md` §5 items 1, 2, 7 — note this plan implements only the devlog-identity slice of each item, not the item in full; the rest of each item is out of scope here per the "Explicitly out of scope" section above):
+- Item 1 (doc-lifecycle manifest) → this plan implements only the `member_id` identity-registry piece (`members`/`member_aliases` tables, Task 1), not a general doc-lifecycle manifest schema. A full manifest (canonical identifier/path/backend/`create_via`/mutability/archive policy per Round 4's CRUD contract) is a separate follow-up plan.
+- Item 2 (report-mode audit) → Task 2, scoped to the devlog author category only, not the other doc categories from the spec.
+- Item 7 (revision-aware manifest writes + machine-readable audit wired into CI/pr check) → this plan implements the machine-readable audit (`--json`, Task 2) and `pr check` wiring (Task 6) for the devlog category, plus archive-not-delete provenance on fix (Task 3). It does **not** implement general revision-aware manifest writes (there is no manifest in this plan, per Item 1's note above) — devlog fixes are provenance-preserving via file archival and `member_id` backfill, which is a narrower mechanism than a manifest revision history.
 
-**Placeholder scan:** Task 6 Step 3 shows a rejected placeholder line explicitly and immediately replaces it with real code — this is intentional (documents *why* the naive version was wrong), not a residual TODO. No other placeholders present.
+**Placeholder scan:** none present — the rejected-example pattern previously used in Task 6 Step 3 was removed per review; the step now shows only the real implementation.
 
 **Type consistency:** `cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list` — signature used identically in Tasks 2, 3, 5, 6. `_fix_devlog_fork(conn, member_id: str, aliases: list) -> None` used identically in Tasks 2 and 3. `_resolve_member_id(username: str) -> str` used identically in Task 4's helper and call site.
 
