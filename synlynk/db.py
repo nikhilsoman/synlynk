@@ -552,6 +552,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             entry_date    TEXT NOT NULL,
             session_title TEXT,
             session_id    TEXT,
+            goal_id       TEXT REFERENCES goals(goal_id),
             member_id     TEXT,
             body          TEXT NOT NULL,
             recorded_at   TEXT DEFAULT (datetime('now'))
@@ -578,6 +579,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             pass
     if "member_id" not in devlog_cols:
         conn.execute("ALTER TABLE devlog_entries ADD COLUMN member_id TEXT")
+
+    if "goal_id" not in devlog_cols:
+        try:
+            conn.execute("ALTER TABLE devlog_entries ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
+        except sqlite3.OperationalError:
+            pass
 
     conn.execute(
         "INSERT OR IGNORE INTO members (member_id, canonical_name) VALUES (?, ?)",
@@ -1817,13 +1824,18 @@ def _write_devlog_file(author: str) -> None:
         f.writelines(lines)
 
 def cmd_devlog_append(author: str, entry_date: str, body: str,
-                      session_title: str = None) -> None:
+                      session_title: str = None, session_id: str = None,
+                      goal_id: str = None) -> None:
     """Append a devlog entry to DB and write through to flat file if migrated."""
     from synlynk import _dr_sync, _get_db, _is_migrated
+    from synlynk.session import _read_active_session
+    if session_id is None:
+        session_id = _read_active_session()
     conn = _get_db()
     conn.execute(
-        "INSERT INTO devlog_entries (author, entry_date, session_title, body) VALUES (?,?,?,?)",
-        (author, entry_date, session_title, body)
+        "INSERT INTO devlog_entries (author, entry_date, session_title, session_id, goal_id, body) "
+        "VALUES (?,?,?,?,?,?)",
+        (author, entry_date, session_title, session_id, goal_id, body)
     )
     conn.commit()
     conn.close()
