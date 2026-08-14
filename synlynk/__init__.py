@@ -964,6 +964,20 @@ CREATE TABLE IF NOT EXISTS goal_contributions (
     UNIQUE(goal_id, story_id)
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id       TEXT NOT NULL UNIQUE,
+    title            TEXT NOT NULL,
+    goal_id          TEXT REFERENCES goals(goal_id),
+    status           TEXT NOT NULL DEFAULT 'open',
+    disposition      TEXT,
+    opened_at        TEXT NOT NULL,
+    closed_at        TEXT,
+    last_checkpoint_at TEXT,
+    closing_summary  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+
 CREATE TABLE IF NOT EXISTS events (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type      TEXT NOT NULL,
