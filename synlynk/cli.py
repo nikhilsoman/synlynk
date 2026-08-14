@@ -152,6 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
         cmd_exit,
@@ -261,6 +262,17 @@ def build_parser() -> argparse.ArgumentParser:
     decide_parser.add_argument(
         "--record", action="store_true",
         help="Write the Decision record to project-docs/decisions/"
+    )
+
+    audit_docs_parser = subparsers.add_parser(
+        "audit-docs", help="Detect (and optionally fix) devlog author-identity drift"
+    )
+    audit_docs_parser.add_argument(
+        "--json", action="store_true", help="Emit findings as JSON"
+    )
+    audit_docs_parser.add_argument(
+        "--fix", action="store_true",
+        help="Merge fork findings into their canonical member devlog (unregistered findings are never auto-fixed)"
     )
 
     goal_parser = subparsers.add_parser("goal", help="Manage Business Goals")
@@ -929,6 +941,7 @@ def main() -> None:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
         cmd_exit,
@@ -1323,6 +1336,10 @@ def main() -> None:
     elif args.command == "decide":
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
         cmd_decide(args.topic, panel=panel_members, record=args.record)
+    elif args.command == "audit-docs":
+        findings = cmd_audit_docs(json_output=args.json, fix=args.fix)
+        if findings and not args.fix:
+            sys.exit(1)
     elif args.command == "goal":
         from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
         action = getattr(args, "goal_action", None)

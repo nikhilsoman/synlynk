@@ -58,3 +58,13 @@ def test_start_command_parses():
     args = parser.parse_args(["start"])
 
     assert args.command == "start"
+
+
+def test_audit_docs_parser_accepts_json_and_fix_flags():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["audit-docs", "--json", "--fix"])
+    assert args.command == "audit-docs"
+    assert args.json is True
+    assert args.fix is True
