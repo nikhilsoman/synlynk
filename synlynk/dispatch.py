@@ -95,6 +95,25 @@ def _ensure_daemon_job_context_columns(conn) -> None:
             pass
 
 
+def _ensure_daemon_job_session_column(conn) -> None:
+    """Add session_id if missing (legacy schemas + unit fixtures). Mirrors
+    _ensure_daemon_job_context_columns above — same no-op-on-absence contract.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    if "session_id" not in cols:
+        try:
+            conn.execute(
+                "ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT REFERENCES sessions(session_id)"
+            )
+        except Exception:
+            pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -1850,11 +1869,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    job_id: str = None,
                    issue: int = None,
                    base: str = None,
-                   scope_paths: list = None) -> dict:
+                   scope_paths: list = None,
+                   session_id: str = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    if session_id is None:
+        from synlynk.session import _read_active_session
+        session_id = _read_active_session()
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     dispatch_time = None
     if not story_id:
@@ -2358,6 +2381,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             # Tests and older DBs may create daemon_jobs without these columns;
             # ensure before INSERT so dispatch never hard-fails on schema lag.
             _ensure_daemon_job_context_columns(dconn)
+            _ensure_daemon_job_session_column(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -2368,7 +2392,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, agent=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
-                    "context_mode=?, context_bytes=? WHERE job_id=?",
+                    "context_mode=?, context_bytes=?, "
+                    "session_id=COALESCE(session_id, ?) WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2379,6 +2404,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         dispatch_context,
                         context_mode,
                         context_bytes,
+                        session_id,
                         job_id,
                     ),
                 )
@@ -2387,8 +2413,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2404,6 +2430,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         dispatch_context,
                         context_mode,
                         context_bytes,
+                        session_id,
                     ),
                 )
             dconn.commit()

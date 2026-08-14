@@ -944,7 +944,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     blocked_reason TEXT,
     context_mode TEXT,
     context_bytes INTEGER,
-    session_id TEXT
+    session_id TEXT REFERENCES sessions(session_id)
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 

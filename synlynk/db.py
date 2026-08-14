@@ -334,6 +334,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError:
             pass
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "session_id" not in cost_cols:
+        try:
+            conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("DROP VIEW IF EXISTS capability_scores")
     conn.executescript(_DB_SCORES_VIEW)
     conn.executescript("""
@@ -534,7 +540,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             job_id            TEXT,
             recorded_at       TEXT DEFAULT (datetime('now')),
             dispatch_context  TEXT,
-            context_mode      TEXT
+            context_mode      TEXT,
+            session_id        TEXT REFERENCES sessions(session_id)
         );
         CREATE TABLE IF NOT EXISTS remediation_actions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -950,6 +957,7 @@ def _insert_cost_row(
     payment_mode: str = None,
     dispatch_context: str = None,
     context_mode: str = None,
+    session_id: str = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -977,6 +985,16 @@ def _insert_cost_row(
                     context_mode = row[0]
             except sqlite3.Error:
                 pass
+        if session_id is None and job_id is not None:
+            try:
+                row = conn.execute(
+                    "SELECT session_id FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if row and row[0]:
+                    session_id = row[0]
+            except sqlite3.Error:
+                pass
         if job_id is not None:
             existing = conn.execute(
                 "SELECT id FROM cost_entries WHERE job_id=?",
@@ -1002,7 +1020,8 @@ def _insert_cost_row(
                         epic_id=?,
                         phase_id=?,
                         dispatch_context=COALESCE(?, dispatch_context),
-                        context_mode=COALESCE(?, context_mode)
+                        context_mode=COALESCE(?, context_mode),
+                        session_id=COALESCE(?, session_id)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -1023,6 +1042,7 @@ def _insert_cost_row(
                         phase_id,
                         dispatch_context,
                         context_mode,
+                        session_id,
                         job_id,
                     ),
                 )
@@ -1031,8 +1051,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent,
@@ -1053,6 +1073,7 @@ def _insert_cost_row(
                 job_id,
                 dispatch_context,
                 context_mode,
+                session_id,
             ),
         )
         conn.commit()
