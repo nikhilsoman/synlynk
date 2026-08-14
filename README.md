@@ -135,7 +135,7 @@ Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
 ### Dispatch flags
 
-- `--task-type <type>`: classify a dispatch task for task-specific handling (use `review` for PR review jobs; review jobs default to a 90-minute stall timeout).
+- `--task-type <type>`: classify a dispatch task for task-specific handling (use `review` for PR review jobs; review jobs default to a 90-minute stall timeout and are scoped to read-only permissions (`read:*`) instead of the agent's default write-capable role bundle; explicit `--grant`/`--revoke` still apply on top).
 - `--scope-paths <glob>` (repeatable): restrict this dispatch to only touching files matching
   the given glob (e.g. `--scope-paths 'docs/superpowers/specs/**'`). At reconciliation, if the
   job's actual changed files don't all match a declared glob, the job is marked

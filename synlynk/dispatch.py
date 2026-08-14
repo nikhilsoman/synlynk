@@ -2010,6 +2010,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     load_config = _pkg("load_config")
     cfg = load_config() if load_config else {}
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
+    if task_type == "review":
+        role_list = ["review"]
     permissions = _resolve_dispatch_permissions(agent, role_list=role_list, grants=grants, revokes=revokes)
     flags = flags + _permissions_to_flags(agent, permissions)
     if agent == "agy" and permissions:

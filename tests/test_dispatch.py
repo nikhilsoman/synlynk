@@ -629,6 +629,76 @@ def test_review_dispatch_job_stores_task_type(project_dir, monkeypatch):
     assert saved["jobs"][0]["task_type"] == "review"
 
 
+_AGY_WRITE_BUNDLE_ROLES = ["implement", "test", "css", "templates", "content"]
+_AGY_DEFAULT_PERMISSIONS = ["read:*", "run:tests", "write:docs/", "write:src/"]
+
+
+def _dispatch_capturing_permissions(monkeypatch, *, task_type=None, grants=None):
+    """Dispatch agy with its write-capable default roles and capture permissions."""
+    import synlynk.dispatch as dispatch_mod
+
+    real_pkg = dispatch_mod._pkg
+    saved = {}
+    captured = {}
+
+    def fake_pkg(name, default=None):
+        if name == "_load_jobs":
+            return lambda: []
+        if name == "_save_jobs":
+            return lambda jobs: saved.setdefault("jobs", jobs)
+        if name == "_get_db":
+            return lambda: None
+        if name == "load_config":
+            return lambda: {"roles": {"agy": list(_AGY_WRITE_BUNDLE_ROLES)}}
+        return real_pkg(name, default)
+
+    def capture_flags(agent, perms):
+        captured["permissions"] = list(perms)
+        return []
+
+    monkeypatch.setattr(dispatch_mod, "_pkg", fake_pkg)
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", capture_flags)
+
+    class FakeProc:
+        pid = 12345
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+
+    kwargs = {"skip_preflight": True, "grants": grants}
+    if task_type is not None:
+        kwargs["task_type"] = task_type
+    dispatch_mod.dispatch_agent("agy", "review this PR", **kwargs)
+    return captured.get("permissions")
+
+
+def test_review_task_type_scopes_permissions_to_read_only(project_dir, monkeypatch):
+    permissions = _dispatch_capturing_permissions(monkeypatch, task_type="review")
+
+    assert permissions == ["read:*"]
+    assert not any(perm.startswith("write:") for perm in permissions)
+
+
+def test_review_task_type_still_applies_explicit_grants(project_dir, monkeypatch):
+    permissions = _dispatch_capturing_permissions(
+        monkeypatch, task_type="review", grants=["run:tests"],
+    )
+
+    assert "read:*" in permissions
+    assert "run:tests" in permissions
+    assert not any(perm.startswith("write:") for perm in permissions)
+
+
+@pytest.mark.parametrize("task_type", [None, "", "implement"])
+def test_non_review_task_type_keeps_default_role_bundle_permissions(
+    project_dir, monkeypatch, task_type,
+):
+    permissions = _dispatch_capturing_permissions(monkeypatch, task_type=task_type)
+
+    assert permissions == _AGY_DEFAULT_PERMISSIONS
+    assert "write:src/" in permissions
+    assert "write:docs/" in permissions
+
+
 @pytest.mark.parametrize(
     ("task_type", "age_minutes", "expected_killed"),
     [("review", 60, False), ("review", 100, True), (None, 60, True)],
