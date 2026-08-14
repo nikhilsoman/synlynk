@@ -2745,6 +2745,15 @@ def cmd_pr_check() -> None:
         for (story_id,) in unlinked_story_ids:
             print(f"    {story_id}")
         print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
+    devlog_findings = cmd_audit_docs(json_output=False)
+    if devlog_findings:
+        fork_count = sum(1 for f in devlog_findings if f["kind"] == "fork")
+        unreg_count = sum(1 for f in devlog_findings if f["kind"] == "unregistered")
+        print(
+            f"\n  ⚠ [PR CHECK] devlog identity drift found: {fork_count} fork(s), "
+            f"{unreg_count} unregistered (soft-warn, not blocking)"
+        )
+        print("  Fix with: synlynk audit-docs --fix\n")
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:
