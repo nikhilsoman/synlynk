@@ -10,6 +10,127 @@ from synlynk.db import (
 )
 
 
+def test_member_registry_tables_and_seed(project_dir):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    members = conn.execute("SELECT member_id, canonical_name FROM members").fetchall()
+    assert ("nikhilsoman", "Nikhil Soman") in members
+
+    aliases = dict(conn.execute("SELECT alias, member_id FROM member_aliases").fetchall())
+    assert aliases["nikhil"] == "nikhilsoman"
+    assert aliases["nikhilsoman"] == "nikhilsoman"
+    conn.close()
+
+
+def test_devlog_entries_has_member_id_column(project_dir):
+    from synlynk import _get_db
+
+    conn = _get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
+    assert "member_id" in cols
+    conn.close()
+
+
+def test_audit_docs_report_detects_fork_and_unregistered(project_dir, capsys):
+    from synlynk import _get_db
+    from synlynk.db import cmd_audit_docs
+
+    conn = _get_db()
+    conn.executemany(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        [
+            ("nikhil", "2026-05-16", "did a thing"),
+            ("nikhilsoman", "2026-06-29", "did another thing"),
+            ("agy", "2026-06-28", "harness wrote this"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    findings = cmd_audit_docs(json_output=False)
+
+    kinds = {f["kind"] for f in findings}
+    assert "fork" in kinds
+    assert "unregistered" in kinds
+
+    fork = next(f for f in findings if f["kind"] == "fork")
+    assert fork["member_id"] == "nikhilsoman"
+    assert set(fork["aliases"]) == {"nikhil", "nikhilsoman"}
+
+    unregistered = next(f for f in findings if f["kind"] == "unregistered")
+    assert unregistered["alias"] == "agy"
+
+    out = capsys.readouterr().out
+    assert "FORK" in out
+    assert "UNREGISTERED" in out
+
+
+def test_audit_docs_report_json_output(project_dir, capsys):
+    import json
+
+    from synlynk import _get_db
+    from synlynk.db import cmd_audit_docs
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        ("nikhil", "2026-05-16", "did a thing"),
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_audit_docs(json_output=True)
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert isinstance(payload, list)
+
+
+def test_audit_docs_fix_merges_fork(project_dir):
+    import os
+
+    from synlynk import _get_db
+    from synlynk.db import cmd_audit_docs
+
+    devlogs_dir = os.path.join("project-docs", "devlogs")
+    with open(os.path.join(devlogs_dir, "nikhil.md"), "w") as f:
+        f.write("# nikhil devlog\n\n## 2026-05-16\n- did old thing\n")
+    with open(os.path.join(devlogs_dir, "nikhilsoman.md"), "w") as f:
+        f.write("# nikhilsoman devlog\n\n## 2026-06-29\n- did new thing\n")
+
+    conn = _get_db()
+    conn.executemany(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        [
+            ("nikhil", "2026-05-16", "did old thing"),
+            ("nikhilsoman", "2026-06-29", "did new thing"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    findings = cmd_audit_docs(fix=True)
+    assert any(f["kind"] == "fork" for f in findings)
+
+    canonical_path = os.path.join(devlogs_dir, "nikhilsoman.md")
+    assert os.path.exists(canonical_path)
+    merged = open(canonical_path).read()
+    assert "did old thing" in merged
+    assert "did new thing" in merged
+    assert "migrated from" in merged
+
+    assert not os.path.exists(os.path.join(devlogs_dir, "nikhil.md"))
+    archived = os.path.join(devlogs_dir, "archive")
+    assert any("nikhil" in fn for fn in os.listdir(archived))
+
+    conn = _get_db()
+    member_ids = {
+        row[0] for row in conn.execute("SELECT DISTINCT member_id FROM devlog_entries")
+    }
+    assert member_ids == {"nikhilsoman"}
+    conn.close()
+
+
 def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
     conn.execute(
         "INSERT INTO roadmap_arcs (version, title, status) VALUES (?, ?, ?)",
