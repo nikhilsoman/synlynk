@@ -77,3 +77,62 @@ def test_dispatch_agent_writes_session_id_to_daemon_jobs(tmp_path, monkeypatch):
     ).fetchone()
     conn.close()
     assert row == ("session-abc12345",)
+
+
+def test_dispatch_cli_session_flag_overrides_active_marker(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+
+    from synlynk import _get_db
+    from synlynk.session import _write_active_session
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+    import synlynk.dispatch as dispatch_mod
+
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    _write_active_session("session-active0000")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO sessions (session_id, title, opened_at) VALUES (?, ?, ?)",
+        ("session-active0000", "active session", "2026-08-17T00:00:00"),
+    )
+    conn.execute(
+        "INSERT INTO sessions (session_id, title, opened_at) VALUES (?, ?, ?)",
+        ("session-override99", "override session", "2026-08-17T00:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda *a, **kw: {
+            "path": str(tmp_path),
+            "branch": "dispatch/test/job-cli-test",
+            "base_branch": "main",
+            "base_sha": "deadbeef",
+        },
+    )
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: "context")
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *a, **kw: type("P", (), {"pid": 12345})(),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "synlynk", "dispatch", "codex", "--task", "do a thing",
+            "--force-agent", "--session", "session-override99",
+            "--skip-preflight", "--context-mode", "none",
+        ],
+    )
+
+    cli_mod.main()
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT session_id FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row == ("session-override99",)

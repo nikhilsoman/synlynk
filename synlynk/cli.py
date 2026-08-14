@@ -618,6 +618,12 @@ def build_parser() -> argparse.ArgumentParser:
              "e.g. --scope-paths 'docs/superpowers/specs/**'). Declaring this denies automatic "
              "PR creation by default unless --requires-gh-write is also set. See #769.",
     )
+    dispatch_parser.add_argument(
+        "--session",
+        dest="session_id",
+        default=None,
+        help="Override the active session_id for this dispatch (defaults to .synlynk/active_session.json)",
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -1118,7 +1124,8 @@ def main() -> None:
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
                                  issue=getattr(args, "issue", None),
-                                 scope_paths=getattr(args, "scope_paths", []))
+                                 scope_paths=getattr(args, "scope_paths", []),
+                                 session_id=getattr(args, "session_id", None))
             if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
                 print(f"Error: {job.get('reason')}")
                 remediation = job.get("remediation")
