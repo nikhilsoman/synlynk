@@ -29,6 +29,10 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `decide` (primary) — goal
 - `goal create` (primary) — goal
 - `goal list` (primary) — goal
+- `session open` (primary) — sustain
+- `session status` (primary) — sustain
+- `session checkpoint` (secondary) — sustain
+- `session close` (secondary) — sustain
 - `goal link` (primary) — goal
 - `goal status` (primary) — goal
 - `story create` (primary) — goal
