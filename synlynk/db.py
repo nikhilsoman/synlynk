@@ -2543,6 +2543,76 @@ def cmd_credit_grant(
     suffix = f" (expires {expires})" if expires else ""
     print(f"  {_GREEN}✓{_RESET} Credit grant recorded for {agent}: ${amount:.2f}{suffix}")
 
+
+def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
+    """Reports (and optionally fixes) devlog author-identity drift.
+
+    Cross-references distinct devlog_entries.author values and
+    project-docs/devlogs/*.md filenames against the members/member_aliases
+    registry (see Task 1). Two finding kinds:
+      - "fork": two or more registered aliases resolve to the same member_id
+        (e.g. nikhil + nikhilsoman both -> nikhilsoman).
+      - "unregistered": an author/filename has no member_alias row at all
+        (e.g. agy - a harness identity, never auto-fixed).
+
+    --fix only merges "fork" findings; "unregistered" findings are report-only
+    by design (auto-registering an unknown identity is a policy decision, not
+    a mechanical fix).
+    """
+    import glob
+
+    from synlynk import _docs_dir, _get_db
+
+    conn = _get_db()
+    db_authors = {row[0] for row in conn.execute("SELECT DISTINCT author FROM devlog_entries")}
+    aliases = dict(conn.execute("SELECT alias, member_id FROM member_aliases").fetchall())
+
+    file_authors = set()
+    for path in glob.glob(os.path.join(_docs_dir(), "devlogs", "*.md")):
+        file_authors.add(os.path.splitext(os.path.basename(path))[0])
+
+    all_authors = db_authors | file_authors
+
+    by_member: dict = {}
+    unregistered = []
+    for author in sorted(all_authors):
+        member_id = aliases.get(author)
+        if member_id is None:
+            unregistered.append(author)
+        else:
+            by_member.setdefault(member_id, set()).add(author)
+
+    findings = []
+    for member_id, alias_set in by_member.items():
+        if len(alias_set) > 1:
+            findings.append({
+                "kind": "fork",
+                "member_id": member_id,
+                "aliases": sorted(alias_set),
+            })
+    for author in unregistered:
+        findings.append({"kind": "unregistered", "alias": author})
+
+    if fix:
+        for finding in findings:
+            if finding["kind"] == "fork":
+                _fix_devlog_fork(conn, finding["member_id"], finding["aliases"])
+
+    conn.close()
+
+    if json_output:
+        print(json.dumps(findings, indent=2))
+    else:
+        if not findings:
+            print("  ✓ No devlog identity drift found.")
+        for finding in findings:
+            if finding["kind"] == "fork":
+                print(f"  FORK: aliases {finding['aliases']} all resolve to member_id={finding['member_id']!r}")
+            else:
+                print(f"  UNREGISTERED: {finding['alias']!r} has no member_aliases entry (not auto-fixable)")
+
+    return findings
+
 def cmd_pr_check() -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'.
 

@@ -32,6 +32,60 @@ def test_devlog_entries_has_member_id_column(project_dir):
     conn.close()
 
 
+def test_audit_docs_report_detects_fork_and_unregistered(project_dir, capsys):
+    from synlynk import _get_db
+    from synlynk.db import cmd_audit_docs
+
+    conn = _get_db()
+    conn.executemany(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        [
+            ("nikhil", "2026-05-16", "did a thing"),
+            ("nikhilsoman", "2026-06-29", "did another thing"),
+            ("agy", "2026-06-28", "harness wrote this"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    findings = cmd_audit_docs(json_output=False)
+
+    kinds = {f["kind"] for f in findings}
+    assert "fork" in kinds
+    assert "unregistered" in kinds
+
+    fork = next(f for f in findings if f["kind"] == "fork")
+    assert fork["member_id"] == "nikhilsoman"
+    assert set(fork["aliases"]) == {"nikhil", "nikhilsoman"}
+
+    unregistered = next(f for f in findings if f["kind"] == "unregistered")
+    assert unregistered["alias"] == "agy"
+
+    out = capsys.readouterr().out
+    assert "FORK" in out
+    assert "UNREGISTERED" in out
+
+
+def test_audit_docs_report_json_output(project_dir, capsys):
+    import json
+
+    from synlynk import _get_db
+    from synlynk.db import cmd_audit_docs
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        ("nikhil", "2026-05-16", "did a thing"),
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_audit_docs(json_output=True)
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert isinstance(payload, list)
+
+
 def _seed_arc(conn, version="v0.13.0", title="State Engine", status="planned"):
     conn.execute(
         "INSERT INTO roadmap_arcs (version, title, status) VALUES (?, ?, ?)",
