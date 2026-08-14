@@ -564,6 +564,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Task needs gh write (PR review/merge/comment). Requires a role GitHub App token "
              "(synlynk identity init --role); fails closed if none (#569). "
              "Also hints routing to a GH-capable agent unless --force-agent (#426).")
+    dispatch_parser.add_argument("--task-type", default=None, dest="task_type",
+        help="Classify the dispatch task (for example, review) for task-specific handling")
     dispatch_parser.add_argument(
         "--requires",
         action="append",
@@ -1092,6 +1094,7 @@ def main() -> None:
             job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
+                                 task_type=getattr(args, "task_type", None),
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),

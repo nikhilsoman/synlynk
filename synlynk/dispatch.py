@@ -505,7 +505,10 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
 
     agent = job.get("agent", "")
     global_timeout = config.get("stall_timeout_minutes", 30)
-    timeout = config.get("agents", {}).get(agent, {}).get("stall_timeout_minutes", global_timeout)
+    if job.get("task_type") == "review":
+        timeout = config.get("review_stall_timeout_minutes", 90)
+    else:
+        timeout = config.get("agents", {}).get(agent, {}).get("stall_timeout_minutes", global_timeout)
 
     stale_minutes = (time.time() - os.path.getmtime(log_file)) / 60
     if stale_minutes < timeout:
@@ -1840,6 +1843,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
                    requires_gh_write: bool = False,
+                   task_type: str = None,
                    requires: list = None,
                    grants: list = None,
                    revokes: list = None,
@@ -2328,6 +2332,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
+        "task_type": task_type or "",
     }
 
     load_jobs = _pkg("_load_jobs")

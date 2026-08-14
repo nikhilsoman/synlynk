@@ -1564,6 +1564,7 @@ def load_config() -> dict:
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
         "stall_timeout_minutes": 30,
+        "review_stall_timeout_minutes": 90,
         "agents": {},
         "payment_models": {},
         "capability_sweep": {"cost_cap_usd": 10.0},

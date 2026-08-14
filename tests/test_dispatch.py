@@ -582,6 +582,98 @@ def test_cli_dispatch_passes_requires_gh_write_flag(project_dir, monkeypatch):
     assert captured["requires_gh_write"] is True
 
 
+def test_cli_dispatch_passes_task_type_flag(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["task_type"] = kwargs.get("task_type")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "check PR #935",
+         "--task-type", "review", "--force-agent"],
+    )
+
+    cli_mod.main()
+
+    assert captured["task_type"] == "review"
+
+
+def test_review_dispatch_job_stores_task_type(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    saved = {}
+
+    monkeypatch.setattr(dispatch_mod, "_pkg", lambda name, default=None: {
+        "_load_jobs": lambda: [],
+        "_save_jobs": lambda jobs: saved.setdefault("jobs", jobs),
+    }.get(name, default))
+
+    class FakeProc:
+        pid = 12345
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", lambda agent, perms: [])
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_permissions", lambda *a, **kw: [])
+
+    job = dispatch_mod.dispatch_agent(
+        "codex", "check PR #935", task_type="review", skip_preflight=True,
+    )
+
+    assert job["task_type"] == "review"
+    assert saved["jobs"][0]["task_type"] == "review"
+
+
+@pytest.mark.parametrize(
+    ("task_type", "age_minutes", "expected_killed"),
+    [("review", 60, False), ("review", 100, True), (None, 60, True)],
+)
+def test_check_job_stall_uses_review_timeout_without_changing_default(
+    tmp_path, monkeypatch, task_type, age_minutes, expected_killed,
+):
+    import os
+    import signal
+    import time
+    import synlynk as sl
+
+    log_file = tmp_path / "job-stall.log"
+    log_file.write_bytes(b"")
+    old_time = time.time() - age_minutes * 60
+    os.utime(log_file, (old_time, old_time))
+    job = {
+        "id": "job-stall",
+        "agent": "codex",
+        "status": "running",
+        "pid": 12345,
+        "started_at": old_time,
+        "log_file": str(log_file),
+    }
+    if task_type is not None:
+        job["task_type"] = task_type
+
+    killed = []
+    monkeypatch.setattr(sl.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+
+    result = sl._check_job_stall(
+        job,
+        {"stall_timeout_minutes": 30},
+        str(tmp_path / "sentinel.md"),
+    )
+
+    assert result is expected_killed
+    assert bool(killed) is expected_killed
+    if expected_killed:
+        assert killed == [(12345, signal.SIGKILL)]
+    else:
+        assert job["status"] == "running"
+
+
 def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_worktree_repo, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
