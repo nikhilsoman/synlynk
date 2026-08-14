@@ -86,6 +86,26 @@ def test_audit_docs_report_json_output(project_dir, capsys):
     assert isinstance(payload, list)
 
 
+def test_pr_check_soft_warns_on_devlog_fork(project_dir, capsys, monkeypatch):
+    from synlynk import _get_db
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.setattr("synlynk.pr_multiplier._is_github_remote", lambda: False)
+
+    conn = _get_db()
+    conn.executemany(
+        "INSERT INTO devlog_entries (author, entry_date, body) VALUES (?, ?, ?)",
+        [("nikhil", "2026-05-16", "x"), ("nikhilsoman", "2026-06-29", "y")],
+    )
+    conn.commit()
+    conn.close()
+
+    cmd_pr_check()
+    out = capsys.readouterr().out
+    assert "devlog identity drift" in out.lower()
+    assert "synlynk audit-docs" in out
+
+
 def test_audit_docs_fix_merges_fork(project_dir):
     import os
 
