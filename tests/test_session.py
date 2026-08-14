@@ -130,3 +130,27 @@ def test_cmd_session_status_and_checkpoint_tolerate_unpopulated_session_id(
     checkpoint_out = capsys.readouterr().out
     assert "Jobs attributed to this session: 0" in checkpoint_out
     assert "Devlog entries linked: 0" in checkpoint_out
+
+
+def test_session_status_nudges_unattributed_jobs(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk.db import cmd_session_open, cmd_session_status
+    from synlynk import _get_db
+
+    session_id = cmd_session_open("Ship v0.14.0")
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, session_id) "
+        "VALUES ('job-orphan', 'grok', 'unattributed work', 'completed', '2026-08-17T01:00:00', NULL)"
+    )
+    conn.commit()
+    conn.close()
+
+    capsys.readouterr()
+    cmd_session_status()
+    out = capsys.readouterr().out
+
+    assert "NUDGE" in out
+    assert "1 job" in out or "job-orphan" in out
+

@@ -2263,11 +2263,18 @@ def cmd_session_status() -> None:
     devlog_count = conn.execute(
         "SELECT COUNT(*) FROM devlog_entries WHERE session_id=?", (session_id,)
     ).fetchone()[0]
+    unattributed_jobs = conn.execute(
+        "SELECT COUNT(*) FROM daemon_jobs WHERE session_id IS NULL"
+    ).fetchone()[0]
     conn.close()
     print(f"  Session: {session_id}  [{title}]")
     print(f"  Goal: {goal_id or '(none linked)'}")
     print(f"  Opened: {opened_at}   Last checkpoint: {last_checkpoint_at or '(never)'}")
     print(f"  Jobs attributed: {job_count}   Devlog entries: {devlog_count}")
+    if unattributed_jobs:
+        print(f"  NUDGE: {unattributed_jobs} job(s) in daemon_jobs have no session_id — "
+              f"dispatched with no session open. Run 'synlynk session open' before dispatching, "
+              f"or pass --session explicitly.")
 
 
 def cmd_session_checkpoint() -> None:
