@@ -652,27 +652,25 @@ git commit -m "feat(pr-check): soft-warn on devlog identity drift, point at audi
 
 ### Task 7: Run the full test suite
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
-Run: `pytest tests/ -v 2>&1 | tail -40`
-Expected: all tests pass (current baseline before this plan: 1916 passed, 2 skipped — expect that plus this plan's ~9 new tests, so ~1925 passed, 2 skipped, 0 failed)
+Run: `pytest tests/ -q`
+Result (2026-08-14, `feat/devlog-identity-test-verify`): **1940 passed, 2 skipped, 0 failed** in 186.91s. Above the plan-time baseline (~1925 + this plan's new tests).
 
-- [ ] **Step 2: If anything regressed, fix before proceeding**
+- [x] **Step 2: If anything regressed, fix before proceeding**
 
-Likely regression risk: any existing test that calls `checkpoint()` with `username` mocked/monkeypatched to `"nikhil"` or `"nikhilsoman"` and asserts on the raw `project-docs/devlogs/nikhil.md` path will now see `nikhilsoman.md` instead (Task 4's canonicalization). A known instance: `tests/test_synlynk.py:1296-1303` mocks `get_username()` to `"nikhil"` and asserts on `project-docs/devlogs/nikhil.md` directly — this must be updated to expect `nikhilsoman.md`. Search for all such matches before running (the existing tests build the path via `os.path.join`/f-strings, not a literal `"devlogs/nikhil"` substring, so grep for the filename fragment instead):
+Grep of `tests/` for `"nikhil.md"` / `devlogs.*nikhil` found:
 
-```bash
-grep -rln '"nikhil\.md"\|devlogs.*nikhil\b\|nikhil.*devlogs' tests/
-```
+- `tests/test_synlynk.py` `test_checkpoint_appends_to_devlog` — already asserts `devlogs/nikhilsoman.md` (canonicalized in an earlier merge; no further change).
+- `tests/test_checkpoint_identity.py` — already asserts canonical `nikhilsoman.md` and that `nikhil.md` is not created.
+- `tests/test_db.py` `test_audit_docs_fix_merges_fork` — uses `nikhil.md` as the *alias* file being merged/archived; leave as-is.
+- `tests/test_migrate.py` — seeds/asserts `nikhil.md` as a migrate *backup fixture* of an existing on-disk file, not a `checkpoint()` destination; leave as-is.
 
-Read each match and confirm whether it's asserting on the raw per-alias devlog path (needs updating to `nikhilsoman.md`) or using a username that has no registry entry (e.g. some other test fixture username) — those are unaffected and should be left as-is. Update `tests/test_synlynk.py:1296-1303` specifically as part of this step.
+No identity-registry regressions to fix.
 
-- [ ] **Step 3: Commit any fixes**
+- [x] **Step 3: Commit any fixes**
 
-```bash
-git add -A
-git commit -m "test: fix devlog path assertions after member_id canonicalization"
-```
+No test-code fixes required. This checkbox records the clean full-suite run.
 
 ---
 
