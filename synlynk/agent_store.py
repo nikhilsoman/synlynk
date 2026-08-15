@@ -286,3 +286,47 @@ def propose_entry_revision(
     with open(revisions_path, "a") as f:
         f.write(json.dumps(entry_row) + "\n")
     return new_revision
+
+
+def _dump_flat_yaml(data: dict, indent: int = 0) -> str:
+    lines = []
+    pad = "  " * indent
+    for key, value in data.items():
+        if value is None:
+            lines.append(f"{pad}{key}: null")
+        elif isinstance(value, dict):
+            if not value:
+                lines.append(f"{pad}{key}: {{}}")
+            else:
+                lines.append(f"{pad}{key}:")
+                lines.append(_dump_flat_yaml(value, indent + 1))
+        else:
+            lines.append(f"{pad}{key}: {value}")
+    return "\n".join(lines)
+
+
+def _agent_role(agent_id: str) -> str:
+    registry = _load_registry()
+    for agent in registry["agents"]:
+        if agent["agent_id"] == agent_id:
+            for alias in agent["aliases"]:
+                if alias["kind"] == "role_slug":
+                    return alias["value"]
+    return ""
+
+
+def regenerate_agent_projection(agent_id: str, repo_overrides: dict = None) -> None:
+    workspace_id = get_workspace_id()
+    payload = {
+        "agent_id": agent_id,
+        "workspace_id": workspace_id,
+        "role": _agent_role(agent_id),
+        "overrides": repo_overrides or {},
+    }
+    rendered = _dump_flat_yaml(payload) + "\n"
+
+    projection_dir = os.path.join("synlynk", "agents")
+    os.makedirs(projection_dir, exist_ok=True)
+    projection_path = os.path.join(projection_dir, f"{agent_id}.yaml")
+    with open(projection_path, "w") as f:
+        f.write(rendered)
