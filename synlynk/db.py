@@ -2651,7 +2651,16 @@ def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
     from synlynk import _docs_dir, _get_db
 
     conn = _get_db()
-    db_authors = {row[0] for row in conn.execute("SELECT DISTINCT author FROM devlog_entries")}
+    # A backfilled member_id marks historical rows as reconciled while the
+    # original author remains intact for provenance.  Only rows without that
+    # identity linkage still represent active drift; otherwise a successful
+    # --fix would continue to report the same fork forever.
+    db_authors = {
+        row[0]
+        for row in conn.execute(
+            "SELECT DISTINCT author FROM devlog_entries WHERE member_id IS NULL"
+        )
+    }
     aliases = dict(conn.execute("SELECT alias, member_id FROM member_aliases").fetchall())
 
     file_authors = set()
