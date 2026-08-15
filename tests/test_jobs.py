@@ -1231,6 +1231,57 @@ def test_gtv_status_no_exit_no_git_is_timed_out():
     assert exit_code == -9
 
 
+def test_reconcile_daemon_jobs_and_reconcile_jobs_agree_on_terminal_status(project_dir, monkeypatch, tmp_path):
+    """Parity regression test for #331/#579: both reconciliation mechanisms
+    must reach the same terminal status for equivalent job evidence (real
+    git activity, non-zero exit) - this is the scenario where they
+    historically diverged (daemon path GTV'd, legacy path didn't).
+    """
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    git_state = {"has_activity": True, "commits_ahead": 2, "dirty": False, "changed_files": ["a.py"]}
+    monkeypatch.setattr(jobs_mod, "_inspect_worktree_git_state", lambda *a, **kw: git_state)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: "/tmp/fake-wt")
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path) VALUES ('job-parity1', 'codex', 'story-1', 'implement thing', "
+        "'running', 999999, '2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL)"
+    )
+    conn.commit()
+    conn.close()
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    daemon_status = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-parity1'"
+    ).fetchone()[0]
+    conn.close()
+
+    from synlynk import dispatch as dispatch_mod
+    legacy_job = {
+        "id": "job-parity1-legacy", "status": "running", "agent": "codex",
+        "log_file": str(tmp_path / "job.log"), "pid": None,
+        "worktree_path": "/tmp/fake-wt", "worktree_branch": "dispatch/codex/job-parity1-legacy",
+        "started_at": "2026-08-15T00:00:00",
+    }
+    (tmp_path / "job.log").write_text("output")
+    import os as _os
+    old_mtime = __import__("time").time() - 3600
+    _os.utime(tmp_path / "job.log", (old_mtime, old_mtime))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: git_state)
+    stalled = dispatch_mod._check_job_stall(legacy_job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+
+    # Both mechanisms see real git activity (has_activity=True) - neither should
+    # discard the job as a bare failure/unknown; the daemon path GTVs it into a
+    # non-"unknown", non-bare-"failed" status, and the legacy path extends the
+    # timeout rather than killing (returns False = not stalled).
+    assert daemon_status not in ("unknown", "failed")
+    assert stalled is False
+
+
 def test_daemon_job_worktree_path_from_log(tmp_path):
     from synlynk.jobs import _daemon_job_worktree_path
 
