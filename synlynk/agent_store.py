@@ -193,3 +193,96 @@ def propose_charter_revision(
         actor,
         parent_revision,
     )
+
+
+_ENTRY_CATEGORIES = ("memory", "statements-of-record")
+
+
+def _entry_file_path(agent_id: str, category: str, entry_name: str) -> str:
+    assert category in _ENTRY_CATEGORIES, f"unknown category {category}"
+    return os.path.join(agent_store_path(agent_id), category, f"{entry_name}.md")
+
+
+def _entry_revisions_path(agent_id: str, category: str) -> str:
+    assert category in _ENTRY_CATEGORIES, f"unknown category {category}"
+    return os.path.join(agent_store_path(agent_id), category, "revisions.jsonl")
+
+
+def _current_entry_revision(revisions_path: str, entry_name: str) -> int:
+    if not os.path.exists(revisions_path):
+        return 0
+    count = 0
+    with open(revisions_path) as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row["entry"] == entry_name:
+                count += 1
+    return count
+
+
+def _latest_entry_content_hash(revisions_path: str, entry_name: str):
+    if not os.path.exists(revisions_path):
+        return None
+    latest = None
+    with open(revisions_path) as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row["entry"] == entry_name:
+                latest = row
+    return latest["content_hash"] if latest else None
+
+
+def read_entry(agent_id: str, category: str, entry_name: str):
+    """Return (content, current_revision) for one named entry in memory/ or statements-of-record/."""
+    file_path = _entry_file_path(agent_id, category, entry_name)
+    revisions_path = _entry_revisions_path(agent_id, category)
+    if not os.path.exists(file_path):
+        return "", 0
+    with open(file_path) as f:
+        content = f.read()
+    return content, _current_entry_revision(revisions_path, entry_name)
+
+
+def propose_entry_revision(
+    agent_id: str,
+    category: str,
+    entry_name: str,
+    content: str,
+    actor: str,
+    parent_revision: int,
+) -> int:
+    """Write a new revision of one named entry.
+
+    Raises RevisionConflictError on stale parent_revision.
+    """
+    file_path = _entry_file_path(agent_id, category, entry_name)
+    revisions_path = _entry_revisions_path(agent_id, category)
+
+    current_revision = _current_entry_revision(revisions_path, entry_name)
+    if parent_revision != current_revision:
+        raise RevisionConflictError(
+            f"parent_revision {parent_revision} does not match current head "
+            f"{current_revision} for entry {entry_name}"
+        )
+    parent_hash = _latest_entry_content_hash(revisions_path, entry_name)
+
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w") as f:
+        f.write(content)
+
+    new_revision = current_revision + 1
+    entry_row = {
+        "entry": entry_name,
+        "revision": new_revision,
+        "parent_hash": parent_hash,
+        "content_hash": _content_hash(content),
+        "actor": actor,
+        "timestamp": _now_iso(),
+    }
+    with open(revisions_path, "a") as f:
+        f.write(json.dumps(entry_row) + "\n")
+    return new_revision

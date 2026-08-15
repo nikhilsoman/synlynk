@@ -159,3 +159,85 @@ def test_charter_revisions_jsonl_provenance_chain(project_dir, tmp_path, monkeyp
     assert lines[1]["revision"] == 2
     assert lines[1]["parent_hash"] == lines[0]["content_hash"]
     assert lines[1]["actor"] == "agent:dev-primary"
+
+
+def test_read_entry_missing_returns_empty(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    content, revision = agent_store.read_entry("dev-primary", "memory", "onboarding-notes")
+    assert content == ""
+    assert revision == 0
+
+
+def test_propose_entry_revision_writes_and_reads_back(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    new_revision = agent_store.propose_entry_revision(
+        "dev-primary", "memory", "onboarding-notes", "notes v1",
+        actor="agent:dev-primary", parent_revision=0,
+    )
+    assert new_revision == 1
+
+    content, revision = agent_store.read_entry("dev-primary", "memory", "onboarding-notes")
+    assert content == "notes v1"
+    assert revision == 1
+
+
+def test_entries_in_same_category_have_independent_revision_counters(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.propose_entry_revision(
+        "dev-primary", "memory", "entry-a", "a v1", actor="agent:dev-primary", parent_revision=0
+    )
+    agent_store.propose_entry_revision(
+        "dev-primary", "memory", "entry-b", "b v1", actor="agent:dev-primary", parent_revision=0
+    )
+    _, rev_a = agent_store.read_entry("dev-primary", "memory", "entry-a")
+    _, rev_b = agent_store.read_entry("dev-primary", "memory", "entry-b")
+    assert rev_a == 1
+    assert rev_b == 1
+
+
+def test_memory_and_sor_categories_share_one_revisions_file_each(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+    import json as _json
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.propose_entry_revision(
+        "dev-primary", "memory", "entry-a", "a v1", actor="agent:dev-primary", parent_revision=0
+    )
+    agent_store.propose_entry_revision(
+        "dev-primary", "memory", "entry-b", "b v1", actor="agent:dev-primary", parent_revision=0
+    )
+
+    revisions_path = os.path.join(agent_store.agent_store_path("dev-primary"), "memory", "revisions.jsonl")
+    lines = [_json.loads(line) for line in open(revisions_path) if line.strip()]
+    assert {line["entry"] for line in lines} == {"entry-a", "entry-b"}
+
+
+def test_statements_of_record_category(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.propose_entry_revision(
+        "dev-primary", "statements-of-record", "2026-08-15-decision", "decided X",
+        actor="human:nikhilsoman", parent_revision=0,
+    )
+    content, revision = agent_store.read_entry(
+        "dev-primary", "statements-of-record", "2026-08-15-decision"
+    )
+    assert content == "decided X"
+    assert revision == 1
