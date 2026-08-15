@@ -1027,6 +1027,47 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
     assert "#426" in captured.err
 
 
+def test_dispatch_agent_requires_gh_write_blocks_agy_when_tc7_fails(project_dir, monkeypatch, capsys):
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_run_tc7",
+        lambda: {"passed": False, "missing": ["command(gh pr merge)"], "error": ""},
+    )
+    with pytest.raises(SystemExit):
+        dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True)
+    out = capsys.readouterr().out
+    assert "TC-7" in out or "allow-rule" in out
+
+
+def test_dispatch_agent_requires_gh_write_allows_agy_when_tc7_passes(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_run_tc7",
+        lambda: {"passed": True, "missing": [], "error": ""},
+    )
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True,
+            "sentinel": None,
+            "reason": None,
+        },
+    )
+    result = dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True)
+    assert result is not None
+
+
 def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
