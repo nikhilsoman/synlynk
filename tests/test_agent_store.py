@@ -30,3 +30,61 @@ def test_get_workspace_id_never_overwrites_existing_value(project_dir):
         json.dump(config, f)
 
     assert get_workspace_id() == "pre-existing-id"
+
+
+def test_agent_store_path_under_workspace_home(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    workspace_id = agent_store.get_workspace_id()
+    path = agent_store.agent_store_path("dev-primary")
+    assert path == str(fake_home / ".synlynk" / "workspaces" / workspace_id / "agents" / "dev-primary")
+
+
+def test_register_and_resolve_agent(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent(
+        "dev-primary",
+        aliases=[
+            {"kind": "role_slug", "value": "dev"},
+            {"kind": "github_app_slug", "value": "synlynk-dev[bot]"},
+        ],
+    )
+
+    assert agent_store.resolve_agent_id("dev") == "dev-primary"
+    assert agent_store.resolve_agent_id("synlynk-dev[bot]") == "dev-primary"
+    assert agent_store.resolve_agent_id("unregistered-alias") is None
+
+
+def test_register_agent_rejects_duplicate_agent_id(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
+    try:
+        agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev2"}])
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_register_agent_rejects_duplicate_alias_across_agents(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
+    try:
+        agent_store.register_agent("dev-secondary", aliases=[{"kind": "role_slug", "value": "dev"}])
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
