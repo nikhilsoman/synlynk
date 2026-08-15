@@ -108,3 +108,88 @@ def resolve_agent_id(alias: str) -> str:
             if a["value"] == alias:
                 return agent["agent_id"]
     return None
+
+
+class RevisionConflictError(Exception):
+    """Raised when a proposed revision's parent_revision doesn't match the current head."""
+
+
+def _content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _read_versioned_file(file_path: str, revisions_path: str):
+    """Return (content, current_revision) for a single-file versioned artifact."""
+    if not os.path.exists(file_path):
+        return "", 0
+    with open(file_path) as f:
+        content = f.read()
+    revision = 0
+    if os.path.exists(revisions_path):
+        with open(revisions_path) as f:
+            revision = sum(1 for line in f if line.strip())
+    return content, revision
+
+
+def _write_versioned_file(
+    file_path: str,
+    revisions_path: str,
+    content: str,
+    actor: str,
+    parent_revision: int,
+) -> int:
+    """Write a new revision of a single-file versioned artifact.
+
+    Raises RevisionConflictError on stale parent_revision.
+    """
+    _, current_revision = _read_versioned_file(file_path, revisions_path)
+    if parent_revision != current_revision:
+        raise RevisionConflictError(
+            f"parent_revision {parent_revision} does not match current head {current_revision}"
+        )
+    parent_hash = None
+    if current_revision > 0:
+        with open(file_path) as f:
+            parent_hash = _content_hash(f.read())
+
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w") as f:
+        f.write(content)
+
+    new_revision = current_revision + 1
+    entry = {
+        "revision": new_revision,
+        "parent_hash": parent_hash,
+        "content_hash": _content_hash(content),
+        "actor": actor,
+        "timestamp": _now_iso(),
+    }
+    with open(revisions_path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return new_revision
+
+
+def read_charter(agent_id: str):
+    """Return (content, current_revision) for an agent's charter."""
+    base = agent_store_path(agent_id)
+    return _read_versioned_file(
+        os.path.join(base, "charter.md"),
+        os.path.join(base, "charter.revisions.jsonl"),
+    )
+
+
+def propose_charter_revision(
+    agent_id: str, content: str, actor: str, parent_revision: int
+) -> int:
+    """Write a new charter revision if parent_revision matches the current head.
+
+    No auto-approval logic is included; the gated mutability tier is out of scope.
+    """
+    base = agent_store_path(agent_id)
+    return _write_versioned_file(
+        os.path.join(base, "charter.md"),
+        os.path.join(base, "charter.revisions.jsonl"),
+        content,
+        actor,
+        parent_revision,
+    )

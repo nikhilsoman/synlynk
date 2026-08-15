@@ -88,3 +88,74 @@ def test_register_agent_rejects_duplicate_alias_across_agents(project_dir, tmp_p
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_read_charter_missing_returns_empty(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    content, revision = agent_store.read_charter("dev-primary")
+    assert content == ""
+    assert revision == 0
+
+
+def test_propose_charter_revision_writes_and_reads_back(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    new_revision = agent_store.propose_charter_revision(
+        "dev-primary", "# Charter v1", actor="human:nikhilsoman", parent_revision=0
+    )
+    assert new_revision == 1
+
+    content, revision = agent_store.read_charter("dev-primary")
+    assert content == "# Charter v1"
+    assert revision == 1
+
+
+def test_propose_charter_revision_stale_parent_raises_conflict(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.propose_charter_revision(
+        "dev-primary", "# Charter v1", actor="human:nikhilsoman", parent_revision=0
+    )
+    try:
+        agent_store.propose_charter_revision(
+            "dev-primary", "# Charter v2 (stale)", actor="human:nikhilsoman", parent_revision=0
+        )
+        assert False, "expected agent_store.RevisionConflictError"
+    except agent_store.RevisionConflictError:
+        pass
+
+
+def test_charter_revisions_jsonl_provenance_chain(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+    import json as _json
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.propose_charter_revision(
+        "dev-primary", "# Charter v1", actor="human:nikhilsoman", parent_revision=0
+    )
+    agent_store.propose_charter_revision(
+        "dev-primary", "# Charter v2", actor="agent:dev-primary", parent_revision=1
+    )
+
+    revisions_path = os.path.join(
+        agent_store.agent_store_path("dev-primary"), "charter.revisions.jsonl"
+    )
+    lines = [_json.loads(line) for line in open(revisions_path) if line.strip()]
+    assert len(lines) == 2
+    assert lines[0]["revision"] == 1
+    assert lines[0]["parent_hash"] is None
+    assert lines[1]["revision"] == 2
+    assert lines[1]["parent_hash"] == lines[0]["content_hash"]
+    assert lines[1]["actor"] == "agent:dev-primary"
