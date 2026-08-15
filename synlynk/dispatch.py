@@ -30,6 +30,13 @@ def _pkg(name: str, default=None):
     return getattr(package, name, default)
 
 
+def _run_tc7() -> dict:
+    """Load the Agy gh-write preflight lazily to avoid the doctor cycle."""
+    from synlynk.doctor import _run_tc7 as doctor_run_tc7
+
+    return doctor_run_tc7()
+
+
 def _print_pending_nudges() -> None:
     """Print any queued workspace-agent nudges when enabled by config."""
     load_config_fn = _pkg("load_config")
@@ -1966,6 +1973,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     f"(--requires-gh-write; '{agent}' cannot do this headless, see #426)"
                 )
                 agent = rerouted_to
+
+    if requires_gh_write and agent == "agy":
+        tc7_result = _run_tc7()
+        if not tc7_result["passed"]:
+            print(
+                "  ✗ TC-7 preflight failed: Agy is missing required gh-write allow-rules: "
+                f"{', '.join(tc7_result['missing'])}"
+            )
+            print(
+                "    Configure ~/.gemini/antigravity-cli/settings.json with these allowRules, "
+                "or dispatch to a different agent (Codex/Grok)."
+            )
+            raise SystemExit(1)
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
