@@ -948,15 +948,27 @@ def _render_task_receipt_instruction(task_sha256: Optional[str]) -> str:
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
                               cwd_hint: Optional[str] = None,
-                              task_sha256: Optional[str] = None) -> str:
+                              task_sha256: Optional[str] = None,
+                              *, requires_gh_write: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
+        gh_write_instruction = ""
+        if requires_gh_write:
+            gh_write_instruction = (
+                "## GitHub Write Instructions\n"
+                "For any PR review or issue/PR comment in this task, use the `gh` "
+                "CLI directly via the shell — e.g. `gh pr review <N> --approve "
+                "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
+                "comment <N> --body '...'`. Do not use MCP GitHub tools for these "
+                "writes; they have a confirmed failure history for this workflow.\n\n"
+            )
         return (
             f"{receipt_instruction}"
+            f"{gh_write_instruction}"
             f"## Task Criteria\n{criteria}\n"
             f"{file_section}\n"
             f"{verify_section}\n"
@@ -2220,6 +2232,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             verify_section,
             cwd_hint=worktree_path,
             task_sha256=task_sha256_for_receipt,
+            requires_gh_write=requires_gh_write,
         )
     except TypeError:
         prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)
