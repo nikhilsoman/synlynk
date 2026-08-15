@@ -464,21 +464,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     session_close_parser.add_argument("--summary", default=None, help="One-line closing summary")
 
-    agent_parser = subparsers.add_parser("agent", help="Manage and run autopilot agents")
-    agent_sub = agent_parser.add_subparsers(dest="agent_action")
-    agent_add_parser = agent_sub.add_parser("add", help="Retrofit an on-PATH agent into this project")
-    agent_add_parser.add_argument("name", help="Agent binary name on PATH")
-    agent_configure_parser = agent_sub.add_parser(
+    harness_parser = subparsers.add_parser("harness", help="Manage and run autopilot harnesses")
+    harness_sub = harness_parser.add_subparsers(dest="harness_action")
+    harness_add_parser = harness_sub.add_parser("add", help="Retrofit an on-PATH harness into this project")
+    harness_add_parser.add_argument("name", help="Harness binary name on PATH")
+    harness_configure_parser = harness_sub.add_parser(
         "configure", help="Interactively write .agents/<name>.json context profile"
     )
-    agent_configure_parser.add_argument("name", help="Agent name: claude, agy, codex, grok")
-    agent_run_parser = agent_sub.add_parser("run", help="Run a named agent once")
-    agent_run_parser.add_argument("name", help="Agent name (matches .agents/<name>.json)")
-    agent_run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+    harness_configure_parser.add_argument("name", help="Harness name: claude, agy, codex, grok")
+    harness_run_parser = harness_sub.add_parser("run", help="Run a named harness once")
+    harness_run_parser.add_argument("name", help="Harness name (matches .agents/<name>.json)")
+    harness_run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                                   help="Collect signals and print findings; no dispatch/issue/PR")
-    agent_run_parser.add_argument("--install-cron", action="store_true", dest="install_cron",
-                                  help="Install local crontab entry for this agent")
-    agent_sub.add_parser("list", help="List .agents/ configs and last run status")
+    harness_run_parser.add_argument("--install-cron", action="store_true", dest="install_cron",
+                                  help="Install local crontab entry for this harness")
+    harness_sub.add_parser("list", help="List .agents/ configs and last run status")
 
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
@@ -878,7 +878,7 @@ def build_parser() -> argparse.ArgumentParser:
     instr_ack_parser.add_argument("file", help="File to acknowledge drift for")
 
     parser._synlynk_help_parsers = {
-        "agent": agent_parser,
+        "harness": harness_parser,
         "configure": configure_parser,
         "config": config_parser,
         "daemon": daemon_parser,
@@ -1294,8 +1294,8 @@ def main() -> None:
             cmd_instructions_ack(args.file)
         else:
             help_parsers.get("instructions", parser).print_help()
-    elif args.command == "agent":
-        action = getattr(args, "agent_action", None)
+    elif args.command == "harness":
+        action = getattr(args, "harness_action", None)
         if action == "add":
             cmd_agent_add(args.name)
         elif action == "configure":
@@ -1309,7 +1309,7 @@ def main() -> None:
         elif action == "list":
             cmd_agent_list()
         else:
-            help_parsers.get("agent", parser).print_help()
+            help_parsers.get("harness", parser).print_help()
     elif args.command == "ops":
         from synlynk.platform_ops import cmd_ops_report
 
