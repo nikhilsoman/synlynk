@@ -1299,6 +1299,11 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
     monkeypatch.setattr(sl, "_run_tc4", lambda agent, db_conn: {"passed": True, "failed_verbs": []})
     monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {}})
     monkeypatch.setattr(sl, "_run_tc6", lambda agent: {"passed": True, "error": ""})
+    monkeypatch.setattr(
+        doctor_mod,
+        "_run_tc7",
+        lambda *a, **kw: {"passed": True, "missing": [], "error": ""},
+    )
     monkeypatch.setattr(sl, "load_config", lambda: {"roles": {}})
 
     exit_code = sl.cmd_doctor()
