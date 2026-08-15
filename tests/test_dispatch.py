@@ -744,6 +744,75 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
         assert job["status"] == "running"
 
 
+def test_check_job_stall_extends_timeout_when_gh_write_verified_true(project_dir, monkeypatch, tmp_path):
+    import os
+    import time as _time
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-abc123", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": 999999,
+        "requires_gh_write": True, "gh_write_target": "issue:701",
+    }
+    monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda target, expect, **kw: True)
+    stalled = dispatch_mod._check_job_stall(job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+    assert stalled is False
+    assert job["status"] == "running"
+
+
+def test_check_job_stall_kills_when_gh_write_verified_false(project_dir, monkeypatch, tmp_path):
+    import os
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-abc123", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": None,
+        "requires_gh_write": True, "gh_write_target": "issue:701",
+    }
+    monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda target, expect, **kw: False)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    stalled = dispatch_mod._check_job_stall(job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+    assert stalled is True
+    assert job["status"] == "failed"
+    assert job.get("gh_write_verified") == "false"
+
+
+def test_check_job_stall_falls_through_to_git_state_when_gh_write_unknown(project_dir, monkeypatch, tmp_path):
+    import os
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-abc123", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": None,
+        "requires_gh_write": True, "gh_write_target": "issue:701",
+        "worktree_path": "/tmp/fake-wt", "worktree_branch": "dispatch/grok/job-abc123",
+        "started_at": "2026-08-15T00:00:00",
+    }
+    monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda target, expect, **kw: None)
+    monkeypatch.setattr(
+        sl, "_inspect_worktree_git_state",
+        lambda *a, **kw: {"has_activity": True, "commits_ahead": 1, "dirty": False},
+    )
+    stalled = dispatch_mod._check_job_stall(job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+    assert stalled is False
+
+
 def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_worktree_repo, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod

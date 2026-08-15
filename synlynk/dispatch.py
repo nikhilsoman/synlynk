@@ -19,6 +19,7 @@ from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.github_app_auth import get_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
+from synlynk.gh_verify import gh_write_verified
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
 
 
@@ -112,6 +113,27 @@ def _ensure_daemon_job_session_column(conn) -> None:
             )
         except Exception:
             pass
+
+
+def _ensure_daemon_job_gh_write_columns(conn) -> None:
+    """Add Task 0 gh-write columns for legacy/unit-test daemon schemas."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    definitions = {
+        "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
+        "gh_write_target": "TEXT",
+        "gh_write_verified": "TEXT",
+    }
+    for name, definition in definitions.items():
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
+            except Exception:
+                pass
 
 
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
@@ -532,6 +554,37 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     stale_minutes = (time.time() - os.path.getmtime(log_file)) / 60
     if stale_minutes < timeout:
         return False
+
+    if job.get("requires_gh_write"):
+        target = job.get("gh_write_target")
+        verified = gh_write_verified(target, expect="closed")
+        job["gh_write_verified"] = (
+            "true" if verified is True else ("false" if verified is False else "unknown")
+        )
+        if verified is True:
+            print(
+                f"  Stall check extended for job {job.get('id')}: gh-write target {target} "
+                "verified delivered (ground truth)."
+            )
+            return False
+        if verified is False:
+            pid = job.get("pid")
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            job["status"] = "failed"
+            job["exit_code"] = -1
+            job["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+            write_alert(
+                "CRITICAL", "STALL_GH_WRITE_UNVERIFIED",
+                f"Job {job.get('id')} on agent '{job.get('agent', '')}' stalled and its "
+                f"declared gh-write target {target} was confirmed NOT delivered. Process killed.",
+                sentinel_path,
+            )
+            return True
 
     inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
     git_state = (
@@ -2386,6 +2439,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             # ensure before INSERT so dispatch never hard-fails on schema lag.
             _ensure_daemon_job_context_columns(dconn)
             _ensure_daemon_job_session_column(dconn)
+            _ensure_daemon_job_gh_write_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()

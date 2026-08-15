@@ -15,6 +15,7 @@ from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
+from synlynk.gh_verify import gh_write_verified
 
 
 _BOLD = "[1m"
@@ -2046,6 +2047,23 @@ def _gtv_status_for_daemon_exit(
     return ("failed", exit_code, None, None)
 
 
+def _apply_gh_write_verification(
+    conn, job_id: str, requires_gh_write, gh_write_target: Optional[str], status: str
+) -> tuple:
+    """Consult GitHub state for a --requires-gh-write job and return status/outcome."""
+    if not requires_gh_write:
+        return status, None
+    verified = gh_write_verified(gh_write_target, expect="closed")
+    verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
+    if verified is False and status in ("done", "failed_unverified"):
+        status = "succeeded_gh_write_failed"
+    conn.execute(
+        "UPDATE daemon_jobs SET gh_write_verified=? WHERE job_id=?",
+        (verified_str, job_id),
+    )
+    return status, verified_str
+
+
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db.
 
@@ -2054,12 +2072,14 @@ def _reconcile_daemon_jobs() -> None:
     """
     conn = _pkg("_get_db")()
     rows = conn.execute(
-        "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, dispatch_context "
+        "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
+        "dispatch_context, requires_gh_write, gh_write_target "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        for job_id, agent, story_id, task, pid, started_at, completed_at, log_path, dispatch_context in rows:
+        for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
+             dispatch_context, requires_gh_write, gh_write_target) in rows:
             exited = False
             raw_exit_status = None
             if pid is None:
@@ -2104,6 +2124,9 @@ def _reconcile_daemon_jobs() -> None:
 
                 if preferred is not None:
                     status, exit_code = preferred
+                    status, gh_write_verified_str = _apply_gh_write_verification(
+                        conn, job_id, requires_gh_write, gh_write_target, status
+                    )
                     conn.execute(
                         "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
                         "WHERE job_id=? AND status='running'",
@@ -2136,6 +2159,7 @@ def _reconcile_daemon_jobs() -> None:
                             "status": status,
                             "cost_recorded": cost_recorded,
                             "dispatch_context": dispatch_context,
+                            "gh_write_verified": gh_write_verified_str,
                         },
                         emitted_by="_reconcile_daemon_jobs",
                     )
@@ -2154,6 +2178,9 @@ def _reconcile_daemon_jobs() -> None:
 
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                     exit_code, git_state
+                )
+                status, gh_write_verified_str = _apply_gh_write_verification(
+                    conn, job_id, requires_gh_write, gh_write_target, status
                 )
 
                 files_touched = []
@@ -2242,6 +2269,7 @@ def _reconcile_daemon_jobs() -> None:
                         "status": status,
                         "cost_recorded": cost_recorded,
                         "dispatch_context": dispatch_context,
+                        "gh_write_verified": gh_write_verified_str,
                     },
                     emitted_by="_reconcile_daemon_jobs",
                 )

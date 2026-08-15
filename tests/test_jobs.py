@@ -1489,3 +1489,71 @@ def test_reconcile_daemon_jobs_emits_job_terminal_on_preferred_summary_path(proj
     payload = matching[0]["payload"]
     assert payload["status"] == "done"
     assert payload["cost_recorded"] is True
+
+
+def test_reconcile_daemon_jobs_sets_succeeded_gh_write_failed_when_verified_false(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target) "
+        "VALUES ('job-ghw1', 'grok', 'story-1', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL, 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: False)
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    row = conn.execute("SELECT status, gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw1'").fetchone()
+    conn.close()
+    assert row[0] == "succeeded_gh_write_failed"
+    assert row[1] == "false"
+
+
+def test_reconcile_daemon_jobs_leaves_status_unchanged_when_gh_write_verified_true(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target) "
+        "VALUES ('job-ghw2', 'grok', 'story-1', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL, 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    row = conn.execute("SELECT status, gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw2'").fetchone()
+    conn.close()
+    assert row[0] != "succeeded_gh_write_failed"
+    assert row[1] == "true"
+
+
+def test_reconcile_daemon_jobs_gh_write_verified_null_when_not_requires_gh_write(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target) "
+        "VALUES ('job-ghw3', 'codex', 'story-1', 'refactor thing', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL, 0, NULL)"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    row = conn.execute("SELECT gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw3'").fetchone()
+    conn.close()
+    assert row[0] is None
