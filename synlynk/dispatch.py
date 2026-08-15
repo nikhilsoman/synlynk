@@ -2318,6 +2318,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
     proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id)
+    gh_write_target_value = None
+    if requires_gh_write and issue is not None:
+        gh_write_target_value = f"issue:{issue}"
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
@@ -2357,6 +2360,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
+        "gh_write_target": gh_write_target_value,
         "task_type": task_type or "",
     }
 
@@ -2413,8 +2417,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
+                    "requires_gh_write, gh_write_target) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2431,6 +2436,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_mode,
                         context_bytes,
                         session_id,
+                        1 if requires_gh_write else 0,
+                        gh_write_target_value,
                     ),
                 )
             dconn.commit()

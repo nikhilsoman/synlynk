@@ -946,6 +946,42 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
     assert job["agent"] == "grok"
 
 
+def test_daemon_jobs_migration_adds_requires_gh_write_and_gh_write_target(project_dir):
+    from synlynk import _get_db
+    conn = _get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "requires_gh_write" in cols
+    assert "gh_write_target" in cols
+    conn.close()
+
+
+def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "run",
+        lambda *a, **kw: dispatch_mod.subprocess.CompletedProcess(
+            a[0], 0, stdout='{"title":"close stale issues","body":"","labels":[]}', stderr=""
+        ),
+    )
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    sl.dispatch_agent("codex", "close stale issues", force_agent=True, requires_gh_write=True, issue=701)
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT requires_gh_write, gh_write_target FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == 1
+    assert row[1] == "issue:701"
+
+
 def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod

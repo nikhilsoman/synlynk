@@ -334,6 +334,21 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError:
             pass
+    if "requires_gh_write" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN requires_gh_write INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+    if "gh_write_target" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_target TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "gh_write_verified" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_verified TEXT")
+        except sqlite3.OperationalError:
+            pass
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     if "session_id" not in cost_cols:
         try:
