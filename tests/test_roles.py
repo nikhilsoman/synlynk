@@ -234,10 +234,43 @@ def test_agent_add_cli_route(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "cmd_agent_add", lambda name: calls.append(name))
 
     old_argv = sys.argv
-    sys.argv = ["synlynk", "agent", "add", "codex"]
+    sys.argv = ["synlynk", "harness", "add", "codex"]
     try:
         synlynk.main()
     finally:
         sys.argv = old_argv
 
     assert calls == ["codex"]
+
+
+def test_agent_run_cli_route_parses_dry_run(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        synlynk,
+        "cmd_agent_run",
+        lambda name, dry_run=False, install_cron=False: calls.append(
+            (name, dry_run, install_cron)
+        ),
+    )
+
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "harness", "run", "claude", "--dry-run"]
+    try:
+        synlynk.main()
+    finally:
+        sys.argv = old_argv
+
+    assert calls == [("claude", True, False)]
+
+
+def test_agent_verb_no_longer_recognized(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    old_argv = sys.argv
+    sys.argv = ["synlynk", "agent", "add", "codex"]
+    try:
+        with pytest.raises(SystemExit):
+            synlynk.main()
+    finally:
+        sys.argv = old_argv
