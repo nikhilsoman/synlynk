@@ -18,9 +18,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `join` (primary) — open
 - `migrate` (secondary) — sustain
 - `configure agent` (secondary) — open
-- `agent add` (secondary) — open
-- `agent configure` (secondary) — open
-- `agent list` (secondary) — open
+- `harness add` (secondary) — open
+- `harness configure` (secondary) — open
+- `harness list` (secondary) — open
 - `config set` (secondary) — open
 - `config nudges` (secondary) — open
 
@@ -95,7 +95,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `events tail` — sustain
 - `repair` — sustain
 - `exit` — sustain
-- `agent run` — execute
+- `harness run` — execute
 - `instructions status` — sustain
 - `instructions diff` — sustain
 - `instructions update` — sustain
