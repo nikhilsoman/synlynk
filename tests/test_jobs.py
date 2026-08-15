@@ -334,6 +334,27 @@ def test_cmd_jobs_summary_missing(tmp_path, monkeypatch, capsys):
     assert "No summary for nonexistent -- job may still be running or predates this feature" in out
 
 
+def test_cmd_jobs_shows_gh_write_column_when_present(project_dir, capsys):
+    import synlynk.jobs as jobs_mod
+    from synlynk import _get_db
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, enqueued_at, "
+        "exit_code, requires_gh_write, gh_write_verified) "
+        "VALUES ('job-ghw9', 'grok', 'story-1', 'close issues', 'succeeded_gh_write_failed', "
+        "'2026-08-15T00:00:00', 0, 1, 'false')"
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+    assert "GH-WRITE" in out
+    assert "job-ghw9" in out
+    assert "✗" in out
+
+
 def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     import synlynk
@@ -1210,6 +1231,57 @@ def test_gtv_status_no_exit_no_git_is_timed_out():
     assert exit_code == -9
 
 
+def test_reconcile_daemon_jobs_and_reconcile_jobs_agree_on_terminal_status(project_dir, monkeypatch, tmp_path):
+    """Parity regression test for #331/#579: both reconciliation mechanisms
+    must reach the same terminal status for equivalent job evidence (real
+    git activity, non-zero exit) - this is the scenario where they
+    historically diverged (daemon path GTV'd, legacy path didn't).
+    """
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    git_state = {"has_activity": True, "commits_ahead": 2, "dirty": False, "changed_files": ["a.py"]}
+    monkeypatch.setattr(jobs_mod, "_inspect_worktree_git_state", lambda *a, **kw: git_state)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: "/tmp/fake-wt")
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path) VALUES ('job-parity1', 'codex', 'story-1', 'implement thing', "
+        "'running', 999999, '2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL)"
+    )
+    conn.commit()
+    conn.close()
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    daemon_status = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id='job-parity1'"
+    ).fetchone()[0]
+    conn.close()
+
+    from synlynk import dispatch as dispatch_mod
+    legacy_job = {
+        "id": "job-parity1-legacy", "status": "running", "agent": "codex",
+        "log_file": str(tmp_path / "job.log"), "pid": None,
+        "worktree_path": "/tmp/fake-wt", "worktree_branch": "dispatch/codex/job-parity1-legacy",
+        "started_at": "2026-08-15T00:00:00",
+    }
+    (tmp_path / "job.log").write_text("output")
+    import os as _os
+    old_mtime = __import__("time").time() - 3600
+    _os.utime(tmp_path / "job.log", (old_mtime, old_mtime))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: git_state)
+    stalled = dispatch_mod._check_job_stall(legacy_job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+
+    # Both mechanisms see real git activity (has_activity=True) - neither should
+    # discard the job as a bare failure/unknown; the daemon path GTVs it into a
+    # non-"unknown", non-bare-"failed" status, and the legacy path extends the
+    # timeout rather than killing (returns False = not stalled).
+    assert daemon_status not in ("unknown", "failed")
+    assert stalled is False
+
+
 def test_daemon_job_worktree_path_from_log(tmp_path):
     from synlynk.jobs import _daemon_job_worktree_path
 
@@ -1489,3 +1561,71 @@ def test_reconcile_daemon_jobs_emits_job_terminal_on_preferred_summary_path(proj
     payload = matching[0]["payload"]
     assert payload["status"] == "done"
     assert payload["cost_recorded"] is True
+
+
+def test_reconcile_daemon_jobs_sets_succeeded_gh_write_failed_when_verified_false(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target) "
+        "VALUES ('job-ghw1', 'grok', 'story-1', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL, 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: False)
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    row = conn.execute("SELECT status, gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw1'").fetchone()
+    conn.close()
+    assert row[0] == "succeeded_gh_write_failed"
+    assert row[1] == "false"
+
+
+def test_reconcile_daemon_jobs_leaves_status_unchanged_when_gh_write_verified_true(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target) "
+        "VALUES ('job-ghw2', 'grok', 'story-1', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL, 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    row = conn.execute("SELECT status, gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw2'").fetchone()
+    conn.close()
+    assert row[0] != "succeeded_gh_write_failed"
+    assert row[1] == "true"
+
+
+def test_reconcile_daemon_jobs_gh_write_verified_null_when_not_requires_gh_write(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target) "
+        "VALUES ('job-ghw3', 'codex', 'story-1', 'refactor thing', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', NULL, 0, NULL)"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    row = conn.execute("SELECT gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw3'").fetchone()
+    conn.close()
+    assert row[0] is None

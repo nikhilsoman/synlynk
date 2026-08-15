@@ -19,6 +19,7 @@ from synlynk._constants import AGENT_CAPABILITY_BASELINES
 from synlynk.github_app_auth import get_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
+from synlynk.gh_verify import gh_write_verified
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
 
 
@@ -27,6 +28,13 @@ def _pkg(name: str, default=None):
     if package is None:
         return default
     return getattr(package, name, default)
+
+
+def _run_tc7() -> dict:
+    """Load the Agy gh-write preflight lazily to avoid the doctor cycle."""
+    from synlynk.doctor import _run_tc7 as doctor_run_tc7
+
+    return doctor_run_tc7()
 
 
 def _print_pending_nudges() -> None:
@@ -112,6 +120,27 @@ def _ensure_daemon_job_session_column(conn) -> None:
             )
         except Exception:
             pass
+
+
+def _ensure_daemon_job_gh_write_columns(conn) -> None:
+    """Add Task 0 gh-write columns for legacy/unit-test daemon schemas."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    definitions = {
+        "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
+        "gh_write_target": "TEXT",
+        "gh_write_verified": "TEXT",
+    }
+    for name, definition in definitions.items():
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
+            except Exception:
+                pass
 
 
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
@@ -533,6 +562,37 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if stale_minutes < timeout:
         return False
 
+    if job.get("requires_gh_write"):
+        target = job.get("gh_write_target")
+        verified = gh_write_verified(target, expect="closed")
+        job["gh_write_verified"] = (
+            "true" if verified is True else ("false" if verified is False else "unknown")
+        )
+        if verified is True:
+            print(
+                f"  Stall check extended for job {job.get('id')}: gh-write target {target} "
+                "verified delivered (ground truth)."
+            )
+            return False
+        if verified is False:
+            pid = job.get("pid")
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            job["status"] = "failed"
+            job["exit_code"] = -1
+            job["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+            write_alert(
+                "CRITICAL", "STALL_GH_WRITE_UNVERIFIED",
+                f"Job {job.get('id')} on agent '{job.get('agent', '')}' stalled and its "
+                f"declared gh-write target {target} was confirmed NOT delivered. Process killed.",
+                sentinel_path,
+            )
+            return True
+
     inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
     git_state = (
         inspect_worktree_git_state(
@@ -948,15 +1008,27 @@ def _render_task_receipt_instruction(task_sha256: Optional[str]) -> str:
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
                               cwd_hint: Optional[str] = None,
-                              task_sha256: Optional[str] = None) -> str:
+                              task_sha256: Optional[str] = None,
+                              *, requires_gh_write: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
+        gh_write_instruction = ""
+        if requires_gh_write:
+            gh_write_instruction = (
+                "## GitHub Write Instructions\n"
+                "For any PR review or issue/PR comment in this task, use the `gh` "
+                "CLI directly via the shell — e.g. `gh pr review <N> --approve "
+                "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
+                "comment <N> --body '...'`. Do not use MCP GitHub tools for these "
+                "writes; they have a confirmed failure history for this workflow.\n\n"
+            )
         return (
             f"{receipt_instruction}"
+            f"{gh_write_instruction}"
             f"## Task Criteria\n{criteria}\n"
             f"{file_section}\n"
             f"{verify_section}\n"
@@ -1914,6 +1986,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 )
                 agent = rerouted_to
 
+    if requires_gh_write and agent == "agy":
+        tc7_result = _run_tc7()
+        if not tc7_result["passed"]:
+            print(
+                "  ✗ TC-7 preflight failed: Agy is missing required gh-write allow-rules: "
+                f"{', '.join(tc7_result['missing'])}"
+            )
+            print(
+                "    Configure ~/.gemini/antigravity-cli/settings.json with these allowRules, "
+                "or dispatch to a different agent (Codex/Grok)."
+            )
+            raise SystemExit(1)
+
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
 
@@ -2220,6 +2305,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             verify_section,
             cwd_hint=worktree_path,
             task_sha256=task_sha256_for_receipt,
+            requires_gh_write=requires_gh_write,
         )
     except TypeError:
         prompt = format_prompt(agent, context_text, story_id or "", task, file_section, verify_section)
@@ -2318,6 +2404,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
     proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id)
+    gh_write_target_value = None
+    if requires_gh_write and issue is not None:
+        gh_write_target_value = f"issue:{issue}"
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
@@ -2357,6 +2446,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
+        "gh_write_target": gh_write_target_value,
         "task_type": task_type or "",
     }
 
@@ -2382,6 +2472,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             # ensure before INSERT so dispatch never hard-fails on schema lag.
             _ensure_daemon_job_context_columns(dconn)
             _ensure_daemon_job_session_column(dconn)
+            _ensure_daemon_job_gh_write_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -2413,8 +2504,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
+                    "requires_gh_write, gh_write_target) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2431,6 +2523,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_mode,
                         context_bytes,
                         session_id,
+                        1 if requires_gh_write else 0,
+                        gh_write_target_value,
                     ),
                 )
             dconn.commit()

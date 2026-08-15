@@ -1,4 +1,4 @@
-"""synlynk doctor: installation health checks and TC-1..TC-6 compliance suite."""
+"""synlynk doctor: installation health checks and TC-1..TC-7 compliance suite."""
 
 import json
 import difflib
@@ -343,6 +343,45 @@ def _confirm_fix(prompt: str, args=None) -> bool:
     return response in {"y", "yes"}
 
 
+_TC7_REQUIRED_ALLOW_RULES = [
+    "command(gh pr review)",
+    "command(gh pr comment)",
+    "command(gh pr merge)",
+]
+
+
+def _run_tc7(settings_path: str = None) -> dict:
+    """TC-7: Agy (Gemini antigravity-cli) gh-write allow-rules preflight.
+
+    Routing a --requires-gh-write task to Agy without these scoped allow-rules
+    already present in its local settings produces a silent no-op or an
+    interactive permission prompt Agy cannot answer headless (#426). This
+    check must run BEFORE routing, not after -- the failure mode it prevents
+    is discovering the gap only once the dispatched job has already burned
+    its quota.
+    """
+    if settings_path is None:
+        settings_path = os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
+    if not os.path.exists(settings_path):
+        return {
+            "passed": False,
+            "missing": list(_TC7_REQUIRED_ALLOW_RULES),
+            "error": "settings file not found",
+        }
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "passed": False,
+            "missing": list(_TC7_REQUIRED_ALLOW_RULES),
+            "error": str(exc),
+        }
+    present = set(settings.get("allowRules", []))
+    missing = [rule for rule in _TC7_REQUIRED_ALLOW_RULES if rule not in present]
+    return {"passed": not missing, "missing": missing, "error": ""}
+
+
 def _apply_fix_plan(plan: FixPlan, operator: str) -> None:
     os.makedirs(os.path.dirname(plan.target_file), exist_ok=True)
     with open(plan.target_file, "w") as fh:
@@ -537,12 +576,17 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 if agent in CORE_FLEET
                 else {"passed": True, "skipped": "not a dispatch harness"}
             )
+            tc7 = (
+                _run_tc7()
+                if agent == "agy"
+                else {"passed": True, "skipped": "not Agy"}
+            )
 
             # TC-5 is warn-only for exit code; still surfaces as ⚠ below.
             hard_tcs_passed = (
                 tc0["passed"] and tc1["passed"] and tc2["passed"]
                 and tc3["passed"] and tc4["passed"]
-                and tc6["passed"]
+                and tc6["passed"] and tc7["passed"]
             )
             agent_missing = [agent] if agent in missing_core_instructions else []
             # Nested DBs already counted once above; avoid re-flagging per agent.
@@ -608,6 +652,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             tc3_status = "✓" if tc3["passed"] else f"✗ unreachable={tc3['unreachable']}"
             tc4_status = "✓" if tc4["passed"] else f"✗ failed={tc4['failed_verbs']}"
             tc6_status = "✓" if tc6["passed"] else f"✗ {tc6.get('error') or 'invalid or missing credentials'}"
+            tc7_status = "✓" if tc7["passed"] else "✗"
             print(f"    TC-0 schema:  {tc0_status}")
             print(f"    TC-1 stdout:  {tc1_status}")
             print(f"    TC-2 flags:   {tc2_status}")
@@ -615,6 +660,11 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             print(f"    TC-4 verbs:   {tc4_status}")
             if agent in CORE_FLEET:
                 print(f"    TC-6 gh-auth: {tc6_status}")
+            if agent == "agy":
+                print(f"    TC-7 agy-gh-write-preflight: {tc7_status}")
+                if not tc7["passed"]:
+                    for rule in tc7["missing"]:
+                        print(f"      missing allow-rule: {rule}")
             if tc5["passed"]:
                 print("    TC-5 sops:    ✓")
             else:

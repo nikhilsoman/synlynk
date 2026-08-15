@@ -109,6 +109,41 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
 
 
+def test_run_tc7_passes_when_all_gh_write_allow_rules_present(tmp_path):
+    from synlynk.doctor import _run_tc7
+
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(json.dumps({
+        "allowRules": [
+            "command(gh pr review)",
+            "command(gh pr comment)",
+            "command(gh pr merge)",
+        ]
+    }))
+    result = _run_tc7(settings_path=str(settings_path))
+    assert result["passed"] is True
+    assert result["missing"] == []
+
+
+def test_run_tc7_reports_missing_allow_rules(tmp_path):
+    from synlynk.doctor import _run_tc7
+
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(json.dumps({"allowRules": ["command(gh pr review)"]}))
+    result = _run_tc7(settings_path=str(settings_path))
+    assert result["passed"] is False
+    assert "command(gh pr comment)" in result["missing"]
+    assert "command(gh pr merge)" in result["missing"]
+
+
+def test_run_tc7_missing_settings_file_reports_all_rules_missing(tmp_path):
+    from synlynk.doctor import _run_tc7
+
+    result = _run_tc7(settings_path=str(tmp_path / "does-not-exist.json"))
+    assert result["passed"] is False
+    assert len(result["missing"]) == 3
+
+
 def test_run_tc4_skips_flag_only_command_templates(monkeypatch):
     """dispatch.model/dispatch.tools store a bare flag ("--model {model}"), not a
     full invocation. TC-4 must not try to exec the flag itself as a binary."""

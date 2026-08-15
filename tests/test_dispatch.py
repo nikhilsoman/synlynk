@@ -143,6 +143,29 @@ def test_format_prompt_for_agent_prepends_receipt_instruction_for_all_agents():
         assert "do the thing" in prompt
 
 
+def test_format_prompt_for_agent_adds_codex_gh_write_guardrail():
+    import synlynk.dispatch as dispatch_mod
+
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "codex", "context", "story-1", "review the pull request", "", "",
+        requires_gh_write=True,
+    )
+
+    assert "gh pr review" in prompt
+    assert "add_review_to_pr" not in prompt
+    assert "add_comment_to_issue" not in prompt
+
+
+def test_format_prompt_for_agent_omits_codex_gh_write_guardrail_by_default():
+    import synlynk.dispatch as dispatch_mod
+
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "codex", "context", "story-1", "review the pull request", "", "",
+    )
+
+    assert "gh pr review" not in prompt
+
+
 def test_dispatch_agent_writes_receipt_instruction_to_prompt_file(tmp_path, monkeypatch):
     import hashlib
     import synlynk as sl
@@ -744,6 +767,75 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
         assert job["status"] == "running"
 
 
+def test_check_job_stall_extends_timeout_when_gh_write_verified_true(project_dir, monkeypatch, tmp_path):
+    import os
+    import time as _time
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-abc123", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": 999999,
+        "requires_gh_write": True, "gh_write_target": "issue:701",
+    }
+    monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda target, expect, **kw: True)
+    stalled = dispatch_mod._check_job_stall(job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+    assert stalled is False
+    assert job["status"] == "running"
+
+
+def test_check_job_stall_kills_when_gh_write_verified_false(project_dir, monkeypatch, tmp_path):
+    import os
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-abc123", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": None,
+        "requires_gh_write": True, "gh_write_target": "issue:701",
+    }
+    monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda target, expect, **kw: False)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
+    stalled = dispatch_mod._check_job_stall(job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+    assert stalled is True
+    assert job["status"] == "failed"
+    assert job.get("gh_write_verified") == "false"
+
+
+def test_check_job_stall_falls_through_to_git_state_when_gh_write_unknown(project_dir, monkeypatch, tmp_path):
+    import os
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-abc123", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": None,
+        "requires_gh_write": True, "gh_write_target": "issue:701",
+        "worktree_path": "/tmp/fake-wt", "worktree_branch": "dispatch/grok/job-abc123",
+        "started_at": "2026-08-15T00:00:00",
+    }
+    monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda target, expect, **kw: None)
+    monkeypatch.setattr(
+        sl, "_inspect_worktree_git_state",
+        lambda *a, **kw: {"has_activity": True, "commits_ahead": 1, "dirty": False},
+    )
+    stalled = dispatch_mod._check_job_stall(job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md"))
+    assert stalled is False
+
+
 def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_worktree_repo, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
@@ -946,6 +1038,42 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
     assert job["agent"] == "grok"
 
 
+def test_daemon_jobs_migration_adds_requires_gh_write_and_gh_write_target(project_dir):
+    from synlynk import _get_db
+    conn = _get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "requires_gh_write" in cols
+    assert "gh_write_target" in cols
+    conn.close()
+
+
+def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "run",
+        lambda *a, **kw: dispatch_mod.subprocess.CompletedProcess(
+            a[0], 0, stdout='{"title":"close stale issues","body":"","labels":[]}', stderr=""
+        ),
+    )
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    sl.dispatch_agent("codex", "close stale issues", force_agent=True, requires_gh_write=True, issue=701)
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT requires_gh_write, gh_write_target FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == 1
+    assert row[1] == "issue:701"
+
+
 def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
@@ -989,6 +1117,47 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
     captured = capsys.readouterr()
     assert "codex" in captured.err
     assert "#426" in captured.err
+
+
+def test_dispatch_agent_requires_gh_write_blocks_agy_when_tc7_fails(project_dir, monkeypatch, capsys):
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_run_tc7",
+        lambda: {"passed": False, "missing": ["command(gh pr merge)"], "error": ""},
+    )
+    with pytest.raises(SystemExit):
+        dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True)
+    out = capsys.readouterr().out
+    assert "TC-7" in out or "allow-rule" in out
+
+
+def test_dispatch_agent_requires_gh_write_allows_agy_when_tc7_passes(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_run_tc7",
+        lambda: {"passed": True, "missing": [], "error": ""},
+    )
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {
+            "passed": True,
+            "sentinel": None,
+            "reason": None,
+        },
+    )
+    result = dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True)
+    assert result is not None
 
 
 def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_dir, monkeypatch):
