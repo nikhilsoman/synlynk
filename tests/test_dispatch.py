@@ -143,6 +143,29 @@ def test_format_prompt_for_agent_prepends_receipt_instruction_for_all_agents():
         assert "do the thing" in prompt
 
 
+def test_format_prompt_for_agent_adds_codex_gh_write_guardrail():
+    import synlynk.dispatch as dispatch_mod
+
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "codex", "context", "story-1", "review the pull request", "", "",
+        requires_gh_write=True,
+    )
+
+    assert "gh pr review" in prompt
+    assert "add_review_to_pr" not in prompt
+    assert "add_comment_to_issue" not in prompt
+
+
+def test_format_prompt_for_agent_omits_codex_gh_write_guardrail_by_default():
+    import synlynk.dispatch as dispatch_mod
+
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "codex", "context", "story-1", "review the pull request", "", "",
+    )
+
+    assert "gh pr review" not in prompt
+
+
 def test_dispatch_agent_writes_receipt_instruction_to_prompt_file(tmp_path, monkeypatch):
     import hashlib
     import synlynk as sl
