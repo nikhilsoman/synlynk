@@ -334,6 +334,27 @@ def test_cmd_jobs_summary_missing(tmp_path, monkeypatch, capsys):
     assert "No summary for nonexistent -- job may still be running or predates this feature" in out
 
 
+def test_cmd_jobs_shows_gh_write_column_when_present(project_dir, capsys):
+    import synlynk.jobs as jobs_mod
+    from synlynk import _get_db
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, enqueued_at, "
+        "exit_code, requires_gh_write, gh_write_verified) "
+        "VALUES ('job-ghw9', 'grok', 'story-1', 'close issues', 'succeeded_gh_write_failed', "
+        "'2026-08-15T00:00:00', 0, 1, 'false')"
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+    assert "GH-WRITE" in out
+    assert "job-ghw9" in out
+    assert "✗" in out
+
+
 def test_reconcile_jobs_writes_and_prints_summary(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     import synlynk

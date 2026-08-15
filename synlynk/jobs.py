@@ -2505,7 +2505,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
         try:
             rows = conn.execute(
                 "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
-                "context_mode "
+                "context_mode, requires_gh_write, gh_write_verified "
                 "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
             ).fetchall()
         except Exception:
@@ -2534,25 +2534,38 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
 
         header = (
             f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  "
-            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}"
+            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}  GH-WRITE"
         )
         print(f"{_BOLD}{header}{_RESET}")
         print("  " + "─" * 72)
         for row in visible:
-            # Support both 6-col (legacy SELECT) and extended rows with context_mode.
-            if len(row) >= 7:
+            # Support legacy 6-col rows, extended context rows, and gh-write rows.
+            if len(row) >= 9:
+                (job_id, agent, story_id, status, enqueued_at, exit_code,
+                 ctx_mode, requires_gh_write, gh_write_verified_val) = row[:9]
+            elif len(row) >= 7:
                 job_id, agent, story_id, status, enqueued_at, exit_code, ctx_mode = row[:7]
+                requires_gh_write, gh_write_verified_val = None, None
             else:
                 job_id, agent, story_id, status, enqueued_at, exit_code = row[:6]
                 ctx_mode = None
+                requires_gh_write, gh_write_verified_val = None, None
             sid = (story_id or "—")[:12]
             age = _parse_age(enqueued_at)
             color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
             exit_str = str(exit_code) if exit_code is not None else "—"
             ctx = (ctx_mode or "—")[:6]
+            if not requires_gh_write:
+                gh_write_display = "—"
+            elif gh_write_verified_val == "true":
+                gh_write_display = "✓"
+            elif gh_write_verified_val == "false":
+                gh_write_display = "✗"
+            else:
+                gh_write_display = "?"
             print(
                 f"  {job_id:14}  {agent:8}  {sid:12}  "
-                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}"
+                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  {gh_write_display}"
             )
 
     if watch:
