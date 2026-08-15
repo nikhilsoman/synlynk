@@ -2,6 +2,7 @@ import os
 import json
 import sys
 import subprocess
+import shutil
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -65,6 +66,10 @@ def project_dir(tmp_path, monkeypatch):
     (tmp_path / "project-docs").mkdir()
     (tmp_path / "project-docs" / "devlogs").mkdir()
     (tmp_path / ".synlynk").mkdir()
+    shutil.copyfile(
+        os.path.join(os.path.dirname(__file__), "..", ".gitignore"),
+        tmp_path / ".gitignore",
+    )
 
     (tmp_path / "project-docs" / "todo.md").write_text(
         "# Project Todo List\n## Active Tasks\n"

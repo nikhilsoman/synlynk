@@ -256,7 +256,7 @@ def test_regenerate_agent_projection_writes_flat_yaml(project_dir, tmp_path, mon
 
     agent_store.regenerate_agent_projection("dev-primary", repo_overrides={"note": "pinned"})
 
-    projection_path = os.path.join("synlynk", "agents", "dev-primary.yaml")
+    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
     assert os.path.exists(projection_path)
     with open(projection_path) as f:
         rendered = f.read()
@@ -273,7 +273,7 @@ def test_regenerate_agent_projection_is_idempotent(project_dir, tmp_path, monkey
 
     agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
     agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-    projection_path = os.path.join("synlynk", "agents", "dev-primary.yaml")
+    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
     with open(projection_path) as f:
         first = f.read()
     agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
@@ -288,14 +288,58 @@ def test_regenerate_agent_projection_path_is_gitignored(project_dir, tmp_path, m
 
     fake_home = tmp_path / "fake_home"
     monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-    with open(os.path.join(git_worktree_repo, ".gitignore"), "w") as f:
-        f.write("synlynk/*\n")
-
     agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
     agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
 
     result = subprocess.run(
-        ["git", "check-ignore", os.path.join("synlynk", "agents", "dev-primary.yaml")],
+        ["git", "check-ignore", os.path.join(".synlynk", "agents", "dev-primary.yaml")],
         cwd=git_worktree_repo, capture_output=True, text=True,
     )
-    assert result.returncode == 0, "expected synlynk/agents/dev-primary.yaml to be gitignored"
+    assert result.returncode == 0, "expected .synlynk/agents/dev-primary.yaml to be gitignored"
+
+
+def test_full_flow_canonical_content_lives_only_in_workspace_store(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    workspace_id = agent_store.get_workspace_id()
+    assert workspace_id
+
+    agent_store.register_agent(
+        "dev-primary",
+        aliases=[
+            {"kind": "role_slug", "value": "dev"},
+            {"kind": "github_app_slug", "value": "synlynk-dev[bot]"},
+        ],
+    )
+    assert agent_store.resolve_agent_id("dev") == "dev-primary"
+
+    rev1 = agent_store.propose_charter_revision(
+        "dev-primary", "# Dev charter v1", actor="human:nikhilsoman", parent_revision=0
+    )
+    assert rev1 == 1
+    rev2 = agent_store.propose_charter_revision(
+        "dev-primary", "# Dev charter v2 — expanded scope", actor="agent:dev-primary", parent_revision=1
+    )
+    assert rev2 == 2
+
+    content, revision = agent_store.read_charter("dev-primary")
+    assert content == "# Dev charter v2 — expanded scope"
+    assert revision == 2
+
+    agent_store.regenerate_agent_projection("dev-primary", repo_overrides={"pinned_role": "dev"})
+
+    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
+    with open(projection_path) as f:
+        projection_content = f.read()
+    assert "Dev charter" not in projection_content
+    assert "agent_id: dev-primary" in projection_content
+
+    canonical_charter_path = os.path.join(
+        agent_store.agent_store_path("dev-primary"), "charter.md"
+    )
+    assert str(fake_home) in canonical_charter_path
+    with open(canonical_charter_path) as f:
+        assert "Dev charter v2" in f.read()

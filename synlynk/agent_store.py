@@ -325,7 +325,7 @@ def regenerate_agent_projection(agent_id: str, repo_overrides: dict = None) -> N
     }
     rendered = _dump_flat_yaml(payload) + "\n"
 
-    projection_dir = os.path.join("synlynk", "agents")
+    projection_dir = os.path.join(".synlynk", "agents")
     os.makedirs(projection_dir, exist_ok=True)
     projection_path = os.path.join(projection_dir, f"{agent_id}.yaml")
     with open(projection_path, "w") as f:
