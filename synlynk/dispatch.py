@@ -1929,6 +1929,7 @@ def _preflight_dispatch(
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
+                   agent_id: str = None,
                    force_agent: bool = False,
                    context_mode: str = None,
                    cycle: str = "work",
@@ -1946,6 +1947,25 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
+        )
+    resolved_agent_role = None
+    if agent_id:
+        from synlynk import agent_store
+        entry = next(
+            (a for a in agent_store.list_agents() if a["agent_id"] == agent_id), None
+        )
+        if entry is None:
+            raise ValueError(
+                f"agent_id {agent_id!r} is unregistered — cannot dispatch. "
+                f"Run `synlynk agent list` to see registered agents."
+            )
+        if entry.get("disabled"):
+            raise ValueError(
+                f"agent {agent_id!r} is disabled — cannot dispatch. "
+                f"Use `synlynk agent show {agent_id}` to check status."
+            )
+        resolved_agent_role = next(
+            (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
         )
     if session_id is None:
         from synlynk.session import _read_active_session

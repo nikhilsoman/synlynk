@@ -1607,3 +1607,25 @@ def test_cost_entry_inherits_context_mode_from_job(project_dir):
     conn.close()
     assert row is not None
     assert row[0] == "full"
+
+
+def test_dispatch_agent_with_unregistered_agent_id_raises(project_dir):
+    import synlynk as sl
+
+    with pytest.raises(ValueError, match="unregistered"):
+        sl.dispatch_agent(
+            "codex", "do work", agent_id="nonexistent-id", force_agent=True, context_mode="none",
+        )
+
+
+def test_dispatch_agent_with_disabled_agent_id_raises(project_dir):
+    import synlynk as sl
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    agent_store.set_agent_disabled(agent_id, actor="test")
+
+    with pytest.raises(ValueError, match="disabled"):
+        sl.dispatch_agent(
+            "codex", "do work", agent_id=agent_id, force_agent=True, context_mode="none",
+        )
