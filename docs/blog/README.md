@@ -122,6 +122,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [115](./115-fix910-identity-init-resume-confirm.md) | Resume identity init at install confirmation instead of restarting | [#912](https://github.com/nikhilsoman/synlynk/pull/912) | 2026-08-12 |
 | [115](./115-chore-governs-event-contract-extension.md) | GOVERNS Event-Contract Extension — Two New Event Types for the Autonomous Ops Release Gates | [#922](https://github.com/nikhilsoman/synlynk/pull/922) | 2026-08-13 |
 | [116](./116-v0.13.1-operational-reliability-patch.md) | v0.13.1 — The Release That Stayed a Patch | TBD | 2026-08-13 |
+| [117](./117-pr1003-agent-roles-phase1-cli.md) | PR #1003 — Agent-Roles-Charters Phase 1: Giving Workspace Agents a CLI | [#1003](https://github.com/nikhilsoman/synlynk/pull/1003) | 2026-08-16 |
 
 ## Per-PR Post Template
 
