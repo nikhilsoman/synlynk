@@ -129,15 +129,21 @@ def test_cmd_agent_edit_stdin(project_dir, monkeypatch, capsys):
     assert revision == 2
 
 
-def test_cmd_agent_edit_stale_revision_exits_1(project_dir, tmp_path, capsys):
+def test_cmd_agent_edit_stale_revision_exits_1(project_dir, tmp_path, monkeypatch, capsys):
     from synlynk import agent_cli, agent_store
 
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
-    # Simulate a concurrent edit bumping the revision underneath us.
-    agent_store.propose_charter_revision(
-        agent_id, "concurrent edit", actor="other", parent_revision=1
-    )
+
+    # cmd_agent_edit reads parent_revision fresh from read_charter() immediately
+    # before writing, so it never observes a stale cached revision itself. The
+    # only way to exercise its RevisionConflictError handling path is to force
+    # the underlying store call to raise it directly, simulating a concurrent
+    # writer winning the race between our read and our write.
+    def _raise_conflict(*args, **kwargs):
+        raise agent_store.RevisionConflictError("concurrent edit detected")
+
+    monkeypatch.setattr(agent_store, "propose_charter_revision", _raise_conflict)
 
     charter_file = tmp_path / "stale.md"
     charter_file.write_text("stale content")
