@@ -599,8 +599,9 @@ def build_parser() -> argparse.ArgumentParser:
         "dispatch", help="Dispatch an agent to run a task in the background")
     known_agents = sorted(AGENT_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
+        nargs="?", default=None,
         choices=known_agents,
-        help=f"Agent name: {', '.join(known_agents)}")
+        help=f"Agent name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -657,6 +658,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="session_id",
         default=None,
         help="Override the active session_id for this dispatch (defaults to .synlynk/active_session.json)",
+    )
+    dispatch_parser.add_argument(
+        "--as-agent",
+        dest="as_agent",
+        default=None,
+        help="Dispatch as this workspace agent (ID or role alias). Resolves GitHub identity "
+             "and, if the harness positional is omitted, auto-selects a harness by role fit.",
     )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
@@ -1122,7 +1130,15 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
+        known_agents = sorted(AGENT_CAPABILITY_BASELINES)
         try:
+            resolved_agent_id = None
+            if getattr(args, "as_agent", None):
+                from synlynk import agent_cli
+                resolved_agent_id = agent_cli._resolve_or_exit(args.as_agent)
+            if not args.agent and not resolved_agent_id:
+                dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
+
             if getattr(args, "dry_run", False):
                 if not args.task or not args.task.strip():
                     raise ValueError(
@@ -1149,7 +1165,8 @@ def main(argv=None) -> None:
                 print("(dry run — no job, worktree, or cost entry created)")
                 return
 
-            job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
+            job = dispatch_agent(args.agent or known_agents[0], args.task, story_id=args.story_id,
+                                 agent_id=resolved_agent_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
                                  task_type=getattr(args, "task_type", None),
@@ -1168,7 +1185,7 @@ def main(argv=None) -> None:
                 if remediation:
                     print(f"  {remediation}")
                 sys.exit(1)
-            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
+            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
                 from synlynk.fencing import render_task_fence

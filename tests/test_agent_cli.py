@@ -239,3 +239,55 @@ def test_cli_agent_edit_requires_charter_flag(project_dir):
     main(["agent", "init", "dev"])
     with pytest.raises(SystemExit):
         main(["agent", "edit", "dev"])
+
+
+def test_cli_dispatch_as_agent_resolves_alias(project_dir, monkeypatch, capsys):
+    from synlynk.cli import main
+    import synlynk.dispatch as dispatch_mod
+
+    main(["agent", "init", "dev"])
+    capsys.readouterr()
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["agent"] = agent
+        captured["agent_id"] = kwargs.get("agent_id")
+        return {"id": "job-1", "pid": 1, "agent": agent}
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr("synlynk.dispatch_agent", fake_dispatch_agent)
+
+    main(["dispatch", "codex", "--task", "do work", "--as-agent", "dev"])
+
+    assert captured["agent"] == "codex"
+    assert captured["agent_id"] is not None
+
+
+def test_cli_dispatch_as_agent_unresolvable_exits_1(project_dir):
+    from synlynk.cli import main
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["dispatch", "codex", "--task", "do work", "--as-agent", "nonexistent"])
+    assert exc_info.value.code == 1
+
+
+def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch, capsys):
+    from synlynk.cli import main
+    import synlynk.dispatch as dispatch_mod
+
+    main(["agent", "init", "dev"])
+    capsys.readouterr()
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["agent"] = agent
+        return {"id": "job-1", "pid": 1, "agent": agent}
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr("synlynk.dispatch_agent", fake_dispatch_agent)
+
+    main(["dispatch", "--task", "do work", "--as-agent", "dev"])
+
+    assert "agent" in captured
