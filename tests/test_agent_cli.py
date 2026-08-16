@@ -186,3 +186,56 @@ def test_cmd_agent_disable_unresolvable_exits_1(project_dir, capsys):
     with pytest.raises(SystemExit) as exc_info:
         agent_cli.cmd_agent_disable("nonexistent")
     assert exc_info.value.code == 1
+
+
+def test_cli_agent_init_route(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["agent", "init", "dev"])
+    captured = capsys.readouterr()
+    assert "Created agent" in captured.out
+
+
+def test_cli_agent_init_rejects_unknown_role(project_dir):
+    from synlynk.cli import main
+
+    with pytest.raises(SystemExit):
+        main(["agent", "init", "not-a-real-role"])
+
+
+def test_cli_agent_list_route(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["agent", "init", "dev"])
+    capsys.readouterr()
+    main(["agent", "list"])
+    captured = capsys.readouterr()
+    assert "dev" in captured.out
+
+
+def test_cli_agent_show_route(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["agent", "init", "dev"])
+    capsys.readouterr()
+    main(["agent", "show", "dev"])
+    captured = capsys.readouterr()
+    assert "dev" in captured.out
+
+
+def test_cli_agent_disable_route(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["agent", "init", "dev"])
+    capsys.readouterr()
+    main(["agent", "disable", "dev"])
+    captured = capsys.readouterr()
+    assert "Disabled agent" in captured.out
+
+
+def test_cli_agent_edit_requires_charter_flag(project_dir):
+    from synlynk.cli import main
+
+    main(["agent", "init", "dev"])
+    with pytest.raises(SystemExit):
+        main(["agent", "edit", "dev"])
