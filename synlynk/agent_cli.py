@@ -89,3 +89,38 @@ def cmd_agent_show(id_or_alias: str) -> None:
         print(f"  {event}")
     print(f"charter (revision {revision}):")
     print(content)
+
+
+def cmd_agent_edit(id_or_alias: str, charter_path: str) -> None:
+    agent_id = _resolve_or_exit(id_or_alias)
+    if charter_path == "-":
+        new_content = sys.stdin.read()
+    else:
+        with open(charter_path) as f:
+            new_content = f.read()
+
+    _, parent_revision = agent_store.read_charter(agent_id)
+    try:
+        new_revision = agent_store.propose_charter_revision(
+            agent_id, new_content, actor="cli", parent_revision=parent_revision
+        )
+    except agent_store.RevisionConflictError:
+        print(
+            "Charter was updated by someone else since you last viewed it. "
+            f"Run `synlynk agent show {agent_id}` and retry.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    agent_store.regenerate_agent_projection(agent_id, repo_overrides={"capability_grants": {}})
+    print(f"Updated charter for {agent_id} (revision {new_revision})")
+
+
+def cmd_agent_disable(id_or_alias: str) -> None:
+    agent_id = _resolve_or_exit(id_or_alias)
+    entry = next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
+    if entry.get("disabled"):
+        print(f"Agent {agent_id} is already disabled.")
+        return
+    agent_store.set_agent_disabled(agent_id, actor="cli")
+    print(f"Disabled agent {agent_id}.")

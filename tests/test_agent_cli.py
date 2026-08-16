@@ -96,3 +96,87 @@ def test_cmd_agent_show_unresolvable_exits_1(project_dir, capsys):
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "No agent found matching" in captured.err or "No agent found matching" in captured.out
+
+
+def test_cmd_agent_edit_updates_charter(project_dir, tmp_path, capsys):
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    charter_file = tmp_path / "new_charter.md"
+    charter_file.write_text("Implementation — writes the code, reviews own PRs.")
+
+    agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+
+    content, revision = agent_store.read_charter(agent_id)
+    assert revision == 2
+    assert content == "Implementation — writes the code, reviews own PRs."
+
+
+def test_cmd_agent_edit_stdin(project_dir, monkeypatch, capsys):
+    import io
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("New charter from stdin."))
+    agent_cli.cmd_agent_edit(agent_id, "-")
+
+    content, revision = agent_store.read_charter(agent_id)
+    assert content == "New charter from stdin."
+    assert revision == 2
+
+
+def test_cmd_agent_edit_stale_revision_exits_1(project_dir, tmp_path, capsys):
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+    # Simulate a concurrent edit bumping the revision underneath us.
+    agent_store.propose_charter_revision(
+        agent_id, "concurrent edit", actor="other", parent_revision=1
+    )
+
+    charter_file = tmp_path / "stale.md"
+    charter_file.write_text("stale content")
+
+    with pytest.raises(SystemExit) as exc_info:
+        agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "updated by someone else" in captured.err or "updated by someone else" in captured.out
+
+
+def test_cmd_agent_disable_sets_flag(project_dir, capsys):
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    agent_cli.cmd_agent_disable(agent_id)
+
+    entry = next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
+    assert entry["disabled"] is True
+
+
+def test_cmd_agent_disable_idempotent(project_dir, capsys):
+    from synlynk import agent_cli
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    agent_cli.cmd_agent_disable(agent_id)
+    capsys.readouterr()
+    agent_cli.cmd_agent_disable(agent_id)
+    captured = capsys.readouterr()
+    assert "already disabled" in captured.out
+
+
+def test_cmd_agent_disable_unresolvable_exits_1(project_dir, capsys):
+    from synlynk import agent_cli
+
+    with pytest.raises(SystemExit) as exc_info:
+        agent_cli.cmd_agent_disable("nonexistent")
+    assert exc_info.value.code == 1
