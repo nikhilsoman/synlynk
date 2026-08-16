@@ -16,6 +16,40 @@ import time
 from typing import Optional, Tuple
 
 from synlynk._constants import AGENT_CAPABILITY_BASELINES
+
+_ORG_ROLE_TO_BASELINE_ROLE = {
+    "dev": "builder",
+    "qa": "verifier",
+    "architect": "architect",
+    "tpm": "architect",
+    "pm": "architect",
+    "designer": "builder",
+    "marketing": "builder",
+    "synlynk-bot": "builder",
+}
+
+
+def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write: bool = False):
+    """Deterministic fallback harness selection for agent_id-driven dispatch.
+
+    Picks the first harness (alphabetical) whose declared baseline "roles"
+    (architect/builder/verifier — a different vocabulary than org-chart
+    roles, see docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md §6)
+    includes the mapped tag for this org role. Does not consult the
+    story_id-based capability_scores DB table — that stays story_id-only.
+    """
+    baseline_role = _ORG_ROLE_TO_BASELINE_ROLE.get(org_role)
+    if not baseline_role:
+        return None
+    for name in sorted(baselines_map):
+        baseline = baselines_map[name]
+        if baseline_role not in baseline.get("roles", []):
+            continue
+        if requires_gh_write and not baseline.get("can_gh_write", False):
+            continue
+        return name
+    return None
+
 from synlynk.github_app_auth import get_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
@@ -382,7 +416,7 @@ def _isolated_gh_config_dir() -> str:
     return path
 
 
-def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str) -> dict:
+def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str, agent_role: str = None) -> dict:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
     Replaces copying the full parent environment: only a fixed base set of
@@ -407,7 +441,7 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
             proc_env[k] = v
 
     if requires_gh_write:
-        role = _role_for_story(story_id) or "dev"
+        role = agent_role or _role_for_story(story_id) or "dev"
         gh_token = _resolve_dispatch_gh_token(role)
         # Never inherit ambient tokens from the parent shell for GH-write jobs.
         proc_env.pop("GH_TOKEN", None)
@@ -1929,6 +1963,7 @@ def _preflight_dispatch(
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
+                   agent_id: str = None,
                    force_agent: bool = False,
                    context_mode: str = None,
                    cycle: str = "work",
@@ -1947,6 +1982,25 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    resolved_agent_role = None
+    if agent_id:
+        from synlynk import agent_store
+        entry = next(
+            (a for a in agent_store.list_agents() if a["agent_id"] == agent_id), None
+        )
+        if entry is None:
+            raise ValueError(
+                f"agent_id {agent_id!r} is unregistered — cannot dispatch. "
+                f"Run `synlynk agent list` to see registered agents."
+            )
+        if entry.get("disabled"):
+            raise ValueError(
+                f"agent {agent_id!r} is disabled — cannot dispatch. "
+                f"Use `synlynk agent show {agent_id}` to check status."
+            )
+        resolved_agent_role = next(
+            (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
+        )
     if session_id is None:
         from synlynk.session import _read_active_session
         session_id = _read_active_session()
@@ -1954,12 +2008,18 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     dispatch_time = None
     if not story_id:
         dispatch_time = time.time()
-    if story_id and not force_agent:
-        best_agent = _pkg("_best_agent_for_story")
-        if best_agent:
-            best = best_agent(story_id)
-            if best and best in baselines_map:
-                agent = best
+    if not force_agent:
+        picked = None
+        if story_id:
+            best_agent = _pkg("_best_agent_for_story")
+            if best_agent:
+                best = best_agent(story_id)
+                if best and best in baselines_map:
+                    picked = best
+        if picked is None and resolved_agent_role:
+            picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
+        if picked:
+            agent = picked
 
     if requires_gh_write:
         current_baseline = baselines_map.get(agent, {})
@@ -2403,7 +2463,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id)
+    proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id, agent_role=resolved_agent_role)
     gh_write_target_value = None
     if requires_gh_write and issue is not None:
         gh_write_target_value = f"issue:{issue}"

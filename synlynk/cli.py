@@ -480,6 +480,28 @@ def build_parser() -> argparse.ArgumentParser:
                                   help="Install local crontab entry for this harness")
     harness_sub.add_parser("list", help="List .agents/ configs and last run status")
 
+    agent_parser = subparsers.add_parser("agent", help="Manage workspace agents (roles/charters)")
+    agent_parser._synlynk_skip_taxonomy = True
+    agent_sub = agent_parser.add_subparsers(dest="agent_action")
+
+    agent_init_parser = agent_sub.add_parser("init", help="Create a new workspace agent for a role")
+    agent_init_parser.add_argument("role", choices=[
+        "dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot",
+    ], help="Org-chart role for this agent")
+
+    agent_sub.add_parser("list", help="List all registered workspace agents")
+
+    agent_show_parser = agent_sub.add_parser("show", help="Show one agent's details and charter")
+    agent_show_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
+
+    agent_edit_parser = agent_sub.add_parser("edit", help="Propose a new charter revision")
+    agent_edit_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
+    agent_edit_parser.add_argument("--charter", required=True,
+        help="Path to new charter content, or '-' to read from stdin")
+
+    agent_disable_parser = agent_sub.add_parser("disable", help="Disable a workspace agent")
+    agent_disable_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
+
     exec_parser = subparsers.add_parser("exec", help="Execute an AI CLI with synlynk context")
     exec_parser.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
     exec_parser.add_argument("--force", action="store_true",
@@ -577,8 +599,9 @@ def build_parser() -> argparse.ArgumentParser:
         "dispatch", help="Dispatch an agent to run a task in the background")
     known_agents = sorted(AGENT_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
+        nargs="?", default=None,
         choices=known_agents,
-        help=f"Agent name: {', '.join(known_agents)}")
+        help=f"Agent name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the agent")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -635,6 +658,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="session_id",
         default=None,
         help="Override the active session_id for this dispatch (defaults to .synlynk/active_session.json)",
+    )
+    dispatch_parser.add_argument(
+        "--as-agent",
+        dest="as_agent",
+        default=None,
+        help="Dispatch as this workspace agent (ID or role alias). Resolves GitHub identity "
+             "and, if the harness positional is omitted, auto-selects a harness by role fit.",
     )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
@@ -879,6 +909,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser._synlynk_help_parsers = {
         "harness": harness_parser,
+        "agent": agent_parser,
         "configure": configure_parser,
         "config": config_parser,
         "daemon": daemon_parser,
@@ -920,7 +951,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
 
@@ -1009,7 +1040,7 @@ def main() -> None:
     except Exception:
         pass  # staleness checks are best-effort; never block a real command on this
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
 
     if args.command == "init":
@@ -1099,7 +1130,15 @@ def main() -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
+        known_agents = sorted(AGENT_CAPABILITY_BASELINES)
         try:
+            resolved_agent_id = None
+            if getattr(args, "as_agent", None):
+                from synlynk import agent_cli
+                resolved_agent_id = agent_cli._resolve_or_exit(args.as_agent)
+            if not args.agent and not resolved_agent_id:
+                dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
+
             if getattr(args, "dry_run", False):
                 if not args.task or not args.task.strip():
                     raise ValueError(
@@ -1126,7 +1165,8 @@ def main() -> None:
                 print("(dry run — no job, worktree, or cost entry created)")
                 return
 
-            job = dispatch_agent(args.agent, args.task, story_id=args.story_id,
+            job = dispatch_agent(args.agent or known_agents[0], args.task, story_id=args.story_id,
+                                 agent_id=resolved_agent_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
                                  task_type=getattr(args, "task_type", None),
@@ -1145,7 +1185,7 @@ def main() -> None:
                 if remediation:
                     print(f"  {remediation}")
                 sys.exit(1)
-            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {args.agent} dispatched  PID {job['pid']}")
+            print(f"  {_GREEN}▶{_RESET} [{job['id']}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
                 from synlynk.fencing import render_task_fence
@@ -1154,6 +1194,20 @@ def main() -> None:
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
+    elif args.command == "agent":
+        from synlynk import agent_cli
+        if args.agent_action == "init":
+            agent_cli.cmd_agent_init(args.role)
+        elif args.agent_action == "list":
+            agent_cli.cmd_agent_list()
+        elif args.agent_action == "show":
+            agent_cli.cmd_agent_show(args.id_or_alias)
+        elif args.agent_action == "edit":
+            agent_cli.cmd_agent_edit(args.id_or_alias, args.charter)
+        elif args.agent_action == "disable":
+            agent_cli.cmd_agent_disable(args.id_or_alias)
+        else:
+            help_parsers.get("agent", parser).print_help()
     elif args.command == "backfill-capability-ratings":
         cmd_backfill_capability_ratings()
     elif args.command == "jobs":

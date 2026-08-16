@@ -1607,3 +1607,73 @@ def test_cost_entry_inherits_context_mode_from_job(project_dir):
     conn.close()
     assert row is not None
     assert row[0] == "full"
+
+
+def test_dispatch_agent_with_unregistered_agent_id_raises(project_dir):
+    import synlynk as sl
+
+    with pytest.raises(ValueError, match="unregistered"):
+        sl.dispatch_agent(
+            "codex", "do work", agent_id="nonexistent-id", force_agent=True, context_mode="none",
+        )
+
+
+def test_dispatch_agent_with_disabled_agent_id_raises(project_dir):
+    import synlynk as sl
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    agent_store.set_agent_disabled(agent_id, actor="test")
+
+    with pytest.raises(ValueError, match="disabled"):
+        sl.dispatch_agent(
+            "codex", "do work", agent_id=agent_id, force_agent=True, context_mode="none",
+        )
+
+
+def test_dispatch_agent_id_auto_selects_harness_by_mapped_role(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import agent_cli
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    agent_id = agent_cli.cmd_agent_init("qa")  # qa -> "verifier" -> agy
+
+    job = sl.dispatch_agent(
+        "claude", "run the test suite", agent_id=agent_id,
+        force_agent=False, context_mode="none",
+    )
+
+    assert job["agent"] == "agy"
+
+
+def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import agent_cli
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    captured_roles = []
+    monkeypatch.setattr(
+        dispatch_mod, "_resolve_dispatch_gh_token",
+        lambda role: captured_roles.append(role) or "test-gh-token",
+    )
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+
+    sl.dispatch_agent(
+        "grok", "review and merge PR #500", agent_id=agent_id, story_id="story-with-different-role",
+        context_mode="none", requires_gh_write=True, force_agent=True,
+    )
+
+    assert captured_roles == ["dev"]
