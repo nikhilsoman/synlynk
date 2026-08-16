@@ -1,7 +1,7 @@
 # Agent Roles & Charters — Phase 1 CLI Onboarding Surface — Design
 
 **Date:** 2026-08-16
-**Status:** Approved (pending final user sign-off on this written doc)
+**Status:** Superseded by `2026-08-16-agent-dispatch-integration-design.md` — this spec covered CLI onboarding only, and was found insufficient against the stated velocity goal (parallel dispatch, harness capability access, GitHub identity) before user sign-off. Kept for history; do not implement standalone.
 **Author:** Claude (pm), brainstormed with Nikhil Soman
 
 ## 1. Motivation
