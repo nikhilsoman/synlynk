@@ -343,3 +343,46 @@ def test_full_flow_canonical_content_lives_only_in_workspace_store(project_dir, 
     assert str(fake_home) in canonical_charter_path
     with open(canonical_charter_path) as f:
         assert "Dev charter v2" in f.read()
+
+
+def test_list_agents_empty(project_dir):
+    from synlynk import agent_store
+
+    assert agent_store.list_agents() == []
+
+
+def test_list_agents_returns_registered_entries(project_dir):
+    from synlynk import agent_store
+
+    agent_store.register_agent("agent-1", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.register_agent("agent-2", [{"kind": "role_slug", "value": "qa"}])
+
+    agents = agent_store.list_agents()
+    ids = {a["agent_id"] for a in agents}
+    assert ids == {"agent-1", "agent-2"}
+
+
+def test_set_agent_disabled_marks_entry_and_appends_history(project_dir):
+    from synlynk import agent_store
+
+    agent_store.register_agent("agent-1", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.set_agent_disabled("agent-1", actor="cli")
+
+    agents = agent_store.list_agents()
+    entry = next(a for a in agents if a["agent_id"] == "agent-1")
+    assert entry["disabled"] is True
+    assert entry["history"][-1]["event"] == "disabled"
+    assert entry["history"][-1]["actor"] == "cli"
+
+
+def test_set_agent_disabled_is_idempotent(project_dir):
+    from synlynk import agent_store
+
+    agent_store.register_agent("agent-1", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.set_agent_disabled("agent-1", actor="cli")
+    history_len_after_first = len(agent_store.list_agents()[0]["history"])
+
+    agent_store.set_agent_disabled("agent-1", actor="cli")
+    agents = agent_store.list_agents()
+    assert len(agents[0]["history"]) == history_len_after_first
+    assert agents[0]["disabled"] is True

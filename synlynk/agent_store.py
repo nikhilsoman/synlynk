@@ -110,6 +110,26 @@ def resolve_agent_id(alias: str) -> str:
     return None
 
 
+def list_agents() -> list:
+    """Return all registry entries (agent_id, aliases, disabled, created_at, history)."""
+    return _load_registry()["agents"]
+
+
+def set_agent_disabled(agent_id: str, actor: str) -> None:
+    """Idempotently mark an agent disabled, appending a history event."""
+    registry = _load_registry()
+    for entry in registry["agents"]:
+        if entry["agent_id"] == agent_id:
+            if entry.get("disabled"):
+                return
+            entry["disabled"] = True
+            entry["history"].append(
+                {"event": "disabled", "at": _now_iso(), "actor": actor}
+            )
+            _write_json_atomic(_registry_path(), registry)
+            return
+
+
 class RevisionConflictError(Exception):
     """Raised when a proposed revision's parent_revision doesn't match the current head."""
 
