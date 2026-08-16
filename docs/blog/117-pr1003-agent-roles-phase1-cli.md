@@ -44,8 +44,10 @@ synlynk agent disable <id>      # idempotent disable
 ```
 
 Each `agent init` writes a registry entry (`agent_store.register_agent`) and a
-`.synlynk/agents/<id>.yaml` projection carrying role, charter, and an empty `capability_grants: {}`
-map — a placeholder for the capability-scoping work planned for a later phase.
+`.synlynk/agents/<id>.yaml` projection carrying agent id, workspace id, role, and an
+`overrides.capability_grants: {}` map — a placeholder for the capability-scoping work planned for a
+later phase. The charter itself is not duplicated into this projection; it stays in the agent store's
+own revision-tracked storage, read via `agent_store.read_charter()`.
 
 **Dispatch integration** (`synlynk/dispatch.py`): `dispatch_agent()` gained an optional `agent_id`
 parameter. When supplied, it resolves the agent's org-chart role (raising `ValueError` if the agent
@@ -61,11 +63,12 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
 ```
 
 and falls back to a new `_harness_for_org_role()` selector only when the existing `story_id`-based
-`_best_agent_for_story` auto-selection doesn't produce a pick. `story_id` still wins when both are
-present — `agent_id` is additive, not a replacement for the existing routing path. The GitHub
-identity/token resolution for dispatched work now reads `role = agent_role or _role_for_story(story_id)
-or "dev"`, so an agent-driven dispatch gets the right role-scoped `gh` token without disturbing the
-story-driven path.
+`_best_agent_for_story` auto-selection doesn't produce a pick — for **harness auto-selection**,
+`story_id` still wins when both are present, and `agent_id` is additive rather than a replacement
+for the existing routing path. GitHub identity/token resolution is a separate lookup with the
+opposite precedence: it reads `role = agent_role or _role_for_story(story_id) or "dev"`, so an
+explicit `agent_id` overrides `story_id` for *which role's `gh` token gets used*, even though it
+doesn't override `story_id` for *which harness gets picked*.
 
 **CLI flag**: `synlynk dispatch --as-agent <id_or_alias>` resolves the agent at the CLI layer before
 calling `dispatch_agent()`, and makes the harness positional argument optional so `--as-agent` alone
