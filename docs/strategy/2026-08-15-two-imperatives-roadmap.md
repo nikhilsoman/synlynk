@@ -17,14 +17,17 @@ The two imperatives share a dependency: `docs/superpowers/specs/2026-08-14-works
 
 | # | Item | Imperative | Status | Blocked by |
 |---|---|---|---|---|
-| 1 | Brainstorm job-truth/gh-write consolidation (#701) → spec | 1 | in_progress (dispatched 2026-08-15) | — |
-| 2 | Plan job-truth/gh-write consolidation | 1 | pending | 1 (spec sign-off) |
-| 3 | Execute job-truth/gh-write consolidation plan | 1 | pending | 2 |
-| 4 | Plan workspace-context-governance next vertical slice (manifest schema, `audit-docs --fix`, migrate synlynk, agent artifact store + `agent_id` registry) | 2 | pending | — (spec already committed, gh#936) |
-| 5 | Execute workspace-context-governance vertical slice | 2 | pending | 4 |
-| 6 | Ship worktree/job cleanup automation (#559) | 1 | pending | — (can run in parallel once quota allows) |
-| 7 | Agent-roles-charters Phase 1 (charter storage) | 1 | pending | 5 (needs the storage design) |
-| 8 | Cut v0.14.0 named release | admin | pending | — (opportunistic, not gap-closing) |
+| 1 | Brainstorm job-truth/gh-write consolidation (#701) → spec | 1 | done | — |
+| 2 | Plan job-truth/gh-write consolidation | 1 | done | — |
+| 3 | Execute job-truth/gh-write consolidation plan | 1 | done | — |
+| 4 | Plan workspace-context-governance next vertical slice (manifest schema, `audit-docs --fix`, migrate synlynk, agent artifact store + `agent_id` registry) | 2 | done | — |
+| 5 | Execute workspace-context-governance vertical slice | 2 | done | — |
+| 6 | Ship worktree/job cleanup automation (#559) | 1 | done | — |
+| 6a | *(emergent, not in original scope)* Rename `synlynk agent` CLI verb → `harness` (spec + plan + PR #993, 2026-08-15) — required to free the `agent` verb group for item 7 | 1 | done | — |
+| 7 | Agent-roles-charters Phase 1 (charter storage + CLI onboarding + dispatch integration, PR #1003; retroactive blog post PR #1006) | 1 | done | — |
+| 8 | Cut named release(s) for the completed clusters above | admin | pending | — |
+
+**Release cadence decision (2026-08-16):** rather than accumulating everything into one big `v0.14.0`, cut a `vX.Y.0` named release as soon as a themed cluster of 3+ related PRs is complete, per the existing global Named Release Policy's own trigger condition — no policy override needed. Item 8 is that next cut, scoped to the job-truth/gh-write reliability + workspace-context-governance + agent-roles-charters-Phase-1 cluster (items 1-7 above). Future clusters get their own `vX.Y.0` rather than waiting to bundle further.
 
 ## Pause points (per standing authorization, 2026-08-15)
 
