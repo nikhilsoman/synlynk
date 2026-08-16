@@ -25,9 +25,11 @@ The two imperatives share a dependency: `docs/superpowers/specs/2026-08-14-works
 | 6 | Ship worktree/job cleanup automation (#559) | 1 | done | — |
 | 6a | *(emergent, not in original scope)* Rename `synlynk agent` CLI verb → `harness` (spec + plan + PR #993, 2026-08-15) — required to free the `agent` verb group for item 7 | 1 | done | — |
 | 7 | Agent-roles-charters Phase 1 (charter storage + CLI onboarding + dispatch integration, PR #1003; retroactive blog post PR #1006) | 1 | done | — |
-| 8 | Cut named release(s) for the completed clusters above | admin | pending | — |
+| 8 | Cut named release(s) for the completed clusters above | admin | done | — |
 
 **Release cadence decision (2026-08-16):** rather than accumulating everything into one big `v0.14.0`, cut a `vX.Y.0` named release as soon as a themed cluster of 3+ related PRs is complete, per the existing global Named Release Policy's own trigger condition — no policy override needed. Item 8 is that next cut, scoped to the job-truth/gh-write reliability + workspace-context-governance + agent-roles-charters-Phase-1 cluster (items 1-7 above). Future clusters get their own `vX.Y.0` rather than waiting to bundle further.
+
+**Shipped 2026-08-16:** [v0.14.0 — Truth in the Pipe, Identity for the Agents](https://github.com/nikhilsoman/synlynk/releases/tag/v0.14.0) (PR #1012). Bundled items 1-7 above plus the previously-undocumented TPM/session MVP (PRs #934/#944/#950/#954/#959), discovered during CHANGELOG authoring to have merged in the same window with no release of its own.
 
 ## Pause points (per standing authorization, 2026-08-15)
 
