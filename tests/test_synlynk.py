@@ -2375,7 +2375,7 @@ def test_sentinel_clear_by_severity(project_dir):
 
 
 def test_version_is_0120(project_dir):
-    assert synlynk.VERSION == "0.13.1"
+    assert synlynk.VERSION == "0.14.0"
 
 
 def test_pyproject_version_matches_module(project_dir):

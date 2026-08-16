@@ -16,7 +16,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Auto-generated `## Capability-Based Task Allocation` table (synced into CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md via `synlynk doctor --fix`) now reads `| Role | Harness | Tasks |` instead of the conflated `| Role | Agent | Tasks |`, with a glossary-link note.
 - Hand-maintained "Terminology: Agent vs Harness" section added to this repo's own `CLAUDE.md`.
 - `.synlynk/roles.yaml`, `README.md`, `SYNLYNK_GUIDE.md` wording fixed to stop conflating Agent and Harness.
-- **Not yet a shippable milestone:** first phase of a 5-phase roadmap (`docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md` §10) — Phases 1-4 (agent manifests, memory, capability registry, portability) are unbuilt. Held out of 0.13.1; will ship as its own named release once the terminology rollout is actually complete.
+- **Not yet a shippable milestone:** first phase of a 5-phase roadmap (`docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md` §10). Phase 1 (agent manifests/charter storage) has since shipped — see `[0.14.0]` below — but Phases 2-4 (memory, capability registry, portability) remain unbuilt. Held out of 0.13.1 and 0.14.0; will ship as its own named release once the full terminology rollout is complete.
 
 **Quota-Aware Dispatch Reservation (design 2026-08-08, plan 2026-08-08)**
 - `agent_reservations` ledger tracks estimated-token reservations per harness from the moment a job is queued/dispatched until it settles, closing the gap where `--force-agent` and daemon-queued dispatches could bypass quota checks entirely.
@@ -25,7 +25,51 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `synlynk schedule --execute` opens real reservations for the whole batch at commit time via `_enqueue_plan()`.
 - `_force_exhaust_quota()` wires sentinel's existing `QUOTA_EXHAUSTED` detection into the reservation ledger without ever touching already-running jobs.
 - `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
-- **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1; will ship once agents actually consume it.
+- **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.
+
+## [0.14.0] - 2026-08-16
+
+**Release pitch:** the execution floor gets a truth guarantee — every GitHub-write dispatch now has its claimed outcome independently verified against live GitHub state instead of trusted at face value — and workspace agents get a real identity: a storage-backed charter, a `synlynk agent init/list/show/edit/disable` onboarding surface, and dispatch integration that resolves role and harness from that identity automatically.
+
+### Added
+
+**GOVERNS Job-Truth / GH-Write Consolidation (#701, PR #978)** — closes #331, #579, #935
+- `synlynk/gh_verify.py` `gh_write_verified()` — an independent delivery-of-effect check that queries live GitHub state via the orchestrator's own `gh` identity (not the sandboxed job's), replacing "the job said it succeeded" with "GitHub confirms the write landed."
+- Wired into `dispatch.py`'s `_check_job_stall` (extends timeout on an unverified write, kills the job on a confirmed failure) and `jobs.py`'s `_reconcile_daemon_jobs` (new `succeeded_gh_write_failed` terminal status distinct from a clean success).
+- `gh_write_verified` surfaced as a column in `synlynk jobs` output.
+- Regression guard (`tests/test_gh_write_guard.py`) asserting every terminal-status-deciding code path for a `--requires-gh-write` job consults the check.
+- `synlynk doctor` TC-7 preflight verifies Agy's local `gh` allow-rules before routing gh-write tasks to it, instead of failing at dispatch runtime.
+- Codex PR-review tasks now route through the `gh` CLI directly instead of the previously-unreliable MCP `add_review_to_pr`/`add_comment_to_issue` tools.
+
+**Workspace-Scoped Agent Artifact Storage (design 2026-08-14/15, gh#936, PR #988)**
+- Mints a real `workspace_id` (uuid4, persisted once in `.synlynk/config.json`) keying a new workspace-level agent artifact store.
+- `agent_id` registry (`register_agent`/`resolve_agent_id`) mirroring the existing `member_id`/`member_aliases` pattern — loud failure on an unregistered alias, rejects duplicate agent_id/alias.
+- Canonical `charter.md` + provenance-chained `charter.revisions.jsonl` storage (`read_charter`/`propose_charter_revision`) with stale-parent-revision conflict detection, extended to `memory/` and `statements-of-record/` entries.
+- `regenerate_agent_projection()` writes a generated, gitignored `.synlynk/agents/<agent_id>.yaml` projection (agent_id/role/overrides only, never charter content) via a stdlib-only flat YAML emitter.
+
+**Agent-Roles-Charters Phase 1 — CLI Onboarding + Dispatch Integration (design 2026-08-16, PR #1003)**
+- `synlynk agent init/list/show/edit/disable` — the CLI onboarding surface for workspace agents (org-chart roles: dev/qa/pm/architect/tpm/designer/marketing/synlynk-bot), built on the storage layer above.
+- `dispatch_agent()` gains `agent_id` support: validates the agent is registered/enabled, resolves its role, auto-selects a harness by capability fit when none is forced, and threads the resolved role into GitHub-identity/token resolution (taking precedence over `story_id`-derived role when both are present).
+- `synlynk dispatch --as-agent <id_or_alias>` — makes the `harness` positional argument optional when `--as-agent` triggers auto-selection.
+
+**Agent → Harness CLI Rename (PR #993)**
+- Renames `synlynk agent add/configure/run/list` to `synlynk harness add/configure/run/list`, resolving the naming collision between execution-backend harnesses and the workspace/role-identity agents introduced above. No deprecation shim — pre-1.0 breaking change, decided via a 4/4 `synlynk decide --panel` vote (`project-docs/decisions/2026-08-16-synlynk-s-cli-has-a-naming-collision-syn.md`).
+- Frees the `agent` CLI verb for the onboarding surface above. `dispatch <agent>`, `open <agent>`, `probe --agent`, `quota --agent` are untouched — those use "agent" in unrelated senses.
+
+**TPM/Session MVP (plan 2026-08-13, PRs #934, #944, #950, #954, #959)**
+- `sessions` table + `synlynk/session.py` active-session marker file helpers.
+- `devlog_entries` gains `session_id`/`goal_id` columns; `cmd_devlog_append()` auto-inherits the active session when not passed explicitly.
+- `session_id` threaded through `dispatch_agent()` → `daemon_jobs` → `cost_entries` (with inheritance from job to cost row), so every dispatch and its cost are attributable to the session that launched it.
+- `synlynk dispatch --session <id>` override flag.
+- `synlynk session status` surfaces a NUDGE line when `daemon_jobs` has rows with no `session_id` — the first concrete TPM-facing signal for unattributed work.
+
+### Fixed
+- Devlog identity re-fork prevented by resolving the devlog path through the `member_id` registry instead of a raw filename match (#956).
+- Dispatch stall-timeout extended for review-only jobs, which previously could be killed mid-review before posting (#939).
+- Review-only `synlynk dispatch` jobs no longer get miscounted against implementation-job budgets (#943, closes #937).
+
+### Housekeeping
+- Worktree/job accumulation (#559) audited and closed without new code: `synlynk worktree audit`/`worktree clean` (shipped pre-0.13.1 in PR #676) already covers the core ask; `synlynk status`'s existing staleness hint covers the proactive-warning ask. Re-verified against this repo's own worktree state during the audit.
 
 ## [0.13.1] - 2026-08-13
 
