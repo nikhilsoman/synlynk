@@ -586,6 +586,18 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
+        CREATE TABLE IF NOT EXISTS decisions (
+            decision_id   TEXT PRIMARY KEY,
+            topic         TEXT NOT NULL,
+            date          TEXT NOT NULL,
+            panel         TEXT NOT NULL,
+            status        TEXT NOT NULL,
+            inputs        TEXT NOT NULL,
+            synthesis     TEXT NOT NULL,
+            decision_text TEXT NOT NULL,
+            signature     TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS members (
             member_id      TEXT PRIMARY KEY,
             canonical_name TEXT NOT NULL,

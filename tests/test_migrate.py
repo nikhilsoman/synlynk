@@ -781,3 +781,17 @@ def test_full_migration_end_to_end(tmp_path, monkeypatch):
     count = conn.execute('SELECT COUNT(*) FROM memory_entries').fetchone()[0]
     conn.close()
     assert count == 3  # 2 original + 1 written-through
+
+
+def test_decisions_table_created_idempotently(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DB_PATH", str(tmp_path / "state.db"))
+    conn = synlynk._get_db()
+    conn.close()
+    conn = synlynk._get_db()  # second call must not raise
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)")}
+    conn.close()
+    assert cols == {
+        "decision_id", "topic", "date", "panel", "status", "inputs",
+        "synthesis", "decision_text", "signature", "created_at",
+    }
