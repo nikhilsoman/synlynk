@@ -2945,7 +2945,10 @@ def checkpoint() -> None:
     username = get_username()
     canonical_id = _resolve_member_id(username)
     todo_path = "project-docs/todo.md"
-    devlog_path = f"project-docs/devlogs/{canonical_id}.md"
+    if _is_migrated():
+        devlog_path = os.path.join(_synlynk_project_docs_dir(), "devlogs", f"{canonical_id}.md")
+    else:
+        devlog_path = os.path.join(_docs_dir(), "devlogs", f"{canonical_id}.md")
 
     # Collect resolved tasks (done/superseded/absorbed) and keep the rest
     completed, active_lines = [], []
@@ -2960,13 +2963,12 @@ def checkpoint() -> None:
                 else:
                     active_lines.append(line)
 
-    # Append resolved tasks to devlog
+    # Write resolved tasks through to the devlog (DB row + regenerated flat file)
     if completed:
-        os.makedirs(os.path.dirname(devlog_path), exist_ok=True)
-        with open(devlog_path, "a") as f:
-            f.write(f"\n## {time.strftime('%Y-%m-%d')}\n### Resolved (checkpoint)\n")
-            for task in completed:
-                f.write(f"- {task['text']}\n")
+        body_lines = ["### Resolved (checkpoint)"]
+        for task in completed:
+            body_lines.append(f"- {task['text']}")
+        cmd_devlog_append(canonical_id, time.strftime('%Y-%m-%d'), "\n".join(body_lines) + "\n")
         with open(todo_path, "w") as f:
             f.writelines(active_lines)
 

@@ -1856,8 +1856,10 @@ def cmd_memory_add(section: str, body: str, author: str = None) -> None:
         _dr_sync("memory.md")
 
 def _write_devlog_file(author: str) -> None:
-    """Regenerate .synlynk/project-docs/devlogs/<author>.md from devlog_entries."""
-    from synlynk import _get_db, _synlynk_project_docs_dir
+    """Regenerate devlogs/<author>.md from devlog_entries.
+    Post-migration: writes to .synlynk/project-docs/devlogs/.
+    Pre-migration: writes to project-docs/devlogs/."""
+    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
     conn = _get_db()
     rows = conn.execute(
         "SELECT entry_date, session_title, body FROM devlog_entries "
@@ -1871,7 +1873,13 @@ def _write_devlog_file(author: str) -> None:
         if session_title:
             header += f" — {session_title}"
         lines.append(f"{header}\n\n{body}\n\n")
-    devlog_dir = os.path.join(_synlynk_project_docs_dir(), "devlogs")
+    if _is_migrated():
+        devlog_dir = os.path.join(_synlynk_project_docs_dir(), "devlogs")
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        devlog_dir = os.path.join(docs_dir, "devlogs")
     os.makedirs(devlog_dir, exist_ok=True)
     with open(os.path.join(devlog_dir, f"{author}.md"), "w") as f:
         f.writelines(lines)
@@ -1879,7 +1887,8 @@ def _write_devlog_file(author: str) -> None:
 def cmd_devlog_append(author: str, entry_date: str, body: str,
                       session_title: str = None, session_id: str = None,
                       goal_id: str = None) -> None:
-    """Append a devlog entry to DB and write through to flat file if migrated."""
+    """Append a devlog entry to DB. Always writes through to the flat file;
+    DR sync only fires once this repo is migrated."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.session import _read_active_session
     if session_id is None:
@@ -1892,8 +1901,8 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
     )
     conn.commit()
     conn.close()
+    _write_devlog_file(author)
     if _is_migrated():
-        _write_devlog_file(author)
         _dr_sync(f"devlogs/{author}.md")
 
 

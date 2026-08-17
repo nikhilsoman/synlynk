@@ -679,6 +679,16 @@ def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
     assert "BS-18" in devlog_file.read_text()
 
 
+def test_write_devlog_file_pre_migration(project_dir):
+    from synlynk.db import cmd_devlog_append
+
+    cmd_devlog_append("nikhil", "2026-08-18", "### Resolved (checkpoint)\n- Ship the thing\n")
+
+    path = project_dir / "project-docs" / "devlogs" / "nikhil.md"
+    assert path.exists()
+    assert "Ship the thing" in path.read_text()
+
+
 def test_update_costs_writes_to_db_and_flat_file_post_migration(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
     synlynk.update_costs("scan", 50000, 10000, 12.5)

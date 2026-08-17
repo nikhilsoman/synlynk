@@ -1364,6 +1364,20 @@ def test_checkpoint_appends_to_devlog(project_dir, monkeypatch):
     devlog = (project_dir / "project-docs" / "devlogs" / "nikhilsoman.md").read_text()
     assert "Finished feature" in devlog
 
+def test_checkpoint_writes_devlog_entries_row(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Finished feature <!-- id: 5 -->\n"
+    )
+    synlynk.checkpoint()
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT author, body FROM devlog_entries WHERE author=?", ("nikhilsoman",)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert "Finished feature" in row[1]
+
 def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     (project_dir / "project-docs" / "todo.md").write_text(
