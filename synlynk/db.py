@@ -334,6 +334,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError:
             pass
+    if "agent_id" not in daemon_job_cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN agent_id TEXT")
+        except sqlite3.OperationalError:
+            pass
     if "requires_gh_write" not in daemon_job_cols:
         try:
             conn.execute("ALTER TABLE daemon_jobs ADD COLUMN requires_gh_write INTEGER NOT NULL DEFAULT 0")

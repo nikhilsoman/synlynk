@@ -1047,6 +1047,14 @@ def test_daemon_jobs_migration_adds_requires_gh_write_and_gh_write_target(projec
     conn.close()
 
 
+def test_daemon_jobs_migration_adds_agent_id_column(project_dir):
+    from synlynk import _get_db
+    conn = _get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "agent_id" in cols
+    conn.close()
+
+
 def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
