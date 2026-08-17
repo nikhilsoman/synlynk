@@ -313,3 +313,14 @@ def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch
     main(["dispatch", "--task", "do work", "--as-agent", "dev"])
 
     assert "agent" in captured
+
+
+def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_agent(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["agent", "init", "qa"])  # qa -> "verifier" -> agy (see _ORG_ROLE_TO_BASELINE_ROLE)
+    capsys.readouterr()
+
+    main(["dispatch", "--task", "run the test suite", "--as-agent", "qa", "--dry-run"])
+    captured = capsys.readouterr()
+    assert "agent:        agy" in captured.out
