@@ -156,6 +156,23 @@ def _ensure_daemon_job_session_column(conn) -> None:
             pass
 
 
+def _ensure_daemon_job_agent_id_column(conn) -> None:
+    """Add agent_id if missing (legacy schemas + unit fixtures). Mirrors
+    _ensure_daemon_job_session_column above — same no-op-on-absence contract.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    if "agent_id" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN agent_id TEXT")
+        except Exception:
+            pass
+
+
 def _ensure_daemon_job_gh_write_columns(conn) -> None:
     """Add Task 0 gh-write columns for legacy/unit-test daemon schemas."""
     try:
@@ -2532,6 +2549,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             # ensure before INSERT so dispatch never hard-fails on schema lag.
             _ensure_daemon_job_context_columns(dconn)
             _ensure_daemon_job_session_column(dconn)
+            _ensure_daemon_job_agent_id_column(dconn)
             _ensure_daemon_job_gh_write_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
@@ -2544,7 +2562,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "log_path=?, agent=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
-                    "session_id=COALESCE(session_id, ?) WHERE job_id=?",
+                    "session_id=COALESCE(session_id, ?), "
+                    "agent_id=COALESCE(agent_id, ?) WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2556,6 +2575,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_mode,
                         context_bytes,
                         session_id,
+                        agent_id,
                         job_id,
                     ),
                 )
@@ -2565,8 +2585,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
                     "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
-                    "requires_gh_write, gh_write_target) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "agent_id, requires_gh_write, gh_write_target) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2583,6 +2603,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_mode,
                         context_bytes,
                         session_id,
+                        agent_id,
                         1 if requires_gh_write else 0,
                         gh_write_target_value,
                     ),

@@ -1082,6 +1082,31 @@ def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(pro
     assert row[1] == "issue:701"
 
 
+def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import agent_cli
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+
+    sl.dispatch_agent(
+        "codex", "do work", agent_id=agent_id, force_agent=True, context_mode="none",
+    )
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT agent_id FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == agent_id
+
+
 def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
