@@ -1722,3 +1722,30 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
     )
 
     assert captured_roles == ["dev"]
+
+
+def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import agent_cli, agent_store
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(
+        agent_store, "_workspace_root",
+        lambda workspace_id: str(project_dir / ".synlynk" / "workspaces" / workspace_id),
+    )
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    monkeypatch.setattr(sl, "_best_agent_for_story", lambda story_id: "grok")
+
+    job = sl.dispatch_agent(
+        "claude", "implement the feature", agent_id=agent_id,
+        story_id="story-with-capability-match", force_agent=False,
+        context_mode="none",
+    )
+
+    assert job["agent"] == "grok"
