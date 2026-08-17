@@ -1394,6 +1394,29 @@ def test_checkpoint_writes_devlog_entries_row(project_dir, monkeypatch):
     assert row is not None
     assert "Finished feature" in row[1]
 
+
+def test_archive_old_devlog_entries_deletes_synced_db_rows(project_dir):
+    author = "nikhilsoman"
+    old_date = time.strftime("%Y-%m-%d", time.localtime(time.time() - 40 * 24 * 3600))
+    synlynk.cmd_devlog_append(author, old_date, "old entry\n")
+    devlog_path = str(project_dir / "project-docs" / "devlogs" / f"{author}.md")
+
+    synlynk._archive_old_devlog_entries(devlog_path, author)
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT 1 FROM devlog_entries WHERE author=? AND entry_date=?",
+        (author, old_date),
+    ).fetchone()
+    conn.close()
+    assert row is None
+
+    synlynk.cmd_devlog_append(author, "2026-08-18", "new entry\n")
+    live_devlog = (project_dir / "project-docs" / "devlogs" / f"{author}.md").read_text()
+    assert "old entry" not in live_devlog
+    assert "new entry" in live_devlog
+
+
 def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     (project_dir / "project-docs" / "todo.md").write_text(

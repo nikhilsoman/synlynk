@@ -2004,6 +2004,7 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
     if _is_migrated():
         slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
         _dr_sync(f"decisions/{date}-{slug}.md")
+        _dr_sync(f"decisions/{date}-{slug}.json")
 
 def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""

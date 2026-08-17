@@ -839,6 +839,20 @@ def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monke
     assert "> Signatures:" in md_content
 
 
+def test_cmd_decision_record_syncs_both_md_and_json(tmp_path, monkeypatch):
+    _setup_migrated(tmp_path, monkeypatch)
+    synced = []
+    monkeypatch.setattr(synlynk, "_dr_sync", synced.append)
+
+    synlynk.cmd_decision_record(
+        "dec-sync123", "Sync paths", "2026-08-18", ["claude"],
+        {"claude": "input"}, "Synthesis", "Decision",
+    )
+
+    assert synced == ["decisions/2026-08-18-sync-paths.md",
+                      "decisions/2026-08-18-sync-paths.json"]
+
+
 def test_cmd_decision_record_writes_pre_migration_too(project_dir):
     from synlynk.db import cmd_decision_record
 

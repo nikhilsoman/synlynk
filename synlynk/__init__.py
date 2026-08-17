@@ -2873,7 +2873,7 @@ def _tee_process(process, buffer: list) -> None:
 
 
 
-def _archive_old_devlog_entries(devlog_path: str) -> None:
+def _archive_old_devlog_entries(devlog_path: str, author: str) -> None:
     """Moves devlog entries older than 30 days to devlogs/archive/YYYY-MM.md."""
     import calendar
     if not os.path.exists(devlog_path):
@@ -2895,7 +2895,7 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
     if current_lines:
         sections.append((current_date, current_lines))
 
-    keep, archive_by_month = [], {}
+    keep, archive_by_month, archived_dates = [], {}, []
     for date_str, lines in sections:
         if date_str is None:
             keep.append((date_str, lines))
@@ -2905,6 +2905,7 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
             if ts < cutoff:
                 month_key = date_str[:7]
                 archive_by_month.setdefault(month_key, []).extend(lines)
+                archived_dates.append(date_str)
             else:
                 keep.append((date_str, lines))
         except ValueError:
@@ -2922,6 +2923,14 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
     with open(devlog_path, "w") as f:
         for _, lines in keep:
             f.writelines(lines)
+
+    conn = _get_db()
+    conn.executemany(
+        "DELETE FROM devlog_entries WHERE author=? AND entry_date=?",
+        [(author, date_str) for date_str in archived_dates],
+    )
+    conn.commit()
+    conn.close()
 
 def _resolve_member_id(username: str) -> str:
     """Looks up username in the member_aliases registry; falls back to username
@@ -2972,7 +2981,7 @@ def checkpoint() -> None:
         with open(todo_path, "w") as f:
             f.writelines(active_lines)
 
-    _archive_old_devlog_entries(devlog_path)
+    _archive_old_devlog_entries(devlog_path, canonical_id)
     generate_context()
 
     completed_ids = [t["id"] for t in completed if t["id"]]
