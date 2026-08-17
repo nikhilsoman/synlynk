@@ -1,0 +1,94 @@
+---
+decision_id: dec-57ceb4e9
+topic: "synlynk's CLI has a naming collision: 'synlynk agent add/configure/run/list' already means per-repo harness configs (.agents/<name>.json matching claude/agy/codex/grok), while the newly-approved Agent-roles-charters design (docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md, already backed by synlynk/agent_store.py) needs new CLI verbs 'agent init/list/show/edit/disable' for durable role-identity agents (pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot). The project's own glossary (docs/glossary-agent-vs-harness.md) already defines Agent=identity+role+charter vs Harness=execution backend (Claude/Agy/Grok/Codex/local) as the correct distinction, but the CLI verb was never updated to match — it still uses 'agent' for what the glossary calls 'harness'. Project is pre-1.0 (v0.13.x), so backwards-compat shims are discouraged by project convention when a direct rename is possible. Two options: (A) rename the existing 'synlynk agent add/configure/run/list' group to 'synlynk harness add/configure/run/list' now (small, scoped, breaking CLI change affecting only the top-level verb + two doc files: README.md, SYNLYNK_GUIDE.md), freeing 'agent' for the new durable role-identity commands, matching the glossary's own terminology; or (B) leave the existing 'agent' CLI group untouched and give the new durable role-identity commands a different noun entirely (e.g. 'synlynk role init/list/show/edit/disable'), avoiding any breaking change but leaving the CLI vocabulary permanently out of sync with the glossary/design-doc terminology (docs say Agent, CLI says role, for the same concept). Which option should this Phase 1 CLI spec take, and why?"
+date: 2026-08-16
+panel: [claude, agy, codex, grok]
+status: approved
+---
+
+## Topic
+synlynk's CLI has a naming collision: 'synlynk agent add/configure/run/list' already means per-repo harness configs (.agents/<name>.json matching claude/agy/codex/grok), while the newly-approved Agent-roles-charters design (docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md, already backed by synlynk/agent_store.py) needs new CLI verbs 'agent init/list/show/edit/disable' for durable role-identity agents (pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot). The project's own glossary (docs/glossary-agent-vs-harness.md) already defines Agent=identity+role+charter vs Harness=execution backend (Claude/Agy/Grok/Codex/local) as the correct distinction, but the CLI verb was never updated to match — it still uses 'agent' for what the glossary calls 'harness'. Project is pre-1.0 (v0.13.x), so backwards-compat shims are discouraged by project convention when a direct rename is possible. Two options: (A) rename the existing 'synlynk agent add/configure/run/list' group to 'synlynk harness add/configure/run/list' now (small, scoped, breaking CLI change affecting only the top-level verb + two doc files: README.md, SYNLYNK_GUIDE.md), freeing 'agent' for the new durable role-identity commands, matching the glossary's own terminology; or (B) leave the existing 'agent' CLI group untouched and give the new durable role-identity commands a different noun entirely (e.g. 'synlynk role init/list/show/edit/disable'), avoiding any breaking change but leaving the CLI vocabulary permanently out of sync with the glossary/design-doc terminology (docs say Agent, CLI says role, for the same concept). Which option should this Phase 1 CLI spec take, and why?
+
+## Panel Inputs
+
+### claude
+This is a naming/design question, not implementation — no skill needed.
+
+**Analysis**
+
+The glossary already exists and already draws the line: Agent = identity/role/charter, Harness = execution backend. That's not a new decision being made here; it's a pre-existing spec the CLI verb currently violates. Option B doesn't avoid a naming problem, it just relocates it — you'd have three names for two concepts (`agent` CLI group = harness, `role` CLI group = agent-per-glossary, plus the glossary's own "agent" term), which is strictly worse than two names for two concepts. Every future contributor reading the design doc and then the CLI has to hold a mental translation table indefinitely. That's a permanent tax, not a one-time cost.
+
+Option A's blast radius is genuinely small and well-scoped: one top-level verb (`agent` → `harness`) plus `.agents/<name>.json` config paths, README.md, SYNLYNK_GUIDE.md. Pre-1.0 (v0.13.x) is exactly the point in a project's life where this kind of rename is cheap — few external integrators, no compat-shim precedent to maintain, and the project's own stated convention already discourages shims when a direct rename is possible. Waiting past 1.0 makes this the same fix at 10x the cost (deprecation cycle, shim code, migration docs) for a problem that's fully fixable today in one PR.
+
+The counterargument for B is real: `agent` is the more intuitive top-level word for "thing I dispatch to run a task" from a user's-eye view, and `harness` is somewhat jargon-y. But that's a documentation/UX problem solvable with good `--help` text and command descriptions, not a reason to let the CLI's core vocabulary drift from the glossary that governs the whole multi-agent design.
+
+**Recommendation: Option A.** Rename `agent` → `harness` now, before the new role-identity commands ship and lock in `agent` for the wrong concept. Scope it as its own small `chore/rename-agent-to-harness-cli` PR ahead of or alongside the Phase 1 role-identity CLI work, per the project's docs-separate-from-code convention.
+
+### agy
+**Status:**
+- **Last completed task:** Initial session setup & prompt review.
+- **Next task from `todo.md`:** Provide panel analysis and recommendation on `synlynk` CLI naming collision.
+
+---
+
+### Analysis
+
+The choice between Option A and Option B represents a fundamental API design trade-off: short-term convenience versus long-term architectural coherence.
+
+1. **Alignment with Ubiquitous Language:**
+   A core principle of intuitive developer tooling is conceptual alignment between documentation and interface. Synlynk’s architecture and glossary establish that an **Agent** is a durable role-identity with a charter (PM, Dev, Architect), whereas a **Harness** is an execution provider (Claude, Agy, Grok). Retaining `synlynk agent` for harnesses while introducing `synlynk role` for agents permanently breaks domain-driven clarity and forces users into constant mental translation between specs and CLI syntax.
+
+2. **Leveraging Pre-1.0 SemVer (`v0.13.x`):**
+   Pre-1.0 versions exist specifically to pay down technical and ergonomic debt before committing to public API stability. Introducing a compromised noun (`role`) solely to avoid a breaking change at `v0.13.x` violates the project's own anti-shim convention and defers an inevitable correction to a point when breaking changes are far more disruptive.
+
+3. **Contained Blast Radius:**
+   Option A's scope is strictly bounded: updating the top-level command parser/router and updating two documentation files (`README.md`, `SYNLYNK_GUIDE.md`). In contrast, Option B creates compounding technical and pedagogical debt across all future CLI subcommands, shell autocompletions, error messages, and documentation.
+
+---
+
+### Final Recommendation
+
+**The Phase 1 CLI spec should adopt Option (A): rename the existing harness management commands to `synlynk harness add/configure/run/list` and assign `synlynk agent` to the new durable role-identity commands.** This cleanly resolves the naming collision, enforces consistency with the established glossary, and takes proper advantage of the pre-1.0 development cycle to deliver a clean, maintainable interface.
+
+### codex
+Option A is the stronger Phase 1 choice: rename the existing per-repository harness command group from `synlynk agent` to `synlynk harness`, then reserve `synlynk agent` for durable role-identity agents.
+
+The naming collision is conceptual, not merely cosmetic. The glossary already establishes a meaningful distinction: an Agent is an identity with a role and charter, while a Harness is the execution backend and repository configuration. The existing commands—`add`, `configure`, `run`, and `list` against `.agents/<name>.json` entries for Claude, Agy, Codex, and Grok—clearly operate on harnesses. Keeping them under `agent` would make the CLI contradict the project’s own architecture and the approved design backed by `agent_store.py`.
+
+Option B avoids an immediate breaking change, but preserves a more costly long-term inconsistency. Calling the new entities `role` would force users to translate between the design vocabulary (“Agent”) and the CLI vocabulary (“role”), obscure the fact that roles are only one part of an agent identity, and make future documentation, help output, and automation harder to reason about. It also risks another migration later, after the durable agent surface has gained users.
+
+Because the project is pre-1.0 and explicitly discourages compatibility shims when a direct rename is feasible, this is the appropriate window for the breaking change. The impact is narrow: the top-level verb changes, with documentation updates in `README.md` and `SYNLYNK_GUIDE.md`. The migration should be explicit and clean, with no alias that perpetuates ambiguity.
+
+Therefore, Phase 1 should adopt Option A: rename the existing group to `synlynk harness add/configure/run/list`, and use `synlynk agent init/list/show/edit/disable` for durable role-identity agents. This aligns implementation, glossary, design, and future CLI evolution around one coherent terminology.
+
+### grok
+I'll read the design, glossary, and current CLI usage so the recommendation matches how this project actually uses "agent" vs "harness".The glossary already treats this as Phase 0; I’ll check how the live CLI still uses `agent` and how wide a rename would actually be.**Take option A:** rename the existing group to `synlynk harness add/configure/run/list` and reserve `synlynk agent …` for durable role-identity agents.
+
+Phase 0 of the approved design already required this vocabulary in code and docs. Phase 1 then names the onboarding surface `agent init/list/show/edit/disable` and stores manifests at `.synlynk/agents/<id>.yaml`. Option B would ship Phase 1 with a CLI noun that contradicts the glossary, the design, the store (`agent_store.py`), and the Tokq story (portable **Agents**, not portable “roles”). “Role” is the charter template (`pm`, `dev`); an Agent is the durable instance (identity, memory namespace, grants). Collapsing those on the CLI reopens the three-model drift the design just closed.
+
+The break is cheap and correctly timed. Pre-1.0, the project already prefers a direct rename over a shim. The live surface is one argparse group plus help strings (`doctor`, `synlynk agent add …` prompts) and the two operator docs. Historical changelog/blog lines can stay as history. The current verb is already the *wrong* word for `.agents/<claude|agy|codex|grok>.json` — those files are harness profiles.
+
+One implementation caution: do not blindly move every current `agent` subcommand. `add`/`configure`/`list` are harness config. `agent run support` (and cron install) is the Support Engineer — already qa’s durable Agent. That verb should land under the new `agent` group, not become `harness run`.
+
+Option B only delays the rename until more scripts, doctor copy, and muscle memory exist. The glossary already made the decision; the CLI should stop fighting it.
+
+**Recommendation: specify option A in the Phase 1 CLI spec.** Rename the harness-config group now, give identity agents `synlynk agent init/list/show/edit/disable`, and treat `agent run` as an Agent verb, not a Harness one.
+
+## Synthesis
+**Synthesis**
+
+All four panel responses converge on the same conclusion, and the reasoning lines up cleanly:
+
+- **The glossary isn't a proposal, it's an existing spec being violated.** Option B doesn't resolve the naming collision, it triples the vocabulary (CLI `agent` = harness, CLI `role` = agent-per-glossary, design docs say `agent`) instead of halving it. That's a permanent tax on every future contributor who reads the design doc and then the `--help` output.
+- **Blast radius for Option A is genuinely small and well-understood**: one top-level verb, `.agents/<name>.json` path naming, two docs (README.md, SYNLYNK_GUIDE.md). No shim needed or wanted, consistent with the project's stated pre-1.0 convention.
+- **Timing argument is one-directional**: this is exactly the cheapest point in the project's life to make this fix. Every dispatched agent, cron job, script, and muscle-memory habit that gets built against `synlynk agent` for harnesses between now and 1.0 makes the eventual correction more expensive, not less.
+- **Grok's addition is the one implementation nuance worth carrying into the Phase 1 spec**: `agent run support` (the Support Engineer / QA agent) is already a durable-identity Agent per the design, not a harness-config verb — it should land under the new `synlynk agent` group, not get swept into `synlynk harness run` just because it currently lives in the old command group. Whoever writes the Phase 1 spec should audit the existing `agent` subcommands individually rather than doing a blanket rename of the whole group.
+
+No dissent to weigh — this is a rare 4/4 alignment across independent panelists, including one (Grok) who apparently checked the actual current CLI surface before answering.
+
+**Decision:** Option A. Rename the existing `synlynk agent add/configure/run/list` group to `synlynk harness add/configure/run/list` now, as a small scoped pre-1.0 breaking change (top-level verb + README.md + SYNLYNK_GUIDE.md), and reserve `synlynk agent init/list/show/edit/disable` for the new durable role-identity commands — matching the glossary the project already committed to. Carve out `agent run support` from the old group into the new one rather than renaming it to `harness run`, since it's already a durable-identity agent per the design, not a harness config action. Scope this as its own `chore/rename-agent-to-harness-cli` PR ahead of or alongside the Phase 1 role-identity CLI work.
+
+## Decision
+**Decision:** Option A. Rename the existing `synlynk agent add/configure/run/list` group to `synlynk harness add/configure/run/list` now, as a small scoped pre-1.0 breaking change (top-level verb + README.md + SYNLYNK_GUIDE.md), and reserve `synlynk agent init/list/show/edit/disable` for the new durable role-identity commands — matching the glossary the project already committed to. Carve out `agent run support` from the old group into the new one rather than renaming it to `harness run`, since it's already a durable-identity agent per the design, not a harness config action. Scope this as its own `chore/rename-agent-to-harness-cli` PR ahead of or alongside the Phase 1 role-identity CLI work.
+
+> Signatures: see 2026-08-16-synlynk-s-cli-has-a-naming-collision-syn.json
