@@ -282,6 +282,28 @@ def test_regenerate_agent_projection_is_idempotent(project_dir, tmp_path, monkey
     assert first == second
 
 
+def test_regenerate_agent_projection_merges_overrides_across_calls(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
+
+    agent_store.regenerate_agent_projection(
+        "dev-primary", repo_overrides={"capability_grants": {}}
+    )
+    agent_store.regenerate_agent_projection(
+        "dev-primary", repo_overrides={"new_key": "value"}
+    )
+
+    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
+    with open(projection_path) as f:
+        rendered = f.read()
+    assert "capability_grants: {}" in rendered
+    assert "new_key: value" in rendered
+
+
 def test_regenerate_agent_projection_path_is_gitignored(project_dir, tmp_path, monkeypatch, git_worktree_repo):
     from synlynk import agent_store
     import subprocess

@@ -335,18 +335,46 @@ def _agent_role(agent_id: str) -> str:
     return ""
 
 
+def _read_existing_projection_overrides(projection_path: str) -> dict:
+    if not os.path.exists(projection_path):
+        return {}
+    try:
+        with open(projection_path) as f:
+            lines = f.readlines()
+    except OSError:
+        return {}
+    overrides = {}
+    in_overrides = False
+    for line in lines:
+        stripped = line.rstrip("\n")
+        if stripped == "overrides:":
+            in_overrides = True
+            continue
+        if in_overrides:
+            if not stripped.startswith("  ") or stripped.strip() == "":
+                break
+            key, _, value = stripped.strip().partition(": ")
+            if key:
+                overrides[key] = value if value != "{}" else {}
+    return overrides
+
+
 def regenerate_agent_projection(agent_id: str, repo_overrides: dict = None) -> None:
     workspace_id = get_workspace_id()
+    projection_dir = os.path.join(".synlynk", "agents")
+    os.makedirs(projection_dir, exist_ok=True)
+    projection_path = os.path.join(projection_dir, f"{agent_id}.yaml")
+
+    merged_overrides = _read_existing_projection_overrides(projection_path)
+    merged_overrides.update(repo_overrides or {})
+
     payload = {
         "agent_id": agent_id,
         "workspace_id": workspace_id,
         "role": _agent_role(agent_id),
-        "overrides": repo_overrides or {},
+        "overrides": merged_overrides,
     }
     rendered = _dump_flat_yaml(payload) + "\n"
 
-    projection_dir = os.path.join(".synlynk", "agents")
-    os.makedirs(projection_dir, exist_ok=True)
-    projection_path = os.path.join(projection_dir, f"{agent_id}.yaml")
     with open(projection_path, "w") as f:
         f.write(rendered)
