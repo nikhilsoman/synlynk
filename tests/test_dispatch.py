@@ -1047,6 +1047,14 @@ def test_daemon_jobs_migration_adds_requires_gh_write_and_gh_write_target(projec
     conn.close()
 
 
+def test_daemon_jobs_migration_adds_agent_id_column(project_dir):
+    from synlynk import _get_db
+    conn = _get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "agent_id" in cols
+    conn.close()
+
+
 def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
@@ -1072,6 +1080,31 @@ def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(pro
     conn.close()
     assert row[0] == 1
     assert row[1] == "issue:701"
+
+
+def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import agent_cli
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+
+    sl.dispatch_agent(
+        "codex", "do work", agent_id=agent_id, force_agent=True, context_mode="none",
+    )
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT agent_id FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == agent_id
 
 
 def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
@@ -1652,6 +1685,18 @@ def test_dispatch_agent_id_auto_selects_harness_by_mapped_role(project_dir, monk
     assert job["agent"] == "agy"
 
 
+def test_harness_for_org_role_ignores_non_core_fleet_baselines(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    fake_baselines = {
+        "aardvark": {"roles": ["builder"], "can_gh_write": False},
+        "agy": {"roles": ["builder", "verifier"], "can_gh_write": False},
+    }
+
+    result = dispatch_mod._harness_for_org_role("dev", fake_baselines)
+    assert result == "agy"
+
+
 def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
@@ -1677,3 +1722,30 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
     )
 
     assert captured_roles == ["dev"]
+
+
+def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import agent_cli, agent_store
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(
+        agent_store, "_workspace_root",
+        lambda workspace_id: str(project_dir / ".synlynk" / "workspaces" / workspace_id),
+    )
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    monkeypatch.setattr(sl, "_best_agent_for_story", lambda story_id: "grok")
+
+    job = sl.dispatch_agent(
+        "claude", "implement the feature", agent_id=agent_id,
+        story_id="story-with-capability-match", force_agent=False,
+        context_mode="none",
+    )
+
+    assert job["agent"] == "grok"

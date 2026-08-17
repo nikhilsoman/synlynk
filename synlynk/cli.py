@@ -1147,7 +1147,14 @@ def main(argv=None) -> None:
                 from synlynk.dispatch import _render_dispatch_preview
 
                 context_mode = getattr(args, "context_mode", "task")
-                preview = _render_dispatch_preview(args.agent, args.task, context_mode)
+                preview = _render_dispatch_preview(
+                    args.agent or (known_agents[0] if not resolved_agent_id else None),
+                    args.task, context_mode,
+                    agent_id=resolved_agent_id,
+                    story_id=getattr(args, "story_id", None),
+                    force_agent=getattr(args, "force_agent", False),
+                    requires_gh_write=getattr(args, "requires_gh_write", False),
+                )
                 print()
                 print(f"agent:        {preview['agent']}")
                 print(f"task ({preview['task_len']} chars):")

@@ -41,7 +41,9 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
     baseline_role = _ORG_ROLE_TO_BASELINE_ROLE.get(org_role)
     if not baseline_role:
         return None
-    for name in sorted(baselines_map):
+    from synlynk._constants import CORE_FLEET
+
+    for name in sorted(n for n in baselines_map if n in CORE_FLEET):
         baseline = baselines_map[name]
         if baseline_role not in baseline.get("roles", []):
             continue
@@ -152,6 +154,23 @@ def _ensure_daemon_job_session_column(conn) -> None:
             conn.execute(
                 "ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT REFERENCES sessions(session_id)"
             )
+        except Exception:
+            pass
+
+
+def _ensure_daemon_job_agent_id_column(conn) -> None:
+    """Add agent_id if missing (legacy schemas + unit fixtures). Mirrors
+    _ensure_daemon_job_session_column above — same no-op-on-absence contract.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    if "agent_id" not in cols:
+        try:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN agent_id TEXT")
         except Exception:
             pass
 
@@ -811,8 +830,14 @@ def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None)
     return current_tip == base_sha
 
 
-def _render_dispatch_preview(agent: str, task: str, context_mode: str) -> dict:
+def _render_dispatch_preview(agent: str, task: str, context_mode: str,
+                              agent_id: str = None, story_id: str = None,
+                              force_agent: bool = False, requires_gh_write: bool = False) -> dict:
     """Compute task/context digest data for dispatch inspection."""
+    agent = resolve_dispatch_harness(
+        agent, agent_id=agent_id, story_id=story_id,
+        force_agent=force_agent, requires_gh_write=requires_gh_write,
+    )
     task_sha256 = hashlib.sha256(task.encode("utf-8")).hexdigest()
     context_digest = None
     context_bytes = None
@@ -1962,6 +1987,51 @@ def _preflight_dispatch(
     return {"passed": True, "sentinel": None, "reason": None}
 
 
+def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
+                              force_agent: bool = False, requires_gh_write: bool = False) -> str:
+    """Resolve which harness a dispatch will actually run on.
+
+    Side-effect-free (no subprocess spawn, no DB write) so both the live
+    dispatch path and the --dry-run preview path can call it and see the
+    same answer. Raises ValueError for an unregistered/disabled agent_id,
+    same as the live path always has.
+    """
+    resolved_agent_role = None
+    if agent_id:
+        from synlynk import agent_store
+        entry = next(
+            (a for a in agent_store.list_agents() if a["agent_id"] == agent_id), None
+        )
+        if entry is None:
+            raise ValueError(
+                f"agent_id {agent_id!r} is unregistered — cannot dispatch. "
+                f"Run `synlynk agent list` to see registered agents."
+            )
+        if entry.get("disabled"):
+            raise ValueError(
+                f"agent {agent_id!r} is disabled — cannot dispatch. "
+                f"Use `synlynk agent show {agent_id}` to check status."
+            )
+        resolved_agent_role = next(
+            (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
+        )
+
+    if force_agent:
+        return agent
+
+    baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
+    picked = None
+    if story_id:
+        best_agent = _pkg("_best_agent_for_story")
+        if best_agent:
+            best = best_agent(story_id)
+            if best and best in baselines_map:
+                picked = best
+    if picked is None and resolved_agent_role:
+        picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
+    return picked or agent
+
+
 def dispatch_agent(agent: str, task: str, story_id: str = None,
                    agent_id: str = None,
                    force_agent: bool = False,
@@ -1982,25 +2052,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    agent = resolve_dispatch_harness(
+        agent, agent_id=agent_id, story_id=story_id,
+        force_agent=force_agent, requires_gh_write=requires_gh_write,
+    )
     resolved_agent_role = None
     if agent_id:
         from synlynk import agent_store
         entry = next(
             (a for a in agent_store.list_agents() if a["agent_id"] == agent_id), None
         )
-        if entry is None:
-            raise ValueError(
-                f"agent_id {agent_id!r} is unregistered — cannot dispatch. "
-                f"Run `synlynk agent list` to see registered agents."
+        if entry:
+            resolved_agent_role = next(
+                (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
             )
-        if entry.get("disabled"):
-            raise ValueError(
-                f"agent {agent_id!r} is disabled — cannot dispatch. "
-                f"Use `synlynk agent show {agent_id}` to check status."
-            )
-        resolved_agent_role = next(
-            (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
-        )
     if session_id is None:
         from synlynk.session import _read_active_session
         session_id = _read_active_session()
@@ -2008,19 +2073,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     dispatch_time = None
     if not story_id:
         dispatch_time = time.time()
-    if not force_agent:
-        picked = None
-        if story_id:
-            best_agent = _pkg("_best_agent_for_story")
-            if best_agent:
-                best = best_agent(story_id)
-                if best and best in baselines_map:
-                    picked = best
-        if picked is None and resolved_agent_role:
-            picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
-        if picked:
-            agent = picked
-
     if requires_gh_write:
         current_baseline = baselines_map.get(agent, {})
         if not current_baseline.get("can_gh_write", False):
@@ -2532,6 +2584,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             # ensure before INSERT so dispatch never hard-fails on schema lag.
             _ensure_daemon_job_context_columns(dconn)
             _ensure_daemon_job_session_column(dconn)
+            _ensure_daemon_job_agent_id_column(dconn)
             _ensure_daemon_job_gh_write_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
@@ -2544,7 +2597,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "log_path=?, agent=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
-                    "session_id=COALESCE(session_id, ?) WHERE job_id=?",
+                    "session_id=COALESCE(session_id, ?), "
+                    "agent_id=COALESCE(agent_id, ?) WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2556,6 +2610,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_mode,
                         context_bytes,
                         session_id,
+                        agent_id,
                         job_id,
                     ),
                 )
@@ -2565,8 +2620,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
                     "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
-                    "requires_gh_write, gh_write_target) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "agent_id, requires_gh_write, gh_write_target) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2583,6 +2638,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_mode,
                         context_bytes,
                         session_id,
+                        agent_id,
                         1 if requires_gh_write else 0,
                         gh_write_target_value,
                     ),

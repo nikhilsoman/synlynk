@@ -125,6 +125,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [117](./117-pr1003-agent-roles-phase1-cli.md) | PR #1003 — Agent-Roles-Charters Phase 1: Giving Workspace Agents a CLI | [#1003](https://github.com/nikhilsoman/synlynk/pull/1003) | 2026-08-16 |
 | [118](./118-pr993-agent-harness-rename.md) | PR #993 — Freeing `agent` from `harness` | [#993](https://github.com/nikhilsoman/synlynk/pull/993) | 2026-08-16 |
 | **[119](./119-v0.14.0-truth-and-identity.md)** | **v0.14.0 — Truth in the Pipe, Identity for the Agents (Named Release)** | [v0.14.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.14.0) | **2026-08-16** |
+| [120](./120-pr1022-agent-roles-phase1-followups.md) | PR #1022 — Agent-Roles-Charters Phase 1 Follow-Ups: Closing the Footguns | [#1022](https://github.com/nikhilsoman/synlynk/pull/1022) | 2026-08-17 |
 
 ## Per-PR Post Template
 

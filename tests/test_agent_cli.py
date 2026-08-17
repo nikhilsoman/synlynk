@@ -155,6 +155,28 @@ def test_cmd_agent_edit_stale_revision_exits_1(project_dir, tmp_path, monkeypatc
     assert "updated by someone else" in captured.err or "updated by someone else" in captured.out
 
 
+def test_cmd_agent_edit_preserves_capability_grants_set_after_init(project_dir, tmp_path, capsys):
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    # Simulate a future mechanism (e.g. Phase 3 capability registry) writing
+    # a non-empty capability_grants after init but before this edit.
+    agent_store.regenerate_agent_projection(
+        agent_id, repo_overrides={"capability_grants": {"can_deploy": True}}
+    )
+
+    charter_file = tmp_path / "edited_charter.md"
+    charter_file.write_text("Implementation — writes the code, now with more detail.")
+    agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+
+    projection_path = os.path.join(".synlynk", "agents", f"{agent_id}.yaml")
+    with open(projection_path) as f:
+        rendered = f.read()
+    assert "can_deploy: True" in rendered
+
+
 def test_cmd_agent_disable_sets_flag(project_dir, capsys):
     from synlynk import agent_cli, agent_store
 
@@ -291,3 +313,14 @@ def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch
     main(["dispatch", "--task", "do work", "--as-agent", "dev"])
 
     assert "agent" in captured
+
+
+def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_agent(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["agent", "init", "qa"])  # qa -> "verifier" -> agy (see _ORG_ROLE_TO_BASELINE_ROLE)
+    capsys.readouterr()
+
+    main(["dispatch", "--task", "run the test suite", "--as-agent", "qa", "--dry-run"])
+    captured = capsys.readouterr()
+    assert "agent:        agy" in captured.out

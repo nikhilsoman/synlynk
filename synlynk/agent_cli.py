@@ -112,7 +112,7 @@ def cmd_agent_edit(id_or_alias: str, charter_path: str) -> None:
         )
         raise SystemExit(1)
 
-    agent_store.regenerate_agent_projection(agent_id, repo_overrides={"capability_grants": {}})
+    agent_store.regenerate_agent_projection(agent_id)
     print(f"Updated charter for {agent_id} (revision {new_revision})")
 
 
