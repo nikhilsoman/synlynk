@@ -213,7 +213,7 @@ def _register_agent(tmp_path, monkeypatch, agent_id, org_role):
     """Registers a workspace agent with the given org role, returning its agent_id."""
     monkeypatch.chdir(tmp_path)
     from synlynk import agent_store
-    agent_store.init_agent(agent_id, role=org_role, charter="test agent")
+    agent_store.register_agent(agent_id, aliases=[{"kind": "role_slug", "value": org_role}])
     return agent_id
 
 
@@ -226,7 +226,7 @@ def test_role_only_dispatch_uses_synthetic_story_capability_score(tmp_path, monk
     from synlynk._constants import _role_dispatch_story_id
     from synlynk.dispatch import resolve_dispatch_harness
 
-    agent_store.init_agent("dev-agent-1", role="architect", charter="test")
+    agent_store.register_agent("dev-agent-1", aliases=[{"kind": "role_slug", "value": "architect"}])
     story_id = _role_dispatch_story_id("architect")
     conn = _get_db()
     conn.execute(
@@ -257,11 +257,14 @@ def test_role_only_dispatch_cold_start_falls_back_to_static_baseline(tmp_path, m
     from synlynk import agent_store
     from synlynk.dispatch import resolve_dispatch_harness
 
-    agent_store.init_agent("dev-agent-2", role="architect", charter="test")
-    result = resolve_dispatch_harness("claude", agent_id="dev-agent-2")
-    # architect baseline role: "agy" sorts first alphabetically among CORE_FLEET agents
-    # tagged "architect" in AGENT_CAPABILITY_BASELINES.
-    assert result == "agy"
+    agent_store.register_agent("dev-agent-2", aliases=[{"kind": "role_slug", "value": "architect"}])
+    # "codex" as the initial agent param would never be returned by any path here (it isn't
+    # tagged "architect"), so a "claude" result proves _harness_for_org_role's static pick ran.
+    result = resolve_dispatch_harness("codex", agent_id="dev-agent-2")
+    # architect baseline role: among CORE_FLEET agents tagged "architect" in
+    # AGENT_CAPABILITY_BASELINES ("claude", "grok" — "agy" is NOT tagged "architect"),
+    # "claude" sorts first alphabetically.
+    assert result == "claude"
 
 
 def test_static_baseline_forces_static_pick_over_synthetic_story_score(tmp_path, monkeypatch):
@@ -271,7 +274,7 @@ def test_static_baseline_forces_static_pick_over_synthetic_story_score(tmp_path,
     from synlynk._constants import _role_dispatch_story_id
     from synlynk.dispatch import resolve_dispatch_harness
 
-    agent_store.init_agent("dev-agent-3", role="architect", charter="test")
+    agent_store.register_agent("dev-agent-3", aliases=[{"kind": "role_slug", "value": "architect"}])
     story_id = _role_dispatch_story_id("architect")
     conn = _get_db()
     conn.execute(
@@ -288,8 +291,9 @@ def test_static_baseline_forces_static_pick_over_synthetic_story_score(tmp_path,
     conn.commit()
     conn.close()
 
-    result = resolve_dispatch_harness("claude", agent_id="dev-agent-3", static_baseline=True)
-    assert result == "agy"  # static baseline pick, ignoring the codex score
+    result = resolve_dispatch_harness("codex", agent_id="dev-agent-3", static_baseline=True)
+    assert result == "claude"  # static baseline pick ("claude" sorts first among architect-tagged
+    # CORE_FLEET agents), ignoring the codex score
 
 
 def test_static_baseline_forces_static_pick_even_with_real_story_id_score(tmp_path, monkeypatch):
@@ -298,7 +302,7 @@ def test_static_baseline_forces_static_pick_even_with_real_story_id_score(tmp_pa
     from synlynk import _get_db, agent_store
     from synlynk.dispatch import resolve_dispatch_harness
 
-    agent_store.init_agent("dev-agent-4", role="architect", charter="test")
+    agent_store.register_agent("dev-agent-4", aliases=[{"kind": "role_slug", "value": "architect"}])
     conn = _get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, discipline, org_domain, industry, phase) "
@@ -315,9 +319,9 @@ def test_static_baseline_forces_static_pick_even_with_real_story_id_score(tmp_pa
     conn.close()
 
     result = resolve_dispatch_harness(
-        "claude", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
+        "codex", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
     )
-    assert result == "agy"  # static baseline pick, ignoring the real story_id's codex score
+    assert result == "claude"  # static baseline pick, ignoring the real story_id's codex score
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -658,7 +662,7 @@ def test_dispatch_static_baseline_flag_threads_to_resolve_dispatch_harness(tmp_p
     import os
     os.makedirs(".synlynk/state", exist_ok=True)
     from synlynk import agent_store
-    agent_store.init_agent("dev-agent-cli-1", role="architect", charter="test")
+    agent_store.register_agent("dev-agent-cli-1", aliases=[{"kind": "role_slug", "value": "architect"}])
 
     from synlynk.dispatch import _render_dispatch_preview
 
