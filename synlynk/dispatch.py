@@ -41,7 +41,9 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
     baseline_role = _ORG_ROLE_TO_BASELINE_ROLE.get(org_role)
     if not baseline_role:
         return None
-    for name in sorted(baselines_map):
+    from synlynk._constants import CORE_FLEET
+
+    for name in sorted(n for n in baselines_map if n in CORE_FLEET):
         baseline = baselines_map[name]
         if baseline_role not in baseline.get("roles", []):
             continue

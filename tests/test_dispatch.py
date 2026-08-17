@@ -1685,6 +1685,18 @@ def test_dispatch_agent_id_auto_selects_harness_by_mapped_role(project_dir, monk
     assert job["agent"] == "agy"
 
 
+def test_harness_for_org_role_ignores_non_core_fleet_baselines(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    fake_baselines = {
+        "aardvark": {"roles": ["builder"], "can_gh_write": False},
+        "agy": {"roles": ["builder", "verifier"], "can_gh_write": False},
+    }
+
+    result = dispatch_mod._harness_for_org_role("dev", fake_baselines)
+    assert result == "agy"
+
+
 def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
