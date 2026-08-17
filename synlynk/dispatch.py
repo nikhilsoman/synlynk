@@ -2054,6 +2054,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    cycle: str = "work",
                    skip_preflight: bool = False,
                    requires_gh_write: bool = False,
+                   static_baseline: bool = False,
                    task_type: str = None,
                    requires: list = None,
                    grants: list = None,
@@ -2070,6 +2071,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     agent = resolve_dispatch_harness(
         agent, agent_id=agent_id, story_id=story_id,
         force_agent=force_agent, requires_gh_write=requires_gh_write,
+        static_baseline=static_baseline,
     )
     resolved_agent_role = None
     if agent_id:
