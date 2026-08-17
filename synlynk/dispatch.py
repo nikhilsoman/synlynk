@@ -832,11 +832,13 @@ def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None)
 
 def _render_dispatch_preview(agent: str, task: str, context_mode: str,
                               agent_id: str = None, story_id: str = None,
-                              force_agent: bool = False, requires_gh_write: bool = False) -> dict:
+                              force_agent: bool = False, requires_gh_write: bool = False,
+                              static_baseline: bool = False) -> dict:
     """Compute task/context digest data for dispatch inspection."""
     agent = resolve_dispatch_harness(
         agent, agent_id=agent_id, story_id=story_id,
         force_agent=force_agent, requires_gh_write=requires_gh_write,
+        static_baseline=static_baseline,
     )
     task_sha256 = hashlib.sha256(task.encode("utf-8")).hexdigest()
     context_digest = None
@@ -1988,13 +1990,17 @@ def _preflight_dispatch(
 
 
 def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
-                              force_agent: bool = False, requires_gh_write: bool = False) -> str:
+                              force_agent: bool = False, requires_gh_write: bool = False,
+                              static_baseline: bool = False) -> str:
     """Resolve which harness a dispatch will actually run on.
 
     Side-effect-free (no subprocess spawn, no DB write) so both the live
     dispatch path and the --dry-run preview path can call it and see the
     same answer. Raises ValueError for an unregistered/disabled agent_id,
     same as the live path always has.
+    static_baseline=True bypasses learned capability-score routing entirely
+    (both real story_id and synthetic role-dispatch story lookups) and
+    forces the deterministic _harness_for_org_role static pick.
     """
     resolved_agent_role = None
     if agent_id:
@@ -2021,10 +2027,19 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
 
     baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
     picked = None
-    if story_id:
+    if story_id and not static_baseline:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
             best = best_agent(story_id)
+            if best and best in baselines_map:
+                picked = best
+    if picked is None and resolved_agent_role and not static_baseline:
+        from synlynk._constants import _role_dispatch_story_id
+
+        synthetic_story_id = _role_dispatch_story_id(resolved_agent_role)
+        best_agent = _pkg("_best_agent_for_story")
+        if best_agent:
+            best = best_agent(synthetic_story_id)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role:
