@@ -486,57 +486,6 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
                 pass
 
 
-def _write_decision_record(
-    decision_id: str, topic: str, date: str, panel: list,
-    inputs: dict, synthesis: str, decision_text: str,
-    decisions_dir: str, slug: str
-) -> None:
-    """Write MD + JSON sidecar for a Decision record. Signs JSON with local identity key."""
-    base = os.path.join(decisions_dir, f"{date}-{slug}")
-
-    record = {
-        "decision_id": decision_id,
-        "topic": topic,
-        "date": date,
-        "panel": panel,
-        "status": "approved",
-        "inputs": inputs,
-        "synthesis": synthesis,
-        "decision": decision_text,
-    }
-
-    sig = _pkg("_sign_capability_rating")(record)
-    if sig:
-        record["signature"] = sig
-    else:
-        print("  ⚠ No identity key — decision written unsigned. "
-              "Run `synlynk identity init` first.")
-
-    with open(f"{base}.json", "w") as f:
-        json.dump(record, f, indent=2)
-
-    panel_inputs_md = ""
-    for member, text in inputs.items():
-        panel_inputs_md += f"\n### {member}\n{text}\n"
-
-    md_content = (
-        f"---\n"
-        f"decision_id: {decision_id}\n"
-        f"topic: \"{topic}\"\n"
-        f"date: {date}\n"
-        f"panel: [{', '.join(panel)}]\n"
-        f"status: approved\n"
-        f"---\n\n"
-        f"## Topic\n{topic}\n\n"
-        f"## Panel Inputs\n{panel_inputs_md}\n"
-        f"## Synthesis\n{synthesis}\n\n"
-        f"## Decision\n{decision_text}\n\n"
-        f"> Signatures: see {date}-{slug}.json\n"
-    )
-    with open(f"{base}.md", "w") as f:
-        f.write(md_content)
-
-
 def cmd_decide(topic: str, panel: list, record: bool = False) -> None:
     """Convene a multi-agent panel on topic and optionally record the Decision."""
     print(f"\n  {_CYAN}▶{_RESET} Convening panel on: {topic}")
@@ -603,22 +552,19 @@ def cmd_decide(topic: str, panel: list, record: bool = False) -> None:
     today = time.strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
 
-    decisions_dir = os.path.join(_pkg("_docs_dir")(), "decisions")
-    os.makedirs(decisions_dir, exist_ok=True)
-
-    _write_decision_record(
-        decision_id, topic, today, panel,
-        inputs, synthesis, decision_text, decisions_dir, slug
+    _pkg("cmd_decision_record")(
+        decision_id, topic, today, panel, inputs, synthesis, decision_text
     )
 
-    print(f"  {_GREEN}✓{_RESET} Decision recorded: {decisions_dir}/{today}-{slug}.md")
+    print(f"  {_GREEN}✓{_RESET} Decision recorded: {today}-{slug}")
 
 
 def _build_team_digest() -> dict:
     """Reads devlogs + SQLite to build a team status digest.
     SQLite section silently skipped if state.db absent."""
     members = []
-    devlogs_dir = os.path.join(_pkg("_docs_dir")(), "devlogs")
+    docs_root = _pkg("_synlynk_project_docs_dir")() if _pkg("_is_migrated")() else _pkg("_docs_dir")()
+    devlogs_dir = os.path.join(docs_root, "devlogs")
     if os.path.exists(devlogs_dir):
         for fname in sorted(os.listdir(devlogs_dir)):
             if fname.endswith(".md") and fname != "README.md":

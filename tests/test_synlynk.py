@@ -5684,6 +5684,22 @@ def test_build_team_digest_reads_devlogs(project_dir):
     assert "alice" in users
 
 
+def test_build_team_digest_reads_devlogs_when_migrated(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    migrated_devlogs = tmp_path / ".synlynk" / "project-docs" / "devlogs"
+    migrated_devlogs.mkdir(parents=True)
+    (migrated_devlogs / "alice.md").write_text(
+        "# Devlog — @alice\n\n## 2026-06-20\nDid stuff.\n"
+    )
+    digest = synlynk._build_team_digest()
+    users = [m["user"] for m in digest["members"]]
+    assert "alice" in users
+
+
 def test_build_team_digest_no_db(project_dir):
     import synlynk
     digest = synlynk._build_team_digest()
@@ -5818,6 +5834,20 @@ def test_decide_json_has_decision_id(project_dir, monkeypatch):
     json_file = next((project_dir / "project-docs" / "decisions").glob("*.json"))
     record = _json.loads(json_file.read_text())
     assert record["decision_id"].startswith("dec-")
+
+
+def test_decide_record_writes_decisions_row(project_dir, monkeypatch):
+    import synlynk
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"Analysis from {agent}. Decision: use option B.")
+    synlynk.cmd_decide("Relay ownership", panel=["claude", "agy"], record=True)
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT topic, status FROM decisions WHERE topic=?", ("Relay ownership",)
+    ).fetchone()
+    conn.close()
+    assert row == ("Relay ownership", "approved")
+
 
 def test_decide_md_contains_panel_inputs(project_dir, monkeypatch):
     import synlynk

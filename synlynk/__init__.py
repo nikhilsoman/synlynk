@@ -138,7 +138,6 @@ from synlynk.team import (
     _run_agent_sync,
     _sign_capability_rating,
     _write_role_app_config,
-    _write_decision_record,
     cmd_decide,
     cmd_identity_init,
     cmd_identity_init_role,
