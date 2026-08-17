@@ -1141,3 +1141,53 @@ def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
     
     # Ensure no file writes
     assert version_file.read_text().strip() == "0.10.0"
+
+# --- Phase 2: role-dispatch synthetic story ---
+
+def test_role_dispatch_story_id_is_deterministic():
+    from synlynk._constants import _role_dispatch_story_id
+    assert _role_dispatch_story_id("dev") == "__role_dispatch_dev__"
+    assert _role_dispatch_story_id("dev") == _role_dispatch_story_id("dev")
+    assert _role_dispatch_story_id("qa") != _role_dispatch_story_id("dev")
+
+
+def test_ensure_role_dispatch_story_seeds_synthetic_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _ensure_role_dispatch_story
+    from synlynk._constants import _role_dispatch_story_id
+
+    conn = _get_db()
+    story_id = _role_dispatch_story_id("dev")
+    _ensure_role_dispatch_story(conn, "dev", story_id)
+    row = conn.execute(
+        "SELECT story_id, title, discipline, org_domain, industry, phase, role "
+        "FROM stories WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "__role_dispatch_dev__"
+    assert "synthetic, not a real story" in row[1]
+    assert row[2] == "general"
+    assert row[3] == "general"
+    assert row[4] == "general"
+    assert row[5] == "build"
+    assert row[6] == "dev"
+
+
+def test_ensure_role_dispatch_story_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _ensure_role_dispatch_story
+    from synlynk._constants import _role_dispatch_story_id
+
+    conn = _get_db()
+    story_id = _role_dispatch_story_id("qa")
+    _ensure_role_dispatch_story(conn, "qa", story_id)
+    _ensure_role_dispatch_story(conn, "qa", story_id)  # second call must not raise or duplicate
+    count = conn.execute(
+        "SELECT COUNT(*) FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert count == 1

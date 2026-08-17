@@ -182,6 +182,7 @@ from synlynk.jobs import (
     _count_dispatch_rework,
     _count_tool_calls,
     _dispatch_ready_jobs,
+    _ensure_role_dispatch_story,
     _extract_micro_rework,
     _inspect_worktree_git_state,
     _load_jobs,

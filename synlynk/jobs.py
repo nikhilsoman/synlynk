@@ -842,6 +842,31 @@ def _count_tool_calls(log_text: str) -> int:
     patterns = ("Tool:", "Running tool", "function_call", "tool_use")
     return sum(log_text.count(pattern) for pattern in patterns)
 
+def _ensure_role_dispatch_story(conn, org_role: str, story_id: str) -> None:
+    """Lazily seeds the synthetic per-org-role story row (Phase 2 role-dispatch learning).
+
+    Mirrors _seed_capability_ledger_from_baseline's INSERT OR IGNORE pattern in
+    capability_sweep.py — idempotent, safe under concurrent dispatches for the same role.
+    Role-dispatch capability signal is intentionally coarse (discipline="general" for every
+    role) rather than discipline-aware; real story_id-based dispatches keep their own
+    discipline value untouched.
+    """
+    conn.execute(
+        "INSERT OR IGNORE INTO stories "
+        "(story_id, title, discipline, org_domain, industry, phase, role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            story_id,
+            f"Role-dispatch capability signal ({org_role}) — synthetic, not a real story",
+            "general",
+            "general",
+            "general",
+            "build",
+            org_role,
+        ),
+    )
+    conn.commit()
+
 def _write_capability_rating(job: dict, log_text: str) -> None:
     """Writes a capability_ratings row for a completed job."""
     story_id = job.get("story_id", "")

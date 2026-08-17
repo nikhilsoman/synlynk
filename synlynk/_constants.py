@@ -224,3 +224,13 @@ CORE_INSTRUCTION_FILES = {
 AGENT_PANEL_QUERY_TIMEOUT_SECONDS = {
     "codex": 300,
 }
+
+
+def _role_dispatch_story_id(org_role: str) -> str:
+    """Deterministic synthetic story_id for role/agent_id-driven dispatches with no real story.
+
+    Pure function — safe to call from both the read path (resolve_dispatch_harness,
+    no DB access) and the write path (_write_capability_rating, seeds this ID lazily).
+    Never persisted to daemon_jobs.story_id or any other real-story-consuming field.
+    """
+    return f"__role_dispatch_{org_role}__"
