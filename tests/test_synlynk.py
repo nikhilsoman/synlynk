@@ -1309,6 +1309,22 @@ def test_check_costs_freshness_silent_when_fresh(project_dir, capsys):
     assert "costs.md not updated" not in captured.out
 
 
+def test_check_costs_freshness_resolves_migrated_path(tmp_path, monkeypatch, capsys):
+    import synlynk, os, time
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    migrated_docs = tmp_path / ".synlynk" / "project-docs"
+    migrated_docs.mkdir()
+    costs_path = migrated_docs / "costs.md"
+    costs_path.write_text("| date | ... |\n")
+    old_time = time.time() - 7200
+    os.utime(str(costs_path), (old_time, old_time))
+    synlynk._check_costs_freshness()
+    captured = capsys.readouterr()
+    assert "costs.md not updated" in captured.out
+
+
 def test_watch_daemon_is_running_false_when_no_pidfile(project_dir):
     daemon = synlynk.WatchDaemon()
     assert daemon._is_running() is False

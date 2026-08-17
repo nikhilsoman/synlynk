@@ -21,18 +21,6 @@ _SENTINEL_VERSION_DRIFT_AGENT_RE = re.compile(
 )
 
 
-def _docs_dir() -> str:
-    """Returns the configured project docs directory (defaults to 'project-docs')."""
-    config_file = ".synlynk/config.json"
-    if os.path.exists(config_file):
-        try:
-            with open(config_file) as f:
-                return json.load(f).get("project_docs_dir", "project-docs")
-        except (json.JSONDecodeError, IOError):
-            pass
-    return "project-docs"
-
-
 def log_telemetry_event(event: dict) -> None:
     """Appends a structured event to .synlynk/telemetry.json (capped at 100)."""
     telemetry_file = ".synlynk/telemetry.json"
@@ -53,7 +41,9 @@ def log_telemetry_event(event: dict) -> None:
 
 def _check_costs_freshness() -> None:
     """Warns if costs.md hasn't been updated in the current session (>1 hour)."""
-    costs_file = os.path.join(_docs_dir(), "costs.md")
+    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+    docs = _synlynk_project_docs_dir() if _is_migrated() else _docs_dir()
+    costs_file = os.path.join(docs, "costs.md")
     if not os.path.exists(costs_file):
         return
     if time.time() - os.path.getmtime(costs_file) > 3600:
