@@ -842,13 +842,46 @@ def _count_tool_calls(log_text: str) -> int:
     patterns = ("Tool:", "Running tool", "function_call", "tool_use")
     return sum(log_text.count(pattern) for pattern in patterns)
 
+def _ensure_role_dispatch_story(conn, org_role: str, story_id: str) -> None:
+    """Lazily seeds the synthetic per-org-role story row (Phase 2 role-dispatch learning).
+
+    Mirrors _seed_capability_ledger_from_baseline's INSERT OR IGNORE pattern in
+    capability_sweep.py — idempotent, safe under concurrent dispatches for the same role.
+    Role-dispatch capability signal is intentionally coarse (discipline="general" for every
+    role) rather than discipline-aware; real story_id-based dispatches keep their own
+    discipline value untouched.
+    """
+    conn.execute(
+        "INSERT OR IGNORE INTO stories "
+        "(story_id, title, engg_domain, discipline, org_domain, industry, phase, role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            story_id,
+            f"Role-dispatch capability signal ({org_role}) — synthetic, not a real story",
+            "general",
+            "general",
+            "general",
+            "general",
+            "build",
+            org_role,
+        ),
+    )
+    conn.commit()
+
 def _write_capability_rating(job: dict, log_text: str) -> None:
     """Writes a capability_ratings row for a completed job."""
     story_id = job.get("story_id", "")
+    org_role = None
     if not story_id:
-        return
+        org_role = job.get("resolved_agent_role") or ""
+        if not org_role:
+            return
+        from synlynk._constants import _role_dispatch_story_id
+        story_id = _role_dispatch_story_id(org_role)
 
     conn = _pkg("_get_db")()
+    if org_role:
+        _ensure_role_dispatch_story(conn, org_role, story_id)
     exists = conn.execute("SELECT 1 FROM stories WHERE story_id=?", (story_id,)).fetchone()
     if not exists:
         conn.close()
@@ -907,14 +940,15 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         conn.close()
         return
     story_engg_domain, story_discipline, org_domain, role, stage, industry, phase, stack_tags = story_row
-    from synlynk.db import _normalize_capability_tags
-    story_discipline, org_domain, role, stage = _normalize_capability_tags(
-        story_engg_domain,
-        org_domain,
-        discipline=story_discipline,
-        role=role,
-        stage=stage,
-    )
+    if not org_role:
+        from synlynk.db import _normalize_capability_tags
+        story_discipline, org_domain, role, stage = _normalize_capability_tags(
+            story_engg_domain,
+            org_domain,
+            discipline=story_discipline,
+            role=role,
+            stage=stage,
+        )
     engg_domain = story_discipline or engg_domain
 
     weighted_sum, total_weight = 0.0, 0.0

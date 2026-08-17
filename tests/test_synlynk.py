@@ -228,6 +228,33 @@ def test_dispatch_rejects_unknown_agent_before_dispatch_agent_called(project_dir
     assert calls == []
 
 
+def test_dispatch_static_baseline_flag_threads_to_resolve_dispatch_harness(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda path: path.replace("~", str(fake_home)))
+    from synlynk import agent_store
+    agent_store.register_agent("dev-agent-cli-1", aliases=[{"kind": "role_slug", "value": "architect"}])
+
+    captured = {}
+    import synlynk.dispatch as dispatch_mod
+
+    def fake_resolve(*args, **kwargs):
+        captured["static_baseline"] = kwargs.get("static_baseline")
+        return "agy"
+
+    monkeypatch.setattr(dispatch_mod, "resolve_dispatch_harness", fake_resolve)
+
+    from synlynk.cli import main
+    main([
+        "dispatch", "--as-agent", "dev-agent-cli-1",
+        "--task", "do the thing", "--static-baseline", "--dry-run",
+    ])
+    out = capsys.readouterr().out
+    assert captured.get("static_baseline") is True
+    assert "agent:        agy" in out
+
+
 def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(

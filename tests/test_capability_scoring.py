@@ -1141,3 +1141,159 @@ def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
     
     # Ensure no file writes
     assert version_file.read_text().strip() == "0.10.0"
+
+# --- Phase 2: role-dispatch synthetic story ---
+
+def test_role_dispatch_story_id_is_deterministic():
+    from synlynk._constants import _role_dispatch_story_id
+    assert _role_dispatch_story_id("dev") == "__role_dispatch_dev__"
+    assert _role_dispatch_story_id("dev") == _role_dispatch_story_id("dev")
+    assert _role_dispatch_story_id("qa") != _role_dispatch_story_id("dev")
+
+
+def test_ensure_role_dispatch_story_seeds_synthetic_row(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _ensure_role_dispatch_story
+    from synlynk._constants import _role_dispatch_story_id
+
+    conn = _get_db()
+    story_id = _role_dispatch_story_id("dev")
+    _ensure_role_dispatch_story(conn, "dev", story_id)
+    row = conn.execute(
+        "SELECT story_id, title, discipline, org_domain, industry, phase, role "
+        "FROM stories WHERE story_id=?",
+        (story_id,),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "__role_dispatch_dev__"
+    assert "synthetic, not a real story" in row[1]
+    assert row[2] == "general"
+    assert row[3] == "general"
+    assert row[4] == "general"
+    assert row[5] == "build"
+    assert row[6] == "dev"
+
+
+def test_ensure_role_dispatch_story_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/state", exist_ok=True)
+    from synlynk import _get_db, _ensure_role_dispatch_story
+    from synlynk._constants import _role_dispatch_story_id
+
+    conn = _get_db()
+    story_id = _role_dispatch_story_id("qa")
+    _ensure_role_dispatch_story(conn, "qa", story_id)
+    _ensure_role_dispatch_story(conn, "qa", story_id)  # second call must not raise or duplicate
+    count = conn.execute(
+        "SELECT COUNT(*) FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert count == 1
+
+
+def test_write_capability_rating_role_only_job_writes_synthetic_story_rating(tmp_path, monkeypatch):
+    """A completed role-only job writes a rating keyed to its synthetic story."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import synlynk as sl
+    from synlynk._constants import _role_dispatch_story_id
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+
+    job = {
+        "story_id": "", "agent": "claude", "model_at_dispatch": "claude-3",
+        "resolved_agent_role": "dev",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "19 passed in 2.1s")
+
+    story_id = _role_dispatch_story_id("dev")
+    conn = sl._get_db()
+    story_row = conn.execute(
+        "SELECT title FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    rating_row = conn.execute(
+        "SELECT agent, role, discipline FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert story_row is not None
+    assert "synthetic, not a real story" in story_row[0]
+    assert rating_row is not None
+    assert rating_row[0] == "claude"
+    assert rating_row[1] == "dev"
+    assert rating_row[2] == "general"
+
+
+def test_write_capability_rating_role_only_second_job_does_not_reseed(tmp_path, monkeypatch):
+    """A second role-only job adds a rating without duplicating the synthetic story."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import synlynk as sl
+    from synlynk._constants import _role_dispatch_story_id
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+
+    job_common = {
+        "story_id": "", "agent": "claude", "model_at_dispatch": "claude-3",
+        "resolved_agent_role": "qa",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(dict(job_common), "19 passed in 2.1s")
+    sl._write_capability_rating(dict(job_common), "20 passed in 2.3s")
+
+    story_id = _role_dispatch_story_id("qa")
+    conn = sl._get_db()
+    story_count = conn.execute(
+        "SELECT COUNT(*) FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    rating_count = conn.execute(
+        "SELECT COUNT(*) FROM capability_ratings WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert story_count == 1
+    assert rating_count == 2
+
+
+def test_write_capability_rating_no_story_no_role_still_no_ops(tmp_path, monkeypatch):
+    """A job with neither story_id nor a resolvable role writes no rating."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import synlynk as sl
+    monkeypatch.setattr(sl, "_sign_capability_rating", lambda d: "")
+
+    job = {
+        "story_id": "", "agent": "claude", "model_at_dispatch": "claude-3",
+        "started_at": "2026-06-01T10:00:00", "ended_at": "2026-06-01T10:05:00",
+        "exit_code": 0, "dispatch_rework": 0, "micro_rework": 0,
+    }
+    sl._write_capability_rating(job, "19 passed in 2.1s")
+
+    conn = sl._get_db()
+    count = conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0]
+    conn.close()
+    assert count == 0
+
+
+def test_role_only_job_never_persists_synthetic_story_id_to_daemon_jobs(tmp_path, monkeypatch):
+    """Role-only dispatches keep daemon_jobs.story_id empty rather than using the synthetic ID."""
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    from synlynk import _get_db
+    from synlynk.dispatch import _ensure_daemon_job_agent_id_column
+
+    conn = _get_db()
+    _ensure_daemon_job_agent_id_column(conn)
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, depends_on, "
+        "enqueued_at, agent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-role-only-1", "claude", "do work", None, "completed", 5, "[]",
+         "2026-06-01T10:00:00", "dev-agent-1"),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT story_id FROM daemon_jobs WHERE job_id=?", ("job-role-only-1",)
+    ).fetchone()
+    conn.close()
+    assert row[0] is None

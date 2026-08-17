@@ -610,6 +610,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
         help="Bypass capability routing — dispatch to the exact agent specified")
+    dispatch_parser.add_argument("--static-baseline", action="store_true", dest="static_baseline",
+        help="Bypass learned capability-score routing for this dispatch — use the "
+             "deterministic static baseline pick instead (Phase 2, #914-adjacent)")
     dispatch_parser.add_argument("--requires-gh-write", action="store_true", dest="requires_gh_write",
         help="Task needs gh write (PR review/merge/comment). Requires a role GitHub App token "
              "(synlynk identity init --role); fails closed if none (#569). "
@@ -1154,6 +1157,7 @@ def main(argv=None) -> None:
                     story_id=getattr(args, "story_id", None),
                     force_agent=getattr(args, "force_agent", False),
                     requires_gh_write=getattr(args, "requires_gh_write", False),
+                    static_baseline=getattr(args, "static_baseline", False),
                 )
                 print()
                 print(f"agent:        {preview['agent']}")
@@ -1175,6 +1179,7 @@ def main(argv=None) -> None:
             job = dispatch_agent(args.agent or known_agents[0], args.task, story_id=args.story_id,
                                  agent_id=resolved_agent_id,
                                  force_agent=getattr(args, "force_agent", False),
+                                 static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
                                  task_type=getattr(args, "task_type", None),
                                  requires=getattr(args, "requires", []),
