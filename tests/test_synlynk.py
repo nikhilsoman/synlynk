@@ -6994,6 +6994,23 @@ def test_hc_docs_dir_warn_missing_files(tmp_path, monkeypatch):
     assert "todo.md" in result.message or "memory.md" in result.message
 
 
+def test_hc_docs_dir_resolves_migrated_path(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    (tmp_path / ".synlynk" / "config.json").write_text('{"project_docs_dir": "project-docs"}')
+    migrated_docs = tmp_path / ".synlynk" / "project-docs"
+    migrated_docs.mkdir()
+    for fname in ["roadmap.md", "todo.md", "memory.md"]:
+        (migrated_docs / fname).write_text("")
+    # Old pre-migration path does NOT exist — if _hc_docs_dir() still reads
+    # the raw _docs_dir(), this must fail/warn instead of reporting ok.
+    result = synlynk._hc_docs_dir()
+    assert result.status == "ok"
+    assert str(migrated_docs) in result.message
+
+
 def test_hc_identity_key_ok(tmp_path, monkeypatch):
     import synlynk
     synlynk_home = tmp_path / ".synlynk_test_home"
