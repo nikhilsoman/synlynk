@@ -795,3 +795,49 @@ def test_decisions_table_created_idempotently(tmp_path, monkeypatch):
         "decision_id", "topic", "date", "panel", "status", "inputs",
         "synthesis", "decision_text", "signature", "created_at",
     }
+
+
+def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    synlynk.cmd_decision_record(
+        "dec-abc12345", "Relay ownership", "2026-08-18", ["claude", "agy"],
+        {"claude": "Claude's input", "agy": "Agy's input"},
+        "Synthesis text", "Decision: use option B.",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT topic, status, decision_text FROM decisions WHERE decision_id=?",
+        ("dec-abc12345",)
+    ).fetchone()
+    conn.close()
+    assert row == ("Relay ownership", "approved", "Decision: use option B.")
+
+    decisions_dir = backup / "decisions"
+    md_files = list(decisions_dir.glob("*.md"))
+    json_files = list(decisions_dir.glob("*.json"))
+    assert len(md_files) == 1
+    assert len(json_files) == 1
+    import json as _json
+    record = _json.loads(json_files[0].read_text())
+    assert record["decision_id"] == "dec-abc12345"
+    assert record["decision"] == "Decision: use option B."
+    md_content = md_files[0].read_text()
+    assert "<!-- generated - source of truth is state.db -->" in md_content
+    assert "### claude" in md_content
+    assert "### agy" in md_content
+    assert "## Synthesis" in md_content
+    assert "> Signatures:" in md_content
+
+
+def test_cmd_decision_record_writes_pre_migration_too(project_dir):
+    from synlynk.db import cmd_decision_record
+
+    cmd_decision_record(
+        "dec-def67890", "DB choice", "2026-08-18", ["claude"],
+        {"claude": "input text"}, "synthesis text", "Decision: yes.",
+    )
+
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    md_files = list(decisions_dir.glob("*.md"))
+    assert len(md_files) == 1
+    assert "DB choice" in md_files[0].read_text()

@@ -1896,6 +1896,106 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
         _write_devlog_file(author)
         _dr_sync(f"devlogs/{author}.md")
 
+
+def _write_decision_record_md(decision_id: str) -> None:
+    """Regenerate the .md + .json sidecar for a decision from the decisions table.
+    Post-migration: writes to .synlynk/project-docs/decisions/.
+    Pre-migration: writes to project-docs/decisions/."""
+    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT decision_id, topic, date, panel, status, inputs, synthesis, "
+        "decision_text, signature FROM decisions WHERE decision_id=?",
+        (decision_id,)
+    ).fetchone()
+    conn.close()
+    decision_id, topic, date, panel_json, status, inputs_json, synthesis, decision_text, signature = row
+    panel = json.loads(panel_json)
+    inputs = json.loads(inputs_json)
+
+    if _is_migrated():
+        decisions_dir = os.path.join(_synlynk_project_docs_dir(), "decisions")
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        decisions_dir = os.path.join(docs_dir, "decisions")
+    os.makedirs(decisions_dir, exist_ok=True)
+
+    slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
+    base = os.path.join(decisions_dir, f"{date}-{slug}")
+
+    record = {
+        "decision_id": decision_id,
+        "topic": topic,
+        "date": date,
+        "panel": panel,
+        "status": status,
+        "inputs": inputs,
+        "synthesis": synthesis,
+        "decision": decision_text,
+    }
+    if signature:
+        record["signature"] = signature
+
+    with open(f"{base}.json", "w") as f:
+        json.dump(record, f, indent=2)
+
+    panel_inputs_md = ""
+    for member, text in inputs.items():
+        panel_inputs_md += f"\n### {member}\n{text}\n"
+
+    md_content = (
+        f"<!-- generated - source of truth is state.db -->\n"
+        f"---\n"
+        f"decision_id: {decision_id}\n"
+        f"topic: \"{topic}\"\n"
+        f"date: {date}\n"
+        f"panel: [{', '.join(panel)}]\n"
+        f"status: {status}\n"
+        f"---\n\n"
+        f"## Topic\n{topic}\n\n"
+        f"## Panel Inputs\n{panel_inputs_md}\n"
+        f"## Synthesis\n{synthesis}\n\n"
+        f"## Decision\n{decision_text}\n\n"
+        f"> Signatures: see {date}-{slug}.json\n"
+    )
+    with open(f"{base}.md", "w") as f:
+        f.write(md_content)
+
+
+def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
+                         inputs: dict, synthesis: str, decision_text: str) -> None:
+    """Insert a decision row into state.db, then write through to the flat file pair."""
+    from synlynk import _dr_sync, _get_db, _is_migrated
+    from synlynk.team import _sign_capability_rating
+
+    record_for_signing = {
+        "decision_id": decision_id, "topic": topic, "date": date, "panel": panel,
+        "status": "approved", "inputs": inputs, "synthesis": synthesis,
+        "decision": decision_text,
+    }
+    signature = _sign_capability_rating(record_for_signing)
+    if not signature:
+        print("  ⚠ No identity key — decision written unsigned. "
+              "Run `synlynk identity init` first.")
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, "
+        "synthesis, decision_text, signature) VALUES (?,?,?,?,?,?,?,?,?)",
+        (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
+         synthesis, decision_text, signature)
+    )
+    conn.commit()
+    conn.close()
+
+    _write_decision_record_md(decision_id)
+    if _is_migrated():
+        slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
+        _dr_sync(f"decisions/{date}-{slug}.md")
+
 def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""
     from synlynk import _docs_dir, _get_db
