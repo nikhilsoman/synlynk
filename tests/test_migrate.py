@@ -679,6 +679,16 @@ def test_cmd_devlog_append_writes_entry(tmp_path, monkeypatch):
     assert "BS-18" in devlog_file.read_text()
 
 
+def test_write_devlog_file_pre_migration(project_dir):
+    from synlynk.db import cmd_devlog_append
+
+    cmd_devlog_append("nikhil", "2026-08-18", "### Resolved (checkpoint)\n- Ship the thing\n")
+
+    path = project_dir / "project-docs" / "devlogs" / "nikhil.md"
+    assert path.exists()
+    assert "Ship the thing" in path.read_text()
+
+
 def test_update_costs_writes_to_db_and_flat_file_post_migration(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
     synlynk.update_costs("scan", 50000, 10000, 12.5)
@@ -781,3 +791,77 @@ def test_full_migration_end_to_end(tmp_path, monkeypatch):
     count = conn.execute('SELECT COUNT(*) FROM memory_entries').fetchone()[0]
     conn.close()
     assert count == 3  # 2 original + 1 written-through
+
+
+def test_decisions_table_created_idempotently(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DB_PATH", str(tmp_path / "state.db"))
+    conn = synlynk._get_db()
+    conn.close()
+    conn = synlynk._get_db()  # second call must not raise
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)")}
+    conn.close()
+    assert cols == {
+        "decision_id", "topic", "date", "panel", "status", "inputs",
+        "synthesis", "decision_text", "signature", "created_at",
+    }
+
+
+def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monkeypatch):
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    synlynk.cmd_decision_record(
+        "dec-abc12345", "Relay ownership", "2026-08-18", ["claude", "agy"],
+        {"claude": "Claude's input", "agy": "Agy's input"},
+        "Synthesis text", "Decision: use option B.",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT topic, status, decision_text FROM decisions WHERE decision_id=?",
+        ("dec-abc12345",)
+    ).fetchone()
+    conn.close()
+    assert row == ("Relay ownership", "approved", "Decision: use option B.")
+
+    decisions_dir = backup / "decisions"
+    md_files = list(decisions_dir.glob("*.md"))
+    json_files = list(decisions_dir.glob("*.json"))
+    assert len(md_files) == 1
+    assert len(json_files) == 1
+    import json as _json
+    record = _json.loads(json_files[0].read_text())
+    assert record["decision_id"] == "dec-abc12345"
+    assert record["decision"] == "Decision: use option B."
+    md_content = md_files[0].read_text()
+    assert "<!-- generated - source of truth is state.db -->" in md_content
+    assert "### claude" in md_content
+    assert "### agy" in md_content
+    assert "## Synthesis" in md_content
+    assert "> Signatures:" in md_content
+
+
+def test_cmd_decision_record_syncs_both_md_and_json(tmp_path, monkeypatch):
+    _setup_migrated(tmp_path, monkeypatch)
+    synced = []
+    monkeypatch.setattr(synlynk, "_dr_sync", synced.append)
+
+    synlynk.cmd_decision_record(
+        "dec-sync123", "Sync paths", "2026-08-18", ["claude"],
+        {"claude": "input"}, "Synthesis", "Decision",
+    )
+
+    assert synced == ["decisions/2026-08-18-sync-paths.md",
+                      "decisions/2026-08-18-sync-paths.json"]
+
+
+def test_cmd_decision_record_writes_pre_migration_too(project_dir):
+    from synlynk.db import cmd_decision_record
+
+    cmd_decision_record(
+        "dec-def67890", "DB choice", "2026-08-18", ["claude"],
+        {"claude": "input text"}, "synthesis text", "Decision: yes.",
+    )
+
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    md_files = list(decisions_dir.glob("*.md"))
+    assert len(md_files) == 1
+    assert "DB choice" in md_files[0].read_text()

@@ -97,7 +97,10 @@ def _hc_project_init() -> HealthCheck:
 
 def _hc_docs_dir() -> HealthCheck:
     try:
-        docs = _pkg("_docs_dir")()
+        if _pkg("_is_migrated")():
+            docs = _pkg("_synlynk_project_docs_dir")()
+        else:
+            docs = _pkg("_docs_dir")()
     except Exception:
         return HealthCheck(
             "docs_dir",

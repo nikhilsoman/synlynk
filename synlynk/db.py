@@ -586,6 +586,18 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
         CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
+        CREATE TABLE IF NOT EXISTS decisions (
+            decision_id   TEXT PRIMARY KEY,
+            topic         TEXT NOT NULL,
+            date          TEXT NOT NULL,
+            panel         TEXT NOT NULL,
+            status        TEXT NOT NULL,
+            inputs        TEXT NOT NULL,
+            synthesis     TEXT NOT NULL,
+            decision_text TEXT NOT NULL,
+            signature     TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS members (
             member_id      TEXT PRIMARY KEY,
             canonical_name TEXT NOT NULL,
@@ -1844,8 +1856,10 @@ def cmd_memory_add(section: str, body: str, author: str = None) -> None:
         _dr_sync("memory.md")
 
 def _write_devlog_file(author: str) -> None:
-    """Regenerate .synlynk/project-docs/devlogs/<author>.md from devlog_entries."""
-    from synlynk import _get_db, _synlynk_project_docs_dir
+    """Regenerate devlogs/<author>.md from devlog_entries.
+    Post-migration: writes to .synlynk/project-docs/devlogs/.
+    Pre-migration: writes to project-docs/devlogs/."""
+    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
     conn = _get_db()
     rows = conn.execute(
         "SELECT entry_date, session_title, body FROM devlog_entries "
@@ -1859,7 +1873,13 @@ def _write_devlog_file(author: str) -> None:
         if session_title:
             header += f" — {session_title}"
         lines.append(f"{header}\n\n{body}\n\n")
-    devlog_dir = os.path.join(_synlynk_project_docs_dir(), "devlogs")
+    if _is_migrated():
+        devlog_dir = os.path.join(_synlynk_project_docs_dir(), "devlogs")
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        devlog_dir = os.path.join(docs_dir, "devlogs")
     os.makedirs(devlog_dir, exist_ok=True)
     with open(os.path.join(devlog_dir, f"{author}.md"), "w") as f:
         f.writelines(lines)
@@ -1867,7 +1887,8 @@ def _write_devlog_file(author: str) -> None:
 def cmd_devlog_append(author: str, entry_date: str, body: str,
                       session_title: str = None, session_id: str = None,
                       goal_id: str = None) -> None:
-    """Append a devlog entry to DB and write through to flat file if migrated."""
+    """Append a devlog entry to DB. Always writes through to the flat file;
+    DR sync only fires once this repo is migrated."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.session import _read_active_session
     if session_id is None:
@@ -1880,9 +1901,110 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
     )
     conn.commit()
     conn.close()
+    _write_devlog_file(author)
     if _is_migrated():
-        _write_devlog_file(author)
         _dr_sync(f"devlogs/{author}.md")
+
+
+def _write_decision_record_md(decision_id: str) -> None:
+    """Regenerate the .md + .json sidecar for a decision from the decisions table.
+    Post-migration: writes to .synlynk/project-docs/decisions/.
+    Pre-migration: writes to project-docs/decisions/."""
+    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT decision_id, topic, date, panel, status, inputs, synthesis, "
+        "decision_text, signature FROM decisions WHERE decision_id=?",
+        (decision_id,)
+    ).fetchone()
+    conn.close()
+    decision_id, topic, date, panel_json, status, inputs_json, synthesis, decision_text, signature = row
+    panel = json.loads(panel_json)
+    inputs = json.loads(inputs_json)
+
+    if _is_migrated():
+        decisions_dir = os.path.join(_synlynk_project_docs_dir(), "decisions")
+    else:
+        docs_dir = _docs_dir()
+        if not os.path.exists(docs_dir):
+            return
+        decisions_dir = os.path.join(docs_dir, "decisions")
+    os.makedirs(decisions_dir, exist_ok=True)
+
+    slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
+    base = os.path.join(decisions_dir, f"{date}-{slug}")
+
+    record = {
+        "decision_id": decision_id,
+        "topic": topic,
+        "date": date,
+        "panel": panel,
+        "status": status,
+        "inputs": inputs,
+        "synthesis": synthesis,
+        "decision": decision_text,
+    }
+    if signature:
+        record["signature"] = signature
+
+    with open(f"{base}.json", "w") as f:
+        json.dump(record, f, indent=2)
+
+    panel_inputs_md = ""
+    for member, text in inputs.items():
+        panel_inputs_md += f"\n### {member}\n{text}\n"
+
+    md_content = (
+        f"<!-- generated - source of truth is state.db -->\n"
+        f"---\n"
+        f"decision_id: {decision_id}\n"
+        f"topic: \"{topic}\"\n"
+        f"date: {date}\n"
+        f"panel: [{', '.join(panel)}]\n"
+        f"status: {status}\n"
+        f"---\n\n"
+        f"## Topic\n{topic}\n\n"
+        f"## Panel Inputs\n{panel_inputs_md}\n"
+        f"## Synthesis\n{synthesis}\n\n"
+        f"## Decision\n{decision_text}\n\n"
+        f"> Signatures: see {date}-{slug}.json\n"
+    )
+    with open(f"{base}.md", "w") as f:
+        f.write(md_content)
+
+
+def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
+                         inputs: dict, synthesis: str, decision_text: str) -> None:
+    """Insert a decision row into state.db, then write through to the flat file pair."""
+    from synlynk import _dr_sync, _get_db, _is_migrated
+    from synlynk.team import _sign_capability_rating
+
+    record_for_signing = {
+        "decision_id": decision_id, "topic": topic, "date": date, "panel": panel,
+        "status": "approved", "inputs": inputs, "synthesis": synthesis,
+        "decision": decision_text,
+    }
+    signature = _sign_capability_rating(record_for_signing)
+    if not signature:
+        print("  ⚠ No identity key — decision written unsigned. "
+              "Run `synlynk identity init` first.")
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, "
+        "synthesis, decision_text, signature) VALUES (?,?,?,?,?,?,?,?,?)",
+        (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
+         synthesis, decision_text, signature)
+    )
+    conn.commit()
+    conn.close()
+
+    _write_decision_record_md(decision_id)
+    if _is_migrated():
+        slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
+        _dr_sync(f"decisions/{date}-{slug}.md")
+        _dr_sync(f"decisions/{date}-{slug}.json")
 
 def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""

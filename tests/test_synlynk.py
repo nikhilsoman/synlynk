@@ -1309,6 +1309,22 @@ def test_check_costs_freshness_silent_when_fresh(project_dir, capsys):
     assert "costs.md not updated" not in captured.out
 
 
+def test_check_costs_freshness_resolves_migrated_path(tmp_path, monkeypatch, capsys):
+    import synlynk, os, time
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    migrated_docs = tmp_path / ".synlynk" / "project-docs"
+    migrated_docs.mkdir()
+    costs_path = migrated_docs / "costs.md"
+    costs_path.write_text("| date | ... |\n")
+    old_time = time.time() - 7200
+    os.utime(str(costs_path), (old_time, old_time))
+    synlynk._check_costs_freshness()
+    captured = capsys.readouterr()
+    assert "costs.md not updated" in captured.out
+
+
 def test_watch_daemon_is_running_false_when_no_pidfile(project_dir):
     daemon = synlynk.WatchDaemon()
     assert daemon._is_running() is False
@@ -1363,6 +1379,43 @@ def test_checkpoint_appends_to_devlog(project_dir, monkeypatch):
     synlynk.checkpoint()
     devlog = (project_dir / "project-docs" / "devlogs" / "nikhilsoman.md").read_text()
     assert "Finished feature" in devlog
+
+def test_checkpoint_writes_devlog_entries_row(project_dir, monkeypatch):
+    monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Finished feature <!-- id: 5 -->\n"
+    )
+    synlynk.checkpoint()
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT author, body FROM devlog_entries WHERE author=?", ("nikhilsoman",)
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert "Finished feature" in row[1]
+
+
+def test_archive_old_devlog_entries_deletes_synced_db_rows(project_dir):
+    author = "nikhilsoman"
+    old_date = time.strftime("%Y-%m-%d", time.localtime(time.time() - 40 * 24 * 3600))
+    synlynk.cmd_devlog_append(author, old_date, "old entry\n")
+    devlog_path = str(project_dir / "project-docs" / "devlogs" / f"{author}.md")
+
+    synlynk._archive_old_devlog_entries(devlog_path, author)
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT 1 FROM devlog_entries WHERE author=? AND entry_date=?",
+        (author, old_date),
+    ).fetchone()
+    conn.close()
+    assert row is None
+
+    synlynk.cmd_devlog_append(author, "2026-08-18", "new entry\n")
+    live_devlog = (project_dir / "project-docs" / "devlogs" / f"{author}.md").read_text()
+    assert "old entry" not in live_devlog
+    assert "new entry" in live_devlog
+
 
 def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
@@ -5684,6 +5737,22 @@ def test_build_team_digest_reads_devlogs(project_dir):
     assert "alice" in users
 
 
+def test_build_team_digest_reads_devlogs_when_migrated(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    migrated_devlogs = tmp_path / ".synlynk" / "project-docs" / "devlogs"
+    migrated_devlogs.mkdir(parents=True)
+    (migrated_devlogs / "alice.md").write_text(
+        "# Devlog — @alice\n\n## 2026-06-20\nDid stuff.\n"
+    )
+    digest = synlynk._build_team_digest()
+    users = [m["user"] for m in digest["members"]]
+    assert "alice" in users
+
+
 def test_build_team_digest_no_db(project_dir):
     import synlynk
     digest = synlynk._build_team_digest()
@@ -5818,6 +5887,20 @@ def test_decide_json_has_decision_id(project_dir, monkeypatch):
     json_file = next((project_dir / "project-docs" / "decisions").glob("*.json"))
     record = _json.loads(json_file.read_text())
     assert record["decision_id"].startswith("dec-")
+
+
+def test_decide_record_writes_decisions_row(project_dir, monkeypatch):
+    import synlynk
+    monkeypatch.setattr(synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"Analysis from {agent}. Decision: use option B.")
+    synlynk.cmd_decide("Relay ownership", panel=["claude", "agy"], record=True)
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT topic, status FROM decisions WHERE topic=?", ("Relay ownership",)
+    ).fetchone()
+    conn.close()
+    assert row == ("Relay ownership", "approved")
+
 
 def test_decide_md_contains_panel_inputs(project_dir, monkeypatch):
     import synlynk
@@ -6948,6 +7031,23 @@ def test_hc_docs_dir_warn_missing_files(tmp_path, monkeypatch):
     result = synlynk._hc_docs_dir()
     assert result.status == "warn"
     assert "todo.md" in result.message or "memory.md" in result.message
+
+
+def test_hc_docs_dir_resolves_migrated_path(tmp_path, monkeypatch):
+    import synlynk, os
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
+    (tmp_path / ".synlynk" / "config.json").write_text('{"project_docs_dir": "project-docs"}')
+    migrated_docs = tmp_path / ".synlynk" / "project-docs"
+    migrated_docs.mkdir()
+    for fname in ["roadmap.md", "todo.md", "memory.md"]:
+        (migrated_docs / fname).write_text("")
+    # Old pre-migration path does NOT exist — if _hc_docs_dir() still reads
+    # the raw _docs_dir(), this must fail/warn instead of reporting ok.
+    result = synlynk._hc_docs_dir()
+    assert result.status == "ok"
+    assert str(migrated_docs) in result.message
 
 
 def test_hc_identity_key_ok(tmp_path, monkeypatch):

@@ -138,7 +138,6 @@ from synlynk.team import (
     _run_agent_sync,
     _sign_capability_rating,
     _write_role_app_config,
-    _write_decision_record,
     cmd_decide,
     cmd_identity_init,
     cmd_identity_init_role,
@@ -2874,7 +2873,7 @@ def _tee_process(process, buffer: list) -> None:
 
 
 
-def _archive_old_devlog_entries(devlog_path: str) -> None:
+def _archive_old_devlog_entries(devlog_path: str, author: str) -> None:
     """Moves devlog entries older than 30 days to devlogs/archive/YYYY-MM.md."""
     import calendar
     if not os.path.exists(devlog_path):
@@ -2896,7 +2895,7 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
     if current_lines:
         sections.append((current_date, current_lines))
 
-    keep, archive_by_month = [], {}
+    keep, archive_by_month, archived_dates = [], {}, []
     for date_str, lines in sections:
         if date_str is None:
             keep.append((date_str, lines))
@@ -2906,6 +2905,7 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
             if ts < cutoff:
                 month_key = date_str[:7]
                 archive_by_month.setdefault(month_key, []).extend(lines)
+                archived_dates.append(date_str)
             else:
                 keep.append((date_str, lines))
         except ValueError:
@@ -2923,6 +2923,14 @@ def _archive_old_devlog_entries(devlog_path: str) -> None:
     with open(devlog_path, "w") as f:
         for _, lines in keep:
             f.writelines(lines)
+
+    conn = _get_db()
+    conn.executemany(
+        "DELETE FROM devlog_entries WHERE author=? AND entry_date=?",
+        [(author, date_str) for date_str in archived_dates],
+    )
+    conn.commit()
+    conn.close()
 
 def _resolve_member_id(username: str) -> str:
     """Looks up username in the member_aliases registry; falls back to username
@@ -2946,7 +2954,10 @@ def checkpoint() -> None:
     username = get_username()
     canonical_id = _resolve_member_id(username)
     todo_path = "project-docs/todo.md"
-    devlog_path = f"project-docs/devlogs/{canonical_id}.md"
+    if _is_migrated():
+        devlog_path = os.path.join(_synlynk_project_docs_dir(), "devlogs", f"{canonical_id}.md")
+    else:
+        devlog_path = os.path.join(_docs_dir(), "devlogs", f"{canonical_id}.md")
 
     # Collect resolved tasks (done/superseded/absorbed) and keep the rest
     completed, active_lines = [], []
@@ -2961,17 +2972,16 @@ def checkpoint() -> None:
                 else:
                     active_lines.append(line)
 
-    # Append resolved tasks to devlog
+    # Write resolved tasks through to the devlog (DB row + regenerated flat file)
     if completed:
-        os.makedirs(os.path.dirname(devlog_path), exist_ok=True)
-        with open(devlog_path, "a") as f:
-            f.write(f"\n## {time.strftime('%Y-%m-%d')}\n### Resolved (checkpoint)\n")
-            for task in completed:
-                f.write(f"- {task['text']}\n")
+        body_lines = ["### Resolved (checkpoint)"]
+        for task in completed:
+            body_lines.append(f"- {task['text']}")
+        cmd_devlog_append(canonical_id, time.strftime('%Y-%m-%d'), "\n".join(body_lines) + "\n")
         with open(todo_path, "w") as f:
             f.writelines(active_lines)
 
-    _archive_old_devlog_entries(devlog_path)
+    _archive_old_devlog_entries(devlog_path, canonical_id)
     generate_context()
 
     completed_ids = [t["id"] for t in completed if t["id"]]
@@ -3961,6 +3971,7 @@ from synlynk.db import (  # noqa: E402
     _parse_roadmap_md,
     _parse_todo_metadata,
     cmd_devlog_append,
+    cmd_decision_record,
     cmd_cost_log,
     cmd_audit_docs,
     cmd_remediation_log,
