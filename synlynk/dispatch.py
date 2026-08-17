@@ -2575,6 +2575,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "requires_gh_write": requires_gh_write,
         "gh_write_target": gh_write_target_value,
         "task_type": task_type or "",
+        "agent_id": agent_id or "",
+        "resolved_agent_role": resolved_agent_role or "",
     }
 
     load_jobs = _pkg("_load_jobs")
