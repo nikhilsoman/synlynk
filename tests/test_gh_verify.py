@@ -1,6 +1,6 @@
 import subprocess
 
-from synlynk.gh_verify import gh_write_verified
+from synlynk.gh_verify import _parse_iso8601, gh_write_verified
 
 
 def test_gh_write_verified_true_when_issue_closed(monkeypatch):
@@ -51,3 +51,24 @@ def test_gh_write_verified_unknown_when_gh_cli_times_out(monkeypatch):
 
 def test_gh_write_verified_rejects_malformed_target():
     assert gh_write_verified("not-a-valid-target", expect="closed") is None
+
+
+def test_parse_iso8601_handles_z_suffix():
+    dt = _parse_iso8601("2026-08-18T10:00:00Z")
+    assert dt is not None
+    assert dt.year == 2026 and dt.month == 8 and dt.day == 18
+    assert dt.hour == 10
+
+
+def test_parse_iso8601_handles_offset_suffix():
+    dt = _parse_iso8601("2026-08-18T10:00:00+00:00")
+    assert dt is not None
+    assert dt.hour == 10
+
+
+def test_parse_iso8601_returns_none_for_garbage():
+    assert _parse_iso8601("not-a-timestamp") is None
+
+
+def test_parse_iso8601_returns_none_for_none():
+    assert _parse_iso8601(None) is None

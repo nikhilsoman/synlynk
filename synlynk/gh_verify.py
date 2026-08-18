@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+from datetime import datetime
 from typing import Optional
 
 
@@ -11,6 +12,21 @@ _EXPECT_FIELD = {
     "closed": ("state", "CLOSED"),
     "merged": ("state", "MERGED"),
 }
+
+
+def _parse_iso8601(value: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO8601 timestamp, normalizing a trailing ``Z`` for Python <3.11.
+
+    Return None for missing or malformed input. Callers treat an unparseable
+    timestamp as unknown, matching the contract of the rest of this module.
+    """
+    if not value:
+        return None
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        return datetime.fromisoformat(normalized)
+    except (ValueError, TypeError):
+        return None
 
 
 def gh_write_verified(target: Optional[str], expect: str, timeout: int = 10) -> Optional[bool]:
