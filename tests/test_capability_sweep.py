@@ -149,3 +149,42 @@ def test_pick_verifier_agent_is_not_executor(tmp_path, monkeypatch):
     verifier = _pick_verifier_agent(executor_agent="codex", available_agents=["codex", "agy", "grok"])
     assert verifier != "codex"
     assert verifier in ("agy", "grok")
+
+
+def test_calibration_pool_has_all_role_difficulty_combinations(tmp_path, monkeypatch):
+    from synlynk import db
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    roles = ("pm", "architect", "tpm", "dev", "designer", "qa", "marketing", "synlynk-bot")
+    difficulties = ("basic", "intermediate", "advanced")
+    rows = conn.execute("SELECT role, difficulty FROM capability_calibration_tasks").fetchall()
+    present = {(r, d) for r, d in rows}
+    missing = [(r, d) for r in roles for d in difficulties if (r, d) not in present]
+    assert not missing, f"missing calibration tasks for: {missing}"
+
+
+def test_sweep_for_harness_model_writes_calibration_result(tmp_path, monkeypatch):
+    from synlynk import db, capability_sweep
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    monkeypatch.setattr(capability_sweep, "_get_db", lambda: conn)
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda agent, task, **kwargs: {"output": "example output"},
+    )
+    monkeypatch.setattr(
+        capability_sweep, "_verify_calibration_result",
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {"quality": 8.0, "correct": True},
+    )
+    monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda executor, available: "codex")
+
+    capability_sweep.cmd_capability_sweep_for_harness_model("agy", "gemini-3-pro")
+
+    rows = conn.execute(
+        "SELECT harness_name, model_id, score FROM capability_calibration_results WHERE harness_name='agy'"
+    ).fetchall()
+    assert len(rows) >= 1
+    assert all(r[2] == 0.8 for r in rows)  # quality 8.0 normalized to a 0-1 score
+
+
