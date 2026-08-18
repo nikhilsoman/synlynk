@@ -8,7 +8,7 @@ import sqlite3
 import time
 from typing import Any, Optional
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.hud import CYCLES
 
 TIER1_CAPACITY = {
@@ -49,10 +49,10 @@ def _classify_task_type(prompt: str) -> str:
     return "default"
 
 
-def _get_avg_tool_calls(agent_name: str, db_conn=None) -> float:
+def _get_avg_tool_calls(harness_name: str, db_conn=None) -> float:
     """Return a rolling mean tool-call count, or a baseline default."""
     defaults = {"claude": 25, "agy": 30, "codex": 20, "grok": 18}
-    default = float(defaults.get(agent_name, 20))
+    default = float(defaults.get(harness_name, 20))
 
     if db_conn is not None:
         try:
@@ -60,7 +60,7 @@ def _get_avg_tool_calls(agent_name: str, db_conn=None) -> float:
                 "SELECT AVG(tool_call_count) FROM telemetry_events "
                 "WHERE agent=? AND tool_call_count IS NOT NULL "
                 "AND recorded_at >= datetime('now', '-30 days')",
-                (agent_name,),
+                (harness_name,),
             ).fetchone()
             if row and row[0] is not None:
                 return float(row[0])
@@ -81,17 +81,17 @@ def _get_avg_tool_calls(agent_name: str, db_conn=None) -> float:
     return default
 
 
-def estimate_dispatch_tokens(prompt: str, context_md: str, agent_name: str) -> dict:
+def estimate_dispatch_tokens(prompt: str, context_md: str, harness_name: str) -> dict:
     """Estimate token pressure before dispatch."""
     input_est = (
         len((context_md or "").split()) * 1.3
         + len((prompt or "").split()) * 1.3
-        + TOOL_DEF_OVERHEAD.get(agent_name, 2000)
+        + TOOL_DEF_OVERHEAD.get(harness_name, 2000)
         + SYSTEM_OVERHEAD
     )
     task_type = _classify_task_type(prompt)
     output_est = TASK_TYPE_OUTPUT.get(task_type, TASK_TYPE_OUTPUT["default"])
-    tool_est = _get_avg_tool_calls(agent_name) * 800
+    tool_est = _get_avg_tool_calls(harness_name) * 800
     return {"input": int(input_est), "output": int(output_est), "tools": int(tool_est)}
 
 
@@ -120,7 +120,7 @@ def _cycle_from_row(row: sqlite3.Row, cols: set[str]) -> Optional[str]:
     return None
 
 
-def _compute_cycle_capability(agent_name: str, db_conn) -> dict:
+def _compute_cycle_capability(harness_name: str, db_conn) -> dict:
     """Aggregate harness verb support into the cycle_capability table."""
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     result = {cycle: {"support": "none", "verb_count": 0, "full_count": 0, "partial_count": 0, "notes": None} for cycle in CYCLES}
@@ -128,7 +128,7 @@ def _compute_cycle_capability(agent_name: str, db_conn) -> dict:
     try:
         db_conn.row_factory = sqlite3.Row
         cols = {row[1] for row in db_conn.execute("PRAGMA table_info(harness_verb_map)").fetchall()}
-        rows = db_conn.execute("SELECT * FROM harness_verb_map WHERE agent_name=?", (agent_name,)).fetchall()
+        rows = db_conn.execute("SELECT * FROM harness_verb_map WHERE harness_name=?", (harness_name,)).fetchall()
     except Exception:
         return result
 
@@ -171,9 +171,9 @@ def _compute_cycle_capability(agent_name: str, db_conn) -> dict:
             db_conn.execute(
                 """
                 INSERT INTO cycle_capability
-                    (agent_name, cycle, support, notes, verb_count, full_count, partial_count, updated_at)
+                    (harness_name, cycle, support, notes, verb_count, full_count, partial_count, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(agent_name, cycle) DO UPDATE SET
+                ON CONFLICT(harness_name, cycle) DO UPDATE SET
                     support=excluded.support,
                     notes=excluded.notes,
                     verb_count=excluded.verb_count,
@@ -181,7 +181,7 @@ def _compute_cycle_capability(agent_name: str, db_conn) -> dict:
                     partial_count=excluded.partial_count,
                     updated_at=excluded.updated_at
                 """,
-                (agent_name, cycle, data["support"], data.get("notes"), vc, fc, pc, now),
+                (harness_name, cycle, data["support"], data.get("notes"), vc, fc, pc, now),
             )
         except Exception:
             pass
@@ -210,7 +210,7 @@ def _load_harness_status_rows(db_conn) -> list:
     """Return harness_status rows as dicts, falling back to harness_records."""
     try:
         db_conn.row_factory = sqlite3.Row
-        rows = db_conn.execute("SELECT * FROM harness_status ORDER BY agent_name").fetchall()
+        rows = db_conn.execute("SELECT * FROM harness_status ORDER BY harness_name").fetchall()
         if rows:
             return [dict(row) for row in rows]
     except Exception:
@@ -219,8 +219,8 @@ def _load_harness_status_rows(db_conn) -> list:
     try:
         db_conn.row_factory = sqlite3.Row
         rows = db_conn.execute(
-            "SELECT agent_name, installed_version, last_probe_at, compliance_status, capability_hash "
-            "FROM harness_records ORDER BY agent_name"
+            "SELECT harness_name, installed_version, last_probe_at, compliance_status, capability_hash "
+            "FROM harness_records ORDER BY harness_name"
         ).fetchall()
     except Exception:
         return []
@@ -231,7 +231,7 @@ def _load_harness_status_rows(db_conn) -> list:
         status = data.get("compliance_status") or "unknown"
         result.append(
             {
-                "agent_name": data.get("agent_name"),
+                "harness_name": data.get("harness_name"),
                 "attach_rate_24h": 0.0,
                 "attach_point_in_time": 1 if status == "ok" else 0,
                 "adherence_score": None,
@@ -263,11 +263,11 @@ def _load_cycle_capability_rows(db_conn) -> dict:
     result: dict[str, dict[str, str]] = {}
     try:
         db_conn.row_factory = sqlite3.Row
-        rows = db_conn.execute("SELECT agent_name, cycle, support FROM cycle_capability").fetchall()
+        rows = db_conn.execute("SELECT harness_name, cycle, support FROM cycle_capability").fetchall()
     except Exception:
         return result
     for row in rows:
-        result.setdefault(row["agent_name"], {})[row["cycle"]] = row["support"]
+        result.setdefault(row["harness_name"], {})[row["cycle"]] = row["support"]
     return result
 
 
@@ -308,7 +308,7 @@ def _format_status_terminal(
     worktree_hint: Optional[dict] = None,
 ) -> str:
     """Format status output for terminal or JSON consumers."""
-    agents = [r["agent_name"] for r in harness_rows] or sorted(AGENT_CAPABILITY_BASELINES)
+    agents = [r["harness_name"] for r in harness_rows] or sorted(HARNESS_CAPABILITY_BASELINES)
     attached = sum(1 for r in harness_rows if int(r.get("attach_point_in_time", 0) or 0))
 
     if json_output:
@@ -319,7 +319,7 @@ def _format_status_terminal(
                 "total": len(agents),
                 "dispatch_mode": dispatch_mode,
             },
-            "agents": {r["agent_name"]: r for r in harness_rows},
+            "agents": {r["harness_name"]: r for r in harness_rows},
             "cycle_capability": cycle_map,
             "capacity": TIER1_CAPACITY,
             "sentinels_active": sentinels_active,
@@ -357,7 +357,7 @@ def _format_status_terminal(
         drift = " ⚠" if row.get("latest_version") and row.get("latest_version") != ver else ""
         tier = row.get("fleet_tier") or "—"
         lines.append(
-            f"  {row['agent_name']:<12} {tier:>10}  {attach:>8}  {complete:>9}  {ver}{drift}"
+            f"  {row['harness_name']:<12} {tier:>10}  {attach:>8}  {complete:>9}  {ver}{drift}"
         )
 
     lines += ["", f"{'CAPACITY':<14} {'R(read)':>8}  {'W(write)':>9}  {'T(tools)':>8}  {'CTX':>8}"]
@@ -398,7 +398,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
         from synlynk.fleet import tier_for_agent
 
         for row in harness_rows:
-            row["fleet_tier"] = tier_for_agent(db_conn, row.get("agent_name", ""))
+            row["fleet_tier"] = tier_for_agent(db_conn, row.get("harness_name", ""))
     except Exception:
         for row in harness_rows:
             row.setdefault("fleet_tier", "—")

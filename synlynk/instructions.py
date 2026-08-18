@@ -12,7 +12,7 @@ import stat
 from pathlib import Path
 from typing import Optional
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
 from synlynk.probe import SOP_BLOCKS
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk.taxonomy import entries_up_to_tier
@@ -362,7 +362,7 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
     with open(prompt_file, "w") as f:
         f.write(prompt)
 
-    baselines = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baselines = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
     flags = baselines.get("non_interactive_flags", ["--print"])
     cmd = [agent_cli] + flags
 

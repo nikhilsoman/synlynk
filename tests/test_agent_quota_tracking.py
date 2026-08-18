@@ -1,4 +1,4 @@
-"""#291: agent_quotas populated from telemetry + synlynk quota CLI."""
+"""#291: harness_quotas populated from telemetry + synlynk quota CLI."""
 
 import io
 import json
@@ -75,11 +75,11 @@ def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_
     db.execute(
         """
         INSERT INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (agent, agent, "1.0.0", compliance_status, "{}", "{}", "cap-hash", last_probe_at),
+        (agent, "1.0.0", compliance_status, "{}", "{}", "cap-hash", last_probe_at),
     )
     db.commit()
 
@@ -87,7 +87,7 @@ def _seed_harness_record(db, *, agent="agy", compliance_status="ok", last_probe_
 def test_agent_reservations_table_exists(project_dir):
     import synlynk as sl
     conn = sl._get_db()
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_reservations)")}
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_reservations)")}
     assert cols == {
         "id", "harness", "tokens", "scope", "scope_id", "job_id",
         "status", "created_at", "released_at",
@@ -104,7 +104,7 @@ def test_open_release_reservation_lifecycle(project_dir):
     assert isinstance(rid, int)
 
     row = conn.execute(
-        "SELECT harness, tokens, scope, scope_id, job_id, status FROM agent_reservations WHERE id=?",
+        "SELECT harness, tokens, scope, scope_id, job_id, status FROM harness_reservations WHERE id=?",
         (rid,),
     ).fetchone()
     assert row == ("claude", 5000, "adhoc", None, None, "open")
@@ -114,7 +114,7 @@ def test_open_release_reservation_lifecycle(project_dir):
 
     sl._release_reservation(conn, rid)
     status, released_at = conn.execute(
-        "SELECT status, released_at FROM agent_reservations WHERE id=?", (rid,)
+        "SELECT status, released_at FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()
     assert status == "released"
     assert released_at is not None
@@ -132,13 +132,13 @@ def test_open_reservations_sum_ignores_expired(project_dir):
         "%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 25 * 3600)
     )
     conn.execute(
-        "UPDATE agent_reservations SET created_at=? WHERE id=?", (stale, rid)
+        "UPDATE harness_reservations SET created_at=? WHERE id=?", (stale, rid)
     )
     conn.commit()
     assert sl._open_reservations_sum(conn, "claude") == 0
     # Row itself is untouched (status still 'open') -- lazy, not physical
     status = conn.execute(
-        "SELECT status FROM agent_reservations WHERE id=?", (rid,)
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()[0]
     assert status == "open"
 
@@ -151,7 +151,7 @@ def test_open_reservation_with_scope_id_and_job_id(project_dir):
         conn, "agy", 2000, scope="plan", scope_id="run-abc123", job_id="job-xyz"
     )
     row = conn.execute(
-        "SELECT scope, scope_id, job_id FROM agent_reservations WHERE id=?", (rid,)
+        "SELECT scope, scope_id, job_id FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()
     assert row == ("plan", "run-abc123", "job-xyz")
 
@@ -197,7 +197,7 @@ def test_force_exhaust_quota_zeroes_headroom_not_running_jobs(project_dir):
     sl._force_exhaust_quota(conn, "codex", "5h")
 
     row = conn.execute(
-        "SELECT limit_tokens, used_tokens FROM agent_quotas WHERE agent='codex' AND quota_type='5h'"
+        "SELECT limit_tokens, used_tokens FROM harness_quotas WHERE harness='codex' AND quota_type='5h'"
     ).fetchone()
     assert row[1] == row[0]  # used == limit -> headroom 0
 
@@ -217,7 +217,7 @@ def test_force_exhaust_quota_creates_row_when_none_exists(project_dir):
     conn = sl._get_db()
     sl._force_exhaust_quota(conn, "grok", "hourly")
     row = conn.execute(
-        "SELECT limit_tokens, used_tokens FROM agent_quotas WHERE agent='grok' AND quota_type='hourly'"
+        "SELECT limit_tokens, used_tokens FROM harness_quotas WHERE harness='grok' AND quota_type='hourly'"
     ).fetchone()
     assert row == (0, 0)
     status = sl._quota_status_for_agent(conn, "grok", estimated_tokens=0)
@@ -364,7 +364,7 @@ def test_repair_sops_only_refreshes_stale_capability_allocation_with_single_blan
 
     monkeypatch.setattr(sl, "_run_tc5", lambda files: {"passed": True, "missing": {"claude": []}})
 
-    sl._repair_sops_only(dry_run=False, agent_name="claude")
+    sl._repair_sops_only(dry_run=False, harness_name="claude")
 
     repaired = (tmp_path / "CLAUDE.md").read_text()
     boundary = (
@@ -390,7 +390,7 @@ def test_cmd_probewrite_fencetrue_clobbers_sop_harness(tmp_path, monkeypatch):
 
     import synlynk as sl
 
-    sl._repair_sops_only(dry_run=False, agent_name="codex")
+    sl._repair_sops_only(dry_run=False, harness_name="codex")
 
     class _Result:
         returncode = 0
@@ -478,13 +478,13 @@ def test_refresh_populates_agent_quotas_from_telemetry(project_dir):
     conn = sl._get_db()
     try:
         rows = conn.execute(
-            "SELECT agent, quota_type, unit, limit_tokens, used_tokens, reset_at "
-            "FROM agent_quotas ORDER BY agent, quota_type, unit"
+            "SELECT harness, quota_type, unit, limit_tokens, used_tokens, reset_at "
+            "FROM harness_quotas ORDER BY harness, quota_type, unit"
         ).fetchall()
     finally:
         conn.close()
 
-    assert rows, "agent_quotas must be non-empty after telemetry refresh"
+    assert rows, "harness_quotas must be non-empty after telemetry refresh"
     by_key = {(r[0], r[1], r[2]): r for r in rows}
 
     # claude: 12k + 6k = 18k tokens, 2 requests inside 5h/hourly/daily/...
@@ -515,7 +515,7 @@ def test_quota_headroom_helper_used_by_refresh(project_dir):
 
 def test_stage2_gate_sees_nonzero_usage_after_refresh(project_dir, monkeypatch):
     """Stage-2 quota gate must not stay stuck in degraded empty-table mode
-    once telemetry has been rolled into agent_quotas (#291 acceptance)."""
+    once telemetry has been rolled into harness_quotas (#291 acceptance)."""
     import synlynk as sl
 
     monkeypatch.setattr(sl, "_project_request_quota_from_config", lambda: None)
@@ -862,11 +862,11 @@ def test_phase_6_of_docssuperpowersplans20260730h_failing_probe_branch_blocks(tm
     db.execute(
         """
         INSERT INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        ("codex", "codex", "1.0.0", "degraded", "{}", "{}", "cap-hash", last_probe_at),
+        ("codex", "1.0.0", "degraded", "{}", "{}", "cap-hash", last_probe_at),
     )
     db.commit()
     original_trust = dispatch_globals["_probe_results_trustworthy"]
@@ -1119,8 +1119,8 @@ def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):
     conn = sl._get_db()
     try:
         used = conn.execute(
-            "SELECT used_tokens FROM agent_quotas "
-            "WHERE agent='claude' AND unit='tokens' AND quota_type='hourly'"
+            "SELECT used_tokens FROM harness_quotas "
+            "WHERE harness='claude' AND unit='tokens' AND quota_type='hourly'"
         ).fetchone()
     finally:
         conn.close()
@@ -1282,7 +1282,7 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
     )
     monkeypatch.setattr(
         doctor_mod,
-        "AGENT_CAPABILITY_BASELINES",
+        "HARNESS_CAPABILITY_BASELINES",
         {
             "agy": {
                 "cli": "agy",
@@ -1324,7 +1324,7 @@ def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_inc
 
     monkeypatch.setattr(
         sl,
-        "AGENT_CAPABILITY_BASELINES",
+        "HARNESS_CAPABILITY_BASELINES",
         {
             "claude": {
                 "cli": "claude",
@@ -1335,8 +1335,8 @@ def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_inc
             }
         },
     )
-    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
-    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl._constants, "HARNESS_CAPABILITY_BASELINES", sl.HARNESS_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl.doctor, "HARNESS_CAPABILITY_BASELINES", sl.HARNESS_CAPABILITY_BASELINES)
     monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -1377,9 +1377,9 @@ def test_synlynk_doctor_reports_local_tc5_skip(tmp_path, monkeypatch, capsys):
             "non_interactive_flags": [],
         }
     }
-    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
-    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", patched_baselines)
-    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl._constants, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl.doctor, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr(sl, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
@@ -1478,7 +1478,7 @@ def test_empty_telemetry_writes_nothing(project_dir):
     assert sl.refresh_agent_quotas_from_telemetry() == 0
     conn = sl._get_db()
     try:
-        n = conn.execute("SELECT COUNT(*) FROM agent_quotas").fetchone()[0]
+        n = conn.execute("SELECT COUNT(*) FROM harness_quotas").fetchone()[0]
     finally:
         conn.close()
     assert n == 0
@@ -1601,16 +1601,15 @@ def test_harden_preflight_dispatch_check_agent_auth_fails_loudly_on_not_signed_i
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "grok",
-            "grok",
             "1.0.0",
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]),
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["grok"]["dispatch_flags"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["grok"]["headless_contract"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["grok"]["dispatch_flags"]),
             "seeded-probe",
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
         ),
@@ -1653,12 +1652,11 @@ def _seed_hardened_preflight_record(db, agent_name: str, baseline: dict):
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
-            agent_name,
             agent_name,
             "1.0.0",
             json.dumps(baseline["headless_contract"]),
@@ -1683,7 +1681,7 @@ def test_fixdispatch_harden_reporting_and_preflight_allows_agy_dangerously_skip_
     monkeypatch.setenv("HOME", str(tmp_path))
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    _seed_hardened_preflight_record(db, "agy", sl.AGENT_CAPABILITY_BASELINES["agy"])
+    _seed_hardened_preflight_record(db, "agy", sl.HARNESS_CAPABILITY_BASELINES["agy"])
 
     class _SuccessSocket:
         def settimeout(self, timeout):
@@ -1721,7 +1719,7 @@ def test_fixdispatch_harden_reporting_and_preflight_blocks_invalid_flag(
     monkeypatch.setenv("HOME", str(tmp_path))
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+    _seed_hardened_preflight_record(db, "grok", sl.HARNESS_CAPABILITY_BASELINES["grok"])
 
     monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
 
@@ -1745,7 +1743,7 @@ def test_fixdispatch_harden_reporting_and_preflight_blocks_unreachable_endpoint(
     monkeypatch.setenv("HOME", str(tmp_path))
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+    _seed_hardened_preflight_record(db, "grok", sl.HARNESS_CAPABILITY_BASELINES["grok"])
 
     class _FailSocket:
         def settimeout(self, timeout):
@@ -1788,16 +1786,15 @@ def test_harden_preflight_dispatch_check_agent_au_blocks_known_headless_permissi
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "agy",
-            "agy",
             "1.0.0",
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["agy"]["headless_contract"]),
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["agy"]["dispatch_flags"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["agy"]["headless_contract"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["agy"]["dispatch_flags"]),
             "seeded-probe",
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
         ),
@@ -2200,7 +2197,7 @@ def test_roles_fix_and_sync_repairsops_write_uncoordinated_harness_content(tmp_p
     claude_md.write_text("# Claude Directive\nRaw unfenced text\n")
     assert not synlynk._fence_exists(str(claude_md))
 
-    synlynk._repair_sops_only(cfg=saved_cfg, agent_name="claude")
+    synlynk._repair_sops_only(cfg=saved_cfg, harness_name="claude")
     claude_content = claude_md.read_text()
     assert "<!-- synlynk:harness" in claude_content
     assert synlynk._fence_exists(str(claude_md))

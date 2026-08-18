@@ -234,14 +234,14 @@ def refresh_agent_quotas_from_telemetry(
     telemetry_path: Optional[str] = None,
     now: Optional[float] = None,
 ) -> int:
-    """Populate agent_quotas from .synlynk/telemetry.json usage proxy (#291).
+    """Populate harness_quotas from .synlynk/telemetry.json usage proxy (#291).
 
     Provider CLIs rarely expose a durable usage/limits API, so synlynk uses its
     own exec telemetry as the usage signal and config/default ceilings as
     limits. Upserts tokens + requests rows for every plan window for each
     agent seen in telemetry.
 
-    Returns the number of agent_quotas rows written/updated.
+    Returns the number of harness_quotas rows written/updated.
     """
     events = _load_telemetry_events(telemetry_path)
     if not events:
@@ -309,7 +309,7 @@ _refresh_agent_quotas_from_telemetry = refresh_agent_quotas_from_telemetry
 def cmd_quota(agent: Optional[str] = None, json_output: bool = False) -> None:
     """Report per-agent quota headroom and reset times (synlynk quota).
 
-    Refreshes agent_quotas from telemetry first so the table is never a
+    Refreshes harness_quotas from telemetry first so the table is never a
     permanent empty shell when usage data exists.
     """
     # Refresh proxy usage before read so CLI and stage-2 share one pipeline.
@@ -321,12 +321,12 @@ def cmd_quota(agent: Optional[str] = None, json_output: bool = False) -> None:
             agents = [agent]
         else:
             rows = conn.execute(
-                "SELECT DISTINCT agent FROM agent_quotas ORDER BY agent"
+                "SELECT DISTINCT harness FROM harness_quotas ORDER BY harness"
             ).fetchall()
             agents = [r[0] for r in rows]
             if not agents:
                 # Also surface known fleet agents with no signal yet
-                baselines = _pkg("AGENT_CAPABILITY_BASELINES") or {}
+                baselines = _pkg("HARNESS_CAPABILITY_BASELINES") or {}
                 agents = sorted(baselines.keys()) if baselines else []
 
         report = []
@@ -446,7 +446,7 @@ def _upsert_agent_quota(
     reset_at: Optional[str] = None,
     conn=None,
 ) -> None:
-    """Insert or update an agent_quotas row. Validates quota_type and unit."""
+    """Insert or update an harness_quotas row. Validates quota_type and unit."""
     if quota_type not in QUOTA_TYPES:
         raise ValueError(
             f"Invalid quota_type {quota_type!r}. Allowed: {', '.join(QUOTA_TYPES)}"
@@ -461,11 +461,11 @@ def _upsert_agent_quota(
     try:
         conn.execute(
             """
-            INSERT INTO agent_quotas
-                (agent, model, quota_type, unit, limit_tokens, used_tokens,
+            INSERT INTO harness_quotas
+                (harness, model, quota_type, unit, limit_tokens, used_tokens,
                  reset_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(agent, model, quota_type, unit) DO UPDATE SET
+            ON CONFLICT(harness, model, quota_type, unit) DO UPDATE SET
                 limit_tokens = excluded.limit_tokens,
                 used_tokens  = excluded.used_tokens,
                 reset_at     = excluded.reset_at,
@@ -498,13 +498,13 @@ def _open_reservation(
     scope_id: Optional[str] = None,
     job_id: Optional[str] = None,
 ) -> int:
-    """Opens an agent_reservations row. Returns the new reservation id.
+    """Opens an harness_reservations row. Returns the new reservation id.
 
     scope is one of 'plan' | 'session' | 'adhoc' (not validated here -- callers
     are internal and already constrained by the design's dispatch-time flow).
     """
     cur = conn.execute(
-        "INSERT INTO agent_reservations (harness, tokens, scope, scope_id, job_id, status) "
+        "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
         "VALUES (?, ?, ?, ?, ?, 'open')",
         (harness, int(tokens), scope, scope_id, job_id),
     )
@@ -516,7 +516,7 @@ def _release_reservation(conn, reservation_id: int) -> None:
     """Marks a reservation released. Idempotent -- releasing twice is a no-op
     on the second call since the WHERE clause only matches status='open'."""
     conn.execute(
-        "UPDATE agent_reservations SET status='released', released_at=CURRENT_TIMESTAMP "
+        "UPDATE harness_reservations SET status='released', released_at=CURRENT_TIMESTAMP "
         "WHERE id=? AND status='open'",
         (reservation_id,),
     )
@@ -533,7 +533,7 @@ def _open_reservations_sum(conn, harness: str) -> int:
     cutoff = datetime.now(UTC).timestamp() - _RESERVATION_EXPIRY_SECONDS
     cutoff_iso = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
     row = conn.execute(
-        "SELECT COALESCE(SUM(tokens), 0) FROM agent_reservations "
+        "SELECT COALESCE(SUM(tokens), 0) FROM harness_reservations "
         "WHERE harness=? AND status='open' AND created_at >= ?",
         (harness, cutoff_iso),
     ).fetchone()
@@ -545,14 +545,14 @@ def _force_exhaust_quota(conn, harness: str, window: str) -> None:
     from a real observed rejection signal (see sentinel.py QUOTA_EXHAUSTED).
 
     Never touches daemon_jobs -- running jobs keep running (wait/resume policy).
-    If no agent_quotas row exists yet for this harness/window, creates a
+    If no harness_quotas row exists yet for this harness/window, creates a
     zero-headroom placeholder row so the next _quota_status_for_agent() call
     sees it as exhausted rather than "unknown" (degraded, non-blocking).
     """
     if window not in QUOTA_TYPES:
         window = "5h"
     rows = conn.execute(
-        "SELECT model, unit, limit_tokens FROM agent_quotas WHERE agent=? AND quota_type=?",
+        "SELECT model, unit, limit_tokens FROM harness_quotas WHERE harness=? AND quota_type=?",
         (harness, window),
     ).fetchall()
     if not rows:
@@ -562,19 +562,19 @@ def _force_exhaust_quota(conn, harness: str, window: str) -> None:
         return
     for model, unit, limit_tokens in rows:
         conn.execute(
-            "UPDATE agent_quotas SET used_tokens=?, updated_at=CURRENT_TIMESTAMP "
-            "WHERE agent=? AND model=? AND quota_type=? AND unit=?",
+            "UPDATE harness_quotas SET used_tokens=?, updated_at=CURRENT_TIMESTAMP "
+            "WHERE harness=? AND model=? AND quota_type=? AND unit=?",
             (int(limit_tokens), harness, model, window, unit),
         )
     conn.commit()
 
 
 def _project_request_quota_from_config() -> Optional[dict]:
-    """Unify project-level budget.limit_requests with agent_quotas request unit.
+    """Unify project-level budget.limit_requests with harness_quotas request unit.
 
     Returns a synthetic quota dict, or None if config cannot be read.
     This is the bridge between .synlynk/config.json limit_requests and the
-    per-agent request-unit rows in agent_quotas — not a substitute for
+    per-agent request-unit rows in harness_quotas — not a substitute for
     per-agent plan quotas, but a workspace floor when no agent-level request
     row exists.
     """
@@ -609,7 +609,7 @@ def _project_request_quota_from_config() -> Optional[dict]:
 
 
 def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
-    """Read agent_quotas rows for an agent.
+    """Read harness_quotas rows for an agent.
 
     Returns:
       - list of row dicts on success (may be empty — empty means no signal)
@@ -622,10 +622,10 @@ def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
     try:
         rows = conn.execute(
             """
-            SELECT agent, model, quota_type, unit, limit_tokens, used_tokens,
+            SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
                    reset_at, updated_at
-            FROM agent_quotas
-            WHERE agent = ?
+            FROM harness_quotas
+            WHERE harness = ?
             """,
             (agent,),
         ).fetchall()
@@ -645,7 +645,7 @@ def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
             "headroom": _quota_headroom(limit_v, used_v),
             "reset_at": r[6],
             "updated_at": r[7],
-            "source": "agent_quotas",
+            "source": "harness_quotas",
         })
     return result
 
@@ -760,7 +760,7 @@ def _quota_status_for_agent(
             "headroom": min_token_headroom,
             "unit": "tokens",
             "degraded": False,
-            "reason": "agent_quotas",
+            "reason": "harness_quotas",
         }
     if min_request_headroom is not None:
         return {
@@ -768,7 +768,7 @@ def _quota_status_for_agent(
             "headroom": min_request_headroom,
             "unit": "requests",
             "degraded": False,
-            "reason": "agent_quotas",
+            "reason": "harness_quotas",
         }
     return {
         "status": "unknown",

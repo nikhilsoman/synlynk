@@ -1,11 +1,11 @@
-"""synlynk capability sweep -- periodic calibration of agent/model capability baselines."""
+"""synlynk capability sweep -- periodic calibration of harness/model capability baselines."""
 
 import json
 import os
 import subprocess
 import sys
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.costs import _HARDCODED_FALLBACK_RATES, _model_rate_for_version
 from synlynk.taxonomy_standards import SFIA_CODES
 
@@ -17,10 +17,10 @@ _SKILL_TO_DISCIPLINE = {"PROG": "backend", "TEST": "testing", "REQM": "architect
 
 
 def _discover_models() -> dict:
-    """Discover available models per agent CLI, with a hardcoded fallback."""
+    """Discover available models per harness CLI, with a hardcoded fallback."""
     discovered = {}
-    for agent, baseline in AGENT_CAPABILITY_BASELINES.items():
-        if agent == "local":
+    for harness, baseline in HARNESS_CAPABILITY_BASELINES.items():
+        if harness == "local":
             continue
         cli = baseline["cli"]
         models = []
@@ -34,24 +34,24 @@ def _discover_models() -> dict:
             )
             help_text = (result.stdout or "") + (result.stderr or "")
             if "--model" in help_text:
-                models = _fallback_models_for_agent(agent)
+                models = _fallback_models_for_harness(harness)
         except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
-            models = _fallback_models_for_agent(agent)
+            models = _fallback_models_for_harness(harness)
         if not models:
-            models = _fallback_models_for_agent(agent)
-        discovered[agent] = models
+            models = _fallback_models_for_harness(harness)
+        discovered[harness] = models
     return discovered
 
 
-def _fallback_models_for_agent(agent: str) -> list:
-    """Return fallback model names for an agent from the hardcoded rates table."""
-    agent_model_prefixes = {
+def _fallback_models_for_harness(harness: str) -> list:
+    """Return fallback model names for a harness from the hardcoded rates table."""
+    harness_model_prefixes = {
         "claude": ("claude-",),
         "codex": ("gpt-",),
         "agy": ("gemini-",),
         "grok": ("grok-",),
     }
-    prefixes = agent_model_prefixes.get(agent, ())
+    prefixes = harness_model_prefixes.get(harness, ())
     return [
         model
         for model in _HARDCODED_FALLBACK_RATES["models"]
@@ -60,11 +60,11 @@ def _fallback_models_for_agent(agent: str) -> list:
 
 
 def _estimate_sweep_cost(discovered: dict, skills: list) -> float:
-    """Estimate total USD cost for all discovered agent/model/skill combinations."""
+    """Estimate total USD cost for all discovered harness/model/skill combinations."""
     total = 0.0
-    for agent, models in discovered.items():
+    for harness, models in discovered.items():
         for model in models:
-            rate = _model_rate_for_version(model, agent=agent)
+            rate = _model_rate_for_version(model, agent=harness)
             per_call_cost = (
                 (_ESTIMATED_TOKENS_PER_CALL["input"] / 1000.0) * rate["input"]
                 + (_ESTIMATED_TOKENS_PER_CALL["output"] / 1000.0) * rate["output"]
@@ -87,7 +87,7 @@ def cmd_capability_sweep(cost_cap_override: float = None) -> None:
 
     total_models = sum(len(models) for models in discovered.values())
     print(
-        f"  Capability sweep: {len(discovered)} agents, {total_models} models, "
+        f"  Capability sweep: {len(discovered)} harnesses, {total_models} models, "
         f"{len(_CALIBRATION_SKILLS)} SFIA skills",
         flush=True,
     )
@@ -104,32 +104,32 @@ def cmd_capability_sweep(cost_cap_override: float = None) -> None:
     _run_sweep(discovered, _CALIBRATION_SKILLS)
 
 
-def _pick_verifier_agent(executor_agent: str, available_agents: list) -> str:
-    """Picks a verifier agent that is not the executor - genuine independence,
+def _pick_verifier_harness(executor_harness: str, available_harnesses: list) -> str:
+    """Picks a verifier harness that is not the executor - genuine independence,
     fixing the #353 self-attestation gap for the seeded portion of the ledger.
     """
-    candidates = [agent for agent in available_agents if agent != executor_agent]
+    candidates = [harness for harness in available_harnesses if harness != executor_harness]
     if not candidates:
         raise ValueError(
-            f"No independent verifier available for executor {executor_agent}; "
-            "need at least 2 configured agents to run the calibration sweep"
+            f"No independent verifier available for executor {executor_harness}; "
+            "need at least 2 configured harnesses to run the calibration sweep"
         )
     return candidates[0]
 
 
-def _dispatch_calibration_task(agent: str, task: str, **kwargs) -> dict:
+def _dispatch_calibration_task(harness: str, task: str, **kwargs) -> dict:
     """Dispatch one calibration task through dispatch_agent behind a test seam."""
     from synlynk.dispatch import dispatch_agent
 
     dispatch_kwargs = dict(kwargs)
     dispatch_kwargs.setdefault("force_agent", True)
     dispatch_kwargs.setdefault("skip_preflight", True)
-    return dispatch_agent(agent, task, **dispatch_kwargs)
+    return dispatch_agent(harness, task, **dispatch_kwargs)
 
 
 def _verify_calibration_result(
-    verifier_agent: str,
-    executor_agent: str,
+    verifier_harness: str,
+    executor_harness: str,
     model: str,
     skill: str,
     executor_output: dict,
@@ -137,16 +137,16 @@ def _verify_calibration_result(
     """Ask a different agent to score the executor output and parse its verdict."""
     label = SFIA_CODES.get(skill, {}).get("label", skill)
     verify_task = (
-        f"Review this {label} calibration task output from another agent and score it "
+        f"Review this {label} calibration task output from another harness and score it "
         "0-10 for quality.\n"
         "Respond with a line '# synlynk-meta' followed by 'quality=<N>' "
         "and 'correct=<true|false>'.\n\n"
-        f"Executor agent: {executor_agent}\n"
+        f"Executor harness: {executor_harness}\n"
         f"Executor model: {model}\n"
-        f"Verifier agent: {verifier_agent}\n\n"
+        f"Verifier harness: {verifier_harness}\n\n"
         f"Output to review:\n{executor_output.get('output', '')}"
     )
-    result = _dispatch_calibration_task(verifier_agent, verify_task)
+    result = _dispatch_calibration_task(verifier_harness, verify_task)
     from synlynk.costs import extract_verifier_meta
 
     meta = extract_verifier_meta(result.get("output", "")) or {}
@@ -157,8 +157,8 @@ def _verify_calibration_result(
 
 
 def _run_sweep(discovered: dict, skills: list) -> None:
-    """Dispatches one calibration task per (agent, model, skill), scored by a
-    different agent (never the executor), and writes a baseline_seed row with
+    """Dispatches one calibration task per (harness, model, skill), scored by a
+    different harness (never the executor), and writes a baseline_seed row with
     a phantom sample_count (3-5) per result - light enough that real organic
     jobs quickly dominate the weighted average once several accumulate.
 
@@ -172,17 +172,17 @@ def _run_sweep(discovered: dict, skills: list) -> None:
     import synlynk as sl
 
     conn_get = sl._get_db
-    all_agents = list(discovered.keys())
-    for agent, models in discovered.items():
+    available_harnesses = list(discovered.keys())
+    for harness, models in discovered.items():
         for model in models:
             for skill in skills:
                 label = SFIA_CODES.get(skill, {}).get("label", skill)
                 task = f"Write a minimal example demonstrating {label} for a small Python function."
-                executor_result = _dispatch_calibration_task(agent, task)
+                executor_result = _dispatch_calibration_task(harness, task)
 
-                verifier_agent = _pick_verifier_agent(agent, all_agents)
+                verifier_harness = _pick_verifier_harness(harness, available_harnesses)
                 verdict = _verify_calibration_result(
-                    verifier_agent, agent, model, skill, executor_result
+                    verifier_harness, harness, model, skill, executor_result
                 )
 
                 conn = conn_get()
@@ -204,7 +204,7 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             "__baseline_seed__",
-                            agent,
+                            harness,
                             model,
                             discipline_value,
                             "platform",
@@ -213,15 +213,15 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                             "baseline_seed",
                             verdict["quality"],
                             verdict["quality"],
-                            verifier_agent,
+                            verifier_harness,
                             1 if verdict.get("correct", True) else 0,
                         ),
                     )
                 conn.commit()
                 conn.close()
                 print(
-                    f"  [sweep] {agent} / {model} / {skill}: quality={verdict['quality']} "
-                    f"(verified by {verifier_agent})"
+                    f"  [sweep] {harness} / {model} / {skill}: quality={verdict['quality']} "
+                    f"(verified by {verifier_harness})"
                 )
 
 

@@ -97,13 +97,13 @@ def emit_event(event_type: str, payload: dict, emitted_by: str,
     return event_id
 
 
-def pending_events(agent_name: str, event_type: str) -> list:
-    """Returns events of event_type with id greater than agent_name's checkpoint, oldest first."""
+def pending_events(harness_name: str, event_type: str) -> list:
+    """Returns events of event_type with id greater than harness_name's checkpoint, oldest first."""
     from synlynk import _get_db
     conn = _get_db()
     row = conn.execute(
-        "SELECT last_seen_event_id FROM subscriptions WHERE agent_name=? AND event_type=?",
-        (agent_name, event_type),
+        "SELECT last_seen_event_id FROM subscriptions WHERE harness_name=? AND event_type=?",
+        (harness_name, event_type),
     ).fetchone()
     checkpoint = row[0] if row else 0
     rows = conn.execute(
@@ -119,22 +119,22 @@ def pending_events(agent_name: str, event_type: str) -> list:
     ]
 
 
-def advance_checkpoint(agent_name: str, event_type: str, event_id: int) -> None:
-    """Advances agent_name's checkpoint for event_type to event_id. Never moves backward."""
+def advance_checkpoint(harness_name: str, event_type: str, event_id: int) -> None:
+    """Advances harness_name's checkpoint for event_type to event_id. Never moves backward."""
     from synlynk import _get_db
     conn = _get_db()
     conn.execute(
-        "INSERT INTO subscriptions (agent_name, event_type, last_seen_event_id) VALUES (?, ?, ?) "
-        "ON CONFLICT(agent_name, event_type) DO UPDATE SET "
+        "INSERT INTO subscriptions (harness_name, event_type, last_seen_event_id) VALUES (?, ?, ?) "
+        "ON CONFLICT(harness_name, event_type) DO UPDATE SET "
         "last_seen_event_id=excluded.last_seen_event_id "
         "WHERE excluded.last_seen_event_id > subscriptions.last_seen_event_id",
-        (agent_name, event_type, event_id),
+        (harness_name, event_type, event_id),
     )
     conn.commit()
     conn.close()
 
 
-def scan_local_events(agent_name: str) -> None:
+def scan_local_events(harness_name: str) -> None:
     """Detect and emit local lifecycle events for this run.
 
     The pilot intentionally scans the latest merged PRs and recent relevant git
@@ -144,7 +144,7 @@ def scan_local_events(agent_name: str) -> None:
     import subprocess
 
     heartbeat_id = emit_event("cron_heartbeat", {}, emitted_by="scan_local_events")
-    advance_checkpoint(agent_name, "cron_heartbeat", heartbeat_id)
+    advance_checkpoint(harness_name, "cron_heartbeat", heartbeat_id)
 
     try:
         result = subprocess.run(
@@ -173,9 +173,9 @@ def scan_local_events(agent_name: str) -> None:
         if review_event_id is not None:
             last_review_event_id = review_event_id
     if last_event_id is not None:
-        advance_checkpoint(agent_name, "pr_merged", last_event_id)
+        advance_checkpoint(harness_name, "pr_merged", last_event_id)
     if last_review_event_id is not None:
-        advance_checkpoint(agent_name, "review_submitted", last_review_event_id)
+        advance_checkpoint(harness_name, "review_submitted", last_review_event_id)
 
     try:
         result = subprocess.run(
@@ -205,7 +205,7 @@ def scan_local_events(agent_name: str) -> None:
             emitted_by="scan_local_events",
         )
     if last_event_id is not None:
-        advance_checkpoint(agent_name, "spec_or_plan_committed", last_event_id)
+        advance_checkpoint(harness_name, "spec_or_plan_committed", last_event_id)
 
 
 def cmd_events_tail(event_type: str = None, limit: int = 20) -> None:

@@ -458,12 +458,12 @@ def _subscription_actual_usd(
     conn = get_db()
     try:
         row_in = conn.execute(
-            "SELECT used_tokens FROM agent_quotas WHERE agent=? "
+            "SELECT used_tokens FROM harness_quotas WHERE harness=? "
             "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
             (agent,),
         ).fetchone()
         row_out = conn.execute(
-            "SELECT used_tokens FROM agent_quotas WHERE agent=? "
+            "SELECT used_tokens FROM harness_quotas WHERE harness=? "
             "AND quota_type='monthly' AND unit='tokens' AND model='out'",
             (agent,),
         ).fetchone()
@@ -858,8 +858,8 @@ def check_budgets() -> None:
                 conn = _pkg("_get_db")()
                 try:
                     row = conn.execute(
-                        "SELECT limit_tokens, used_tokens FROM agent_quotas "
-                        "WHERE agent=? AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+                        "SELECT limit_tokens, used_tokens FROM harness_quotas "
+                        "WHERE harness=? AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
                         (agent,),
                     ).fetchone()
                 finally:

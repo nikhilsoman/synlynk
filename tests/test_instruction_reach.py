@@ -6,9 +6,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
 def test_agy_baseline_replaces_gemini():
-    from synlynk import AGENT_CAPABILITY_BASELINES
-    assert "gemini" not in AGENT_CAPABILITY_BASELINES
-    assert "agy" in AGENT_CAPABILITY_BASELINES
+    from synlynk import HARNESS_CAPABILITY_BASELINES
+    assert "gemini" not in HARNESS_CAPABILITY_BASELINES
+    assert "agy" in HARNESS_CAPABILITY_BASELINES
 
 
 def test_gemini_md_template_has_no_transition_note(tmp_path, monkeypatch):

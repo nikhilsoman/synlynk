@@ -608,11 +608,11 @@ def _scenario_status(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
     with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
         conn = synlynk_pkg._get_db()
         conn.execute(
-            "INSERT OR REPLACE INTO harness_status (agent_name, attach_rate_24h, attach_point_in_time, completion_rate_24h, installed_version, latest_version) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO harness_status (harness_name, attach_rate_24h, attach_point_in_time, completion_rate_24h, installed_version, latest_version) VALUES (?, ?, ?, ?, ?, ?)",
             ("claude", 1.0, 1, 0.8, "1.0.0", "1.0.0"),
         )
         conn.execute(
-            "INSERT INTO cycle_capability (agent_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            "INSERT INTO cycle_capability (harness_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
             ("claude", "execute", "full", 1, 1, 0),
         )
         conn.commit()

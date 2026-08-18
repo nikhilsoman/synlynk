@@ -2,7 +2,7 @@
 
 Not a TPM agent implementation -- the stable, independently-testable surface
 a future role='tpm' dispatch calls to observe/reorder/reallocate the dispatch
-reservation ledger, instead of touching agent_reservations / daemon_jobs
+reservation ledger, instead of touching harness_reservations / daemon_jobs
 directly.
 """
 
@@ -13,7 +13,7 @@ def tpm_observe_reservations(conn, scope: str = None, scope_id: str = None) -> l
 
     query = (
         "SELECT id, harness, tokens, scope, scope_id, job_id, created_at "
-        "FROM agent_reservations WHERE status='open'"
+        "FROM harness_reservations WHERE status='open'"
     )
     params = []
     if scope:
@@ -72,7 +72,7 @@ def tpm_reallocate(conn, job_id: str, new_harness: str) -> dict:
         )
 
     res_row = conn.execute(
-        "SELECT id, tokens, scope, scope_id FROM agent_reservations "
+        "SELECT id, tokens, scope, scope_id FROM harness_reservations "
         "WHERE job_id=? AND status='open'",
         (job_id,),
     ).fetchone()

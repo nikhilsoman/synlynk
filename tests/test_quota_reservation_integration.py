@@ -55,7 +55,7 @@ def test_full_reserve_dispatch_settle_release_cycle(project_dir, monkeypatch):
     assert len(job_ids) == 2
 
     open_count = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE status='open'"
+        "SELECT COUNT(*) FROM harness_reservations WHERE status='open'"
     ).fetchone()[0]
     assert open_count == 2
 
@@ -83,11 +83,11 @@ def test_full_reserve_dispatch_settle_release_cycle(project_dir, monkeypatch):
         assert status in ("done", "timed_out", "failed")
 
     open_count_after = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE status='open'"
+        "SELECT COUNT(*) FROM harness_reservations WHERE status='open'"
     ).fetchone()[0]
     assert open_count_after == 0
     released_count = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE status='released'"
+        "SELECT COUNT(*) FROM harness_reservations WHERE status='released'"
     ).fetchone()[0]
     assert released_count == 2
 

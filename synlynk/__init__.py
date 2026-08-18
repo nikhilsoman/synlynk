@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 import sqlite3 as _sqlite3
 
 from synlynk._constants import (
-    AGENT_CAPABILITY_BASELINES,
+    HARNESS_CAPABILITY_BASELINES,
     HARNESS_TIMEOUT_PATTERNS,
     QUOTA_PATTERNS,
     VERSION,
@@ -911,7 +911,7 @@ CREATE INDEX IF NOT EXISTS idx_source_symbols_file ON source_symbols(file);
 
 CREATE TABLE IF NOT EXISTS autopilot_runs (
     id            TEXT PRIMARY KEY,
-    agent_name    TEXT NOT NULL,
+    harness_name    TEXT NOT NULL,
     signal_type   TEXT NOT NULL,
     signal_hash   TEXT NOT NULL,
     severity      TEXT NOT NULL,
@@ -992,19 +992,19 @@ CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, id);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_name         TEXT NOT NULL,
+    harness_name         TEXT NOT NULL,
     event_type         TEXT NOT NULL,
     last_seen_event_id INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(agent_name, event_type)
+    UNIQUE(harness_name, event_type)
 );
 
--- Per-agent plan quotas (tokens or requests). quota_type is plan-driven:
+-- Per-harness plan quotas (tokens or requests). quota_type is plan-driven:
 -- different harnesses reset on different windows (5h Claude plan, hourly,
 -- daily, weekly, monthly). headroom is computed as limit_tokens - used_tokens
 -- (columns named *_tokens historically; unit column disambiguates).
-CREATE TABLE IF NOT EXISTS agent_quotas (
+CREATE TABLE IF NOT EXISTS harness_quotas (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent        TEXT NOT NULL,
+    harness      TEXT NOT NULL,
     model        TEXT NOT NULL DEFAULT 'unknown',
     quota_type   TEXT NOT NULL,
     unit         TEXT NOT NULL DEFAULT 'tokens',
@@ -1012,17 +1012,17 @@ CREATE TABLE IF NOT EXISTS agent_quotas (
     used_tokens  INTEGER NOT NULL DEFAULT 0,
     reset_at     TIMESTAMP,
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(agent, model, quota_type, unit)
+    UNIQUE(harness, model, quota_type, unit)
 );
-CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
+CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness);
 
 -- Reservation ledger: an open row represents tokens committed against a
--- harness before real usage lands in agent_quotas via telemetry (#XXX
+-- harness before real usage lands in harness_quotas via telemetry (#XXX
 -- quota-aware dispatch reservation). Released once the matching daemon_jobs
 -- row settles (done/failed/timed_out) and real usage has been recorded.
 -- Reservations older than 24h are treated as expired at READ time (lazy
 -- expiry, see _open_reservations_sum) rather than physically deleted.
-CREATE TABLE IF NOT EXISTS agent_reservations (
+CREATE TABLE IF NOT EXISTS harness_reservations (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     harness        TEXT NOT NULL,
     tokens         INTEGER NOT NULL,
@@ -1033,7 +1033,7 @@ CREATE TABLE IF NOT EXISTS agent_reservations (
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     released_at    TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness ON agent_reservations(harness, status);
+CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
 
 CREATE TABLE IF NOT EXISTS credit_grants (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1194,16 +1194,16 @@ def _dr_sync(relative_path: str) -> None:
 def _seed_verb_map(db_conn):
     db_conn.executemany("""
         INSERT OR IGNORE INTO harness_verb_map
-            (synlynk_verb, verb_category, agent_name, agent_command, supported, partial_notes)
+                (synlynk_verb, verb_category, harness_name, harness_command, supported, partial_notes)
         VALUES (?,?,?,?,?,?)
     """, _VERB_MAP_SEED)
     db_conn.commit()
 
 
-def _check_verb_support(verb: str, agent_name: str, db_conn) -> dict:
+def _check_verb_support(verb: str, harness_name: str, db_conn) -> dict:
     row = db_conn.execute(
-        "SELECT supported, partial_notes, agent_command FROM harness_verb_map WHERE synlynk_verb=? AND agent_name=?",
-        (verb, agent_name)
+        "SELECT supported, partial_notes, harness_command FROM harness_verb_map WHERE synlynk_verb=? AND harness_name=?",
+        (verb, harness_name)
     ).fetchone()
     if not row:
         return {"supported": "unknown", "block": False, "warn": False, "notes": None, "command": None}
@@ -1228,24 +1228,24 @@ def _load_agent_config(name: str) -> dict:
         return _json.load(f)
 
 
-def _load_agent_profile(agent_name: str, agents_dir: str = ".agents") -> dict:
+def _load_agent_profile(harness_name: str, agents_dir: str = ".agents") -> dict:
     """Load an agent profile and normalize harness/model defaults."""
     import json as _json
 
     candidates = [
-        os.path.join(agents_dir, f"{agent_name}.json"),
-        os.path.join(".agents", f"{agent_name}.json"),
-        os.path.join("agents", f"{agent_name}.json"),
+        os.path.join(agents_dir, f"{harness_name}.json"),
+        os.path.join(".agents", f"{harness_name}.json"),
+        os.path.join("agents", f"{harness_name}.json"),
     ]
     path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
-        return {"agent": agent_name, "harness": agent_name, "model": "unknown"}
+        return {"agent": harness_name, "harness": harness_name, "model": "unknown"}
     try:
         with open(path) as f:
             profile = _json.load(f)
     except (OSError, ValueError, TypeError):
-        return {"agent": agent_name, "harness": agent_name, "model": "unknown"}
-    profile.setdefault("harness", agent_name)
+        return {"agent": harness_name, "harness": harness_name, "model": "unknown"}
+    profile.setdefault("harness", harness_name)
     profile.setdefault("model", "unknown")
     return profile
 
@@ -1255,7 +1255,7 @@ def _dispatch_flags_for_agent(agent: str) -> list:
 
     Supports both the legacy list form and the structured mapping form.
     """
-    baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    baselines = HARNESS_CAPABILITY_BASELINES.get(agent, {})
     dispatch_flags = baselines.get("dispatch_flags", [])
     if isinstance(dispatch_flags, dict):
         ordered = []
@@ -1354,7 +1354,7 @@ LOGS_DIR = ".synlynk/logs"
 PROMPTS_DIR = ".synlynk/prompts"
 
 _VERB_MAP_SEED = [
-    # (synlynk_verb, category, agent, agent_command, supported, partial_notes)
+    # (synlynk_verb, category, agent, harness_command, supported, partial_notes)
     ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
     ("dispatch.task",     "dispatch",      "grok",   "grok --single {task}", "full", None),
@@ -1967,7 +1967,7 @@ def discover_agents(config: dict = None) -> list:
     discovery_paths.update(config.get("agent_discovery_paths", {}))
 
     found = []
-    for name, defaults in AGENT_CAPABILITY_BASELINES.items():
+    for name, defaults in HARNESS_CAPABILITY_BASELINES.items():
         path = discovery_paths.get(name)
         if path and not os.path.exists(path):
             continue  # config dir not present — skip entirely
@@ -2086,8 +2086,8 @@ def cmd_agent_configure(agent_name: str) -> None:
     """Interactively write .agents/<agent_name>.json context-profile settings."""
     import json as _json
 
-    if agent_name not in AGENT_CAPABILITY_BASELINES:
-        print(f"  Unknown agent '{agent_name}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+    if agent_name not in HARNESS_CAPABILITY_BASELINES:
+        print(f"  Unknown agent '{agent_name}'. Known: {list(HARNESS_CAPABILITY_BASELINES)}")
         return
 
     os.makedirs(".agents", exist_ok=True)
@@ -2136,8 +2136,8 @@ def cmd_agent_configure(agent_name: str) -> None:
 
 def cmd_agent_add(agent_name: str) -> None:
     """Retrofit an on-PATH agent into the current project."""
-    if agent_name not in AGENT_CAPABILITY_BASELINES:
-        print(f"  Error: unknown agent '{agent_name}'. Known: {', '.join(sorted(AGENT_CAPABILITY_BASELINES))}")
+    if agent_name not in HARNESS_CAPABILITY_BASELINES:
+        print(f"  Error: unknown agent '{agent_name}'. Known: {', '.join(sorted(HARNESS_CAPABILITY_BASELINES))}")
         return
 
     cli_path = shutil.which(agent_name)
@@ -2214,11 +2214,11 @@ def _run_daily_housekeeping() -> None:
     if config.get("last_housekeeping_date") == today:
         return
 
-    workgroup_agents = [a for a in (config.get("workgroup_agents") or []) if a in AGENT_CAPABILITY_BASELINES]
+    workgroup_agents = [a for a in (config.get("workgroup_agents") or []) if a in HARNESS_CAPABILITY_BASELINES]
     known_on_path = {
         harness["name"]
         for harness in _detect_harnesses_on_path()
-        if harness.get("name") in AGENT_CAPABILITY_BASELINES
+        if harness.get("name") in HARNESS_CAPABILITY_BASELINES
     }
     onboarded = set(workgroup_agents)
     new_agents = sorted(known_on_path - onboarded)
@@ -2235,12 +2235,12 @@ def _run_daily_housekeeping() -> None:
         for agent_name in workgroup_agents:
             try:
                 before = db_conn.execute(
-                    "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+                    "SELECT installed_version, capability_hash FROM harness_records WHERE harness_name=?",
                     (agent_name,),
                 ).fetchone()
                 result = _probe_agent(agent_name, db_conn, write_fence=False)
                 after = db_conn.execute(
-                    "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
+                    "SELECT installed_version, capability_hash FROM harness_records WHERE harness_name=?",
                     (agent_name,),
                 ).fetchone()
             except Exception as exc:
@@ -2252,7 +2252,7 @@ def _run_daily_housekeeping() -> None:
                 after_version = after[0] if after else result.get("version", "unknown")
                 status = result.get("status", "unknown")
                 print(f"  Probe drift for {agent_name}: {before_version} → {after_version} ({status})")
-                baseline = AGENT_CAPABILITY_BASELINES.get(agent_name)
+                baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name)
                 if baseline is not None:
                     baseline["last_probe_snapshot"] = {
                         "installed_version": after_version,
@@ -2261,7 +2261,7 @@ def _run_daily_housekeeping() -> None:
                     }
                 printed = True
             try:
-                _repair_sops_only(agent_name=agent_name, dry_run=False)
+                _repair_sops_only(harness_name=agent_name, dry_run=False)
             except Exception as exc:
                 print(f"  Housekeeping repair failed for {agent_name}: {exc}")
                 printed = True
@@ -2519,11 +2519,11 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
     agent reads it as initial context. Stdout/stderr are not captured —
     this is an interactive session. Telemetry is logged on exit.
     """
-    if agent not in AGENT_CAPABILITY_BASELINES:
-        print(f"Unknown agent '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+    if agent not in HARNESS_CAPABILITY_BASELINES:
+        print(f"Unknown agent '{agent}'. Known: {list(HARNESS_CAPABILITY_BASELINES)}")
         return
 
-    cli = AGENT_CAPABILITY_BASELINES[agent]["cli"]
+    cli = HARNESS_CAPABILITY_BASELINES[agent]["cli"]
 
     try:
         generate_context(scope="full")
@@ -3306,9 +3306,9 @@ def _load_platform_harness_rows() -> tuple:
     if conn is not None:
         try:
             db_rows = conn.execute(
-                "SELECT agent_name, installed_version, last_probe_at, "
+                "SELECT harness_name, installed_version, last_probe_at, "
                 "compliance_status AS probe_status, capability_hash "
-                "FROM harness_records ORDER BY agent_name"
+                "FROM harness_records ORDER BY harness_name"
             ).fetchall()
         except Exception:
             db_rows = []
@@ -3317,9 +3317,9 @@ def _load_platform_harness_rows() -> tuple:
 
     if db_rows:
         rows = []
-        for agent_name, installed_version, last_probe_at, probe_status, capability_hash in db_rows:
+        for harness_name, installed_version, last_probe_at, probe_status, capability_hash in db_rows:
             rows.append({
-                "agent_name": agent_name,
+                "harness_name": harness_name,
                 "installed_version": installed_version or "—",
                 "last_probe_at": last_probe_at,
                 "probe_status": probe_status or "unknown",
@@ -3329,13 +3329,13 @@ def _load_platform_harness_rows() -> tuple:
         return rows, "db"
 
     rows = []
-    for agent_name in known_agents:
-        path = shutil.which(agent_name)
+    for harness_name in known_agents:
+        path = shutil.which(harness_name)
         version = "—"
         if path:
             try:
                 result = subprocess.run(
-                    [agent_name, "--version"], capture_output=True, text=True, timeout=5
+                    [harness_name, "--version"], capture_output=True, text=True, timeout=5
                 )
                 raw = (result.stdout or result.stderr or "").strip()
                 if raw:
@@ -3343,7 +3343,7 @@ def _load_platform_harness_rows() -> tuple:
             except Exception:
                 version = os.path.basename(path)
         rows.append({
-            "agent_name": agent_name,
+            "harness_name": harness_name,
             "installed_version": version,
             "last_probe_at": None,
             "probe_status": "unknown",
@@ -3366,9 +3366,9 @@ def _load_platform_drift_agents() -> tuple:
     drift_agents = set()
     for line in drift_lines:
         lower = line.lower()
-        for agent_name in ("claude", "agy", "codex", "grok", "gemini"):
-            if agent_name in lower:
-                drift_agents.add(agent_name)
+        for harness_name in ("claude", "agy", "codex", "grok", "gemini"):
+            if harness_name in lower:
+                drift_agents.add(harness_name)
     return drift_agents, drift_lines
 
 
@@ -3436,12 +3436,12 @@ def _print_platform_health() -> bool:
     compliance_rows = []
     availability_rows = []
     for row in rows:
-        agent_name = row["agent_name"]
-        probe_status = "DRIFT" if agent_name in drift_agents else "OK"
+        harness_name = row["harness_name"]
+        probe_status = "DRIFT" if harness_name in drift_agents else "OK"
         status_icon = "⚠" if probe_status == "DRIFT" else "✓"
         age = _humanize_ago(row.get("last_probe_at"))
         compliance_rows.append([
-            agent_name,
+            harness_name,
             row.get("installed_version") or "—",
             f"probed {age}" if age != "not probed" else "not probed",
             f"{status_icon} {probe_status}",
@@ -3449,7 +3449,7 @@ def _print_platform_health() -> bool:
         if row.get("installed", False):
             tc_status = "known" if row.get("capability_hash") else "unknown"
             availability_rows.append([
-                agent_name,
+                harness_name,
                 row.get("installed_version") or "—",
                 f"✓ {tc_status}" if tc_status == "known" else "⚠ unknown",
             ])

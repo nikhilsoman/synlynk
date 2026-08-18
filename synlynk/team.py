@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from synlynk._constants import (
-    AGENT_CAPABILITY_BASELINES,
+    HARNESS_CAPABILITY_BASELINES,
     AGENT_PANEL_QUERY_TIMEOUT_SECONDS,
 )
 
@@ -440,7 +440,7 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
     """Run an agent synchronously and return its stdout. Returns '' on any failure."""
     import tempfile as _tmp
 
-    baselines = AGENT_CAPABILITY_BASELINES
+    baselines = HARNESS_CAPABILITY_BASELINES
     if agent not in baselines:
         print(f"  ⚠ Unknown agent '{agent}' — skipping")
         return ""

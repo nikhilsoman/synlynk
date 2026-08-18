@@ -48,16 +48,15 @@ def _seed_probe_row(project_dir: Path, agent_name: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     synlynk._migrate_db(conn)
-    baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES[agent_name]
     conn.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
-            agent_name,
             baseline["cli"],
             "1.0.0",
             json.dumps(baseline["headless_contract"]),

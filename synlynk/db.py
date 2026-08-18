@@ -236,9 +236,70 @@ def _parse_todo_metadata(content: str) -> list:
                              'priority': pri_m.group(1) if pri_m else None})
     return results
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+
+
+def _get_db():
+    """Lazy compatibility access to the package DB connection."""
+    from synlynk import _get_db as get_db
+
+    return get_db()
+
+
+def _run_harness_rename_migration(conn) -> None:
+    """Rename agent-named harness schema objects from Plan A of #786."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_records)")}
+    if "agent_name" in cols and "harness_name" in cols:
+        conn.executescript("""
+            CREATE TABLE harness_records_new (
+                harness_name TEXT PRIMARY KEY,
+                installed_version TEXT NOT NULL DEFAULT 'unknown',
+                compliance_status TEXT NOT NULL DEFAULT 'unknown',
+                active_contract TEXT NOT NULL DEFAULT '{}',
+                active_flags TEXT NOT NULL DEFAULT '{}',
+                last_probe_at TEXT,
+                capability_hash TEXT NOT NULL DEFAULT ''
+            );
+            INSERT INTO harness_records_new
+                SELECT harness_name, installed_version, compliance_status, active_contract,
+                       active_flags, last_probe_at, capability_hash FROM harness_records;
+            DROP TABLE harness_records;
+            ALTER TABLE harness_records_new RENAME TO harness_records;
+        """)
+    for tbl, old_col, new_col in [
+        ("harness_verb_map", "agent_name", "harness_name"),
+        ("harness_verb_map", "agent_command", "harness_command"),
+        ("harness_version_history", "agent_name", "harness_name"),
+        ("cycle_capability", "agent_name", "harness_name"),
+        ("harness_status", "agent_name", "harness_name"),
+    ]:
+        tcols = {row[1] for row in conn.execute(f"PRAGMA table_info({tbl})")}
+        if old_col in tcols and new_col not in tcols:
+            conn.execute(f"ALTER TABLE {tbl} RENAME COLUMN {old_col} TO {new_col}")
+    qcols = (
+        {row[1] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
+        if _table_exists(conn, "agent_quotas") else set()
+    )
+    if qcols and "agent" in qcols:
+        conn.execute("ALTER TABLE agent_quotas RENAME COLUMN agent TO harness")
+        conn.execute("ALTER TABLE agent_quotas RENAME TO harness_quotas")
+        conn.execute("DROP INDEX IF EXISTS idx_agent_quotas_agent")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)")
+    if _table_exists(conn, "agent_reservations"):
+        conn.execute("ALTER TABLE agent_reservations RENAME TO harness_reservations")
+        conn.execute("DROP INDEX IF EXISTS idx_agent_reservations_harness")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status)"
+        )
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
-    from synlynk import AGENT_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
+    _run_harness_rename_migration(conn)
+    from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
     story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
     if "discipline" not in story_cols:
@@ -384,8 +445,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS harness_records (
-            agent_name TEXT PRIMARY KEY,
-            harness_name TEXT NOT NULL,
+            harness_name TEXT PRIMARY KEY,
             installed_version TEXT NOT NULL DEFAULT 'unknown',
             compliance_status TEXT NOT NULL DEFAULT 'unknown',
             active_contract TEXT NOT NULL DEFAULT '{}',
@@ -397,12 +457,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS harness_verb_map (
             synlynk_verb TEXT,
             verb_category TEXT,
-            agent_name TEXT NOT NULL,
-            agent_command TEXT,
+            harness_name TEXT NOT NULL,
+            harness_command TEXT,
             supported TEXT NOT NULL DEFAULT 'none',
             partial_notes TEXT,
             min_cli_version TEXT,
-            PRIMARY KEY (synlynk_verb, agent_name)
+            PRIMARY KEY (synlynk_verb, harness_name)
         );
 
         CREATE TABLE IF NOT EXISTS harness_command_palette (
@@ -419,7 +479,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS harness_version_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent_name TEXT NOT NULL,
+            harness_name TEXT NOT NULL,
             cli_version TEXT NOT NULL,
             event_type TEXT NOT NULL,
             prev_hash TEXT,
@@ -486,7 +546,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cycle_capability (
-            agent_name    TEXT NOT NULL,
+            harness_name  TEXT NOT NULL,
             cycle         TEXT NOT NULL,
             support       TEXT NOT NULL DEFAULT 'none',
             notes         TEXT,
@@ -494,12 +554,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             full_count    INTEGER DEFAULT 0,
             partial_count INTEGER DEFAULT 0,
             updated_at    TEXT NOT NULL,
-            PRIMARY KEY (agent_name, cycle)
+            PRIMARY KEY (harness_name, cycle)
         )
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS harness_status (
-            agent_name             TEXT PRIMARY KEY,
+            harness_name           TEXT PRIMARY KEY,
             attach_rate_24h        REAL DEFAULT 0.0,
             attach_point_in_time   INTEGER DEFAULT 0,
             adherence_score        REAL DEFAULT NULL,
@@ -822,7 +882,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("DELETE FROM cycle_capability WHERE cycle=?", (old,))
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
-    for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
+    for _agent_name, _baseline in HARNESS_CAPABILITY_BASELINES.items():
         _harness_name = _HARNESS_MAP.get(_agent_name, _agent_name)
         conn.execute("""
             INSERT OR IGNORE INTO harness_baselines
@@ -845,11 +905,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
         except Exception:
             pass  # column already exists
-    # #141: agent_quotas base table (also in _DB_SCHEMA; re-assert for older DBs)
+    # #141: harness_quotas base table (also in _DB_SCHEMA; re-assert for older DBs)
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS agent_quotas (
+        CREATE TABLE IF NOT EXISTS harness_quotas (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent        TEXT NOT NULL,
+            harness      TEXT NOT NULL,
             model        TEXT NOT NULL DEFAULT 'unknown',
             quota_type   TEXT NOT NULL,
             unit         TEXT NOT NULL DEFAULT 'tokens',
@@ -857,7 +917,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             used_tokens  INTEGER NOT NULL DEFAULT 0,
             reset_at     TIMESTAMP,
             updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(agent, model, quota_type, unit)
+            UNIQUE(harness, model, quota_type, unit)
         )
     """)
     conn.execute("""
@@ -867,12 +927,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         )
     """)
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent)"
+        "CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)"
     )
-    # Quota-aware dispatch reservation: agent_reservations base table
+    # Quota-aware dispatch reservation: harness_reservations base table
     # (also in _DB_SCHEMA; re-assert for older DBs)
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS agent_reservations (
+        CREATE TABLE IF NOT EXISTS harness_reservations (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
             harness        TEXT NOT NULL,
             tokens         INTEGER NOT NULL,
@@ -885,21 +945,21 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         )
     """)
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness "
-        "ON agent_reservations(harness, status)"
+        "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness "
+        "ON harness_reservations(harness, status)"
     )
-    quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
+    quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
     if quota_cols and "unit" not in quota_cols:
         try:
             conn.execute(
-                "ALTER TABLE agent_quotas ADD COLUMN unit TEXT NOT NULL DEFAULT 'tokens'"
+                "ALTER TABLE harness_quotas ADD COLUMN unit TEXT NOT NULL DEFAULT 'tokens'"
             )
         except sqlite3.OperationalError:
             pass
     if quota_cols and "model" not in quota_cols:
         try:
             conn.execute(
-                "ALTER TABLE agent_quotas ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+                "ALTER TABLE harness_quotas ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
             )
         except sqlite3.OperationalError:
             pass

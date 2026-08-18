@@ -399,7 +399,7 @@ def test_dispatch_agent_auto_provisions_story_id_when_not_given(project_dir, mon
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sp.subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("gh not found")))
 
     job = sl.dispatch_agent("claude", "rebind DB_PATH per #395", context_mode="none")
@@ -477,7 +477,7 @@ def test_dispatch_agent_reuses_existing_open_reservation(project_dir, monkeypatc
     job_id = "job-existing-reservation"
     sl._open_reservation(conn, "codex", 2_000, scope="plan", scope_id="run-1", job_id=job_id)
     before = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE job_id=? AND status='open'", (job_id,)
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id=? AND status='open'", (job_id,)
     ).fetchone()[0]
 
     class _P:
@@ -487,7 +487,7 @@ def test_dispatch_agent_reuses_existing_open_reservation(project_dir, monkeypatc
     sl.dispatch_agent("codex", "dispatch reserved task", job_id=job_id, force_agent=True, skip_preflight=True)
 
     after = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE job_id=? AND status='open'", (job_id,)
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id=? AND status='open'", (job_id,)
     ).fetchone()[0]
     assert after == before == 1
     conn.close()
@@ -509,7 +509,7 @@ def test_dispatch_agent_opens_reservation_when_headroom_exists(project_dir, monk
     sl.dispatch_agent("codex", "do a small task", force_agent=True, skip_preflight=True)
 
     reservations = conn.execute(
-        "SELECT harness, status FROM agent_reservations WHERE harness='codex'"
+        "SELECT harness, status FROM harness_reservations WHERE harness='codex'"
     ).fetchall()
     assert len(reservations) == 1
     assert reservations[0] == ("codex", "open")
@@ -525,7 +525,7 @@ def test_dispatch_agent_reuses_existing_story_id_for_repeat_issue_dispatch(proje
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(sp.subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("gh not found")))
 
     job1 = sl.dispatch_agent("claude", "first pass on #395", context_mode="none")
@@ -542,7 +542,7 @@ def test_dispatch_agent_explicit_story_id_provisions_missing_story(project_dir, 
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     job = sl.dispatch_agent("claude", "task text with #999", story_id="story-manual-1", context_mode="none")
 
     assert job["story_id"] == "story-manual-1"
@@ -563,7 +563,7 @@ def test_dispatch_agent_requires_gh_write_false_is_noop(project_dir, monkeypatch
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     job = sl.dispatch_agent("agy", "write docs", story_id="story-manual-1", context_mode="none")
 
@@ -1092,7 +1092,7 @@ def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
     fake_baselines = {
         "codex": {"env_passthrough": ["MY_AGENT_TOKEN"], "headless_contract": {}},
     }
-    monkeypatch.setattr(dispatch_mod, "AGENT_CAPABILITY_BASELINES", fake_baselines)
+    monkeypatch.setattr(dispatch_mod, "HARNESS_CAPABILITY_BASELINES", fake_baselines)
 
     env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
@@ -1106,13 +1106,13 @@ def test_build_subprocess_env_applies_headless_contract_required_vars():
     fake_baselines = {
         "agy": {"env_passthrough": [], "headless_contract": {"env_vars_required": ["PYTHONUNBUFFERED=1"]}},
     }
-    dispatch_mod_patch_target = dispatch_mod.AGENT_CAPABILITY_BASELINES
-    dispatch_mod.AGENT_CAPABILITY_BASELINES = fake_baselines
+    dispatch_mod_patch_target = dispatch_mod.HARNESS_CAPABILITY_BASELINES
+    dispatch_mod.HARNESS_CAPABILITY_BASELINES = fake_baselines
     try:
         env = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
         assert env.get("PYTHONUNBUFFERED") == "1"
     finally:
-        dispatch_mod.AGENT_CAPABILITY_BASELINES = dispatch_mod_patch_target
+        dispatch_mod.HARNESS_CAPABILITY_BASELINES = dispatch_mod_patch_target
 
 
 def test_build_subprocess_env_overrides_win_over_allowlist(monkeypatch):
@@ -1133,7 +1133,7 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     # #569 fail-closed: tests without Apps must mock a minted token
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
@@ -1177,7 +1177,7 @@ def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(pro
             a[0], 0, stdout='{"title":"close stale issues","body":"","labels":[]}', stderr=""
         ),
     )
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     sl.dispatch_agent("codex", "close stale issues", force_agent=True, requires_gh_write=True, issue=701)
     conn = sl._get_db()
@@ -1198,7 +1198,7 @@ def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatc
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     agent_id = agent_cli.cmd_agent_init("dev")
 
@@ -1222,7 +1222,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
@@ -1231,7 +1231,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
     )
 
     assert job["agent"] == "claude"
-    assert sl.AGENT_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
+    assert sl.HARNESS_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
     captured = capsys.readouterr()
     assert "rerouted" in captured.out
     assert "#426" in captured.out
@@ -1245,7 +1245,7 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
@@ -1290,7 +1290,7 @@ def test_dispatch_agent_requires_gh_write_allows_agy_when_tc7_passes(project_dir
     monkeypatch.setattr(
         sl,
         "_preflight_dispatch",
-        lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {
+        lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {
             "passed": True,
             "sentinel": None,
             "reason": None,
@@ -1306,10 +1306,10 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
 
     no_capable = {
         name: {**baseline, "can_gh_write": False}
-        for name, baseline in sl.AGENT_CAPABILITY_BASELINES.items()
+        for name, baseline in sl.HARNESS_CAPABILITY_BASELINES.items()
     }
-    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", no_capable)
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "HARNESS_CAPABILITY_BASELINES", no_capable)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     with pytest.raises(ValueError, match="can_gh_write"):
         sl.dispatch_agent(
@@ -1780,7 +1780,7 @@ def test_dispatch_agent_id_auto_selects_harness_by_mapped_role(project_dir, monk
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     agent_id = agent_cli.cmd_agent_init("qa")  # qa -> "verifier" -> agy
 
@@ -1813,7 +1813,7 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     captured_roles = []
     monkeypatch.setattr(
@@ -1840,7 +1840,7 @@ def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(p
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
-    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(
         agent_store, "_workspace_root",
         lambda workspace_id: str(project_dir / ".synlynk" / "workspaces" / workspace_id),

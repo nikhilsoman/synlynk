@@ -350,7 +350,7 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                 pass
             try:
                 rows = conn.execute(
-                    "SELECT agent_name, attach_rate_24h, completion_rate_24h, compliance_status "
+                    "SELECT harness_name, attach_rate_24h, completion_rate_24h, compliance_status "
                     "FROM harness_status"
                 ).fetchall()
                 if rows:
@@ -576,7 +576,7 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
         ):
             gh_fail_hints += 1
     try:
-        from synlynk._constants import AGENT_CAPABILITY_BASELINES as _BASELINES
+        from synlynk._constants import HARNESS_CAPABILITY_BASELINES as _BASELINES
         can_gh = [a for a, b in _BASELINES.items() if b.get("can_gh_write")]
     except Exception:
         can_gh = []

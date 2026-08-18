@@ -41,7 +41,7 @@ _PERMISSION_TO_TOOL_MAP = {
 
 # Known baseline capabilities per agent CLI.
 # Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
-AGENT_CAPABILITY_BASELINES = {
+HARNESS_CAPABILITY_BASELINES = {
     "claude": {
         "cli": "claude",
         "can_gh_write": True,

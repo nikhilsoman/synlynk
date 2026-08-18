@@ -64,10 +64,10 @@ def test_tpm_reallocate_moves_reservation_and_agent(project_dir):
         "SELECT agent FROM daemon_jobs WHERE job_id='job-realloc1'"
     ).fetchone()[0] == "agy"
     assert conn.execute(
-        "SELECT status FROM agent_reservations WHERE id=?", (rid,)
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()[0] == "released"
     assert conn.execute(
-        "SELECT harness, tokens, status FROM agent_reservations "
+        "SELECT harness, tokens, status FROM harness_reservations "
         "WHERE job_id='job-realloc1' AND status='open'"
     ).fetchone() == ("agy", 5_000, "open")
 

@@ -12,7 +12,7 @@ import time
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
 from synlynk.gh_verify import gh_write_verified
@@ -896,9 +896,9 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
-    if agent not in AGENT_CAPABILITY_BASELINES:
+    if agent not in HARNESS_CAPABILITY_BASELINES:
         conn.close()
-        known_agents = ", ".join(sorted(AGENT_CAPABILITY_BASELINES))
+        known_agents = ", ".join(sorted(HARNESS_CAPABILITY_BASELINES))
         raise ValueError(
             f"Refusing capability rating write for unregistered agent {agent!r}. "
             f"Known agents: {known_agents}"
@@ -1093,7 +1093,7 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
         if not candidates:
             return None
 
-        # #291: keep agent_quotas rows current from telemetry before stage-2 gate
+        # #291: keep harness_quotas rows current from telemetry before stage-2 gate
         # so routing sees non-zero used_tokens when exec history exists.
         refresh_quotas = _pkg("_refresh_agent_quotas_from_telemetry") or _pkg(
             "refresh_agent_quotas_from_telemetry"
@@ -2185,7 +2185,7 @@ def _reconcile_daemon_jobs() -> None:
                     release_fn = _pkg("_release_reservation")
                     if release_fn:
                         _res_row = conn.execute(
-                            "SELECT id FROM agent_reservations WHERE job_id=? AND status='open'",
+                            "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
                             (job_id,),
                         ).fetchone()
                         if _res_row:
@@ -2257,7 +2257,7 @@ def _reconcile_daemon_jobs() -> None:
                 release_fn = _pkg("_release_reservation")
                 if release_fn:
                     _res_row = conn.execute(
-                        "SELECT id FROM agent_reservations WHERE job_id=? AND status='open'",
+                        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
                         (job_id,),
                     ).fetchone()
                     if _res_row:
