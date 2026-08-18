@@ -1,6 +1,6 @@
 import subprocess
 
-from synlynk.gh_verify import gh_write_verified
+from synlynk.gh_verify import _parse_iso8601, gh_write_verified
 
 
 def test_gh_write_verified_true_when_issue_closed(monkeypatch):
@@ -51,3 +51,133 @@ def test_gh_write_verified_unknown_when_gh_cli_times_out(monkeypatch):
 
 def test_gh_write_verified_rejects_malformed_target():
     assert gh_write_verified("not-a-valid-target", expect="closed") is None
+
+
+def test_parse_iso8601_handles_z_suffix():
+    dt = _parse_iso8601("2026-08-18T10:00:00Z")
+    assert dt is not None
+    assert dt.year == 2026 and dt.month == 8 and dt.day == 18
+    assert dt.hour == 10
+
+
+def test_parse_iso8601_handles_offset_suffix():
+    dt = _parse_iso8601("2026-08-18T10:00:00+00:00")
+    assert dt is not None
+    assert dt.hour == 10
+
+
+def test_parse_iso8601_returns_none_for_garbage():
+    assert _parse_iso8601("not-a-timestamp") is None
+
+
+def test_parse_iso8601_returns_none_for_none():
+    assert _parse_iso8601(None) is None
+
+
+def test_gh_write_verified_review_posted_true_after_since_no_author_filter(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        assert cmd[:3] == ["gh", "pr", "view"]
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"someone[bot]"},'
+            '"submittedAt":"2026-08-18T11:00:00Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z"
+    )
+    assert result is True
+
+
+def test_gh_write_verified_review_posted_false_when_only_stale_entry(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"someone[bot]"},'
+            '"submittedAt":"2026-08-18T09:00:00Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z"
+    )
+    assert result is False
+
+
+def test_gh_write_verified_review_posted_true_with_matching_author(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"synlynk-synlynk-dev[bot]"},'
+            '"submittedAt":"2026-08-18T11:00:00Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1038",
+        expect="review_posted",
+        since="2026-08-18T10:00:00Z",
+        expect_author="synlynk-synlynk-dev[bot]",
+    )
+    assert result is True
+
+
+def test_gh_write_verified_review_posted_false_when_author_mismatch(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"someone-else[bot]"},'
+            '"submittedAt":"2026-08-18T11:00:00Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1038",
+        expect="review_posted",
+        since="2026-08-18T10:00:00Z",
+        expect_author="synlynk-synlynk-dev[bot]",
+    )
+    assert result is False
+
+
+def test_gh_write_verified_review_posted_none_when_since_omitted(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout='{"reviews":[]}', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified("pr:1038", expect="review_posted") is None
+
+
+def test_gh_write_verified_comment_posted_true_after_since(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        assert cmd[:3] == ["gh", "pr", "view"]
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"comments":[{"author":{"login":"someone[bot]"},'
+            '"createdAt":"2026-08-18T11:00:00Z"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1038", expect="comment_posted", since="2026-08-18T10:00:00Z"
+    )
+    assert result is True
+
+
+def test_gh_write_verified_closed_behavior_unchanged_after_extension(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout='{"state":"CLOSED"}', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified("issue:701", expect="closed") is True

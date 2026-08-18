@@ -865,3 +865,23 @@ def test_cmd_decision_record_writes_pre_migration_too(project_dir):
     md_files = list(decisions_dir.glob("*.md"))
     assert len(md_files) == 1
     assert "DB choice" in md_files[0].read_text()
+
+
+def test_migrate_adds_gh_write_author_and_expect_columns(tmp_path):
+    import sqlite3
+    from synlynk.db import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, "
+        "story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, "
+        "enqueued_at TEXT, started_at TEXT, log_path TEXT)"
+    )
+    conn.execute("CREATE TABLE cost_entries (session_id TEXT, recorded_at TEXT)")
+    conn.commit()
+    _migrate_db(conn)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "gh_write_author" in cols
+    assert "gh_write_expect" in cols
+    conn.close()

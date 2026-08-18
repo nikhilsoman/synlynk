@@ -52,6 +52,26 @@ def test_resolve_dispatch_gh_token_returns_none_when_nothing_provisioned(tmp_pat
     assert dispatch_mod._resolve_dispatch_gh_token("dev") is None
 
 
+def test_resolve_dispatch_gh_bot_login_uses_role_specific_app(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "dev.json").write_text(json.dumps({"app_slug": "synlynk-synlynk-dev"}))
+
+    import synlynk.dispatch as dispatch_mod
+
+    assert dispatch_mod._resolve_dispatch_gh_bot_login("dev") == "synlynk-synlynk-dev[bot]"
+
+
+def test_resolve_dispatch_gh_bot_login_returns_none_when_nothing_provisioned(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    import synlynk.dispatch as dispatch_mod
+
+    assert dispatch_mod._resolve_dispatch_gh_bot_login("dev") is None
+
+
 def _dispatch_with_fake_popen(
     tmp_path,
     monkeypatch,
@@ -62,6 +82,8 @@ def _dispatch_with_fake_popen(
     requires_gh_write=False,
     token_resolver=None,
     role_for_story=None,
+    issue=None,
+    gh_write_target_kind="issue",
 ):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(parents=True, exist_ok=True)
@@ -146,6 +168,8 @@ def _dispatch_with_fake_popen(
         skip_preflight=True,
         job_id="job-test",
         requires_gh_write=requires_gh_write,
+        issue=issue,
+        gh_write_target_kind=gh_write_target_kind,
         force_agent=True,
     )
     return dispatch_mod, job, captured_env
@@ -163,6 +187,29 @@ def test_dispatch_agent_injects_gh_token_when_requires_gh_write(tmp_path, monkey
 
     assert job["agent"] == "grok"
     assert captured_env.get("GH_TOKEN") == "minted-token-abc"
+
+
+def test_dispatch_agent_uses_pr_target_kind(tmp_path, monkeypatch):
+    _dispatch_mod, job, _captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        requires_gh_write=True,
+        token_resolver=lambda role: "minted-token-abc",
+        issue=1038,
+        gh_write_target_kind="pr",
+    )
+    assert job["gh_write_target"] == "pr:1038"
+
+
+def test_dispatch_agent_defaults_to_issue_target_kind(tmp_path, monkeypatch):
+    dispatch_mod, job, _captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        requires_gh_write=True,
+        token_resolver=lambda role: "minted-token-abc",
+        issue=701,
+    )
+    assert job["gh_write_target"] == "issue:701"
 
 
 def test_dispatch_agent_injects_gh_token_and_isolates_config_dir(tmp_path, monkeypatch):

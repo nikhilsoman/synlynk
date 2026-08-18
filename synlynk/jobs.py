@@ -2082,12 +2082,16 @@ def _gtv_status_for_daemon_exit(
 
 
 def _apply_gh_write_verification(
-    conn, job_id: str, requires_gh_write, gh_write_target: Optional[str], status: str
+    conn, job_id: str, requires_gh_write, gh_write_target: Optional[str], status: str,
+    since: Optional[str] = None, expect_author: Optional[str] = None,
+    expect: str = "closed",
 ) -> tuple:
     """Consult GitHub state for a --requires-gh-write job and return status/outcome."""
     if not requires_gh_write:
         return status, None
-    verified = gh_write_verified(gh_write_target, expect="closed")
+    verified = gh_write_verified(
+        gh_write_target, expect=expect, since=since, expect_author=expect_author,
+    )
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified is False and status in ("done", "failed_unverified"):
         status = "succeeded_gh_write_failed"
@@ -2107,13 +2111,14 @@ def _reconcile_daemon_jobs() -> None:
     conn = _pkg("_get_db")()
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
-        "dispatch_context, requires_gh_write, gh_write_target "
+        "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
-             dispatch_context, requires_gh_write, gh_write_target) in rows:
+             dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
+             gh_write_expect) in rows:
             exited = False
             raw_exit_status = None
             if pid is None:
@@ -2159,7 +2164,9 @@ def _reconcile_daemon_jobs() -> None:
                 if preferred is not None:
                     status, exit_code = preferred
                     status, gh_write_verified_str = _apply_gh_write_verification(
-                        conn, job_id, requires_gh_write, gh_write_target, status
+                        conn, job_id, requires_gh_write, gh_write_target, status,
+                        since=started_at, expect_author=gh_write_author,
+                        expect=gh_write_expect or "closed",
                     )
                     conn.execute(
                         "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
@@ -2214,7 +2221,9 @@ def _reconcile_daemon_jobs() -> None:
                     exit_code, git_state
                 )
                 status, gh_write_verified_str = _apply_gh_write_verification(
-                    conn, job_id, requires_gh_write, gh_write_target, status
+                    conn, job_id, requires_gh_write, gh_write_target, status,
+                    since=started_at, expect_author=gh_write_author,
+                    expect=gh_write_expect or "closed",
                 )
 
                 files_touched = []

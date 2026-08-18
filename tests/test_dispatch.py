@@ -166,6 +166,48 @@ def test_format_prompt_for_agent_omits_codex_gh_write_guardrail_by_default():
     assert "gh pr review" not in prompt
 
 
+def test_gh_write_instruction_present_for_grok_when_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "grok", "context", "story-1", "review PR 1038", "", "",
+        requires_gh_write=True,
+    )
+    assert "GitHub Write Instructions" in prompt
+    assert "Do not use MCP GitHub tools" in prompt
+
+
+def test_gh_write_instruction_present_for_agy_when_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "agy", "context", "story-1", "review PR 1038", "", "",
+        requires_gh_write=True,
+    )
+    assert "GitHub Write Instructions" in prompt
+
+
+def test_gh_write_instruction_present_for_codex_when_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "codex", "context", "story-1", "review PR 1038", "", "",
+        requires_gh_write=True,
+    )
+    assert "GitHub Write Instructions" in prompt
+
+
+def test_gh_write_instruction_absent_when_not_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    for agent in ("codex", "agy", "grok"):
+        prompt = _format_prompt_for_agent(
+            agent, "context", "story-1", "some task", "", "",
+            requires_gh_write=False,
+        )
+        assert "GitHub Write Instructions" not in prompt
+
+
 def test_dispatch_agent_writes_receipt_instruction_to_prompt_file(tmp_path, monkeypatch):
     import hashlib
     import synlynk as sl
@@ -625,6 +667,71 @@ def test_cli_dispatch_passes_task_type_flag(project_dir, monkeypatch):
     cli_mod.main()
 
     assert captured["task_type"] == "review"
+
+
+def test_cli_dispatch_infers_pr_gh_write_target_for_review(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["gh_write_target_kind"] = kwargs.get("gh_write_target_kind")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "review PR 1038",
+         "--task-type", "review", "--requires-gh-write", "--issue", "1038"],
+    )
+
+    cli_mod.main()
+
+    assert captured["gh_write_target_kind"] == "pr"
+
+
+def test_cli_dispatch_explicitly_overrides_gh_write_target_kind(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["gh_write_target_kind"] = kwargs.get("gh_write_target_kind")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "review PR 1038",
+         "--task-type", "review", "--gh-write-target-kind", "issue"],
+    )
+
+    cli_mod.main()
+
+    assert captured["gh_write_target_kind"] == "issue"
+
+
+def test_cli_dispatch_defaults_gh_write_target_to_issue(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["gh_write_target_kind"] = kwargs.get("gh_write_target_kind")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "do the work"],
+    )
+
+    cli_mod.main()
+
+    assert captured["gh_write_target_kind"] == "issue"
 
 
 def test_review_dispatch_job_stores_task_type(project_dir, monkeypatch):

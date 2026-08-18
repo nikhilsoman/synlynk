@@ -187,6 +187,8 @@ def _ensure_daemon_job_gh_write_columns(conn) -> None:
         "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
         "gh_write_target": "TEXT",
         "gh_write_verified": "TEXT",
+        "gh_write_author": "TEXT",
+        "gh_write_expect": "TEXT DEFAULT 'closed'",
     }
     for name, definition in definitions.items():
         if name not in cols:
@@ -253,6 +255,28 @@ def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
                 file=sys.stderr,
             )
             return None
+    return None
+
+
+def _resolve_dispatch_gh_bot_login(role: str) -> Optional[str]:
+    """Resolve a provisioned GitHub App bot login for dispatch.
+
+    Mirrors _resolve_dispatch_gh_token's lookup order, but derives the bot
+    login from each App's ``app_slug`` instead of minting a token. Returns
+    None if no App is provisioned; it never guesses a login.
+    """
+    for candidate_role in (role, "synlynk-bot"):
+        json_path = os.path.join(".synlynk", "github_apps", f"{candidate_role}.json")
+        if not os.path.exists(json_path):
+            continue
+        try:
+            with open(json_path) as fh:
+                app_slug = json.load(fh).get("app_slug")
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(app_slug, str) or not app_slug:
+            continue
+        return app_slug if app_slug.endswith("[bot]") else f"{app_slug}[bot]"
     return None
 
 
@@ -617,7 +641,13 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
 
     if job.get("requires_gh_write"):
         target = job.get("gh_write_target")
-        verified = gh_write_verified(target, expect="closed")
+        expect = job.get("gh_write_expect") or "closed"
+        verified = gh_write_verified(
+            target,
+            expect=expect,
+            since=job.get("started_at"),
+            expect_author=job.get("gh_write_author"),
+        )
         job["gh_write_verified"] = (
             "true" if verified is True else ("false" if verified is False else "unknown")
         )
@@ -1074,19 +1104,19 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     """Returns a prompt formatted for the agent's preferred input style."""
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
+    gh_write_instruction = ""
+    if requires_gh_write:
+        gh_write_instruction = (
+            "## GitHub Write Instructions\n"
+            "For any PR review or issue/PR comment in this task, use the `gh` "
+            "CLI directly via the shell — e.g. `gh pr review <N> --approve "
+            "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
+            "comment <N> --body '...'. Do not use MCP GitHub tools for these "
+            "writes; they have a confirmed failure history for this workflow.\n\n"
+        )
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
-        gh_write_instruction = ""
-        if requires_gh_write:
-            gh_write_instruction = (
-                "## GitHub Write Instructions\n"
-                "For any PR review or issue/PR comment in this task, use the `gh` "
-                "CLI directly via the shell — e.g. `gh pr review <N> --approve "
-                "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
-                "comment <N> --body '...'`. Do not use MCP GitHub tools for these "
-                "writes; they have a confirmed failure history for this workflow.\n\n"
-            )
         return (
             f"{receipt_instruction}"
             f"{gh_write_instruction}"
@@ -1100,6 +1130,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         working_dir = cwd_hint or os.getcwd()
         return (
             f"{receipt_instruction}"
+            f"{gh_write_instruction}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
@@ -1110,6 +1141,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         )
     return (
         f"{receipt_instruction}"
+        f"{gh_write_instruction}"
         f"{context_text}"
         f"{story_ref}"
         f"{file_section}"
@@ -2063,7 +2095,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    issue: int = None,
                    base: str = None,
                    scope_paths: list = None,
-                   session_id: str = None) -> dict:
+                   session_id: str = None,
+                   gh_write_target_kind: str = "issue") -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2534,8 +2567,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id, agent_role=resolved_agent_role)
     gh_write_target_value = None
+    gh_write_author_value = None
+    gh_write_expect_value = None
     if requires_gh_write and issue is not None:
-        gh_write_target_value = f"issue:{issue}"
+        target_prefix = "pr" if gh_write_target_kind == "pr" else "issue"
+        gh_write_target_value = f"{target_prefix}:{issue}"
+        gh_write_role = resolved_agent_role or _role_for_story(story_id) or "dev"
+        gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
+        gh_write_expect_value = "review_posted" if task_type == "review" else "closed"
+    gh_write_expect_for_job = gh_write_expect_value or "closed"
 
     proc = subprocess.Popen(
         ["sh", "-c", shell_cmd],
@@ -2576,6 +2616,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
         "gh_write_target": gh_write_target_value,
+        "gh_write_author": gh_write_author_value,
+        "gh_write_expect": gh_write_expect_for_job,
         "task_type": task_type or "",
         "agent_id": agent_id or "",
         "resolved_agent_role": resolved_agent_role or "",
@@ -2617,7 +2659,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
-                    "agent_id=COALESCE(agent_id, ?) WHERE job_id=?",
+                    "agent_id=COALESCE(agent_id, ?), "
+                    "gh_write_author=COALESCE(gh_write_author, ?), "
+                    "gh_write_expect=COALESCE(gh_write_expect, ?) WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -2630,6 +2674,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_bytes,
                         session_id,
                         agent_id,
+                        gh_write_author_value,
+                        gh_write_expect_for_job,
                         job_id,
                     ),
                 )
@@ -2639,8 +2685,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
                     "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
-                    "agent_id, requires_gh_write, gh_write_target) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -2660,6 +2706,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         agent_id,
                         1 if requires_gh_write else 0,
                         gh_write_target_value,
+                        gh_write_author_value,
+                        gh_write_expect_for_job,
                     ),
                 )
             dconn.commit()
