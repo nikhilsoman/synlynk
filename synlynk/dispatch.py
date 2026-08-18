@@ -1365,7 +1365,7 @@ def _assert_dispatch_worktree_base_is_fresh(worktree_path: str, base_ref: str) -
     print(f"  worktree base verified against {base_ref} @ {ref_commit}")
 
 
-def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
+def _preflight_auth_check(harness_name: str, auth_check: dict) -> Optional[dict]:
     """Run a lightweight auth probe and fail when it reports an unauthenticated state."""
     if not auth_check:
         return None
@@ -1389,7 +1389,7 @@ def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
             "passed": False,
             "sentinel": "HARNESS_PREFLIGHT_FAIL",
             "reason": (
-                f"Agent '{agent_name}' auth preflight failed: missing required auth state "
+                f"Harness '{harness_name}' auth preflight failed: missing required auth state "
                 f"file(s) {', '.join(missing_paths)}. Re-authenticate before dispatch."
             ),
         }
@@ -1407,7 +1407,7 @@ def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
             "passed": False,
             "sentinel": "HARNESS_PREFLIGHT_FAIL",
             "reason": (
-                f"Agent '{agent_name}' auth preflight failed: probe command "
+                f"Harness '{harness_name}' auth preflight failed: probe command "
                 f"{' '.join(probe_cmd)!r} is unavailable."
             ),
         }
@@ -1416,7 +1416,7 @@ def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
             "passed": False,
             "sentinel": "HARNESS_PREFLIGHT_FAIL",
             "reason": (
-                f"Agent '{agent_name}' auth preflight failed: probe command "
+                f"Harness '{harness_name}' auth preflight failed: probe command "
                 f"{' '.join(probe_cmd)!r} timed out."
             ),
         }
@@ -1430,14 +1430,14 @@ def _preflight_auth_check(agent_name: str, auth_check: dict) -> Optional[dict]:
             "passed": False,
             "sentinel": "HARNESS_PREFLIGHT_FAIL",
             "reason": (
-                f"Agent '{agent_name}' is not authenticated: "
+                f"Harness '{harness_name}' is not authenticated: "
                 f"{(probe_result.stderr or probe_result.stdout or 'auth probe failed').strip()}"
             ),
         }
     return None
 
 
-def _known_headless_permission_denial(agent_name: str) -> Optional[dict]:
+def _known_headless_permission_denial(harness_name: str) -> Optional[dict]:
     """Return a known matching permission-denial log id when we have one."""
     get_db = _pkg("_get_db")
     if get_db:
@@ -1451,7 +1451,7 @@ def _known_headless_permission_denial(agent_name: str) -> Optional[dict]:
                     "SELECT job_id, log_path FROM daemon_jobs "
                     "WHERE agent=? AND status='permission_denied' "
                     "ORDER BY completed_at DESC LIMIT 1",
-                    (agent_name,),
+                    (harness_name,),
                 ).fetchone()
             except Exception:
                 row = None
@@ -1483,7 +1483,7 @@ def _known_headless_permission_denial(agent_name: str) -> Optional[dict]:
     except Exception:
         return None
     for job in reversed(jobs):
-        if job.get("agent") != agent_name:
+        if job.get("agent") != harness_name:
             continue
         log_path = job.get("log_file") or job.get("log_path")
         if not log_path or not os.path.exists(log_path):
@@ -1502,9 +1502,9 @@ def _known_headless_permission_denial(agent_name: str) -> Optional[dict]:
     return None
 
 
-def _preflight_headless_permission_check(agent_name: str, permissions: list, dispatch_flags: list) -> Optional[dict]:
+def _preflight_headless_permission_check(harness_name: str, permissions: list, dispatch_flags: list) -> Optional[dict]:
     """Block known headless permission auto-denials before dispatching."""
-    if agent_name != "agy":
+    if harness_name != "agy":
         return None
 
     permissions = permissions or []
@@ -1514,13 +1514,13 @@ def _preflight_headless_permission_check(agent_name: str, permissions: list, dis
     if has_write_or_run or bypass_flag:
         return None
 
-    known = _known_headless_permission_denial(agent_name)
+    known = _known_headless_permission_denial(harness_name)
     if known:
         return {
             "passed": False,
             "sentinel": "HARNESS_PREFLIGHT_FAIL",
             "reason": (
-                f"Agent '{agent_name}' would dispatch headless with read-only permissions, "
+                f"Harness '{harness_name}' would dispatch headless with read-only permissions, "
                 f"and prior job {known['job_id']} hit the same auto-denial pattern. "
                 "Grant a write/run permission or reroute this work."
             ),
@@ -1530,7 +1530,7 @@ def _preflight_headless_permission_check(agent_name: str, permissions: list, dis
         "passed": False,
         "sentinel": "HARNESS_PREFLIGHT_FAIL",
         "reason": (
-            f"Agent '{agent_name}' would dispatch headless with read-only permissions, "
+            f"Harness '{harness_name}' would dispatch headless with read-only permissions, "
             "which is a known auto-denial pattern. Grant a write/run permission or reroute this work."
         ),
     }
@@ -1707,7 +1707,7 @@ def _dispatch_capability_preflight(
     if db_conn is not None:
         try:
             probe_row = db_conn.execute(
-                "SELECT compliance_status, last_probe_at FROM harness_records WHERE agent_name=?",
+                "SELECT compliance_status, last_probe_at FROM harness_records WHERE harness_name=?",
                 (agent,),
             ).fetchone()
         except Exception:
@@ -1846,7 +1846,7 @@ def _dispatch_capability_preflight(
 
 
 def _preflight_dispatch(
-    agent_name: str,
+    harness_name: str,
     dispatch_flags: list,
     db_conn=None,
     _task_hint: str = "",
@@ -1854,13 +1854,13 @@ def _preflight_dispatch(
 ) -> dict:
     import socket as _socket
 
-    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
 
     if db_conn:
         try:
             _row = db_conn.execute(
-                "SELECT installed_version, last_probe_at FROM harness_records WHERE agent_name=?",
-                (agent_name,),
+                "SELECT installed_version, last_probe_at FROM harness_records WHERE harness_name=?",
+                (harness_name,),
             ).fetchone()
         except Exception:
             _row = None
@@ -1876,7 +1876,7 @@ def _preflight_dispatch(
             if _is_stale:
                 try:
                     _ver_result = subprocess.run(
-                        [agent_name, "--version"], capture_output=True, text=True, timeout=3
+                        [harness_name, "--version"], capture_output=True, text=True, timeout=3
                     )
                     _live_version = _ver_result.stdout.strip().split()[-1] if _ver_result.stdout.strip() else "unknown"
                     if _live_version != _recorded_version:
@@ -1884,7 +1884,7 @@ def _preflight_dispatch(
                         write_alert(
                             "WARNING",
                             "HARNESS_VERSION_DRIFT",
-                            f"Agent '{agent_name}' version changed: {_recorded_version} -> {_live_version}. Run synlynk probe to update.",
+                            f"Harness '{harness_name}' version changed: {_recorded_version} -> {_live_version}. Run synlynk probe to update.",
                         )
                 except (FileNotFoundError, subprocess.TimeoutExpired):
                     pass
@@ -1897,7 +1897,7 @@ def _preflight_dispatch(
             return {
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"Flag {f!r} is invalid for agent '{agent_name}' (LIVE-1 class error)",
+                "reason": f"Flag {f!r} is invalid for agent '{harness_name}' (LIVE-1 class error)",
             }
 
     if isinstance(flags_spec, dict):
@@ -1910,8 +1910,8 @@ def _preflight_dispatch(
         if db_conn:
             try:
                 probe_row = db_conn.execute(
-                    "SELECT compliance_status, active_flags FROM harness_records WHERE agent_name=?",
-                    (agent_name,),
+                    "SELECT compliance_status, active_flags FROM harness_records WHERE harness_name=?",
+                    (harness_name,),
                 ).fetchone()
             except Exception:
                 probe_row = None
@@ -1919,7 +1919,7 @@ def _preflight_dispatch(
             return {
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"no probe data for agent; run synlynk probe {agent_name}",
+                "reason": f"no probe data for agent; run synlynk probe {harness_name}",
             }
         compliance_status, _active_flags_json = probe_row
         if compliance_status != "ok":
@@ -1927,8 +1927,8 @@ def _preflight_dispatch(
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
                 "reason": (
-                    f"TC-2 flag check failed for {agent_name}: probe status is {compliance_status!r}. "
-                    f"Run synlynk probe {agent_name} to update."
+                    f"TC-2 flag check failed for {harness_name}: probe status is {compliance_status!r}. "
+                    f"Run synlynk probe {harness_name} to update."
                 ),
             }
 
@@ -1947,15 +1947,15 @@ def _preflight_dispatch(
             return {
                 "passed": False,
                 "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"Required endpoint {endpoint!r} unreachable for agent '{agent_name}'",
+                "reason": f"Required endpoint {endpoint!r} unreachable for agent '{harness_name}'",
             }
 
     auth_check = baseline.get("auth_check", {})
-    auth_failure = _preflight_auth_check(agent_name, auth_check)
+    auth_failure = _preflight_auth_check(harness_name, auth_check)
     if auth_failure:
         return auth_failure
 
-    headless_failure = _preflight_headless_permission_check(agent_name, permissions or [], dispatch_flags or [])
+    headless_failure = _preflight_headless_permission_check(harness_name, permissions or [], dispatch_flags or [])
     if headless_failure:
         return headless_failure
 
@@ -1969,13 +1969,13 @@ def _preflight_dispatch(
                 with open(ctx_path) as f:
                     context_md = f.read()
 
-            est = estimate_dispatch_tokens(_task_hint, context_md, agent_name)
+            est = estimate_dispatch_tokens(_task_hint, context_md, harness_name)
             cap_row = None
             try:
                 cap_row = db_conn.execute(
                     "SELECT read_budget_tokens, write_budget_tokens, tool_budget_count "
-                    "FROM harness_status WHERE agent_name=?",
-                    (agent_name,),
+                    "FROM harness_status WHERE harness_name=?",
+                    (harness_name,),
                 ).fetchone()
             except Exception:
                 cap_row = None
@@ -1983,7 +1983,7 @@ def _preflight_dispatch(
             if cap_row and any(v is not None for v in cap_row):
                 read_budget, write_budget, tool_budget = cap_row
             else:
-                tier1 = TIER1_CAPACITY.get(agent_name, {})
+                tier1 = TIER1_CAPACITY.get(harness_name, {})
                 read_budget = tier1.get("read_budget_tokens", 999_999)
                 write_budget = tier1.get("write_budget_tokens", 32_000)
                 tool_budget = tier1.get("tool_budget_count", 200)
@@ -1994,7 +1994,7 @@ def _preflight_dispatch(
                     "sentinel": "CAPACITY_EXCEEDED_INPUT",
                     "reason": (
                         f"task needs ~{est['input']:,} input tokens; "
-                        f"{agent_name} budget is {(read_budget or 0):,}."
+                        f"{harness_name} budget is {(read_budget or 0):,}."
                     ),
                 }
 
@@ -2004,7 +2004,7 @@ def _preflight_dispatch(
                     "sentinel": "CAPACITY_EXCEEDED_OUTPUT",
                     "reason": (
                         f"task needs ~{est['output']:,} output tokens; "
-                        f"{agent_name} write budget is {(write_budget or 0):,}."
+                        f"{harness_name} write budget is {(write_budget or 0):,}."
                     ),
                 }
 
@@ -2013,7 +2013,7 @@ def _preflight_dispatch(
                 write_alert(
                     "WARNING",
                     "TOOL_PRESSURE",
-                    f"{agent_name} tool budget ~{tool_budget}; estimated usage {est['tools']}",
+                    f"{harness_name} tool budget ~{tool_budget}; estimated usage {est['tools']}",
                 )
         except Exception:
             pass
@@ -2336,7 +2336,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _preflight_db = _get_db_fn() if _get_db_fn else None
         try:
             preflight = preflight_fn(
-                agent_name=agent,
+                harness_name=agent,
                 dispatch_flags=flags,
                 db_conn=_preflight_db,
                 _task_hint=task,
@@ -2345,13 +2345,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except TypeError:
             try:
                 preflight = preflight_fn(
-                    agent_name=agent,
+                    harness_name=agent,
                     dispatch_flags=flags,
                     db_conn=_preflight_db,
                     _task_hint=task,
                 )
             except TypeError:
-                preflight = preflight_fn(agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
+                preflight = preflight_fn(harness_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
         if isinstance(preflight, dict):
             if not preflight.get("passed", False):
                 sentinel_path = os.path.join(".synlynk", "sentinel.md")
