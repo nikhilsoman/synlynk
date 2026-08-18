@@ -25,30 +25,32 @@ esac
     return script
 
 
-def _seed_probe_db(db_path, agent_name="agy", installed_version="1.0.0", capability_hash="oldhash"):
+def _seed_probe_db(db_path, harness_name="agy", installed_version="1.0.0", capability_hash="oldhash"):
     import synlynk
 
+    record_harness_name = {"claude": "claude-cli"}.get(harness_name, harness_name)
     conn = sqlite3.connect(str(db_path))
     synlynk._migrate_db(conn)
     conn.execute(
         """
         INSERT INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', '{}', '{}', ?, datetime('now'))
+        ) VALUES (?, ?, 'ok', '{}', '{}', ?, datetime('now'))
         """,
-        (agent_name, agent_name, installed_version, capability_hash),
+        (record_harness_name, installed_version, capability_hash),
     )
     conn.commit()
     conn.close()
 
 
-def _read_installed_version(db_path, agent_name):
+def _read_installed_version(db_path, harness_name):
     conn = sqlite3.connect(str(db_path))
     try:
+        record_harness_name = {"claude": "claude-cli"}.get(harness_name, harness_name)
         row = conn.execute(
-            "SELECT installed_version FROM harness_records WHERE agent_name=?",
-            (agent_name,),
+            "SELECT installed_version FROM harness_records WHERE harness_name=?",
+            (record_harness_name,),
         ).fetchone()
         return row[0] if row else None
     finally:
@@ -64,7 +66,7 @@ def test_probe_clears_drift_alert_for_matching_agent(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
 
     db_path = tmp_path / ".synlynk" / "state.db"
-    _seed_probe_db(db_path, agent_name="agy", installed_version="1.0.0")
+    _seed_probe_db(db_path, harness_name="agy", installed_version="1.0.0")
     _make_stub_agent(tmp_path, "agy", "2.0.0")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
@@ -94,7 +96,7 @@ def test_probe_leaves_other_agent_drift_alert_untouched(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
 
     db_path = tmp_path / ".synlynk" / "state.db"
-    _seed_probe_db(db_path, agent_name="agy", installed_version="1.0.0")
+    _seed_probe_db(db_path, harness_name="agy", installed_version="1.0.0")
     _make_stub_agent(tmp_path, "agy", "2.0.0")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
@@ -123,7 +125,7 @@ def test_probe_no_drift_alerts_is_noop_for_sentinel_state(tmp_path, monkeypatch)
     (tmp_path / ".synlynk").mkdir()
 
     db_path = tmp_path / ".synlynk" / "state.db"
-    _seed_probe_db(db_path, agent_name="agy", installed_version="1.0.0")
+    _seed_probe_db(db_path, harness_name="agy", installed_version="1.0.0")
     _make_stub_agent(tmp_path, "agy", "2.0.0")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
@@ -151,7 +153,7 @@ def test_probe_clears_all_drift_alerts_for_same_agent(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
 
     db_path = tmp_path / ".synlynk" / "state.db"
-    _seed_probe_db(db_path, agent_name="agy", installed_version="1.0.0")
+    _seed_probe_db(db_path, harness_name="agy", installed_version="1.0.0")
     _make_stub_agent(tmp_path, "agy", "2.0.0")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
@@ -183,7 +185,7 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
     (tmp_path / ".synlynk").mkdir()
 
     db_path = tmp_path / ".synlynk" / "state.db"
-    _seed_probe_db(db_path, agent_name="claude", installed_version="2.0.0")
+    _seed_probe_db(db_path, harness_name="claude", installed_version="2.0.0")
     _make_stub_agent(tmp_path, "claude", "2.1.208", version_output="2.1.208 (Claude Code)")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())

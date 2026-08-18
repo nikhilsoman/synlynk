@@ -104,11 +104,11 @@ def _compute_capability_hash(headless_contract: dict, dispatch_flags) -> str:
     return _hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def _baseline_schema_issues(agent_name: str, baseline: dict) -> list:
+def _baseline_schema_issues(harness_name: str, baseline: dict) -> list:
     """Return human-readable schema issues for a baseline."""
     issues = []
     if not isinstance(baseline, dict):
-        return [f"{agent_name}: baseline missing or not a dict"]
+        return [f"{harness_name}: baseline missing or not a dict"]
 
     required_sections = {
         "dispatch_flags": {
@@ -140,42 +140,42 @@ def _baseline_schema_issues(agent_name: str, baseline: dict) -> list:
     for section_name, spec in required_sections.items():
         section = baseline.get(section_name)
         if not isinstance(section, spec["type"]):
-            issues.append(f"{agent_name}: {section_name} must be a dict")
+            issues.append(f"{harness_name}: {section_name} must be a dict")
             continue
 
         missing = [key for key in spec["keys"] if key not in section]
         if missing:
-            issues.append(f"{agent_name}: {section_name} missing keys: {', '.join(missing)}")
+            issues.append(f"{harness_name}: {section_name} missing keys: {', '.join(missing)}")
             continue
 
         for key, expected_type in spec["keys"].items():
             value = section.get(key)
             if expected_type is bool:
                 if not isinstance(value, bool):
-                    issues.append(f"{agent_name}: {section_name}.{key} must be a bool")
+                    issues.append(f"{harness_name}: {section_name}.{key} must be a bool")
             elif expected_type is str:
                 if not isinstance(value, str) or not value.strip():
-                    issues.append(f"{agent_name}: {section_name}.{key} must be a non-empty string")
+                    issues.append(f"{harness_name}: {section_name}.{key} must be a non-empty string")
             elif expected_type is list:
                 if not isinstance(value, list):
-                    issues.append(f"{agent_name}: {section_name}.{key} must be a list")
+                    issues.append(f"{harness_name}: {section_name}.{key} must be a list")
     return issues
 
 
-def _run_tc0(agent_name: str, baseline: dict = None) -> dict:
+def _run_tc0(harness_name: str, baseline: dict = None) -> dict:
     """TC-0: baseline schema completeness."""
-    baseline = baseline if baseline is not None else HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
-    issues = _baseline_schema_issues(agent_name, baseline)
+    baseline = baseline if baseline is not None else HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
+    issues = _baseline_schema_issues(harness_name, baseline)
     return {"passed": not issues, "schema_issues": issues}
 
 
 _re = re
 
 
-def _scan_command_palette(agent_name: str, harness_name: str, cli_version: str, db_conn) -> list:
+def _scan_command_palette(harness_cli: str, harness_name: str, cli_version: str, db_conn) -> list:
     """Parse --help output and populate harness_command_palette."""
     try:
-        result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([harness_cli, "--help"], capture_output=True, text=True, timeout=5)
         help_text = (result.stdout or "") + (result.stderr or "")
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return []
@@ -403,18 +403,18 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
     return updated
 
 
-def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
+def _build_fence_body_from_record(harness_name: str, db_conn=None) -> str:
     import json as _j
 
-    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
     contract = baseline.get("headless_contract", {})
     flags_spec = baseline.get("dispatch_flags", {})
     net_deps = baseline.get("network_deps", {})
 
     if db_conn:
         row = db_conn.execute(
-            "SELECT active_contract, active_flags FROM harness_records WHERE agent_name=?",
-            (agent_name,)
+            "SELECT active_contract, active_flags FROM harness_records WHERE harness_name=?",
+            (harness_name,)
         ).fetchone()
         if row:
             contract = _j.loads(row[0]) or contract
@@ -474,7 +474,7 @@ def _merge_fence_body(existing_body: str, capability_body: str) -> str:
     return merged
 
 
-def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fence: bool = True) -> dict:
+def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fence: bool = True) -> dict:
     import json as _json
     import socket as _sock
     import time as _time
@@ -491,13 +491,13 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
         return text.split()[-1]
 
     harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
-    harness_name = harness_map.get(agent_name, agent_name)
-    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
-    schema_result = _run_tc0(agent_name, baseline)
+    baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
+    record_harness_name = harness_map.get(harness_name, harness_name)
+    schema_result = _run_tc0(harness_name, baseline)
     schema_issues = schema_result["schema_issues"]
 
     try:
-        result = subprocess.run([agent_name, "--version"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([harness_name, "--version"], capture_output=True, text=True, timeout=5)
         installed_version = _extract_installed_version(result.stdout or "")
     except (FileNotFoundError, subprocess.TimeoutExpired):
         installed_version = "unavailable"
@@ -509,8 +509,8 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
 
     if fast_path_ok and not schema_issues:
         row = db_conn.execute(
-            "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
-            (agent_name,),
+            "SELECT installed_version, capability_hash FROM harness_records WHERE harness_name=?",
+            (record_harness_name,),
         ).fetchone()
         if row and row[0] == installed_version and row[1] == new_hash:
             return {
@@ -533,8 +533,8 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     compliance = "ok" if network_ok and not schema_issues else "degraded"
 
     prev_row = db_conn.execute(
-        "SELECT installed_version, capability_hash FROM harness_records WHERE agent_name=?",
-        (agent_name,),
+        "SELECT installed_version, capability_hash FROM harness_records WHERE harness_name=?",
+        (record_harness_name,),
     ).fetchone()
 
     now = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
@@ -548,10 +548,9 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     db_conn.execute(
         """
         INSERT INTO harness_records
-            (agent_name, harness_name, installed_version, compliance_status, active_contract, active_flags, capability_hash, last_probe_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(agent_name) DO UPDATE SET
-            harness_name=excluded.harness_name,
+            (harness_name, installed_version, compliance_status, active_contract, active_flags, capability_hash, last_probe_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(harness_name) DO UPDATE SET
             installed_version=excluded.installed_version,
             compliance_status=excluded.compliance_status,
             active_contract=excluded.active_contract,
@@ -560,8 +559,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
             last_probe_at=excluded.last_probe_at
         """,
         (
-            agent_name,
-            harness_name,
+            record_harness_name,
             installed_version,
             compliance,
             _json.dumps(contract),
@@ -574,11 +572,11 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     if event_type:
         db_conn.execute(
             """
-            INSERT INTO harness_version_history (agent_name, cli_version, event_type, prev_hash, new_hash, recorded_at)
+            INSERT INTO harness_version_history (harness_name, cli_version, event_type, prev_hash, new_hash, recorded_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                agent_name,
+                record_harness_name,
                 installed_version,
                 event_type,
                 prev_row[1] if prev_row else None,
@@ -590,17 +588,17 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     try:
         from synlynk.status import TIER1_CAPACITY, _compute_cycle_capability
 
-        cap = TIER1_CAPACITY.get(agent_name, {})
+        cap = TIER1_CAPACITY.get(harness_name, {})
         attach_point_in_time = 1 if compliance == "ok" else 0
         db_conn.execute(
             """
             INSERT INTO harness_status (
-                agent_name, attach_point_in_time, installed_version,
+                harness_name, attach_point_in_time, installed_version,
                 ctx_window_tokens, read_budget_tokens, write_budget_tokens,
                 tool_budget_count, tc1_status, tc2_status, tc3_status, tc4_status,
                 last_probe_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(agent_name) DO UPDATE SET
+            ON CONFLICT(harness_name) DO UPDATE SET
                 attach_point_in_time=excluded.attach_point_in_time,
                 installed_version=excluded.installed_version,
                 ctx_window_tokens=excluded.ctx_window_tokens,
@@ -614,7 +612,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
                 last_probe_at=excluded.last_probe_at
             """,
             (
-                agent_name,
+                harness_name,
                 attach_point_in_time,
                 installed_version,
                 cap.get("ctx_window_tokens"),
@@ -628,7 +626,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
                 now,
             ),
         )
-        _compute_cycle_capability(agent_name, db_conn)
+        _compute_cycle_capability(harness_name, db_conn)
 
         latest_version_cmds = {
             "claude": ["npm", "info", "@anthropic-ai/claude-code", "version"],
@@ -636,15 +634,15 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
             "agy": None,
             "grok": None,
         }
-        ver_cmd = latest_version_cmds.get(agent_name)
+        ver_cmd = latest_version_cmds.get(harness_name)
         if ver_cmd:
             try:
                 latest_result = subprocess.run(ver_cmd, capture_output=True, text=True, timeout=3)
                 latest_version = latest_result.stdout.strip() if latest_result.returncode == 0 else ""
                 if latest_version:
                     db_conn.execute(
-                        "UPDATE harness_status SET latest_version=? WHERE agent_name=?",
-                        (latest_version, agent_name),
+                        "UPDATE harness_status SET latest_version=? WHERE harness_name=?",
+                        (latest_version, harness_name),
                     )
             except Exception:
                 pass
@@ -657,13 +655,13 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
         "grok": "GROK.md",
         "codex": "AGENTS.md",
     }
-    instr_file = _INSTRUCTION_FILES.get(agent_name)
+    instr_file = _INSTRUCTION_FILES.get(harness_name)
     if write_fence and instr_file and os.path.exists(instr_file):
-        capability_body = _build_fence_body_from_record(agent_name, db_conn)
+        capability_body = _build_fence_body_from_record(harness_name, db_conn)
         body = _merge_fence_body(_read_harness_fence_body(instr_file), capability_body)
         _upsert_harness_fence(instr_file, installed_version, body)
 
-    _scan_command_palette(agent_name, harness_name, installed_version, db_conn)
+    _scan_command_palette(harness_name, record_harness_name, installed_version, db_conn)
 
     db_conn.commit()
     return {
@@ -675,11 +673,11 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
     }
 
 
-def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
+def _run_tc1(harness_name: str, timeout: int = 5) -> dict:
     """TC-1: Headless stdout contract."""
     import sys as _sys
 
-    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
     contract = baseline.get("headless_contract", {})
     if not contract:
         return {"requires_pty": False, "passed": True, "stdout_method": "not_applicable"}
@@ -693,7 +691,7 @@ def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
 
     try:
         proc = subprocess.Popen(
-            [agent_name, non_interactive_flag],
+            [harness_name, non_interactive_flag],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             env=env,
@@ -709,7 +707,7 @@ def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
         return {"requires_pty": False, "passed": False, "stdout_method": "not_found"}
 
 
-def _run_tc2(agent_name: str, flags_spec: dict) -> dict:
+def _run_tc2(harness_name: str, flags_spec: dict) -> dict:
     """TC-2: Flag compliance."""
     if isinstance(flags_spec, dict):
         invalid_flags = list(flags_spec.get("invalid_flags", []))
@@ -720,7 +718,7 @@ def _run_tc2(agent_name: str, flags_spec: dict) -> dict:
 
     failed = []
     try:
-        result = subprocess.run([agent_name, "--help"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([harness_name, "--help"], capture_output=True, text=True, timeout=5)
         help_text = (result.stdout or "") + (result.stderr or "")
         expected_flags = list(dict.fromkeys(valid_flags + required_flags))
         for flag in expected_flags:
@@ -747,16 +745,16 @@ def _run_tc3(endpoints: list) -> dict:
     return {"reachable": reachable, "unreachable": unreachable, "passed": len(unreachable) == 0}
 
 
-def _run_tc4(agent_name: str, db_conn) -> dict:
+def _run_tc4(harness_name: str, db_conn) -> dict:
     """TC-4: Verb map validation."""
     failed = []
     rows = db_conn.execute(
         """
         SELECT synlynk_verb, agent_command, supported
         FROM harness_verb_map
-        WHERE agent_name=?
+        WHERE harness_name=?
         """,
-        (agent_name,),
+        (harness_name,),
     ).fetchall()
     for verb, cmd_template, supported in rows:
         if supported == "none" or not cmd_template:
@@ -787,7 +785,7 @@ def _run_tc5(directive_files: dict) -> dict:
     return {"passed": not missing, "missing": missing}
 
 
-def _run_tc6(agent_name: str, env: Optional[dict] = None, timeout: int = 5) -> dict:
+def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) -> dict:
     """TC-6: GitHub CLI authentication in the dispatch environment.
 
     ``gh auth status`` has historically returned zero for some authentication
@@ -1023,7 +1021,7 @@ def _repair_sop_body_parts(*parts: str) -> str:
     return "\n\n".join(cleaned) + "\n"
 
 
-def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = False) -> None:
+def _repair_sops_only(cfg: dict = None, harness_name: str = None, dry_run: bool = False) -> None:
     """Repair missing SOP sections without rewriting unrelated sync artifacts."""
     if cfg is None:
         from synlynk import load_config as _load_config
@@ -1037,7 +1035,7 @@ def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = 
         "grok": "GROK.md",
     }
     cfg_agents = _repair_config_agents(cfg)
-    agent_names = [agent_name] if agent_name else cfg_agents
+    agent_names = [harness_name] if harness_name else cfg_agents
     for agent in agent_names:
         fpath = directive_files.get(agent)
         if not fpath or not os.path.exists(fpath):
@@ -1116,18 +1114,18 @@ def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
     db_conn = get_db()
     results = []
     try:
-        for agent_name in agents:
-            result = _probe_agent(agent_name, db_conn, write_fence=write_fence)
+        for harness_name in agents:
+            result = _probe_agent(harness_name, db_conn, write_fence=write_fence)
             if result.get("version_detected"):
                 _clear_sentinel_alerts(
                     code="HARNESS_VERSION_DRIFT",
-                    agent=agent_name,
+                    agent=harness_name,
                 )
             status = "skipped (up to date)" if result["skipped"] else result["status"]
-            print(f"  probe [{agent_name}] {result['version']} → {status}")
+            print(f"  probe [{harness_name}] {result['version']} → {status}")
             for issue in result.get("schema_issues", []):
                 print(f"    schema incomplete: {issue}")
-            results.append({"agent": agent_name, **result})
+            results.append({"agent": harness_name, **result})
     finally:
         db_conn.close()
     return results
@@ -1244,7 +1242,7 @@ def _read_toml_string_value(path: str, key: str, section: Optional[str] = None) 
     return None
 
 
-def _probe_model_version(agent_name: str, cli: str) -> str:
+def _probe_model_version(harness_name: str, cli: str) -> str:
     """Tier 2: resolve the agent's configured model from its own config files.
 
     CLI ``--version`` / ``/status`` probes only surface harness/CLI version (or
@@ -1260,16 +1258,16 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
     """
     del cli  # signature retained for dispatch_agent(agent, cli) callers
 
-    if agent_name == "agy":
+    if harness_name == "agy":
         return "session-scoped, no fixed default"
 
-    if agent_name == "codex":
+    if harness_name == "codex":
         model = _read_toml_string_value(
             os.path.expanduser("~/.codex/config.toml"), "model"
         )
         return model if model else "unknown"
 
-    if agent_name == "grok":
+    if harness_name == "grok":
         model = _read_toml_string_value(
             os.path.expanduser("~/.grok/config.toml"),
             "default",
@@ -1277,7 +1275,7 @@ def _probe_model_version(agent_name: str, cli: str) -> str:
         )
         return model if model else "unknown"
 
-    if agent_name == "claude":
+    if harness_name == "claude":
         settings_path = os.path.expanduser("~/.claude/settings.json")
         try:
             with open(settings_path, "r", encoding="utf-8") as f:
