@@ -1432,6 +1432,7 @@ def test_update_costs_uses_shared_state_db_from_linked_worktree(git_worktree_rep
     (git_worktree_repo / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01T00:00:00Z")
     monkeypatch.chdir(worktree_path)
     monkeypatch.setenv("HOME", str(worktree_path.parent / "home"))
+    monkeypatch.setenv("SYNLYNK_ALLOW_SHARED_STATE_DB", "1")
     monkeypatch.setattr(sl, "DB_PATH", sl._resolve_db_path())
     monkeypatch.setattr(sl, "_generate_costs_md", lambda: None)
     monkeypatch.setattr(sl, "_dr_sync", lambda *_args, **_kwargs: None)

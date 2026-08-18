@@ -1,6 +1,54 @@
 import os
+import sqlite3
 
 import pytest
+
+
+def test_prevent_global_state_db_corruption_from_worktree(tmp_path, monkeypatch):
+    import synlynk
+
+    shared = tmp_path / "home" / ".synlynk" / "projects" / "shared" / "state.db"
+    isolated = tmp_path / "isolated" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(shared))
+    monkeypatch.setattr(synlynk, "_INITIAL_GIT_WORKTREE", True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(synlynk, "_resolve_db_path", lambda: str(shared))
+    monkeypatch.setattr(synlynk, "_test_isolation_db_path", lambda: str(isolated))
+
+    conn = synlynk._get_db()
+    conn.close()
+    assert isolated.exists()
+    assert not shared.exists()
+
+
+def test_prevent_global_state_db_corruption_from_non_worktree_keeps_shared_path(tmp_path, monkeypatch):
+    import synlynk
+
+    shared = tmp_path / "shared" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(shared))
+    monkeypatch.setattr(synlynk, "_resolve_db_path", lambda: str(shared))
+    monkeypatch.setattr(synlynk, "_INITIAL_GIT_WORKTREE", False)
+
+    conn = synlynk._get_db()
+    conn.close()
+    assert shared.exists()
+
+
+def test_prevent_global_state_db_corruption_from_migration_snapshot(tmp_path):
+    from synlynk.db import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE legacy (payload TEXT)")
+    conn.execute("INSERT INTO legacy VALUES (?)", ("x" * 8192,))
+    conn.commit()
+
+    _migrate_db(conn)
+    conn.close()
+
+    snapshots = list(tmp_path.glob("state.db.pre-migration-*.bak"))
+    assert len(snapshots) == 1
+    assert snapshots[0].stat().st_size >= 4096
 
 
 SEED_ROLES = ["dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot"]

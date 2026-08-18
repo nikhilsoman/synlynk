@@ -3,6 +3,7 @@ import argparse
 import sys
 import os
 import subprocess
+import tempfile
 import shutil
 import time
 import json
@@ -833,6 +834,52 @@ def _resolve_db_path() -> str:
     return os.path.expanduser(f"~/.synlynk/projects/{key}/state.db")
 
 
+def _is_git_worktree() -> bool:
+    """Return whether the current directory is a linked git worktree."""
+    try:
+        git_dir_output = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-dir"],
+            stderr=subprocess.DEVNULL,
+        )
+        common_dir_output = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            stderr=subprocess.DEVNULL,
+        )
+        git_dir = git_dir_output.decode() if isinstance(git_dir_output, bytes) else str(git_dir_output)
+        common_dir = common_dir_output.decode() if isinstance(common_dir_output, bytes) else str(common_dir_output)
+        git_dir = git_dir.strip()
+        common_dir = common_dir.strip()
+        return os.path.realpath(git_dir) != os.path.realpath(common_dir)
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+
+# Resolve once at import time so ordinary test doubles for subprocess calls do
+# not accidentally change DB-path safety decisions mid-test.
+_INITIAL_GIT_WORKTREE = _is_git_worktree()
+
+
+def _test_isolation_db_path() -> str:
+    """Return a process-local DB path for pytest worktree execution."""
+    import hashlib
+
+    key = hashlib.md5(os.path.abspath(os.getcwd()).encode()).hexdigest()[:12]
+    return os.path.join(tempfile.gettempdir(), "synlynk-test-db", f"{key}-{os.getpid()}.db")
+
+
+def _should_isolate_worktree_db(db_path: str) -> bool:
+    """Limit the worktree guard to test execution unless explicitly disabled."""
+    if os.environ.get("SYNLYNK_ALLOW_SHARED_STATE_DB") == "1":
+        return False
+    if not (_INITIAL_GIT_WORKTREE and os.environ.get("PYTEST_CURRENT_TEST")):
+        return False
+    # Explicit test DB_PATH overrides (including tmp_path fixtures) are already
+    # isolated and must keep working in a worktree. Only the canonical product
+    # ledger location is guarded.
+    canonical_root = os.path.abspath(os.path.expanduser("~/.synlynk/projects"))
+    return os.path.abspath(db_path).startswith(canonical_root + os.sep)
+
+
 DB_PATH = _resolve_db_path()
 
 _DB_SCHEMA = """
@@ -1120,6 +1167,11 @@ def _get_db() -> _sqlite3.Connection:
     home path is the intended path (#330 / fleet S2a). Sandbox fallback after
     OSError/OperationalError uses a path that never lands under worktrees
     (tmpdir when cwd is a job/feature worktree) so nested_state matrix stays clean.
+
+    During pytest execution from a linked worktree, the canonical shared path is
+    redirected to a process-local temporary DB to protect the live ledger. Set
+    SYNLYNK_ALLOW_SHARED_STATE_DB=1 only for tests that explicitly exercise
+    shared-DB behavior.
     """
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
@@ -1133,6 +1185,14 @@ def _get_db() -> _sqlite3.Connection:
     from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
     db_path = DB_PATH
+    if _should_isolate_worktree_db(db_path):
+        db_path = _test_isolation_db_path()
+        print(
+            "warning: pytest is running from a git worktree; using isolated "
+            f"state DB at {db_path}. Set SYNLYNK_ALLOW_SHARED_STATE_DB=1 only "
+            "for an intentional shared-DB test.",
+            file=sys.stderr,
+        )
     fallback_path = sandbox_fallback_db_path()
     tried_fallback = False
     while True:
