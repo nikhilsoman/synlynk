@@ -641,7 +641,13 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
 
     if job.get("requires_gh_write"):
         target = job.get("gh_write_target")
-        verified = gh_write_verified(target, expect="closed")
+        expect = job.get("gh_write_expect") or "closed"
+        verified = gh_write_verified(
+            target,
+            expect=expect,
+            since=job.get("started_at"),
+            expect_author=job.get("gh_write_author"),
+        )
         job["gh_write_verified"] = (
             "true" if verified is True else ("false" if verified is False else "unknown")
         )
