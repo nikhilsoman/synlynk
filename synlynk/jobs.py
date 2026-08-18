@@ -338,7 +338,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     if not worktree_path or not worktree_branch:
         return
 
-    if job.get("task_type") == "review" or job.get("requires_gh_write"):
+    if job.get("task_type") == "review" or (job.get("requires_gh_write") and not job.get("scope_paths")):
         print(
             f"  ⚠ skipping automatic PR creation for {worktree_branch}: "
             f"job is review/gh-write-only (task_type={job.get('task_type') or 'none'}, "
