@@ -28,21 +28,18 @@ def _write_config(tmp_path, dispatch_mode="daily-grind"):
     )
 
 
-def _seed_probe_row(db, agent_name):
+def _seed_probe_row(db, harness_name):
     import synlynk
 
-    baseline = synlynk.HARNESS_CAPABILITY_BASELINES[agent_name]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES[harness_name]
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
-        (
-            agent_name,
-            baseline["cli"],
-            "1.0.0",
+        (harness_name, "1.0.0",
             json.dumps(baseline["headless_contract"]),
             json.dumps(baseline["dispatch_flags"]),
             "seeded-probe",
@@ -69,7 +66,7 @@ def test_cycle_capability_table_exists(db):
 def test_harness_status_columns(db):
     cols = {r[1] for r in db.execute("PRAGMA table_info(harness_status)")}
     required = {
-        "agent_name", "attach_rate_24h", "attach_point_in_time", "adherence_score",
+        "harness_name", "attach_rate_24h", "attach_point_in_time", "adherence_score",
         "completion_rate_24h", "rescue_count_24h", "output_velocity_p50",
         "installed_version", "latest_version", "plan_tier", "plan_type",
         "ctx_window_tokens", "read_budget_tokens", "write_budget_tokens",
@@ -81,7 +78,7 @@ def test_harness_status_columns(db):
 
 def test_cycle_capability_columns(db):
     cols = {r[1] for r in db.execute("PRAGMA table_info(cycle_capability)")}
-    required = {"agent_name", "cycle", "support", "notes", "verb_count", "full_count", "partial_count", "updated_at"}
+    required = {"harness_name", "cycle", "support", "notes", "verb_count", "full_count", "partial_count", "updated_at"}
     assert required <= cols
 
 
@@ -137,14 +134,14 @@ def test_compute_cycle_capability_upserts(db):
 
     now = _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime())
     db.execute(
-        "INSERT INTO harness_verb_map (synlynk_verb, verb_category, agent_name, verb, cycle_hint, support, notes, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO harness_verb_map (synlynk_verb, verb_category, harness_name, verb, cycle_hint, support, notes, updated_at) VALUES (?,?,?,?,?,?,?,?)",
         ("dispatch.task", "dispatch", "testbot", "dispatch.task", "work", "full", "", now),
     )
     db.commit()
     result = _compute_cycle_capability("testbot", db)
     assert result["execute"]["support"] == "full"
     row = db.execute(
-        "SELECT support, verb_count, full_count FROM cycle_capability WHERE agent_name='testbot' AND cycle='execute'"
+        "SELECT support, verb_count, full_count FROM cycle_capability WHERE harness_name='testbot' AND cycle='execute'"
     ).fetchone()
     assert row[0] == "full"
     assert row[1] >= 1
@@ -162,7 +159,7 @@ def test_harness_snapshot_loads_rows(db, tmp_path):
     from synlynk.hud import HarnessSnapshot
 
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
         ("claude", 1, "1.2.3"),
     )
     db.commit()
@@ -175,7 +172,7 @@ def test_harness_snapshot_loads_rows(db, tmp_path):
 def test_format_status_terminal_structure(db):
     from synlynk.status import _format_status_terminal
 
-    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
+    rows = [{"harness_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
     cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
     assert "HEADLESS EFFICIENCY" in output
@@ -189,7 +186,7 @@ def test_format_status_terminal_structure(db):
 def test_format_status_terminal_shows_rates_updated_date():
     from synlynk.status import _format_status_terminal
 
-    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
+    rows = [{"harness_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
     cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0, rates_updated_at="2026-07-13")
     assert "RATES   updated 2026-07-13" in output
@@ -198,7 +195,7 @@ def test_format_status_terminal_shows_rates_updated_date():
 def test_format_status_terminal_shows_rates_never_updated_warning():
     from synlynk.status import _format_status_terminal
 
-    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
+    rows = [{"harness_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": 0.99, "installed_version": "1.2.3", "latest_version": "1.2.3"}]
     cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
     assert "RATES   never updated ⚠ (hardcoded defaults)" in output
@@ -207,7 +204,7 @@ def test_format_status_terminal_shows_rates_never_updated_warning():
 def test_format_status_json_valid():
     from synlynk.status import _format_status_terminal
 
-    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": None, "installed_version": "1.2.3", "latest_version": None}]
+    rows = [{"harness_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": None, "installed_version": "1.2.3", "latest_version": None}]
     output = _format_status_terminal(rows, {}, 1.0, "eco", 2, json_output=True)
     data = json.loads(output)
     assert data["fleet"]["dispatch_mode"] == "eco"
@@ -218,7 +215,7 @@ def test_format_status_json_valid():
 def test_format_status_json_includes_rates_updated_at():
     from synlynk.status import _format_status_terminal
 
-    rows = [{"agent_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": None, "installed_version": "1.2.3", "latest_version": None}]
+    rows = [{"harness_name": "claude", "attach_rate_24h": 1.0, "attach_point_in_time": 1, "completion_rate_24h": None, "installed_version": "1.2.3", "latest_version": None}]
     output = _format_status_terminal(rows, {}, 1.0, "eco", 2, json_output=True, rates_updated_at="2026-07-13")
     data = json.loads(output)
     assert data["rates_updated_at"] == "2026-07-13"
@@ -230,7 +227,7 @@ def test_cmd_status_outputs_sections(tmp_path, monkeypatch, db):
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path)
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
         ("claude", 1, "1.2.3"),
     )
     db.commit()
@@ -249,7 +246,7 @@ def test_cmd_status_json_output(tmp_path, monkeypatch, db):
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path, dispatch_mode="eco")
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
         ("claude", 1, "1.2.3"),
     )
     db.commit()
@@ -277,7 +274,7 @@ def test_cmd_status_json_output_reads_rates_from_file(tmp_path, monkeypatch, db)
         })
     )
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
         ("claude", 1, "1.2.3"),
     )
     db.commit()
@@ -294,7 +291,7 @@ def test_cmd_status_json_output_rates_null_when_no_file(tmp_path, monkeypatch, d
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path)
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, attach_point_in_time, installed_version) VALUES (?,?,?)",
         ("claude", 1, "1.2.3"),
     )
     db.commit()
@@ -313,7 +310,7 @@ def test_preflight_blocks_input_overflow(db, tmp_path, monkeypatch):
     (tmp_path / ".synlynk" / "context.md").write_text("word " * 160_000)
     _seed_probe_row(db, "codex")
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
         ("codex", 110_000, 16_000, 128),
     )
     db.commit()
@@ -329,7 +326,7 @@ def test_preflight_blocks_output_overflow(db, tmp_path, monkeypatch):
     os.makedirs(".synlynk", exist_ok=True)
     _seed_probe_row(db, "codex")
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
         ("codex", 110_000, 7_999, 128),
     )
     db.commit()
@@ -346,7 +343,7 @@ def test_preflight_warns_tool_pressure(db, tmp_path, monkeypatch):
     os.makedirs(".synlynk", exist_ok=True)
     _seed_probe_row(db, "claude")
     db.execute(
-        "INSERT OR REPLACE INTO harness_status (agent_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
+        "INSERT OR REPLACE INTO harness_status (harness_name, read_budget_tokens, write_budget_tokens, tool_budget_count) VALUES (?,?,?,?)",
         ("claude", 999_999, 999_999, 1),
     )
     db.commit()
@@ -371,12 +368,12 @@ def test_probe_writes_status_and_cycle_capability(db, tmp_path, monkeypatch):
     result = probe_mod._probe_agent("claude", db, fast_path_ok=False)
     assert result["status"] in {"ok", "degraded"}
     row = db.execute(
-        "SELECT installed_version, ctx_window_tokens, read_budget_tokens FROM harness_status WHERE agent_name='claude'"
+        "SELECT installed_version, ctx_window_tokens, read_budget_tokens FROM harness_status WHERE harness_name='claude'"
     ).fetchone()
     assert row is not None
     assert row[0] == "1.2.3"
     cycle_row = db.execute(
-        "SELECT COUNT(*) FROM cycle_capability WHERE agent_name='claude'"
+        "SELECT COUNT(*) FROM cycle_capability WHERE harness_name='claude'"
     ).fetchone()
     assert cycle_row[0] == 7
 
@@ -454,7 +451,7 @@ def test_preflight_receives_real_db_conn(monkeypatch, tmp_path, db):
 
     received = {}
 
-    def fake_preflight(agent_name, dispatch_flags, db_conn=None, _task_hint=""):
+    def fake_preflight(harness_name, dispatch_flags, db_conn=None, _task_hint=""):
         received["db_conn"] = db_conn
         return {"passed": True, "sentinel": None, "reason": None}
 

@@ -1113,7 +1113,7 @@ def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
     sl._reconcile_daemon_jobs()
 
     status = conn.execute(
-        "SELECT status FROM agent_reservations WHERE id=?", (rid,)
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
     ).fetchone()[0]
     assert status == "released"
 

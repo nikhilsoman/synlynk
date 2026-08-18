@@ -191,7 +191,7 @@ def test_cmd_agent_add_onboards_agent(tmp_path, monkeypatch, capsys):
 
     db = sqlite3.connect(str(tmp_path / "state.db"))
     row = db.execute(
-        "SELECT installed_version FROM harness_records WHERE agent_name='codex'"
+        "SELECT installed_version FROM harness_records WHERE harness_name='codex'"
     ).fetchone()
     db.close()
     assert row and row[0] == "1.2.3"

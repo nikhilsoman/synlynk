@@ -30,9 +30,9 @@ def test_probe_fastpath_skips_deep_probe_when_hash_matches(tmp_path, monkeypatch
     h = _compute_capability_hash(baseline.get("headless_contract", {}), baseline.get("dispatch_flags", {}))
     db.execute(
         """
-        INSERT INTO harness_records (agent_name, harness_name, installed_version, compliance_status,
+        INSERT INTO harness_records (harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at)
-        VALUES ('agy','agy','1.0.0','ok','{}','{}',?,datetime('now'))
+        VALUES ('agy','1.0.0','ok','{}','{}',?,datetime('now'))
         """,
         (h,),
     )
@@ -52,7 +52,7 @@ def test_probe_writes_harness_records_on_new_version(tmp_path, monkeypatch):
     _migrate_db(db)
 
     result = _probe_agent("agy", db, fast_path_ok=True)
-    row = db.execute("SELECT installed_version FROM harness_records WHERE agent_name='agy'").fetchone()
+    row = db.execute("SELECT installed_version FROM harness_records WHERE harness_name='agy'").fetchone()
     assert row and row[0] == "2.0.0"
     assert result["skipped"] is False
 
@@ -67,15 +67,15 @@ def test_probe_appends_history_on_version_change(tmp_path, monkeypatch):
     _migrate_db(db)
     db.execute(
         """
-        INSERT INTO harness_records (agent_name, harness_name, installed_version, compliance_status,
+        INSERT INTO harness_records (harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at)
-        VALUES ('agy','agy','1.0.0','ok','{}','{}','oldhash',datetime('now'))
+        VALUES ('agy','1.0.0','ok','{}','{}','oldhash',datetime('now'))
         """
     )
     db.commit()
 
     _probe_agent("agy", db, fast_path_ok=True)
-    history = db.execute("SELECT event_type FROM harness_version_history WHERE agent_name='agy'").fetchall()
+    history = db.execute("SELECT event_type FROM harness_version_history WHERE harness_name='agy'").fetchall()
     assert any(r[0] == "version_change" for r in history)
 
 
@@ -227,9 +227,9 @@ def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch)
     old_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 7200))
     db.execute(
         """
-        INSERT INTO harness_records (agent_name, harness_name, installed_version, compliance_status,
+        INSERT INTO harness_records (harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at)
-        VALUES ('agy','agy','1.0.0','ok','{}','{}','abc123',?)
+        VALUES ('agy','1.0.0','ok','{}','{}','abc123',?)
         """,
         (old_time,),
     )

@@ -240,8 +240,8 @@ def test_resolve_payment_value_subscription_bills_marginal_overage_not_cumulativ
 
     conn = sl._get_db()
     row = conn.execute(
-        "SELECT used_tokens FROM agent_quotas "
-        "WHERE agent='codex' AND quota_type='monthly' AND unit='tokens' AND model='unknown'"
+        "SELECT used_tokens FROM harness_quotas "
+        "WHERE harness='codex' AND quota_type='monthly' AND unit='tokens' AND model='unknown'"
     ).fetchone()
     conn.close()
     assert row[0] == 1600

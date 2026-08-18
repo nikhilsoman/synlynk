@@ -787,7 +787,7 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
     called = {}
 
     def fake_repair(harness_name=None, dry_run=False):
-        called["agent_name"] = agent_name
+        called["agent_name"] = harness_name
         called["dry_run"] = dry_run
 
     monkeypatch.setattr(synlynk, "_repair_sops_only", fake_repair)
@@ -5422,7 +5422,7 @@ def test_collect_github_issues(project_dir, monkeypatch):
 def test_dedup_skips_recent_signal(project_dir):
     conn = synlynk._get_db()
     conn.execute(
-        "INSERT INTO autopilot_runs (id, agent_name, signal_type, signal_hash, severity, summary, status, ts) "
+        "INSERT INTO autopilot_runs (id, harness_name, signal_type, signal_hash, severity, summary, status, ts) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '-3 days'))",
         ("run-001", "support-engineer", "test_suite", "abc123", "high", "test failure", "filed")
     )
@@ -5436,7 +5436,7 @@ def test_dedup_skips_recent_signal(project_dir):
 def test_dedup_reinvestigates_after_7_days(project_dir):
     conn = synlynk._get_db()
     conn.execute(
-        "INSERT INTO autopilot_runs (id, agent_name, signal_type, signal_hash, severity, summary, status, ts) "
+        "INSERT INTO autopilot_runs (id, harness_name, signal_type, signal_hash, severity, summary, status, ts) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '-8 days'))",
         ("run-001", "support-engineer", "test_suite", "abc123", "high", "test failure", "filed")
     )

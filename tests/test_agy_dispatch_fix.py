@@ -1494,7 +1494,7 @@ def test_fix_a_nameerror_regression_in_your_own_prior_work_exec_command_does_not
     assert exit_code == 0
 
 
-# --- #141: agent_quotas base table + stage-2 quota gate -------------------
+# --- #141: harness_quotas base table + stage-2 quota gate -------------------
 
 def _seed_capability(conn, story_id, agent, quality, model="unknown",
                      engg="backend", org="platform", industry="ott", phase="build"):
@@ -1509,17 +1509,17 @@ def _seed_capability(conn, story_id, agent, quality, model="unknown",
 def test_build_the_base_agent_quotas_table_and_wi_table_exists_with_quota_types_and_unit(
     tmp_path, monkeypatch
 ):
-    """agent_quotas exists with 5h/daily/weekly/monthly (+hourly) and unit column."""
+    """harness_quotas exists with 5h/daily/weekly/monthly (+hourly) and unit column."""
     import synlynk as sl
 
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
     conn = sl._get_db()
-    cols = {row[1]: row[2] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
+    cols = {row[1]: row[2] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
     conn.close()
 
     for required in (
-        "agent", "model", "quota_type", "unit",
+        "harness", "model", "quota_type", "unit",
         "limit_tokens", "used_tokens", "reset_at", "updated_at",
     ):
         assert required in cols, f"missing column {required}"
@@ -1537,18 +1537,18 @@ def test_build_the_base_agent_quotas_table_and_wi_table_exists_with_quota_types_
     types = {
         r[0]
         for r in conn.execute(
-            "SELECT DISTINCT quota_type FROM agent_quotas WHERE agent='claude'"
+            "SELECT DISTINCT quota_type FROM harness_quotas WHERE harness='claude'"
         )
     }
     units = {
         r[0]
         for r in conn.execute(
-            "SELECT DISTINCT unit FROM agent_quotas WHERE agent='claude'"
+            "SELECT DISTINCT unit FROM harness_quotas WHERE harness='claude'"
         )
     }
     row = conn.execute(
-        "SELECT limit_tokens, used_tokens, unit FROM agent_quotas "
-        "WHERE agent='claude' AND quota_type='5h' AND unit='tokens'"
+        "SELECT limit_tokens, used_tokens, unit FROM harness_quotas "
+        "WHERE harness='claude' AND quota_type='5h' AND unit='tokens'"
     ).fetchone()
     conn.close()
 
@@ -1610,7 +1610,7 @@ def test_build_the_base_agent_quotas_table_and_wi_routing_filters_exhausted_quot
 
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
-    # Disable project request floor so only agent_quotas rows decide
+    # Disable project request floor so only harness_quotas rows decide
     monkeypatch.setattr(
         sl, "_project_request_quota_from_config", lambda: None
     )

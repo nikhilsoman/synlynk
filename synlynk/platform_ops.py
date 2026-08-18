@@ -350,7 +350,7 @@ def collect_platform_report(hours: int = 24, dev_root: Optional[str] = None) -> 
                 pass
             try:
                 rows = conn.execute(
-                    "SELECT agent_name, attach_rate_24h, completion_rate_24h, compliance_status "
+                    "SELECT harness_name, attach_rate_24h, completion_rate_24h, compliance_status "
                     "FROM harness_status"
                 ).fetchall()
                 if rows:
