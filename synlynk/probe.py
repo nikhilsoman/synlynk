@@ -231,6 +231,49 @@ def _scan_command_palette(harness_cli: str, harness_name: str, cli_version: str,
     return list(found_commands.keys())
 
 
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _diff_and_queue_new_models(harness_name: str, discovered_model_ids: list, conn) -> None:
+    """Diff a harness's discovered models against harness_models; queue a
+    calibration sweep for any model_id not yet recorded (#786 Plan B)."""
+    known = {
+        row[0]
+        for row in conn.execute(
+            "SELECT model_id FROM harness_models WHERE harness_name=?", (harness_name,)
+        ).fetchall()
+    }
+    now = _now_iso()
+    for model_id in discovered_model_ids:
+        if model_id in known:
+            conn.execute(
+                "UPDATE harness_models SET last_seen_at=? WHERE harness_name=? AND model_id=?",
+                (now, harness_name, model_id),
+            )
+            continue
+        conn.execute(
+            "INSERT INTO harness_models "
+            "(harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source) "
+            "VALUES (?, ?, ?, ?, 'active', 'self_report')",
+            (harness_name, model_id, now, now),
+        )
+        _queue_calibration_sweep(harness_name, model_id, conn)
+    conn.commit()
+
+
+def _queue_calibration_sweep(harness_name: str, model_id: str, conn) -> None:
+    """Auto-trigger a cost-capped, verified calibration sweep for one newly
+    discovered (harness, model) pair, reusing capability_sweep.py's machinery."""
+    from synlynk.capability_sweep import cmd_capability_sweep_for_harness_model
+    try:
+        cmd_capability_sweep_for_harness_model(harness_name, model_id)
+    except SystemExit:
+        pass  # cost cap exceeded — model stays 'active' with zero calibration data,
+              # picked up by the routing explore-bonus in Task 4 instead
+
+
 def _scan_repo_requirements(repo_path: str) -> set[str]:
     """Return repo artifact requirements detected by presence only.
 
@@ -662,6 +705,10 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
         _upsert_harness_fence(instr_file, installed_version, body)
 
     _scan_command_palette(harness_name, record_harness_name, installed_version, db_conn)
+
+    discovered_version = _probe_model_version(agent_name, "")
+    if discovered_version and discovered_version not in ("unknown", "session-scoped, no fixed default", "uses Claude Code's built-in default, no override"):
+        _diff_and_queue_new_models(harness_name, [discovered_version], db_conn)
 
     db_conn.commit()
     return {
