@@ -68,3 +68,15 @@ def test_audit_docs_parser_accepts_json_and_fix_flags():
     assert args.command == "audit-docs"
     assert args.json is True
     assert args.fix is True
+
+
+def test_probe_agent_flag_deprecated_alias():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(["probe", "--agent", "codex"])
+    assert args.harness == "codex"
+
+
+def test_probe_harness_flag_new():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(["probe", "--harness", "codex"])
+    assert args.harness == "codex"

@@ -335,8 +335,10 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser = subparsers.add_parser(
         "probe", help="Probe agent harness capability and record compatibility"
     )
-    probe_parser.add_argument("--agent", default=None,
-                              help="Probe a single agent instead of all known agents")
+    probe_parser.add_argument(
+        "--harness", "--agent", default=None, dest="harness",
+        help="Probe a single harness instead of all known harnesses (--agent is deprecated, use --harness)",
+    )
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
     doctor_parser.add_argument("--fix", default=None,
@@ -816,7 +818,7 @@ def build_parser() -> argparse.ArgumentParser:
     cost_parser = subparsers.add_parser("cost", help="Manage the cost ledger")
     cost_sub = cost_parser.add_subparsers(dest="cost_action")
     cost_log_parser = cost_sub.add_parser("log", help="Log a manual cost entry for native/unwrapped sessions")
-    cost_log_parser.add_argument("--agent", required=True)
+    cost_log_parser.add_argument("--harness", "--agent", required=True, dest="harness")
     cost_log_parser.add_argument("--tokens-in", type=int, required=True, dest="tokens_in")
     cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
     cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
@@ -837,7 +839,10 @@ def build_parser() -> argparse.ArgumentParser:
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
     grant_parser = credit_sub.add_parser("grant", help="Record a credit grant for an agent")
-    grant_parser.add_argument("--agent", required=True, help="Agent name (e.g. agy, codex)")
+    grant_parser.add_argument(
+        "--harness", "--agent", required=True, dest="harness",
+        help="Harness name (e.g. agy, codex) (--agent is deprecated, use --harness)",
+    )
     grant_parser.add_argument("--amount", type=float, required=True, help="Face-value USD amount granted")
     grant_parser.add_argument("--expires", default=None, help="ISO8601 expiry date, optional")
     grant_parser.add_argument("--note", default=None, help="Free-text note")
@@ -847,9 +852,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show per-agent quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
     )
     quota_parser.add_argument(
-        "--agent",
+        "--harness", "--agent",
         default=None,
-        help="Filter to a single agent (claude, agy, codex, grok, local)",
+        dest="harness",
+        help="Filter to a single harness (claude, agy, codex, grok, local) (--agent is deprecated, use --harness)",
     )
     quota_parser.add_argument(
         "--json",
@@ -962,6 +968,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _warn_deprecated_harness_flag(argv) -> None:
+    if "--agent" in argv and "--harness" not in argv:
+        print("  warning: --agent is deprecated, use --harness instead", file=sys.stderr)
+
+
 def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
@@ -1052,6 +1063,7 @@ def main(argv=None) -> None:
         pass  # staleness checks are best-effort; never block a real command on this
     parser = build_parser()
     args = parser.parse_args(argv)
+    cli_tokens = argv if argv is not None else sys.argv[1:]
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
 
     if args.command == "init":
@@ -1316,8 +1328,9 @@ def main(argv=None) -> None:
             cmd_score_attest(args.story_id, args.model)
     elif args.command == "cost":
         if args.cost_action == "log":
+            _warn_deprecated_harness_flag(cli_tokens)
             cmd_cost_log(
-                args.agent,
+                args.harness,
                 args.tokens_in,
                 args.tokens_out,
                 story_id=args.story_id,
@@ -1341,8 +1354,9 @@ def main(argv=None) -> None:
                 sys.exit(1)
     elif args.command == "credit":
         if args.credit_action == "grant":
+            _warn_deprecated_harness_flag(cli_tokens)
             cmd_credit_grant(
-                agent=args.agent,
+                agent=args.harness,
                 amount=args.amount,
                 expires=args.expires,
                 note=args.note,
@@ -1351,8 +1365,9 @@ def main(argv=None) -> None:
         if getattr(args, "tpm_view", False):
             cmd_quota_tpm_view()
         else:
+            _warn_deprecated_harness_flag(cli_tokens)
             cmd_quota(
-                agent=getattr(args, "agent", None),
+                agent=getattr(args, "harness", None),
                 json_output=getattr(args, "json_output", False),
             )
     elif args.command == "schedule":
@@ -1465,7 +1480,8 @@ def main(argv=None) -> None:
             clear=getattr(args, "clear", False),
         )
     elif args.command == "probe":
-        cmd_probe(agent=getattr(args, "agent", None))
+        _warn_deprecated_harness_flag(cli_tokens)
+        cmd_probe(agent=getattr(args, "harness", None))
     elif args.command == "doctor":
         sys.exit(cmd_doctor(args))
     elif args.command == "worktree":
