@@ -177,7 +177,9 @@ def _table_exists(conn, name: str) -> bool:
     ).fetchone() is not None
 ```
 
-Then update every `CREATE TABLE IF NOT EXISTS` in `db.py:376-419` and `db.py:838-880` to use the new names directly (`harness_name`, `harness_command`, `harness_quotas`/`harness`, `harness_reservations`) so fresh installs never see the old names at all — the migration function above only fires for pre-existing DBs where `PRAGMA table_info` still shows the old column/table. Call `_run_harness_rename_migration(conn)` from wherever the existing `ALTER TABLE cost_entries RENAME TO ...` migration is invoked (same migration-runner call site, `db.py:679`'s caller — i.e. inside `_migrate_db()` in `db.py`, which runs on every connection open, so the rename stays idempotent).
+Then update every `CREATE TABLE IF NOT EXISTS` in `db.py:376-419` and `db.py:838-880` to use the new names directly (`harness_name`, `harness_command`, `harness_quotas`/`harness`, `harness_reservations`) so fresh installs never see the old names at all — the migration function above only fires for pre-existing DBs where `PRAGMA table_info` still shows the old column/table.
+
+**Call `_run_harness_rename_migration(conn)` as the FIRST statement inside `_migrate_db()`, before `conn.executescript(_DB_SCHEMA)`** (`db.py:239-242`) — not after, and not at the `db.py:679` cost_entries call site. Ordering matters here in a way it doesn't for the cost_entries migration: `_DB_SCHEMA` (Step 3a below) now creates `harness_quotas`/`harness_reservations` directly by their new names via `CREATE TABLE IF NOT EXISTS`. On a pre-existing database that still has the old `agent_quotas` table, if `executescript(_DB_SCHEMA)` runs first, its `CREATE TABLE IF NOT EXISTS harness_quotas` finds no `harness_quotas` table yet and creates a new, empty one — then `_run_harness_rename_migration()`'s `ALTER TABLE agent_quotas RENAME TO harness_quotas` fails with "table harness_quotas already exists", because the empty table `_DB_SCHEMA` just created is now squatting on the target name. Running the rename migration first avoids this entirely: on a pre-existing DB, `agent_quotas` gets renamed to `harness_quotas` before `_DB_SCHEMA` ever runs, so `_DB_SCHEMA`'s `CREATE TABLE IF NOT EXISTS harness_quotas` correctly no-ops against the now-renamed (and now-populated) table; on a fresh install, the `_table_exists(conn, "agent_quotas")`/`_table_exists(conn, "agent_reservations")` guards inside `_run_harness_rename_migration()` make it a no-op, and `_DB_SCHEMA` creates the tables fresh under their new names as normal. The same rename-before-create ordering also protects `harness_records` and the `harness_verb_map`/`harness_version_history` column renames for the same reason — always run the rename migration before any `CREATE TABLE IF NOT EXISTS` for a table/column it touches.
 
 - [ ] **Step 3a: Rename `_DB_SCHEMA`'s independent `agent_quotas`/`agent_reservations` DDL in `synlynk/__init__.py`**
 
@@ -218,6 +220,63 @@ Because `_DB_SCHEMA` executes unconditionally before `_run_harness_rename_migrat
 
 Run: `pytest tests/test_db_migration.py::test_harness_rename_migration_preserves_data -v`
 Expected: `PASS`
+
+- [ ] **Step 4a: Write a regression test for the real `_migrate_db()` entry point (not just `_run_harness_rename_migration()` in isolation)**
+
+This is the ordering bug caught in PR #1053 review (Grok, 2026-08-18): calling `_run_harness_rename_migration()` directly (as Step 1's test does) proves the function itself is correct, but does not prove `_migrate_db()` calls it in the right order relative to `conn.executescript(_DB_SCHEMA)`. Add this test to the same file:
+
+```python
+def test_migrate_db_renames_pre_existing_agent_quotas_without_collision(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk import db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    # Simulate a pre-existing, pre-rename DB with only the old table name —
+    # harness_quotas does not exist yet, matching a real upgrade scenario.
+    conn.execute("""
+        CREATE TABLE agent_quotas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent TEXT NOT NULL, model TEXT NOT NULL DEFAULT 'unknown',
+            quota_type TEXT NOT NULL, unit TEXT NOT NULL DEFAULT 'tokens',
+            limit_tokens INTEGER NOT NULL, used_tokens INTEGER NOT NULL DEFAULT 0,
+            reset_at TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(agent, model, quota_type, unit)
+        )
+    """)
+    conn.execute(
+        "INSERT INTO agent_quotas (agent, model, quota_type, limit_tokens) VALUES ('codex', 'gpt-5', '5h', 100000)"
+    )
+    conn.commit()
+    conn.close()
+
+    # Drive the real entry point every DB connection goes through — this is
+    # what would raise sqlite3.OperationalError: table harness_quotas
+    # already exists if _DB_SCHEMA ran before the rename migration.
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = db._get_db()
+    db._migrate_db(conn)
+    conn.commit()
+
+    quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
+    assert "harness" in quota_cols
+    row = conn.execute(
+        "SELECT harness, model, limit_tokens FROM harness_quotas WHERE harness='codex'"
+    ).fetchone()
+    assert row == ("codex", "gpt-5", 100000), "pre-existing row must survive _migrate_db(), not be shadowed by a fresh empty table"
+    assert not _table_exists_test_helper(conn, "agent_quotas")
+
+
+def _table_exists_test_helper(conn, name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+```
+
+- [ ] **Step 4b: Run the regression test to verify it passes**
+
+Run: `pytest tests/test_db_migration.py::test_migrate_db_renames_pre_existing_agent_quotas_without_collision -v`
+Expected: `PASS`. If it fails with `sqlite3.OperationalError: table harness_quotas already exists`, the call to `_run_harness_rename_migration(conn)` in `_migrate_db()` was placed after (not before) `conn.executescript(_DB_SCHEMA)` — move it above that line.
 
 - [ ] **Step 5: Commit**
 
