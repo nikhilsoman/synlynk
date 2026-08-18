@@ -526,6 +526,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
         );
     """)
+    from synlynk.capability_sweep import _seed_calibration_tasks
+    _seed_calibration_tasks(conn)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS capability_watch (
             id INTEGER PRIMARY KEY CHECK (id = 1),
