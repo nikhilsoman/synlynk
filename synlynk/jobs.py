@@ -1061,6 +1061,49 @@ def _capability_candidates_for_story(conn, discipline, org, industry, phase) -> 
             return out
     return []
 
+
+_STAGE0_EXPLORE_BONUS = 0.05  # bounded: smaller than typical _CAPABILITY_COST_TIE_GAP
+_STAGE0_BASELINE_SCORE = 0.5  # neutral starting point for an injected, never-scored model
+
+
+def _apply_stage0_explore_bonus(conn, candidates: list, discipline: str, phase: str) -> list:
+    """Stage 0 (#786 Plan B): surface thin/zero-calibration-data active models
+    instead of letting cold-start scoring starve them.
+
+    Two cases, both bounded by _STAGE0_EXPLORE_BONUS (smaller than
+    _CAPABILITY_COST_TIE_GAP, so this nudges exploration without overriding a
+    well-calibrated cheaper option at Stage 3):
+    1. Model is already in `candidates` (has a capability_scores row, e.g. via
+       the legacy baseline seed) but has zero capability_calibration_results
+       rows — bump its existing score.
+    2. Model has a harness_models row but is absent from `candidates` entirely
+       (true cold start — no capability_scores row yet) — inject it at
+       _STAGE0_BASELINE_SCORE + the bonus, so it can compete for Stage 1-3
+       instead of never being considered.
+    """
+    known_models = {model for _agent, _score, model in candidates}
+
+    thin_rows = conn.execute(
+        "SELECT hm.harness_name, hm.model_id FROM harness_models hm "
+        "LEFT JOIN capability_calibration_results ccr "
+        "  ON ccr.model_id = hm.model_id AND ccr.harness_name = hm.harness_name "
+        "WHERE hm.status='active' "
+        "GROUP BY hm.harness_name, hm.model_id HAVING COUNT(ccr.result_id) = 0"
+    ).fetchall()
+    thin_model_ids = {model_id for _harness_name, model_id in thin_rows}
+
+    boosted = list(candidates)
+    for harness_name, model_id in thin_rows:
+        if model_id not in known_models:
+            boosted.append((harness_name, _STAGE0_BASELINE_SCORE, model_id))
+
+    result = []
+    for agent, score, model in boosted:
+        bumped_score = score + _STAGE0_EXPLORE_BONUS if model in thin_model_ids else score
+        result.append((agent, bumped_score, model))
+    return sorted(result, key=lambda c: c[1], reverse=True)
+
+
 def _best_agent_for_story(story_id: str) -> Optional[str]:
     """3-stage routing: capability score → quota headroom → cost.
 
@@ -1090,6 +1133,7 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
         candidates = _capability_candidates_for_story(
             conn, discipline, org, industry, phase
         )
+        candidates = _apply_stage0_explore_bonus(conn, candidates, discipline, phase)
         if not candidates:
             return None
 
