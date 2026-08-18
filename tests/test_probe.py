@@ -368,3 +368,23 @@ def test_scan_repo_requirements_detects_artifact_presence(tmp_path, requirements
     _make_repo_requirement_fixture(repo, requirements)
 
     assert _scan_repo_requirements(str(repo)) == expected
+
+
+def test_probe_queues_sweep_for_new_model(tmp_path, monkeypatch):
+    from synlynk import db, probe
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    conn.execute(
+        "INSERT INTO harness_models (harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source) "
+        "VALUES ('codex', 'gpt-5', '2026-08-01', '2026-08-01', 'active', 'curated')"
+    )
+    conn.commit()
+
+    queued = []
+    monkeypatch.setattr(
+        probe, "_queue_calibration_sweep",
+        lambda harness_name, model_id, conn: queued.append((harness_name, model_id)),
+    )
+    probe._diff_and_queue_new_models("codex", ["gpt-5", "gpt-5.5"], conn)
+    assert queued == [("codex", "gpt-5.5")]
+

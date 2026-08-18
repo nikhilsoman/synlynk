@@ -2096,7 +2096,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    base: str = None,
                    scope_paths: list = None,
                    session_id: str = None,
-                   gh_write_target_kind: str = "issue") -> dict:
+                   gh_write_target_kind: str = "issue",
+                   model: str = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2277,6 +2278,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
+    if model:
+        flags += ["--model", model]
     load_config = _pkg("load_config")
     cfg = load_config() if load_config else {}
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
@@ -2399,7 +2402,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             pass
 
     probe_model = _pkg("_probe_model_version")
-    model_at_dispatch = probe_model(agent, cli) if probe_model else "unknown"
+    model_at_dispatch = model or (probe_model(agent, cli) if probe_model else "unknown")
     if context_mode is None:
         context_mode = profile.get("context_mode", "task")
     hint = _context_mode_hint(context_mode, task)

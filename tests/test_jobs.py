@@ -1706,3 +1706,89 @@ def test_reconcile_daemon_jobs_gh_write_verified_null_when_not_requires_gh_write
     row = conn.execute("SELECT gh_write_verified FROM daemon_jobs WHERE job_id='job-ghw3'").fetchone()
     conn.close()
     assert row[0] is None
+
+
+def test_stage0_explore_bonus_bumps_thin_existing_candidate(tmp_path, monkeypatch):
+    from synlynk import db, jobs
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    # gpt-5 is calibrated (has a result row); gpt-5.5 is thin (zero results) but
+    # already appears in candidates (e.g. seeded once via the legacy baseline).
+    conn.execute(
+        "INSERT INTO harness_models (harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source) "
+        "VALUES ('codex', 'gpt-5', '2026-08-01', '2026-08-01', 'active', 'curated'), "
+        "('codex', 'gpt-5.5', '2026-08-18', '2026-08-18', 'active', 'self_report')"
+    )
+    conn.execute(
+        "INSERT INTO capability_calibration_tasks (task_id, role, skill, difficulty, prompt_template, created_at) "
+        "VALUES ('t1', 'dev', 'general', 'basic', 'x', '2026-08-01')"
+    )
+    conn.execute(
+        "INSERT INTO capability_calibration_results "
+        "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at) "
+        "VALUES ('r1', 'codex', 'gpt-5', 't1', 0.9, 0.01, 'grok', '2026-08-01')"
+    )
+    conn.commit()
+
+    candidates = [("codex", 0.7, "gpt-5"), ("codex", 0.68, "gpt-5.5")]
+    result = jobs._apply_stage0_explore_bonus(conn, candidates, discipline="backend", phase="build")
+
+    scores = {model: score for _agent, score, model in result}
+    assert scores["gpt-5"] == 0.7  # calibrated — unchanged
+    assert scores["gpt-5.5"] == 0.68 + jobs._STAGE0_EXPLORE_BONUS  # thin — bumped
+    assert result[0][2] == "gpt-5.5"  # bumped score (0.73) now sorts first over gpt-5 (0.7)
+
+
+def test_stage0_explore_bonus_injects_cold_start_model_absent_from_candidates(tmp_path, monkeypatch):
+    from synlynk import db, jobs
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    # gpt-5.5 was just discovered by probe (harness_models row exists) but has
+    # never been calibrated or organically scored — no capability_scores row,
+    # so it is NOT in the `candidates` list the caller passes in. This is the
+    # real cold-start case: Stage 0 must inject it, not just re-score it.
+    conn.execute(
+        "INSERT INTO harness_models (harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source) "
+        "VALUES ('codex', 'gpt-5', '2026-08-01', '2026-08-01', 'active', 'curated'), "
+        "('codex', 'gpt-5.5', '2026-08-18', '2026-08-18', 'active', 'self_report')"
+    )
+    conn.commit()
+
+    candidates = [("codex", 0.7, "gpt-5")]  # gpt-5.5 absent — the bug case
+    result = jobs._apply_stage0_explore_bonus(conn, candidates, discipline="backend", phase="build")
+
+    models = {model for _agent, _score, model in result}
+    assert "gpt-5.5" in models, "cold-start model must be injected as a candidate, not silently dropped"
+    scores = {model: score for _agent, score, model in result}
+    assert scores["gpt-5.5"] == jobs._STAGE0_BASELINE_SCORE + jobs._STAGE0_EXPLORE_BONUS
+    assert scores["gpt-5.5"] < scores["gpt-5"], "injected baseline+bonus must stay below an already-calibrated model's real score"
+
+
+def test_stage0_explore_bonus_excludes_nonmatching_discipline_model(tmp_path, monkeypatch):
+    from synlynk import db, jobs
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    conn.execute(
+        "INSERT INTO harness_models (harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source) "
+        "VALUES ('codex', 'gpt-frontend', '2026-08-18', '2026-08-18', 'active', 'self_report')"
+    )
+    conn.execute(
+        "INSERT INTO capability_calibration_tasks "
+        "(task_id, role, skill, difficulty, prompt_template, created_at) "
+        "VALUES ('frontend-task', 'dev', 'frontend', 'basic', 'x', '2026-08-18')"
+    )
+    conn.execute(
+        "INSERT INTO capability_calibration_results "
+        "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at) "
+        "VALUES ('frontend-result', 'codex', 'gpt-frontend', 'frontend-task', 0.8, 0.01, 'grok', '2026-08-18')"
+    )
+    conn.commit()
+
+    result = jobs._apply_stage0_explore_bonus(
+        conn, [], discipline="backend", phase="build"
+    )
+
+    assert "gpt-frontend" not in {model for _agent, _score, model in result}

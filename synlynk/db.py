@@ -294,8 +294,6 @@ def _run_harness_rename_migration(conn) -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status)"
         )
-
-
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     _run_harness_rename_migration(conn)
@@ -486,7 +484,50 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             new_hash TEXT,
             recorded_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS harness_models (
+            harness_name TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            superseded_by TEXT,
+            discovery_source TEXT NOT NULL DEFAULT 'curated',
+            PRIMARY KEY (harness_name, model_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS harness_modes (
+            harness_name TEXT NOT NULL,
+            cli_version_range TEXT NOT NULL,
+            mode_type TEXT NOT NULL,
+            mode_name TEXT NOT NULL,
+            shape TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY (harness_name, cli_version_range, mode_type, mode_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS capability_calibration_tasks (
+            task_id TEXT PRIMARY KEY,
+            role TEXT NOT NULL,
+            skill TEXT NOT NULL,
+            difficulty TEXT NOT NULL,
+            prompt_template TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS capability_calibration_results (
+            result_id TEXT PRIMARY KEY,
+            harness_name TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            score REAL NOT NULL,
+            cost_usd REAL NOT NULL,
+            verified_by TEXT NOT NULL,
+            run_at TEXT NOT NULL,
+            FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
+        );
     """)
+    from synlynk.capability_sweep import _seed_calibration_tasks
+    _seed_calibration_tasks(conn)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS capability_watch (
             id INTEGER PRIMARY KEY CHECK (id = 1),
