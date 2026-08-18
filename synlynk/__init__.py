@@ -998,13 +998,13 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     UNIQUE(agent_name, event_type)
 );
 
--- Per-agent plan quotas (tokens or requests). quota_type is plan-driven:
+-- Per-harness plan quotas (tokens or requests). quota_type is plan-driven:
 -- different harnesses reset on different windows (5h Claude plan, hourly,
 -- daily, weekly, monthly). headroom is computed as limit_tokens - used_tokens
 -- (columns named *_tokens historically; unit column disambiguates).
-CREATE TABLE IF NOT EXISTS agent_quotas (
+CREATE TABLE IF NOT EXISTS harness_quotas (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent        TEXT NOT NULL,
+    harness      TEXT NOT NULL,
     model        TEXT NOT NULL DEFAULT 'unknown',
     quota_type   TEXT NOT NULL,
     unit         TEXT NOT NULL DEFAULT 'tokens',
@@ -1012,17 +1012,17 @@ CREATE TABLE IF NOT EXISTS agent_quotas (
     used_tokens  INTEGER NOT NULL DEFAULT 0,
     reset_at     TIMESTAMP,
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(agent, model, quota_type, unit)
+    UNIQUE(harness, model, quota_type, unit)
 );
-CREATE INDEX IF NOT EXISTS idx_agent_quotas_agent ON agent_quotas(agent);
+CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness);
 
 -- Reservation ledger: an open row represents tokens committed against a
--- harness before real usage lands in agent_quotas via telemetry (#XXX
+-- harness before real usage lands in harness_quotas via telemetry (#XXX
 -- quota-aware dispatch reservation). Released once the matching daemon_jobs
 -- row settles (done/failed/timed_out) and real usage has been recorded.
 -- Reservations older than 24h are treated as expired at READ time (lazy
 -- expiry, see _open_reservations_sum) rather than physically deleted.
-CREATE TABLE IF NOT EXISTS agent_reservations (
+CREATE TABLE IF NOT EXISTS harness_reservations (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     harness        TEXT NOT NULL,
     tokens         INTEGER NOT NULL,
@@ -1033,7 +1033,7 @@ CREATE TABLE IF NOT EXISTS agent_reservations (
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     released_at    TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_agent_reservations_harness ON agent_reservations(harness, status);
+CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
 
 CREATE TABLE IF NOT EXISTS credit_grants (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1194,7 +1194,7 @@ def _dr_sync(relative_path: str) -> None:
 def _seed_verb_map(db_conn):
     db_conn.executemany("""
         INSERT OR IGNORE INTO harness_verb_map
-            (synlynk_verb, verb_category, agent_name, agent_command, supported, partial_notes)
+                (synlynk_verb, verb_category, harness_name, harness_command, supported, partial_notes)
         VALUES (?,?,?,?,?,?)
     """, _VERB_MAP_SEED)
     db_conn.commit()
