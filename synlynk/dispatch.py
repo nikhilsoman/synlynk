@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Optional, Tuple
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -98,7 +98,7 @@ def _print_pending_nudges() -> None:
 
 def _dispatch_flags_for_agent(agent: str) -> list:
     """Return the executable dispatch flags for an agent baseline."""
-    baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
+    baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
     dispatch_flags = baselines.get("dispatch_flags", [])
     flags = []
@@ -473,7 +473,7 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
     - Token missing → **fail closed** (raise RuntimeError) unless
       SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is truthy.
     """
-    baseline = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(agent, {})
     allowed = set(_ENV_ALLOWLIST_BASE) | set(baseline.get("env_passthrough", []))
     proc_env = {k: v for k, v in os.environ.items() if k in allowed}
     proc_env.update(overrides.get("env", {}))
@@ -1854,7 +1854,7 @@ def _preflight_dispatch(
 ) -> dict:
     import socket as _socket
 
-    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
 
     if db_conn:
         try:
@@ -2057,7 +2057,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     if force_agent:
         return agent
 
-    baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
+    baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     picked = None
     if story_id and not static_baseline:
         best_agent = _pkg("_best_agent_for_story")
@@ -2119,7 +2119,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if session_id is None:
         from synlynk.session import _read_active_session
         session_id = _read_active_session()
-    baselines_map = _pkg("AGENT_CAPABILITY_BASELINES", AGENT_CAPABILITY_BASELINES)
+    baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     dispatch_time = None
     if not story_id:
         dispatch_time = time.time()
@@ -2132,7 +2132,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             ]
             if not capable_agents:
                 raise ValueError(
-                    "No agent in AGENT_CAPABILITY_BASELINES has can_gh_write: True"
+                    "No agent in HARNESS_CAPABILITY_BASELINES has can_gh_write: True"
                 )
             if force_agent:
                 print(

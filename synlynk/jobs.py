@@ -12,7 +12,7 @@ import time
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
 from synlynk.gh_verify import gh_write_verified
@@ -896,9 +896,9 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
         return
 
     agent = job.get("agent", "unknown")
-    if agent not in AGENT_CAPABILITY_BASELINES:
+    if agent not in HARNESS_CAPABILITY_BASELINES:
         conn.close()
-        known_agents = ", ".join(sorted(AGENT_CAPABILITY_BASELINES))
+        known_agents = ", ".join(sorted(HARNESS_CAPABILITY_BASELINES))
         raise ValueError(
             f"Refusing capability rating write for unregistered agent {agent!r}. "
             f"Known agents: {known_agents}"

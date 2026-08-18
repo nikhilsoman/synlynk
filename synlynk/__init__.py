@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 import sqlite3 as _sqlite3
 
 from synlynk._constants import (
-    AGENT_CAPABILITY_BASELINES,
+    HARNESS_CAPABILITY_BASELINES,
     HARNESS_TIMEOUT_PATTERNS,
     QUOTA_PATTERNS,
     VERSION,
@@ -1255,7 +1255,7 @@ def _dispatch_flags_for_agent(agent: str) -> list:
 
     Supports both the legacy list form and the structured mapping form.
     """
-    baselines = AGENT_CAPABILITY_BASELINES.get(agent, {})
+    baselines = HARNESS_CAPABILITY_BASELINES.get(agent, {})
     dispatch_flags = baselines.get("dispatch_flags", [])
     if isinstance(dispatch_flags, dict):
         ordered = []
@@ -1967,7 +1967,7 @@ def discover_agents(config: dict = None) -> list:
     discovery_paths.update(config.get("agent_discovery_paths", {}))
 
     found = []
-    for name, defaults in AGENT_CAPABILITY_BASELINES.items():
+    for name, defaults in HARNESS_CAPABILITY_BASELINES.items():
         path = discovery_paths.get(name)
         if path and not os.path.exists(path):
             continue  # config dir not present — skip entirely
@@ -2086,8 +2086,8 @@ def cmd_agent_configure(agent_name: str) -> None:
     """Interactively write .agents/<agent_name>.json context-profile settings."""
     import json as _json
 
-    if agent_name not in AGENT_CAPABILITY_BASELINES:
-        print(f"  Unknown agent '{agent_name}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+    if agent_name not in HARNESS_CAPABILITY_BASELINES:
+        print(f"  Unknown agent '{agent_name}'. Known: {list(HARNESS_CAPABILITY_BASELINES)}")
         return
 
     os.makedirs(".agents", exist_ok=True)
@@ -2136,8 +2136,8 @@ def cmd_agent_configure(agent_name: str) -> None:
 
 def cmd_agent_add(agent_name: str) -> None:
     """Retrofit an on-PATH agent into the current project."""
-    if agent_name not in AGENT_CAPABILITY_BASELINES:
-        print(f"  Error: unknown agent '{agent_name}'. Known: {', '.join(sorted(AGENT_CAPABILITY_BASELINES))}")
+    if agent_name not in HARNESS_CAPABILITY_BASELINES:
+        print(f"  Error: unknown agent '{agent_name}'. Known: {', '.join(sorted(HARNESS_CAPABILITY_BASELINES))}")
         return
 
     cli_path = shutil.which(agent_name)
@@ -2214,11 +2214,11 @@ def _run_daily_housekeeping() -> None:
     if config.get("last_housekeeping_date") == today:
         return
 
-    workgroup_agents = [a for a in (config.get("workgroup_agents") or []) if a in AGENT_CAPABILITY_BASELINES]
+    workgroup_agents = [a for a in (config.get("workgroup_agents") or []) if a in HARNESS_CAPABILITY_BASELINES]
     known_on_path = {
         harness["name"]
         for harness in _detect_harnesses_on_path()
-        if harness.get("name") in AGENT_CAPABILITY_BASELINES
+        if harness.get("name") in HARNESS_CAPABILITY_BASELINES
     }
     onboarded = set(workgroup_agents)
     new_agents = sorted(known_on_path - onboarded)
@@ -2252,7 +2252,7 @@ def _run_daily_housekeeping() -> None:
                 after_version = after[0] if after else result.get("version", "unknown")
                 status = result.get("status", "unknown")
                 print(f"  Probe drift for {agent_name}: {before_version} → {after_version} ({status})")
-                baseline = AGENT_CAPABILITY_BASELINES.get(agent_name)
+                baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name)
                 if baseline is not None:
                     baseline["last_probe_snapshot"] = {
                         "installed_version": after_version,
@@ -2519,11 +2519,11 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
     agent reads it as initial context. Stdout/stderr are not captured —
     this is an interactive session. Telemetry is logged on exit.
     """
-    if agent not in AGENT_CAPABILITY_BASELINES:
-        print(f"Unknown agent '{agent}'. Known: {list(AGENT_CAPABILITY_BASELINES)}")
+    if agent not in HARNESS_CAPABILITY_BASELINES:
+        print(f"Unknown agent '{agent}'. Known: {list(HARNESS_CAPABILITY_BASELINES)}")
         return
 
-    cli = AGENT_CAPABILITY_BASELINES[agent]["cli"]
+    cli = HARNESS_CAPABILITY_BASELINES[agent]["cli"]
 
     try:
         generate_context(scope="full")

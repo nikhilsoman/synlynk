@@ -8,7 +8,7 @@ import sqlite3
 import time
 from typing import Any, Optional
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.hud import CYCLES
 
 TIER1_CAPACITY = {
@@ -308,7 +308,7 @@ def _format_status_terminal(
     worktree_hint: Optional[dict] = None,
 ) -> str:
     """Format status output for terminal or JSON consumers."""
-    agents = [r["agent_name"] for r in harness_rows] or sorted(AGENT_CAPABILITY_BASELINES)
+    agents = [r["agent_name"] for r in harness_rows] or sorted(HARNESS_CAPABILITY_BASELINES)
     attached = sum(1 for r in harness_rows if int(r.get("attach_point_in_time", 0) or 0))
 
     if json_output:

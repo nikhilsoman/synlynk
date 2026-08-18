@@ -297,7 +297,7 @@ def _run_harness_rename_migration(conn) -> None:
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     _run_harness_rename_migration(conn)
-    from synlynk import AGENT_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
+    from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
     story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
     if "discipline" not in story_cols:
@@ -880,7 +880,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("DELETE FROM cycle_capability WHERE cycle=?", (old,))
     import json as _json
     _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
-    for _agent_name, _baseline in AGENT_CAPABILITY_BASELINES.items():
+    for _agent_name, _baseline in HARNESS_CAPABILITY_BASELINES.items():
         _harness_name = _HARNESS_MAP.get(_agent_name, _agent_name)
         conn.execute("""
             INSERT OR IGNORE INTO harness_baselines

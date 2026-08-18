@@ -48,7 +48,7 @@ def _seed_probe_row(project_dir: Path, agent_name: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     synlynk._migrate_db(conn)
-    baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES[agent_name]
     conn.execute(
         """
         INSERT OR REPLACE INTO harness_records (

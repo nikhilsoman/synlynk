@@ -1092,7 +1092,7 @@ def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
     fake_baselines = {
         "codex": {"env_passthrough": ["MY_AGENT_TOKEN"], "headless_contract": {}},
     }
-    monkeypatch.setattr(dispatch_mod, "AGENT_CAPABILITY_BASELINES", fake_baselines)
+    monkeypatch.setattr(dispatch_mod, "HARNESS_CAPABILITY_BASELINES", fake_baselines)
 
     env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
@@ -1106,13 +1106,13 @@ def test_build_subprocess_env_applies_headless_contract_required_vars():
     fake_baselines = {
         "agy": {"env_passthrough": [], "headless_contract": {"env_vars_required": ["PYTHONUNBUFFERED=1"]}},
     }
-    dispatch_mod_patch_target = dispatch_mod.AGENT_CAPABILITY_BASELINES
-    dispatch_mod.AGENT_CAPABILITY_BASELINES = fake_baselines
+    dispatch_mod_patch_target = dispatch_mod.HARNESS_CAPABILITY_BASELINES
+    dispatch_mod.HARNESS_CAPABILITY_BASELINES = fake_baselines
     try:
         env = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
         assert env.get("PYTHONUNBUFFERED") == "1"
     finally:
-        dispatch_mod.AGENT_CAPABILITY_BASELINES = dispatch_mod_patch_target
+        dispatch_mod.HARNESS_CAPABILITY_BASELINES = dispatch_mod_patch_target
 
 
 def test_build_subprocess_env_overrides_win_over_allowlist(monkeypatch):
@@ -1231,7 +1231,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
     )
 
     assert job["agent"] == "claude"
-    assert sl.AGENT_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
+    assert sl.HARNESS_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
     captured = capsys.readouterr()
     assert "rerouted" in captured.out
     assert "#426" in captured.out
@@ -1306,9 +1306,9 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
 
     no_capable = {
         name: {**baseline, "can_gh_write": False}
-        for name, baseline in sl.AGENT_CAPABILITY_BASELINES.items()
+        for name, baseline in sl.HARNESS_CAPABILITY_BASELINES.items()
     }
-    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", no_capable)
+    monkeypatch.setattr(sl, "HARNESS_CAPABILITY_BASELINES", no_capable)
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     with pytest.raises(ValueError, match="can_gh_write"):

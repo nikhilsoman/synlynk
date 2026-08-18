@@ -31,7 +31,7 @@ def _write_config(tmp_path, dispatch_mode="daily-grind"):
 def _seed_probe_row(db, agent_name):
     import synlynk
 
-    baseline = synlynk.AGENT_CAPABILITY_BASELINES[agent_name]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES[agent_name]
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (

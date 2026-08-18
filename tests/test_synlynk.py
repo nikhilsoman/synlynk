@@ -11,28 +11,28 @@ import synlynk
 
 
 def test_agent_capability_baselines_exist():
-    assert "claude" in synlynk.AGENT_CAPABILITY_BASELINES
-    assert "agy" in synlynk.AGENT_CAPABILITY_BASELINES
-    assert "codex" in synlynk.AGENT_CAPABILITY_BASELINES
-    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
-    assert "local" in synlynk.AGENT_CAPABILITY_BASELINES
-    for name, caps in synlynk.AGENT_CAPABILITY_BASELINES.items():
+    assert "claude" in synlynk.HARNESS_CAPABILITY_BASELINES
+    assert "agy" in synlynk.HARNESS_CAPABILITY_BASELINES
+    assert "codex" in synlynk.HARNESS_CAPABILITY_BASELINES
+    assert "grok" in synlynk.HARNESS_CAPABILITY_BASELINES
+    assert "local" in synlynk.HARNESS_CAPABILITY_BASELINES
+    for name, caps in synlynk.HARNESS_CAPABILITY_BASELINES.items():
         assert "roles" in caps
         assert "cli" in caps
         assert "non_interactive_flags" in caps
         assert isinstance(caps.get("dispatch_flags"), dict)
         assert isinstance(caps.get("headless_contract"), dict)
         assert isinstance(caps.get("network_deps"), dict)
-    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
-    assert synlynk.AGENT_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
     # Sandbox is enforced via non_interactive_flags (-s workspace-write), not required_flags
     # (required_flags are bare flags with no values; bare --sandbox breaks codex CLI).
-    assert synlynk.AGENT_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == []
-    assert "-s" in synlynk.AGENT_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
-    assert "workspace-write" in synlynk.AGENT_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
-    assert synlynk.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]["non_interactive_flag"] == "--single"
-    assert synlynk.AGENT_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["codex"]["dispatch_flags"]["required_flags"] == []
+    assert "-s" in synlynk.HARNESS_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
+    assert "workspace-write" in synlynk.HARNESS_CAPABILITY_BASELINES["codex"]["non_interactive_flags"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["grok"]["headless_contract"]["non_interactive_flag"] == "--single"
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
 
 
 def test_sop_section_headers_defined():
@@ -208,7 +208,7 @@ def test_dispatch_help_lists_all_known_agents(project_dir, capsys):
         sys.argv = old_argv
     captured = capsys.readouterr()
     assert exc.value.code == 0
-    for agent_name in sorted(synlynk.AGENT_CAPABILITY_BASELINES):
+    for agent_name in sorted(synlynk.HARNESS_CAPABILITY_BASELINES):
         assert agent_name in captured.out
 
 
@@ -259,7 +259,7 @@ def test_doctor_prints_tc5_warning(monkeypatch, tmp_path, isolated_db, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         synlynk,
-        "AGENT_CAPABILITY_BASELINES",
+        "HARNESS_CAPABILITY_BASELINES",
         {
             "claude": {
                 "cli": "claude",
@@ -537,7 +537,7 @@ def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkey
 
     db = sqlite3.connect(str(tmp_path / "state.db"))
     synlynk._migrate_db(db)
-    baseline = synlynk.AGENT_CAPABILITY_BASELINES["agy"]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES["agy"]
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
@@ -721,9 +721,9 @@ def test_doctor_wizard_offers_fix_menu_on_tc2_failure(tmp_path, isolated_db, mon
             "headless_contract": {},
         }
     }
-    monkeypatch.setattr("synlynk.AGENT_CAPABILITY_BASELINES", patched_baselines)
-    monkeypatch.setattr("synlynk._constants.AGENT_CAPABILITY_BASELINES", patched_baselines)
-    monkeypatch.setattr("synlynk.doctor.AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr("synlynk.HARNESS_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr("synlynk._constants.HARNESS_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr("synlynk.doctor.HARNESS_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr(synlynk, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(synlynk, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(synlynk, "_run_tc2", lambda agent, flags_spec: {"passed": False, "failed_flags": ["--bad-flag"]})
@@ -762,7 +762,7 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         synlynk,
-        "AGENT_CAPABILITY_BASELINES",
+        "HARNESS_CAPABILITY_BASELINES",
         {
             "claude": {
                 "cli": "claude",
@@ -3887,7 +3887,7 @@ def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
     # requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges
-    if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
+    if "grok" not in sl.HARNESS_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
@@ -3928,7 +3928,7 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_load_agent_profile", lambda agent: {"always_approve_unsupported": True})
     monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
-    if "grok" not in sl.AGENT_CAPABILITY_BASELINES:
+    if "grok" not in sl.HARNESS_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
@@ -3987,7 +3987,7 @@ def test_agy_prompt_flag_split_from_non_interactive_flags():
     fails immediately if someone moves -p back into non_interactive_flags.
     """
     import synlynk as sl
-    agy = sl.AGENT_CAPABILITY_BASELINES["agy"]
+    agy = sl.HARNESS_CAPABILITY_BASELINES["agy"]
     assert agy.get("prompt_flag") == "-p", "agy prompt_flag must be '-p'"
     assert "-p" not in agy.get("non_interactive_flags", []), (
         "-p must not be in non_interactive_flags; use prompt_flag instead"
@@ -4004,9 +4004,9 @@ def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
     import synlynk as sl, copy
     captured = {}
 
-    patched_baselines = copy.deepcopy(sl.AGENT_CAPABILITY_BASELINES)
+    patched_baselines = copy.deepcopy(sl.HARNESS_CAPABILITY_BASELINES)
     patched_baselines["agy"]["dispatch_flags"] = ["--some-flag"]
-    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
 
     class FakeStdout:
         def readline(self):
@@ -4923,7 +4923,7 @@ def test_preflight_blocks_unreachable_endpoint(tmp_path, monkeypatch):
     # test can exercise the network gate directly.
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    baseline = sl.AGENT_CAPABILITY_BASELINES["grok"]
+    baseline = sl.HARNESS_CAPABILITY_BASELINES["grok"]
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
@@ -4961,7 +4961,7 @@ def test_preflight_passes_for_valid_claude_dispatch(tmp_path):
 
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    baseline = sl.AGENT_CAPABILITY_BASELINES["claude"]
+    baseline = sl.HARNESS_CAPABILITY_BASELINES["claude"]
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
@@ -6123,7 +6123,7 @@ def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
     """Launches a queued job when under max_parallel."""
     import json as _json
     conn = synlynk._get_db()
-    baseline = synlynk.AGENT_CAPABILITY_BASELINES["claude"]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES["claude"]
     conn.execute(
         """
         INSERT OR REPLACE INTO harness_records (
@@ -6305,7 +6305,7 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
             self._real.close()
 
     conn = synlynk._get_db()
-    baseline = synlynk.AGENT_CAPABILITY_BASELINES["claude"]
+    baseline = synlynk.HARNESS_CAPABILITY_BASELINES["claude"]
     conn.execute(
         """
         INSERT OR REPLACE INTO harness_records (
@@ -6879,8 +6879,8 @@ def test_uninstall_service_not_installed(project_dir, monkeypatch, capsys):
 
 def test_agent_capability_baselines_includes_grok():
     import synlynk
-    assert "grok" in synlynk.AGENT_CAPABILITY_BASELINES
-    grok = synlynk.AGENT_CAPABILITY_BASELINES["grok"]
+    assert "grok" in synlynk.HARNESS_CAPABILITY_BASELINES
+    grok = synlynk.HARNESS_CAPABILITY_BASELINES["grok"]
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
@@ -6895,8 +6895,8 @@ def test_agent_capability_baselines_includes_grok():
 
 def test_grok_baseline_no_longer_requires_always_approve():
     # Grok no longer hardcodes always-approve as a required dispatch flag.
-    from synlynk import AGENT_CAPABILITY_BASELINES
-    grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
+    from synlynk import HARNESS_CAPABILITY_BASELINES
+    grok = HARNESS_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
     assert "--always-approve" in flags.get("valid_flags", []), \
         "--always-approve must be valid for Grok (--yes was dropped)"
@@ -6907,8 +6907,8 @@ def test_grok_baseline_no_longer_requires_always_approve():
 
 
 def test_grok_baseline_has_network_deps():
-    from synlynk import AGENT_CAPABILITY_BASELINES
-    grok = AGENT_CAPABILITY_BASELINES.get("grok", {})
+    from synlynk import HARNESS_CAPABILITY_BASELINES
+    grok = HARNESS_CAPABILITY_BASELINES.get("grok", {})
     endpoints = grok.get("network_deps", {}).get("required_endpoints", [])
     assert any("cli-chat-proxy.grok.com" in e for e in endpoints)
 
@@ -7516,8 +7516,8 @@ def test_cmd_sync_no_manifest(tmp_path, monkeypatch, capsys):
 
 
 def test_agy_baseline_has_headless_contract():
-    from synlynk import AGENT_CAPABILITY_BASELINES
-    agy = AGENT_CAPABILITY_BASELINES.get("agy", {})
+    from synlynk import HARNESS_CAPABILITY_BASELINES
+    agy = HARNESS_CAPABILITY_BASELINES.get("agy", {})
     contract = agy.get("headless_contract", {})
     assert contract.get("requires_pty") is False
     assert contract.get("stdout_flush_method") == "unbuffered"

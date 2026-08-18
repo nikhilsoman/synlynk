@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 from typing import Optional
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 
 
 def _pkg(name: str, default=None):
@@ -375,7 +375,7 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
     import hashlib as _hashlib, shlex as _shlex
 
     agent = agent_cfg.get("investigator", "claude")
-    if agent not in AGENT_CAPABILITY_BASELINES:
+    if agent not in HARNESS_CAPABILITY_BASELINES:
         agent = "claude"
 
     # Create story in DB
@@ -421,7 +421,7 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
         f.write(prompt)
 
     # Build shell command (same pattern as dispatch_agent)
-    baselines = AGENT_CAPABILITY_BASELINES[agent]
+    baselines = HARNESS_CAPABILITY_BASELINES[agent]
     cli = baselines["cli"]
     flags = baselines["non_interactive_flags"]
     prompt_via_arg = baselines.get("prompt_via_arg", False)
@@ -551,7 +551,7 @@ def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return ranked[0][1]
 
-    for agent_name in AGENT_CAPABILITY_BASELINES:
+    for agent_name in HARNESS_CAPABILITY_BASELINES:
         if agent_name != failed_agent:
             return agent_name
     return failed_agent

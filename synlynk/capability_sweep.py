@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.costs import _HARDCODED_FALLBACK_RATES, _model_rate_for_version
 from synlynk.taxonomy_standards import SFIA_CODES
 
@@ -19,7 +19,7 @@ _SKILL_TO_DISCIPLINE = {"PROG": "backend", "TEST": "testing", "REQM": "architect
 def _discover_models() -> dict:
     """Discover available models per agent CLI, with a hardcoded fallback."""
     discovered = {}
-    for agent, baseline in AGENT_CAPABILITY_BASELINES.items():
+    for agent, baseline in HARNESS_CAPABILITY_BASELINES.items():
         if agent == "local":
             continue
         cli = baseline["cli"]

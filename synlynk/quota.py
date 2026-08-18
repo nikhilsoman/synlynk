@@ -326,7 +326,7 @@ def cmd_quota(agent: Optional[str] = None, json_output: bool = False) -> None:
             agents = [r[0] for r in rows]
             if not agents:
                 # Also surface known fleet agents with no signal yet
-                baselines = _pkg("AGENT_CAPABILITY_BASELINES") or {}
+                baselines = _pkg("HARNESS_CAPABILITY_BASELINES") or {}
                 agents = sorted(baselines.keys()) if baselines else []
 
         report = []

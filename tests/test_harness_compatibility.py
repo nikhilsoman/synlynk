@@ -18,7 +18,7 @@ esac
 
 
 def test_probe_fastpath_skips_deep_probe_when_hash_matches(tmp_path, monkeypatch):
-    from synlynk import _probe_agent, _compute_capability_hash, AGENT_CAPABILITY_BASELINES, _migrate_db
+    from synlynk import _probe_agent, _compute_capability_hash, HARNESS_CAPABILITY_BASELINES, _migrate_db
 
     _make_stub_cli(tmp_path, "agy", version="1.0.0")
     monkeypatch.setenv("PATH", str(tmp_path) + ":" + os.environ["PATH"])
@@ -26,7 +26,7 @@ def test_probe_fastpath_skips_deep_probe_when_hash_matches(tmp_path, monkeypatch
     db = sqlite3.connect(":memory:")
     _migrate_db(db)
 
-    baseline = AGENT_CAPABILITY_BASELINES.get("agy", {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get("agy", {})
     h = _compute_capability_hash(baseline.get("headless_contract", {}), baseline.get("dispatch_flags", {}))
     db.execute(
         """

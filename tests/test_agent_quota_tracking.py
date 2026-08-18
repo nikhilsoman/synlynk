@@ -1282,7 +1282,7 @@ def test_wire_health_checks_into_real_synlynk_doc(project_dir, monkeypatch, caps
     )
     monkeypatch.setattr(
         doctor_mod,
-        "AGENT_CAPABILITY_BASELINES",
+        "HARNESS_CAPABILITY_BASELINES",
         {
             "agy": {
                 "cli": "agy",
@@ -1324,7 +1324,7 @@ def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_inc
 
     monkeypatch.setattr(
         sl,
-        "AGENT_CAPABILITY_BASELINES",
+        "HARNESS_CAPABILITY_BASELINES",
         {
             "claude": {
                 "cli": "claude",
@@ -1335,8 +1335,8 @@ def test_synlynk_doctor_tc1tc2tc3tc5_silently_noop_regression_reports_schema_inc
             }
         },
     )
-    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
-    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", sl.AGENT_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl._constants, "HARNESS_CAPABILITY_BASELINES", sl.HARNESS_CAPABILITY_BASELINES)
+    monkeypatch.setattr(sl.doctor, "HARNESS_CAPABILITY_BASELINES", sl.HARNESS_CAPABILITY_BASELINES)
     monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
     monkeypatch.setattr(sl, "_run_tc3", lambda endpoints: {"passed": True, "unreachable": []})
@@ -1377,9 +1377,9 @@ def test_synlynk_doctor_reports_local_tc5_skip(tmp_path, monkeypatch, capsys):
             "non_interactive_flags": [],
         }
     }
-    monkeypatch.setattr(sl, "AGENT_CAPABILITY_BASELINES", patched_baselines)
-    monkeypatch.setattr(sl._constants, "AGENT_CAPABILITY_BASELINES", patched_baselines)
-    monkeypatch.setattr(sl.doctor, "AGENT_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl._constants, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
+    monkeypatch.setattr(sl.doctor, "HARNESS_CAPABILITY_BASELINES", patched_baselines)
     monkeypatch.setattr(sl, "_run_tc0", lambda agent, baseline=None: {"passed": True, "schema_issues": []})
     monkeypatch.setattr(sl, "_run_tc1", lambda agent: {"passed": True, "requires_pty": False})
     monkeypatch.setattr(sl, "_run_tc2", lambda agent, flags_spec: {"passed": True, "failed_flags": []})
@@ -1609,8 +1609,8 @@ def test_harden_preflight_dispatch_check_agent_auth_fails_loudly_on_not_signed_i
             "grok",
             "grok",
             "1.0.0",
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["grok"]["headless_contract"]),
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["grok"]["dispatch_flags"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["grok"]["headless_contract"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["grok"]["dispatch_flags"]),
             "seeded-probe",
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
         ),
@@ -1683,7 +1683,7 @@ def test_fixdispatch_harden_reporting_and_preflight_allows_agy_dangerously_skip_
     monkeypatch.setenv("HOME", str(tmp_path))
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    _seed_hardened_preflight_record(db, "agy", sl.AGENT_CAPABILITY_BASELINES["agy"])
+    _seed_hardened_preflight_record(db, "agy", sl.HARNESS_CAPABILITY_BASELINES["agy"])
 
     class _SuccessSocket:
         def settimeout(self, timeout):
@@ -1721,7 +1721,7 @@ def test_fixdispatch_harden_reporting_and_preflight_blocks_invalid_flag(
     monkeypatch.setenv("HOME", str(tmp_path))
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+    _seed_hardened_preflight_record(db, "grok", sl.HARNESS_CAPABILITY_BASELINES["grok"])
 
     monkeypatch.setattr(dispatch_mod.shutil, "which", lambda cmd: None)
 
@@ -1745,7 +1745,7 @@ def test_fixdispatch_harden_reporting_and_preflight_blocks_unreachable_endpoint(
     monkeypatch.setenv("HOME", str(tmp_path))
     db = sqlite3.connect(str(tmp_path / "state.db"))
     sl._migrate_db(db)
-    _seed_hardened_preflight_record(db, "grok", sl.AGENT_CAPABILITY_BASELINES["grok"])
+    _seed_hardened_preflight_record(db, "grok", sl.HARNESS_CAPABILITY_BASELINES["grok"])
 
     class _FailSocket:
         def settimeout(self, timeout):
@@ -1796,8 +1796,8 @@ def test_harden_preflight_dispatch_check_agent_au_blocks_known_headless_permissi
             "agy",
             "agy",
             "1.0.0",
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["agy"]["headless_contract"]),
-            json.dumps(sl.AGENT_CAPABILITY_BASELINES["agy"]["dispatch_flags"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["agy"]["headless_contract"]),
+            json.dumps(sl.HARNESS_CAPABILITY_BASELINES["agy"]["dispatch_flags"]),
             "seeded-probe",
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
         ),

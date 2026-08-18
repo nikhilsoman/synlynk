@@ -137,7 +137,7 @@ def cmd_watch(args) -> None:
 def build_parser() -> argparse.ArgumentParser:
     from synlynk._constants import CORE_FLEET
     from synlynk import (
-        AGENT_CAPABILITY_BASELINES,
+        HARNESS_CAPABILITY_BASELINES,
         VERSION,
         SynlynkDaemon,
         SynlynkRelay,
@@ -597,7 +597,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dispatch_parser = subparsers.add_parser(
         "dispatch", help="Dispatch an agent to run a task in the background")
-    known_agents = sorted(AGENT_CAPABILITY_BASELINES)
+    known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
         nargs="?", default=None,
         choices=known_agents,
@@ -967,7 +967,7 @@ def main(argv=None) -> None:
     from synlynk.db import cmd_story_done
 
     from synlynk import (
-        AGENT_CAPABILITY_BASELINES,
+        HARNESS_CAPABILITY_BASELINES,
         VERSION,
         SynlynkDaemon,
         SynlynkRelay,
@@ -1141,7 +1141,7 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
-        known_agents = sorted(AGENT_CAPABILITY_BASELINES)
+        known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
         try:
             resolved_agent_id = None
             if getattr(args, "as_agent", None):

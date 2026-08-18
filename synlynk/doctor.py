@@ -15,7 +15,7 @@ import stat
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES, CORE_FLEET, CORE_INSTRUCTION_FILES, VERSION
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES, CORE_FLEET, CORE_INSTRUCTION_FILES, VERSION
 from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
 from synlynk.fleet import (
@@ -528,7 +528,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
 
     agent_filter = getattr(args, "agent", None) if args is not None else None
     db_conn = _pkg("_get_db")()
-    baselines = AGENT_CAPABILITY_BASELINES
+    baselines = HARNESS_CAPABILITY_BASELINES
     agents = [agent_filter] if agent_filter else list(baselines.keys())
     any_failed = False
     # Once per doctor run: nested product state.db under worktrees is a hard fail.

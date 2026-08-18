@@ -14,7 +14,7 @@ from typing import Iterable, List, Optional, Sequence
 
 from synlynk._constants import (
     AGENT_BUILDER_ONLY,
-    AGENT_CAPABILITY_BASELINES,
+    HARNESS_CAPABILITY_BASELINES,
     CORE_FLEET,
     CORE_INSTRUCTION_FILES,
     EXPERIMENTAL_FLEET,
@@ -216,7 +216,7 @@ def run_matrix_dry(root: str = ".") -> list[MatrixCellResult]:
                 )
             )
 
-        baseline = AGENT_CAPABILITY_BASELINES.get(home)
+        baseline = HARNESS_CAPABILITY_BASELINES.get(home)
         if baseline is not None:
             flags = baseline.get("non_interactive_flags")
             detail = (
@@ -238,7 +238,7 @@ def run_matrix_dry(root: str = ".") -> list[MatrixCellResult]:
                     cell="dispatch_dry",
                     tier=1,
                     status="red",
-                    detail="not in AGENT_CAPABILITY_BASELINES",
+                    detail="not in HARNESS_CAPABILITY_BASELINES",
                 )
             )
 
@@ -354,7 +354,7 @@ def tier_for_agent(conn, agent: str, *, now: float | None = None) -> str:
 
 def live_agent_smoke(home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> MatrixCellResult:
     """Run one real headless CLI smoke turn for *home* (no file edits)."""
-    baseline = AGENT_CAPABILITY_BASELINES.get(home) or {}
+    baseline = HARNESS_CAPABILITY_BASELINES.get(home) or {}
     cli = baseline.get("cli", home)
     cell = f"live_self:{home}"
     if shutil.which(cli) is None:
@@ -449,7 +449,7 @@ def live_agent_receipt_check(home: str, task_sha256: str, *, timeout_s: int = _L
     from synlynk.jobs import _check_task_receipt
     from synlynk.dispatch import _render_task_receipt_instruction
 
-    baseline = AGENT_CAPABILITY_BASELINES.get(home) or {}
+    baseline = HARNESS_CAPABILITY_BASELINES.get(home) or {}
     cli = baseline.get("cli", home)
     cell = f"live_receipt:{home}"
     if shutil.which(cli) is None:

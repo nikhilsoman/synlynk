@@ -11,7 +11,7 @@ import sys
 import time
 from typing import Optional
 
-from synlynk._constants import AGENT_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.sentinel import _clear_sentinel_alerts, _write_sentinel_alert
 
 SOP_SECTION_HEADERS = [
@@ -164,7 +164,7 @@ def _baseline_schema_issues(agent_name: str, baseline: dict) -> list:
 
 def _run_tc0(agent_name: str, baseline: dict = None) -> dict:
     """TC-0: baseline schema completeness."""
-    baseline = baseline if baseline is not None else AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = baseline if baseline is not None else HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
     issues = _baseline_schema_issues(agent_name, baseline)
     return {"passed": not issues, "schema_issues": issues}
 
@@ -406,7 +406,7 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
 def _build_fence_body_from_record(agent_name: str, db_conn=None) -> str:
     import json as _j
 
-    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
     contract = baseline.get("headless_contract", {})
     flags_spec = baseline.get("dispatch_flags", {})
     net_deps = baseline.get("network_deps", {})
@@ -492,7 +492,7 @@ def _probe_agent(agent_name: str, db_conn, fast_path_ok: bool = True, write_fenc
 
     harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
     harness_name = harness_map.get(agent_name, agent_name)
-    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
     schema_result = _run_tc0(agent_name, baseline)
     schema_issues = schema_result["schema_issues"]
 
@@ -679,7 +679,7 @@ def _run_tc1(agent_name: str, timeout: int = 5) -> dict:
     """TC-1: Headless stdout contract."""
     import sys as _sys
 
-    baseline = AGENT_CAPABILITY_BASELINES.get(agent_name, {})
+    baseline = HARNESS_CAPABILITY_BASELINES.get(agent_name, {})
     contract = baseline.get("headless_contract", {})
     if not contract:
         return {"requires_pty": False, "passed": True, "stdout_method": "not_applicable"}
@@ -1108,7 +1108,7 @@ def _repair_sops_only(cfg: dict = None, agent_name: str = None, dry_run: bool = 
 
 
 def cmd_probe(agent: str = None, write_fence: bool = True) -> list:
-    agents = [agent] if agent else list(AGENT_CAPABILITY_BASELINES.keys())
+    agents = [agent] if agent else list(HARNESS_CAPABILITY_BASELINES.keys())
     package = sys.modules.get("synlynk")
     get_db = getattr(package, "_get_db", None)
     if get_db is None:
