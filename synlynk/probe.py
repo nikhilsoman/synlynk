@@ -706,7 +706,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
 
     _scan_command_palette(harness_name, record_harness_name, installed_version, db_conn)
 
-    discovered_version = _probe_model_version(agent_name, "")
+    discovered_version = _probe_model_version(harness_name, "")
     if discovered_version and discovered_version not in ("unknown", "session-scoped, no fixed default", "uses Claude Code's built-in default, no override"):
         _diff_and_queue_new_models(harness_name, [discovered_version], db_conn)
 
