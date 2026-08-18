@@ -958,6 +958,46 @@ def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch)
     assert create_call[create_call.index("--base") + 1] == "master"
 
 
+def test_maybe_open_worktree_pr_skips_for_review_task_type(tmp_path, monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+
+    def fake_run(cmd, **kwargs):
+        raise AssertionError(f"no subprocess call expected, got: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {"id": "job-1", "task": "review PR 1053", "task_type": "review"},
+        str(worktree_path),
+        "dispatch/agy/job-1",
+    )
+
+    assert pr_number is None
+
+
+def test_maybe_open_worktree_pr_skips_for_requires_gh_write(tmp_path, monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+
+    def fake_run(cmd, **kwargs):
+        raise AssertionError(f"no subprocess call expected, got: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {"id": "job-2", "task": "close stale issue", "task_type": "", "requires_gh_write": True},
+        str(worktree_path),
+        "dispatch/codex/job-2",
+    )
+
+    assert pr_number is None
+
+
 # --- #753 jobs reap -----------------------------------------------------------
 
 def _seed_daemon_job(conn, job_id, agent="agy", status="running", pid=None, started_at="2026-08-07T07:00:00"):
