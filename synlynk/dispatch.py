@@ -1104,19 +1104,19 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     """Returns a prompt formatted for the agent's preferred input style."""
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
+    gh_write_instruction = ""
+    if requires_gh_write:
+        gh_write_instruction = (
+            "## GitHub Write Instructions\n"
+            "For any PR review or issue/PR comment in this task, use the `gh` "
+            "CLI directly via the shell — e.g. `gh pr review <N> --approve "
+            "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
+            "comment <N> --body '...'. Do not use MCP GitHub tools for these "
+            "writes; they have a confirmed failure history for this workflow.\n\n"
+        )
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
-        gh_write_instruction = ""
-        if requires_gh_write:
-            gh_write_instruction = (
-                "## GitHub Write Instructions\n"
-                "For any PR review or issue/PR comment in this task, use the `gh` "
-                "CLI directly via the shell — e.g. `gh pr review <N> --approve "
-                "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
-                "comment <N> --body '...'`. Do not use MCP GitHub tools for these "
-                "writes; they have a confirmed failure history for this workflow.\n\n"
-            )
         return (
             f"{receipt_instruction}"
             f"{gh_write_instruction}"
@@ -1130,6 +1130,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         working_dir = cwd_hint or os.getcwd()
         return (
             f"{receipt_instruction}"
+            f"{gh_write_instruction}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
@@ -1140,6 +1141,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         )
     return (
         f"{receipt_instruction}"
+        f"{gh_write_instruction}"
         f"{context_text}"
         f"{story_ref}"
         f"{file_section}"

@@ -166,6 +166,48 @@ def test_format_prompt_for_agent_omits_codex_gh_write_guardrail_by_default():
     assert "gh pr review" not in prompt
 
 
+def test_gh_write_instruction_present_for_grok_when_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "grok", "context", "story-1", "review PR 1038", "", "",
+        requires_gh_write=True,
+    )
+    assert "GitHub Write Instructions" in prompt
+    assert "Do not use MCP GitHub tools" in prompt
+
+
+def test_gh_write_instruction_present_for_agy_when_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "agy", "context", "story-1", "review PR 1038", "", "",
+        requires_gh_write=True,
+    )
+    assert "GitHub Write Instructions" in prompt
+
+
+def test_gh_write_instruction_present_for_codex_when_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "codex", "context", "story-1", "review PR 1038", "", "",
+        requires_gh_write=True,
+    )
+    assert "GitHub Write Instructions" in prompt
+
+
+def test_gh_write_instruction_absent_when_not_required():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    for agent in ("codex", "agy", "grok"):
+        prompt = _format_prompt_for_agent(
+            agent, "context", "story-1", "some task", "", "",
+            requires_gh_write=False,
+        )
+        assert "GitHub Write Instructions" not in prompt
+
+
 def test_dispatch_agent_writes_receipt_instruction_to_prompt_file(tmp_path, monkeypatch):
     import hashlib
     import synlynk as sl
