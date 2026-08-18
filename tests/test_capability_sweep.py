@@ -141,11 +141,13 @@ def test_run_sweep_writes_baseline_seed_rows_with_independent_verifier(tmp_path,
         assert quality == 8.0
 
 
-def test_pick_verifier_agent_is_not_executor(tmp_path, monkeypatch):
+def test_pick_verifier_harness_is_not_executor(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk", exist_ok=True)
-    from synlynk.capability_sweep import _pick_verifier_agent
+    from synlynk.capability_sweep import _pick_verifier_harness
 
-    verifier = _pick_verifier_agent(executor_agent="codex", available_agents=["codex", "agy", "grok"])
+    verifier = _pick_verifier_harness(
+        executor_harness="codex", available_harnesses=["codex", "agy", "grok"]
+    )
     assert verifier != "codex"
     assert verifier in ("agy", "grok")
