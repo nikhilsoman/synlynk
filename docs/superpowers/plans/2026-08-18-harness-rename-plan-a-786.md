@@ -16,11 +16,19 @@ Recon during plan-writing found the actual footprint differs from #786's origina
 - **CLI flags:** only 4 flags carry harness meaning (`probe --agent`, `cost log --agent`, `credit grant --agent`, `quota --agent`), not 18. The other ~14 are unrelated `--agent-*`-prefixed or incidental matches.
 - **`agent_name` as a bare identifier** is far more pervasive than "5 DB columns" suggested — it's the de facto parameter name for "which harness" across `probe.py`, `status.py`, `dispatch.py`, `doctor.py`, `events.py`, `support_engineer.py`, `wizard.py`, `hud.py`, `db.py`, in addition to 3 DB table columns. This plan accounts for the real footprint.
 
+## Revisions from PR #1053 review (Grok + Agy, 2026-08-18)
+
+Two independent non-authoring reviews of this plan found two blocking issues in Task 1, both fixed below:
+- **`_DB_SCHEMA` in `synlynk/__init__.py` is a second, independent source of `agent_quotas`/`agent_reservations` DDL**, separate from the re-assert block in `db.py:838-880`. `_migrate_db()` runs `conn.executescript(_DB_SCHEMA)` unconditionally on every call (`db.py:242`) before any other migration logic. Task 1 originally only listed the `db.py` DDL blocks — `synlynk/__init__.py:1005-1036` is now in scope too (Step 3a below).
+- **The original `_run_harness_rename_migration()` draft had a data-loss bug**: `harness_records`' rebuild step selected `agent_name` into the new `harness_name` primary key, discarding the table's real, already-populated `harness_name` column (e.g. `'claude-cli'` would be overwritten by `'claude'`). Fixed in Step 3 below — the rebuild now selects the actual `harness_name` column.
+- The test in Step 1 also called `db._get_db(str(db_path))`, but the real `_get_db()` (defined in `synlynk/__init__.py:1096`, not `db.py`) takes zero arguments and resolves its path via the `SYNLYNK_STATE_DB_PATH` env var. Fixed via `monkeypatch.setenv`.
+
 ## File Structure
 
 | File | Change |
 |---|---|
 | `synlynk/db.py` | DDL renames (Task 1), constant renames (Task 2 call sites), quota/reservation table + query renames (Task 8) |
+| `synlynk/__init__.py` | `_DB_SCHEMA`'s independent `agent_quotas`/`agent_reservations` DDL copy (Task 1, Step 3a) — separate from `db.py`'s re-assert block, also runs unconditionally on every `_migrate_db()` call |
 | `synlynk/_constants.py` | `AGENT_CAPABILITY_BASELINES` → `HARNESS_CAPABILITY_BASELINES` (Task 2) |
 | `synlynk/capability_sweep.py` | Internal `agent` → `harness` rename (Task 3) |
 | `synlynk/probe.py` | `agent_name` → `harness_name` parameter rename (Task 4) |
@@ -36,19 +44,25 @@ Recon during plan-writing found the actual footprint differs from #786's origina
 
 **Files:**
 - Modify: `synlynk/db.py:376-419` (harness_records, harness_verb_map, harness_version_history DDL)
-- Modify: `synlynk/db.py:838-880` (agent_quotas, agent_reservations DDL)
+- Modify: `synlynk/db.py:838-880` (agent_quotas, agent_reservations re-assert DDL)
+- Modify: `synlynk/__init__.py:1005-1036` (`_DB_SCHEMA`'s independent copy of the `agent_quotas`/`agent_reservations` DDL — this is a *separate* CREATE TABLE from the one in `db.py`, executed unconditionally by `conn.executescript(_DB_SCHEMA)` at `db.py:242` on every `_migrate_db()` call, so it must be renamed too or fresh installs will still see the old names)
 - Test: `tests/test_db_migration.py` (create if it does not already cover schema migrations — check first with `grep -l "def test.*migrat" tests/*.py`)
 
 - [ ] **Step 1: Write the failing migration test**
 
 ```python
-def test_harness_rename_migration_preserves_data(tmp_path):
+def test_harness_rename_migration_preserves_data(tmp_path, monkeypatch):
     import sqlite3
     from synlynk import db
 
     db_path = tmp_path / "state.db"
     conn = sqlite3.connect(str(db_path))
-    # Simulate a pre-rename DB: old table/column names
+    # Simulate a pre-rename DB: old table/column names.
+    # NOTE: harness_records already carries BOTH agent_name (PK) and a
+    # separately-populated harness_name column in the real schema (they can
+    # diverge, e.g. agent_name='claude' vs harness_name='claude-cli') — the
+    # migration must preserve the real harness_name value, not derive it
+    # from agent_name.
     conn.execute("""
         CREATE TABLE harness_records (
             agent_name TEXT PRIMARY KEY,
@@ -62,7 +76,7 @@ def test_harness_rename_migration_preserves_data(tmp_path):
         )
     """)
     conn.execute(
-        "INSERT INTO harness_records VALUES ('codex', 'codex', '1.2.0', 'ok', '{}', '{}', '2026-08-18', 'abc')"
+        "INSERT INTO harness_records VALUES ('claude', 'claude-cli', '1.2.0', 'ok', '{}', '{}', '2026-08-18', 'abc')"
     )
     conn.execute("""
         CREATE TABLE agent_quotas (
@@ -80,16 +94,18 @@ def test_harness_rename_migration_preserves_data(tmp_path):
     conn.commit()
     conn.close()
 
-    # Run the migration
-    conn = db._get_db(str(db_path))
+    # Run the migration. _get_db() takes no path argument — it resolves the
+    # DB location from SYNLYNK_STATE_DB_PATH, so point that at our tmp DB.
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = db._get_db()
     db._run_harness_rename_migration(conn)
     conn.commit()
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_records)")}
     assert "harness_name" in cols
     assert "agent_name" not in cols
-    row = conn.execute("SELECT harness_name, installed_version FROM harness_records WHERE harness_name='codex'").fetchone()
-    assert row == ("codex", "1.2.0")
+    row = conn.execute("SELECT harness_name, installed_version FROM harness_records WHERE harness_name='claude-cli'").fetchone()
+    assert row == ("claude-cli", "1.2.0"), "must preserve the real harness_name value, not overwrite it with agent_name"
 
     quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
     assert "harness" in quota_cols
@@ -112,8 +128,11 @@ def _run_harness_rename_migration(conn) -> None:
     """One-time rename of agent-named harness symbols to harness-named (#786 Plan A)."""
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_records)")}
     if "agent_name" in cols and "harness_name" in cols:
-        # both a leftover agent_name PK and the real harness_name col exist pre-rename;
-        # agent_name IS the PK, harness_name is a data column — drop old PK col via rebuild
+        # harness_records already carries BOTH agent_name (the old PK) and a
+        # separately-populated harness_name data column — they can diverge
+        # (e.g. agent_name='claude' vs harness_name='claude-cli'). Promote
+        # the REAL harness_name column to the new PK; do not derive it from
+        # agent_name, or existing harness_name data is silently lost.
         conn.executescript("""
             CREATE TABLE harness_records_new (
                 harness_name TEXT PRIMARY KEY,
@@ -125,7 +144,7 @@ def _run_harness_rename_migration(conn) -> None:
                 capability_hash TEXT NOT NULL DEFAULT ''
             );
             INSERT INTO harness_records_new
-                SELECT agent_name, installed_version, compliance_status, active_contract,
+                SELECT harness_name, installed_version, compliance_status, active_contract,
                        active_flags, last_probe_at, capability_hash FROM harness_records;
             DROP TABLE harness_records;
             ALTER TABLE harness_records_new RENAME TO harness_records;
@@ -158,7 +177,42 @@ def _table_exists(conn, name: str) -> bool:
     ).fetchone() is not None
 ```
 
-Then update every `CREATE TABLE IF NOT EXISTS` in `db.py:376-419` and `db.py:838-880` to use the new names directly (`harness_name`, `harness_command`, `harness_quotas`/`harness`, `harness_reservations`) so fresh installs never see the old names at all — the migration function above only fires for pre-existing DBs where `PRAGMA table_info` still shows the old column/table. Call `_run_harness_rename_migration(conn)` from wherever the existing `ALTER TABLE cost_entries RENAME TO ...` migration is invoked (same migration-runner call site, `db.py:679`'s caller).
+Then update every `CREATE TABLE IF NOT EXISTS` in `db.py:376-419` and `db.py:838-880` to use the new names directly (`harness_name`, `harness_command`, `harness_quotas`/`harness`, `harness_reservations`) so fresh installs never see the old names at all — the migration function above only fires for pre-existing DBs where `PRAGMA table_info` still shows the old column/table. Call `_run_harness_rename_migration(conn)` from wherever the existing `ALTER TABLE cost_entries RENAME TO ...` migration is invoked (same migration-runner call site, `db.py:679`'s caller — i.e. inside `_migrate_db()` in `db.py`, which runs on every connection open, so the rename stays idempotent).
+
+- [ ] **Step 3a: Rename `_DB_SCHEMA`'s independent `agent_quotas`/`agent_reservations` DDL in `synlynk/__init__.py`**
+
+`_migrate_db()` (`db.py:239-242`) runs `conn.executescript(_DB_SCHEMA)` *before* the rest of migration logic, on every single call. `_DB_SCHEMA` is defined in `synlynk/__init__.py:833` and contains its own `CREATE TABLE IF NOT EXISTS agent_quotas` (line 1005) and `CREATE TABLE IF NOT EXISTS agent_reservations` (line 1025) — a second, independent copy of the DDL from `db.py:838-880`, not a duplicate of the same statement. `agent_reservations` here already uses `harness` as its column name (only the table name is stale); `agent_quotas` uses `agent` for both the column and the table name and needs both renamed. In `synlynk/__init__.py`:
+
+```python
+CREATE TABLE IF NOT EXISTS harness_quotas (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness      TEXT NOT NULL,
+    model        TEXT NOT NULL DEFAULT 'unknown',
+    quota_type   TEXT NOT NULL,
+    unit         TEXT NOT NULL DEFAULT 'tokens',
+    limit_tokens INTEGER NOT NULL,
+    used_tokens  INTEGER NOT NULL DEFAULT 0,
+    reset_at     TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(harness, model, quota_type, unit)
+);
+CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness);
+
+CREATE TABLE IF NOT EXISTS harness_reservations (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness        TEXT NOT NULL,
+    tokens         INTEGER NOT NULL,
+    scope          TEXT NOT NULL,
+    scope_id       TEXT,
+    job_id         TEXT,
+    status         TEXT NOT NULL DEFAULT 'open',
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    released_at    TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
+```
+
+Because `_DB_SCHEMA` executes unconditionally before `_run_harness_rename_migration()` runs later in the same `_migrate_db()` call, a genuinely fresh install would otherwise create `agent_quotas` (old name) first and rely on the rename migration to immediately convert it — functionally correct but confusing and easy to regress later. Renaming the source DDL directly means fresh installs create the right table the first time, and `_run_harness_rename_migration()` remains solely responsible for converting *pre-existing* databases.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -168,7 +222,7 @@ Expected: `PASS`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synlynk/db.py tests/test_db_migration.py
+git add synlynk/db.py synlynk/__init__.py tests/test_db_migration.py
 git commit -m "feat(db): rename agent-named harness schema to harness (#786 Plan A, 1/8)"
 ```
 
@@ -325,7 +379,7 @@ git commit -m "feat: rename agent_name to harness_name in dispatch.py preflight 
 
 **Files:**
 - Modify: `synlynk/status.py`, `synlynk/doctor.py`, `synlynk/events.py`, `synlynk/support_engineer.py`, `synlynk/hud.py`, `synlynk/wizard.py`, `synlynk/__init__.py` (all `harness_records`/`harness_verb_map`/`harness_version_history`/`cycle_capability`/`harness_status` query sites using `agent_name`)
-- Test: matching `tests/test_status.py`, `tests/test_doctor.py`, `tests/test_events.py`, `tests/test_support_engineer.py`, `tests/test_hud.py`, `tests/test_wizard.py`, `tests/test_synlynk.py`
+- Test: `tests/test_status.py`, `tests/test_doctor_identity_roles.py`, `tests/test_events.py`, `tests/test_hud_buffer.py`, `tests/test_hud_cycles.py`, `tests/test_hud_errors.py`, `tests/test_hud_integration.py`, `tests/test_hud_live.py`, `tests/test_hud_renderer.py`, `tests/test_hud_snapshot.py`, `tests/test_wizard.py`, `tests/test_synlynk.py` (real filenames per repo, corrected from `test_doctor.py`/`test_hud.py` in the original draft — `synlynk/support_engineer.py` has no dedicated test file; its `agent_name` sites are covered indirectly via `tests/test_cost_ledger.py`, run that too if touching `support_engineer.py`)
 
 - [ ] **Step 1: Per file, confirm every `agent_name` occurrence is DB-column-facing (not a genuine Agent-role reference)**
 
@@ -349,7 +403,7 @@ sed -i '' '2230,2270s/\bagent_name\b/harness_name/g; 3300,3460s/\bagent_name\b/h
 
 - [ ] **Step 3: Run the affected test files**
 
-Run: `pytest tests/test_status.py tests/test_doctor.py tests/test_events.py tests/test_support_engineer.py tests/test_hud.py tests/test_wizard.py tests/test_synlynk.py -v`
+Run: `pytest tests/test_status.py tests/test_doctor_identity_roles.py tests/test_events.py tests/test_hud_buffer.py tests/test_hud_cycles.py tests/test_hud_errors.py tests/test_hud_integration.py tests/test_hud_live.py tests/test_hud_renderer.py tests/test_hud_snapshot.py tests/test_wizard.py tests/test_synlynk.py -v`
 Expected: `PASS` after updating any test-side `agent_name=` references in the same line ranges
 
 - [ ] **Step 4: Commit**
@@ -365,7 +419,7 @@ git commit -m "feat: rename remaining agent_name query sites to harness_name (#7
 
 **Files:**
 - Modify: `synlynk/cli.py:338-339` (`probe --agent`), `:811` (`cost log --agent`), `:832` (`credit grant --agent`), `:842-846` (`quota --agent`)
-- Test: `tests/test_cli.py`
+- Test: `tests/test_cli_parser.py`
 
 - [ ] **Step 1: Write the failing deprecation test**
 
@@ -388,7 +442,7 @@ def test_probe_harness_flag_new(monkeypatch):
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pytest tests/test_cli.py -k "agent_flag_deprecated or harness_flag_new" -v`
+Run: `pytest tests/test_cli_parser.py -k "agent_flag_deprecated or harness_flag_new" -v`
 Expected: `FAIL` — `AttributeError: 'Namespace' object has no attribute 'harness'`
 
 - [ ] **Step 3: Add the new flag + deprecated alias for each of the 4 sites**
@@ -455,18 +509,18 @@ Run: `grep -rn "args\.agent\b" synlynk/*.py` and update only the call sites belo
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `pytest tests/test_cli.py -k "agent_flag_deprecated or harness_flag_new" -v`
+Run: `pytest tests/test_cli_parser.py -k "agent_flag_deprecated or harness_flag_new" -v`
 Expected: `PASS`
 
 - [ ] **Step 6: Run the full CLI test suite**
 
-Run: `pytest tests/test_cli.py -v`
+Run: `pytest tests/test_cli_parser.py -v`
 Expected: `PASS`
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add synlynk/cli.py synlynk/*.py tests/test_cli.py
+git add synlynk/cli.py synlynk/*.py tests/test_cli_parser.py
 git commit -m "feat(cli): rename --agent to --harness on probe/cost log/credit grant/quota, deprecate old flag (#786 Plan A, 7/8)"
 ```
 
@@ -476,7 +530,7 @@ git commit -m "feat(cli): rename --agent to --harness on probe/cost log/credit g
 
 **Files:**
 - Modify: `synlynk/costs.py`, `synlynk/jobs.py`, `synlynk/quota.py`, `synlynk/scheduler.py`, `synlynk/tpm_hooks.py`, `synlynk/dispatch.py`, `synlynk/__init__.py`
-- Test: `tests/test_quota.py`, `tests/test_scheduler.py`, `tests/test_costs.py`, matching test files for the other modules
+- Test: `tests/test_agent_quota_tracking.py`, `tests/test_quota_reservation_integration.py`, `tests/test_sentinel_quota_exhaustion.py`, `tests/test_fleet_scheduler.py`, `tests/test_cost_ledger.py`, `tests/test_tpm_hooks.py` (real filenames per repo, corrected from `test_quota.py`/`test_scheduler.py`/`test_costs.py` in the original draft — no files with those exact names exist)
 
 - [ ] **Step 1: Confirm every call site**
 
@@ -498,7 +552,7 @@ For each match, rename `agent` → `harness` in that specific SQL fragment only 
 
 - [ ] **Step 3: Run the affected test files**
 
-Run: `pytest tests/test_quota.py tests/test_scheduler.py tests/test_costs.py -v`
+Run: `pytest tests/test_agent_quota_tracking.py tests/test_quota_reservation_integration.py tests/test_sentinel_quota_exhaustion.py tests/test_fleet_scheduler.py tests/test_cost_ledger.py tests/test_tpm_hooks.py -v`
 Expected: `PASS` after updating test-side table/column references
 
 - [ ] **Step 4: Commit**
