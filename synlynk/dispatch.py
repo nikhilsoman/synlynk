@@ -2228,12 +2228,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
             open_reservation_fn = _pkg("_open_reservation")
             has_reservations_table = _quota_conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_reservations'"
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_reservations'"
             ).fetchone()
             if open_reservation_fn and has_reservations_table:
                 _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
                 existing_reservation = _quota_conn.execute(
-                    "SELECT 1 FROM agent_reservations "
+                    "SELECT 1 FROM harness_reservations "
                     "WHERE status='open' AND job_id=?",
                     (job_id,),
                 ).fetchone()
@@ -2351,7 +2351,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     _task_hint=task,
                 )
             except TypeError:
-                preflight = preflight_fn(harness_name=agent, dispatch_flags=flags, db_conn=_preflight_db)
+                    try:
+                        preflight = preflight_fn(
+                            agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db
+                        )
+                    except TypeError:
+                        raise
         if isinstance(preflight, dict):
             if not preflight.get("passed", False):
                 sentinel_path = os.path.join(".synlynk", "sentinel.md")
@@ -2883,7 +2888,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                 "rescue_agent": None,
                 "output_velocity_bpm": output_velocity_bpm,
             })
-            # #291: roll exec usage into agent_quotas so stage-2 headroom is live
+            # #291: roll exec usage into harness_quotas so stage-2 headroom is live
             refresh_quotas = _pkg("_refresh_agent_quotas_from_telemetry") or _pkg(
                 "refresh_agent_quotas_from_telemetry"
             )

@@ -182,7 +182,7 @@ def test_plan_assigns_ready_story_to_best_capability_agent(scheduler_db):
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     _seed_capability(conn, "codex", "backend", "platform", "unknown", "build", 0.4)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.commit()
@@ -217,7 +217,7 @@ def test_plan_blocks_story_when_all_candidates_quota_exhausted(scheduler_db):
     _seed_story(conn, "story-c", tokens=50000)
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 10000, 10000)"
     )
     conn.commit()
@@ -238,7 +238,7 @@ def test_plan_respects_max_stories(scheduler_db):
     _seed_story(conn, "story-2")
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.commit()
@@ -258,7 +258,7 @@ def test_plan_decrements_fleet_headroom_across_batch_and_blocks_second_story(sch
     _seed_story(conn, "story-2", tokens=6000, priority=2)
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 10000, 0)"
     )
     conn.commit()
@@ -279,11 +279,11 @@ def test_plan_excludes_agent_that_previously_failed_this_story(scheduler_db):
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     _seed_capability(conn, "codex", "backend", "platform", "unknown", "build", 0.3)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('codex', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.execute(
@@ -347,7 +347,7 @@ def test_plan_dry_run_never_writes_to_daemon_jobs(scheduler_db):
     _seed_story(conn, "story-dry")
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.commit()
@@ -360,7 +360,7 @@ def test_plan_dry_run_never_writes_to_daemon_jobs(scheduler_db):
 
 
 def test_plan_degraded_mode_still_produces_a_plan(scheduler_db):
-    """No agent_quotas rows at all -> degraded, non-hard-blocking per design."""
+    """No harness_quotas rows at all -> degraded, non-hard-blocking per design."""
     from synlynk import _get_db
     from synlynk.scheduler import _compute_schedule_plan
 
@@ -419,7 +419,7 @@ def test_enqueue_plan_opens_reservations(scheduler_db):
 
     conn = _get_db()
     rows = conn.execute(
-        "SELECT harness, tokens, scope, job_id, status FROM agent_reservations "
+        "SELECT harness, tokens, scope, job_id, status FROM harness_reservations "
         "WHERE job_id=?",
         (job_ids[0],),
     ).fetchall()
@@ -449,7 +449,7 @@ def test_cmd_schedule_dry_run_prints_plan_and_writes_nothing(scheduler_db, capsy
     _seed_story(conn, "story-dryrun")
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.commit()
@@ -475,7 +475,7 @@ def test_cmd_schedule_execute_enqueues_and_calls_dispatch(scheduler_db, monkeypa
     _seed_story(conn, "story-exec")
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.commit()
@@ -541,7 +541,7 @@ def test_end_to_end_ready_story_flows_to_queued_daemon_job(scheduler_db, monkeyp
     conn = _get_db()
     _seed_capability(conn, "grok", "backend", "platform", "unknown", "build", 0.9)
     conn.execute(
-        "INSERT INTO agent_quotas (agent, model, quota_type, unit, limit_tokens, used_tokens) "
+        "INSERT INTO harness_quotas (harness, model, quota_type, unit, limit_tokens, used_tokens) "
         "VALUES ('grok', 'unknown', '5h', 'tokens', 100000, 0)"
     )
     conn.commit()

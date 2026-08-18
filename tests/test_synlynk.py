@@ -541,13 +541,12 @@ def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkey
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "agy",
-            baseline["cli"],
             "1.0.0",
             json.dumps(baseline["headless_contract"]),
             json.dumps(baseline["dispatch_flags"]),
@@ -558,7 +557,7 @@ def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkey
     db.commit()
 
     result = _preflight_dispatch(
-        agent_name="agy",
+        harness_name="agy",
         dispatch_flags=["--dangerously-skip-permissions"],
         db_conn=db,
     )
@@ -787,7 +786,7 @@ def test_doctor_tc5_fix_uses_targeted_repair(monkeypatch, tmp_path, isolated_db)
     monkeypatch.setattr(synlynk, "_doctor_fix_menu", lambda agent, tc_name, tc: "1")
     called = {}
 
-    def fake_repair(agent_name=None, dry_run=False):
+    def fake_repair(harness_name=None, dry_run=False):
         called["agent_name"] = agent_name
         called["dry_run"] = dry_run
 
@@ -3760,7 +3759,7 @@ def test_llm_enrich_uses_agent_name_not_cli_for_baselines(project_dir, monkeypat
     scan = {"project_name": "p", "description": "", "commit_count": 0,
             "recent_topics": [], "languages": [], "readme_summary": "",
             "top_dirs": [], "has_structured_commits": False}
-    # agent_name="claude" (key in BASELINES), agent_cli="/usr/local/bin/my-claude" (custom path)
+    # harness_name="claude" (key in BASELINES), agent_cli="/usr/local/bin/my-claude" (custom path)
     synlynk._llm_enrich("claude", "/usr/local/bin/my-claude", scan)
     # The command must use the custom cli path, not the key name
     assert captured_cmd[0] == "/usr/local/bin/my-claude"
@@ -4891,7 +4890,7 @@ def test_preflight_blocks_invalid_flag():
     from synlynk import _preflight_dispatch
     # --yes is now invalid for Grok (replaced by --always-approve)
     result = _preflight_dispatch(
-        agent_name="grok",
+        harness_name="grok",
         dispatch_flags=["--yes"],
         db_conn=None,
     )
@@ -4927,13 +4926,12 @@ def test_preflight_blocks_unreachable_endpoint(tmp_path, monkeypatch):
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "grok",
-            baseline["cli"],
             "1.0.0",
             json.dumps(baseline["headless_contract"]),
             json.dumps(baseline["dispatch_flags"]),
@@ -4945,7 +4943,7 @@ def test_preflight_blocks_unreachable_endpoint(tmp_path, monkeypatch):
 
     from synlynk import _preflight_dispatch
     result = _preflight_dispatch(
-        agent_name="grok",
+        harness_name="grok",
         dispatch_flags=["--always-approve"],
         db_conn=db,
     )
@@ -4965,13 +4963,12 @@ def test_preflight_passes_for_valid_claude_dispatch(tmp_path):
     db.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "claude",
-            baseline["cli"],
             "1.0.0",
             json.dumps(baseline["headless_contract"]),
             json.dumps(baseline["dispatch_flags"]),
@@ -4981,7 +4978,7 @@ def test_preflight_passes_for_valid_claude_dispatch(tmp_path):
     )
     db.commit()
     result = _preflight_dispatch(
-        agent_name="claude",
+        harness_name="claude",
         dispatch_flags=["--print", "--dangerously-skip-permissions"],
         db_conn=db,
     )
@@ -6127,13 +6124,12 @@ def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
     conn.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "claude",
-            baseline["cli"],
             "1.0.0",
             _json.dumps(baseline["headless_contract"]),
             _json.dumps(baseline["dispatch_flags"]),
@@ -6309,13 +6305,12 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
     conn.execute(
         """
         INSERT OR REPLACE INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, installed_version, compliance_status,
             active_contract, active_flags, capability_hash, last_probe_at
-        ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+        ) VALUES (?, ?, 'ok', ?, ?, ?, ?)
         """,
         (
             "claude",
-            baseline["cli"],
             "1.0.0",
             _json.dumps(baseline["headless_contract"]),
             _json.dumps(baseline["dispatch_flags"]),

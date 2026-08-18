@@ -53,7 +53,7 @@ def _compute_schedule_plan(max_stories=None) -> dict:
 
     conn = _get_db()
     try:
-        # #291: populate agent_quotas from telemetry before fleet stage-2 gate
+        # #291: populate harness_quotas from telemetry before fleet stage-2 gate
         try:
             _refresh_agent_quotas_from_telemetry(conn=conn)
         except Exception:

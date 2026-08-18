@@ -748,14 +748,25 @@ def _run_tc3(endpoints: list) -> dict:
 def _run_tc4(harness_name: str, db_conn) -> dict:
     """TC-4: Verb map validation."""
     failed = []
-    rows = db_conn.execute(
-        """
-        SELECT synlynk_verb, agent_command, supported
-        FROM harness_verb_map
-        WHERE harness_name=?
-        """,
-        (harness_name,),
-    ).fetchall()
+    try:
+        rows = db_conn.execute(
+            """
+            SELECT synlynk_verb, harness_command, supported
+            FROM harness_verb_map
+            WHERE harness_name=?
+            """,
+            (harness_name,),
+        ).fetchall()
+    except Exception:
+        # Keep TC-4 usable against a caller-supplied pre-rename connection.
+        rows = db_conn.execute(
+            """
+            SELECT synlynk_verb, agent_command, supported
+            FROM harness_verb_map
+            WHERE agent_name=?
+            """,
+            (harness_name,),
+        ).fetchall()
     for verb, cmd_template, supported in rows:
         if supported == "none" or not cmd_template:
             continue
@@ -1021,8 +1032,17 @@ def _repair_sop_body_parts(*parts: str) -> str:
     return "\n\n".join(cleaned) + "\n"
 
 
-def _repair_sops_only(cfg: dict = None, harness_name: str = None, dry_run: bool = False) -> None:
+def _repair_sops_only(
+    cfg: dict = None,
+    harness_name: str = None,
+    dry_run: bool = False,
+    **legacy_kwargs,
+) -> None:
     """Repair missing SOP sections without rewriting unrelated sync artifacts."""
+    if harness_name is None:
+        harness_name = legacy_kwargs.pop("agent_name", None)
+    if legacy_kwargs:
+        raise TypeError(f"unexpected keyword argument: {next(iter(legacy_kwargs))!r}")
     if cfg is None:
         from synlynk import load_config as _load_config
 

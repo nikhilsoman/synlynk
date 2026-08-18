@@ -711,7 +711,10 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             if tc5["missing"].get(agent):
                 choice = _pkg("_doctor_fix_menu")(agent, "tc5", tc5)
                 if choice == "1":
-                    _pkg("_repair_sops_only")(harness_name=agent)
+                    try:
+                        _pkg("_repair_sops_only")(harness_name=agent)
+                    except TypeError:
+                        _pkg("_repair_sops_only")(agent_name=agent)
                 elif choice == "escalate":
                     _pkg("_doctor_maybe_escalate")(agent, {"tc5": tc5})
 

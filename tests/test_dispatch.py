@@ -477,7 +477,7 @@ def test_dispatch_agent_reuses_existing_open_reservation(project_dir, monkeypatc
     job_id = "job-existing-reservation"
     sl._open_reservation(conn, "codex", 2_000, scope="plan", scope_id="run-1", job_id=job_id)
     before = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE job_id=? AND status='open'", (job_id,)
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id=? AND status='open'", (job_id,)
     ).fetchone()[0]
 
     class _P:
@@ -487,7 +487,7 @@ def test_dispatch_agent_reuses_existing_open_reservation(project_dir, monkeypatc
     sl.dispatch_agent("codex", "dispatch reserved task", job_id=job_id, force_agent=True, skip_preflight=True)
 
     after = conn.execute(
-        "SELECT COUNT(*) FROM agent_reservations WHERE job_id=? AND status='open'", (job_id,)
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id=? AND status='open'", (job_id,)
     ).fetchone()[0]
     assert after == before == 1
     conn.close()
@@ -509,7 +509,7 @@ def test_dispatch_agent_opens_reservation_when_headroom_exists(project_dir, monk
     sl.dispatch_agent("codex", "do a small task", force_agent=True, skip_preflight=True)
 
     reservations = conn.execute(
-        "SELECT harness, status FROM agent_reservations WHERE harness='codex'"
+        "SELECT harness, status FROM harness_reservations WHERE harness='codex'"
     ).fetchall()
     assert len(reservations) == 1
     assert reservations[0] == ("codex", "open")

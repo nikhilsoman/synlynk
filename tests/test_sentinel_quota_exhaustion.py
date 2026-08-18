@@ -1,4 +1,4 @@
-"""Tests that sentinel's QUOTA_EXHAUSTED detection actually corrects agent_quotas."""
+"""Tests that sentinel's QUOTA_EXHAUSTED detection actually corrects harness_quotas."""
 
 
 def test_quota_exhausted_detection_calls_force_exhaust(project_dir):
@@ -17,7 +17,7 @@ def test_quota_exhausted_detection_calls_force_exhaust(project_dir):
     )
 
     row = conn.execute(
-        "SELECT limit_tokens, used_tokens FROM agent_quotas WHERE agent='claude' AND quota_type='5h'"
+        "SELECT limit_tokens, used_tokens FROM harness_quotas WHERE harness='claude' AND quota_type='5h'"
     ).fetchone()
     assert row[1] == row[0]
 
@@ -36,6 +36,6 @@ def test_quota_exhausted_detection_noop_when_no_match(project_dir):
     )
 
     row = conn.execute(
-        "SELECT used_tokens FROM agent_quotas WHERE agent='claude' AND quota_type='5h'"
+        "SELECT used_tokens FROM harness_quotas WHERE harness='claude' AND quota_type='5h'"
     ).fetchone()
     assert row[0] == 1_000
