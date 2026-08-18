@@ -620,6 +620,14 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--task-type", default=None, dest="task_type",
         help="Classify the dispatch task (for example, review) for task-specific handling")
     dispatch_parser.add_argument(
+        "--gh-write-target-kind",
+        choices=["issue", "pr"],
+        default=None,
+        dest="gh_write_target_kind",
+        help="Explicitly set the gh-write verification target kind (issue or pr). "
+             "If omitted, defaults to 'pr' when --task-type review is set, else 'issue'.",
+    )
+    dispatch_parser.add_argument(
         "--requires",
         action="append",
         default=[],
@@ -1142,6 +1150,11 @@ def main(argv=None) -> None:
             if not args.agent and not resolved_agent_id:
                 dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
 
+            _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
+            _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
+                "pr" if getattr(args, "task_type", None) == "review" else "issue"
+            )
+
             if getattr(args, "dry_run", False):
                 if not args.task or not args.task.strip():
                     raise ValueError(
@@ -1172,6 +1185,7 @@ def main(argv=None) -> None:
                     )
                 requires_gh_write = getattr(args, "requires_gh_write", False)
                 print(f"capabilities: requires_gh_write={'true' if requires_gh_write else 'false'}")
+                print(f"capabilities: gh_write_target_kind={_resolved_gh_write_target_kind}")
                 print()
                 print("(dry run — no job, worktree, or cost entry created)")
                 return
@@ -1182,6 +1196,7 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=getattr(args, "requires_gh_write", False),
                                  task_type=getattr(args, "task_type", None),
+                                 gh_write_target_kind=_resolved_gh_write_target_kind,
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),

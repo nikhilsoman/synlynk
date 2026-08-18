@@ -669,6 +669,71 @@ def test_cli_dispatch_passes_task_type_flag(project_dir, monkeypatch):
     assert captured["task_type"] == "review"
 
 
+def test_cli_dispatch_infers_pr_gh_write_target_for_review(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["gh_write_target_kind"] = kwargs.get("gh_write_target_kind")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "review PR 1038",
+         "--task-type", "review", "--requires-gh-write", "--issue", "1038"],
+    )
+
+    cli_mod.main()
+
+    assert captured["gh_write_target_kind"] == "pr"
+
+
+def test_cli_dispatch_explicitly_overrides_gh_write_target_kind(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["gh_write_target_kind"] = kwargs.get("gh_write_target_kind")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "review PR 1038",
+         "--task-type", "review", "--gh-write-target-kind", "issue"],
+    )
+
+    cli_mod.main()
+
+    assert captured["gh_write_target_kind"] == "issue"
+
+
+def test_cli_dispatch_defaults_gh_write_target_to_issue(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.cli as cli_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured["gh_write_target_kind"] = kwargs.get("gh_write_target_kind")
+        return {"id": "job-test", "pid": 1, "fence": None}
+
+    monkeypatch.setattr(sl, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["synlynk", "dispatch", "codex", "--task", "do the work"],
+    )
+
+    cli_mod.main()
+
+    assert captured["gh_write_target_kind"] == "issue"
+
+
 def test_review_dispatch_job_stores_task_type(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
