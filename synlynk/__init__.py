@@ -63,6 +63,8 @@ from synlynk.probe import (
     cmd_probe,
     _fence_exists,
     _probe_model_version,
+    _diff_and_queue_new_models,
+    _queue_calibration_sweep,
 )
 from synlynk.fencing import FenceData, render_task_fence
 from synlynk.dispatch import (
