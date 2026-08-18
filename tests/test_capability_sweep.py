@@ -188,3 +188,51 @@ def test_sweep_for_harness_model_writes_calibration_result(tmp_path, monkeypatch
     assert all(r[2] == 0.8 for r in rows)  # quality 8.0 normalized to a 0-1 score
 
 
+def test_sweep_for_harness_model_dispatches_selected_model(tmp_path, monkeypatch):
+    from synlynk import db, capability_sweep
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    monkeypatch.setattr(capability_sweep, "_get_db", lambda: conn)
+    calls = []
+
+    def fake_dispatch(agent, task, **kwargs):
+        calls.append((agent, kwargs))
+        return {"output": "example output"}
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
+    monkeypatch.setattr(
+        capability_sweep,
+        "_verify_calibration_result",
+        lambda *args: {"quality": 8.0, "correct": True},
+    )
+    monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda *args: "codex")
+
+    capability_sweep.cmd_capability_sweep_for_harness_model("agy", "gemini-specific")
+
+    assert calls
+    assert calls[0] == ("agy", {"model": "gemini-specific"})
+
+
+def test_dispatch_calibration_task_passes_model_to_dispatch_agent(monkeypatch):
+    from synlynk import capability_sweep
+
+    calls = []
+
+    def fake_dispatch(agent, task, **kwargs):
+        calls.append((agent, task, kwargs))
+        return {"output": "ok"}
+
+    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", fake_dispatch)
+
+    capability_sweep._dispatch_calibration_task(
+        "agy", "calibrate", model="gemini-specific"
+    )
+
+    assert calls == [
+        (
+            "agy",
+            "calibrate",
+            {"model": "gemini-specific", "force_agent": True, "skip_preflight": True},
+        )
+    ]

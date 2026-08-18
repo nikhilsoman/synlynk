@@ -1765,3 +1765,30 @@ def test_stage0_explore_bonus_injects_cold_start_model_absent_from_candidates(tm
     assert scores["gpt-5.5"] == jobs._STAGE0_BASELINE_SCORE + jobs._STAGE0_EXPLORE_BONUS
     assert scores["gpt-5.5"] < scores["gpt-5"], "injected baseline+bonus must stay below an already-calibrated model's real score"
 
+
+def test_stage0_explore_bonus_excludes_nonmatching_discipline_model(tmp_path, monkeypatch):
+    from synlynk import db, jobs
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    conn.execute(
+        "INSERT INTO harness_models (harness_name, model_id, first_seen_at, last_seen_at, status, discovery_source) "
+        "VALUES ('codex', 'gpt-frontend', '2026-08-18', '2026-08-18', 'active', 'self_report')"
+    )
+    conn.execute(
+        "INSERT INTO capability_calibration_tasks "
+        "(task_id, role, skill, difficulty, prompt_template, created_at) "
+        "VALUES ('frontend-task', 'dev', 'frontend', 'basic', 'x', '2026-08-18')"
+    )
+    conn.execute(
+        "INSERT INTO capability_calibration_results "
+        "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at) "
+        "VALUES ('frontend-result', 'codex', 'gpt-frontend', 'frontend-task', 0.8, 0.01, 'grok', '2026-08-18')"
+    )
+    conn.commit()
+
+    result = jobs._apply_stage0_explore_bonus(
+        conn, [], discipline="backend", phase="build"
+    )
+
+    assert "gpt-frontend" not in {model for _agent, _score, model in result}
