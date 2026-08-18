@@ -167,7 +167,7 @@ class HarnessSnapshot:
         self._path = db_path
 
     def load(self) -> dict:
-        """Return {agent_name: row} or an empty dict on error."""
+        """Return {harness_name: row} or an empty dict on error."""
         try:
             import sqlite3 as _sq
 
@@ -175,7 +175,7 @@ class HarnessSnapshot:
             conn.row_factory = _sq.Row
             rows = conn.execute("SELECT * FROM harness_status").fetchall()
             conn.close()
-            return {row["agent_name"]: dict(row) for row in rows}
+            return {row["harness_name"]: dict(row) for row in rows}
         except Exception:
             return {}
 

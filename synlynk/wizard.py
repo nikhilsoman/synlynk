@@ -691,7 +691,7 @@ def _wiz_screen_agents(scan: dict) -> None:
 def _wiz_screen_roles(scan: dict) -> dict:
     """Screen 5 — agent role assignment.
 
-    Returns dict: {agent_name: role_description}
+    Returns dict: {harness_name: role_description}
     """
     _wiz_clear()
     _wiz_header(step=5, total=6)
@@ -1007,10 +1007,10 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
         print(f"\n  {_GREEN}✓{_RESET} workspace config → {config_path}")
 
         # Write role blocks into agent directive files
-        for agent_name, role_desc in roles.items():
+        for harness_name, role_desc in roles.items():
             fname_map = {"claude": "CLAUDE.md", "agy": "GEMINI.md",
                          "grok": "GROK.md", "codex": "AGENTS.md"}
-            fname = fname_map.get(agent_name)
+            fname = fname_map.get(harness_name)
             if fname and os.path.exists(fname):
                 try:
                     _pkg("_upsert_harness_fence")(

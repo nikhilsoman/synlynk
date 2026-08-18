@@ -273,6 +273,8 @@ def _run_harness_rename_migration(conn) -> None:
         ("harness_verb_map", "agent_name", "harness_name"),
         ("harness_verb_map", "agent_command", "harness_command"),
         ("harness_version_history", "agent_name", "harness_name"),
+        ("cycle_capability", "agent_name", "harness_name"),
+        ("harness_status", "agent_name", "harness_name"),
     ]:
         tcols = {row[1] for row in conn.execute(f"PRAGMA table_info({tbl})")}
         if old_col in tcols and new_col not in tcols:
@@ -544,7 +546,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cycle_capability (
-            agent_name    TEXT NOT NULL,
+            harness_name  TEXT NOT NULL,
             cycle         TEXT NOT NULL,
             support       TEXT NOT NULL DEFAULT 'none',
             notes         TEXT,
@@ -552,12 +554,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             full_count    INTEGER DEFAULT 0,
             partial_count INTEGER DEFAULT 0,
             updated_at    TEXT NOT NULL,
-            PRIMARY KEY (agent_name, cycle)
+            PRIMARY KEY (harness_name, cycle)
         )
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS harness_status (
-            agent_name             TEXT PRIMARY KEY,
+            harness_name           TEXT PRIMARY KEY,
             attach_rate_24h        REAL DEFAULT 0.0,
             attach_point_in_time   INTEGER DEFAULT 0,
             adherence_score        REAL DEFAULT NULL,

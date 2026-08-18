@@ -612,12 +612,12 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             )
 
             db_conn.execute(
-                """
-                INSERT INTO harness_records
-                    (agent_name, harness_name, installed_version, compliance_status,
-                     active_contract, active_flags, last_probe_at, capability_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(agent_name) DO UPDATE SET
+                    """
+                    INSERT INTO harness_records
+                        (harness_name, installed_version, compliance_status,
+                         active_contract, active_flags, last_probe_at, capability_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(harness_name) DO UPDATE SET
                     harness_name=excluded.harness_name,
                     installed_version=excluded.installed_version,
                     compliance_status=excluded.compliance_status,
@@ -626,10 +626,9 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                     last_probe_at=excluded.last_probe_at,
                     capability_hash=excluded.capability_hash
                 """,
-                (
-                    agent,
-                    baseline.get("cli", agent),
-                    "unknown",
+                    (
+                        agent,
+                        "unknown",
                     status,
                     json.dumps(baseline.get("headless_contract", {})),
                     json.dumps(baseline.get("dispatch_flags", {})),
@@ -640,7 +639,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             try:
                 db_conn.execute(
                     """
-                    INSERT INTO harness_version_history (agent_name, cli_version, event_type, recorded_at)
+                    INSERT INTO harness_version_history (harness_name, cli_version, event_type, recorded_at)
                     VALUES (?, ?, 'doctor_run', ?)
                     """,
                     (agent, "unknown", now),
@@ -712,7 +711,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
             if tc5["missing"].get(agent):
                 choice = _pkg("_doctor_fix_menu")(agent, "tc5", tc5)
                 if choice == "1":
-                    _pkg("_repair_sops_only")(agent_name=agent)
+                    _pkg("_repair_sops_only")(harness_name=agent)
                 elif choice == "escalate":
                     _pkg("_doctor_maybe_escalate")(agent, {"tc5": tc5})
 
@@ -724,8 +723,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
         }
         cfg_roles = _pkg("load_config")().get("roles", {})
         roles_issues = []
-        for agent_name in cfg_roles:
-            fname = _DIRECTIVE_MAP.get(agent_name, f"{agent_name}.md")
+        for harness_name in cfg_roles:
+            fname = _DIRECTIVE_MAP.get(harness_name, f"{harness_name}.md")
             if os.path.exists(fname) and not _pkg("_fence_exists")(fname):
                 roles_issues.append(fname)
         if roles_issues:

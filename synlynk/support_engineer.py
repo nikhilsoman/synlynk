@@ -98,7 +98,7 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
         pr_url_to_store = fix_pr_url if investigation["fix_signal"] else ""
         conn.execute(
             "INSERT INTO autopilot_runs "
-            "(id, agent_name, signal_type, signal_hash, severity, summary, status, gh_issue_url, pr_url, story_id, ts) "
+            "(id, harness_name, signal_type, signal_hash, severity, summary, status, gh_issue_url, pr_url, story_id, ts) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
             (run_id, name, finding["type"], finding["signal_hash"],
              finding["severity"], finding["summary"][:200],
@@ -167,13 +167,13 @@ def cmd_agent_list() -> None:
         return
     conn = _pkg("_get_db")()
     for fname in sorted(files):
-        agent_name = fname[:-5]
+        harness_name = fname[:-5]
         row = conn.execute(
-            "SELECT ts, status FROM autopilot_runs WHERE agent_name=? ORDER BY ts DESC LIMIT 1",
-            (agent_name,)
+            "SELECT ts, status FROM autopilot_runs WHERE harness_name=? ORDER BY ts DESC LIMIT 1",
+            (harness_name,)
         ).fetchone()
         last_run = f"{row[0]}  status={row[1]}" if row else "never run"
-        print(f"  {agent_name:<25}  {last_run}")
+        print(f"  {harness_name:<25}  {last_run}")
     conn.close()
 
 def _collect_test_suite(signal_cfg: dict) -> list:
@@ -527,7 +527,7 @@ def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
 
     try:
         rows = db_conn.execute(
-            "SELECT agent_name, support, verb_count, full_count, partial_count "
+            "SELECT harness_name, support, verb_count, full_count, partial_count "
             "FROM cycle_capability WHERE cycle=?",
             (cycle,),
         ).fetchall()
@@ -535,8 +535,8 @@ def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
         rows = []
 
     ranked = []
-    for agent_name, support, verb_count, full_count, partial_count in rows:
-        if agent_name == failed_agent:
+    for harness_name, support, verb_count, full_count, partial_count in rows:
+        if harness_name == failed_agent:
             continue
         support_score = {"full": 300, "partial": 150, "none": 0}.get(support, 0)
         score = (
@@ -545,15 +545,15 @@ def _recommend_handoff_agent(task_text: str, failed_agent: str, db_conn) -> str:
             + int(partial_count or 0) * 5
             + int(verb_count or 0)
         )
-        ranked.append((score, agent_name))
+        ranked.append((score, harness_name))
 
     if ranked:
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return ranked[0][1]
 
-    for agent_name in HARNESS_CAPABILITY_BASELINES:
-        if agent_name != failed_agent:
-            return agent_name
+    for harness_name in HARNESS_CAPABILITY_BASELINES:
+        if harness_name != failed_agent:
+            return harness_name
     return failed_agent
 
 def _stalled_job_ids_from_sentinel(sentinel_text: str) -> set:

@@ -41,7 +41,7 @@ def test_cmd_status_platform_with_harness_record(project_dir, monkeypatch, capsy
     conn.execute(
         """
         INSERT INTO harness_records (
-            agent_name, harness_name, installed_version, compliance_status,
+            harness_name, harness_name, installed_version, compliance_status,
             active_contract, active_flags, last_probe_at, capability_hash
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
