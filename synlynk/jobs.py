@@ -1083,12 +1083,51 @@ def _apply_stage0_explore_bonus(conn, candidates: list, discipline: str, phase: 
     """
     known_models = {model for _agent, _score, model in candidates}
 
+    # Calibration tasks carry the discipline association through their SFIA
+    # skill. Existing capability ratings carry both discipline and phase. A
+    # model with no association is a genuine cold-start model and remains
+    # eligible; a model associated only with another story coordinate does not.
     thin_rows = conn.execute(
-        "SELECT hm.harness_name, hm.model_id FROM harness_models hm "
-        "LEFT JOIN capability_calibration_results ccr "
-        "  ON ccr.model_id = hm.model_id AND ccr.harness_name = hm.harness_name "
-        "WHERE hm.status='active' "
-        "GROUP BY hm.harness_name, hm.model_id HAVING COUNT(ccr.result_id) = 0"
+        """
+        WITH model_associations AS (
+            SELECT agent AS harness_name, model_version AS model_id,
+                   discipline, phase
+            FROM capability_ratings
+            UNION ALL
+            SELECT ccr.harness_name, ccr.model_id,
+                   CASE cct.skill
+                       WHEN 'PROG' THEN 'backend'
+                       WHEN 'TEST' THEN 'testing'
+                       WHEN 'REQM' THEN 'architecture'
+                       ELSE cct.skill
+                   END AS discipline,
+                   NULL AS phase
+            FROM capability_calibration_results ccr
+            JOIN capability_calibration_tasks cct ON cct.task_id = ccr.task_id
+        ), calibration_counts AS (
+            SELECT harness_name, model_id, COUNT(*) AS result_count
+            FROM capability_calibration_results
+            GROUP BY harness_name, model_id
+        )
+        SELECT hm.harness_name, hm.model_id
+        FROM harness_models hm
+        LEFT JOIN calibration_counts cc
+          ON cc.harness_name = hm.harness_name AND cc.model_id = hm.model_id
+        LEFT JOIN model_associations ma
+          ON ma.harness_name = hm.harness_name AND ma.model_id = hm.model_id
+        WHERE hm.status = 'active'
+        GROUP BY hm.harness_name, hm.model_id
+        HAVING COALESCE(MAX(cc.result_count), 0) = 0
+           AND (
+               COUNT(ma.model_id) = 0
+               OR SUM(
+                   CASE WHEN ma.discipline = ?
+                          AND (ma.phase IS NULL OR ma.phase = ?)
+                        THEN 1 ELSE 0 END
+               ) > 0
+           )
+        """,
+        (discipline, phase),
     ).fetchall()
     thin_model_ids = {model_id for _harness_name, model_id in thin_rows}
 

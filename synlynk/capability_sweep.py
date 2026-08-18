@@ -156,7 +156,9 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str) -> 
     now = datetime.now(timezone.utc).isoformat()
     for task_id, role, skill, difficulty, template in tasks:
         prompt = template.format(context=f"a {skill} scenario at {difficulty} difficulty")
-        executor_result = _dispatch_calibration_task(harness_name, prompt)
+        executor_result = _dispatch_calibration_task(
+            harness_name, prompt, model=model_id
+        )
         cost_usd = _extract_task_cost_usd(executor_result)
         total_cost += cost_usd
         if total_cost > cost_cap:
