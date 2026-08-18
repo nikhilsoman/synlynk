@@ -338,6 +338,14 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     if not worktree_path or not worktree_branch:
         return
 
+    if job.get("task_type") == "review" or job.get("requires_gh_write"):
+        print(
+            f"  ⚠ skipping automatic PR creation for {worktree_branch}: "
+            f"job is review/gh-write-only (task_type={job.get('task_type') or 'none'}, "
+            f"requires_gh_write={bool(job.get('requires_gh_write'))})"
+        )
+        return
+
     detect_remote_owner_repo = _pkg("detect_remote_owner_repo")
     if not detect_remote_owner_repo:
         return
