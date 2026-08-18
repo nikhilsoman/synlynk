@@ -187,6 +187,8 @@ def _ensure_daemon_job_gh_write_columns(conn) -> None:
         "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
         "gh_write_target": "TEXT",
         "gh_write_verified": "TEXT",
+        "gh_write_author": "TEXT",
+        "gh_write_expect": "TEXT DEFAULT 'closed'",
     }
     for name, definition in definitions.items():
         if name not in cols:
