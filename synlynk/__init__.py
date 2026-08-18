@@ -178,6 +178,9 @@ from synlynk.context import (
     generate_context,
 )
 from synlynk.jobs import (
+    _STAGE0_BASELINE_SCORE,
+    _STAGE0_EXPLORE_BONUS,
+    _apply_stage0_explore_bonus,
     _best_agent_for_story,
     _capability_candidates_for_story,
     _count_dispatch_rework,
