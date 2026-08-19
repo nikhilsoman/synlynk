@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import time
+from datetime import datetime, timezone
 
 from synlynk.hud import CYCLES
 from synlynk.taxonomy_standards import _taxonomy_label
@@ -294,8 +296,23 @@ def _run_harness_rename_migration(conn) -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status)"
         )
+
+
+def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
+    """Copy a non-trivial on-disk DB before migration can alter its schema."""
+    row = conn.execute("PRAGMA database_list").fetchone()
+    db_path = row[2] if row and len(row) > 2 else ""
+    if not db_path or not os.path.isfile(db_path) or os.path.getsize(db_path) <= 4096:
+        return None
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    backup_path = f"{db_path}.pre-migration-{stamp}.bak"
+    shutil.copy2(db_path, backup_path)
+    return backup_path
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
+    _snapshot_before_migration(conn)
     _run_harness_rename_migration(conn)
     from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
