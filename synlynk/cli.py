@@ -1166,6 +1166,11 @@ def main(argv=None) -> None:
             _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
                 "pr" if getattr(args, "task_type", None) == "review" else "issue"
             )
+            from synlynk.dispatch import _task_requires_gh_write
+            _effective_requires_gh_write = bool(
+                getattr(args, "requires_gh_write", False)
+                or _task_requires_gh_write(args.task, getattr(args, "task_type", None))
+            )
 
             if getattr(args, "dry_run", False):
                 if not args.task or not args.task.strip():
@@ -1181,8 +1186,9 @@ def main(argv=None) -> None:
                     agent_id=resolved_agent_id,
                     story_id=getattr(args, "story_id", None),
                     force_agent=getattr(args, "force_agent", False),
-                    requires_gh_write=getattr(args, "requires_gh_write", False),
+                    requires_gh_write=_effective_requires_gh_write,
                     static_baseline=getattr(args, "static_baseline", False),
+                    task_type=getattr(args, "task_type", None),
                 )
                 print()
                 print(f"agent:        {preview['agent']}")
@@ -1195,7 +1201,7 @@ def main(argv=None) -> None:
                         f"context.md:   sha256={preview['context_digest']}  "
                         f"({preview['context_bytes']:,} bytes)"
                     )
-                requires_gh_write = getattr(args, "requires_gh_write", False)
+                requires_gh_write = preview["requires_gh_write"]
                 print(f"capabilities: requires_gh_write={'true' if requires_gh_write else 'false'}")
                 print(f"capabilities: gh_write_target_kind={_resolved_gh_write_target_kind}")
                 print()
@@ -1206,7 +1212,7 @@ def main(argv=None) -> None:
                                  agent_id=resolved_agent_id,
                                  force_agent=getattr(args, "force_agent", False),
                                  static_baseline=getattr(args, "static_baseline", False),
-                                 requires_gh_write=getattr(args, "requires_gh_write", False),
+                                 requires_gh_write=_effective_requires_gh_write,
                                  task_type=getattr(args, "task_type", None),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
                                  requires=getattr(args, "requires", []),
