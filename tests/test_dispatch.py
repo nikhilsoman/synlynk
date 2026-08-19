@@ -160,10 +160,30 @@ def test_format_prompt_for_agent_omits_codex_gh_write_guardrail_by_default():
     import synlynk.dispatch as dispatch_mod
 
     prompt = dispatch_mod._format_prompt_for_agent(
-        "codex", "context", "story-1", "review the pull request", "", "",
+        "codex", "context", "story-1", "review the local code", "", "",
     )
 
     assert "gh pr review" not in prompt
+
+
+def test_format_prompt_for_agent_auto_detects_issue_closing_task_shape():
+    import synlynk.dispatch as dispatch_mod
+
+    task = (
+        "Close GitHub issues #935 and #701, citing the implementation PR "
+        "and verification job."
+    )
+
+    assert dispatch_mod._task_requires_gh_write(task) is True
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "grok", "context", "story-1", task, "", "",
+        requires_gh_write=False,
+    )
+
+    assert "GitHub Write Instructions (MANDATORY)" in prompt
+    assert "gh issue close" in prompt
+    assert "Do not use MCP GitHub tools" in prompt
+    assert "close_issue" in prompt
 
 
 def test_gh_write_instruction_present_for_grok_when_required():
@@ -202,7 +222,7 @@ def test_gh_write_instruction_absent_when_not_required():
 
     for agent in ("codex", "agy", "grok"):
         prompt = _format_prompt_for_agent(
-            agent, "context", "story-1", "some task", "", "",
+            agent, "context", "story-1", "review code locally", "", "",
             requires_gh_write=False,
         )
         assert "GitHub Write Instructions" not in prompt

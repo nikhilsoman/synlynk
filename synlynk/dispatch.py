@@ -863,8 +863,12 @@ def _check_dispatch_base_still_fresh(job: dict, repo_path: Optional[str] = None)
 def _render_dispatch_preview(agent: str, task: str, context_mode: str,
                               agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
-                              static_baseline: bool = False) -> dict:
+                              static_baseline: bool = False,
+                              task_type: str = None) -> dict:
     """Compute task/context digest data for dispatch inspection."""
+    requires_gh_write = bool(
+        requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
+    )
     agent = resolve_dispatch_harness(
         agent, agent_id=agent_id, story_id=story_id,
         force_agent=force_agent, requires_gh_write=requires_gh_write,
@@ -891,7 +895,33 @@ def _render_dispatch_preview(agent: str, task: str, context_mode: str,
         "context_mode": context_mode,
         "context_digest": context_digest,
         "context_bytes": context_bytes,
+        "requires_gh_write": requires_gh_write,
     }
+
+
+_GH_WRITE_ACTION_RE = re.compile(
+    r"\b(?:approve|close|comment|merge|review|request[- ]changes|"
+    r"submit(?:ting)?\s+(?:a\s+)?review|add_(?:review|comment))\b",
+    re.IGNORECASE,
+)
+_GH_TARGET_RE = re.compile(
+    r"(?:\bgithub\b|\bgh\b|\bpull\s+request\b|\bpr\s*#?\d+\b|"
+    r"\bissues?\s*#?\d+\b|\bissue\b|\bpull\s+requests?\b)",
+    re.IGNORECASE,
+)
+
+
+def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
+    """Infer GitHub-write intent so operators do not have to remember a flag.
+
+    The explicit ``--requires-gh-write`` flag remains the override, while this
+    conservative detector only promotes action words when the task also names
+    GitHub/PR/issue context.
+    """
+    text = task or ""
+    if re.search(r"\bgh\s+(?:issue|pr)\s+(?:review|comment|close|merge)\b", text, re.IGNORECASE):
+        return True
+    return bool(_GH_WRITE_ACTION_RE.search(text) and _GH_TARGET_RE.search(text))
 
 
 def _job_summary_path(job_id: str) -> str:
@@ -1102,17 +1132,23 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task_sha256: Optional[str] = None,
                               *, requires_gh_write: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
+    requires_gh_write = bool(
+        requires_gh_write or _task_requires_gh_write(task)
+    )
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     gh_write_instruction = ""
     if requires_gh_write:
         gh_write_instruction = (
-            "## GitHub Write Instructions\n"
-            "For any PR review or issue/PR comment in this task, use the `gh` "
-            "CLI directly via the shell — e.g. `gh pr review <N> --approve "
-            "--body '...'` (or `--request-changes`/`--comment`) and `gh pr "
-            "comment <N> --body '...'. Do not use MCP GitHub tools for these "
-            "writes; they have a confirmed failure history for this workflow.\n\n"
+            "## GitHub Write Instructions (MANDATORY)\n"
+            "This task requires a real GitHub write. You MUST use the `gh` CLI "
+            "directly through the shell for every write: `gh pr review`, `gh pr "
+            "comment`, `gh pr merge`, `gh issue comment`, or `gh issue close`. "
+            "Do not use MCP GitHub tools for these writes. NEVER call the MCP "
+            "GitHub write tool `close_issue` or any similar `github_*` write "
+            "tool. MCP writes are structurally unreliable "
+            "in dispatched sessions and have caused confirmed silent cancellations. "
+            "After running `gh`, verify its exit status and report the result.\n\n"
         )
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
@@ -2102,6 +2138,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    # Keep the explicit flag as an override, but infer the same safety and
+    # identity requirements for obvious GitHub-write task shapes (#659).
+    requires_gh_write = bool(
+        requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
+    )
     agent = resolve_dispatch_harness(
         agent, agent_id=agent_id, story_id=story_id,
         force_agent=force_agent, requires_gh_write=requires_gh_write,
