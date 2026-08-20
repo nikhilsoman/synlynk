@@ -126,6 +126,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [118](./118-pr993-agent-harness-rename.md) | PR #993 — Freeing `agent` from `harness` | [#993](https://github.com/nikhilsoman/synlynk/pull/993) | 2026-08-16 |
 | **[119](./119-v0.14.0-truth-and-identity.md)** | **v0.14.0 — Truth in the Pipe, Identity for the Agents (Named Release)** | [v0.14.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.14.0) | **2026-08-16** |
 | [120](./120-pr1022-agent-roles-phase1-followups.md) | PR #1022 — Agent-Roles-Charters Phase 1 Follow-Ups: Closing the Footguns | [#1022](https://github.com/nikhilsoman/synlynk/pull/1022) | 2026-08-17 |
+| [121](./121-pr1030-agent-roles-phase2-memory-gated-learning.md) | PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something | [#1030](https://github.com/nikhilsoman/synlynk/pull/1030) | 2026-08-18 |
+| [122](./122-pr1074-1075-gh-write-reliability-and-broker-design.md) | PR #1074 / #1075 — GitHub-Write Reliability, and the Spec for the Next Step | [#1074](https://github.com/nikhilsoman/synlynk/pull/1074), [#1075](https://github.com/nikhilsoman/synlynk/pull/1075) | 2026-08-19 |
 
 ## Per-PR Post Template
 
