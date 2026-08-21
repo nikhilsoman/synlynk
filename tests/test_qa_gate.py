@@ -1,5 +1,6 @@
 from unittest.mock import patch
 import json
+import synlynk
 
 from synlynk.qa_gate import _qa_gate_ci_status, _qa_gate_sentinel_health, qa_gate_verdict
 
@@ -105,3 +106,17 @@ def test_qa_gate_verdict_fails_closed_when_sentinel_status_undeterminable():
         verdict = qa_gate_verdict("owner", "repo")
     assert verdict["verdict"] == "red"
     assert "undeterminable" in verdict["reason"].lower()
+
+
+def test_load_config_defaults_qa_gate_mode_to_block_only(project_dir):
+    config = synlynk.load_config()
+    assert config["qa_gate_mode"] == "block-only"
+
+
+def test_load_config_preserves_explicit_qa_gate_mode(project_dir):
+    config_path = project_dir / ".synlynk" / "config.json"
+    existing = json.loads(config_path.read_text()) if config_path.exists() else {}
+    existing["qa_gate_mode"] = "block-only"
+    config_path.write_text(json.dumps(existing))
+    config = synlynk.load_config()
+    assert config["qa_gate_mode"] == "block-only"

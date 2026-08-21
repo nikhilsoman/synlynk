@@ -1653,6 +1653,7 @@ def load_config() -> dict:
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
+        "qa_gate_mode": "block-only",
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
