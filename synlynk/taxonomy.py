@@ -151,6 +151,9 @@ COMMAND_TAXONOMY = [
     {"command": "pr check", "governs_stage": "release", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["is this PR's model version attested"], "hook_event": None},
+    {"command": "pr gate-status", "governs_stage": "release", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["qa merge gate status", "is the qa-gate green"], "hook_event": None},
     {"command": "ops report", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": [
