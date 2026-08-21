@@ -51,6 +51,52 @@ def test_prevent_global_state_db_corruption_from_migration_snapshot(tmp_path):
     assert snapshots[0].stat().st_size >= 4096
 
 
+def test_live5__migrate_db_copies_the_entire_state_db_only_once(tmp_path):
+    from synlynk.db import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE legacy (payload TEXT)")
+    conn.execute("INSERT INTO legacy VALUES (?)", ("x" * 8192,))
+    conn.commit()
+
+    _migrate_db(conn)
+    before = len(list(tmp_path.glob("state.db.pre-migration-*.bak")))
+    _migrate_db(conn)
+    after = len(list(tmp_path.glob("state.db.pre-migration-*.bak")))
+
+    assert before == 1
+    assert after == before
+
+
+def test_live5__harness_rename_is_safe_when_both_reservation_tables_exist():
+    from synlynk.db import _run_harness_rename_migration
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE agent_reservations (id INTEGER PRIMARY KEY, harness TEXT, status TEXT);
+        CREATE TABLE harness_reservations (id INTEGER PRIMARY KEY, harness TEXT, status TEXT);
+        """
+    )
+
+    _run_harness_rename_migration(conn)
+
+
+def test_live5__migrate_db_older_schema_creates_one_backup(tmp_path):
+    from synlynk.db import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE old_state (payload TEXT)")
+    conn.execute("INSERT INTO old_state VALUES (?)", ("x" * 8192,))
+    conn.commit()
+
+    _migrate_db(conn)
+
+    assert len(list(tmp_path.glob("state.db.pre-migration-*.bak"))) == 1
+
+
 SEED_ROLES = ["dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot"]
 
 
