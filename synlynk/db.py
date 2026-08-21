@@ -57,6 +57,11 @@ _ORG_DOMAIN_DRIFT_MAP = {
 
 _PROJECT_DOC_KEEP_N = 50
 
+# Bump when a new schema migration is added.  This is deliberately kept in
+# SQLite's small built-in metadata slot so checking it does not touch the DB
+# file or create a backup on already-migrated connections.
+_DB_MIGRATION_VERSION = 1
+
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
     "roadmap.md": "_generate_roadmap_md",
@@ -302,7 +307,10 @@ def _run_harness_rename_migration(conn) -> None:
         conn.execute("ALTER TABLE agent_quotas RENAME TO harness_quotas")
         conn.execute("DROP INDEX IF EXISTS idx_agent_quotas_agent")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)")
-    if _table_exists(conn, "agent_reservations"):
+    if (
+        _table_exists(conn, "agent_reservations")
+        and not _table_exists(conn, "harness_reservations")
+    ):
         conn.execute("ALTER TABLE agent_reservations RENAME TO harness_reservations")
         conn.execute("DROP INDEX IF EXISTS idx_agent_reservations_harness")
         conn.execute(
@@ -324,7 +332,9 @@ def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
 
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
-    _snapshot_before_migration(conn)
+    migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if migration_version < _DB_MIGRATION_VERSION:
+        _snapshot_before_migration(conn)
     _run_harness_rename_migration(conn)
     from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
@@ -1122,6 +1132,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         )
     conn.commit()
     _seed_verb_map(conn)
+    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+    conn.commit()
 
 
 _VALID_COST_SOURCES = {
