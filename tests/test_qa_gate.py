@@ -1,5 +1,6 @@
 from unittest.mock import patch
 import json
+import pytest
 import synlynk
 
 from synlynk.qa_gate import _qa_gate_ci_status, _qa_gate_sentinel_health, qa_gate_verdict
@@ -120,3 +121,58 @@ def test_load_config_preserves_explicit_qa_gate_mode(project_dir):
     config_path.write_text(json.dumps(existing))
     config = synlynk.load_config()
     assert config["qa_gate_mode"] == "block-only"
+
+
+def test_cmd_pr_gate_status_exits_zero_on_green(capsys):
+    from synlynk.qa_gate import cmd_pr_gate_status
+    green_verdict = {
+        "verdict": "green", "ci_status": True, "sentinel_status": True,
+        "reason": "CI green, no unresolved sentinel alert",
+    }
+    with patch("synlynk.qa_gate.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.qa_gate.qa_gate_verdict", return_value=green_verdict):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_gate_status()
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "green" in captured.out.lower()
+
+
+def test_cmd_pr_gate_status_exits_one_on_red(capsys):
+    from synlynk.qa_gate import cmd_pr_gate_status
+    red_verdict = {
+        "verdict": "red", "ci_status": False, "sentinel_status": True,
+        "reason": "CI matrix is red",
+    }
+    with patch("synlynk.qa_gate.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.qa_gate.qa_gate_verdict", return_value=red_verdict):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_gate_status()
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "red" in captured.out.lower()
+
+
+def test_cmd_pr_gate_status_exits_one_when_remote_undetectable(capsys):
+    from synlynk.qa_gate import cmd_pr_gate_status
+    with patch("synlynk.qa_gate.detect_remote_owner_repo", return_value=(None, None)):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_gate_status()
+    assert exc_info.value.code == 1
+
+
+def test_cli_pr_gate_status_invokes_cmd(monkeypatch):
+    import sys
+    from synlynk import cli
+
+    called = {}
+
+    def fake_cmd():
+        called["ran"] = True
+        raise SystemExit(0)
+
+    monkeypatch.setattr("synlynk.qa_gate.cmd_pr_gate_status", fake_cmd)
+    monkeypatch.setattr(sys, "argv", ["synlynk", "pr", "gate-status"])
+    with pytest.raises(SystemExit):
+        cli.main()
+    assert called.get("ran") is True

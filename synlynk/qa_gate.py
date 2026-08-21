@@ -95,3 +95,24 @@ def qa_gate_verdict(owner: str, repo: str, worktree_path=None, worktree_branch=N
         "sentinel_status": sentinel_status,
         "reason": reason,
     }
+
+
+def cmd_pr_gate_status() -> None:
+    """Thin CLI entry point for the qa block-only gate, scoped for CI.
+
+    Unlike `synlynk pr check`, this only computes qa_gate_verdict() — no
+    local DB state, no devlog audit. This is what the qa-gate GitHub Actions
+    job runs, and its exit code is what a branch-protection required check
+    on that job name enforces.
+    """
+    owner, repo = detect_remote_owner_repo()
+    if not owner or not repo:
+        print("  🚫 [qa gate] could not determine GitHub owner/repo — failing closed")
+        raise SystemExit(1)
+
+    verdict = qa_gate_verdict(owner, repo)
+    if verdict["verdict"] == "red":
+        print(f"  🚫 [qa gate] RED — {verdict['reason']}")
+        raise SystemExit(1)
+    print(f"  ✓ [qa gate] GREEN — {verdict['reason']}")
+    raise SystemExit(0)

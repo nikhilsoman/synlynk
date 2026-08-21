@@ -1,0 +1,21 @@
+name: qa-gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  qa-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run qa block-only merge gate
+        run: python3 bin/synlynk.py pr gate-status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

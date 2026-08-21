@@ -55,6 +55,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `schedule` (primary) — execute
 - `release` (primary) — release
 - `pr check` (primary) — release
+- `pr gate-status` (secondary) — release
 - `ops report` (primary) — sustain
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain
