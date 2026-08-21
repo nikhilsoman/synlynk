@@ -12,6 +12,18 @@ from datetime import datetime, timezone
 from synlynk.hud import CYCLES
 from synlynk.taxonomy_standards import _taxonomy_label
 
+
+def detect_remote_owner_repo() -> tuple:
+    from synlynk import detect_remote_owner_repo as _detect_remote_owner_repo
+
+    return _detect_remote_owner_repo()
+
+
+def qa_gate_verdict(owner: str, repo: str) -> dict:
+    from synlynk.qa_gate import qa_gate_verdict as _qa_gate_verdict
+
+    return _qa_gate_verdict(owner, repo)
+
 _ORG_DOMAINS = (
     "personalization",
     "monetization",
@@ -3005,6 +3017,17 @@ def cmd_pr_check() -> None:
         if pr_number is not None:
             changes_requested_count = _extract_pr_review_cycles() or 0
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
+
+        owner, repo = detect_remote_owner_repo()
+        if owner and repo:
+            gate = qa_gate_verdict(owner, repo)
+            if gate["verdict"] == "red":
+                conn.close()
+                print(f"\n  🚫 [PR CHECK BLOCKED] qa gate is red: {gate['reason']}")
+                print("  This is qa's block-only merge gate (CI matrix + sentinel health)\n")
+                print("  See docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md\n")
+                raise SystemExit(1)
+            print(f"  {_GREEN}✓{_RESET} qa gate green — {gate['reason']}")
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"
