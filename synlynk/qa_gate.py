@@ -6,6 +6,7 @@ See docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md.
 """
 
 import json
+import os
 import subprocess
 from typing import Optional
 
@@ -110,7 +111,8 @@ def cmd_pr_gate_status() -> None:
         print("  🚫 [qa gate] could not determine GitHub owner/repo — failing closed")
         raise SystemExit(1)
 
-    verdict = qa_gate_verdict(owner, repo)
+    worktree_branch = os.environ.get("GITHUB_HEAD_REF") or None
+    verdict = qa_gate_verdict(owner, repo, worktree_branch=worktree_branch)
     if verdict["verdict"] == "red":
         print(f"  🚫 [qa gate] RED — {verdict['reason']}")
         raise SystemExit(1)

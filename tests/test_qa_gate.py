@@ -1,5 +1,6 @@
 from unittest.mock import patch
 import json
+import os
 import pytest
 import synlynk
 
@@ -151,6 +152,41 @@ def test_cmd_pr_gate_status_exits_one_on_red(capsys):
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "red" in captured.out.lower()
+
+
+def test_cmd_pr_gate_status_passes_github_head_ref_as_worktree_branch():
+    from synlynk.qa_gate import cmd_pr_gate_status
+    green_verdict = {
+        "verdict": "green", "ci_status": True, "sentinel_status": True,
+        "reason": "CI green, no unresolved sentinel alert",
+    }
+    with patch("synlynk.qa_gate.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.qa_gate.qa_gate_verdict", return_value=green_verdict) as mock_verdict, \
+         patch.dict("os.environ", {"GITHUB_HEAD_REF": "feat/qa-gate-ci-workflow"}):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_gate_status()
+    assert exc_info.value.code == 0
+    mock_verdict.assert_called_once_with(
+        "nikhilsoman", "synlynk", worktree_branch="feat/qa-gate-ci-workflow"
+    )
+
+
+def test_cmd_pr_gate_status_worktree_branch_none_when_github_head_ref_unset():
+    from synlynk.qa_gate import cmd_pr_gate_status
+    green_verdict = {
+        "verdict": "green", "ci_status": True, "sentinel_status": True,
+        "reason": "CI green, no unresolved sentinel alert",
+    }
+    env = {k: v for k, v in os.environ.items() if k != "GITHUB_HEAD_REF"}
+    with patch("synlynk.qa_gate.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.qa_gate.qa_gate_verdict", return_value=green_verdict) as mock_verdict, \
+         patch.dict("os.environ", env, clear=True):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_gate_status()
+    assert exc_info.value.code == 0
+    mock_verdict.assert_called_once_with(
+        "nikhilsoman", "synlynk", worktree_branch=None
+    )
 
 
 def test_cmd_pr_gate_status_exits_one_when_remote_undetectable(capsys):
