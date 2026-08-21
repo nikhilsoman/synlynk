@@ -1,7 +1,7 @@
 from unittest.mock import patch
 import json
 
-from synlynk.qa_gate import _qa_gate_ci_status, _qa_gate_sentinel_health
+from synlynk.qa_gate import _qa_gate_ci_status, _qa_gate_sentinel_health, qa_gate_verdict
 
 
 def test_qa_gate_ci_status_green_when_ci_passes():
@@ -64,3 +64,44 @@ def test_qa_gate_sentinel_health_none_when_gh_errors():
 def test_qa_gate_sentinel_health_none_on_malformed_json():
     with patch("subprocess.run", return_value=_mock_gh_issue_list("not json")):
         assert _qa_gate_sentinel_health("owner", "repo") is None
+
+
+def test_qa_gate_verdict_green_when_both_signals_healthy():
+    with patch("synlynk.qa_gate._qa_gate_ci_status", return_value=True), \
+         patch("synlynk.qa_gate._qa_gate_sentinel_health", return_value=True):
+        verdict = qa_gate_verdict("owner", "repo")
+    assert verdict["verdict"] == "green"
+    assert verdict["ci_status"] is True
+    assert verdict["sentinel_status"] is True
+
+
+def test_qa_gate_verdict_red_when_ci_fails():
+    with patch("synlynk.qa_gate._qa_gate_ci_status", return_value=False), \
+         patch("synlynk.qa_gate._qa_gate_sentinel_health", return_value=True):
+        verdict = qa_gate_verdict("owner", "repo")
+    assert verdict["verdict"] == "red"
+    assert "CI" in verdict["reason"]
+
+
+def test_qa_gate_verdict_red_when_sentinel_unhealthy():
+    with patch("synlynk.qa_gate._qa_gate_ci_status", return_value=True), \
+         patch("synlynk.qa_gate._qa_gate_sentinel_health", return_value=False):
+        verdict = qa_gate_verdict("owner", "repo")
+    assert verdict["verdict"] == "red"
+    assert "sentinel" in verdict["reason"].lower()
+
+
+def test_qa_gate_verdict_fails_closed_when_ci_status_undeterminable():
+    with patch("synlynk.qa_gate._qa_gate_ci_status", return_value=None), \
+         patch("synlynk.qa_gate._qa_gate_sentinel_health", return_value=True):
+        verdict = qa_gate_verdict("owner", "repo")
+    assert verdict["verdict"] == "red"
+    assert "undeterminable" in verdict["reason"].lower()
+
+
+def test_qa_gate_verdict_fails_closed_when_sentinel_status_undeterminable():
+    with patch("synlynk.qa_gate._qa_gate_ci_status", return_value=True), \
+         patch("synlynk.qa_gate._qa_gate_sentinel_health", return_value=None):
+        verdict = qa_gate_verdict("owner", "repo")
+    assert verdict["verdict"] == "red"
+    assert "undeterminable" in verdict["reason"].lower()

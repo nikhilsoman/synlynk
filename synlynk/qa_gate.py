@@ -68,3 +68,30 @@ def _qa_gate_sentinel_health(owner: str, repo: str) -> Optional[bool]:
         if any(marker in upper for marker in _HIGH_SEVERITY_MARKERS):
             return False
     return True
+
+
+def qa_gate_verdict(owner: str, repo: str, worktree_path=None, worktree_branch=None) -> dict:
+    """Combines CI status and sentinel health into one fail-closed verdict."""
+    ci_status = _qa_gate_ci_status(
+        worktree_path=worktree_path, worktree_branch=worktree_branch
+    )
+    sentinel_status = _qa_gate_sentinel_health(owner, repo)
+
+    if ci_status is None:
+        reason = "CI status undeterminable — failing closed"
+    elif sentinel_status is None:
+        reason = "sentinel health undeterminable — failing closed"
+    elif ci_status is False:
+        reason = "CI matrix is red"
+    elif sentinel_status is False:
+        reason = "unresolved high-severity sentinel alert open"
+    else:
+        reason = "CI green, no unresolved sentinel alert"
+
+    verdict = "green" if (ci_status is True and sentinel_status is True) else "red"
+    return {
+        "verdict": verdict,
+        "ci_status": ci_status,
+        "sentinel_status": sentinel_status,
+        "reason": reason,
+    }
