@@ -61,7 +61,7 @@ _CAPABILITY_ALLOCATION_SOP = """\
 | HTML/CSS/content/docs | Agy | HTML, CSS, content, docs |
 | canvas/JS/infra | Grok | canvas, JS, infra |
 | PM/review/deploy/brainstorm | Claude | PM, review, deploy, brainstorm |
-| GitHub write actions | **Grok only** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` (Agy is viable only when an operator has already confirmed scoped allow-rules in `~/.gemini/antigravity-cli/settings.json`) |
+| GitHub write actions | **claude, Agy fallback** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` — claude by default (live-verified 2026-08-23); Agy viable only when an operator has already confirmed scoped allow-rules in the local Antigravity CLI settings file; the Grok harness's dispatch sandbox denies shell execution entirely in this environment, do not route here |
 Do not start a task outside your role column without explicit Claude approval.
 
 **GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)
@@ -1029,7 +1029,7 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
         *rows,
         f"Do not start a task outside your role column without explicit approval from {escalation_target}.",
         "",
-        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)\n- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic \"OK, exit 0\" job status — do not trust job-status alone for Grok gh-write attempts)\n- Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design\n- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)\n-",
+        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)\n- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic \"OK, exit 0\" job status — do not trust job-status alone for Grok gh-write attempts)\n- Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design\n- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)",
         "",
         "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
         "rather than synlynk's default fleet assumptions.",
