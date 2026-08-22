@@ -635,6 +635,77 @@ def test_resolve_dispatch_permissions_grant_expands():
     assert "write:src/" in perms
 
 
+def test_dispatch_agent_gh_write_auto_implies_run_shell(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import types
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_permissions_to_flags(agent, permissions):
+        captured["agent"] = agent
+        captured["permissions"] = list(permissions)
+        return []
+
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *a, **kw: types.SimpleNamespace(pid=1),
+    )
+
+    dispatch_mod.dispatch_agent(
+        "claude", "do a review #123", task_type="review",
+        requires_gh_write=True, force_agent=True, role="qa",
+        context_mode="none", skip_preflight=True,
+    )
+
+    assert "run:shell" in captured["permissions"]
+
+
+def test_dispatch_agent_non_gh_write_does_not_add_run_shell(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import types
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_permissions_to_flags(agent, permissions):
+        captured["permissions"] = list(permissions)
+        return []
+
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *a, **kw: types.SimpleNamespace(pid=1),
+    )
+
+    dispatch_mod.dispatch_agent(
+        "claude", "implement a small fix", task_type="implement",
+        requires_gh_write=False, force_agent=True,
+        context_mode="none", skip_preflight=True,
+    )
+
+    assert "run:shell" not in captured["permissions"]
+
+
 def test_resolve_dispatch_permissions_revoke_removes():
     from synlynk.dispatch import _resolve_dispatch_permissions
 
