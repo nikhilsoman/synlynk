@@ -3,6 +3,7 @@
 **Date:** 2026-08-20
 **Status:** Approved by Nikhil (brainstorm dialogue, this session) — amends `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md`
 **Origin:** Explicitly deferred in `docs/superpowers/specs/2026-08-19-gh-write-broker-design.md` §9 Out of Scope, as its own follow-up PR.
+**Applied:** 2026-08-22 — `block-only` implemented (#1082, #1083, #1084, #1089) and `qa-gate` is a live required status check on `main`'s branch protection. See `docs/blog/123-pr1082-1089-qa-merge-gate-live5.md` for the implementation writeup.
 
 ## 1. Problem
 
