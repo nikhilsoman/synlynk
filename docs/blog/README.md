@@ -128,6 +128,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [120](./120-pr1022-agent-roles-phase1-followups.md) | PR #1022 — Agent-Roles-Charters Phase 1 Follow-Ups: Closing the Footguns | [#1022](https://github.com/nikhilsoman/synlynk/pull/1022) | 2026-08-17 |
 | [121](./121-pr1030-agent-roles-phase2-memory-gated-learning.md) | PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something | [#1030](https://github.com/nikhilsoman/synlynk/pull/1030) | 2026-08-18 |
 | [122](./122-pr1074-1075-gh-write-reliability-and-broker-design.md) | PR #1074 / #1075 — GitHub-Write Reliability, and the Spec for the Next Step | [#1074](https://github.com/nikhilsoman/synlynk/pull/1074), [#1075](https://github.com/nikhilsoman/synlynk/pull/1075) | 2026-08-19 |
+| [123](./123-pr1082-1089-qa-merge-gate-live5.md) | PRs #1082–#1089 — Shipping the QA Merge Gate, and the Bug It Found on the Way | [#1082](https://github.com/nikhilsoman/synlynk/pull/1082), [#1083](https://github.com/nikhilsoman/synlynk/pull/1083), [#1084](https://github.com/nikhilsoman/synlynk/pull/1084), [#1086](https://github.com/nikhilsoman/synlynk/pull/1086), [#1088](https://github.com/nikhilsoman/synlynk/pull/1088), [#1089](https://github.com/nikhilsoman/synlynk/pull/1089) | 2026-08-21/22 |
 
 ## Per-PR Post Template
 

@@ -1219,8 +1219,8 @@ def test_wire_the_2_dead_auto_signals_and_add_the_pr_review_cycles_from_pr_revie
     "ci_stdout, ci_returncode, expected",
     [
         ("no checks reported", 1, None),
-        ("✓ build passed", 0, 1),
-        ("✗ build failed", 1, 0),
+        ("test (3.12)\tpass\t1m0s\thttps://example.com/check", 0, 1),
+        ("test (3.12)\tfail\t1m0s\thttps://example.com/check", 1, 0),
     ],
 )
 def test_wire_the_2_dead_auto_signals_and_add_the_verified_by_ci_can_be_null_true_false(

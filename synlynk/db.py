@@ -12,6 +12,18 @@ from datetime import datetime, timezone
 from synlynk.hud import CYCLES
 from synlynk.taxonomy_standards import _taxonomy_label
 
+
+def detect_remote_owner_repo() -> tuple:
+    from synlynk import detect_remote_owner_repo as _detect_remote_owner_repo
+
+    return _detect_remote_owner_repo()
+
+
+def qa_gate_verdict(owner: str, repo: str) -> dict:
+    from synlynk.qa_gate import qa_gate_verdict as _qa_gate_verdict
+
+    return _qa_gate_verdict(owner, repo)
+
 _ORG_DOMAINS = (
     "personalization",
     "monetization",
@@ -44,6 +56,11 @@ _ORG_DOMAIN_DRIFT_MAP = {
 }
 
 _PROJECT_DOC_KEEP_N = 50
+
+# Bump when a new schema migration is added.  This is deliberately kept in
+# SQLite's small built-in metadata slot so checking it does not touch the DB
+# file or create a backup on already-migrated connections.
+_DB_MIGRATION_VERSION = 1
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -290,7 +307,10 @@ def _run_harness_rename_migration(conn) -> None:
         conn.execute("ALTER TABLE agent_quotas RENAME TO harness_quotas")
         conn.execute("DROP INDEX IF EXISTS idx_agent_quotas_agent")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)")
-    if _table_exists(conn, "agent_reservations"):
+    if (
+        _table_exists(conn, "agent_reservations")
+        and not _table_exists(conn, "harness_reservations")
+    ):
         conn.execute("ALTER TABLE agent_reservations RENAME TO harness_reservations")
         conn.execute("DROP INDEX IF EXISTS idx_agent_reservations_harness")
         conn.execute(
@@ -312,7 +332,9 @@ def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
 
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
-    _snapshot_before_migration(conn)
+    migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if migration_version < _DB_MIGRATION_VERSION:
+        _snapshot_before_migration(conn)
     _run_harness_rename_migration(conn)
     from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
@@ -1110,6 +1132,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         )
     conn.commit()
     _seed_verb_map(conn)
+    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+    conn.commit()
 
 
 _VALID_COST_SOURCES = {
@@ -3005,6 +3029,17 @@ def cmd_pr_check() -> None:
         if pr_number is not None:
             changes_requested_count = _extract_pr_review_cycles() or 0
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
+
+        owner, repo = detect_remote_owner_repo()
+        if owner and repo:
+            gate = qa_gate_verdict(owner, repo)
+            if gate["verdict"] == "red":
+                conn.close()
+                print(f"\n  🚫 [PR CHECK BLOCKED] qa gate is red: {gate['reason']}")
+                print("  This is qa's block-only merge gate (CI matrix + sentinel health)\n")
+                print("  See docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md\n")
+                raise SystemExit(1)
+            print(f"  {_GREEN}✓{_RESET} qa gate green — {gate['reason']}")
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"

@@ -264,14 +264,27 @@ def _extract_verified_by_ci(worktree_path=None, worktree_branch=None):
         result = None
 
     if result is not None:
-        output = "\n".join(part for part in [result.stdout or "", result.stderr or ""] if part).lower()
-        if any(phrase in output for phrase in ("no pull request", "no pull requests", "no checks", "not found")):
-            return None
-        if any(phrase in output for phrase in ("fail", "failure", "errored")):
-            return False
-        if result.returncode == 0 and any(phrase in output for phrase in ("pass", "success", "succeeded")):
-            return True
-        if result.returncode == 0 and not output.strip():
+        # Only the test-matrix jobs (e.g. "test (3.8)") count. Ignore the
+        # in-progress qa-gate row — gh reports it as pending while this job
+        # is the one asking, and that used to make the whole blob fail-closed.
+        test_statuses = []
+        for raw_line in (result.stdout or "").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            fields = line.split("\t")
+            name = (fields[0] or "").strip()
+            if not name.lower().startswith("test"):
+                continue
+            status = (fields[1] if len(fields) > 1 else "").strip().lower()
+            test_statuses.append(status)
+        if test_statuses:
+            for status in test_statuses:
+                if "fail" in status or "error" in status:
+                    return False
+            for status in test_statuses:
+                if status not in ("pass", "success", "succeeded"):
+                    return None
             return True
 
     try:

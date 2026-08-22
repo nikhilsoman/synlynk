@@ -881,6 +881,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr_parser = subparsers.add_parser("pr", help="PR workflow commands")
     pr_sub = pr_parser.add_subparsers(dest="pr_action")
     pr_sub.add_parser("check", help="Block PR if model versions are unattested")
+    pr_sub.add_parser("gate-status", help="qa block-only merge gate (CI matrix + sentinel health)")
 
     capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
     capability_sub = capability_parser.add_subparsers(dest="capability_action")
@@ -1381,6 +1382,9 @@ def main(argv=None) -> None:
     elif args.command == "pr":
         if args.pr_action == "check":
             cmd_pr_check()
+        elif args.pr_action == "gate-status":
+            from synlynk.qa_gate import cmd_pr_gate_status
+            cmd_pr_gate_status()
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
