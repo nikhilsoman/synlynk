@@ -1,10 +1,49 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import json
 import os
 import pytest
 import synlynk
 
-from synlynk.qa_gate import _qa_gate_ci_status, _qa_gate_sentinel_health, qa_gate_verdict
+from synlynk.qa_gate import (
+    _qa_gate_ci_status,
+    _qa_gate_sentinel_health,
+    _qa_gate_mode,
+    _gh_pr_changed_files,
+    qa_gate_verdict,
+)
+
+
+def test_qa_gate_mode_defaults_to_block_only_when_key_absent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "synlynk").mkdir()
+    (tmp_path / "synlynk" / "config.json").write_text('{}')
+    assert _qa_gate_mode() == 'block-only'
+
+
+def test_qa_gate_mode_reads_configured_value(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "synlynk").mkdir()
+    (tmp_path / "synlynk" / "config.json").write_text('{"qa_gate_mode": "merge-restricted-classes"}')
+    assert _qa_gate_mode() == 'merge-restricted-classes'
+
+
+def test_qa_gate_mode_defaults_to_block_only_when_config_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert _qa_gate_mode() == 'block-only'
+
+
+def test_gh_pr_changed_files_parses_gh_output():
+    result = MagicMock(returncode=0, stdout='docs/a.md\ndocs/b.md\n')
+    with patch('subprocess.run', return_value=result) as mock_run:
+        files = _gh_pr_changed_files(1234)
+    assert files == ['docs/a.md', 'docs/b.md']
+    assert mock_run.call_args.args[0] == ['gh', 'pr', 'diff', '1234', '--name-only']
+
+
+def test_gh_pr_changed_files_returns_empty_list_on_gh_failure():
+    result = MagicMock(returncode=1, stdout='')
+    with patch('subprocess.run', return_value=result):
+        assert _gh_pr_changed_files(1234) == []
 
 
 def test_qa_gate_ci_status_green_when_ci_passes():

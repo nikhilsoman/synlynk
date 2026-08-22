@@ -14,6 +14,30 @@ from synlynk.sentinel import _extract_verified_by_ci
 from synlynk import detect_remote_owner_repo
 
 
+def _qa_gate_mode() -> str:
+    try:
+        with open("synlynk/config.json") as f:
+            config = json.load(f)
+    except Exception:
+        return "block-only"
+    return config.get("qa_gate_mode") or "block-only"
+
+
+def _gh_pr_changed_files(pr_number) -> list:
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "diff", str(pr_number), "--name-only"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return []
+    if result.returncode != 0:
+        return []
+    return [p for p in (result.stdout or "").splitlines() if p]
+
+
 def _qa_gate_ci_status(worktree_path=None, worktree_branch=None) -> Optional[bool]:
     """True/False/None (undeterminable) CI matrix status for the active branch."""
     return _extract_verified_by_ci(
