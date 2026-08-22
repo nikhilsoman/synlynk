@@ -81,6 +81,56 @@ def _scan_pr_reviews(pr_number):
     return last_event_id
 
 
+def _existing_spec_verified_pr_numbers():
+    """Returns the set of PR numbers that already have a spec_verified event."""
+    from synlynk import _get_db
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT payload_json FROM events WHERE event_type='spec_verified'"
+    ).fetchall()
+    conn.close()
+    numbers = set()
+    for (payload_json,) in rows:
+        try:
+            payload = json.loads(payload_json)
+        except (TypeError, ValueError):
+            continue
+        pr_number = payload.get("pr_number")
+        if pr_number is not None:
+            numbers.add(pr_number)
+    return numbers
+
+
+def _scan_pr_completion(pr_number, pr_body):
+    """Computes and emits a spec_verified event for pr_number, if its body
+    references a spec/plan/issue and a verdict can be computed. Returns the
+    new event's id, or None if skipped (no reference found in the PR body, or
+    the verdict couldn't be computed -- see compute_completion_verdict's
+    docstring for why None isn't retried as a verdict).
+    """
+    from synlynk.completion_tracker import parse_spec_reference, compute_completion_verdict
+
+    spec_reference = parse_spec_reference(pr_body)
+    if spec_reference is None:
+        return None
+
+    verdict = compute_completion_verdict(pr_number, spec_reference)
+    if verdict is None:
+        return None
+
+    return emit_event(
+        "spec_verified",
+        {
+            "pr_number": pr_number,
+            "spec_path": spec_reference,
+            "verdict": verdict["verdict"],
+            "rationale": verdict["rationale"],
+            "reviewer_role": "qa",
+        },
+        emitted_by="scan_local_events",
+    )
+
+
 def emit_event(event_type: str, payload: dict, emitted_by: str,
                parent_event_id: int = None) -> int:
     """Writes an event row. Returns the new event's id."""
@@ -148,7 +198,7 @@ def scan_local_events(harness_name: str) -> None:
 
     try:
         result = subprocess.run(
-            ["gh", "pr", "list", "--state", "merged", "--limit", "20", "--json", "number,title,mergedAt"],
+            ["gh", "pr", "list", "--state", "merged", "--limit", "20", "--json", "number,title,mergedAt,body"],
             capture_output=True,
             text=True,
             check=False,
@@ -157,8 +207,11 @@ def scan_local_events(harness_name: str) -> None:
     except (FileNotFoundError, json.JSONDecodeError):
         merged_prs = []
 
+    already_verified = _existing_spec_verified_pr_numbers()
+
     last_event_id = None
     last_review_event_id = None
+    last_completion_event_id = None
     for pr in merged_prs:
         last_event_id = emit_event(
             "pr_merged",
@@ -172,10 +225,16 @@ def scan_local_events(harness_name: str) -> None:
         review_event_id = _scan_pr_reviews(pr["number"])
         if review_event_id is not None:
             last_review_event_id = review_event_id
+        if pr["number"] not in already_verified:
+            completion_event_id = _scan_pr_completion(pr["number"], pr.get("body"))
+            if completion_event_id is not None:
+                last_completion_event_id = completion_event_id
     if last_event_id is not None:
         advance_checkpoint(harness_name, "pr_merged", last_event_id)
     if last_review_event_id is not None:
         advance_checkpoint(harness_name, "review_submitted", last_review_event_id)
+    if last_completion_event_id is not None:
+        advance_checkpoint(harness_name, "spec_verified", last_completion_event_id)
 
     try:
         result = subprocess.run(
