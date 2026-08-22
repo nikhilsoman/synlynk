@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from synlynk.hud import CYCLES
 from synlynk.taxonomy_standards import _taxonomy_label
+from synlynk.merge_class import is_docs_only_change
 
 
 def detect_remote_owner_repo() -> tuple:
@@ -23,6 +24,42 @@ def qa_gate_verdict(owner: str, repo: str) -> dict:
     from synlynk.qa_gate import qa_gate_verdict as _qa_gate_verdict
 
     return _qa_gate_verdict(owner, repo)
+
+
+def _qa_gate_mode() -> str:
+    from synlynk.qa_gate import _qa_gate_mode as mode
+
+    return mode()
+
+
+def _gh_pr_changed_files(pr_number) -> list:
+    from synlynk.qa_gate import _gh_pr_changed_files as changed_files
+
+    return changed_files(pr_number)
+
+
+def _is_github_remote() -> bool:
+    from synlynk.pr_multiplier import _is_github_remote as is_github_remote
+
+    return is_github_remote()
+
+
+def _current_pr_number():
+    from synlynk.pr_multiplier import _current_pr_number as current_pr_number
+
+    return current_pr_number()
+
+
+def _extract_pr_review_cycles():
+    from synlynk.sentinel import _extract_pr_review_cycles as extract_pr_review_cycles
+
+    return extract_pr_review_cycles()
+
+
+def _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count):
+    from synlynk.pr_multiplier import _apply_review_cycle_multiplier as apply_multiplier
+
+    return apply_multiplier(conn, pr_number, changes_requested_count)
 
 _ORG_DOMAINS = (
     "personalization",
@@ -3009,12 +3046,6 @@ def cmd_pr_check() -> None:
     Exit code 1 if blocked. Exit code 0 if clean.
     """
     from synlynk import _GREEN, _RESET, _get_db
-    from synlynk.pr_multiplier import (
-        _apply_review_cycle_multiplier,
-        _current_pr_number,
-        _is_github_remote,
-    )
-    from synlynk.sentinel import _extract_pr_review_cycles
 
     detect_hand_edit = globals().get("_detect_hand_edit")
     if callable(detect_hand_edit):
@@ -3040,6 +3071,18 @@ def cmd_pr_check() -> None:
                 print("  See docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md\n")
                 raise SystemExit(1)
             print(f"  {_GREEN}✓{_RESET} qa gate green — {gate['reason']}")
+
+            if pr_number is not None and _qa_gate_mode() == "merge-restricted-classes":
+                changed_files = _gh_pr_changed_files(pr_number)
+                if is_docs_only_change(changed_files):
+                    print(
+                        f"  {_GREEN}✓{_RESET} docs-only PR, qa gate green — qa merging directly "
+                        "(merge-restricted-classes)"
+                    )
+                    subprocess.run(
+                        ["gh", "pr", "merge", str(pr_number), "--squash"],
+                        check=False,
+                    )
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"
