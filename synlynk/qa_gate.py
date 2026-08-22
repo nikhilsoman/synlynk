@@ -16,7 +16,7 @@ from synlynk import detect_remote_owner_repo
 
 def _qa_gate_mode() -> str:
     try:
-        with open("synlynk/config.json") as f:
+        with open(".synlynk/config.json") as f:
             config = json.load(f)
     except Exception:
         return "block-only"
