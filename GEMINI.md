@@ -139,22 +139,19 @@ rather than resolving it silently. This project tracks those conflicts as resear
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness vsop-repair verified:2026-08-09T18:03:36Z -->
+<!-- synlynk:harness v2.0.0 verified:2026-08-22T12:39:42Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
 - Execution mode: pipe
 - Non-interactive flag: -p
 - Stdout flush: unbuffered (set PYTHONUNBUFFERED=1)
-
 ## Active Dispatch Flags
 - Valid: --print --model --add-dir --sandbox --dangerously-skip-permissions
 - Invalid (do not use): --always-approve --non-interactive
-
 ## Network Dependencies
 - Required: generativelanguage.googleapis.com:443
 - Required: oauth2.googleapis.com:443
-
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
@@ -205,5 +202,4 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
 4. Use worktree per feature with `git worktree add`.
 5. Run `git branch --show-current` before committing to verify branch.
-
 <!-- /synlynk:harness -->
