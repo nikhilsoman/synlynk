@@ -41,6 +41,11 @@ def parse_spec_reference(pr_body):
 
 
 def _load_reference_content(spec_reference):
+    """Returns the referenced spec/plan file's text, or a linked issue's body.
+
+    Returns None if the reference can't be read (missing file, gh failure,
+    unparseable gh output) -- callers treat this as "verdict can't be computed".
+    """
     if spec_reference.startswith("#"):
         issue_number = spec_reference[1:]
         result = subprocess.run(
@@ -63,6 +68,14 @@ def _load_reference_content(spec_reference):
 
 
 def compute_completion_verdict(pr_number, spec_reference):
+    """Computes qa's semantic completion verdict for a merged PR.
+
+    Returns {"verdict": "fulfilled"|"partial"|"diverged", "rationale": str},
+    or None if the verdict can't be computed (reference unreadable, gh pr diff
+    fails, or the claude CLI's response isn't parseable as a valid verdict).
+    None is not itself a verdict -- callers must not emit a spec_verified
+    event when this returns None; they retry on the next scan instead.
+    """
     reference_content = _load_reference_content(spec_reference)
     if reference_content is None:
         return None
