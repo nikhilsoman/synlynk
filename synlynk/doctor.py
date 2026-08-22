@@ -380,7 +380,7 @@ def _run_tc7(settings_path: str = None) -> dict:
             "missing": list(_TC7_REQUIRED_ALLOW_RULES),
             "error": str(exc),
         }
-    present = set(settings.get("allowRules", []))
+    present = set(settings.get("permissions", {}).get("allow", []))
     missing = [rule for rule in _TC7_REQUIRED_ALLOW_RULES if rule not in present]
     return {"passed": not missing, "missing": missing, "error": ""}
 

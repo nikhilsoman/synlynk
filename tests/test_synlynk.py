@@ -114,11 +114,13 @@ def test_run_tc7_passes_when_all_gh_write_allow_rules_present(tmp_path):
 
     settings_path = tmp_path / "settings.json"
     settings_path.write_text(json.dumps({
-        "allowRules": [
-            "command(gh pr review)",
-            "command(gh pr comment)",
-            "command(gh pr merge)",
-        ]
+        "permissions": {
+            "allow": [
+                "command(gh pr review)",
+                "command(gh pr comment)",
+                "command(gh pr merge)",
+            ]
+        }
     }))
     result = _run_tc7(settings_path=str(settings_path))
     assert result["passed"] is True
@@ -129,7 +131,9 @@ def test_run_tc7_reports_missing_allow_rules(tmp_path):
     from synlynk.doctor import _run_tc7
 
     settings_path = tmp_path / "settings.json"
-    settings_path.write_text(json.dumps({"allowRules": ["command(gh pr review)"]}))
+    settings_path.write_text(json.dumps({
+        "permissions": {"allow": ["command(gh pr review)"]}
+    }))
     result = _run_tc7(settings_path=str(settings_path))
     assert result["passed"] is False
     assert "command(gh pr comment)" in result["missing"]
