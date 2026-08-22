@@ -84,7 +84,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     assert "## PR Review Discipline" in content
     assert "## Repo Hygiene" in content
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
-    assert "| GitHub write actions | **Grok only** |" in content
+    assert "| GitHub write actions | **claude, Agy fallback** |" in content
     assert "GitHub write routing (#426)" in content
     assert "GitHub identity caveat (#423)" in content
 
