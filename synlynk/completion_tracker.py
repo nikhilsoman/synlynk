@@ -9,7 +9,7 @@ import re
 import subprocess
 
 
-_SPEC_PATH_RE = re.compile(r"docs/superpowers/(?:specs|plans)/[\w\-/]+\.md")
+_SPEC_PATH_RE = re.compile(r"docs/superpowers/(?:specs|plans)/[\w\-/.]+\.md")
 _CLOSES_ISSUE_RE = re.compile(r"(?:closes|fixes|resolves)\s+#(\d+)", re.IGNORECASE)
 _GH_HASH_RE = re.compile(r"gh:#(\d+)")
 

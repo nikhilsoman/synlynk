@@ -11,6 +11,11 @@ def test_parse_spec_reference_finds_plan_path():
     assert parse_spec_reference(body) == "docs/superpowers/plans/2026-08-20-qa-merge-gate-authority.md"
 
 
+def test_parse_spec_reference_finds_path_with_internal_dot():
+    body = "See docs/superpowers/specs/2026-08-22-v1.5-example-design.md"
+    assert parse_spec_reference(body) == "docs/superpowers/specs/2026-08-22-v1.5-example-design.md"
+
+
 def test_parse_spec_reference_finds_closes_issue():
     body = "Fixes the flake described in the ticket\n\nCloses #1087"
     assert parse_spec_reference(body) == "#1087"
