@@ -35,6 +35,16 @@ def test_agent_capability_baselines_exist():
     assert synlynk.HARNESS_CAPABILITY_BASELINES["local"]["dispatch_flags"]["required_flags"] == ["--no-auto-commits", "--yes-always"]
 
 
+def test_can_gh_write_baselines_match_live_verified_reality():
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    assert HARNESS_CAPABILITY_BASELINES["claude"]["can_gh_write"] is True
+    assert HARNESS_CAPABILITY_BASELINES["agy"]["can_gh_write"] is True
+    assert HARNESS_CAPABILITY_BASELINES["grok"]["can_gh_write"] is False
+    assert HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] is False
+    assert HARNESS_CAPABILITY_BASELINES["local"]["can_gh_write"] is False
+
+
 def test_sop_section_headers_defined():
     from synlynk.probe import SOP_SECTION_HEADERS
 
