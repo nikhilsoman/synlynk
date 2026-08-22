@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## QA Completion Tracker + Merge-Restricted-Classes Gate Mode (decided/shipped 2026-08-22)
+- **Shipped:** PR #1100 (completion tracker — `spec_verified` GOVERNS event, Vizor panel distinguishing merged vs verified PRs) and PR #1101 (`qa_gate_mode=merge-restricted-classes` — qa merges docs-only PRs directly, first concrete answer to #1079 §5's deferred "what PR class is safe to merge unattended"). [@nikhilsoman via Claude]
+- **Both plans** executed via subagent-driven-development, dispatched to Codex; reviewed directly by Claude (spec-compliance + code quality, no sub-delegated review) against plan text; merged via #423 COMMENT-review-with-checklist fallback.
+- **Process gap found:** stacked `synlynk dispatch --base` opened a separate PR per task against `main` instead of the parent branch — 2 four-task plans produced 8+ PRs and 16 worktrees needing manual cleanup. Recorded in global memory as `feedback_dispatch_stacking_pr_proliferation`; worth a synlynk issue to make `--base` target the parent branch as PR base.
+- **Still deferred (unchanged from #123):** applying branch protection for real, landing #1079/#1091 design-doc PRs, extending `merge-restricted-classes` to harder PR classes (dependency bumps, CI config).
+- **Blog post:** `docs/blog/124-pr1100-1101-qa-completion-tracker-and-merge-restricted-classes.md` (PR #1102, docs-only follow-up since both PRs merged before the post was drafted).
+
 ## Per-Agent Instruction Fixes (post-BS-14 backlog — 2026-06-29)
 
 Changes to agent directive files pending outcome of BS-14 brainstorm. Do not apply until BS-14 spec is locked.
