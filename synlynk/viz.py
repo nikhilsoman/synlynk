@@ -171,6 +171,7 @@ def generate_viz_data() -> dict:
                 "repos": repos,
             },
             "goals": [],
+            "spec_verifications": _load_spec_verifications(),
             "dreams": [],
             "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
@@ -287,6 +288,25 @@ def generate_viz_data() -> dict:
         except Exception:
             return []
         return alerts
+
+    def _load_spec_verifications(limit: int = 20) -> list:
+        try:
+            rows = _get_db().execute(
+                "SELECT payload_json FROM events "
+                "WHERE event_type='spec_verified' ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        except Exception:
+            return []
+        verifications = []
+        for (payload_json,) in rows:
+            try:
+                payload = json.loads(payload_json)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                verifications.append(payload)
+        return verifications
 
     def _load_journeys() -> list:
         journeys_dir = os.path.join("docs", "journeys")
@@ -1041,6 +1061,12 @@ const STAGE_STYLE = {
 };
 const dreams = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.dreams) ? window.VIZOR_DATA.dreams : [];
 const goals = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.goals) ? window.VIZOR_DATA.goals : [];
+const specVerifications = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.spec_verifications) ? window.VIZOR_DATA.spec_verifications : [];
+const VERDICT_BADGE = {
+  fulfilled: 'background:#dcfce7;border-color:#86efac;color:#15803d',
+  partial: 'background:#fef3c7;border-color:#fde68a;color:#d97706',
+  diverged: 'background:#ffe4e6;border-color:#fda4af;color:#be123c',
+};
 const notes = (window.VIZOR_DATA && window.VIZOR_DATA.notes && typeof window.VIZOR_DATA.notes === 'object') ? window.VIZOR_DATA.notes : {};
 let openDrills = {};
 let currentNoteTarget = null;
@@ -1345,6 +1371,37 @@ function renderGoals() {
   goalsBody.innerHTML = goals.map(renderGoal).join('');
 }
 
+function renderVerifiedEntry(entry) {
+  const verdict = String(entry.verdict || 'unknown').trim().toLowerCase();
+  const badgeStyle = VERDICT_BADGE[verdict] || 'background:#f3f4f6;border-color:#d1d5db;color:#6b7280';
+  return `
+    <div class="goal-item">
+      <div class="goal-content">
+        <div class="goal-outcome">PR #${escapeHtml(entry.pr_number ?? '—')} · ${escapeHtml(entry.spec_path || 'Unknown spec')}</div>
+        <div class="goal-criterion">${escapeHtml(entry.rationale || 'No rationale provided')}</div>
+      </div>
+      <div class="goal-badge" style="${badgeStyle}">${escapeHtml(verdict)}</div>
+    </div>`;
+}
+
+function toggleVerifiedPanel() {
+  const panel = document.getElementById('spec-verifications-panel');
+  if (!panel) return;
+  panel.classList.toggle('open');
+}
+
+function renderVerified() {
+  const count = document.getElementById('spec-verified-count');
+  const sub = document.getElementById('spec-verified-sub');
+  const body = document.getElementById('spec-verifications-body');
+  if (count) count.textContent = String(specVerifications.length);
+  if (sub) sub.textContent = specVerifications.length + ' verified PR' + (specVerifications.length === 1 ? '' : 's');
+  if (!body) return;
+  body.innerHTML = specVerifications.length
+    ? specVerifications.map(renderVerifiedEntry).join('')
+    : '<div class="empty-state"><p class="empty-state-desc" style="padding: 12px 14px; font-size: 11px; color: var(--text3); margin: 0;">No verified PRs yet.</p></div>';
+}
+
 function renderDreams() {
   const body = document.getElementById('gantt-body');
   const wsSub = document.getElementById('ws-sub');
@@ -1360,6 +1417,7 @@ function renderDreams() {
     if (dreamSub) dreamSub.textContent = '0 stages';
     if (statusWorkspaces) statusWorkspaces.textContent = '0 dreams';
     renderGoals();
+    renderVerified();
     return;
   }
 
@@ -1372,6 +1430,7 @@ function renderDreams() {
   if (dreamSub) dreamSub.textContent = stageCountValue + ' stages · ' + activeDreams + ' active';
   if (statusWorkspaces) statusWorkspaces.textContent = dreamCountValue + ' dreams';
   renderGoals();
+  renderVerified();
   const firstDream = dreams[0];
   const firstStage = firstDream && Array.isArray(firstDream.stages) ? (firstDream.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstDream.stages[0]) : null;
   if (firstDream && firstStage) {
@@ -1615,6 +1674,7 @@ renderDreams();
       <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
       <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
       <div class="sc teal editable" onclick="toggleGoalsPanel()" style="cursor:pointer;"><div class="sl">Business Goals</div><div class="sv" id="goal-count">0</div><div class="ss" id="goal-sub">0 active</div><div class="pencil-wrap note-none" onclick="openNote('goals','Business Goals');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+      <div class="sc teal editable" onclick="toggleVerifiedPanel()" style="cursor:pointer;"><div class="sl">Spec Verified</div><div class="sv" id="spec-verified-count">0</div><div class="ss" id="spec-verified-sub">0 verified PRs</div></div>
     </div>
 
     <div class="goals-panel" id="goals-panel">
@@ -1623,6 +1683,13 @@ renderDreams();
         <div class="goals-close" onclick="toggleGoalsPanel()">✕ collapse</div>
       </div>
       <div class="goals-body" id="goals-body"></div>
+    </div>
+    <div class="goals-panel" id="spec-verifications-panel">
+      <div class="goals-header">
+        <div class="goals-ttl">✅ Spec Verified</div>
+        <div class="goals-close" onclick="toggleVerifiedPanel()">✕ collapse</div>
+      </div>
+      <div class="goals-body" id="spec-verifications-body"></div>
     </div>
   </div>
   <div class="status-bar"><span class="sb-ok">● local · offline-ready</span><span id="status-workspaces">3 workspaces</span><div class="sb-rt">next update: ~7 min</div></div>

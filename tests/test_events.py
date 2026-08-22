@@ -224,3 +224,111 @@ def test_cmd_events_tail_with_no_type_shows_all_types(project_dir, capsys):
     out = capsys.readouterr().out
     assert "pr_merged" in out
     assert "job_terminal" in out
+
+
+def test_scan_local_events_emits_spec_verified_when_pr_references_spec(project_dir, tmp_path, monkeypatch):
+    from unittest.mock import patch, MagicMock
+
+    spec_dir = tmp_path / "docs" / "superpowers" / "specs"
+    spec_dir.mkdir(parents=True)
+    (spec_dir / "2026-08-20-example-design.md").write_text("# Example\n\nDo the thing")
+    monkeypatch.chdir(tmp_path)
+
+    pr_list_stdout = json.dumps([{
+        "number": 501, "title": "Test PR", "mergedAt": "2026-08-22T00:00:00Z",
+        "body": "Implements docs/superpowers/specs/2026-08-20-example-design.md",
+    }])
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout="diff --git a/x b/x\n+the thing"),
+            MagicMock(returncode=0, stdout=json.dumps({"verdict": "fulfilled", "rationale": "Matches spec"})),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    pending = pending_events("test-observer", "spec_verified")
+    assert len(pending) == 1
+    payload = pending[0]["payload"]
+    assert payload["pr_number"] == 501
+    assert payload["spec_path"] == "docs/superpowers/specs/2026-08-20-example-design.md"
+    assert payload["verdict"] == "fulfilled"
+    assert payload["rationale"] == "Matches spec"
+    assert payload["reviewer_role"] == "qa"
+
+
+def test_scan_local_events_skips_spec_verified_when_pr_body_has_no_reference(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{
+        "number": 502, "title": "Small typo fix", "mergedAt": "2026-08-22T00:00:00Z",
+        "body": "Fixes a typo, no ticket.",
+    }])
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    assert pending_events("test-observer", "spec_verified") == []
+
+
+def test_scan_local_events_no_duplicate_spec_verified_on_rescan(project_dir, tmp_path, monkeypatch):
+    from unittest.mock import patch, MagicMock
+
+    spec_dir = tmp_path / "docs" / "superpowers" / "specs"
+    spec_dir.mkdir(parents=True)
+    (spec_dir / "x.md").write_text("spec")
+    monkeypatch.chdir(tmp_path)
+
+    pr_list_stdout = json.dumps([{
+        "number": 503, "title": "Test PR", "mergedAt": "2026-08-22T00:00:00Z",
+        "body": "Implements docs/superpowers/specs/x.md",
+    }])
+
+    def run_side_effect():
+        return [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout="diff"),
+            MagicMock(returncode=0, stdout=json.dumps({"verdict": "fulfilled", "rationale": "ok"})),
+            MagicMock(returncode=0, stdout=""),
+        ]
+
+    with patch("subprocess.run", side_effect=run_side_effect()):
+        scan_local_events("workspace-lifecycle-nudge")
+    assert len(pending_events("test-observer", "spec_verified")) == 1
+
+    # Second scan: only the gh pr list / reviews / git log calls happen --
+    # no diff/claude calls, since 503 already has a spec_verified event.
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+        assert mock_run.call_count == 3
+
+    assert len(pending_events("test-observer", "spec_verified")) == 1
+
+
+def test_scan_local_events_skips_spec_verified_when_verdict_uncomputable(project_dir):
+    from unittest.mock import patch, MagicMock
+
+    pr_list_stdout = json.dumps([{
+        "number": 504, "title": "Test PR", "mergedAt": "2026-08-22T00:00:00Z",
+        "body": "Implements docs/superpowers/specs/does-not-exist.md",
+    }])
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=pr_list_stdout),
+            MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        scan_local_events("workspace-lifecycle-nudge")
+
+    assert pending_events("test-observer", "spec_verified") == []

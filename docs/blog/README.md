@@ -129,6 +129,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [121](./121-pr1030-agent-roles-phase2-memory-gated-learning.md) | PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something | [#1030](https://github.com/nikhilsoman/synlynk/pull/1030) | 2026-08-18 |
 | [122](./122-pr1074-1075-gh-write-reliability-and-broker-design.md) | PR #1074 / #1075 — GitHub-Write Reliability, and the Spec for the Next Step | [#1074](https://github.com/nikhilsoman/synlynk/pull/1074), [#1075](https://github.com/nikhilsoman/synlynk/pull/1075) | 2026-08-19 |
 | [123](./123-pr1082-1089-qa-merge-gate-live5.md) | PRs #1082–#1089 — Shipping the QA Merge Gate, and the Bug It Found on the Way | [#1082](https://github.com/nikhilsoman/synlynk/pull/1082), [#1083](https://github.com/nikhilsoman/synlynk/pull/1083), [#1084](https://github.com/nikhilsoman/synlynk/pull/1084), [#1086](https://github.com/nikhilsoman/synlynk/pull/1086), [#1088](https://github.com/nikhilsoman/synlynk/pull/1088), [#1089](https://github.com/nikhilsoman/synlynk/pull/1089) | 2026-08-21/22 |
+| [124](./124-pr1100-1101-qa-completion-tracker-and-merge-restricted-classes.md) | PRs #1100–#1101 — Completion Tracker + Merge-Restricted-Classes Gate Mode | [#1100](https://github.com/nikhilsoman/synlynk/pull/1100), [#1101](https://github.com/nikhilsoman/synlynk/pull/1101) | 2026-08-22 |
 
 ## Per-PR Post Template
 
