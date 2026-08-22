@@ -119,6 +119,17 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
 
 
+def test_capability_allocation_sop_routes_gh_write_to_claude_not_grok():
+    from synlynk.probe import _CAPABILITY_ALLOCATION_SOP, _repair_capability_allocation_sop
+
+    assert "claude by default" in _CAPABILITY_ALLOCATION_SOP
+    assert "Route any task that requires GitHub write actions to **Grok by default**" not in _CAPABILITY_ALLOCATION_SOP
+
+    repaired = _repair_capability_allocation_sop({"roles": {}})
+    assert "claude by default" in repaired
+    assert "Route any task that requires GitHub write actions to **Grok by default**" not in repaired
+
+
 def test_run_tc7_passes_when_all_gh_write_allow_rules_present(tmp_path):
     from synlynk.doctor import _run_tc7
 
