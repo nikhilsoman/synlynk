@@ -2358,7 +2358,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
     if task_type == "review":
         role_list = ["review"]
-    permissions = _resolve_dispatch_permissions(agent, role_list=role_list, grants=grants, revokes=revokes)
+    effective_grants = list(grants or [])
+    if requires_gh_write and "run:shell" not in effective_grants:
+        effective_grants.append("run:shell")
+    permissions = _resolve_dispatch_permissions(
+        agent, role_list=role_list, grants=effective_grants, revokes=revokes
+    )
     flags = flags + _permissions_to_flags(agent, permissions)
     if agent == "agy" and permissions:
         perm_lines = "\n".join(f"- {p}" for p in permissions)
