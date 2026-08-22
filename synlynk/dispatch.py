@@ -497,7 +497,14 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
             proc_env[k] = v
 
     if requires_gh_write:
-        role = agent_role or _role_for_story(story_id) or "dev"
+        role = agent_role or _role_for_story(story_id)
+        if not role:
+            raise RuntimeError(
+                "Dispatch refused: --requires-gh-write requires a resolvable role identity "
+                "(agent_role or a story-tagged role), but none was provided. Pass --role "
+                "<role> to dispatch, or use --as-agent/--story with a role-tagged entry. "
+                "Refusing to default to 'dev' for a GitHub-write dispatch (see #423, #569)."
+            )
         gh_token = _resolve_dispatch_gh_token(role)
         # Never inherit ambient tokens from the parent shell for GH-write jobs.
         proc_env.pop("GH_TOKEN", None)
@@ -2146,7 +2153,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    scope_paths: list = None,
                    session_id: str = None,
                    gh_write_target_kind: str = "issue",
-                   model: str = None) -> dict:
+                   model: str = None,
+                   role: str = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2171,6 +2179,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             resolved_agent_role = next(
                 (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
             )
+    resolved_agent_role = role or resolved_agent_role
+    if requires_gh_write and not resolved_agent_role:
+        resolved_agent_role = _role_for_story(story_id)
+    if requires_gh_write and not resolved_agent_role:
+        raise RuntimeError(
+            "Dispatch refused: --requires-gh-write requires a resolvable role identity, "
+            "but none was provided. Pass --role <role>, or dispatch via --as-agent "
+            "<registered-agent-id> or --story <id> with a role-tagged story. Refusing to "
+            "silently default to the 'dev' identity for a GitHub-write dispatch "
+            "(see #423, #569)."
+        )
     if session_id is None:
         from synlynk.session import _read_active_session
         session_id = _read_active_session()
@@ -2634,7 +2653,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if requires_gh_write and issue is not None:
         target_prefix = "pr" if gh_write_target_kind == "pr" else "issue"
         gh_write_target_value = f"{target_prefix}:{issue}"
-        gh_write_role = resolved_agent_role or _role_for_story(story_id) or "dev"
+        gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = "review_posted" if task_type == "review" else "closed"
     gh_write_expect_for_job = gh_write_expect_value or "closed"
