@@ -679,6 +679,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dispatch as this workspace agent (ID or role alias). Resolves GitHub identity "
              "and, if the harness positional is omitted, auto-selects a harness by role fit.",
     )
+    dispatch_parser.add_argument(
+        "--role",
+        dest="role",
+        default=None,
+        help="Explicit role identity for this dispatch (e.g. qa, dev, architect). Required "
+             "for --requires-gh-write dispatches that have no --as-agent or role-tagged "
+             "--story to resolve a role from (#423, #569).",
+    )
 
     jobs_parser = subparsers.add_parser("jobs", help="List dispatched background jobs")
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
@@ -1224,7 +1232,8 @@ def main(argv=None) -> None:
                                  revokes=getattr(args, "revoke", []),
                                  issue=getattr(args, "issue", None),
                                  scope_paths=getattr(args, "scope_paths", []),
-                                 session_id=getattr(args, "session_id", None))
+                                 session_id=getattr(args, "session_id", None),
+                                 role=getattr(args, "role", None))
             if isinstance(job, dict) and job.get("status") == "blocked" and not job.get("pid"):
                 print(f"Error: {job.get('reason')}")
                 remediation = job.get("remediation")

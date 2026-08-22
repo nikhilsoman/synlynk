@@ -461,6 +461,109 @@ def test_dispatch_agent_applies_harness_overrides(tmp_path, isolated_db, monkeyp
     assert captured_env.get("MY_VAR") == "42"
 
 
+def test_dispatch_agent_gh_write_raises_without_resolvable_role(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(
+        synlynk, "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+        raising=False,
+    )
+    monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
+
+    with pytest.raises(RuntimeError, match="--requires-gh-write"):
+        dispatch_mod.dispatch_agent(
+            "claude", "post a comment on PR #1", task_type="review",
+            requires_gh_write=True, force_agent=True,
+            context_mode="none",
+        )
+
+
+def test_dispatch_agent_gh_write_resolves_explicit_role_flag(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_build_env(agent, overrides, requires_gh_write, story_id, agent_role=None):
+        captured["agent_role"] = agent_role
+        return {}
+
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", fake_build_env)
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", lambda agent, permissions: [])
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen", lambda *a, **kw: type("Proc", (), {"pid": 1})()
+    )
+
+    dispatch_mod.dispatch_agent(
+        "claude", "post a comment on PR #1", task_type="review",
+        requires_gh_write=True, force_agent=True, role="qa",
+        context_mode="none", skip_preflight=True,
+    )
+
+    assert captured["agent_role"] == "qa"
+
+
+def test_dispatch_agent_non_gh_write_still_defaults_role_to_dev(tmp_path, isolated_db, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("synlynk/state", exist_ok=True)
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", lambda agent, permissions: [])
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(
+        synlynk, "_dispatch_capability_preflight",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+        raising=False,
+    )
+    monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen", lambda *a, **kw: type("Proc", (), {"pid": 1})()
+    )
+
+    job = dispatch_mod.dispatch_agent(
+        "claude", "implement a small fix", task_type="implement",
+        requires_gh_write=False, force_agent=True,
+        context_mode="none", skip_preflight=True,
+    )
+    assert job["agent"] == "claude"
+
+
+def test_build_subprocess_env_raises_without_resolvable_role():
+    from synlynk.dispatch import _build_subprocess_env
+
+    with pytest.raises(RuntimeError, match="--requires-gh-write"):
+        _build_subprocess_env("claude", {}, requires_gh_write=True, story_id=None, agent_role=None)
+
+
+def test_build_subprocess_env_dev_default_unchanged_when_gh_write_not_required(monkeypatch, tmp_path):
+    from synlynk.dispatch import _build_subprocess_env
+
+    monkeypatch.chdir(tmp_path)
+    env = _build_subprocess_env(
+        "claude", {}, requires_gh_write=False, story_id=None, agent_role=None
+    )
+    assert "GH_TOKEN" not in env
+
+
 def test_role_permission_defaults_cover_all_default_roles():
     from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
 
