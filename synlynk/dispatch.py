@@ -28,22 +28,35 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
+_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
+
 
 def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write: bool = False):
     """Deterministic fallback harness selection for agent_id-driven dispatch.
 
-    Picks the first harness (alphabetical) whose declared baseline "roles"
-    (architect/builder/verifier — a different vocabulary than org-chart
-    roles, see docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md §6)
-    includes the mapped tag for this org role. Does not consult the
+    Picks the first harness whose declared baseline "roles" (architect/
+    builder/verifier — a different vocabulary than org-chart roles, see
+    docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md
+    §6) includes the mapped tag for this org role. Does not consult the
     story_id-based capability_scores DB table — that stays story_id-only.
+    When requires_gh_write is set, candidates are tried in the fixed
+    priority order claude -> agy first, then any remaining CORE_FLEET members
+    alphabetically. Non-gh-write selection is untouched: plain alphabetical
+    order over CORE_FLEET.
     """
     baseline_role = _ORG_ROLE_TO_BASELINE_ROLE.get(org_role)
     if not baseline_role:
         return None
     from synlynk._constants import CORE_FLEET
 
-    for name in sorted(n for n in baselines_map if n in CORE_FLEET):
+    candidates = [n for n in baselines_map if n in CORE_FLEET]
+    if requires_gh_write:
+        ordered = [n for n in _GH_WRITE_HARNESS_PRIORITY if n in candidates]
+        ordered += sorted(n for n in candidates if n not in _GH_WRITE_HARNESS_PRIORITY)
+    else:
+        ordered = sorted(candidates)
+
+    for name in ordered:
         baseline = baselines_map[name]
         if baseline_role not in baseline.get("roles", []):
             continue

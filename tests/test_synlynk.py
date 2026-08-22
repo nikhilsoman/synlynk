@@ -478,6 +478,42 @@ def test_resolve_dispatch_permissions_returns_role_defaults():
     assert "run:tests" in perms
 
 
+def test_harness_for_org_role_prefers_claude_over_agy_for_gh_write():
+    from synlynk.dispatch import _harness_for_org_role
+
+    baselines_map = {
+        "agy": {"roles": ["builder"], "can_gh_write": True},
+        "claude": {"roles": ["builder"], "can_gh_write": True},
+        "codex": {"roles": ["builder"], "can_gh_write": False},
+        "grok": {"roles": ["builder"], "can_gh_write": False},
+    }
+    picked = _harness_for_org_role("dev", baselines_map, requires_gh_write=True)
+    assert picked == "claude"
+
+
+def test_harness_for_org_role_falls_back_to_agy_when_claude_unavailable():
+    from synlynk.dispatch import _harness_for_org_role
+
+    baselines_map = {
+        "agy": {"roles": ["builder"], "can_gh_write": True},
+        "codex": {"roles": ["builder"], "can_gh_write": False},
+        "grok": {"roles": ["builder"], "can_gh_write": False},
+    }
+    picked = _harness_for_org_role("dev", baselines_map, requires_gh_write=True)
+    assert picked == "agy"
+
+
+def test_harness_for_org_role_stays_alphabetical_when_gh_write_not_required():
+    from synlynk.dispatch import _harness_for_org_role
+
+    baselines_map = {
+        "agy": {"roles": ["builder"], "can_gh_write": True},
+        "claude": {"roles": ["builder"], "can_gh_write": True},
+    }
+    picked = _harness_for_org_role("dev", baselines_map, requires_gh_write=False)
+    assert picked == "agy"
+
+
 def test_resolve_dispatch_permissions_grant_expands():
     from synlynk.dispatch import _resolve_dispatch_permissions
 
