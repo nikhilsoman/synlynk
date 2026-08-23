@@ -54,7 +54,6 @@ def cmd_policy_sync_branch_protection(dry_run: bool = False) -> int:
         [
             "gh", "api", "--method", "PUT",
             f"repos/{repo_slug}/branches/main/protection", "--input", "-",
-            "--header", "X-Synlynk-Required-Checks: qa-gate",
         ],
         input=json.dumps(body), capture_output=True, text=True,
     )

@@ -38,7 +38,8 @@ def test_cmd_policy_sync_branch_protection_calls_gh_api_with_required_checks(tmp
     assert exit_code == 0
     called_args = mock_run.call_args[0][0]
     assert "branches/main/protection" in " ".join(called_args)
-    assert any("qa-gate" in a for a in called_args)
+    request_body = json.loads(mock_run.call_args.kwargs["input"])
+    assert "qa-gate" in request_body["required_status_checks"]["contexts"]
 
 
 def test_cmd_policy_sync_branch_protection_dry_run_does_not_call_gh(tmp_path, monkeypatch):
