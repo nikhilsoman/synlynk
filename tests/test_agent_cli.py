@@ -83,6 +83,37 @@ def test_live5__harness_rename_is_safe_when_both_reservation_tables_exist():
     _run_harness_rename_migration(conn)
 
 
+def test_fixevents_subscriptions_table_missing_harness_name_migration(project_dir):
+    import synlynk
+    from synlynk.db import _run_harness_rename_migration
+    from synlynk.events import scan_local_events
+    from unittest.mock import MagicMock, patch
+
+    conn = sqlite3.connect(synlynk.DB_PATH)
+    conn.execute(
+        """
+        CREATE TABLE subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            last_seen_event_id INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(agent_name, event_type)
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO subscriptions (agent_name, event_type, last_seen_event_id) VALUES (?, ?, ?)",
+        ("some-harness-name", "cron_heartbeat", 0),
+    )
+    conn.commit()
+    _run_harness_rename_migration(conn)
+    conn.commit()
+    conn.close()
+
+    with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="[]")):
+        scan_local_events("some-harness-name")
+
+
 def test_live5__migrate_db_older_schema_creates_one_backup(tmp_path):
     from synlynk.db import _migrate_db
 

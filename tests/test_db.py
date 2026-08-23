@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import subprocess
 import pytest
 
@@ -10,6 +11,46 @@ from synlynk.db import (
     cmd_goal_create,
     cmd_roadmap_add,
 )
+
+
+def test_subscriptions_harness_rename_migration_preserves_data_and_constraint():
+    from synlynk.db import _run_harness_rename_migration
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            last_seen_event_id INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(agent_name, event_type)
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO subscriptions (agent_name, event_type, last_seen_event_id) VALUES (?, ?, ?)",
+        ("some-harness-name", "cron_heartbeat", 1),
+    )
+
+    _run_harness_rename_migration(conn)
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(subscriptions)")}
+    assert "harness_name" in columns
+    assert "agent_name" not in columns
+    assert conn.execute(
+        "SELECT harness_name, event_type, last_seen_event_id FROM subscriptions"
+    ).fetchone() == ("some-harness-name", "cron_heartbeat", 1)
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO subscriptions (harness_name, event_type) VALUES (?, ?)",
+            ("some-harness-name", "cron_heartbeat"),
+        )
+
+    _run_harness_rename_migration(conn)
+    assert conn.execute("SELECT * FROM subscriptions").fetchone() == (
+        1, "some-harness-name", "cron_heartbeat", 1
+    )
 
 
 def test_member_registry_tables_and_seed(project_dir):
