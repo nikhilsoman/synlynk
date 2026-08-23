@@ -27,6 +27,33 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
 - **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.
 
+## [0.16.0] - 2026-08-23
+
+**Release pitch:** the authority layer v0.15.0 built now actually gates something unattended — `synlynk tpm sweep` walks ready stories through dispatch end-to-end, pauses on a policy-flagged action with a GitHub approval ticket instead of blocking the whole batch, and a live dogfood run proved both the happy path and the pause+ticket path work — surfacing two real gaps in the process, filed rather than papered over.
+
+### Added
+
+**GOVERNS `awaiting_approval` event (Task 10, PR #1125)**
+- New GOVERNS event type extending the `job_terminal`/`review_submitted` event-contract pattern (PR #922): `emit_awaiting_approval(story_id, action, reason)` in `synlynk/events.py`, recording which `policy.json` `approval_required_for` rule matched.
+
+**Approval-gate ticket flow (Task 11, PR #1126)**
+- `synlynk/approval_gate.py` — `raise_approval_ticket()` files a `[APPROVAL] <action> — <story_id>` GitHub issue with story context, the matched policy rule, and instructions to reply `approve` or act directly on GitHub.
+- `synlynk/events.py`'s `_scan_approval_tickets()` polls open `[APPROVAL]` issues and emits `approval_resolved` for any that are closed or have an `approve`-prefixed comment, wired as the last step of `scan_local_events()`.
+
+**`synlynk tpm sweep` (Task 12, PR #1127)**
+- One pass over `readiness='ready'` stories: dispatch → verify → PR → review → merge per story, gating every step on `check_authority()`. A `requires_approval` result parks that story (raises a ticket, emits `awaiting_approval`) without blocking the rest of the batch. Per-pass summary surfaced via `synlynk status`.
+
+**Live dogfood verification (Task 13, Claude-direct per plan)**
+- Ran `synlynk tpm sweep` unattended against this repo's real backlog. To avoid dispatching all 8 pre-existing ready stories for real, the 8 were temporarily parked (`synlynk story draft`) and restored afterward; only two purpose-built demo stories were swept.
+- Pass 1 (no approval rule active) proved the normal path: `story-028d26d9` dispatched, ran to completion, PR opened.
+- Pass 2 (a temporary, documented, fully-reverted test-only `policy.json` rule — `task_dispatch:` has no default rule that can trip `requires_approval`, since `_matches_approval_rule()` explicitly skips `security_sensitive_paths:` for dispatch actions) proved the pause path: `story-7aa0aaec` parked, a real `[APPROVAL]` issue was filed and assigned, `approve` was commented, and `_scan_approval_tickets()` correctly emitted `approval_resolved` (event id 272) — independently confirmed via `synlynk events tail --type approval_resolved` and `gh issue view --json state,comments`.
+- Every claim was cross-checked directly (`synlynk jobs --all`, direct DB queries, `gh issue list --search`, `gh api .../branches/main/protection`) rather than trusted from the sweep's own printed summary, per the plan's explicit instruction.
+
+### Fixed / Known gaps (filed, not patched in this release — Claude is PM/review only; fixes are implementation work for a future dispatch)
+- **`scan_local_events()` crashes before reaching `_scan_approval_tickets()`** (`sqlite3.OperationalError: table subscriptions has no column named harness_name`), and its only production call site (`workspace_agent.py`'s `cmd_workspace_agent_run`) has no wired CLI subcommand — meaning the documented approval-resolution detection path does not actually run unattended today. Filed as [#1132](https://github.com/nikhilsoman/synlynk/issues/1132).
+- **`synlynk story done` does not clear `readiness`**, and `_ready_stories()`'s in-flight guard only excludes `queued`/`running` jobs, not `done` ones — so a story whose dispatch already completed gets re-swept and re-parked on the very next pass, observed live with `story-028d26d9`. Filed as [#1133](https://github.com/nikhilsoman/synlynk/issues/1133).
+- **Resolving an approval ticket does not auto-unblock a re-sweep**: `check_authority()` is purely policy-rule-based with no awareness of ticket-resolution state, so `approval_resolved` firing does not itself let the parked story advance on the next pass. This matches the plan's own scoping (ticket-driven auto-resume was explicitly out of scope for this plan) — a known limitation, not a regression, and the natural next increment once #1132/#1133 are fixed.
+
 ## [0.15.0] - 2026-08-23
 
 **Release pitch:** synlynk's own repo gets a real authority layer — a two-tier `policy.json` (workspace defaults + per-repo overrides) that turns previously-hardcoded prose tables (who can merge, who can cut a release, who can edit the roadmap, which harness handles which task type) into data, gated by a fail-closed `check_authority()` resolver, with branch protection now live-verified on `main`.
