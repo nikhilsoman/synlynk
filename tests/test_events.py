@@ -315,22 +315,25 @@ def test_scan_local_events_no_duplicate_spec_verified_on_rescan(project_dir, tmp
             MagicMock(returncode=0, stdout="diff"),
             MagicMock(returncode=0, stdout=json.dumps({"verdict": "fulfilled", "rationale": "ok"})),
             MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout="[]"),
         ]
 
     with patch("subprocess.run", side_effect=run_side_effect()):
         scan_local_events("workspace-lifecycle-nudge")
     assert len(pending_events("test-observer", "spec_verified")) == 1
 
-    # Second scan: only the gh pr list / reviews / git log calls happen --
-    # no diff/claude calls, since 503 already has a spec_verified event.
+    # Second scan: only the gh pr list / reviews / git log / approval-ticket
+    # poll calls happen -- no diff/claude calls, since 503 already has a
+    # spec_verified event.
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = [
             MagicMock(returncode=0, stdout=pr_list_stdout),
             MagicMock(returncode=0, stdout=json.dumps({"reviews": []})),
             MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout="[]"),
         ]
         scan_local_events("workspace-lifecycle-nudge")
-        assert mock_run.call_count == 3
+        assert mock_run.call_count == 4
 
     assert len(pending_events("test-observer", "spec_verified")) == 1
 
