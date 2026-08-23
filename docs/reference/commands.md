@@ -56,6 +56,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `release` (primary) — release
 - `pr check` (primary) — release
 - `pr gate-status` (secondary) — release
+- `policy check-merge` (secondary) — release
+- `policy sync-branch-protection` (secondary) — sustain
 - `ops report` (primary) — sustain
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain
