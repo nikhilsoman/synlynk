@@ -5,6 +5,7 @@ import os
 from typing import Dict
 
 from synlynk.approval_gate import raise_approval_ticket
+from synlynk.db import _find_ticket, _insert_ticket, _mark_ticket_consumed
 from synlynk.dispatch import dispatch_agent
 from synlynk.events import emit_awaiting_approval
 from synlynk.policy import check_authority
@@ -45,20 +46,29 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
             continue
 
         if authority.requires_approval:
-            emit_awaiting_approval(
-                story["story_id"],
-                "task_dispatch:implement",
-                authority.reason,
-            )
-            raise_approval_ticket(
-                story_id=story["story_id"],
-                action="task_dispatch:implement",
-                reason=authority.reason,
-                assignee=assignee,
-                context=f"Story: {story['title']}",
-            )
-            summary["parked"] += 1
-            continue
+            action = "task_dispatch:implement"
+            resolved_ticket = _find_ticket(story["story_id"], action, "resolved")
+            if resolved_ticket:
+                _mark_ticket_consumed(resolved_ticket["id"])
+                # Fall through to dispatch below, same as an allowed authority.
+            else:
+                if not _find_ticket(story["story_id"], action, "open"):
+                    emit_awaiting_approval(
+                        story["story_id"],
+                        action,
+                        authority.reason,
+                    )
+                    issue_url = raise_approval_ticket(
+                        story_id=story["story_id"],
+                        action=action,
+                        reason=authority.reason,
+                        assignee=assignee,
+                        context=f"Story: {story['title']}",
+                    )
+                    if issue_url:
+                        _insert_ticket(story["story_id"], action, issue_url)
+                summary["parked"] += 1
+                continue
 
         try:
             dispatch_agent(
