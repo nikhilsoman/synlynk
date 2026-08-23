@@ -852,6 +852,8 @@ def build_parser() -> argparse.ArgumentParser:
     policy_check_merge_parser.add_argument(
         "--role", required=True, help="Role identity attempting to merge"
     )
+    policy_sync_bp_parser = policy_subparsers.add_parser("sync-branch-protection", help="Configure GitHub branch protection from policy.json")
+    policy_sync_bp_parser.add_argument("--dry-run", action="store_true")
 
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
@@ -994,7 +996,7 @@ def _warn_deprecated_harness_flag(argv) -> None:
 def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
-    from synlynk.policy_cli import cmd_policy_check_merge
+    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_sync_branch_protection
 
     from synlynk import (
         HARNESS_CAPABILITY_BASELINES,
@@ -1380,6 +1382,8 @@ def main(argv=None) -> None:
                 sys.exit(1)
     elif args.command == "policy" and args.policy_command == "check-merge":
         sys.exit(cmd_policy_check_merge(role=args.role))
+    elif args.command == "policy" and args.policy_command == "sync-branch-protection":
+        sys.exit(cmd_policy_sync_branch_protection(dry_run=args.dry_run))
     elif args.command == "credit":
         if args.credit_action == "grant":
             _warn_deprecated_harness_flag(cli_tokens)

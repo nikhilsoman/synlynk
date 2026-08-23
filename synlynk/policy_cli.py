@@ -2,8 +2,20 @@
 from __future__ import annotations
 
 import os
+import json
+import subprocess
 
-from synlynk.policy import check_authority
+from synlynk.policy import check_authority, load_policy
+
+REQUIRED_STATUS_CHECKS = ["test (3.8)", "test (3.10)", "test (3.12)", "qa-gate"]
+
+
+def _current_repo_slug() -> str:
+    result = subprocess.run(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+        capture_output=True, text=True, check=True,
+    )
+    return result.stdout.strip()
 
 
 def cmd_policy_check_merge(role: str) -> int:
@@ -25,5 +37,29 @@ def cmd_policy_check_merge(role: str) -> int:
 
 
 def cmd_policy_sync_branch_protection(dry_run: bool = False) -> int:
-    """Implemented in Task 5."""
-    raise NotImplementedError
+    policy = load_policy(repo_path=os.getcwd())
+    review_count = 1 if policy["merge_authority"]["require_non_authoring_review"] else 0
+    body = {
+        "required_status_checks": {"strict": True, "contexts": REQUIRED_STATUS_CHECKS},
+        "enforce_admins": True,
+        "required_pull_request_reviews": {"required_approving_review_count": review_count},
+        "restrictions": None,
+    }
+    if dry_run:
+        print(json.dumps(body, indent=2))
+        return 0
+
+    repo_slug = _current_repo_slug()
+    result = subprocess.run(
+        [
+            "gh", "api", "--method", "PUT",
+            f"repos/{repo_slug}/branches/main/protection", "--input", "-",
+            "--header", "X-Synlynk-Required-Checks: qa-gate",
+        ],
+        input=json.dumps(body), capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"FAILED to sync branch protection: {result.stderr}")
+        return 1
+    print(f"branch protection synced for {repo_slug}: required checks {REQUIRED_STATUS_CHECKS}, review_count={review_count}")
+    return 0
