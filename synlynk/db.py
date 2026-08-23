@@ -331,6 +331,7 @@ def _run_harness_rename_migration(conn) -> None:
         ("harness_version_history", "agent_name", "harness_name"),
         ("cycle_capability", "agent_name", "harness_name"),
         ("harness_status", "agent_name", "harness_name"),
+        ("subscriptions", "agent_name", "harness_name"),
     ]:
         tcols = {row[1] for row in conn.execute(f"PRAGMA table_info({tbl})")}
         if old_col in tcols and new_col not in tcols:
