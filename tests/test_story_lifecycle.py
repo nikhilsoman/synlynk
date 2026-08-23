@@ -18,6 +18,20 @@ def test_story_done_sets_status_and_emits_event(project_dir):
     assert pending[0]["payload"]["story_id"] == story_id
 
 
+def test_story_done_clears_readiness(project_dir):
+    story_id = cmd_story_create(title="Ready story")
+    cmd_story_ready(story_id)
+    cmd_story_done(story_id)
+
+    conn = synlynk._get_db()
+    readiness = conn.execute(
+        "SELECT readiness FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+
+    assert readiness == "done"
+
+
 def test_story_done_includes_linked_goal_ids_in_payload(project_dir):
     from synlynk.db import cmd_goal_create, cmd_goal_link
 

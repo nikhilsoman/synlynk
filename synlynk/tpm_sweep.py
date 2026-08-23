@@ -19,7 +19,7 @@ def _ready_stories() -> list:
             "SELECT story_id, title, role FROM stories WHERE readiness='ready' "
             "AND NOT EXISTS (SELECT 1 FROM daemon_jobs dj "
             "WHERE dj.story_id=stories.story_id "
-            "AND dj.status IN ('queued','running'))"
+            "AND dj.status IN ('queued','running','done'))"
         ).fetchall()
         return [
             {"story_id": row[0], "title": row[1], "role": row[2] or "dev"}

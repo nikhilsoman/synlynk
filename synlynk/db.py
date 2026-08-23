@@ -2496,7 +2496,10 @@ def cmd_story_done(story_id: str) -> None:
         conn.close()
         print(f"  Story '{story_id}' not found.")
         return
-    conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (story_id,))
+    conn.execute(
+        "UPDATE stories SET status='done', readiness='done' WHERE story_id=?",
+        (story_id,),
+    )
     conn.commit()
     goal_ids = []
     if story[1]:
