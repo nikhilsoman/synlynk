@@ -25,6 +25,25 @@ def test_emit_event_writes_row_and_returns_id(project_dir):
     assert row[3] is None
 
 
+def test_emit_awaiting_approval_event_recorded(project_dir):
+    from synlynk.events import emit_awaiting_approval
+    from synlynk import _get_db
+
+    event_id = emit_awaiting_approval(
+        story_id="story-1", action="release_cut", reason="named_release", emitted_by="tpm_sweep",
+    )
+    assert event_id is not None
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT event_type, payload_json FROM events WHERE id=?", (event_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "awaiting_approval"
+    assert '"story-1"' in row[1]
+    assert '"release_cut"' in row[1]
+    assert '"named_release"' in row[1]
+
+
 def test_pending_events_returns_only_events_after_checkpoint(project_dir):
     e1 = emit_event("story_done", {"story_id": "s1"}, emitted_by="test")
     e2 = emit_event("story_done", {"story_id": "s2"}, emitted_by="test")
