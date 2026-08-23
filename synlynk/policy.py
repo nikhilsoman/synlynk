@@ -90,3 +90,63 @@ def load_policy(repo_path: str, workspace_name: str = "default") -> Dict[str, An
             merged[key] = value
 
     return merged
+
+
+import fnmatch
+from dataclasses import dataclass, field
+from typing import List
+
+
+@dataclass
+class AuthorityResult:
+    allowed: bool
+    requires_approval: bool = False
+    reason: str = ""
+
+
+_ACTION_PREFIXES = ("roadmap_edit", "goal_create", "merge", "release_cut", "task_dispatch:")
+
+
+def _matches_approval_rule(action: str, policy: Dict[str, Any]) -> Optional[str]:
+    for rule in policy.get("approval_required_for", []):
+        if rule == "named_release" and action == "release_cut":
+            return rule
+        if rule == "roadmap_authority_change" and action in ("roadmap_edit", "goal_create"):
+            return rule
+        if rule.startswith("security_sensitive_paths:") and action.startswith("task_dispatch:"):
+            continue  # path-based rules are checked by callers that know the changed files, not here
+    return None
+
+
+def check_authority(action: str, role: str, repo_path: str, workspace_name: str = "default") -> AuthorityResult:
+    if not any(action == p or action.startswith(p) for p in _ACTION_PREFIXES):
+        raise ValueError(f"check_authority: unknown action {action!r}")
+
+    policy = load_policy(repo_path=repo_path, workspace_name=workspace_name)
+
+    if action == "roadmap_edit":
+        allowed = role in policy["roadmap_authority"]["can_edit_roadmap"]
+    elif action == "goal_create":
+        allowed = role in policy["roadmap_authority"]["can_create_goals"]
+    elif action == "merge":
+        allowed = role in policy["merge_authority"]["can_merge"]
+    elif action == "release_cut":
+        allowed = role in policy["release_authority"]["can_cut_release"]
+    elif action.startswith("task_dispatch:"):
+        task_type = action.split(":", 1)[1]
+        table = policy["dev_authority"]["task_allocation"]
+        allowed = task_type in table  # presence in the table = an authorized task type
+    else:  # pragma: no cover - guarded by the ValueError check above
+        allowed = False
+
+    if not allowed:
+        return AuthorityResult(
+            allowed=False,
+            reason=f"role {role!r} is not authorized for action {action!r} per policy.json",
+        )
+
+    matched_rule = _matches_approval_rule(action, policy)
+    if matched_rule:
+        return AuthorityResult(allowed=True, requires_approval=True, reason=matched_rule)
+
+    return AuthorityResult(allowed=True, requires_approval=False, reason="")

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from synlynk.policy import load_policy, DEFAULT_WORKSPACE_POLICY
+from synlynk.policy import check_authority, AuthorityResult
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -71,3 +72,48 @@ def test_load_policy_stub_org_fields_present_but_inert(tmp_path, monkeypatch):
     assert policy["org"]["teams"] == []
     assert policy["org"]["sso_provider"] is None
     assert policy["org"]["seat_limits"] is None
+
+
+def test_check_authority_allows_role_in_can_merge(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("merge", role="qa", repo_path=str(repo))
+    assert isinstance(result, AuthorityResult)
+    assert result.allowed is True
+    assert result.requires_approval is False
+
+
+def test_check_authority_denies_role_not_in_can_merge(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("merge", role="dev", repo_path=str(repo))
+    assert result.allowed is False
+    assert "dev" in result.reason
+
+
+def test_check_authority_release_cut_requires_approval(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("release_cut", role="pm", repo_path=str(repo))
+    assert result.allowed is True
+    assert result.requires_approval is True
+    assert "named_release" in result.reason
+
+
+def test_check_authority_task_dispatch_checked_against_allocation_table(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("task_dispatch:css", role="dev", repo_path=str(repo))
+    assert result.allowed is True
+
+
+def test_check_authority_unknown_action_raises_value_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    with pytest.raises(ValueError):
+        check_authority("not_a_real_action", role="pm", repo_path=str(repo))
