@@ -82,6 +82,7 @@ def _dispatch_with_fake_popen(
     requires_gh_write=False,
     token_resolver=None,
     role_for_story=None,
+    role=None,
     issue=None,
     gh_write_target_kind="issue",
 ):
@@ -171,6 +172,7 @@ def _dispatch_with_fake_popen(
         issue=issue,
         gh_write_target_kind=gh_write_target_kind,
         force_agent=True,
+        role=role,
     )
     return dispatch_mod, job, captured_env
 
@@ -195,6 +197,7 @@ def test_dispatch_agent_uses_pr_target_kind(tmp_path, monkeypatch):
         monkeypatch,
         requires_gh_write=True,
         token_resolver=lambda role: "minted-token-abc",
+        role="qa",
         issue=1038,
         gh_write_target_kind="pr",
     )
@@ -207,6 +210,7 @@ def test_dispatch_agent_defaults_to_issue_target_kind(tmp_path, monkeypatch):
         monkeypatch,
         requires_gh_write=True,
         token_resolver=lambda role: "minted-token-abc",
+        role="qa",
         issue=701,
     )
     assert job["gh_write_target"] == "issue:701"

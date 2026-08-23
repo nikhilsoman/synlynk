@@ -1159,7 +1159,7 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
 
     job = sl.dispatch_agent(
         "grok", "review and merge PR #500", story_id="story-manual-1",
-        context_mode="none", requires_gh_write=True, force_agent=True,
+        context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
     )
 
     assert job["agent"] == "grok"
@@ -1199,7 +1199,7 @@ def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(pro
     )
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
-    sl.dispatch_agent("codex", "close stale issues", force_agent=True, requires_gh_write=True, issue=701)
+    sl.dispatch_agent("codex", "close stale issues", force_agent=True, requires_gh_write=True, issue=701, role="qa")
     conn = sl._get_db()
     row = conn.execute(
         "SELECT requires_gh_write, gh_write_target FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
@@ -1247,7 +1247,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
 
     job = sl.dispatch_agent(
         "agy", "review and merge PR #500", story_id="story-manual-1",
-        context_mode="none", requires_gh_write=True,
+        context_mode="none", requires_gh_write=True, role="qa",
     )
 
     assert job["agent"] == "claude"
@@ -1270,7 +1270,7 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
 
     job = sl.dispatch_agent(
         "codex", "review and merge PR #500", story_id="story-manual-1",
-        context_mode="none", requires_gh_write=True, force_agent=True,
+        context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
     )
 
     assert job["agent"] == "codex"
@@ -1288,7 +1288,7 @@ def test_dispatch_agent_requires_gh_write_blocks_agy_when_tc7_fails(project_dir,
         lambda: {"passed": False, "missing": ["command(gh pr merge)"], "error": ""},
     )
     with pytest.raises(SystemExit):
-        dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True)
+        dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True, role="qa")
     out = capsys.readouterr().out
     assert "TC-7" in out or "allow-rule" in out
 
@@ -1316,7 +1316,7 @@ def test_dispatch_agent_requires_gh_write_allows_agy_when_tc7_passes(project_dir
             "reason": None,
         },
     )
-    result = dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True)
+    result = dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True, role="qa")
     assert result is not None
 
 
@@ -1334,7 +1334,7 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
     with pytest.raises(ValueError, match="can_gh_write"):
         sl.dispatch_agent(
             "agy", "review and merge PR #500", story_id="story-manual-1",
-            context_mode="none", requires_gh_write=True,
+            context_mode="none", requires_gh_write=True, role="qa",
         )
 
 
