@@ -22,7 +22,7 @@ def test_story_done_includes_linked_goal_ids_in_payload(project_dir):
     from synlynk.db import cmd_goal_create, cmd_goal_link
 
     story_id = cmd_story_create(title="Test story")
-    goal_id = cmd_goal_create("Outcome", "Criterion")
+    goal_id = cmd_goal_create("Outcome", "Criterion", role="pm")
     cmd_goal_link(story_id, goal_id)
     cmd_story_done(story_id)
     pending = pending_events("test-observer", "story_done")
@@ -51,7 +51,7 @@ def test_story_ready_records_skip_when_no_goal_linked(project_dir):
 
 def test_story_ready_no_op_when_goal_already_linked(project_dir):
     story_id = cmd_story_create(title="Linked story")
-    goal_id = cmd_goal_create("Outcome", "Criterion")
+    goal_id = cmd_goal_create("Outcome", "Criterion", role="pm")
     cmd_goal_link(story_id, goal_id)
     cmd_story_ready(story_id)
     conn = synlynk._get_db()

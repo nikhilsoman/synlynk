@@ -281,6 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     goal_create_parser.add_argument("--outcome", required=True)
     goal_create_parser.add_argument("--criterion", required=True)
     goal_create_parser.add_argument("--deadline", default=None)
+    goal_create_parser.add_argument("--role", default="dev")
     goal_sub.add_parser("list", help="List active goals")
     goal_link_parser = goal_sub.add_parser("link", help="Link a story to a goal")
     goal_link_parser.add_argument("story_id")
@@ -843,6 +844,7 @@ def build_parser() -> argparse.ArgumentParser:
     roadmap_add_parser.add_argument("--phase-title", default=None, dest="phase_title")
     roadmap_add_parser.add_argument("--priority", default=None)
     roadmap_add_parser.add_argument("--story-id", default=None, dest="story_id")
+    roadmap_add_parser.add_argument("--role", default="dev")
 
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
@@ -972,6 +974,7 @@ def build_parser() -> argparse.ArgumentParser:
     release_parser.add_argument('--dry-run', action='store_true')
     release_parser.add_argument('--version', help='Explicit version string e.g. 0.11.0')
     release_parser.add_argument('--minor', action='store_true', help='Bump minor instead of patch')
+    release_parser.add_argument('--role', default='dev')
 
     viz_parser = subparsers.add_parser("viz", help="Open local browser workspace dashboard")
     viz_parser.add_argument("--serve", action="store_true",
@@ -1376,6 +1379,7 @@ def main(argv=None) -> None:
                     phase_title=args.phase_title,
                     priority=args.priority,
                     story_id=args.story_id,
+                    role=args.role,
                 )
             except ValueError as e:
                 print(f"Error: {e}")
@@ -1475,7 +1479,7 @@ def main(argv=None) -> None:
         from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
         action = getattr(args, "goal_action", None)
         if action == "create":
-            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline)
+            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role)
         elif action == "list":
             cmd_goal_list()
         elif action == "link":
@@ -1540,6 +1544,7 @@ def main(argv=None) -> None:
             dry_run=getattr(args, "dry_run", False),
             version=getattr(args, "version", None),
             minor=getattr(args, "minor", False),
+            role=getattr(args, "role", "dev"),
         )
     elif args.command == "viz":
         cmd_viz(args)

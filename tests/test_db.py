@@ -1,11 +1,13 @@
 import os
 import subprocess
+import pytest
 
 from synlynk.db import (
     _detect_hand_edit,
     _generate_costs_md,
     _generate_roadmap_md,
     cmd_cost_log,
+    cmd_goal_create,
     cmd_roadmap_add,
 )
 
@@ -199,7 +201,7 @@ def test_generate_roadmap_md_writes_post_migration_path(tmp_path, monkeypatch):
 
 
 def test_cmd_roadmap_add_inserts_arc_and_regenerates_md(project_dir):
-    cmd_roadmap_add(version="v0.14.0", title="Next Thing", status="planned")
+    cmd_roadmap_add(version="v0.14.0", title="Next Thing", status="planned", role="pm")
 
     from synlynk import _get_db
 
@@ -214,13 +216,28 @@ def test_cmd_roadmap_add_inserts_arc_and_regenerates_md(project_dir):
     assert "Next Thing" in open(path).read()
 
 
+def test_cmd_roadmap_add_refuses_when_role_not_authorized(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="not authorized"):
+        cmd_roadmap_add(version="0.15.0", title="x", role="dev")
+
+
+def test_cmd_goal_create_refuses_when_role_not_authorized(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="not authorized"):
+        cmd_goal_create(outcome="x", criterion="y", role="dev")
+
+
 def test_cmd_roadmap_add_phase_links_to_existing_arc(project_dir):
-    cmd_roadmap_add(version="v0.14.0", title="Next Thing", status="planned")
+    cmd_roadmap_add(version="v0.14.0", title="Next Thing", status="planned", role="pm")
     cmd_roadmap_add(
         version="v0.14.0",
         phase_title="Build the thing",
         status="planned",
         priority="p1",
+        role="pm",
     )
 
     from synlynk import _get_db
@@ -238,7 +255,7 @@ def test_cmd_roadmap_add_phase_without_arc_raises(project_dir):
     import pytest
 
     with pytest.raises(ValueError, match="no roadmap arc"):
-        cmd_roadmap_add(version="v9.9.9", phase_title="Orphan phase")
+        cmd_roadmap_add(version="v9.9.9", phase_title="Orphan phase", role="pm")
 
 
 def test_generate_costs_md_creates_file_pre_migration(project_dir):

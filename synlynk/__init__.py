@@ -2947,10 +2947,15 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
-def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False) -> None:
+def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False, role: str = "dev") -> None:
     """Cut a named release: bump version, prepend CHANGELOG.md, write blog stub, print checklist."""
     import datetime
     import re
+    from synlynk.policy import check_authority
+
+    authority = check_authority("release_cut", role=role, repo_path=os.getcwd())
+    if not authority.allowed:
+        raise RuntimeError(f"Release refused: role {role!r} is not authorized to cut a release per policy.json.")
 
     # Resolve project root:
     # First priority: check if a VERSION file exists in CWD. If so, root is CWD.

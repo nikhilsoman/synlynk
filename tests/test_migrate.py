@@ -251,7 +251,7 @@ def test_migrate_imports_goal_id_on_roadmap_arcs(tmp_path, monkeypatch):
 
     pd = _make_project_docs(tmp_path)
     from synlynk.db import cmd_goal_create
-    goal_id = cmd_goal_create(outcome="Agent Ecosystem", criterion="Ship the thing")
+    goal_id = cmd_goal_create(outcome="Agent Ecosystem", criterion="Ship the thing", role="pm")
     (pd / "roadmap.md").write_text(
         f"# Roadmap\n\n## v0.11.0 - Agent Ecosystem <!-- goal:{goal_id} -->\n\n- ship the thing [P0]\n"
     )

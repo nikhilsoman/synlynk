@@ -26,7 +26,7 @@ def test_pr_check_soft_warns_on_unlinked_story(project_dir, capsys):
 
 def test_pr_check_does_not_warn_when_goal_linked(project_dir, capsys):
     story_id = cmd_story_create(title="PR story")
-    goal_id = cmd_goal_create("Outcome", "Criterion")
+    goal_id = cmd_goal_create("Outcome", "Criterion", role="pm")
     cmd_goal_link(story_id, goal_id)
     conn = synlynk._get_db()
     conn.execute(
