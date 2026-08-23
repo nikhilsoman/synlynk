@@ -117,3 +117,25 @@ def test_check_authority_unknown_action_raises_value_error(tmp_path, monkeypatch
     repo.mkdir()
     with pytest.raises(ValueError):
         check_authority("not_a_real_action", role="pm", repo_path=str(repo))
+
+
+def test_load_policy_missing_repo_override_file_inherits_workspace_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    ws_policy_path = tmp_path / ".synlynk" / "workspaces" / "acme" / "policy.json"
+    _write_json(ws_policy_path, {
+        "schema_version": 1,
+        "org": {"org_id": "acme", "teams": [], "sso_provider": None, "seat_limits": None},
+        "defaults": {"merge_authority": {"can_merge": ["architect"], "require_non_authoring_review": True, "review_fallback": "comment_checklist"}},
+    })
+    repo = tmp_path / "repo"
+    repo.mkdir()  # no .synlynk/policy.json created here
+    policy = load_policy(repo_path=str(repo), workspace_name="acme")
+    assert policy["merge_authority"]["can_merge"] == ["architect"]
+
+
+def test_check_authority_task_dispatch_unknown_task_type_denied(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("task_dispatch:not_a_real_type", role="dev", repo_path=str(repo))
+    assert result.allowed is False
