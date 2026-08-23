@@ -809,6 +809,13 @@ def build_parser() -> argparse.ArgumentParser:
     story_done_parser = story_sub.add_parser("done", help="Mark a story done")
     story_done_parser.add_argument("story_id")
 
+    tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
+    tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
+    sweep_parser = tpm_subparsers.add_parser(
+        "sweep", help="Run one autonomous sweep pass over ready stories"
+    )
+    sweep_parser.add_argument("--assignee", default="nikhilsoman")
+
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
     score_add_parser = score_sub.add_parser("add", help="Add a human quality rating")
@@ -1351,6 +1358,14 @@ def main(argv=None) -> None:
             cmd_story_draft(args.story_id)
         elif args.story_action == "done":
             cmd_story_done(args.story_id)
+    elif args.command == "tpm" and args.tpm_command == "sweep":
+        from synlynk.tpm_sweep import run_sweep_pass
+
+        summary = run_sweep_pass(assignee=args.assignee)
+        print(
+            f"sweep pass: {summary['advanced']} advanced, "
+            f"{summary['parked']} parked, {summary['failed']} failed"
+        )
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
