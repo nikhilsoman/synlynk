@@ -506,3 +506,49 @@ def test_detect_hand_edit_no_warning_on_pull_then_resync_case(tmp_path, monkeypa
 
     warning = _detect_hand_edit("costs.md")
     assert warning is None
+
+
+def test_find_ticket_returns_none_when_absent(project_dir):
+    from synlynk.db import _find_ticket
+
+    assert _find_ticket("story-x", "task_dispatch:implement", "open") is None
+
+
+def test_insert_ticket_then_find_by_status(project_dir):
+    from synlynk.db import _find_ticket, _insert_ticket
+
+    _insert_ticket(
+        "story-x", "task_dispatch:implement", "https://example.com/o/r/issues/1"
+    )
+    ticket = _find_ticket("story-x", "task_dispatch:implement", "open")
+    assert ticket is not None
+    assert ticket["issue_url"] == "https://example.com/o/r/issues/1"
+    assert ticket["status"] == "open"
+    # wrong status returns nothing
+    assert _find_ticket("story-x", "task_dispatch:implement", "resolved") is None
+
+
+def test_insert_ticket_duplicate_issue_url_raises(project_dir):
+    import sqlite3
+
+    from synlynk.db import _insert_ticket
+
+    _insert_ticket(
+        "story-x", "task_dispatch:implement", "https://example.com/o/r/issues/2"
+    )
+    with __import__("pytest").raises(sqlite3.IntegrityError):
+        _insert_ticket(
+            "story-y", "task_dispatch:implement", "https://example.com/o/r/issues/2"
+        )
+
+
+def test_mark_ticket_consumed_updates_status_and_timestamp(project_dir):
+    from synlynk.db import _find_ticket, _insert_ticket, _mark_ticket_consumed
+
+    _insert_ticket(
+        "story-x", "task_dispatch:implement", "https://example.com/o/r/issues/3"
+    )
+    ticket = _find_ticket("story-x", "task_dispatch:implement", "open")
+    _mark_ticket_consumed(ticket["id"])
+    assert _find_ticket("story-x", "task_dispatch:implement", "open") is None
+    assert _find_ticket("story-x", "task_dispatch:implement", "consumed") is not None

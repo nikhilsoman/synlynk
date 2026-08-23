@@ -2517,6 +2517,60 @@ def cmd_story_done(story_id: str) -> None:
     )
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked done")
 
+
+def _find_ticket(story_id: str, action: str, status: str) -> dict | None:
+    """Returns the approval_tickets row matching (story_id, action, status), or None."""
+    from synlynk import _get_db
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT id, story_id, action, issue_url, status, opened_at, resolved_at, consumed_at "
+        "FROM approval_tickets WHERE story_id=? AND action=? AND status=? "
+        "ORDER BY id DESC LIMIT 1",
+        (story_id, action, status),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "story_id": row[1],
+        "action": row[2],
+        "issue_url": row[3],
+        "status": row[4],
+        "opened_at": row[5],
+        "resolved_at": row[6],
+        "consumed_at": row[7],
+    }
+
+
+def _insert_ticket(story_id: str, action: str, issue_url: str) -> None:
+    """Records a newly filed approval ticket as 'open'."""
+    from synlynk import _get_db
+
+    conn = _get_db()
+    conn.execute(
+        "INSERT INTO approval_tickets (story_id, action, issue_url, status) "
+        "VALUES (?, ?, ?, 'open')",
+        (story_id, action, issue_url),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _mark_ticket_consumed(ticket_id: int) -> None:
+    """Marks a resolved ticket as consumed so it cannot unblock a story twice."""
+    from synlynk import _get_db
+
+    conn = _get_db()
+    conn.execute(
+        "UPDATE approval_tickets SET status='consumed', consumed_at=CURRENT_TIMESTAMP WHERE id=?",
+        (ticket_id,),
+    )
+    conn.commit()
+    conn.close()
+
+
 def cmd_goal_create(outcome: str, criterion: str, deadline: str = None, role: str = "pm") -> str:
     """Creates a Business Goal record in state.db. Returns the generated goal_id."""
     from synlynk import _GREEN, _RESET, _get_db
