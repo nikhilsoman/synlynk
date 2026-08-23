@@ -110,7 +110,7 @@ HARNESS_CAPABILITY_BASELINES = {
     },
     "agy": {
         "cli": "agy",
-        "can_gh_write": False,
+        "can_gh_write": True,
         "non_interactive_flags": [],
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
@@ -144,7 +144,7 @@ HARNESS_CAPABILITY_BASELINES = {
     },
     "grok": {
         "cli": "grok",
-        "can_gh_write": True,
+        "can_gh_write": False,
         "non_interactive_flags": [],
         "prompt_flag": "--single",  # placed last: grok --single "$PROMPT"
         "prompt_via_arg": True,

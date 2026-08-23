@@ -28,22 +28,35 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
+_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
+
 
 def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write: bool = False):
     """Deterministic fallback harness selection for agent_id-driven dispatch.
 
-    Picks the first harness (alphabetical) whose declared baseline "roles"
-    (architect/builder/verifier — a different vocabulary than org-chart
-    roles, see docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md §6)
-    includes the mapped tag for this org role. Does not consult the
+    Picks the first harness whose declared baseline "roles" (architect/
+    builder/verifier — a different vocabulary than org-chart roles, see
+    docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md
+    §6) includes the mapped tag for this org role. Does not consult the
     story_id-based capability_scores DB table — that stays story_id-only.
+    When requires_gh_write is set, candidates are tried in the fixed
+    priority order claude -> agy first, then any remaining CORE_FLEET members
+    alphabetically. Non-gh-write selection is untouched: plain alphabetical
+    order over CORE_FLEET.
     """
     baseline_role = _ORG_ROLE_TO_BASELINE_ROLE.get(org_role)
     if not baseline_role:
         return None
     from synlynk._constants import CORE_FLEET
 
-    for name in sorted(n for n in baselines_map if n in CORE_FLEET):
+    candidates = [n for n in baselines_map if n in CORE_FLEET]
+    if requires_gh_write:
+        ordered = [n for n in _GH_WRITE_HARNESS_PRIORITY if n in candidates]
+        ordered += sorted(n for n in candidates if n not in _GH_WRITE_HARNESS_PRIORITY)
+    else:
+        ordered = sorted(candidates)
+
+    for name in ordered:
         baseline = baselines_map[name]
         if baseline_role not in baseline.get("roles", []):
             continue
@@ -484,7 +497,14 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
             proc_env[k] = v
 
     if requires_gh_write:
-        role = agent_role or _role_for_story(story_id) or "dev"
+        role = agent_role or _role_for_story(story_id)
+        if not role:
+            raise RuntimeError(
+                "Dispatch refused: --requires-gh-write requires a resolvable role identity "
+                "(agent_role or a story-tagged role), but none was provided. Pass --role "
+                "<role> to dispatch, or use --as-agent/--story with a role-tagged entry. "
+                "Refusing to default to 'dev' for a GitHub-write dispatch (see #423, #569)."
+            )
         gh_token = _resolve_dispatch_gh_token(role)
         # Never inherit ambient tokens from the parent shell for GH-write jobs.
         proc_env.pop("GH_TOKEN", None)
@@ -2133,7 +2153,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    scope_paths: list = None,
                    session_id: str = None,
                    gh_write_target_kind: str = "issue",
-                   model: str = None) -> dict:
+                   model: str = None,
+                   role: str = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2158,6 +2179,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             resolved_agent_role = next(
                 (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
             )
+    resolved_agent_role = role or resolved_agent_role
+    if requires_gh_write and not resolved_agent_role:
+        resolved_agent_role = _role_for_story(story_id)
+    if requires_gh_write and not resolved_agent_role:
+        raise RuntimeError(
+            "Dispatch refused: --requires-gh-write requires a resolvable role identity, "
+            "but none was provided. Pass --role <role>, or dispatch via --as-agent "
+            "<registered-agent-id> or --story <id> with a role-tagged story. Refusing to "
+            "silently default to the 'dev' identity for a GitHub-write dispatch "
+            "(see #423, #569)."
+        )
     if session_id is None:
         from synlynk.session import _read_active_session
         session_id = _read_active_session()
@@ -2326,7 +2358,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
     if task_type == "review":
         role_list = ["review"]
-    permissions = _resolve_dispatch_permissions(agent, role_list=role_list, grants=grants, revokes=revokes)
+    effective_grants = list(grants or [])
+    if requires_gh_write and "run:shell" not in effective_grants:
+        effective_grants.append("run:shell")
+    permissions = _resolve_dispatch_permissions(
+        agent, role_list=role_list, grants=effective_grants, revokes=revokes
+    )
     flags = flags + _permissions_to_flags(agent, permissions)
     if agent == "agy" and permissions:
         perm_lines = "\n".join(f"- {p}" for p in permissions)
@@ -2621,7 +2658,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if requires_gh_write and issue is not None:
         target_prefix = "pr" if gh_write_target_kind == "pr" else "issue"
         gh_write_target_value = f"{target_prefix}:{issue}"
-        gh_write_role = resolved_agent_role or _role_for_story(story_id) or "dev"
+        gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = "review_posted" if task_type == "review" else "closed"
     gh_write_expect_for_job = gh_write_expect_value or "closed"

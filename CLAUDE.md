@@ -138,7 +138,7 @@ Enforced by discipline (Claude/PM checks it as part of PR housekeeping), not CI 
 
 Rationale: a July 2026 audit found 30 stale worktrees/branches accumulated because cleanup was only ever done reactively, in large batches, long after the underlying PRs had merged. This protocol front-loads that cost onto the merge step where the context is already loaded, instead of letting it compound into a periodic manual archaeology exercise.
 
-<!-- synlynk:harness vsop-repair verified:2026-08-09T18:03:36Z -->
+<!-- synlynk:harness vsop-repair verified:2026-08-22T21:02:26Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
@@ -178,7 +178,10 @@ task, not the Agent (role) doing the work
 | implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
 Do not start a task outside your role column without explicit approval from Claude.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok by default**. Agy headless can complete `gh pr review`, `gh pr comment`, and `gh pr merge` writes when the machine-local `~/.gemini/antigravity-cli/settings.json` already contains scoped `command(gh pr review)`, `command(gh pr comment)`, and `command(gh pr merge)` allow-rules; that precondition is operator-confirmed, not reliably verifiable mid-task. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically, but do not treat it as a hard identity guarantee yet: the token-stripping fallback does not prevent `gh` from using a locally logged-in personal keyring identity when no role-scoped GitHub App token is available (#569).
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)
+- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
+- Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design
+- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 
 This table is generated from `.synlynk/config.json` so it tracks the repo's own routing rather than synlynk's default fleet assumptions.
 
