@@ -27,6 +27,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
 - **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.
 
+## [0.15.0] - 2026-08-23
+
+**Release pitch:** synlynk's own repo gets a real authority layer — a two-tier `policy.json` (workspace defaults + per-repo overrides) that turns previously-hardcoded prose tables (who can merge, who can cut a release, who can edit the roadmap, which harness handles which task type) into data, gated by a fail-closed `check_authority()` resolver, with branch protection now live-verified on `main`.
+
+### Added
+
+**Workspace Policy Layer (design 2026-08-23, plan `docs/superpowers/plans/2026-08-23-workspace-policy-and-autonomous-loop.md`, PR #1122)**
+- `synlynk/policy.py` — two-tier policy schema: workspace defaults (`~/.synlynk/workspaces/<name>/policy.json`, falling back to `DEFAULT_WORKSPACE_POLICY` when absent) merged with a repo's sparse `.synlynk/policy.json` overrides, whole-object-replace-per-top-level-key (not a deep merge).
+- `check_authority(action, role, repo_path)` → `AuthorityResult(allowed, requires_approval, reason)`, covering `roadmap_edit`, `goal_create`, `merge`, `release_cut`, and `task_dispatch:<type>` actions, plus an `approval_required_for` rule matcher (named releases, roadmap-authority changes, security-sensitive paths, irreversible merges).
+- Wired fail-closed into four call sites: `dispatch_agent()`'s task-allocation resolution, `cmd_release`, `cmd_roadmap_add`, `cmd_goal_create` — each raises `RuntimeError` on `allowed=False` rather than proceeding.
+- `synlynk policy check-merge`, `synlynk policy sync-branch-protection`, `synlynk policy show` — new CLI commands; `sync-branch-protection` calls GitHub's branch protection API idempotently, deriving required status checks from `.github/workflows/`.
+- This repo's own `.synlynk/policy.json` migrates the existing CLAUDE.md prose tables (Capability-Based Task Allocation, PR Review Discipline, Named Release authority) into data — CLAUDE.md now points to `synlynk policy show` as the source of truth instead of hand-maintained tables.
+- Full `check_authority()` unit coverage: allow/deny/requires_approval across both tiers, override-merge rule, missing-repo-override inheritance, unknown task_type denial (`tests/test_policy.py`, 11 tests).
+- **Live-verified:** branch protection synced and independently confirmed via `gh api repos/nikhilsoman/synlynk/branches/main/protection` — `required_status_checks` = `["test (3.8)", "test (3.10)", "test (3.12)", "qa-gate"]`, `required_reviews` = `1`, `enforce_admins` = `true`.
+
+### Fixed
+- Default `role="dev"` on `cmd_release`/`cmd_roadmap_add`/`cmd_goal_create` didn't match the default policy's `pm`-only authority for these actions, causing unspecified-role calls (including coldstart's own roadmap-row write) to fail closed. Defaulted to `role="pm"`, matching the actions' actual authority scope.
+- Taxonomy regression: two new `policy` subcommands were missing `COMMAND_TAXONOMY` entries, failing `test_taxonomy_matches_real_cli_surface`.
+
 ## [0.14.0] - 2026-08-16
 
 **Release pitch:** the execution floor gets a truth guarantee — every GitHub-write dispatch now has its claimed outcome independently verified against live GitHub state instead of trusted at face value — and workspace agents get a real identity: a storage-backed charter, a `synlynk agent init/list/show/edit/disable` onboarding surface, and dispatch integration that resolves role and harness from that identity automatically.

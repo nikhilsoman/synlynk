@@ -131,6 +131,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [123](./123-pr1082-1089-qa-merge-gate-live5.md) | PRs #1082–#1089 — Shipping the QA Merge Gate, and the Bug It Found on the Way | [#1082](https://github.com/nikhilsoman/synlynk/pull/1082), [#1083](https://github.com/nikhilsoman/synlynk/pull/1083), [#1084](https://github.com/nikhilsoman/synlynk/pull/1084), [#1086](https://github.com/nikhilsoman/synlynk/pull/1086), [#1088](https://github.com/nikhilsoman/synlynk/pull/1088), [#1089](https://github.com/nikhilsoman/synlynk/pull/1089) | 2026-08-21/22 |
 | [124](./124-pr1100-1101-qa-completion-tracker-and-merge-restricted-classes.md) | PRs #1100–#1101 — Completion Tracker + Merge-Restricted-Classes Gate Mode | [#1100](https://github.com/nikhilsoman/synlynk/pull/1100), [#1101](https://github.com/nikhilsoman/synlynk/pull/1101) | 2026-08-22 |
 | [125](./125-pr1110-gh-write-identity-hardening.md) | PR #1110 — gh-write Identity Hardening: Phase 1 Closeout | [#1110](https://github.com/nikhilsoman/synlynk/pull/1110) | 2026-08-23 |
+| **[126](./126-pr1122-v0.15.0-workspace-policy-layer.md)** | **v0.15.0 — The Workspace Policy Layer (Named Release)** | [#1122](https://github.com/nikhilsoman/synlynk/pull/1122) | **2026-08-23** |
 
 ## Per-PR Post Template
 
