@@ -70,6 +70,7 @@ from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.gh_verify import gh_write_verified
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+from synlynk.policy import check_authority
 
 
 def _pkg(name: str, default=None):
@@ -2159,6 +2160,18 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    if task_type:
+        try:
+            authority = check_authority(
+                f"task_dispatch:{task_type}", role=role or "dev", repo_path=os.getcwd(),
+            )
+        except ValueError:
+            authority = None  # unknown task_type action shape — not a policy-covered task_type, skip gate
+        if authority is not None and not authority.allowed:
+            raise RuntimeError(
+                f"Dispatch refused: task_type {task_type!r} is not an authorized task_type "
+                f"for role {role or 'dev'!r} per policy.json (see #423, #569)."
+            )
     # Keep the explicit flag as an override, but infer the same safety and
     # identity requirements for obvious GitHub-write task shapes (#659).
     requires_gh_write = bool(

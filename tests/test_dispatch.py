@@ -1,6 +1,19 @@
 import pytest
+import synlynk as sl
 
 from synlynk.dispatch import _format_job_summary
+
+
+def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp_path, monkeypatch, isolated_db):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    with pytest.raises(RuntimeError, match="not an authorized task_type"):
+        sl.dispatch_agent(
+            "codex", "do something", task_type="not_a_real_task_type",
+            context_mode="none",
+        )
 
 
 def test_format_job_summary_flags_cancelled_github_mcp_write():
