@@ -844,6 +844,15 @@ def build_parser() -> argparse.ArgumentParser:
     roadmap_add_parser.add_argument("--priority", default=None)
     roadmap_add_parser.add_argument("--story-id", default=None, dest="story_id")
 
+    policy_parser = subparsers.add_parser("policy", help="Check policy authority")
+    policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
+    policy_check_merge_parser = policy_subparsers.add_parser(
+        "check-merge", help="Check merge authority for a role per policy.json"
+    )
+    policy_check_merge_parser.add_argument(
+        "--role", required=True, help="Role identity attempting to merge"
+    )
+
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
     grant_parser = credit_sub.add_parser("grant", help="Record a credit grant for an agent")
@@ -985,6 +994,7 @@ def _warn_deprecated_harness_flag(argv) -> None:
 def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
+    from synlynk.policy_cli import cmd_policy_check_merge
 
     from synlynk import (
         HARNESS_CAPABILITY_BASELINES,
@@ -1368,6 +1378,8 @@ def main(argv=None) -> None:
             except ValueError as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+    elif args.command == "policy" and args.policy_command == "check-merge":
+        sys.exit(cmd_policy_check_merge(role=args.role))
     elif args.command == "credit":
         if args.credit_action == "grant":
             _warn_deprecated_harness_flag(cli_tokens)
