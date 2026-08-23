@@ -4,6 +4,8 @@ Local-only for this build — authority_scope is reserved for future team/enterp
 delivery and is always written as NULL here (see plan Task 1 header note).
 """
 
+from __future__ import annotations
+
 import json
 import re
 import time
