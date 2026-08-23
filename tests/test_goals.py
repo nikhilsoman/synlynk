@@ -31,6 +31,7 @@ def test_goal_create_returns_goal_id_and_persists():
         outcome="Ship agent role split to v0.10.0",
         criterion="synlynk dispatch routes 100% of implementation work to non-Claude agents",
         deadline="2026-09-01",
+        role="pm",
     )
     assert goal_id.startswith("goal-")
     conn = _get_db()
@@ -48,7 +49,7 @@ def test_goal_create_returns_goal_id_and_persists():
 
 def test_goal_list_prints_active_goals(capsys):
     from synlynk.db import cmd_goal_create, cmd_goal_list
-    cmd_goal_create(outcome="Outcome A", criterion="Criterion A")
+    cmd_goal_create(outcome="Outcome A", criterion="Criterion A", role="pm")
     cmd_goal_list()
     captured = capsys.readouterr()
     assert "Outcome A" in captured.out
@@ -56,7 +57,7 @@ def test_goal_list_prints_active_goals(capsys):
 
 def test_goal_link_sets_primary_goal_id_on_story():
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link
-    goal_id = cmd_goal_create(outcome="O", criterion="C")
+    goal_id = cmd_goal_create(outcome="O", criterion="C", role="pm")
     story_id = cmd_story_create(title="Do the thing")
     cmd_goal_link(story_id, goal_id)
     conn = _get_db()
@@ -67,8 +68,8 @@ def test_goal_link_sets_primary_goal_id_on_story():
 
 def test_goal_link_secondary_writes_contribution_not_primary():
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link
-    goal_a = cmd_goal_create(outcome="A", criterion="C")
-    goal_b = cmd_goal_create(outcome="B", criterion="C")
+    goal_a = cmd_goal_create(outcome="A", criterion="C", role="pm")
+    goal_b = cmd_goal_create(outcome="B", criterion="C", role="pm")
     story_id = cmd_story_create(title="Cross-cutting work")
     cmd_goal_link(story_id, goal_a)
     cmd_goal_link(story_id, goal_b, secondary=True)
@@ -85,7 +86,7 @@ def test_goal_link_secondary_writes_contribution_not_primary():
 def test_goal_status_reports_story_counts(capsys):
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_status
     from synlynk import _get_db
-    goal_id = cmd_goal_create(outcome="Ship it", criterion="All stories done")
+    goal_id = cmd_goal_create(outcome="Ship it", criterion="All stories done", role="pm")
     s1 = cmd_story_create(title="Story one")
     s2 = cmd_story_create(title="Story two")
     cmd_goal_link(s1, goal_id)
@@ -105,7 +106,7 @@ def test_cli_goal_create_and_list(capsys, monkeypatch):
     from synlynk.cli import main
     monkeypatch.setattr(
         sys, "argv",
-        ["synlynk", "goal", "create", "--outcome", "Ship BS-8", "--criterion", "goals table exists"]
+        ["synlynk", "goal", "create", "--outcome", "Ship BS-8", "--criterion", "goals table exists", "--role", "pm"]
     )
     main()
     captured = capsys.readouterr()
@@ -126,6 +127,7 @@ def test_context_from_db_includes_active_goal(tmp_path, monkeypatch):
         outcome="Ship BS-8",
         criterion="goals table exists and CLI works",
         deadline="2026-09-01",
+        role="pm",
     )
     context = _generate_context_from_db(out_path=str(tmp_path / ".synlynk" / "context.md"))
     assert "## Active Goal" in context

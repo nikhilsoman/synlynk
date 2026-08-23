@@ -1137,7 +1137,7 @@ def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
     
     # Run in dry-run
-    synlynk.cmd_release(dry_run=True)
+    synlynk.cmd_release(dry_run=True, role="pm")
     
     # Ensure no file writes
     assert version_file.read_text().strip() == "0.10.0"
