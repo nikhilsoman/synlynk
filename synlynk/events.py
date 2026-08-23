@@ -4,6 +4,8 @@ Local-only for this build — authority_scope is reserved for future team/enterp
 delivery and is always written as NULL here (see plan Task 1 header note).
 """
 
+from __future__ import annotations
+
 import json
 import re
 import time
@@ -131,6 +133,75 @@ def _scan_pr_completion(pr_number, pr_body):
     )
 
 
+def _existing_approval_resolved_keys() -> set:
+    """Returns the set of issue URLs that already have an approval_resolved event."""
+    from synlynk import _get_db
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT payload_json FROM events WHERE event_type='approval_resolved'"
+    ).fetchall()
+    conn.close()
+    keys = set()
+    for (payload_json,) in rows:
+        try:
+            payload = json.loads(payload_json)
+        except (TypeError, ValueError):
+            continue
+        issue_url = payload.get("issue_url")
+        if issue_url is not None:
+            keys.add(issue_url)
+    return keys
+
+
+def _scan_approval_tickets() -> int | None:
+    """Poll approval issues and emit approval_resolved for newly resolved tickets.
+
+    An issue is resolved when it is closed or has a comment beginning with
+    ``approve``. Returns the id of the last event emitted, or None if none were
+    emitted.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "list",
+                "--search",
+                "[APPROVAL] in:title",
+                "--state",
+                "all",
+                "--json",
+                "url,state,comments",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        issues = json.loads(result.stdout) if result.returncode == 0 else []
+    except (FileNotFoundError, json.JSONDecodeError, StopIteration):
+        issues = []
+
+    already = _existing_approval_resolved_keys()
+    last_event_id = None
+    for issue in issues:
+        if issue["url"] in already:
+            continue
+        resolved = issue["state"] == "CLOSED" or any(
+            comment.get("body", "").strip().lower().startswith("approve")
+            for comment in issue.get("comments", [])
+        )
+        if resolved:
+            last_event_id = emit_event(
+                "approval_resolved",
+                {"issue_url": issue["url"]},
+                emitted_by="_scan_approval_tickets",
+            )
+            already.add(issue["url"])
+    return last_event_id
+
+
 def emit_event(event_type: str, payload: dict, emitted_by: str,
                parent_event_id: int = None) -> int:
     """Writes an event row. Returns the new event's id."""
@@ -247,7 +318,6 @@ def scan_local_events(harness_name: str) -> None:
         advance_checkpoint(harness_name, "review_submitted", last_review_event_id)
     if last_completion_event_id is not None:
         advance_checkpoint(harness_name, "spec_verified", last_completion_event_id)
-
     try:
         result = subprocess.run(
             [
@@ -277,6 +347,10 @@ def scan_local_events(harness_name: str) -> None:
         )
     if last_event_id is not None:
         advance_checkpoint(harness_name, "spec_or_plan_committed", last_event_id)
+
+    last_approval_event_id = _scan_approval_tickets()
+    if last_approval_event_id is not None:
+        advance_checkpoint(harness_name, "approval_resolved", last_approval_event_id)
 
 
 def cmd_events_tail(event_type: str = None, limit: int = 20) -> None:
