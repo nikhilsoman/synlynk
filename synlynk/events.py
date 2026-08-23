@@ -147,6 +147,18 @@ def emit_event(event_type: str, payload: dict, emitted_by: str,
     return event_id
 
 
+def emit_awaiting_approval(story_id: str, action: str, reason: str,
+                           emitted_by: str = "tpm_sweep") -> int:
+    """Emits an awaiting_approval GOVERNS event: an autonomous action was gated by
+    policy.json's requires_approval and is parked pending a human decision.
+    """
+    return emit_event(
+        "awaiting_approval",
+        {"story_id": story_id, "action": action, "reason": reason},
+        emitted_by=emitted_by,
+    )
+
+
 def pending_events(harness_name: str, event_type: str) -> list:
     """Returns events of event_type with id greater than harness_name's checkpoint, oldest first."""
     from synlynk import _get_db
