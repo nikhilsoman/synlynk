@@ -31,6 +31,7 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
                 "refactor": {"harness": "codex", "fallback": []},
                 "cli-plumbing": {"harness": "codex", "fallback": []},
                 "gh_write": {"harness": "claude", "fallback": ["agy"]},
+                "review": {"harness": "claude", "fallback": []},
             },
         },
         "merge_authority": {
