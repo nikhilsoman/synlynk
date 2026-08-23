@@ -4,6 +4,17 @@ import pytest
 from synlynk.events import emit_event, pending_events, advance_checkpoint, scan_local_events
 
 
+def test_approval_tickets_table_exists(project_dir):
+    import synlynk
+    conn = synlynk._get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(approval_tickets)")}
+    conn.close()
+    assert cols == {
+        "id", "story_id", "action", "issue_url", "status",
+        "opened_at", "resolved_at", "consumed_at",
+    }
+
+
 def test_emit_event_writes_row_and_returns_id(project_dir):
     event_id = emit_event(
         "story_done",
