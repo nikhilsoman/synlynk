@@ -2947,7 +2947,7 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
-def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False, role: str = "dev") -> None:
+def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False, role: str = "pm") -> None:
     """Cut a named release: bump version, prepend CHANGELOG.md, write blog stub, print checklist."""
     import datetime
     import re

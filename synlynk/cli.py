@@ -281,7 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     goal_create_parser.add_argument("--outcome", required=True)
     goal_create_parser.add_argument("--criterion", required=True)
     goal_create_parser.add_argument("--deadline", default=None)
-    goal_create_parser.add_argument("--role", default="dev")
+    goal_create_parser.add_argument("--role", default="pm")
     goal_sub.add_parser("list", help="List active goals")
     goal_link_parser = goal_sub.add_parser("link", help="Link a story to a goal")
     goal_link_parser.add_argument("story_id")
@@ -844,7 +844,7 @@ def build_parser() -> argparse.ArgumentParser:
     roadmap_add_parser.add_argument("--phase-title", default=None, dest="phase_title")
     roadmap_add_parser.add_argument("--priority", default=None)
     roadmap_add_parser.add_argument("--story-id", default=None, dest="story_id")
-    roadmap_add_parser.add_argument("--role", default="dev")
+    roadmap_add_parser.add_argument("--role", default="pm")
 
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")

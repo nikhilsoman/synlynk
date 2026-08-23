@@ -2333,7 +2333,7 @@ def cmd_roadmap_add(
     phase_title: str = None,
     priority: str = None,
     story_id: str = None,
-    role: str = "dev",
+    role: str = "pm",
 ) -> None:
     """Add or update a roadmap arc, or a phase within an existing arc.
 
@@ -2513,7 +2513,7 @@ def cmd_story_done(story_id: str) -> None:
     )
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked done")
 
-def cmd_goal_create(outcome: str, criterion: str, deadline: str = None, role: str = "dev") -> str:
+def cmd_goal_create(outcome: str, criterion: str, deadline: str = None, role: str = "pm") -> str:
     """Creates a Business Goal record in state.db. Returns the generated goal_id."""
     from synlynk import _GREEN, _RESET, _get_db
     from synlynk.policy import check_authority
