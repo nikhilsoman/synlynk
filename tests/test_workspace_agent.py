@@ -6,7 +6,7 @@ from synlynk.workspace_agent import cmd_workspace_agent_run
 
 def test_nudges_on_goal_fully_closed(project_dir, capsys):
     story_id = cmd_story_create(title="Only story")
-    goal_id = cmd_goal_create("Ship the thing", "All stories done")
+    goal_id = cmd_goal_create("Ship the thing", "All stories done", role="pm")
     cmd_goal_link(story_id, goal_id)
 
     with patch("subprocess.run") as mock_run:
@@ -22,7 +22,7 @@ def test_nudges_on_goal_fully_closed(project_dir, capsys):
 def test_no_nudge_when_goal_still_has_open_stories(project_dir, capsys):
     story_id = cmd_story_create(title="Story one")
     story_id_2 = cmd_story_create(title="Story two")
-    goal_id = cmd_goal_create("Ship the thing", "All stories done")
+    goal_id = cmd_goal_create("Ship the thing", "All stories done", role="pm")
     cmd_goal_link(story_id, goal_id)
     cmd_goal_link(story_id_2, goal_id)
 
@@ -37,7 +37,7 @@ def test_no_nudge_when_goal_still_has_open_stories(project_dir, capsys):
 
 def test_nudges_use_agent_specific_checkpoint_no_repeat(project_dir, capsys):
     story_id = cmd_story_create(title="Only story")
-    goal_id = cmd_goal_create("Ship the thing", "All stories done")
+    goal_id = cmd_goal_create("Ship the thing", "All stories done", role="pm")
     cmd_goal_link(story_id, goal_id)
 
     with patch("subprocess.run") as mock_run:

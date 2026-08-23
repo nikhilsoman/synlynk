@@ -6,6 +6,14 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from synlynk import cmd_release
 
+
+def test_cmd_release_refuses_when_role_not_authorized(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "VERSION").write_text("0.14.0")
+    with pytest.raises(RuntimeError, match="not authorized"):
+        cmd_release(dry_run=True, role="dev")
+
 def test_cmd_release_dry_run_no_writes(tmp_path, monkeypatch):
     # Setup files
     version_file = tmp_path / "VERSION"
@@ -25,7 +33,7 @@ def test_cmd_release_dry_run_no_writes(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
 
     # Run release command in dry-run mode
-    cmd_release(dry_run=True)
+    cmd_release(dry_run=True, role="pm")
 
     # Ensure no files were changed
     assert version_file.read_text().strip() == "0.10.0"
@@ -44,7 +52,7 @@ def test_cmd_release_bumps_version(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
 
     # Run release command
-    cmd_release(dry_run=False)
+    cmd_release(dry_run=False, role="pm")
 
     # Ensure version file was bumped
     assert version_file.read_text().strip() == "0.10.1"
@@ -68,7 +76,7 @@ def test_cmd_release_writes_changelog(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
 
     # Run release command
-    cmd_release(dry_run=False)
+    cmd_release(dry_run=False, role="pm")
 
     changelog_content = changelog_file.read_text()
     assert "## [v0.10.1]" in changelog_content
@@ -93,7 +101,7 @@ def test_cmd_release_writes_blog_stub(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
 
     # Run release command
-    cmd_release(dry_run=False)
+    cmd_release(dry_run=False, role="pm")
 
     # Expected next blog is 06-prTBD-v0.10.1.md
     expected_blog = blog_dir / "06-prTBD-v0.10.1.md"
@@ -114,7 +122,7 @@ def test_cmd_release_checklist_printed(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
 
     # Run release command
-    cmd_release(dry_run=False)
+    cmd_release(dry_run=False, role="pm")
 
     captured = capsys.readouterr()
     assert "synlynk release checklist for v0.10.1" in captured.out
@@ -135,7 +143,7 @@ def test_cmd_release_minor_flag(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "check_output", mock_check_output)
 
     # Run release command with minor=True
-    cmd_release(dry_run=False, minor=True)
+    cmd_release(dry_run=False, minor=True, role="pm")
 
     # Ensure version bumped to 0.11.0
     assert version_file.read_text().strip() == "0.11.0"

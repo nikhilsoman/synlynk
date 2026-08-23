@@ -150,6 +150,10 @@ pm, review, deploy
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
+**Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** —
+a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`;
+a non-zero exit means do not merge.
+
 **GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different reviewer and `gh pr review --approve` fails with "Can not approve your own pull request" on every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.
 
 ## Brainstorm-First Policy
@@ -166,17 +170,9 @@ pm, review, deploy
 
 ## Capability-Based Task Allocation
 
-**Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a 
-task, not the Agent (role) doing the work
-- See `docs/glossary-agent-vs-harness.md`
-
-| Role | Harness | Tasks |
-| :--- | :--- | :--- |
-| pm / review / deploy / brainstorm | Claude | pm, review, deploy, brainstorm |
-| implement / test / css / templates / content / subpages | Agy | implement, test, css, templates, content, subpages |
-| implement / test / canvas / js / infra | Grok | implement, test, canvas, js, infra |
-| implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
-Do not start a task outside your role column without explicit approval from Claude.
+Source of truth: `.synlynk/policy.json` (`dev_authority.task_allocation`). Run
+`synlynk policy show` to print the current resolved table. Do not hand-edit this
+section — edit `.synlynk/policy.json` instead.
 
 **GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)
 - Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
