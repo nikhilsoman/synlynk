@@ -1059,6 +1059,18 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, id);
 
+CREATE TABLE IF NOT EXISTS approval_tickets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    story_id      TEXT NOT NULL,
+    action        TEXT NOT NULL,
+    issue_url     TEXT NOT NULL UNIQUE,
+    status        TEXT NOT NULL DEFAULT 'open',
+    opened_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at   TIMESTAMP,
+    consumed_at   TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_approval_tickets_story_action ON approval_tickets(story_id, action, status);
+
 CREATE TABLE IF NOT EXISTS subscriptions (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     harness_name         TEXT NOT NULL,
