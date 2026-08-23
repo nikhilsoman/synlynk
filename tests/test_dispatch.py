@@ -1246,7 +1246,7 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
-        "agy", "review and merge PR #500", story_id="story-manual-1",
+        "grok", "review and merge PR #500", story_id="story-manual-1",
         context_mode="none", requires_gh_write=True, role="qa",
     )
 
