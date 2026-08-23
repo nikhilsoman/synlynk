@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "repo_id": "synlynk",
+  "overrides": {
+    "dev_authority": {
+      "task_allocation": {
+        "implement": {"harness": "codex", "fallback": ["grok", "agy"]},
+        "test": {"harness": "codex", "fallback": ["grok", "agy"]},
+        "css": {"harness": "agy", "fallback": []},
+        "templates": {"harness": "agy", "fallback": []},
+        "content": {"harness": "agy", "fallback": []},
+        "subpages": {"harness": "agy", "fallback": []},
+        "canvas": {"harness": "grok", "fallback": []},
+        "js": {"harness": "grok", "fallback": []},
+        "infra": {"harness": "grok", "fallback": []},
+        "refactor": {"harness": "codex", "fallback": []},
+        "cli-plumbing": {"harness": "codex", "fallback": []},
+        "gh_write": {"harness": "claude", "fallback": ["agy"]}
+      }
+    },
+    "merge_authority": {
+      "can_merge": ["qa"],
+      "require_non_authoring_review": true,
+      "review_fallback": "comment_checklist"
+    },
+    "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true}
+  }
+}

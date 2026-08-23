@@ -36,6 +36,12 @@ def cmd_policy_check_merge(role: str) -> int:
     return 0
 
 
+def cmd_policy_show() -> int:
+    policy = load_policy(repo_path=os.getcwd())
+    print(json.dumps(policy, indent=2))
+    return 0
+
+
 def cmd_policy_sync_branch_protection(dry_run: bool = False) -> int:
     policy = load_policy(repo_path=os.getcwd())
     review_count = 1 if policy["merge_authority"]["require_non_authoring_review"] else 0

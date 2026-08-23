@@ -848,6 +848,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     policy_parser = subparsers.add_parser("policy", help="Check policy authority")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
+    policy_subparsers.add_parser("show", help="Show the resolved policy")
     policy_check_merge_parser = policy_subparsers.add_parser(
         "check-merge", help="Check merge authority for a role per policy.json"
     )
@@ -999,7 +1000,7 @@ def _warn_deprecated_harness_flag(argv) -> None:
 def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
-    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_sync_branch_protection
+    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_show, cmd_policy_sync_branch_protection
 
     from synlynk import (
         HARNESS_CAPABILITY_BASELINES,
@@ -1384,6 +1385,8 @@ def main(argv=None) -> None:
             except ValueError as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+    elif args.command == "policy" and args.policy_command == "show":
+        sys.exit(cmd_policy_show())
     elif args.command == "policy" and args.policy_command == "check-merge":
         sys.exit(cmd_policy_check_merge(role=args.role))
     elif args.command == "policy" and args.policy_command == "sync-branch-protection":
