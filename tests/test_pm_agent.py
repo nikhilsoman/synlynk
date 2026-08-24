@@ -1,7 +1,16 @@
 import os
 import textwrap
+from unittest.mock import MagicMock, patch
 
-from synlynk.pm_agent import _compose_prompt, _load_config, _resolve_decide_panel
+import pytest
+
+from synlynk.pm_agent import (
+    _compose_prompt,
+    _invoke_headless_claude,
+    _load_config,
+    _resolve_decide_panel,
+    cmd_pm_sweep,
+)
 from synlynk.team import HARNESS_CAPABILITY_BASELINES
 
 
@@ -57,3 +66,79 @@ def test_compose_prompt_includes_segments_competitors_panel_labels():
     assert "synlynk decide" in prompt
     assert "--panel claude,codex --record" in prompt
     assert "harness-maintainer POV" in prompt
+
+
+def test_invoke_headless_claude_builds_expected_command():
+    with patch("synlynk.pm_agent.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout='{"result": "ok"}', stderr=""
+        )
+        result = _invoke_headless_claude("do the sweep")
+    args = mock_run.call_args[0][0]
+    assert args[0] == "claude"
+    assert "-p" in args
+    assert "do the sweep" in args
+    assert "--allowedTools" in args
+    tools_idx = args.index("--allowedTools") + 1
+    assert set(args[tools_idx].split(",")) == {"WebSearch", "WebFetch", "Bash"}
+    assert "--output-format" in args
+    assert "json" in args
+    assert result["returncode"] == 0
+    assert result["stdout"] == '{"result": "ok"}'
+
+
+def test_invoke_headless_claude_nonzero_exit_reported():
+    with patch("synlynk.pm_agent.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+        result = _invoke_headless_claude("do the sweep")
+    assert result["returncode"] == 1
+    assert result["stderr"] == "boom"
+
+
+def _write_seed_config():
+    os.makedirs("docs/strategy", exist_ok=True)
+    with open("docs/strategy/competitive-config.yaml", "w") as f:
+        f.write(textwrap.dedent("""\
+            segments:
+              - name: "solo indie devs"
+                competitors: ["Superpowers"]
+            decide_panel: "claude,codex"
+            research_issue_labels: ["competitive-research"]
+            proposal_issue_labels: ["feature-proposal"]
+        """))
+
+
+def test_cmd_pm_sweep_dry_run_does_not_invoke_subprocess(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_seed_config()
+    with patch("synlynk.pm_agent.subprocess.run") as mock_run:
+        summary = cmd_pm_sweep(dry_run=True)
+    mock_run.assert_not_called()
+    captured = capsys.readouterr()
+    assert "solo indie devs" in captured.out
+    assert summary is None
+
+
+def test_cmd_pm_sweep_real_run_parses_summary(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_seed_config()
+    fake_stdout = (
+        '{"result": "'
+        '{\\"research_tickets\\": 2, \\"proposals\\": 1, \\"segments_updated\\": 1}"}'
+    )
+    with patch("synlynk.pm_agent.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout=fake_stdout, stderr="")
+        summary = cmd_pm_sweep(dry_run=False)
+    assert summary["research_tickets"] == 2
+    assert summary["proposals"] == 1
+    captured = capsys.readouterr()
+    assert "research_tickets" in captured.out
+
+
+def test_cmd_pm_sweep_real_run_failure_exits_nonzero(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_seed_config()
+    with patch("synlynk.pm_agent.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="network error")
+        with pytest.raises(SystemExit):
+            cmd_pm_sweep(dry_run=False)

@@ -5,6 +5,7 @@ See docs/superpowers/specs/2026-08-24-pm-competitive-intelligence-sweep-design.m
 """
 import json
 import subprocess
+import sys
 
 import yaml
 
@@ -64,3 +65,49 @@ def _compose_prompt(config: dict) -> str:
         "stdout: "
         '{"research_tickets": <int>, "proposals": <int>, "segments_updated": <int>}.'
     )
+
+
+def _invoke_headless_claude(prompt: str) -> dict:
+    cmd = [
+        "claude",
+        "-p", prompt,
+        "--allowedTools", "WebSearch,WebFetch,Bash",
+        "--output-format", "json",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    return {
+        "returncode": proc.returncode,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+    }
+
+
+def cmd_pm_sweep(dry_run: bool = False):
+    config = _load_config()
+    prompt = _compose_prompt(config)
+
+    if dry_run:
+        print(prompt)
+        return None
+
+    result = _invoke_headless_claude(prompt)
+    if result["returncode"] != 0:
+        print(
+            f"pm sweep failed (exit {result['returncode']}): {result['stderr']}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        outer = json.loads(result["stdout"])
+        summary = json.loads(outer["result"])
+    except (json.JSONDecodeError, KeyError, TypeError):
+        print("pm sweep: could not parse summary JSON from output", file=sys.stderr)
+        summary = {"research_tickets": 0, "proposals": 0, "segments_updated": 0}
+
+    print(
+        f"pm sweep: {summary.get('research_tickets', 0)} research_tickets, "
+        f"{summary.get('proposals', 0)} proposals, "
+        f"{summary.get('segments_updated', 0)} segments_updated"
+    )
+    return summary
