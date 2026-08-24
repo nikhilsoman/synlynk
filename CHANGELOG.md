@@ -27,6 +27,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
 - **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.
 
+## [0.17.0] - 2026-08-24
+
+**Release pitch:** an approved `[APPROVAL]` ticket now actually unblocks the story it was raised for — the last gap between v0.16.0's authority layer and a `tpm sweep` loop that runs unattended for real, closed and live-verified against this repo's own GitHub tracker.
+
+### Added
+
+**Ticket-driven approval auto-resume (design/plan 2026-08-24, PRs #1137-#1139, #1141)**
+- Closes the known gap flagged at the end of `[0.16.0]`: resolving an `[APPROVAL]` ticket now actually unblocks the parked story on the next `synlynk tpm sweep` pass, instead of the story re-parking forever.
+- `approval_tickets` table (PR #1137) plus `_find_ticket()` / `_insert_ticket()` / `_mark_ticket_consumed()` helpers in `synlynk/db.py` (PR #1138) give `run_sweep_pass()` (PR #1139) three-way state awareness per story/action: no ticket yet → file one; open ticket → keep parking; resolved ticket → consume it and let dispatch proceed.
+- `synlynk/events.py`'s `_scan_approval_tickets()` (PR #1141) now writes `approval_tickets.status='resolved'` at the same point it emits `approval_resolved`, so the resolution is durable state the next sweep pass can actually query — not just an event log entry nothing consumed.
+- **Live dogfood verification (Task 5, Claude-direct per plan, 2026-08-24):** ran the full ticket lifecycle against this repo's real GitHub issue tracker using a temporary, fully-reverted `task_dispatch_demo` policy rule (reverted before merge; never landed on `main`). Demo story `story-becf09a5`: sweep 1 parked it and filed ticket id 8 → issue [#1149](https://github.com/nikhilsoman/synlynk/issues/1149); sweep 2 confirmed no duplicate ticket/issue; `gh issue comment 1149 --body "approve"` + `scan_local_events()` produced `approval_resolved` event id 371 referencing issue #1149; sweep 3 dispatched instead of re-parking (job `job-e8277299`, exit 0) and marked the ticket `consumed` (`consumed_at` set). Every claim was verified via direct DB query / `gh issue list` / `synlynk events tail`, not sweep's own printed summary.
+- **Process note:** Tasks 1-4's implementer stage was dispatched to Codex per the project's PM/review-only split as usual. Task 4 hit a session-level blocker — the Claude Code auto-mode classifier repeatedly denied `synlynk dispatch` calls even with valid role-scoped GitHub App credentials — so Task 4 was implemented directly by Claude as a documented, user-approved workaround. Filed as [LIVE-6, #1140](https://github.com/nikhilsoman/synlynk/issues/1140) (Sev2) since it degrades the autonomy-design goal; root cause not yet investigated.
+
+### Known gaps (carried forward)
+- [LIVE-6, #1140](https://github.com/nikhilsoman/synlynk/issues/1140) — Claude Code auto-mode classifier blocks `synlynk dispatch` calls even with valid role-scoped GitHub App credentials, forcing a manual-implementation fallback. Root cause not yet investigated.
+
 ## [0.16.0] - 2026-08-23
 
 **Release pitch:** the authority layer v0.15.0 built now actually gates something unattended — `synlynk tpm sweep` walks ready stories through dispatch end-to-end, pauses on a policy-flagged action with a GitHub approval ticket instead of blocking the whole batch, and a live dogfood run proved both the happy path and the pause+ticket path work — surfacing two real gaps in the process, filed rather than papered over.
