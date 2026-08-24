@@ -114,6 +114,8 @@ def _matches_approval_rule(action: str, policy: Dict[str, Any]) -> Optional[str]
             return rule
         if rule == "roadmap_authority_change" and action in ("roadmap_edit", "goal_create"):
             return rule
+        if rule == "task_dispatch_demo" and action == "task_dispatch:implement":  # TEMPORARY — dogfood only, revert in Step 7
+            return rule
         if rule.startswith("security_sensitive_paths:") and action.startswith("task_dispatch:"):
             continue  # path-based rules are checked by callers that know the changed files, not here
     return None

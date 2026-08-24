@@ -23,6 +23,13 @@
       "require_non_authoring_review": true,
       "review_fallback": "comment_checklist"
     },
-    "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true}
+    "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true},
+    "approval_required_for": [
+      "security_sensitive_paths:.github/workflows/**,.synlynk/policy.json,.synlynk/github_apps/**",
+      "irreversible_merge",
+      "named_release",
+      "roadmap_authority_change",
+      "task_dispatch_demo"
+    ]
   }
 }
