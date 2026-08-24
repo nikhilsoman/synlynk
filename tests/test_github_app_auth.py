@@ -50,7 +50,7 @@ def test_read_cached_installation_token_returns_fresh_token(monkeypatch, tmp_pat
     monkeypatch.chdir(tmp_path)
     cache_dir = tmp_path / ".synlynk" / "github_apps"
     cache_dir.mkdir(parents=True)
-    (cache_dir / "dev-token.json").write_text(json.dumps({
+    (cache_dir / "dev.token.json").write_text(json.dumps({
         "token": "fresh-token", "expires_at": time.time() + 300,
     }))
 
@@ -63,7 +63,7 @@ def test_read_cached_installation_token_returns_none_when_stale(monkeypatch, tmp
     monkeypatch.chdir(tmp_path)
     cache_dir = tmp_path / ".synlynk" / "github_apps"
     cache_dir.mkdir(parents=True)
-    (cache_dir / "dev-token.json").write_text(json.dumps({
+    (cache_dir / "dev.token.json").write_text(json.dumps({
         "token": "stale-token", "expires_at": time.time() - 10,
     }))
 
@@ -85,7 +85,7 @@ def test_read_cached_installation_token_returns_none_when_corrupt(monkeypatch, t
     monkeypatch.chdir(tmp_path)
     cache_dir = tmp_path / ".synlynk" / "github_apps"
     cache_dir.mkdir(parents=True)
-    (cache_dir / "dev-token.json").write_text("not json")
+    (cache_dir / "dev.token.json").write_text("not json")
 
     assert gh_auth.read_cached_installation_token("dev") is None
 
@@ -104,7 +104,7 @@ def test_refresh_installation_token_writes_cache_file_with_0600(monkeypatch, tmp
 
     gh_auth.refresh_installation_token("dev", app_config)
 
-    cache_path = tmp_path / ".synlynk" / "github_apps" / "dev-token.json"
+    cache_path = tmp_path / ".synlynk" / "github_apps" / "dev.token.json"
     assert cache_path.exists()
     data = json.loads(cache_path.read_text())
     assert data["token"] == "fresh-token"

@@ -22,7 +22,7 @@ def _redaction_cache_path() -> str:
 
 
 def _role_token_cache_path(role: str) -> str:
-    return os.path.join(".synlynk", "github_apps", f"{role}-token.json")
+    return os.path.join(".synlynk", "github_apps", f"{role}.token.json")
 
 
 def _persist_token_for_redaction(role: str, token: str, expires_at: float) -> None:

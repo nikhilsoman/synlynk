@@ -14,8 +14,7 @@ def test_cmd_logs_redacts_active_token_values(tmp_path, monkeypatch, capsys):
     import synlynk as sl
     from synlynk import github_app_auth as gh_auth
 
-    gh_auth._token_cache.clear()
-    gh_auth._token_cache["dev"] = {"token": "ghs_supersecrettoken123", "expires_at": 9999999999}
+    gh_auth._persist_token_for_redaction("dev", "ghs_supersecrettoken123", 9999999999)
 
     monkeypatch.setattr(sl, "_load_jobs", lambda: [
         {"id": "job-test", "agent": "codex", "log_file": str(log_file)}
