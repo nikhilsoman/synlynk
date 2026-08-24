@@ -97,7 +97,7 @@ def _print_pending_nudges() -> None:
         from synlynk.workspace_agent import cmd_workspace_agent_run
 
         cmd_workspace_agent_run()
-    except (OSError, subprocess.CalledProcessError, TypeError):
+    except Exception:
         pass
     try:
         from synlynk.fencing import render_nudge_fence
