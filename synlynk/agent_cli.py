@@ -11,7 +11,14 @@ from synlynk import agent_store
 SEED_CHARTERS = {
     "dev": "Implementation — writes the code.",
     "qa": "Quality assurance — tests and verifies work.",
-    "pm": "Program management — roadmap, brainstorming, issue triage.",
+    "pm": (
+        "Program management — roadmap, brainstorming, issue triage. "
+        "Runs a weekly competitive-intelligence sweep: tracks products serving "
+        "synlynk's user segments, maintains a living capability/marketing-gap "
+        "comparison doc, opens research tickets for candidate features, "
+        "convenes harness-maintainer decide rounds, and escalates strong-fit "
+        "candidates to the user as feature proposals."
+    ),
     "architect": "System design — architecture and technical direction.",
     "tpm": "Technical program management — cross-cutting coordination, GOVERNS integration.",
     "designer": "Design — visual and interaction design.",
