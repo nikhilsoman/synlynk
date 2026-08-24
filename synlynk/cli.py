@@ -809,6 +809,16 @@ def build_parser() -> argparse.ArgumentParser:
     story_done_parser = story_sub.add_parser("done", help="Mark a story done")
     story_done_parser.add_argument("story_id")
 
+    pm_parser = subparsers.add_parser("pm", help="PM agent commands")
+    pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
+    pm_sweep_parser = pm_subparsers.add_parser(
+        "sweep", help="Run one competitive-intelligence sweep pass"
+    )
+    pm_sweep_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Print the composed research prompt without invoking Claude"
+    )
+
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
     tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
     sweep_parser = tpm_subparsers.add_parser(
@@ -1358,6 +1368,10 @@ def main(argv=None) -> None:
             cmd_story_draft(args.story_id)
         elif args.story_action == "done":
             cmd_story_done(args.story_id)
+    elif args.command == "pm" and args.pm_command == "sweep":
+        from synlynk.pm_agent import cmd_pm_sweep
+
+        cmd_pm_sweep(dry_run=args.dry_run)
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 

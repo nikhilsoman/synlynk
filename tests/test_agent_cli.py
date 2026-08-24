@@ -3,6 +3,13 @@ import sqlite3
 
 import pytest
 
+from synlynk.agent_cli import SEED_CHARTERS
+
+
+def test_pm_charter_includes_competitive_sweep_responsibility():
+    assert "competitive-intelligence sweep" in SEED_CHARTERS["pm"]
+    assert "capability/marketing-gap comparison doc" in SEED_CHARTERS["pm"]
+
 
 def test_prevent_global_state_db_corruption_from_worktree(tmp_path, monkeypatch):
     import synlynk
