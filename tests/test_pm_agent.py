@@ -14,17 +14,17 @@ from synlynk.pm_agent import (
 from synlynk.team import HARNESS_CAPABILITY_BASELINES
 
 
-def test_load_config_reads_yaml(tmp_path, monkeypatch):
+def test_load_config_reads_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs("docs/strategy", exist_ok=True)
-    with open("docs/strategy/competitive-config.yaml", "w") as f:
+    with open("docs/strategy/competitive-config.json", "w") as f:
         f.write(textwrap.dedent("""\
-            segments:
-              - name: "solo indie devs"
-                competitors: ["Superpowers", "GStack"]
-            decide_panel: auto
-            research_issue_labels: ["competitive-research", "architect"]
-            proposal_issue_labels: ["feature-proposal", "needs-user-review"]
+            {
+              "segments": [{"name": "solo indie devs", "competitors": ["Superpowers", "GStack"]}],
+              "decide_panel": "auto",
+              "research_issue_labels": ["competitive-research", "architect"],
+              "proposal_issue_labels": ["feature-proposal", "needs-user-review"]
+            }
         """))
     config = _load_config()
     assert config["segments"][0]["name"] == "solo indie devs"
@@ -97,14 +97,14 @@ def test_invoke_headless_claude_nonzero_exit_reported():
 
 def _write_seed_config():
     os.makedirs("docs/strategy", exist_ok=True)
-    with open("docs/strategy/competitive-config.yaml", "w") as f:
+    with open("docs/strategy/competitive-config.json", "w") as f:
         f.write(textwrap.dedent("""\
-            segments:
-              - name: "solo indie devs"
-                competitors: ["Superpowers"]
-            decide_panel: "claude,codex"
-            research_issue_labels: ["competitive-research"]
-            proposal_issue_labels: ["feature-proposal"]
+            {
+              "segments": [{"name": "solo indie devs", "competitors": ["Superpowers"]}],
+              "decide_panel": "claude,codex",
+              "research_issue_labels": ["competitive-research"],
+              "proposal_issue_labels": ["feature-proposal"]
+            }
         """))
 
 
@@ -142,3 +142,15 @@ def test_cmd_pm_sweep_real_run_failure_exits_nonzero(tmp_path, monkeypatch):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="network error")
         with pytest.raises(SystemExit):
             cmd_pm_sweep(dry_run=False)
+
+
+@pytest.mark.parametrize("stdout", ["not json", '{"result": "not json"}', '{"wrong": "key"}'])
+def test_cmd_pm_sweep_malformed_output_exits_nonzero(tmp_path, monkeypatch, capsys, stdout):
+    monkeypatch.chdir(tmp_path)
+    _write_seed_config()
+    with patch("synlynk.pm_agent.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout=stdout, stderr="")
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pm_sweep(dry_run=False)
+    assert exc_info.value.code == 1
+    assert "could not parse summary JSON" in capsys.readouterr().err

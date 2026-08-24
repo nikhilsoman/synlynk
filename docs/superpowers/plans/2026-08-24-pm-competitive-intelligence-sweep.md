@@ -4,9 +4,9 @@
 
 **Goal:** Add a `synlynk pm sweep` command that composes a competitive-research prompt from a config file, hands it to a headless Claude session with web/gh tool access, and reports a cost/ticket summary — wired to a new weekly GH Actions cron and a revised PM charter.
 
-**Architecture:** A new `synlynk/pm_agent.py` module owns prompt composition and the headless-invocation wrapper; `synlynk/cli.py` gets a new `pm sweep [--dry-run]` subcommand mirroring the existing `tpm sweep` subparser pattern. A new `docs/strategy/competitive-config.yaml` holds segments/competitors/panel/labels; a new `docs/strategy/competitive-landscape.md` is the living doc the headless session edits. A new `.github/workflows/pm-competitive-sweep.yml` triggers it weekly, mirroring `support-engineer.yml`'s shape.
+**Architecture:** A new `synlynk/pm_agent.py` module owns prompt composition and the headless-invocation wrapper; `synlynk/cli.py` gets a new `pm sweep [--dry-run]` subcommand mirroring the existing `tpm sweep` subparser pattern. A new `docs/strategy/competitive-config.json` holds segments/competitors/panel/labels; a new `docs/strategy/competitive-landscape.md` is the living doc the headless session edits. A new `.github/workflows/pm-competitive-sweep.yml` triggers it weekly, mirroring `support-engineer.yml`'s shape.
 
-**Tech Stack:** Python (stdlib `subprocess`, `json`, `yaml` — confirm PyYAML is already a dependency before Task 1), pytest with `unittest.mock.patch`, existing `synlynk.agent_store` charter API, existing `synlynk.team.HARNESS_CAPABILITY_BASELINES`.
+**Tech Stack:** Python stdlib (`subprocess`, `json`), pytest with `unittest.mock.patch`, existing `synlynk.agent_store` charter API, existing `synlynk.team.HARNESS_CAPABILITY_BASELINES`.
 
 ---
 
@@ -14,7 +14,7 @@
 
 - **Create:** `synlynk/pm_agent.py` — prompt composition (`_load_config`, `_compose_prompt`, `_resolve_decide_panel`), headless invocation wrapper (`_invoke_headless_claude`), and the top-level `cmd_pm_sweep(dry_run: bool = False) -> dict` entry point.
 - **Modify:** `synlynk/cli.py` — new `pm` subparser (mirrors `tpm_parser` at line ~812) and dispatch branch (mirrors the `tpm sweep` dispatch at line ~1361).
-- **Create:** `docs/strategy/competitive-config.yaml` — seed config.
+- **Create:** `docs/strategy/competitive-config.json` — seed config.
 - **Create:** `docs/strategy/competitive-landscape.md` — seed living doc, migrated from `docs/proposals/competitor-comparison-analysis.md`.
 - **Modify:** `synlynk/agent_cli.py` — revise `SEED_CHARTERS["pm"]` (line 14).
 - **Create:** `.github/workflows/pm-competitive-sweep.yml` — weekly cron workflow.
@@ -39,17 +39,17 @@ import textwrap
 from synlynk.pm_agent import _load_config
 
 
-def test_load_config_reads_yaml(tmp_path, monkeypatch):
+def test_load_config_reads_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs("docs/strategy", exist_ok=True)
-    with open("docs/strategy/competitive-config.yaml", "w") as f:
+    with open("docs/strategy/competitive-config.json", "w") as f:
         f.write(textwrap.dedent("""\
-            segments:
-              - name: "solo indie devs"
-                competitors: ["Superpowers", "GStack"]
-            decide_panel: auto
-            research_issue_labels: ["competitive-research", "architect"]
-            proposal_issue_labels: ["feature-proposal", "needs-user-review"]
+            {
+              "segments": [{"name": "solo indie devs", "competitors": ["Superpowers", "GStack"]}],
+              "decide_panel": "auto",
+              "research_issue_labels": ["competitive-research", "architect"],
+              "proposal_issue_labels": ["feature-proposal", "needs-user-review"]
+            }
         """))
     config = _load_config()
     assert config["segments"][0]["name"] == "solo indie devs"
@@ -60,7 +60,7 @@ def test_load_config_reads_yaml(tmp_path, monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_pm_agent.py::test_load_config_reads_yaml -v`
+Run: `pytest tests/test_pm_agent.py::test_load_config_reads_json -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'synlynk.pm_agent'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -75,28 +75,28 @@ See docs/superpowers/specs/2026-08-24-pm-competitive-intelligence-sweep-design.m
 import json
 import subprocess
 
-import yaml
+import json
 
 from synlynk.team import HARNESS_CAPABILITY_BASELINES
 
-CONFIG_PATH = "docs/strategy/competitive-config.yaml"
+CONFIG_PATH = "docs/strategy/competitive-config.json"
 DOC_PATH = "docs/strategy/competitive-landscape.md"
 
 
 def _load_config(config_path: str = CONFIG_PATH) -> dict:
     with open(config_path) as f:
-        return yaml.safe_load(f)
+        return json.load(f)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pytest tests/test_pm_agent.py::test_load_config_reads_yaml -v`
+Run: `pytest tests/test_pm_agent.py::test_load_config_reads_json -v`
 Expected: PASS
 
-- [ ] **Step 5: Confirm PyYAML is available**
+- [ ] **Step 5: Confirm the stdlib JSON loader is used**
 
-Run: `python3 -c "import yaml; print(yaml.__version__)"`
-Expected: prints a version (PyYAML is already a transitive dependency of this repo's tooling; if this fails, add `PyYAML` to `pyproject.toml`'s dependencies before continuing).
+Run: `python3 -c "import json"`
+Expected: the config loader uses only Python stdlib modules.
 
 - [ ] **Step 6: Write the failing test for `_resolve_decide_panel`**
 
@@ -308,7 +308,7 @@ from synlynk.pm_agent import cmd_pm_sweep
 
 def _write_seed_config():
     os.makedirs("docs/strategy", exist_ok=True)
-    with open("docs/strategy/competitive-config.yaml", "w") as f:
+    with open("docs/strategy/competitive-config.json", "w") as f:
         f.write(textwrap.dedent("""\
             segments:
               - name: "solo indie devs"
@@ -404,7 +404,7 @@ def cmd_pm_sweep(dry_run: bool = False):
         summary = json.loads(outer["result"])
     except (json.JSONDecodeError, KeyError, TypeError):
         print("pm sweep: could not parse summary JSON from output", file=sys.stderr)
-        summary = {"research_tickets": 0, "proposals": 0, "segments_updated": 0}
+        sys.exit(1)
 
     print(
         f"pm sweep: {summary.get('research_tickets', 0)} research_tickets, "
@@ -448,7 +448,7 @@ def test_pm_sweep_dry_run_cli(tmp_path, monkeypatch):
     import os
     import textwrap
     os.makedirs("docs/strategy", exist_ok=True)
-    with open("docs/strategy/competitive-config.yaml", "w") as f:
+    with open("docs/strategy/competitive-config.json", "w") as f:
         f.write(textwrap.dedent("""\
             segments:
               - name: "solo indie devs"
@@ -517,7 +517,7 @@ git commit -m "feat(cli): wire synlynk pm sweep subcommand"
 ### Task 4: Seed config and living comparison doc
 
 **Files:**
-- Create: `docs/strategy/competitive-config.yaml`
+- Create: `docs/strategy/competitive-config.json`
 - Create: `docs/strategy/competitive-landscape.md`
 - Modify: `docs/proposals/competitor-comparison-analysis.md` (archive)
 
@@ -529,14 +529,14 @@ Use its competitor list and comparison table content as the source for the seed 
 
 - [ ] **Step 2: Create the seed config**
 
-```yaml
-# docs/strategy/competitive-config.yaml
-segments:
-  - name: "solo indie devs building with AI agents"
-    competitors: ["Superpowers", "GStack"]
-decide_panel: auto
-research_issue_labels: ["competitive-research", "architect"]
-proposal_issue_labels: ["feature-proposal", "needs-user-review"]
+```json
+# docs/strategy/competitive-config.json
+{
+  "segments": [{"name": "solo indie devs building with AI agents", "competitors": ["Superpowers", "GStack"]}],
+  "decide_panel": "auto",
+  "research_issue_labels": ["competitive-research", "architect"],
+  "proposal_issue_labels": ["feature-proposal", "needs-user-review"]
+}
 ```
 
 - [ ] **Step 3: Create the seed living doc**
@@ -586,7 +586,7 @@ Expected: prints the parsed dict with the "solo indie devs building with AI agen
 - [ ] **Step 6: Commit**
 
 ```bash
-git add docs/strategy/competitive-config.yaml docs/strategy/competitive-landscape.md docs/archive/competitor-comparison-analysis.md
+git add docs/strategy/competitive-config.json docs/strategy/competitive-landscape.md docs/archive/competitor-comparison-analysis.md
 git rm docs/proposals/competitor-comparison-analysis.md 2>/dev/null || true
 git commit -m "docs(strategy): seed competitive-intelligence config and living comparison doc"
 ```
@@ -623,8 +623,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install PyYAML
-        run: pip install pyyaml
+      - name: Use the stdlib JSON loader
+        run: python3 -c "import json"
 
       - name: Install Claude CLI
         run: npm install -g @anthropic-ai/claude-code
@@ -638,7 +638,7 @@ jobs:
 
 - [ ] **Step 2: Validate the YAML is well-formed**
 
-Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/pm-competitive-sweep.yml'))"`
+Run: `python3 -c "import json; json.load(open('docs/strategy/competitive-config.json'))"`
 Expected: no output, exit code 0
 
 - [ ] **Step 3: Commit**

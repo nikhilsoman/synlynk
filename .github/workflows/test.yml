@@ -33,9 +33,6 @@ jobs:
       - name: Install pytest
         run: pip install pytest
 
-      - name: Install project dependencies
-        run: pip install pyyaml
-
       - name: Syntax check
         run: python -m py_compile bin/synlynk.py
 

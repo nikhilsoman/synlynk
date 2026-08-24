@@ -7,14 +7,14 @@ import textwrap
 def test_pm_sweep_dry_run_cli(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs("docs/strategy", exist_ok=True)
-    with open("docs/strategy/competitive-config.yaml", "w") as f:
+    with open("docs/strategy/competitive-config.json", "w") as f:
         f.write(textwrap.dedent("""\
-            segments:
-              - name: "solo indie devs"
-                competitors: []
-            decide_panel: "claude"
-            research_issue_labels: ["competitive-research"]
-            proposal_issue_labels: ["feature-proposal"]
+            {
+              "segments": [{"name": "solo indie devs", "competitors": []}],
+              "decide_panel": "claude",
+              "research_issue_labels": ["competitive-research"],
+              "proposal_issue_labels": ["feature-proposal"]
+            }
         """))
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     result = subprocess.run(

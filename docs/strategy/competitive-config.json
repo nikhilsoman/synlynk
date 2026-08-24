@@ -1,0 +1,11 @@
+{
+  "segments": [
+    {
+      "name": "solo indie devs building with AI agents",
+      "competitors": ["Superpowers", "GStack"]
+    }
+  ],
+  "decide_panel": "auto",
+  "research_issue_labels": ["competitive-research", "architect"],
+  "proposal_issue_labels": ["feature-proposal", "needs-user-review"]
+}

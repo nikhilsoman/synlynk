@@ -7,17 +7,15 @@ import json
 import subprocess
 import sys
 
-import yaml
-
 from synlynk.team import HARNESS_CAPABILITY_BASELINES
 
-CONFIG_PATH = "docs/strategy/competitive-config.yaml"
+CONFIG_PATH = "docs/strategy/competitive-config.json"
 DOC_PATH = "docs/strategy/competitive-landscape.md"
 
 
 def _load_config(config_path: str = CONFIG_PATH) -> dict:
     with open(config_path) as f:
-        return yaml.safe_load(f)
+        return json.load(f)
 
 
 def _resolve_decide_panel(decide_panel_config: str) -> list:
@@ -103,7 +101,7 @@ def cmd_pm_sweep(dry_run: bool = False):
         summary = json.loads(outer["result"])
     except (json.JSONDecodeError, KeyError, TypeError):
         print("pm sweep: could not parse summary JSON from output", file=sys.stderr)
-        summary = {"research_tickets": 0, "proposals": 0, "segments_updated": 0}
+        sys.exit(1)
 
     print(
         f"pm sweep: {summary.get('research_tickets', 0)} research_tickets, "

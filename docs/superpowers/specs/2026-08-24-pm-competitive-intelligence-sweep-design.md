@@ -39,7 +39,7 @@ synlynk pm sweep [--dry-run]                  (synlynk/pm_agent.py, new CLI subc
         │
         │  loads config, composes research prompt
         ▼
-docs/strategy/competitive-config.yaml         (segments, competitors, decide panel, labels)
+docs/strategy/competitive-config.json         (segments, competitors, decide panel, labels)
         │
         ▼
 claude -p "<prompt>" --allowedTools WebSearch,WebFetch,Bash --output-format json
@@ -61,24 +61,25 @@ The sweep's "research" step runs as a single headless Claude session (not a `syn
 
 ### 1. `synlynk/pm_agent.py` (new)
 
-- `cmd_pm_sweep(dry_run: bool = False)`: loads `docs/strategy/competitive-config.yaml`, composes the research prompt (charter context + segment/competitor list + doc path + decide-panel + label config), and either prints the prompt (`--dry-run`) or invokes headless Claude via subprocess with `--allowedTools WebSearch,WebFetch,Bash --output-format json`, then parses and prints the run summary.
+- `cmd_pm_sweep(dry_run: bool = False)`: loads `docs/strategy/competitive-config.json`, composes the research prompt (charter context + segment/competitor list + doc path + decide-panel + label config), and either prints the prompt (`--dry-run`) or invokes headless Claude via subprocess with `--allowedTools WebSearch,WebFetch,Bash --output-format json`, then parses and prints the run summary.
 - Follows the existing headless-invocation flag conventions already used in `synlynk/dispatch.py` (`--output-format json`, `--allowedTools`) — no new invocation pattern.
 
 ### 2. `synlynk/cli.py` (modified)
 
 - New `pm` subparser sibling to the existing `tpm` subparser, with a `sweep` action and a `--dry-run` flag, dispatching to `cmd_pm_sweep`.
 
-### 3. `docs/strategy/competitive-config.yaml` (new)
+### 3. `docs/strategy/competitive-config.json` (new)
 
-```yaml
-segments:
-  - name: "solo indie devs building with AI agents"
-    competitors: ["Superpowers", "GStack"]
-  - name: "enterprise eng platform teams"
-    competitors: []
-decide_panel: auto   # "auto" = all harnesses provisioned for this project
-research_issue_labels: ["competitive-research", "architect"]
-proposal_issue_labels: ["feature-proposal", "needs-user-review"]
+```json
+{
+  "segments": [
+    {"name": "solo indie devs building with AI agents", "competitors": ["Superpowers", "GStack"]},
+    {"name": "enterprise eng platform teams", "competitors": []}
+  ],
+  "decide_panel": "auto",
+  "research_issue_labels": ["competitive-research", "architect"],
+  "proposal_issue_labels": ["feature-proposal", "needs-user-review"]
+}
 ```
 
 Seeded once from the content of `docs/proposals/competitor-comparison-analysis.md`; that file is then archived per the standing "archive before branch/doc removal" policy. Each sweep run may append new segments/competitors discovered during research; it never removes existing entries.
