@@ -365,3 +365,59 @@ def test_scan_local_events_skips_spec_verified_when_verdict_uncomputable(project
         scan_local_events("workspace-lifecycle-nudge")
 
     assert pending_events("test-observer", "spec_verified") == []
+
+
+def test_scan_approval_tickets_marks_row_resolved_on_issue_closed(project_dir):
+    from unittest.mock import patch, MagicMock
+    from synlynk.db import _find_ticket, _insert_ticket
+    from synlynk.events import _scan_approval_tickets
+
+    _insert_ticket("story-a", "task_dispatch:implement", "https://example.com/o/r/issues/10")
+    gh_stdout = json.dumps([
+        {"url": "https://example.com/o/r/issues/10", "state": "CLOSED", "comments": []}
+    ])
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout=gh_stdout)
+        _scan_approval_tickets()
+
+    ticket = _find_ticket("story-a", "task_dispatch:implement", "resolved")
+    assert ticket is not None
+    assert ticket["resolved_at"] is not None
+
+
+def test_scan_approval_tickets_marks_row_resolved_on_approve_comment(project_dir):
+    from unittest.mock import patch, MagicMock
+    from synlynk.db import _find_ticket, _insert_ticket
+    from synlynk.events import _scan_approval_tickets
+
+    _insert_ticket("story-b", "task_dispatch:implement", "https://example.com/o/r/issues/11")
+    gh_stdout = json.dumps([{
+        "url": "https://example.com/o/r/issues/11",
+        "state": "OPEN",
+        "comments": [{"body": "approve, go ahead"}],
+    }])
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout=gh_stdout)
+        _scan_approval_tickets()
+
+    assert _find_ticket("story-b", "task_dispatch:implement", "resolved") is not None
+
+
+def test_scan_approval_tickets_no_op_on_rescan_of_already_resolved(project_dir):
+    from unittest.mock import patch, MagicMock
+    from synlynk.db import _find_ticket, _insert_ticket
+    from synlynk.events import _scan_approval_tickets
+
+    _insert_ticket("story-c", "task_dispatch:implement", "https://example.com/o/r/issues/12")
+    gh_stdout = json.dumps([
+        {"url": "https://example.com/o/r/issues/12", "state": "CLOSED", "comments": []}
+    ])
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout=gh_stdout)
+        _scan_approval_tickets()  # first scan resolves it
+        first_resolved_at = _find_ticket("story-c", "task_dispatch:implement", "resolved")["resolved_at"]
+        _scan_approval_tickets()  # second scan should not touch it again
+
+    ticket = _find_ticket("story-c", "task_dispatch:implement", "resolved")
+    assert ticket is not None
+    assert ticket["resolved_at"] == first_resolved_at
