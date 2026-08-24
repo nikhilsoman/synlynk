@@ -193,6 +193,15 @@ def _scan_approval_tickets() -> int | None:
             for comment in issue.get("comments", [])
         )
         if resolved:
+            from synlynk import _get_db
+            conn = _get_db()
+            conn.execute(
+                "UPDATE approval_tickets SET status='resolved', resolved_at=CURRENT_TIMESTAMP "
+                "WHERE issue_url=? AND status='open'",
+                (issue["url"],),
+            )
+            conn.commit()
+            conn.close()
             last_event_id = emit_event(
                 "approval_resolved",
                 {"issue_url": issue["url"]},
