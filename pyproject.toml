@@ -23,6 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities",
 ]
+dependencies = ["PyYAML"]
 
 [project.urls]
 Homepage = "https://synlynk.com"
