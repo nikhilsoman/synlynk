@@ -242,6 +242,33 @@ def _load_harness_overrides(agent: str) -> dict:
         return empty
 
 
+def _resolve_github_apps_dir() -> str:
+    """Resolve the provisioned GitHub App directory across git worktrees."""
+    cwd_apps_dir = os.path.join(".synlynk", "github_apps")
+    if os.path.isdir(cwd_apps_dir):
+        return cwd_apps_dir
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        git_common_dir = result.stdout.strip()
+        if git_common_dir:
+            git_common_dir = os.path.abspath(git_common_dir)
+            main_repo_apps_dir = os.path.join(
+                os.path.dirname(git_common_dir), ".synlynk", "github_apps"
+            )
+            if os.path.isdir(main_repo_apps_dir):
+                return main_repo_apps_dir
+    except Exception:
+        pass
+
+    return cwd_apps_dir
+
+
 def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
     """Resolve a role-scoped GitHub App installation token for dispatch.
 
@@ -254,8 +281,9 @@ def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
     hasn't refreshed yet) — dispatch's caller decides whether that's a
     fail-closed error (--requires-gh-write) or a silent host-auth fallback.
     """
+    apps_dir = _resolve_github_apps_dir()
     for candidate_role in (role, "synlynk-bot"):
-        json_path = os.path.join(".synlynk", "github_apps", f"{candidate_role}.json")
+        json_path = os.path.join(apps_dir, f"{candidate_role}.json")
         if not os.path.exists(json_path):
             continue
         try:
@@ -276,8 +304,9 @@ def _resolve_dispatch_gh_bot_login(role: str) -> Optional[str]:
     login from each App's ``app_slug`` instead of minting a token. Returns
     None if no App is provisioned; it never guesses a login.
     """
+    apps_dir = _resolve_github_apps_dir()
     for candidate_role in (role, "synlynk-bot"):
-        json_path = os.path.join(".synlynk", "github_apps", f"{candidate_role}.json")
+        json_path = os.path.join(apps_dir, f"{candidate_role}.json")
         if not os.path.exists(json_path):
             continue
         try:
@@ -931,6 +960,15 @@ _GH_TARGET_RE = re.compile(
     re.IGNORECASE,
 )
 
+_REVIEW_TASK_RE = re.compile(
+    r"(?:\breview\s+and\s+post\b|"
+    r"\bpost(?:\s+(?:a|an))?\s+(?:github\s+)?(?:pr|pull\s+request)\s+review\b|"
+    r"\bpost(?:\s+(?:a|an))?\s+review\b|"
+    r"\b(?:pr|pull\s+request)\s+review\b|"
+    r"\bcode\s+review\b)",
+    re.IGNORECASE,
+)
+
 
 def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     """Infer GitHub-write intent so operators do not have to remember a flag.
@@ -943,6 +981,14 @@ def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     if re.search(r"\bgh\s+(?:issue|pr)\s+(?:review|comment|close|merge)\b", text, re.IGNORECASE):
         return True
     return bool(_GH_WRITE_ACTION_RE.search(text) and _GH_TARGET_RE.search(text))
+
+
+def _infer_task_type(task: str) -> Optional[str]:
+    """Infer only an unambiguous PR review task type from task text."""
+    text = task or ""
+    if _REVIEW_TASK_RE.search(text) and _GH_TARGET_RE.search(text):
+        return "review"
+    return None
 
 
 def _job_summary_path(job_id: str) -> str:

@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -68,6 +69,69 @@ def test_resolve_dispatch_gh_token_returns_none_when_nothing_provisioned(tmp_pat
     assert dispatch_mod._resolve_dispatch_gh_token("dev") is None
 
 
+def test_resolve_dispatch_gh_token_uses_main_repo_apps_from_worktree(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+    (repo / "tracked.txt").write_text("tracked\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "initial"], cwd=repo, check=True)
+    worktree = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "test-worktree", str(worktree)],
+        cwd=repo,
+        check=True,
+    )
+
+    apps_dir = repo / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "qa.json").write_text(json.dumps({
+        "role": "qa", "app_id": "1", "installation_id": "2", "private_key_path": "qa.pem",
+    }))
+
+    monkeypatch.chdir(worktree)
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "get_installation_token",
+        lambda role, app_config: f"token-for-{role}",
+    )
+    assert dispatch_mod._resolve_dispatch_gh_token("qa") == "token-for-qa"
+
+
+def test_resolve_github_apps_dir_prefers_cwd_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+
+    import synlynk.dispatch as dispatch_mod
+
+    def fail_git_lookup(*args, **kwargs):
+        raise AssertionError("git-common-dir lookup should not run")
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", fail_git_lookup)
+    assert dispatch_mod._resolve_github_apps_dir() == os.path.join(
+        ".synlynk", "github_apps"
+    )
+
+
+def test_resolve_github_apps_dir_falls_back_to_cwd_path_when_unavailable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    import synlynk.dispatch as dispatch_mod
+
+    def fail_git_lookup(*args, **kwargs):
+        raise subprocess.CalledProcessError(128, args[0])
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "run", fail_git_lookup)
+    assert dispatch_mod._resolve_github_apps_dir() == os.path.join(
+        ".synlynk", "github_apps"
+    )
+
+
 def test_resolve_dispatch_gh_bot_login_uses_role_specific_app(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     apps_dir = tmp_path / ".synlynk" / "github_apps"
@@ -101,6 +165,7 @@ def _dispatch_with_fake_popen(
     role=None,
     issue=None,
     gh_write_target_kind="issue",
+    task_type=None,
 ):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(parents=True, exist_ok=True)
@@ -187,6 +252,7 @@ def _dispatch_with_fake_popen(
         requires_gh_write=requires_gh_write,
         issue=issue,
         gh_write_target_kind=gh_write_target_kind,
+        task_type=task_type,
         force_agent=True,
         role=role,
     )
@@ -230,6 +296,22 @@ def test_dispatch_agent_defaults_to_issue_target_kind(tmp_path, monkeypatch):
         issue=701,
     )
     assert job["gh_write_target"] == "issue:701"
+
+
+def test_dispatch_agent_review_task_uses_review_posted_expectation(tmp_path, monkeypatch):
+    _dispatch_mod, job, _captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        requires_gh_write=True,
+        token_resolver=lambda role: "minted-token-abc",
+        role="qa",
+        issue=1164,
+        gh_write_target_kind="pr",
+        task_type="review",
+    )
+
+    assert job["gh_write_target"] == "pr:1164"
+    assert job["gh_write_expect"] == "review_posted"
 
 
 def test_dispatch_agent_injects_gh_token_and_isolates_config_dir(tmp_path, monkeypatch):

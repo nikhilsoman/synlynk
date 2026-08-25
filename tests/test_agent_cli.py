@@ -447,6 +447,61 @@ def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch
     assert "agent" in captured
 
 
+def test_cli_dispatch_infers_review_task_type_for_gh_write(project_dir, monkeypatch, capsys):
+    from synlynk.cli import main
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        captured.update(kwargs)
+        return {"id": "job-1", "pid": 1, "agent": agent}
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr("synlynk.dispatch_agent", fake_dispatch_agent)
+
+    main([
+        "dispatch", "codex", "--task", "Post a GitHub PR review for PR #1164",
+    ])
+    captured_output = capsys.readouterr()
+
+    assert captured["task_type"] == "review"
+    assert captured["gh_write_target_kind"] == "pr"
+    assert "inferred task_type=review" in captured_output.out
+
+
+def test_cli_dispatch_explicit_task_type_and_non_review_gh_write_remain_unchanged(
+    project_dir, monkeypatch, capsys
+):
+    from synlynk.cli import main
+    import synlynk.dispatch as dispatch_mod
+
+    calls = []
+
+    def fake_dispatch_agent(agent, task, **kwargs):
+        calls.append(kwargs)
+        return {"id": "job-1", "pid": 1, "agent": agent}
+
+    monkeypatch.setattr(dispatch_mod, "dispatch_agent", fake_dispatch_agent)
+    monkeypatch.setattr("synlynk.dispatch_agent", fake_dispatch_agent)
+
+    main([
+        "dispatch", "codex", "--task", "review PR #1164", "--task-type", "review",
+        "--requires-gh-write",
+    ])
+    capsys.readouterr()
+    main([
+        "dispatch", "codex", "--task", "Close issue #99 as duplicate",
+        "--requires-gh-write",
+    ])
+    capsys.readouterr()
+
+    assert calls[0]["task_type"] == "review"
+    assert calls[0]["gh_write_target_kind"] == "pr"
+    assert calls[1]["task_type"] is None
+    assert calls[1]["gh_write_target_kind"] == "issue"
+
+
 def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_agent(project_dir, capsys):
     from synlynk.cli import main
 
