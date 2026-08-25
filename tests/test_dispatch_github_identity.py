@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -19,8 +20,9 @@ def test_resolve_dispatch_gh_token_uses_role_specific_app(tmp_path, monkeypatch)
     import synlynk.dispatch as dispatch_mod
 
     monkeypatch.setattr(
-        dispatch_mod, "get_installation_token",
-        lambda role, app_config: f"token-for-{role}",
+        dispatch_mod,
+        "read_cached_installation_token",
+        lambda role, apps_dir=None: f"token-for-{role}",
     )
     token = dispatch_mod._resolve_dispatch_gh_token("qa")
     assert token == "token-for-qa"
@@ -37,11 +39,28 @@ def test_resolve_dispatch_gh_token_falls_back_to_synlynk_bot(tmp_path, monkeypat
     import synlynk.dispatch as dispatch_mod
 
     monkeypatch.setattr(
-        dispatch_mod, "get_installation_token",
-        lambda role, app_config: f"token-for-{role}",
+        dispatch_mod,
+        "read_cached_installation_token",
+        lambda role, apps_dir=None: f"token-for-{role}",
     )
     token = dispatch_mod._resolve_dispatch_gh_token("dev")  # dev.json does not exist
     assert token == "token-for-synlynk-bot"
+
+
+def test_resolve_dispatch_gh_token_returns_none_when_cache_stale(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "dev.json").write_text(json.dumps({
+        "role": "dev", "app_id": "1", "installation_id": "2", "private_key_path": "dev.pem",
+    }))
+
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(
+        dispatch_mod, "read_cached_installation_token", lambda role, apps_dir=None: None
+    )
+    assert dispatch_mod._resolve_dispatch_gh_token("dev") is None
 
 
 def test_resolve_dispatch_gh_token_returns_none_when_nothing_provisioned(tmp_path, monkeypatch):
@@ -74,15 +93,13 @@ def test_resolve_dispatch_gh_token_uses_main_repo_apps_from_worktree(tmp_path, m
     (apps_dir / "qa.json").write_text(json.dumps({
         "role": "qa", "app_id": "1", "installation_id": "2", "private_key_path": "qa.pem",
     }))
+    (apps_dir / "qa.token.json").write_text(json.dumps({
+        "token": "token-for-qa", "expires_at": time.time() + 3600,
+    }))
 
     monkeypatch.chdir(worktree)
     import synlynk.dispatch as dispatch_mod
 
-    monkeypatch.setattr(
-        dispatch_mod,
-        "get_installation_token",
-        lambda role, app_config: f"token-for-{role}",
-    )
     assert dispatch_mod._resolve_dispatch_gh_token("qa") == "token-for-qa"
 
 

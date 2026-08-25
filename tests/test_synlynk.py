@@ -5267,7 +5267,6 @@ def test_redact_active_tokens_uses_on_disk_redaction_cache(tmp_path, monkeypatch
     from synlynk import github_app_auth as gh_auth
 
     monkeypatch.chdir(tmp_path)
-    gh_auth._token_cache.clear()
     gh_auth._persist_token_for_redaction("dev", "token-value", time.time() + 3600)
 
     redacted = sl._redact_active_tokens("prefix token-value suffix")

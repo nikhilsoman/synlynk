@@ -65,7 +65,7 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
         return name
     return None
 
-from synlynk.github_app_auth import get_installation_token
+from synlynk.github_app_auth import read_cached_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.gh_verify import gh_write_verified
@@ -272,10 +272,14 @@ def _resolve_github_apps_dir() -> str:
 def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
     """Resolve a role-scoped GitHub App installation token for dispatch.
 
+    Reads the daemon-maintained token cache only — never signs a JWT or calls
+    the GitHub API itself (that live-credential action is what triggered
+    Claude Code's auto-mode classifier to block dispatch, #1140).
     Falls back to the synlynk-bot catch-all identity if the role has no
-    provisioned App. Returns None (never a human's personal token) if
-    neither is provisioned — dispatch proceeds using whatever `gh auth`
-    is already configured on the host in that case.
+    provisioned App. Returns None if neither is provisioned, or if the
+    provisioned role's cached token is missing/stale (daemon not running or
+    hasn't refreshed yet) — dispatch's caller decides whether that's a
+    fail-closed error (--requires-gh-write) or a silent host-auth fallback.
     """
     apps_dir = _resolve_github_apps_dir()
     for candidate_role in (role, "synlynk-bot"):
@@ -289,14 +293,7 @@ def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
             continue
         if not app_config.get("installation_id"):
             continue
-        try:
-            return get_installation_token(candidate_role, app_config)
-        except Exception as exc:
-            print(
-                f"  ⚠ could not mint GitHub App token for role '{candidate_role}': {exc}",
-                file=sys.stderr,
-            )
-            return None
+        return read_cached_installation_token(candidate_role, apps_dir)
     return None
 
 
@@ -556,7 +553,10 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
                 "Dispatch refused: --requires-gh-write requires a role-scoped GitHub App "
                 f"token, but none is available for role {role!r} "
                 f"(checked .synlynk/github_apps/{role}.json and synlynk-bot.json). "
-                f"Run: synlynk identity init --role {role}  "
+                f"If the App is provisioned, ensure the token cache is fresh: "
+                f"synlynk daemon status  (start it with: synlynk daemon start — "
+                f"it refreshes tokens automatically every ~50 min). "
+                f"If the App isn't provisioned yet: synlynk identity init --role {role}  "
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )

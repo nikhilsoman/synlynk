@@ -10,15 +10,20 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime
+from typing import Optional
 
 
 GITHUB_API = "https://api.github.com"
-_token_cache = {}  # role -> {"token": str, "expires_at": float}
 _openssl_path_cache = None
 
 
 def _redaction_cache_path() -> str:
     return os.path.join(".synlynk", "token_redaction_cache.json")
+
+
+def _role_token_cache_path(role: str, apps_dir: Optional[str] = None) -> str:
+    base = apps_dir if apps_dir is not None else os.path.join(".synlynk", "github_apps")
+    return os.path.join(base, f"{role}.token.json")
 
 
 def _persist_token_for_redaction(role: str, token: str, expires_at: float) -> None:
@@ -154,14 +159,42 @@ def _mint_installation_token(app_id: str, installation_id: str, private_key_path
     return token, expires_at
 
 
-def get_installation_token(role: str, app_config: dict) -> str:
-    """Return a cached-or-freshly-minted installation token for `role`."""
-    cached = _token_cache.get(role)
-    if cached and cached["expires_at"] - 60 > time.time():
-        return cached["token"]
+def refresh_installation_token(role: str, app_config: dict) -> None:
+    """Mint a fresh installation token for `role` and cache it to disk.
+
+    Daemon-only: this is the only remaining caller of _mint_installation_token
+    (and transitively _sign_jwt/openssl). dispatch must never call this —
+    it only reads the cache via read_cached_installation_token().
+    """
     token, expires_at = _mint_installation_token(
         app_config["app_id"], app_config["installation_id"], app_config["private_key_path"],
     )
-    _token_cache[role] = {"token": token, "expires_at": expires_at}
+    cache_path = _role_token_cache_path(role)
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump({"token": token, "expires_at": expires_at}, f)
+    os.chmod(cache_path, 0o600)
     _persist_token_for_redaction(role, token, expires_at)
-    return token
+
+
+def read_cached_installation_token(role: str, apps_dir: Optional[str] = None) -> Optional[str]:
+    """Return the daemon-cached installation token for `role`, or None.
+
+    Pure file read — never signs a JWT, never calls the GitHub API. Returns
+    None on a missing file, a stale (expired) token, or corrupt JSON.
+    ``apps_dir``, when given, overrides the default cwd-relative lookup.
+    """
+    cache_path = _role_token_cache_path(role, apps_dir)
+    if not os.path.exists(cache_path):
+        return None
+    try:
+        with open(cache_path) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    expires_at = data.get("expires_at")
+    if not isinstance(expires_at, (int, float)) or expires_at - 60 <= time.time():
+        return None
+    return data.get("token")

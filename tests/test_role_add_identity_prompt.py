@@ -21,6 +21,7 @@ def test_identity_init_role_registers_new_role_in_roles_yaml(tmp_path, monkeypat
         "id": 1, "client_id": "c1", "slug": "proj-designer", "pem": "fake-pem",
     })
     monkeypatch.setattr(team_mod, "_confirm_installation", lambda slug, path: None)
+    monkeypatch.setattr(team_mod.github_app_auth, "refresh_installation_token", lambda role, app_config: None)
 
     team_mod.cmd_identity_init_role("designer")
 

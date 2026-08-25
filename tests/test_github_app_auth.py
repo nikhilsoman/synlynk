@@ -44,55 +44,78 @@ def test_resolve_openssl_path_caches_after_first_resolution(monkeypatch):
     assert len(calls) == 1
 
 
-def test_get_installation_token_uses_cache_when_unexpired(monkeypatch):
-    from synlynk import github_app_auth as gh_auth
-
-    gh_auth._token_cache.clear()
-    gh_auth._token_cache["dev"] = {"token": "cached-token", "expires_at": time.time() + 300}
-
-    def fail_if_called(*a, **kw):
-        raise AssertionError("should not mint a new token when cache is fresh")
-
-    monkeypatch.setattr(gh_auth, "_mint_installation_token", fail_if_called)
-    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
-    token = gh_auth.get_installation_token("dev", app_config)
-    assert token == "cached-token"
-
-
-def test_get_installation_token_mints_when_cache_expired(monkeypatch):
-    from synlynk import github_app_auth as gh_auth
-
-    gh_auth._token_cache.clear()
-    gh_auth._token_cache["dev"] = {"token": "stale-token", "expires_at": time.time() - 10}
-
-    monkeypatch.setattr(
-        gh_auth, "_mint_installation_token",
-        lambda app_id, installation_id, private_key_path: ("fresh-token", time.time() + 3600),
-    )
-    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
-    token = gh_auth.get_installation_token("dev", app_config)
-    assert token == "fresh-token"
-    assert gh_auth._token_cache["dev"]["token"] == "fresh-token"
-
-
-def test_get_installation_token_mints_when_no_cache_entry(monkeypatch):
-    from synlynk import github_app_auth as gh_auth
-
-    gh_auth._token_cache.clear()
-    monkeypatch.setattr(
-        gh_auth, "_mint_installation_token",
-        lambda app_id, installation_id, private_key_path: ("brand-new-token", time.time() + 3600),
-    )
-    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
-    token = gh_auth.get_installation_token("qa", app_config)
-    assert token == "brand-new-token"
-
-
-def test_get_installation_token_persists_redaction_cache(monkeypatch, tmp_path):
+def test_read_cached_installation_token_returns_fresh_token(monkeypatch, tmp_path):
     from synlynk import github_app_auth as gh_auth
 
     monkeypatch.chdir(tmp_path)
-    gh_auth._token_cache.clear()
+    cache_dir = tmp_path / ".synlynk" / "github_apps"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "dev.token.json").write_text(json.dumps({
+        "token": "fresh-token", "expires_at": time.time() + 300,
+    }))
+
+    assert gh_auth.read_cached_installation_token("dev") == "fresh-token"
+
+
+def test_read_cached_installation_token_returns_none_when_stale(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    cache_dir = tmp_path / ".synlynk" / "github_apps"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "dev.token.json").write_text(json.dumps({
+        "token": "stale-token", "expires_at": time.time() - 10,
+    }))
+
+    assert gh_auth.read_cached_installation_token("dev") is None
+
+
+def test_read_cached_installation_token_returns_none_when_missing(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    assert gh_auth.read_cached_installation_token("dev") is None
+
+
+def test_read_cached_installation_token_returns_none_when_corrupt(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    cache_dir = tmp_path / ".synlynk" / "github_apps"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "dev.token.json").write_text("not json")
+
+    assert gh_auth.read_cached_installation_token("dev") is None
+
+
+def test_refresh_installation_token_writes_cache_file_with_0600(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    expires = time.time() + 3600
+    monkeypatch.setattr(
+        gh_auth,
+        "_mint_installation_token",
+        lambda app_id, installation_id, private_key_path: ("fresh-token", expires),
+    )
+    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
+
+    gh_auth.refresh_installation_token("dev", app_config)
+
+    cache_path = tmp_path / ".synlynk" / "github_apps" / "dev.token.json"
+    assert cache_path.exists()
+    data = json.loads(cache_path.read_text())
+    assert data["token"] == "fresh-token"
+    assert data["expires_at"] == expires
+    assert (cache_path.stat().st_mode & 0o777) == 0o600
+
+
+def test_refresh_installation_token_persists_redaction_cache(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         gh_auth,
         "_mint_installation_token",
@@ -100,15 +123,28 @@ def test_get_installation_token_persists_redaction_cache(monkeypatch, tmp_path):
     )
     app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
 
-    token = gh_auth.get_installation_token("dev", app_config)
+    gh_auth.refresh_installation_token("dev", app_config)
 
-    assert token == "persisted-token"
     cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
     assert cache_path.exists()
     cache_data = json.loads(cache_path.read_text())
     assert cache_data["persisted-token"]["role"] == "dev"
-    assert cache_data["persisted-token"]["expires_at"] > time.time()
-    assert (cache_path.stat().st_mode & 0o777) == 0o600
+
+
+def test_refresh_installation_token_round_trips_into_read_cache(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        gh_auth,
+        "_mint_installation_token",
+        lambda app_id, installation_id, private_key_path: ("round-trip-token", time.time() + 3600),
+    )
+    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
+
+    gh_auth.refresh_installation_token("qa", app_config)
+
+    assert gh_auth.read_cached_installation_token("qa") == "round-trip-token"
 
 
 def test_load_redaction_tokens_omits_expired_entries(monkeypatch, tmp_path):
@@ -125,28 +161,3 @@ def test_load_redaction_tokens_omits_expired_entries(monkeypatch, tmp_path):
     tokens = gh_auth._load_redaction_tokens()
 
     assert tokens == ["valid-token"]
-
-
-def test_get_installation_token_prunes_expired_redaction_entries(monkeypatch, tmp_path):
-    from synlynk import github_app_auth as gh_auth
-
-    monkeypatch.chdir(tmp_path)
-    cache_path = tmp_path / ".synlynk" / "token_redaction_cache.json"
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({
-        "expired-token": {"expires_at": time.time() - 10, "role": "old"},
-    }))
-    gh_auth._token_cache.clear()
-    monkeypatch.setattr(
-        gh_auth,
-        "_mint_installation_token",
-        lambda app_id, installation_id, private_key_path: ("fresh-token", time.time() + 3600),
-    )
-    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
-
-    token = gh_auth.get_installation_token("dev", app_config)
-
-    assert token == "fresh-token"
-    cache_data = json.loads(cache_path.read_text())
-    assert "expired-token" not in cache_data
-    assert "fresh-token" in cache_data

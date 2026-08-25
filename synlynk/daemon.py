@@ -1,5 +1,6 @@
 """synlynk daemon: background watch daemon, HTTP context server, SSE relay broker."""
 
+import glob
 import http.server
 import json
 import os
@@ -14,6 +15,7 @@ from synlynk.context import generate_context
 from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
 from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
 from synlynk.team import get_username
+from synlynk import github_app_auth
 
 
 def _pkg(name: str, default=None):
@@ -32,6 +34,7 @@ class WatchDaemon:
         self.pidfile = ".synlynk/watch.pid"
         self.logfile = ".synlynk/watch.log"
         self.settle_seconds = 3
+        self.token_refresh_interval_seconds = 50 * 60
 
     def start(self) -> None:
         if self._is_running():
@@ -42,6 +45,7 @@ class WatchDaemon:
         if not hasattr(os, "fork"):
             print("  ⚠ watch daemon requires Unix (macOS/Linux). Not supported on Windows.")
             return
+        self._refresh_github_tokens()
         pid = os.fork()
         if pid > 0:
             print("  ● synlynk watch started.")
@@ -136,10 +140,36 @@ class WatchDaemon:
             "changed_file": filepath,
         })
 
+    def _refresh_github_tokens(self) -> None:
+        """Mint fresh tokens for every provisioned role's GitHub App.
+
+        Best-effort per role: one role's failure (revoked App, bad
+        installation_id) must not stop the others or crash the daemon loop.
+        """
+        apps_dir = os.path.join(".synlynk", "github_apps")
+        if not os.path.isdir(apps_dir):
+            return
+        for json_path in sorted(glob.glob(os.path.join(apps_dir, "*.json"))):
+            if json_path.endswith(".token.json"):
+                continue
+            role = os.path.basename(json_path)[:-len(".json")]
+            try:
+                with open(json_path) as fh:
+                    app_config = json.load(fh)
+                if not app_config.get("installation_id"):
+                    continue
+                github_app_auth.refresh_installation_token(role, app_config)
+            except Exception as exc:
+                print(
+                    f"  ⚠ could not refresh GitHub App token for role '{role}': {exc}",
+                    file=sys.stderr,
+                )
+
     def _run_loop(self) -> None:
         config = _pkg("load_config")()
         interval = config.get("watch_interval_seconds", 30)
         last_mtimes = self._get_mtimes("project-docs")
+        last_token_refresh = time.time()
         while True:
             time.sleep(interval)
             current_mtimes = self._get_mtimes("project-docs")
@@ -151,6 +181,9 @@ class WatchDaemon:
                 self.on_change(changed[0])
                 _pkg("set_state")("watching")
                 last_mtimes = self._get_mtimes("project-docs")
+            if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
+                self._refresh_github_tokens()
+                last_token_refresh = time.time()
 
 def _make_daemon_handler(daemon_instance):
     """Returns a BaseHTTPRequestHandler class with daemon_instance bound via closure."""
@@ -666,6 +699,7 @@ class SynlynkDaemon(WatchDaemon):
         if not hasattr(os, "fork"):
             print("  ⚠ daemon requires Unix (macOS/Linux). Not supported on Windows.")
             return
+        self._refresh_github_tokens()
         pid = os.fork()
         if pid > 0:
             print("  ● synlynk daemon started.")
@@ -758,6 +792,7 @@ class SynlynkDaemon(WatchDaemon):
         max_parallel = config.get("max_parallel", 4)
         interval = config.get("watch_interval_seconds", 30)
         last_mtimes = self._get_mtimes("project-docs")
+        last_token_refresh = time.time()
         while True:
             time.sleep(interval)
             current_mtimes = self._get_mtimes("project-docs")
@@ -773,6 +808,9 @@ class SynlynkDaemon(WatchDaemon):
                 last_mtimes = self._get_mtimes("project-docs")
             _reconcile_daemon_jobs()
             _dispatch_ready_jobs(max_parallel=max_parallel)
+            if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
+                self._refresh_github_tokens()
+                last_token_refresh = time.time()
 
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""
