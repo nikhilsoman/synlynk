@@ -21,8 +21,9 @@ def _redaction_cache_path() -> str:
     return os.path.join(".synlynk", "token_redaction_cache.json")
 
 
-def _role_token_cache_path(role: str) -> str:
-    return os.path.join(".synlynk", "github_apps", f"{role}.token.json")
+def _role_token_cache_path(role: str, apps_dir: Optional[str] = None) -> str:
+    base = apps_dir if apps_dir is not None else os.path.join(".synlynk", "github_apps")
+    return os.path.join(base, f"{role}.token.json")
 
 
 def _persist_token_for_redaction(role: str, token: str, expires_at: float) -> None:
@@ -176,13 +177,14 @@ def refresh_installation_token(role: str, app_config: dict) -> None:
     _persist_token_for_redaction(role, token, expires_at)
 
 
-def read_cached_installation_token(role: str) -> Optional[str]:
+def read_cached_installation_token(role: str, apps_dir: Optional[str] = None) -> Optional[str]:
     """Return the daemon-cached installation token for `role`, or None.
 
     Pure file read — never signs a JWT, never calls the GitHub API. Returns
     None on a missing file, a stale (expired) token, or corrupt JSON.
+    ``apps_dir``, when given, overrides the default cwd-relative lookup.
     """
-    cache_path = _role_token_cache_path(role)
+    cache_path = _role_token_cache_path(role, apps_dir)
     if not os.path.exists(cache_path):
         return None
     try:

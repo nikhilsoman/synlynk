@@ -293,7 +293,7 @@ def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
             continue
         if not app_config.get("installation_id"):
             continue
-        return read_cached_installation_token(candidate_role)
+        return read_cached_installation_token(candidate_role, apps_dir)
     return None
 
 
