@@ -15,7 +15,7 @@
         "infra": {"harness": "grok", "fallback": []},
         "refactor": {"harness": "codex", "fallback": []},
         "cli-plumbing": {"harness": "codex", "fallback": []},
-        "review": {"harness": "claude", "fallback": ["grok", "agy"]},
+        "review": {"harness": "claude", "fallback": ["agy"]},
         "gh_write": {"harness": "claude", "fallback": ["agy"]}
       }
     },
