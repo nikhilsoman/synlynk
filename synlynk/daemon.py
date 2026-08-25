@@ -719,6 +719,7 @@ class SynlynkDaemon(WatchDaemon):
         start_file = self.pidfile.replace(".pid", ".start")
         with open(start_file, "w") as f:
             f.write(str(start_time))
+        self._refresh_github_tokens()
         self._run_loop()
 
     def stop(self) -> None:
@@ -791,6 +792,7 @@ class SynlynkDaemon(WatchDaemon):
         max_parallel = config.get("max_parallel", 4)
         interval = config.get("watch_interval_seconds", 30)
         last_mtimes = self._get_mtimes("project-docs")
+        last_token_refresh = time.time()
         while True:
             time.sleep(interval)
             current_mtimes = self._get_mtimes("project-docs")
@@ -806,6 +808,9 @@ class SynlynkDaemon(WatchDaemon):
                 last_mtimes = self._get_mtimes("project-docs")
             _reconcile_daemon_jobs()
             _dispatch_ready_jobs(max_parallel=max_parallel)
+            if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
+                self._refresh_github_tokens()
+                last_token_refresh = time.time()
 
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""
