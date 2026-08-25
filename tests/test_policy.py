@@ -139,3 +139,14 @@ def test_check_authority_task_dispatch_unknown_task_type_denied(tmp_path, monkey
     repo.mkdir()
     result = check_authority("task_dispatch:not_a_real_type", role="dev", repo_path=str(repo))
     assert result.allowed is False
+
+
+def test_repo_policy_json_authorizes_review_task_type():
+    """Regression guard for the #1166/#1172 gap: overrides.dev_authority does a
+    whole-object replace over the workspace default (see load_policy()'s merge
+    rule), so this repo's own .synlynk/policy.json must carry its own "review"
+    entry — it does not inherit one from DEFAULT_WORKSPACE_POLICY.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    result = check_authority("task_dispatch:review", role="dev", repo_path=str(repo_root))
+    assert result.allowed is True
