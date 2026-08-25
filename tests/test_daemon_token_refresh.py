@@ -157,3 +157,68 @@ def test_synlynk_daemon_start_calls_refresh_before_run_loop(tmp_path, monkeypatc
     daemon_mod.SynlynkDaemon().start()
 
     assert call_order == ["refresh", "run_loop"]
+
+
+def test_synlynk_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    import synlynk.daemon as daemon_mod
+
+    call_order = []
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_refresh_github_tokens", lambda self: call_order.append("refresh"))
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
+
+    fork_calls = []
+
+    def fake_fork():
+        assert call_order == ["refresh"]
+        fork_calls.append(1)
+        return 0
+
+    monkeypatch.setattr(os, "fork", fake_fork)
+    monkeypatch.setattr(os, "setsid", lambda: None)
+    monkeypatch.setattr(os, "dup2", lambda source, target: None)
+    monkeypatch.setattr(os, "getpid", lambda: 12345)
+
+    daemon_mod.SynlynkDaemon().start()
+
+    assert call_order == ["refresh", "run_loop"]
+    assert call_order.index("refresh") == 0
+    assert len(fork_calls) == 2
+
+
+def test_watch_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+
+    import synlynk.daemon as daemon_mod
+
+    call_order = []
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_refresh_github_tokens", lambda self: call_order.append("refresh"))
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(
+        daemon_mod,
+        "_pkg",
+        lambda name, default=None: (lambda state: None) if name == "set_state" else default,
+    )
+
+    fork_calls = []
+
+    def fake_fork():
+        assert call_order == ["refresh"]
+        fork_calls.append(1)
+        return 0
+
+    monkeypatch.setattr(os, "fork", fake_fork)
+    monkeypatch.setattr(os, "setsid", lambda: None)
+    monkeypatch.setattr(os, "dup2", lambda source, target: None)
+    monkeypatch.setattr(os, "getpid", lambda: 12345)
+
+    daemon_mod.WatchDaemon().start()
+
+    assert call_order == ["refresh", "run_loop"]
+    assert call_order.index("refresh") == 0
+    assert len(fork_calls) == 2

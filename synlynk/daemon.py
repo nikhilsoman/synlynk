@@ -45,6 +45,7 @@ class WatchDaemon:
         if not hasattr(os, "fork"):
             print("  ⚠ watch daemon requires Unix (macOS/Linux). Not supported on Windows.")
             return
+        self._refresh_github_tokens()
         pid = os.fork()
         if pid > 0:
             print("  ● synlynk watch started.")
@@ -62,7 +63,6 @@ class WatchDaemon:
         with open(self.pidfile, "w") as f:
             f.write(str(os.getpid()))
         _pkg("set_state")("watching")
-        self._refresh_github_tokens()
         self._run_loop()
 
     def stop(self) -> None:
@@ -699,6 +699,7 @@ class SynlynkDaemon(WatchDaemon):
         if not hasattr(os, "fork"):
             print("  ⚠ daemon requires Unix (macOS/Linux). Not supported on Windows.")
             return
+        self._refresh_github_tokens()
         pid = os.fork()
         if pid > 0:
             print("  ● synlynk daemon started.")
@@ -719,7 +720,6 @@ class SynlynkDaemon(WatchDaemon):
         start_file = self.pidfile.replace(".pid", ".start")
         with open(start_file, "w") as f:
             f.write(str(start_time))
-        self._refresh_github_tokens()
         self._run_loop()
 
     def stop(self) -> None:
