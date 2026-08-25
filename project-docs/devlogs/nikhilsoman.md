@@ -1213,3 +1213,11 @@ implementation plan.
 - **TDD Test**: Added a regression test `test_reconcile_detects_stall_and_kills_process` to `tests/test_synlynk.py`.
 - **Config**: Added defaults for `stall_timeout_minutes` and `agents` config sections to `load_config()` and configuration templates.
 - **Verification**: Verified implementation against 485 tests, ensuring all tests passed.
+
+## 2026-08-25 — Session: PR backlog triage + LIVE-8 verification signal fix
+
+### Completed
+- Triaged the 24-PR backlog in `nikhilsoman/synlynk`, closing 22 stale or duplicate PRs from the superseded `workspace-policy-and-autonomous-loop` and `PM competitive-intel sweep` task stacks, along with three standalone stale PRs; removed the related worktrees and branches under the Worktree Hygiene Protocol.
+- Merged PR #1081, documenting the durable agent runtime, and PR #1175, adding the missing `review` task-allocation override to `synlynk/policy.json`'s `dev_authority` configuration to close the LIVE-8/#1166 policy gap.
+- Confirmed that PR #1172's task-type inference fix and PR #1175's policy override together make the daemon's `gh_write_verified` signal reliable for future runs of LIVE-8 (#1166, Grok gh-write stalls).
+- Planned a fresh Grok dispatch to obtain a real pass/fail result for the gh-write terminal action before deciding whether Grok's gh-write capability profile should be downgraded.
