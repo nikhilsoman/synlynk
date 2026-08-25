@@ -80,6 +80,7 @@ def test_cmd_identity_init_role_retries_taken_app_name(tmp_path, monkeypatch):
     monkeypatch.setattr(team_mod, "_build_app_manifest_url", build_manifest)
     monkeypatch.setattr(team_mod.webbrowser, "open", lambda url: True)
     monkeypatch.setattr(team_mod, "_confirm_installation", lambda slug, path: None)
+    monkeypatch.setattr(team_mod.github_app_auth, "refresh_installation_token", lambda role, app_config: None)
     monkeypatch.setattr("synlynk.identity_roles.load_declared_roles", lambda: [])
     monkeypatch.setattr("synlynk.identity_roles.write_declared_roles", lambda roles: None)
 
@@ -235,6 +236,7 @@ def test_cmd_identity_init_role_resumes_at_confirmation_when_app_created_but_not
         return data
 
     monkeypatch.setattr(team_mod, "_confirm_installation", fake_confirm)
+    monkeypatch.setattr(team_mod.github_app_auth, "refresh_installation_token", lambda role, app_config: None)
     monkeypatch.setattr(team_mod, "_build_app_manifest_url", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not rebuild manifest")))
     monkeypatch.setattr(team_mod.webbrowser, "open", lambda url: (_ for _ in ()).throw(AssertionError("should not reopen browser")))
     monkeypatch.setattr("synlynk.identity_roles.load_declared_roles", lambda: [])
