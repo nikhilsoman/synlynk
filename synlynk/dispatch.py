@@ -960,6 +960,15 @@ _GH_TARGET_RE = re.compile(
     re.IGNORECASE,
 )
 
+_REVIEW_TASK_RE = re.compile(
+    r"(?:\breview\s+and\s+post\b|"
+    r"\bpost(?:\s+(?:a|an))?\s+(?:github\s+)?(?:pr|pull\s+request)\s+review\b|"
+    r"\bpost(?:\s+(?:a|an))?\s+review\b|"
+    r"\b(?:pr|pull\s+request)\s+review\b|"
+    r"\bcode\s+review\b)",
+    re.IGNORECASE,
+)
+
 
 def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     """Infer GitHub-write intent so operators do not have to remember a flag.
@@ -972,6 +981,14 @@ def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     if re.search(r"\bgh\s+(?:issue|pr)\s+(?:review|comment|close|merge)\b", text, re.IGNORECASE):
         return True
     return bool(_GH_WRITE_ACTION_RE.search(text) and _GH_TARGET_RE.search(text))
+
+
+def _infer_task_type(task: str) -> Optional[str]:
+    """Infer only an unambiguous PR review task type from task text."""
+    text = task or ""
+    if _REVIEW_TASK_RE.search(text) and _GH_TARGET_RE.search(text):
+        return "review"
+    return None
 
 
 def _job_summary_path(job_id: str) -> str:
