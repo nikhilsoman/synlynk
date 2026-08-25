@@ -1204,14 +1204,22 @@ def main(argv=None) -> None:
             if not args.agent and not resolved_agent_id:
                 dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
 
-            _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
-            _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
-                "pr" if getattr(args, "task_type", None) == "review" else "issue"
-            )
-            from synlynk.dispatch import _task_requires_gh_write
+            from synlynk.dispatch import _infer_task_type, _task_requires_gh_write
             _effective_requires_gh_write = bool(
                 getattr(args, "requires_gh_write", False)
                 or _task_requires_gh_write(args.task, getattr(args, "task_type", None))
+            )
+            _effective_task_type = getattr(args, "task_type", None) or (
+                _infer_task_type(args.task) if _effective_requires_gh_write else None
+            )
+            if _effective_task_type == "review" and not getattr(args, "task_type", None):
+                print(
+                    "  info: inferred task_type=review from task text "
+                    "(pass --task-type explicitly to override)"
+                )
+            _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
+            _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
+                "pr" if _effective_task_type == "review" else "issue"
             )
 
             if getattr(args, "dry_run", False):
@@ -1230,7 +1238,7 @@ def main(argv=None) -> None:
                     force_agent=getattr(args, "force_agent", False),
                     requires_gh_write=_effective_requires_gh_write,
                     static_baseline=getattr(args, "static_baseline", False),
-                    task_type=getattr(args, "task_type", None),
+                    task_type=_effective_task_type,
                 )
                 print()
                 print(f"agent:        {preview['agent']}")
@@ -1255,7 +1263,7 @@ def main(argv=None) -> None:
                                  force_agent=getattr(args, "force_agent", False),
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
-                                 task_type=getattr(args, "task_type", None),
+                                 task_type=_effective_task_type,
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),

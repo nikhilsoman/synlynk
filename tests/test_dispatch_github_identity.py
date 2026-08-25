@@ -149,6 +149,7 @@ def _dispatch_with_fake_popen(
     role=None,
     issue=None,
     gh_write_target_kind="issue",
+    task_type=None,
 ):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(parents=True, exist_ok=True)
@@ -235,6 +236,7 @@ def _dispatch_with_fake_popen(
         requires_gh_write=requires_gh_write,
         issue=issue,
         gh_write_target_kind=gh_write_target_kind,
+        task_type=task_type,
         force_agent=True,
         role=role,
     )
@@ -278,6 +280,22 @@ def test_dispatch_agent_defaults_to_issue_target_kind(tmp_path, monkeypatch):
         issue=701,
     )
     assert job["gh_write_target"] == "issue:701"
+
+
+def test_dispatch_agent_review_task_uses_review_posted_expectation(tmp_path, monkeypatch):
+    _dispatch_mod, job, _captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        requires_gh_write=True,
+        token_resolver=lambda role: "minted-token-abc",
+        role="qa",
+        issue=1164,
+        gh_write_target_kind="pr",
+        task_type="review",
+    )
+
+    assert job["gh_write_target"] == "pr:1164"
+    assert job["gh_write_expect"] == "review_posted"
 
 
 def test_dispatch_agent_injects_gh_token_and_isolates_config_dir(tmp_path, monkeypatch):
