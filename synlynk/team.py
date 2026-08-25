@@ -18,6 +18,7 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
+from synlynk import github_app_auth
 from synlynk._constants import (
     HARNESS_CAPABILITY_BASELINES,
     AGENT_PANEL_QUERY_TIMEOUT_SECONDS,
@@ -799,6 +800,9 @@ def cmd_identity_init_role(role: str, project=None) -> None:
         ):
             print(f"  role '{role}' has an App already created ({existing['app_slug']}) — resuming at install confirmation")
             _confirm_installation(existing["app_slug"], json_path)
+            with open(json_path) as fh:
+                refreshed_config = json.load(fh)
+            github_app_auth.refresh_installation_token(role, refreshed_config)
             print(f"  role '{role}' provisioned at {json_path}")
             from synlynk.identity_roles import load_declared_roles, write_declared_roles
             declared = load_declared_roles()
@@ -874,6 +878,9 @@ def cmd_identity_init_role(role: str, project=None) -> None:
     conversion["private_key_path"] = str(pem_path)
     config = _write_role_app_config(role, conversion)
     _confirm_installation(config["app_slug"], json_path)
+    with open(json_path) as fh:
+        refreshed_config = json.load(fh)
+    github_app_auth.refresh_installation_token(role, refreshed_config)
     print(f"  role '{role}' provisioned at {json_path}")
 
     from synlynk.identity_roles import load_declared_roles, write_declared_roles
