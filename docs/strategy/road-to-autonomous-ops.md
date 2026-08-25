@@ -213,6 +213,8 @@ Do not make the October preview depend on:
 
 These remain future phases after the local autonomous loop proves useful and sustainable.
 
+**Note on shared durable-agent infrastructure (#1080):** only qa's Support Engineer is a real running durable loop today; pm's and tpm's durable loops (§2 of the agent-roles-charters spec) are designed but unbuilt. When tpm's loop is built, do not extract a shared "durable agent execution runtime" (common scheduling/state-read/audit skeleton with a per-role decision hook) from a single example — wait until a second durable loop exists, then generalize from both. Tracked as issue #1080, not yet spec'd.
+
 ## Decision
 
 Make TPM the accountable owner of the autonomous operating loop now, while keeping the underlying state shared across devlog, GOVERNS, SQLite, GitHub, and all other roles. Build the smallest closed loop that converts a strategy conversation into bounded, quota-aware, verified work and reconciles its evidence. Dogfood it immediately, then ship the measured Autonomous Development Loop Preview by 2026-10-01.
