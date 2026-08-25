@@ -39,6 +39,9 @@ _PERMISSION_TO_TOOL_MAP = {
     "run:shell": ["Bash"],
 }
 
+# Explicit grant required to enable Codex workspace network egress.
+_CODEX_NETWORK_PERMISSION = "run:install"
+
 # Known baseline capabilities per agent CLI.
 # Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
 HARNESS_CAPABILITY_BASELINES = {

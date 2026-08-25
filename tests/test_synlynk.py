@@ -733,6 +733,16 @@ def test_permissions_to_flags_codex_ask_for_approval():
     assert "untrusted" in result
 
 
+def test_permissions_to_flags_codex_network_access_requires_run_install():
+    from synlynk.dispatch import _permissions_to_flags
+
+    granted = _permissions_to_flags("codex", ["read:*", "run:install"])
+    assert granted[-2:] == ["-c", "sandbox_workspace_write.network_access=true"]
+
+    default_safe = _permissions_to_flags("codex", ["read:*"])
+    assert "sandbox_workspace_write.network_access=true" not in default_safe
+
+
 def test_permissions_to_flags_agy_raises_for_read_only():
     from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
 
