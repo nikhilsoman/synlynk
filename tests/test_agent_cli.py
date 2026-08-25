@@ -6,6 +6,23 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def test_codex_dispatch_workspacewrite_sandbox_bl_network_permission_adds_override():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*", "run:install"])
+
+    assert flags[-2:] == ["-c", "sandbox_workspace_write.network_access=true"]
+
+
+def test_codex_dispatch_workspacewrite_sandbox_bl_without_network_permission_is_safe():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*"])
+
+    assert "-c" not in flags
+    assert "sandbox_workspace_write.network_access=true" not in flags
+
+
 def test_pm_charter_includes_competitive_sweep_responsibility():
     assert "competitive-intelligence sweep" in SEED_CHARTERS["pm"]
     assert "capability/marketing-gap comparison doc" in SEED_CHARTERS["pm"]

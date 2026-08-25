@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Optional, Tuple
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -447,9 +447,12 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         return ["--allowedTools", ",".join(tools)]
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
+        flags = []
         if not has_write:
-            return ["--ask-for-approval", "untrusted"]
-        return []
+            flags = ["--ask-for-approval", "untrusted"]
+        if _CODEX_NETWORK_PERMISSION in (permissions or []):
+            flags += ["-c", "sandbox_workspace_write.network_access=true"]
+        return flags
     if agent == "grok":
         return _grok_permission_flags(permissions)
     if agent == "local":
@@ -2523,6 +2526,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--output-format", "json"]
     if agent == "codex":
         flags = flags + ["--json"]
+        if _CODEX_NETWORK_PERMISSION in permissions and "sandbox_workspace_write.network_access=true" not in flags:
+            flags = flags + ["-c", "sandbox_workspace_write.network_access=true"]
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
