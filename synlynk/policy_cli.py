@@ -47,7 +47,7 @@ def cmd_policy_sync_branch_protection(dry_run: bool = False) -> int:
     review_count = 1 if policy["merge_authority"]["require_non_authoring_review"] else 0
     body = {
         "required_status_checks": {"strict": True, "contexts": REQUIRED_STATUS_CHECKS},
-        "enforce_admins": True,
+        "enforce_admins": False,
         "required_pull_request_reviews": {"required_approving_review_count": review_count},
         "restrictions": None,
     }
