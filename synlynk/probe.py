@@ -30,7 +30,7 @@ _PR_REVIEW_SOP = """\
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
-**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different reviewer and `gh pr review --approve` fails with "Can not approve your own pull request" on every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.
+**GitHub identity note (#423):** If a role has a registered workspace agent (`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via `synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving review under that role's own distinct GitHub App identity, satisfying GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (no registered agent for the role):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of an approving review, since dispatches without `--as-agent` share the single repo-owner GitHub identity and an approving review will fail with the self-approval error.
 """
 
 _BRAINSTORM_SOP = """\
@@ -986,12 +986,16 @@ def _repair_pr_review_sop(cfg: dict) -> str:
         "2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.\n"
         "3. The reviewer alone must merge the PR.\n"
         f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
-        "**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* "
-        "enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents "
-        "share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different "
-        "reviewer and `gh pr review --approve` fails with \"Can not approve your own pull request\" on "
-        "every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an "
-        "explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.\n"
+        "**GitHub identity note (#423):** If a role has a registered workspace agent "
+        "(`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via "
+        "`synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving "
+        "review under that role's own distinct GitHub App identity, satisfying GitHub's non-author "
+        "review requirement for real approvals. Route day-to-day reviews through `qa` and any "
+        "feature/architecture-impacting review through `architect`. **Fallback (no registered "
+        "agent for the role):** post a formal COMMENT review with an explicit approve checklist "
+        "(as on PR #417) instead of an approving review, since dispatches without `--as-agent` "
+        "share the single repo-owner GitHub identity and an approving review will fail with the "
+        "self-approval error.\n"
     )
 
 
