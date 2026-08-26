@@ -2719,9 +2719,34 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None
-    if requires_gh_write and issue is not None:
-        target_prefix = "pr" if gh_write_target_kind == "pr" else "issue"
-        gh_write_target_value = f"{target_prefix}:{issue}"
+    gh_write_target_number = issue
+    resolved_gh_write_target_kind = gh_write_target_kind
+    if requires_gh_write and gh_write_target_number is None:
+        task_target_match = re.search(
+            r"\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b",
+            task or "",
+            re.IGNORECASE,
+        )
+        issue_target_match = re.search(
+            r"\bissues?\s*#?\s*(\d+)\b",
+            task or "",
+            re.IGNORECASE,
+        )
+        if task_target_match:
+            resolved_gh_write_target_kind = "pr"
+            gh_write_target_number = int(task_target_match.group(1))
+        elif issue_target_match:
+            resolved_gh_write_target_kind = "issue"
+            gh_write_target_number = int(issue_target_match.group(1))
+        else:
+            print(
+                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
+                "falling back to worktree activity verification",
+                file=sys.stderr,
+            )
+    if requires_gh_write and gh_write_target_number is not None:
+        target_prefix = "pr" if resolved_gh_write_target_kind == "pr" else "issue"
+        gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = "review_posted" if task_type == "review" else "closed"
