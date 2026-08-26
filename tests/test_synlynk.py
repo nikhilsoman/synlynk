@@ -86,7 +86,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
     assert "| GitHub write actions | **claude, Agy fallback** |" in content
     assert "GitHub write routing (#426)" in content
-    assert "GitHub identity caveat (#423)" in content
+    assert "GitHub identity note (#423)" in content
 
 
 def test_run_tc5_passes_when_all_headers_present(tmp_path):
