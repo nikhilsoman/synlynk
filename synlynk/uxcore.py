@@ -532,7 +532,8 @@ def dispatch(agent: str, task: str, actor: Optional[Actor] = None, **flags) -> W
 def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
     """Approve and squash-merge a PR via gh. Falls back to a formal comment
     approval if `gh pr review --approve` fails on the shared-identity
-    self-approval error (see CLAUDE.md "GitHub identity caveat #423")."""
+    self-approval error unless dispatched via `--as-agent` with a registered role identity
+    (see CLAUDE.md "GitHub identity note #423")."""
     actor = actor or DEFAULT_ACTOR
 
     def _op(**params):
