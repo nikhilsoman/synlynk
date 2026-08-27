@@ -1,3 +1,4 @@
+import json
 import stat
 
 import pytest
@@ -124,3 +125,56 @@ def test_instructions_status_pre_commit_exits_on_drift(tmp_path, monkeypatch, ca
     assert "synlynk instructions diff CLAUDE.md" in output
     assert "synlynk instructions update CLAUDE.md" in output
     assert "synlynk instructions ack CLAUDE.md" in output
+
+
+def test_register_backfills_existing_fenced_file_without_rewriting_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    instruction = tmp_path / "CLAUDE.md"
+    original = (
+        "# Project instructions\n"
+        "Keep this content exactly as written.\n"
+        "<!-- synlynk:start version=\"0.4.1\" tool=\"claude\" -->\n"
+        "existing synlynk instructions\n"
+        "<!-- synlynk:end -->\n"
+    )
+    instruction.write_text(original)
+
+    from synlynk.instructions import (
+        _compute_section_sha,
+        _extract_synlynk_section,
+        cmd_instructions_register,
+    )
+
+    cmd_instructions_register("CLAUDE.md")
+    assert instruction.read_text() == original
+    manifest = json.loads((tmp_path / ".synlynk" / "instructions.json").read_text())
+    assert manifest["files"]["CLAUDE.md"] == {
+        "tool": "claude",
+        "sha": _compute_section_sha(_extract_synlynk_section(original)),
+        "last_checked": manifest["files"]["CLAUDE.md"]["last_checked"],
+    }
+
+
+def test_register_is_idempotent_and_scans_known_fenced_targets(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / "GEMINI.md").write_text(
+        '<!-- synlynk:start version="0.4.1" tool="agy" -->\n'
+        "agy instructions\n<!-- synlynk:end -->\n"
+    )
+    (tmp_path / ".windsurfrules").write_text(
+        '# synlynk:start version="0.4.1"\n'
+        "windsurf instructions\n# synlynk:end\n"
+    )
+
+    from synlynk.instructions import cmd_instructions_register
+
+    cmd_instructions_register()
+    first_manifest = (tmp_path / ".synlynk" / "instructions.json").read_text()
+    first_gemini = (tmp_path / "GEMINI.md").read_text()
+    first_windsurf = (tmp_path / ".windsurfrules").read_text()
+    cmd_instructions_register()
+    assert (tmp_path / ".synlynk" / "instructions.json").read_text() == first_manifest
+    assert (tmp_path / "GEMINI.md").read_text() == first_gemini
+    assert (tmp_path / ".windsurfrules").read_text() == first_windsurf
