@@ -216,6 +216,27 @@ def propose_charter_revision(
     )
 
 
+def sync_dispatch_routing(agent_id: str, role: str, actor: str) -> int:
+    """Regenerate an agent's charter `dispatch_routing` frontmatter block
+    from .synlynk/policy.json's <role>_authority.task_allocation table.
+
+    No-op (returns the current revision unchanged, no new revision written)
+    if the role has no task_allocation entry in policy.json.
+    """
+    from synlynk import policy as policy_mod
+
+    content, revision = read_charter(agent_id)
+    merged_policy = policy_mod.load_policy(repo_path=os.getcwd())
+    authority = merged_policy.get(f"{role}_authority", {})
+    task_allocation = authority.get("task_allocation")
+    if not task_allocation:
+        return revision
+
+    block = charter_schema.render_dispatch_routing_block(task_allocation)
+    new_content = charter_schema.set_frontmatter_block(content, "dispatch_routing", block)
+    return propose_charter_revision(agent_id, new_content, actor=actor, parent_revision=revision)
+
+
 _ENTRY_CATEGORIES = ("memory", "statements-of-record")
 
 

@@ -171,6 +171,46 @@ def test_propose_charter_revision_stale_parent_raises_conflict(project_dir, tmp_
         pass
 
 
+def test_sync_dispatch_routing_populates_block_for_dev(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
+    agent_store.propose_charter_revision(
+        "dev-primary", _valid_charter("Dev charter v1"), actor="human:nikhilsoman", parent_revision=0
+    )
+
+    new_revision = agent_store.sync_dispatch_routing("dev-primary", "dev", actor="cli")
+    assert new_revision == 2
+
+    content, revision = agent_store.read_charter("dev-primary")
+    assert revision == 2
+    assert "dispatch_routing:" in content
+    assert "harness: codex" in content
+
+
+def test_sync_dispatch_routing_is_noop_for_role_without_task_allocation(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("qa-primary", aliases=[{"kind": "role_slug", "value": "qa"}])
+    charter_v1 = _valid_charter("QA charter v1").replace("role: dev", "role: qa")
+    agent_store.propose_charter_revision(
+        "qa-primary", charter_v1, actor="human:nikhilsoman", parent_revision=0
+    )
+
+    unchanged_revision = agent_store.sync_dispatch_routing("qa-primary", "qa", actor="cli")
+    assert unchanged_revision == 1
+
+    content, revision = agent_store.read_charter("qa-primary")
+    assert revision == 1
+    assert "dispatch_routing" not in content
+
+
 def test_charter_revisions_jsonl_provenance_chain(project_dir, tmp_path, monkeypatch):
     from synlynk import agent_store
     import json as _json
