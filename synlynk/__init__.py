@@ -242,6 +242,7 @@ from synlynk.instructions import (
     install_pre_commit_hook,
     cmd_instructions_ack,
     cmd_instructions_diff,
+    cmd_instructions_register,
     cmd_instructions_status,
     cmd_instructions_update,
 )

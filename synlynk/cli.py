@@ -159,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_identity_init,
         cmd_instructions_ack,
         cmd_instructions_diff,
+        cmd_instructions_register,
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
@@ -959,6 +960,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     instr_update_parser.add_argument("file", nargs="?", default=None,
                                      help="Specific file to update (default: all)")
+    instr_register_parser = instructions_sub.add_parser(
+        "register", help="Backfill the manifest from existing synlynk sections"
+    )
+    instr_register_parser.add_argument("file", nargs="?", default=None,
+                                       help="Specific file to register (default: all)")
     instr_ack_parser = instructions_sub.add_parser(
         "ack", help="Acknowledge an INSTRUCTION_DRIFT sentinel event"
     )
@@ -1465,6 +1471,8 @@ def main(argv=None) -> None:
             cmd_instructions_diff(getattr(args, "file", None))
         elif action == "update":
             cmd_instructions_update(getattr(args, "file", None))
+        elif action == "register":
+            cmd_instructions_register(getattr(args, "file", None))
         elif action == "ack":
             cmd_instructions_ack(args.file)
         else:

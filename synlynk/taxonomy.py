@@ -292,6 +292,8 @@ COMMAND_TAXONOMY = [
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": None},
     {"command": "instructions ack", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": "pre-commit"},
+    {"command": "instructions register", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
+     "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": None},
 ]
 
 
