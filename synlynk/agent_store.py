@@ -189,7 +189,6 @@ def _write_versioned_file(
         f.write(json.dumps(entry) + "\n")
     return new_revision
 
-
 def read_charter(agent_id: str):
     """Return (content, current_revision) for an agent's charter."""
     base = agent_store_path(agent_id)
@@ -308,75 +307,3 @@ def propose_entry_revision(
     with open(revisions_path, "a") as f:
         f.write(json.dumps(entry_row) + "\n")
     return new_revision
-
-
-def _dump_flat_yaml(data: dict, indent: int = 0) -> str:
-    lines = []
-    pad = "  " * indent
-    for key, value in data.items():
-        if value is None:
-            lines.append(f"{pad}{key}: null")
-        elif isinstance(value, dict):
-            if not value:
-                lines.append(f"{pad}{key}: {{}}")
-            else:
-                lines.append(f"{pad}{key}:")
-                lines.append(_dump_flat_yaml(value, indent + 1))
-        else:
-            lines.append(f"{pad}{key}: {value}")
-    return "\n".join(lines)
-
-
-def _agent_role(agent_id: str) -> str:
-    registry = _load_registry()
-    for agent in registry["agents"]:
-        if agent["agent_id"] == agent_id:
-            for alias in agent["aliases"]:
-                if alias["kind"] == "role_slug":
-                    return alias["value"]
-    return ""
-
-
-def _read_existing_projection_overrides(projection_path: str) -> dict:
-    if not os.path.exists(projection_path):
-        return {}
-    try:
-        with open(projection_path) as f:
-            lines = f.readlines()
-    except OSError:
-        return {}
-    overrides = {}
-    in_overrides = False
-    for line in lines:
-        stripped = line.rstrip("\n")
-        if stripped == "overrides:":
-            in_overrides = True
-            continue
-        if in_overrides:
-            if not stripped.startswith("  ") or stripped.strip() == "":
-                break
-            key, _, value = stripped.strip().partition(": ")
-            if key:
-                overrides[key] = value if value != "{}" else {}
-    return overrides
-
-
-def regenerate_agent_projection(agent_id: str, repo_overrides: dict = None) -> None:
-    workspace_id = get_workspace_id()
-    projection_dir = os.path.join(".synlynk", "agents")
-    os.makedirs(projection_dir, exist_ok=True)
-    projection_path = os.path.join(projection_dir, f"{agent_id}.yaml")
-
-    merged_overrides = _read_existing_projection_overrides(projection_path)
-    merged_overrides.update(repo_overrides or {})
-
-    payload = {
-        "agent_id": agent_id,
-        "workspace_id": workspace_id,
-        "role": _agent_role(agent_id),
-        "overrides": merged_overrides,
-    }
-    rendered = _dump_flat_yaml(payload) + "\n"
-
-    with open(projection_path, "w") as f:
-        f.write(rendered)

@@ -279,83 +279,6 @@ def test_statements_of_record_category(project_dir, tmp_path, monkeypatch):
     assert revision == 1
 
 
-def test_regenerate_agent_projection_writes_flat_yaml(project_dir, tmp_path, monkeypatch):
-    from synlynk import agent_store
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-    agent_store.propose_charter_revision(
-        "dev-primary", "# secret charter content", actor="human:nikhilsoman", parent_revision=0
-    )
-
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides={"note": "pinned"})
-
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    assert os.path.exists(projection_path)
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "agent_id: dev-primary" in rendered
-    assert "note: pinned" in rendered
-    assert "secret charter content" not in rendered
-
-
-def test_regenerate_agent_projection_is_idempotent(project_dir, tmp_path, monkeypatch):
-    from synlynk import agent_store
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    with open(projection_path) as f:
-        first = f.read()
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-    with open(projection_path) as f:
-        second = f.read()
-    assert first == second
-
-
-def test_regenerate_agent_projection_merges_overrides_across_calls(project_dir, tmp_path, monkeypatch):
-    from synlynk import agent_store
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-
-    agent_store.regenerate_agent_projection(
-        "dev-primary", repo_overrides={"capability_grants": {}}
-    )
-    agent_store.regenerate_agent_projection(
-        "dev-primary", repo_overrides={"new_key": "value"}
-    )
-
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "capability_grants: {}" in rendered
-    assert "new_key: value" in rendered
-
-
-def test_regenerate_agent_projection_path_is_gitignored(project_dir, tmp_path, monkeypatch, git_worktree_repo):
-    from synlynk import agent_store
-    import subprocess
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-
-    result = subprocess.run(
-        ["git", "check-ignore", os.path.join(".synlynk", "agents", "dev-primary.yaml")],
-        cwd=git_worktree_repo, capture_output=True, text=True,
-    )
-    assert result.returncode == 0, "expected .synlynk/agents/dev-primary.yaml to be gitignored"
-
-
 def test_full_flow_canonical_content_lives_only_in_workspace_store(project_dir, tmp_path, monkeypatch):
     from synlynk import agent_store
 
@@ -386,14 +309,6 @@ def test_full_flow_canonical_content_lives_only_in_workspace_store(project_dir, 
     content, revision = agent_store.read_charter("dev-primary")
     assert content == _valid_charter("Dev charter v2 expanded scope")
     assert revision == 2
-
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides={"pinned_role": "dev"})
-
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    with open(projection_path) as f:
-        projection_content = f.read()
-    assert "Dev charter" not in projection_content
-    assert "agent_id: dev-primary" in projection_content
 
     canonical_charter_path = os.path.join(
         agent_store.agent_store_path("dev-primary"), "charter.md"
