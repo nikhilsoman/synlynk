@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timezone
 
 from synlynk import _write_json_atomic
+from synlynk import charter_schema
 
 _CONFIG_PATH = os.path.join(".synlynk", "config.json")
 
@@ -205,6 +206,7 @@ def propose_charter_revision(
 
     No auto-approval logic is included; the gated mutability tier is out of scope.
     """
+    charter_schema.validate_charter(content)
     base = agent_store_path(agent_id)
     return _write_versioned_file(
         os.path.join(base, "charter.md"),
