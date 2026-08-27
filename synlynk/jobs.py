@@ -15,7 +15,7 @@ from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
-from synlynk.gh_verify import gh_write_verified
+from synlynk.gh_verify import _parse_iso8601, gh_write_verified
 
 
 _BOLD = "[1m"
@@ -2204,8 +2204,13 @@ def _apply_gh_write_verification(
     """Consult GitHub state for a --requires-gh-write job and return status/outcome."""
     if not requires_gh_write:
         return status, None
+    # daemon_jobs historically stores started_at without an offset. Normalize
+    # it before handing it to the verifier so all timestamp inputs use UTC.
+    since_dt = _parse_iso8601(since)
+    normalized_since = since_dt.isoformat() if since_dt is not None else since
     verified = gh_write_verified(
-        gh_write_target, expect=expect, since=since, expect_author=expect_author,
+        gh_write_target, expect=expect, since=normalized_since,
+        expect_author=expect_author,
     )
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified is False and status in ("done", "failed_unverified"):
