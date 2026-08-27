@@ -178,3 +178,20 @@ def test_register_is_idempotent_and_scans_known_fenced_targets(tmp_path, monkeyp
     assert (tmp_path / ".synlynk" / "instructions.json").read_text() == first_manifest
     assert (tmp_path / "GEMINI.md").read_text() == first_gemini
     assert (tmp_path / ".windsurfrules").read_text() == first_windsurf
+
+
+def test_register_sniffs_tool_from_marker_on_nonstandard_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    custom = tmp_path / "docs" / "CUSTOM_INSTRUCTIONS.md"
+    custom.parent.mkdir()
+    custom.write_text(
+        '  <!-- synlynk:start version="0.4.1" tool="claude" -->\n'
+        "custom instructions\n<!-- synlynk:end -->\n"
+    )
+
+    from synlynk.instructions import cmd_instructions_register
+
+    cmd_instructions_register(str(custom))
+    manifest = json.loads((tmp_path / ".synlynk" / "instructions.json").read_text())
+    assert manifest["files"][str(custom)]["tool"] == "claude"

@@ -841,7 +841,7 @@ def cmd_instructions_register(file_path: Optional[str] = None) -> None:
                 return
             content = Path(file_path).read_text()
             marker_match = re.search(
-                r"^[ \\t]*<!-- synlynk:start[^>]*\\btool=\"([^\"]+)\"[^>]* -->",
+                r"^[ \t]*<!-- synlynk:start[^>]*\btool=\"([^\"]+)\"[^>]* -->",
                 content, flags=re.MULTILINE,
             )
             tool = marker_match.group(1) if marker_match else None
