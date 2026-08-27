@@ -111,6 +111,27 @@ def test_live5__migrate_db_copies_the_entire_state_db_only_once(tmp_path):
     assert after == before
 
 
+def test_live5__migrate_db_skips_work_on_already_migrated_connection(tmp_path, monkeypatch):
+    from synlynk import db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE legacy (payload TEXT)")
+    conn.execute("INSERT INTO legacy VALUES (?)", ("x" * 8192,))
+    conn.commit()
+
+    db._migrate_db(conn)
+    conn.close()
+
+    def fail_if_called(_conn):
+        raise AssertionError("migration work ran for an already-migrated database")
+
+    monkeypatch.setattr(db, "_run_harness_rename_migration", fail_if_called)
+    second_conn = sqlite3.connect(db_path)
+    db._migrate_db(second_conn)
+    second_conn.close()
+
+
 def test_live5__harness_rename_is_safe_when_both_reservation_tables_exist():
     from synlynk.db import _run_harness_rename_migration
 
