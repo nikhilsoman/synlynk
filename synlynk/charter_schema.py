@@ -141,3 +141,50 @@ def validate_charter(content: str, known_roles=KNOWN_ROLES) -> dict:
     if errors:
         raise CharterValidationError(errors)
     return data
+
+
+def _render_task_allocation(task_allocation: dict) -> str:
+    lines = ["dispatch_routing:"]
+    for task_type, entry in task_allocation.items():
+        lines.append(f"  {task_type}:")
+        lines.append(f"    harness: {entry['harness']}")
+        fallback = entry.get("fallback", [])
+        lines.append(f"    fallback: [{', '.join(fallback)}]")
+    return "\n".join(lines) + "\n"
+
+
+def render_dispatch_routing_block(task_allocation: dict) -> str:
+    """Render a policy.json task_allocation table as a dispatch_routing frontmatter block."""
+    return _render_task_allocation(task_allocation)
+
+
+def set_frontmatter_block(content: str, key: str, block_text: str) -> str:
+    """Replace (or append) a top-level frontmatter key's block in `content`.
+
+    `block_text` must be the full rendered block including its own
+    trailing newline, e.g. "dispatch_routing:\\n  implement:\\n    harness: codex\\n".
+    """
+    frontmatter_text, body = split_frontmatter(content)
+    if frontmatter_text is None:
+        raise CharterValidationError([f"cannot set {key!r}: no frontmatter block present"])
+
+    lines = frontmatter_text.split("\n")
+    out = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        line_key = line.split(":", 1)[0].strip()
+        if line_key == key:
+            i += 1
+            while i < len(lines) and (lines[i].startswith("  ") or not lines[i].strip()):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+
+    while out and not out[-1].strip():
+        out.pop()
+
+    out.append(block_text.rstrip("\n"))
+    new_frontmatter = "\n".join(out)
+    return f"---\n{new_frontmatter}\n---{body}"

@@ -164,3 +164,57 @@ def test_validate_charter_dispatch_routing_presence_does_not_affect_validity():
     )
     data = charter_schema.validate_charter(with_routing)
     assert data["role"] == "dev"
+
+
+def test_render_dispatch_routing_block_nested_dict():
+    block = charter_schema.render_dispatch_routing_block({
+        "implement": {"harness": "codex", "fallback": ["grok", "agy"]},
+        "css": {"harness": "agy", "fallback": []},
+    })
+    assert block == (
+        "dispatch_routing:\n"
+        "  implement:\n"
+        "    harness: codex\n"
+        "    fallback: [grok, agy]\n"
+        "  css:\n"
+        "    harness: agy\n"
+        "    fallback: []\n"
+    )
+
+
+def test_set_frontmatter_block_appends_when_key_absent():
+    content = _valid_charter()
+    updated = charter_schema.set_frontmatter_block(
+        content, "dispatch_routing", "dispatch_routing:\n  implement:\n    harness: codex\n"
+    )
+    frontmatter_text, body = charter_schema.split_frontmatter(updated)
+    assert "dispatch_routing:\n  implement:\n    harness: codex" in frontmatter_text
+    assert body == charter_schema.split_frontmatter(content)[1]
+
+
+def test_set_frontmatter_block_replaces_existing_key():
+    content = _valid_charter(
+        extra_frontmatter="dispatch_routing:\n  implement:\n    harness: grok\n"
+    )
+    updated = charter_schema.set_frontmatter_block(
+        content, "dispatch_routing", "dispatch_routing:\n  implement:\n    harness: codex\n"
+    )
+    frontmatter_text, _ = charter_schema.split_frontmatter(updated)
+    assert "harness: codex" in frontmatter_text
+    assert "harness: grok" not in frontmatter_text
+    assert frontmatter_text.count("dispatch_routing:") == 1
+
+
+def test_set_frontmatter_block_preserves_other_keys():
+    content = _valid_charter()
+    updated = charter_schema.set_frontmatter_block(
+        content, "dispatch_routing", "dispatch_routing:\n  implement:\n    harness: codex\n"
+    )
+    data = charter_schema.validate_charter(updated)
+    assert data["role"] == "dev"
+    assert data["durability"] == "dispatch-only"
+
+
+def test_set_frontmatter_block_raises_without_frontmatter():
+    with pytest.raises(charter_schema.CharterValidationError):
+        charter_schema.set_frontmatter_block("no frontmatter here", "dispatch_routing", "x: y\n")
