@@ -1,9 +1,27 @@
 import os
 import sqlite3
+import subprocess
 
 import pytest
 
 from synlynk.agent_cli import SEED_CHARTERS
+
+
+def test_jobs_all_crashes_typeerror_comparing_offset_naive_and_aware(monkeypatch):
+    from synlynk.gh_verify import gh_write_verified
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"submittedAt":"2026-08-18T11:00:00Z"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00"
+    ) is True
 
 
 def test_codex_dispatch_workspacewrite_sandbox_bl_network_permission_adds_override():

@@ -68,7 +68,7 @@ def test_apply_gh_write_verification_uses_data_driven_expect(monkeypatch):
     )
 
     assert captured["expect"] == "review_posted"
-    assert captured["since"] == "2026-08-18T10:00:00"
+    assert captured["since"] == "2026-08-18T10:00:00+00:00"
     assert status == "succeeded_gh_write_failed"
     assert verified_str == "false"
 

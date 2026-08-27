@@ -56,6 +56,7 @@ def test_gh_write_verified_rejects_malformed_target():
 def test_parse_iso8601_handles_z_suffix():
     dt = _parse_iso8601("2026-08-18T10:00:00Z")
     assert dt is not None
+    assert dt.utcoffset().total_seconds() == 0
     assert dt.year == 2026 and dt.month == 8 and dt.day == 18
     assert dt.hour == 10
 
@@ -63,7 +64,14 @@ def test_parse_iso8601_handles_z_suffix():
 def test_parse_iso8601_handles_offset_suffix():
     dt = _parse_iso8601("2026-08-18T10:00:00+00:00")
     assert dt is not None
+    assert dt.utcoffset().total_seconds() == 0
     assert dt.hour == 10
+
+
+def test_parse_iso8601_coerces_naive_timestamp_to_utc():
+    dt = _parse_iso8601("2026-08-18T10:00:00")
+    assert dt is not None
+    assert dt.utcoffset().total_seconds() == 0
 
 
 def test_parse_iso8601_returns_none_for_garbage():
@@ -90,6 +98,21 @@ def test_gh_write_verified_review_posted_true_after_since_no_author_filter(monke
         "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z"
     )
     assert result is True
+
+
+def test_gh_write_verified_handles_aware_entry_and_naive_since(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"submittedAt":"2026-08-18T11:00:00Z"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00"
+    ) is True
 
 
 def test_gh_write_verified_review_posted_false_when_only_stale_entry(monkeypatch):
