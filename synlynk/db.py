@@ -371,8 +371,10 @@ def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if migration_version < _DB_MIGRATION_VERSION:
-        _snapshot_before_migration(conn)
+    if migration_version >= _DB_MIGRATION_VERSION:
+        return
+
+    _snapshot_before_migration(conn)
     _run_harness_rename_migration(conn)
     from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
     conn.executescript(_DB_SCHEMA)
