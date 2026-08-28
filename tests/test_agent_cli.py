@@ -1,4 +1,3 @@
-import os
 import sqlite3
 import subprocess
 
@@ -209,17 +208,6 @@ def test_cmd_agent_init_creates_registry_entry_and_charter(project_dir):
     assert content == agent_cli.SEED_CHARTERS["dev"]
 
 
-def test_cmd_agent_init_writes_projection_with_empty_capability_grants(project_dir):
-    from synlynk import agent_cli
-
-    agent_id = agent_cli.cmd_agent_init("qa")
-
-    projection_path = os.path.join(".synlynk", "agents", f"{agent_id}.yaml")
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "capability_grants: {}" in rendered
-
-
 def test_cmd_agent_init_rejects_duplicate_role(project_dir, capsys):
     from synlynk import agent_cli
 
@@ -292,14 +280,27 @@ def test_cmd_agent_edit_updates_charter(project_dir, tmp_path, capsys):
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
 
+    new_content = (
+        "---\n"
+        "schema_version: 1\n"
+        "role: dev\n"
+        'description: "Implementation — writes the code, reviews own PRs."\n'
+        "durability: dispatch-only\n"
+        "tools: []\n"
+        "credentials: []\n"
+        "---\n\n"
+        "## Instructions\n\nUpdated instructions.\n\n"
+        "## Authority & Escalation\n\nUpdated escalation.\n\n"
+        "## Workflow Ownership\n\nUpdated ownership.\n"
+    )
     charter_file = tmp_path / "new_charter.md"
-    charter_file.write_text("Implementation — writes the code, reviews own PRs.")
+    charter_file.write_text(new_content)
 
     agent_cli.cmd_agent_edit(agent_id, str(charter_file))
 
     content, revision = agent_store.read_charter(agent_id)
     assert revision == 2
-    assert content == "Implementation — writes the code, reviews own PRs."
+    assert content == new_content
 
 
 def test_cmd_agent_edit_stdin(project_dir, monkeypatch, capsys):
@@ -309,11 +310,24 @@ def test_cmd_agent_edit_stdin(project_dir, monkeypatch, capsys):
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
 
-    monkeypatch.setattr("sys.stdin", io.StringIO("New charter from stdin."))
+    new_content = (
+        "---\n"
+        "schema_version: 1\n"
+        "role: dev\n"
+        'description: "New charter from stdin."\n'
+        "durability: dispatch-only\n"
+        "tools: []\n"
+        "credentials: []\n"
+        "---\n\n"
+        "## Instructions\n\nFrom stdin.\n\n"
+        "## Authority & Escalation\n\nFrom stdin.\n\n"
+        "## Workflow Ownership\n\nFrom stdin.\n"
+    )
+    monkeypatch.setattr("sys.stdin", io.StringIO(new_content))
     agent_cli.cmd_agent_edit(agent_id, "-")
 
     content, revision = agent_store.read_charter(agent_id)
-    assert content == "New charter from stdin."
+    assert content == new_content
     assert revision == 2
 
 
@@ -343,26 +357,49 @@ def test_cmd_agent_edit_stale_revision_exits_1(project_dir, tmp_path, monkeypatc
     assert "updated by someone else" in captured.err or "updated by someone else" in captured.out
 
 
-def test_cmd_agent_edit_preserves_capability_grants_set_after_init(project_dir, tmp_path, capsys):
+def test_cmd_agent_edit_rejects_invalid_charter_exits_1(project_dir, tmp_path, capsys):
+    from synlynk import agent_cli
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    charter_file = tmp_path / "invalid.md"
+    charter_file.write_text("not a valid charter, no frontmatter")
+
+    with pytest.raises(SystemExit) as exc_info:
+        agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "failed validation" in captured.err
+
+
+def test_cmd_agent_sync_routing_populates_dispatch_routing_for_dev(project_dir, capsys):
     from synlynk import agent_cli, agent_store
 
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
 
-    # Simulate a future mechanism (e.g. Phase 3 capability registry) writing
-    # a non-empty capability_grants after init but before this edit.
-    agent_store.regenerate_agent_projection(
-        agent_id, repo_overrides={"capability_grants": {"can_deploy": True}}
-    )
+    agent_cli.cmd_agent_sync_routing(agent_id)
 
-    charter_file = tmp_path / "edited_charter.md"
-    charter_file.write_text("Implementation — writes the code, now with more detail.")
-    agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+    content, revision = agent_store.read_charter(agent_id)
+    assert revision == 2
+    assert "dispatch_routing:" in content
+    captured = capsys.readouterr()
+    assert "Synced dispatch_routing" in captured.out
 
-    projection_path = os.path.join(".synlynk", "agents", f"{agent_id}.yaml")
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "can_deploy: True" in rendered
+
+def test_cmd_agent_sync_routing_reports_noop_for_role_without_task_allocation(project_dir, capsys):
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("qa")
+    capsys.readouterr()
+
+    agent_cli.cmd_agent_sync_routing(agent_id)
+
+    content, revision = agent_store.read_charter(agent_id)
+    assert revision == 1
+    captured = capsys.readouterr()
+    assert "nothing to sync" in captured.out
 
 
 def test_cmd_agent_disable_sets_flag(project_dir, capsys):

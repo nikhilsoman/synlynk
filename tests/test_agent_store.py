@@ -1,5 +1,28 @@
 import json
 import os
+import pytest
+
+
+def _valid_charter(marker: str) -> str:
+    return (
+        "---\n"
+        "schema_version: 1\n"
+        "role: dev\n"
+        f'description: "{marker}"\n'
+        "durability: dispatch-only\n"
+        "tools: []\n"
+        "credentials: []\n"
+        "---\n"
+        "\n"
+        "## Instructions\n"
+        f"\n{marker} instructions body.\n"
+        "\n"
+        "## Authority & Escalation\n"
+        "\nEscalates per policy.\n"
+        "\n"
+        "## Workflow Ownership\n"
+        "\nOwns nothing in particular for this test.\n"
+    )
 
 
 def test_get_workspace_id_mints_and_persists(project_dir):
@@ -107,14 +130,27 @@ def test_propose_charter_revision_writes_and_reads_back(project_dir, tmp_path, m
     fake_home = tmp_path / "fake_home"
     monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
 
+    charter_v1 = _valid_charter("Charter v1")
     new_revision = agent_store.propose_charter_revision(
-        "dev-primary", "# Charter v1", actor="human:nikhilsoman", parent_revision=0
+        "dev-primary", charter_v1, actor="human:nikhilsoman", parent_revision=0
     )
     assert new_revision == 1
 
     content, revision = agent_store.read_charter("dev-primary")
-    assert content == "# Charter v1"
+    assert content == charter_v1
     assert revision == 1
+
+
+def test_propose_charter_revision_rejects_invalid_content(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store, charter_schema
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    with pytest.raises(charter_schema.CharterValidationError):
+        agent_store.propose_charter_revision(
+            "dev-primary", "not a valid charter", actor="human:nikhilsoman", parent_revision=0
+        )
 
 
 def test_propose_charter_revision_stale_parent_raises_conflict(project_dir, tmp_path, monkeypatch):
@@ -124,15 +160,55 @@ def test_propose_charter_revision_stale_parent_raises_conflict(project_dir, tmp_
     monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
 
     agent_store.propose_charter_revision(
-        "dev-primary", "# Charter v1", actor="human:nikhilsoman", parent_revision=0
+        "dev-primary", _valid_charter("Charter v1"), actor="human:nikhilsoman", parent_revision=0
     )
     try:
         agent_store.propose_charter_revision(
-            "dev-primary", "# Charter v2 (stale)", actor="human:nikhilsoman", parent_revision=0
+            "dev-primary", _valid_charter("Charter v2 stale"), actor="human:nikhilsoman", parent_revision=0
         )
         assert False, "expected agent_store.RevisionConflictError"
     except agent_store.RevisionConflictError:
         pass
+
+
+def test_sync_dispatch_routing_populates_block_for_dev(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
+    agent_store.propose_charter_revision(
+        "dev-primary", _valid_charter("Dev charter v1"), actor="human:nikhilsoman", parent_revision=0
+    )
+
+    new_revision = agent_store.sync_dispatch_routing("dev-primary", "dev", actor="cli")
+    assert new_revision == 2
+
+    content, revision = agent_store.read_charter("dev-primary")
+    assert revision == 2
+    assert "dispatch_routing:" in content
+    assert "harness: codex" in content
+
+
+def test_sync_dispatch_routing_is_noop_for_role_without_task_allocation(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+
+    agent_store.register_agent("qa-primary", aliases=[{"kind": "role_slug", "value": "qa"}])
+    charter_v1 = _valid_charter("QA charter v1").replace("role: dev", "role: qa")
+    agent_store.propose_charter_revision(
+        "qa-primary", charter_v1, actor="human:nikhilsoman", parent_revision=0
+    )
+
+    unchanged_revision = agent_store.sync_dispatch_routing("qa-primary", "qa", actor="cli")
+    assert unchanged_revision == 1
+
+    content, revision = agent_store.read_charter("qa-primary")
+    assert revision == 1
+    assert "dispatch_routing" not in content
 
 
 def test_charter_revisions_jsonl_provenance_chain(project_dir, tmp_path, monkeypatch):
@@ -143,10 +219,10 @@ def test_charter_revisions_jsonl_provenance_chain(project_dir, tmp_path, monkeyp
     monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
 
     agent_store.propose_charter_revision(
-        "dev-primary", "# Charter v1", actor="human:nikhilsoman", parent_revision=0
+        "dev-primary", _valid_charter("Charter v1"), actor="human:nikhilsoman", parent_revision=0
     )
     agent_store.propose_charter_revision(
-        "dev-primary", "# Charter v2", actor="agent:dev-primary", parent_revision=1
+        "dev-primary", _valid_charter("Charter v2"), actor="agent:dev-primary", parent_revision=1
     )
 
     revisions_path = os.path.join(
@@ -243,83 +319,6 @@ def test_statements_of_record_category(project_dir, tmp_path, monkeypatch):
     assert revision == 1
 
 
-def test_regenerate_agent_projection_writes_flat_yaml(project_dir, tmp_path, monkeypatch):
-    from synlynk import agent_store
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-    agent_store.propose_charter_revision(
-        "dev-primary", "# secret charter content", actor="human:nikhilsoman", parent_revision=0
-    )
-
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides={"note": "pinned"})
-
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    assert os.path.exists(projection_path)
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "agent_id: dev-primary" in rendered
-    assert "note: pinned" in rendered
-    assert "secret charter content" not in rendered
-
-
-def test_regenerate_agent_projection_is_idempotent(project_dir, tmp_path, monkeypatch):
-    from synlynk import agent_store
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    with open(projection_path) as f:
-        first = f.read()
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-    with open(projection_path) as f:
-        second = f.read()
-    assert first == second
-
-
-def test_regenerate_agent_projection_merges_overrides_across_calls(project_dir, tmp_path, monkeypatch):
-    from synlynk import agent_store
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-
-    agent_store.regenerate_agent_projection(
-        "dev-primary", repo_overrides={"capability_grants": {}}
-    )
-    agent_store.regenerate_agent_projection(
-        "dev-primary", repo_overrides={"new_key": "value"}
-    )
-
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "capability_grants: {}" in rendered
-    assert "new_key: value" in rendered
-
-
-def test_regenerate_agent_projection_path_is_gitignored(project_dir, tmp_path, monkeypatch, git_worktree_repo):
-    from synlynk import agent_store
-    import subprocess
-
-    fake_home = tmp_path / "fake_home"
-    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
-    agent_store.register_agent("dev-primary", aliases=[{"kind": "role_slug", "value": "dev"}])
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides=None)
-
-    result = subprocess.run(
-        ["git", "check-ignore", os.path.join(".synlynk", "agents", "dev-primary.yaml")],
-        cwd=git_worktree_repo, capture_output=True, text=True,
-    )
-    assert result.returncode == 0, "expected .synlynk/agents/dev-primary.yaml to be gitignored"
-
-
 def test_full_flow_canonical_content_lives_only_in_workspace_store(project_dir, tmp_path, monkeypatch):
     from synlynk import agent_store
 
@@ -339,25 +338,17 @@ def test_full_flow_canonical_content_lives_only_in_workspace_store(project_dir, 
     assert agent_store.resolve_agent_id("dev") == "dev-primary"
 
     rev1 = agent_store.propose_charter_revision(
-        "dev-primary", "# Dev charter v1", actor="human:nikhilsoman", parent_revision=0
+        "dev-primary", _valid_charter("Dev charter v1"), actor="human:nikhilsoman", parent_revision=0
     )
     assert rev1 == 1
     rev2 = agent_store.propose_charter_revision(
-        "dev-primary", "# Dev charter v2 — expanded scope", actor="agent:dev-primary", parent_revision=1
+        "dev-primary", _valid_charter("Dev charter v2 expanded scope"), actor="agent:dev-primary", parent_revision=1
     )
     assert rev2 == 2
 
     content, revision = agent_store.read_charter("dev-primary")
-    assert content == "# Dev charter v2 — expanded scope"
+    assert content == _valid_charter("Dev charter v2 expanded scope")
     assert revision == 2
-
-    agent_store.regenerate_agent_projection("dev-primary", repo_overrides={"pinned_role": "dev"})
-
-    projection_path = os.path.join(".synlynk", "agents", "dev-primary.yaml")
-    with open(projection_path) as f:
-        projection_content = f.read()
-    assert "Dev charter" not in projection_content
-    assert "agent_id: dev-primary" in projection_content
 
     canonical_charter_path = os.path.join(
         agent_store.agent_store_path("dev-primary"), "charter.md"
