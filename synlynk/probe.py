@@ -317,6 +317,12 @@ _FENCE_OPEN_PATTERN = _re.compile(
     r"<!-- synlynk:harness v\S+ verified:\S+ -->.*?<!-- /synlynk:harness -->",
     _re.DOTALL,
 )
+_FENCE_VERSION_AND_BODY_PATTERN = _re.compile(
+    r"<!-- synlynk:harness v(\S+) verified:\S+ -->\n"
+    r"# Harness Instructions \(synlynk-managed — do not edit\)\n\n"
+    r"(.*?)\n<!-- /synlynk:harness -->",
+    _re.DOTALL,
+)
 
 
 def _build_fence_content(harness_version: str, body: str) -> str:
@@ -336,10 +342,14 @@ def _upsert_harness_fence(file_path: str, harness_version: str, body: str) -> No
         print(f"  warning: {file_path} not found — fence skipped. Run synlynk init to create it.", file=sys.stderr)
         return
 
-    fence = _build_fence_content(harness_version, body)
     with open(file_path, "r", encoding="utf-8") as f:
         current = f.read()
 
+    existing_match = _FENCE_VERSION_AND_BODY_PATTERN.search(current)
+    if existing_match and existing_match.group(1) == harness_version and existing_match.group(2) == body:
+        return
+
+    fence = _build_fence_content(harness_version, body)
     if _FENCE_OPEN_PATTERN.search(current):
         updated = _FENCE_OPEN_PATTERN.sub(fence, current, count=1)
     else:
@@ -897,14 +907,10 @@ def _read_harness_fence_body(file_path: str) -> str:
             content = f.read()
     except OSError:
         return ""
-    match = re.search(
-        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
-        content,
-        re.DOTALL,
-    )
+    match = _FENCE_VERSION_AND_BODY_PATTERN.search(content)
     if not match:
         return ""
-    return match.group(1)
+    return match.group(2)
 
 
 def _repair_config_agents(cfg: dict) -> list:
