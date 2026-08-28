@@ -6,6 +6,36 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
+    project_dir, monkeypatch
+):
+    import synlynk
+    import plistlib
+
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        synlynk.shutil,
+        "which",
+        lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None,
+    )
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        synlynk.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0),
+    )
+
+    launchagents_dir = project_dir / "Library" / "LaunchAgents"
+    launchagents_dir.mkdir(parents=True, exist_ok=True)
+
+    synlynk._daemon_install_service(object())
+
+    plist = (launchagents_dir / "com.synlynk.daemon.plist").read_text()
+    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
+    assert "<key>KeepAlive</key>\n    <false/>" not in plist
+
+
 def test_jobs_all_crashes_typeerror_comparing_offset_naive_and_aware(monkeypatch):
     from synlynk.gh_verify import gh_write_verified
 
