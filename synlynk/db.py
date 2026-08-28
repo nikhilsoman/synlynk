@@ -1179,6 +1179,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
 
     else:
         _normalize_org_domain_drift(conn)
+        conn.commit()
 
 
 _VALID_COST_SOURCES = {
