@@ -449,7 +449,7 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
         if not has_write:
-            flags = ["--ask-for-approval", "untrusted"]
+            flags = ["-c", "approval_policy=untrusted"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
             flags += ["-c", "sandbox_workspace_write.network_access=true"]
         return flags
